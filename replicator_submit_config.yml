@@ -1,0 +1,67 @@
+- hosts: aws_tag_role=connect
+  vars:
+    # alternat method of configuration?
+    # src_zookeepers: "{{ zookeepers-eu-west-1 }}"
+    # src_brokers: "{{ brokers-eu-west-1 }}"
+    # dest_zookeepers: "{{ zookeepers-eu-central-1 }}"
+    # connector_name: "replication-from-ireland"
+    # src_zookeepers: {{ hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-west-1'] }}
+    # src_brokers: {{ hostvars[inventory_hostname]['groups']['aws_tag_role_region=brokers-eu-west-1'] }}
+    # dest_zookeepers: {{ hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-central-1'] }}
+    connector_name: "replication-from-ireland"
+    task_count: 1
+  tasks:
+    - name: get variables
+      debug: var={{ "hostvars[inventory_hostname]['groups']['aws_tag_role_region=connect-eu-central-1']" }}
+
+    - name: Remove Replicator config
+      # run_once: True
+      when: inventory_hostname == ansible_play_hosts[1]
+      # delegate_to: "{{ hostvars[inventory_hostname]['groups']['aws_tag_role_region=connect-eu-central-1'] | first }}"
+      uri:
+        url: "http://localhost:8083/connectors/{{ connector_name }}"
+        method: DELETE
+        status_code: 204
+      ignore_errors: yes
+
+    # - name: get variables
+    #   debug: var=hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-west-1']
+    # - name: curl for testing
+    #   shell: curl http://as-connect-0-eu-central-1a:8083/connectors
+
+    # - name: Get config for debug
+    #   run_once: yes
+    #   uri:
+    #     url: http://localhost:8083/connectors
+    #     method: GET
+
+    - name: Post Replicator config
+      # run_once: yes
+      when: inventory_hostname == ansible_play_hosts[1] # run once causing it to hang - in fact, this only works for one of the hosts (1)
+      uri:
+        url: http://{{ inventory_hostname }}:8083/connectors
+        method: POST
+        status_code: 201
+        body:
+          name: "{{ connector_name }}"
+          config:
+            connector.class: "io.confluent.connect.replicator.ReplicatorSourceConnector"
+            tasks.max: "{{ task_count }}"
+            # topic.whitelist: "performance-test-{{ partition_count }}"
+            topic.whitelist: "*"
+            topic.auto.create: true
+            src.key.converter: "io.confluent.connect.replicator.util.ByteArrayConverter"
+            src.value.converter: "io.confluent.connect.replicator.util.ByteArrayConverter"
+            key.converter: "io.confluent.connect.replicator.util.ByteArrayConverter"
+            value.converter: "io.confluent.connect.replicator.util.ByteArrayConverter"
+            # src.zookeeper.connect: "{% for node in hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-west-1'] %}{{hostvars[node].ansible_hostname}}:2181{% if not loop.last %},{% endif %}{% endfor %}"
+            # src.kafka.bootstrap.servers: "{% for node in hostvars[inventory_hostname]['groups']['aws_tag_role_region=brokers-eu-west-1'] %}{{hostvars[node].ansible_hostname}}:9092{% if not loop.last %},{% endif %}{% endfor %}"
+            src.zookeeper.connect: "{% for node in hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-west-1'] %}{{node}}:2181{% if not loop.last %},{% endif %}{% endfor %}"
+            src.kafka.bootstrap.servers: "{% for node in hostvars[inventory_hostname]['groups']['aws_tag_role_region=brokers-eu-west-1'] %}{{node}}:9092{% if not loop.last %},{% endif %}{% endfor %}"
+            src.kafka.client.id: "kafka-connect-frankfurt"
+            # src.kafka.send.buffer.bytes: 2097152
+            src.consumer.interceptor.classes: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
+            producer.interceptor.classes: "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"
+            src.consumer.group.id:  "replication-ireland-frankfurt"
+            dest.zookeeper.connect: "{% for node in hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-central-1'] %}{{node}}:2181{% if not loop.last %},{% endif %}{% endfor %}"
+        body_format: json
