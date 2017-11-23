@@ -11,10 +11,13 @@
     replace: 'num.partitions=3'
     backup: yes
 
-- replace:
+- name: zk bootstrap
+  vars:
+    zkhostname: as-zookeeper-0-{{ tags.region }}a
+  replace:
     destfile: /home/ubuntu/cp/confluent-3.3.1/etc/kafka/server.properties
     regexp: 'zookeeper.connect=.*'
-    replace: 'zookeeper.connect=as-zookeeper-0-{{ tags["region"] }}a'
+    replace: zookeeper.connect={{ hostvars[zkhostname].public.dns }}
     backup: yes
 
 - name: insert/update text surrounded by custom markers
@@ -23,6 +26,7 @@
     marker: "<!-- {mark} ANSIBLE MANAGED BLOCK -->"
     # insertafter: "<body>"
     content: |
+        default.replication.factor=3
         offsets.topic.replication.factor=3
         transaction.state.log.replication.factor=3
         transaction.state.log.min.isr=2
@@ -31,7 +35,8 @@
         confluent.metrics.reporter.zookeeper.connect=localhost:2181
         confluent.metrics.reporter.topic.replicas=3
         delete.topic.enable=true
-        num.partitions=3
+        # over partition
+        num.partitions=20
         # 20GB in B
         log.retention.bytes=20000000000
         # default 60000
@@ -39,7 +44,9 @@
         # default 300000
         # log.retention.check.interval.ms=30000
         listeners=PLAINTEXT://:9092
-        advertised.listeners=PLAINTEXT://{{ inventory_hostname }}-public:9092
+        advertised.listeners=PLAINTEXT://{{ public['dns'] }}:9092
+
 
 - name: run boker
   command: cp/confluent-3.3.1/bin/kafka-server-start -daemon cp/confluent-3.3.1/etc/kafka/server.properties
+# cp/confluent-3.3.1/bin/kafka-server-start cp/confluent-3.3.1/etc/kafka/server.properties
