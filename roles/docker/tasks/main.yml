@@ -1,0 +1,58 @@
+# Sets up docker
+- name: Remove old verions
+  become: true
+  apt:
+    pkg: "{{ item }}"
+    state: absent
+    update_cache: yes
+  with_items:
+    - docker
+    - docker-engine 
+    - docker.io
+
+- name: Install packages to allow apt to use a repository over HTTPS
+  become: true
+  apt:
+    pkg: "{{ item }}"
+    state: present
+    update_cache: no # done above
+  with_items:
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - software-properties-common
+
+- name: Add Docker’s official GPG key
+  shell:
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+- name: Verify that you now have the key with the fingerprint 9DC8 5822 9FC7 DD38 854A E2D8 8D81 803C 0EBF CD88, by searching for the last 8 characters of the fingerprint.
+  command:
+    sudo apt-key fingerprint 0EBFCD88
+
+- name: Set up the stable repository
+  become: yes
+  shell: add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+- name: Install Docker
+  become: true
+  apt:
+    pkg: docker-ce
+    state: present
+    update_cache: yes
+
+# - name: Install docker-compose
+#   pip: name=docker-compose
+#   sudo: yes
+
+- name: 'After docker role applied, add user to docker group'
+  become: yes
+  user: name=ubuntu groups=docker append=yes
+
+# # work around for https://github.com/angstwad/docker.ubuntu/issues/44
+# - name: Install docker-py
+#   sudo: yes
+#   pip: name=docker-py version=1.1.0
+
+- name: Verify docker runs
+  command: docker run hello-world

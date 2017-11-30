@@ -1,28 +1,42 @@
 - hosts: aws_tag_role=connect
   vars:
-    # alternat method of configuration?
-    # src_zookeepers: "{{ zookeepers-eu-west-1 }}"
-    # src_brokers: "{{ brokers-eu-west-1 }}"
-    # dest_zookeepers: "{{ zookeepers-eu-central-1 }}"
-    # connector_name: "replication-from-ireland"
-    # src_zookeepers: {{ hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-west-1'] }}
-    # src_brokers: {{ hostvars[inventory_hostname]['groups']['aws_tag_role_region=brokers-eu-west-1'] }}
-    # dest_zookeepers: {{ hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-central-1'] }}
+    src_zookeeper: "{% for node in hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-west-1'] %}{{hostvars[node].public.dns}}:2181{% if not loop.last %},{% endif %}{% endfor %}"
+    src_kafka: "{% for node in hostvars[inventory_hostname]['groups']['aws_tag_role_region=brokers-eu-west-1'] %}{{hostvars[node].public.dns}}:{{ src_kafka_port }}{% if not loop.last %},{% endif %}{% endfor %}"
+    dest_zookeeper: "{% for node in hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-central-1'] %}{{node}}:2181{% if not loop.last %},{% endif %}{% endfor %}"
     connector_name: "replication-from-ireland"
     task_count: 10
+    src_security: SASL_PLAINTEXT # SASL_PLAINTEXT, PLAINTEXT
+    src_kafka_port: "{{ kafka.ports.sasl_plaintext }}"
   tasks:
     # - name: get variables
     #   debug: var={{ public_ipv4 }}
 
+    - name: Wait 300 seconds for port 8000 to become open on the host
+      wait_for:
+        port: "{{connect_port}}"
+        # delay: 10
+        timeout: 300
+        
     - name: Remove Replicator config
-      # run_once: True
+      run_once: True
       # when: inventory_hostname == ansible_play_hosts[0]
       # delegate_to: "{{ hostvars[inventory_hostname]['groups']['aws_tag_role_region=connect-eu-central-1'] | first }}"
       uri:
-        url: "http://localhost:8083/connectors/{{ connector_name }}"
+        url: "http://localhost:{{connect_port}}/connectors/{{ connector_name }}"
         method: DELETE
         status_code: 204
       ignore_errors: yes
+
+    - name: Remove Replicator config
+      run_once: True
+      # when: inventory_hostname == ansible_play_hosts[0]
+      # delegate_to: "{{ hostvars[inventory_hostname]['groups']['aws_tag_role_region=connect-eu-central-1'] | first }}"
+      uri:
+        url: "http://localhost:{{connect_port}}/connectors/c3-topics"
+        method: DELETE
+        status_code: 204
+      ignore_errors: yes
+
 
     # - name: get variables
     #   debug: var=hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-west-1']
@@ -32,13 +46,13 @@
     - name: Get config for debug
       run_once: yes
       uri:
-        url: http://localhost:8083/connectors
+        url: http://{{ inventory_hostname }}:{{connect_port}}/connectors
         method: GET
 
     - name: Post Replicator config
       run_once: yes
       uri:
-        url: http://{{ inventory_hostname }}:8083/connectors
+        url: http://{{ inventory_hostname }}:{{connect_port}}/connectors
         method: POST
         status_code: 201
         body:
@@ -46,20 +60,78 @@
           config:
             connector.class: "io.confluent.connect.replicator.ReplicatorSourceConnector"
             tasks.max: "{{ task_count }}"
-            topic.whitelist: "_confluent-monitoring,_confluent-metrics"
-            topic.regex: "r.*"
+            # topic.whitelist: "_confluent-monitoring,_confluent-metrics"
+            topic.regex: "r.*|ireland.*"
             topic.auto.create: true
             topic.poll.interval.ms: "5000"
-            src.key.converter: "io.confluent.connect.replicator.util.ByteArrayConverter"
-            src.value.converter: "io.confluent.connect.replicator.util.ByteArrayConverter"
-            key.converter: "io.confluent.connect.replicator.util.ByteArrayConverter"
-            value.converter: "io.confluent.connect.replicator.util.ByteArrayConverter"
-            src.zookeeper.connect: "{% for node in hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-west-1'] %}{{hostvars[node].public.dns}}:2181{% if not loop.last %},{% endif %}{% endfor %}"
-            src.kafka.bootstrap.servers: "{% for node in hostvars[inventory_hostname]['groups']['aws_tag_role_region=brokers-eu-west-1'] %}{{hostvars[node].public.dns}}:9092{% if not loop.last %},{% endif %}{% endfor %}"
-            src.kafka.client.id: "kafka-connect-frankfurt"
-            # src.kafka.send.buffer.bytes: 2097152
+            key.converter: io.confluent.connect.replicator.util.ByteArrayConverter
+            value.converter: io.confluent.connect.replicator.util.ByteArrayConverter
+
+            src.zookeeper.connect: "{{ src_zookeeper }}"
+            src.kafka.bootstrap.servers: "{{ src_kafka }}"
+            src.kafka.client.id: "kafka-connect-frankfurt-{{ connector_name }}"
+            
+            src.kafka.security.protocol: "{{ src_security }}"
+            src.kafka.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username="connect" password="connect-secret";
+            src.kafka.sasl.mechanism: PLAIN
+
+            src.kafka.send.buffer.bytes: 2097152
             src.consumer.interceptor.classes: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
-            producer.interceptor.classes: "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"
+                        
             src.consumer.group.id:  "replication-ireland-frankfurt"
-            dest.zookeeper.connect: "{% for node in hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-central-1'] %}{{node}}:2181{% if not loop.last %},{% endif %}{% endfor %}"
+
+            dest.zookeeper.connect: "{{ dest_zookeeper }}"
+
+            # delete?
+            src.zookeeper.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
+            dest.zookeeper.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
+            # delete ?
+
+            src.kafka.confluent.monitoring.interceptor.sasl.mechanism: PLAIN
+            src.kafka.confluent.monitoring.interceptor.security.protocol: "{{ src_security }}"
+            src.kafka.confluent.monitoring.interceptor.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username="connect" password="connect-secret";
         body_format: json
+
+    # delete
+    # - name: Post Replicator config - connect topics
+    #   run_once: yes
+    #   uri:
+    #     url: http://{{ inventory_hostname }}:8083/connectors
+    #     method: POST
+    #     status_code: 201
+    #     body:
+    #       name: "c3-topics"
+    #       config:
+    #         connector.class: "io.confluent.connect.replicator.ReplicatorSourceConnector"
+    #         tasks.max: "{{ task_count }}"
+    #         topic.whitelist: "_confluent-monitoring,_confluent-metrics"
+    #         # topic.regex: "r.*"
+    #         topic.auto.create: true
+    #         topic.poll.interval.ms: "5000"
+    #         src.key.converter: "io.confluent.connect.replicator.util.ByteArrayConverter"
+    #         src.value.converter: "io.confluent.connect.replicator.util.ByteArrayConverter"
+    #         key.converter: "io.confluent.connect.replicator.util.ByteArrayConverter"
+    #         value.converter: "io.confluent.connect.replicator.util.ByteArrayConverter"
+    #         src.zookeeper.connect: "{{ src_zookeeper }}"
+    #         src.kafka.bootstrap.servers: "{{ src_kafka }}"
+    #         src.kafka.client.id: "kafka-connect-frankfurt-{{ connector_name }}"
+    #         src.kafka.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username="connect" password="connect-secret";
+    #         src.kafka.security.protocol: "{{ src_security }}"
+    #         src.kafka.sasl.mechanism: PLAIN
+    #         # src.kafka.send.buffer.bytes: 2097152
+    #         src.consumer.interceptor.classes: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
+    #         producer.interceptor.classes: "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"
+    #         src.consumer.group.id:  "replication-ireland-frankfurt"
+    #         dest.zookeeper.connect: "{% for node in hostvars[inventory_hostname]['groups']['aws_tag_role_region=zookeepers-eu-central-1'] %}{{node}}:2181{% if not loop.last %},{% endif %}{% endfor %}"
+    #         src.consumer.security.protocol: "{{ src_security }}"
+    #         src.consumer.sasl.mechanism: PLAIN
+    #         src.consumer.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username="connect" password="connect-secret";
+    #         dest.producer.security.protocol: "{{ src_security }}"
+    #         dest.producer.sasl.mechanism: PLAIN
+    #         dest.producer.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username="connect" password="connect-secret";
+    #         src.zookeeper.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
+    #         dest.zookeeper.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
+    #         src.kafka.confluent.monitoring.interceptor.sasl.mechanism: PLAIN
+    #         src.kafka.confluent.monitoring.interceptor.security.protocol: "{{ src_security }}"
+    #         src.kafka.confluent.monitoring.interceptor.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username="connect" password="connect-secret";            
+    #     body_format: json

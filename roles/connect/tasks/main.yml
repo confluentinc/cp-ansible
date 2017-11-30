@@ -1,16 +1,113 @@
-# producer.interceptor.classes=io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
-# consumer.interceptor.classes=io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
-
-- blockinfile:
-    destfile: /home/ubuntu/cp/confluent-3.3.1/etc/kafka/connect-distributed.properties
-    block: |
-      bootstrap.servers=as-broker-0-{{ tags["region"] }}a:9092
-      group.id=frankfurt-connect
-
 - name: killall java
   shell: killall java
   ignore_errors: yes
 
+- name: Wait for connect port to disappear # replace with process monitor
+  wait_for:
+    port: "{{ connect_port }}"
+    state: absent
+    timeout: 300
+
+- name: Upload Connect configuration
+  blockinfile:
+    destfile: "{{cp.path}}/etc/kafka/connect-distributed.properties"
+    block: |
+      bootstrap.servers=as-broker-0-{{ tags["region"] }}a:{{ root_kafka_port }}
+      group.id=frankfurt-connect
+
+      offset.storage.replication.factor=3
+      config.storage.replication.factor=3
+      status.storage.replication.factor=3
+
+      rest.advertised.host.name={{ public.dns }}
+      
+      # SASL settings for Worker's parent cluster
+      security.protocol={{ dest_kafka_security_protocol }}
+      sasl.mechanism=PLAIN
+      sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="connect" password="connect-secret";
+
+      #### Connect producer / Source connectors ####
+      # SASL_PLAINTEXT / SSL
+      # DELETE - src isnt a config in worker configs: src.sasl.mechanism=PLAIN
+      # DELETE - src isnt a config in worker configs: src.security.protocol=SASL_PLAINTEXT
+
+      producer.sasl.mechanism=PLAIN
+      producer.security.protocol={{ dest_kafka_security_protocol }}
+
+      # producer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="USER" password="PASSWORD";
+      producer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="connect" password="connect-secret";
+      # producer.ssl.truststore.location=/var/private/ssl/kafka.client.truststore.jks
+      # producer.ssl.truststore.password=test1234
+      # producer.ssl.protocol=TLSv1.2
+      # producer.ssl.enabled.protocols=TLSv1.2
+      # producer.ssl.endpoint.identification.algorithm=HTTPS
+
+      #### Connect consumer / Sink connectors ####  
+      # SASL_PLAINTEXT / SSL
+
+      consumer.security.protocol={{ dest_kafka_security_protocol }}
+      consumer.sasl.mechanism=PLAIN
+      consumer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="connect" password="connect-secret";
+      # consumer.ssl.truststore.location=/var/private/ssl/kafka.client.truststore.jks
+      # consumer.ssl.truststore.password=test1234
+      # consumer.ssl.protocol=TLSv1.2
+      # consumer.ssl.enabled.protocols=TLSv1.2
+      # consumer.ssl.endpoint.identification.algorithm=HTTPS
+
+      #### Monitoring producer interceptor ####
+      producer.confluent.monitoring.interceptor.sasl.mechanism=PLAIN
+      producer.confluent.monitoring.interceptor.security.protocol={{dest_kafka_security_protocol}}
+      producer.confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="connect" password="connect-secret";
+
+      # interceptor TLS
+      # producer.confluent.monitoring.interceptor.ssl.protocol=TLSv1.2
+      # producer.confluent.monitoring.interceptor.ssl.enabled.protocols=TLSv1.2
+      # producer.confluent.monitoring.interceptor.ssl.endpoint.identification.algorithm=HTTPS
+
+      #### Monitoring consumer interceptor ####
+      consumer.confluent.monitoring.interceptor.sasl.mechanism=PLAIN
+      consumer.confluent.monitoring.interceptor.security.protocol={{dest_kafka_security_protocol}}
+      consumer.confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="connect" password="connect-secret";
+      
+      # interceptor TLS
+      # consumer.confluent.monitoring.interceptor.ssl.protocol=TLSv1.2
+      # consumer.confluent.monitoring.interceptor.ssl.enabled.protocols=TLSv1.2
+      # consumer.confluent.monitoring.interceptor.ssl.endpoint.identification.algorithm=HTTPS
+
+- name: upload JAAS file
+  template:
+    src: kafka_client_jaas.conf.j2
+    dest: ~/kafka_connect_jaas.conf
+
 - name: run connect
-  command: env KAFKA_HEAP_OPTS="-Xms512m -Xmx2g" cp/confluent-3.3.1/bin/connect-distributed -daemon cp/confluent-3.3.1/etc/kafka/connect-distributed.properties
+  command: >
+    env 
+    KAFKA_HEAP_OPTS="-Xms512m -Xmx2g"
+    KAFKA_OPTS="-Djava.security.auth.login.config=kafka_connect_jaas.conf -Dlog4j.debug"
+    cp/confluent-3.3.1/bin/connect-distributed -daemon cp/confluent-3.3.1/etc/kafka/connect-distributed.properties
 #cp/confluent-3.3.1/bin/connect-distributed cp/confluent-3.3.1/etc/kafka/connect-distributed.properties
+
+- name: Wait for port to become open on the host
+  wait_for:
+    port: "{{ connect_port }}"
+    timeout: 20
+
+ # - name: Check if root page contains `dists` string
+ #    uri: url=http://localhost return_content=true
+ #    register: response
+ #    failed_when: "'dists' not in response.content"
+
+# - name: url status code ok
+#   uri: url=http://localhost:8083 status_code=200 timeout=300
+#   async: 300
+#   poll: 10
+#   register: amiup
+# - fail:
+#   when: "'200' not in {{ amiup.status }}"
+
+# - name: TEST - should fail - Wait for connect port to disaper # replace with process monitor
+#   wait_for:
+#   port: 8083
+#   state: absent
+#   timeout: 300
+
