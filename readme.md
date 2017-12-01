@@ -6,6 +6,7 @@
 - A copy of the public IP to DNS name mappings of all the servers will be downloaded to your working dir, this can be added to HOSTS for easy access
 - Topics prefixed “r.” will be replicated
 - Assumes Terraform json inventory is copied into the working dir as `inventory.json`
+  - See `https://github.com/astubbs/cp-cluster-multi-region-terraform/tree/master` for details
 
 # Features
 - Multi SASL secured connect replicator (different credentials for different clusters)
@@ -53,7 +54,7 @@
 - Make replication setups and directions configurable 
 - Turn on inter broker security?
 - Give servers their own TLS keys
- - Run key generate script if they don’t exist
+  - Run key generate script if they don’t exist
 - Add latency analysis to proof app
 - Turn on HTTPS for C3
 - Turn on simple login for C3
