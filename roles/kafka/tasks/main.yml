@@ -1,107 +1,18 @@
-# - name: get variables
-#   debug: var=cp
-
-- name: killall java
-  shell: killall java
-  ignore_errors: yes
-
-- name: upload JAAS file
-  template:
-    src: kafka_server_jaas.conf.j2
-    dest: ~/kafka_server_jaas.conf
-
-- name: zk bootstrap
-  vars:
-    zkhostname: as-zookeeper-0-{{ tags.region }}a
-  replace:
-    destfile: "{{kafka_paths.properties}}"
-    regexp: 'zookeeper.connect=.*'
-    replace: zookeeper.connect={{ hostvars[zkhostname].public.dns }}
-    backup: yes
+- name: Create Kafka properties file
+  file:
+    path: "{{kafka_config_dir}}"
+    state: directory
 
 - name: Kafka base settings block
   blockinfile:
-    path: "{{kafka_paths.properties}}"
-    marker: "<!-- {mark} ANSIBLE MANAGED BLOCK -->"
-    # insertafter: "<body>"
+    path: "{{kafka_config_dir}}/server.properties"
+    create: yes
+    marker: "<!-- Base Confluent Kafka settings -->"
     content: |
-        broker.id={{tags["brokerid"]}}
-        num.partitions=3
-        default.replication.factor=3
-        offsets.topic.replication.factor=3
-        transaction.state.log.replication.factor=3
-        transaction.state.log.min.isr=2
-        
+        broker.id={{kafka_broker_id}}
         metric.reporters=io.confluent.metrics.reporter.ConfluentMetricsReporter
         confluent.metrics.reporter.bootstrap.servers=localhost:9092
-        confluent.metrics.reporter.zookeeper.connect=localhost:2181
-        confluent.metrics.reporter.topic.replicas=3
-        
         delete.topic.enable=true
-
-        # over partition
-        num.partitions=20
-        # 20GB in B
-        log.retention.bytes=20000000000
-        # default 60000
-        # log.segment.delete.delay.ms=30000
-        # default 300000
-        # log.retention.check.interval.ms=30000
-
         listeners=PLAINTEXT://:9092
-        advertised.listeners=PLAINTEXT://{{ public['dns'] }}:9092
-
-- name: Security block SASL_SSL
-  vars:
-    broker_port: "{{kafka.ports.sasl_ssl}}"
-    ssl_truststore_location: /home/ubuntu/kafka.client.truststore.jks
-    ssl_keystore_location: /home/ubuntu/kafka.server.keystore.jks
-    store_password: "{{kafka.store_password}}"
-  blockinfile:
-    path: "{{kafka_paths.properties}}"
-    marker: "<!-- {mark} ANSIBLE MANAGED SECURITY BLOCK -->"
-    content: |
-        # Security settings
-        listeners=PLAINTEXT://:{{kafka.ports.plain}},SASL_SSL://:{{kafka.ports.sasl_ssl}},SASL_PLAINTEXT://:{{kafka.ports.sasl_plaintext}},SSL://:{{kafka.ports.ssl}}
-        advertised.listeners=PLAINTEXT://{{ public['dns'] }}:{{kafka.ports.plain}},SASL_SSL://{{ public['dns'] }}:{{kafka.ports.sasl_ssl}},SASL_PLAINTEXT://{{ public['dns'] }}:{{kafka.ports.sasl_plaintext}},SSL://{{ public['dns'] }}:{{kafka.ports.ssl}}
-        
-        # SASL_PLAINTEXT (or SASL_SSL, PLAINTEXT, SSL)
-        #security.inter.broker.protocol=SASL_SSL
-        # GSSAPI (or PLAIN)
-        #sasl.mechanism.inter.broker.protocol=PLAIN
-        
-        sasl.enabled.mechanisms=PLAIN
-
-        ############# Confluent Metrics Reporter Security ##############
-        confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="broker" password="broker-secret";
-        confluent.metrics.reporter.sasl.mechanism=PLAIN
-        confluent.metrics.reporter.security.protocol=PLAINTEXT
-        confluent.metrics.reporter.ssl.keystore.location={{kafka.ssl_keystore_location}}
-        confluent.metrics.reporter.ssl.keystore.password={{kafka.store_password}}
-        confluent.metrics.reporter.ssl.key.password={{kafka.store_password}}
-        confluent.metrics.reporter.ssl.truststore.location={{kafka.ssl_truststore_location}}
-        confluent.metrics.reporter.ssl.truststore.password={{kafka.store_password}}
-
-        # ssl.client.auth=required # client side certs
-        ssl.keystore.location={{kafka.ssl_keystore_location}}
-        ssl.keystore.password={{kafka.store_password}}
-        ssl.truststore.location={{kafka.ssl_truststore_location}}
-        ssl.truststore.password={{kafka.store_password}}
-        ssl.key.password={{kafka.store_password}}
-        # super.users=User:CN=kafka.example.com,OU=,O=Confluent,L=London,ST=London,C=GB
-
-- name: run broker
-  command: >
-    env KAFKA_OPTS="
-    -Djava.security.auth.login.config=kafka_server_jaas.conf
-    -Dsun.security.krb5.debug=true
-    -Dlog4j.debug
-    -Djavax.net.debug=all"
-    cp/confluent-3.3.1/bin/kafka-server-start -daemon 
-    cp/confluent-3.3.1/etc/kafka/server.properties
-
-- name: Wait 300 seconds for port to become open on the host
-  wait_for:
-    port: 9092
-    # delay: 10
-    timeout: 20
+        log.dirs={{kafka_log_dirs}}
+        zookeeper.connect={{kafka_zookeeper_connect}}
