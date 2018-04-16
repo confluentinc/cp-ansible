@@ -35,7 +35,7 @@ Future work and additional features should be tracked in the GitHub issues for t
 
 # How to use this repository
 
-PLAINTEXT, SSL, SASL_SSL each have example playbooks and hosts files in their respective `plaintext`, `ssl`, sasl_ssl` directories.
+PLAINTEXT, SSL, SASL_SSL each have example playbooks and hosts files in their respective `plaintext`, `ssl`, `sasl_ssl` directories.
 The `hosts.yml` and `all.yml` files at the repository root match the `sasl_ssl` and this can be considered the default path.
 
 ## Template properties files
@@ -58,7 +58,7 @@ configuration. Please consult [the security documentation](https://docs.confluen
 
 ## Running
 
-### First time run
+### Run the whole setup
 
 ```bash
 ansible-playbook -i hosts.yml all.yml
