@@ -91,14 +91,5 @@ ansible-playbook -i hosts.yml all.yml
 
 # Additional information
 
-This repository makes use of the systemd scripts provided in Confluent Platform. As such, there is an expected default user/service mapping.
-
-```yaml
-# service, user
-#confluent-schema-registry, cp-schema-registry
-#confluent-kafka-rest, cp-kafka-rest
-#confluent-control-center, cp-control-center
-#confluent-kafka-connect, cp-kafka-connect
-#confluent-kafka, cp-kafka
-#confluent-zookeeper, cp-kafka   <-- Take note!
-```
+This repository makes use of the systemd scripts provided in Confluent Platform. As such, there is an expected default user/service mapping that follows the convention of using the prefix
+`cp-` followed by the service name. For example `cp-kafka` or `cp-schema-registry`. The one exception is that ZooKeeper is run as the `cp-kafka` user. This matches the systemd scripts as well.
