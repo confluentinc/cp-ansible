@@ -91,5 +91,5 @@ ansible-playbook -i hosts.yml all.yml
 
 # Additional information
 
-This repository makes use of the systemd scripts provided in Confluent Platform. As such, there is an expected default user/service mapping that follows the convention of using the prefix
+This repository makes use of the [systemd scripts provided in Confluent Platform](https://docs.confluent.io/current/installation/scripted-install.html). As such, there is an expected default user/service mapping that follows the convention of using the prefix
 `cp-` followed by the service name. For example `cp-kafka` or `cp-schema-registry`. The one exception is that ZooKeeper is run as the `cp-kafka` user. This matches the systemd scripts as well.
