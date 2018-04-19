@@ -1,5 +1,9 @@
 Ansible playbooks for installing the [Confluent Platform](http://www.confluent.io).
 
+Note:
+These playbooks are provided without support and are intended to be a guideline. Any issues encountered can be reported
+via GitHub issues and will be addressed on a best effort basis.
+
 # Requirements
 
 * Confluent Platform 4.1 or higher
