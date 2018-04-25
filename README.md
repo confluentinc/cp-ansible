@@ -7,7 +7,7 @@ via GitHub issues and will be addressed on a best effort basis.
 # Requirements
 
 * Confluent Platform 4.1 or higher
-* Ansible (on control node)
+* Ansible 2.5.x or higher (on control node)
 * passwordless ssh between all hosts
 * sudo access for ssh user for all hosts
 
