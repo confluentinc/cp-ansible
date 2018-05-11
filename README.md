@@ -55,6 +55,13 @@ Future work and additional features should be tracked in the GitHub issues for t
 PLAINTEXT, SSL, SASL_SSL each have example playbooks and hosts files in their respective `plaintext`, `ssl`, `sasl_ssl` directories.
 The `hosts.yml` and `all.yml` files at the repository root match the `sasl_ssl` and this can be considered the default path.
 
+## Setting up a `hosts.yml`
+
+This repository has a demo `hosts.yml` file in the root directory. This file is where you specify which roles will be run on each host. For more information on
+the host file in general please see the [Ansible documentation](http://docs.ansible.com/ansible/latest/user_guide/intro_inventory.html#hosts-and-groups). For this
+particular setup, you will want to ensure each host in your cluster is a member of the `preflight` role. Other than that, you can specify as many or as few of each service
+as makes sense for your use case. The setup in the demo `hosts.yml` works well on 4 t2.xlarge AWS instances.
+
 ## Template properties files
 
 Each service has three template properties files. Which properties file template will be used depends on the value of `security_mode` set. Valid options are `plaintext`, `ssl`, `sasl_ssl`.
