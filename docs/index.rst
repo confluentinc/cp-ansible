@@ -48,9 +48,11 @@ The services that can be installed from this repository are:
 * Kafka Connect (distributed mode)
 
 
-=====
 Scope
-=====
+-----
+
+In Scope
+~~~~~~~~
 
 These Ansible playbooks are intended as a general template for setting up a production-ready proof of concept environment. There are three available templates.
 
@@ -59,8 +61,8 @@ These Ansible playbooks are intended as a general template for setting up a prod
 * SASL_SSL -- use these templates if you require plaintext SASL authentication and SSL encryption
 
 
-Out of scope
-------------
+Out of Scope
+~~~~~~~~~~~~
 
 The playbooks and templates generate self-signed certificates and use SASL plaintext authentication for a simple proof of concept that demonstrates the use of security features. The following are not in scope:
 
@@ -70,9 +72,10 @@ The playbooks and templates generate self-signed certificates and use SASL plain
 * Provisioning of machines
 
 Future work and additional features
------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Future work and additional features should be tracked in the GitHub issues for the repository.
+
 
 ==========================
 How to use this repository
