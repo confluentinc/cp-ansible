@@ -3,8 +3,6 @@
 Ansible Playbooks for Confluent Platform
 ========================================
 
-Ansible playbooks for installing the `Confluent Platform <http://www.confluent.io>`__.
-
 .. contents:: Contents
     :local:
     :depth: 2
@@ -14,9 +12,9 @@ Ansible playbooks for installing the `Confluent Platform <http://www.confluent.i
 Overview
 ========
 
-Ansible playbooks for installing the `Confluent Platform <http://www.confluent.io>`__.
+Confluent provides Ansible playbooks for installing the `Confluent Platform <http://www.confluent.io>`__.
 
-.. note:: These playbooks are provided without support and are intended to be a guideline. Any issues encountered can be reported via `GitHub issues<https://github.com/confluentinc/cp-ansible/issues>`_ and will be addressed on a best effort basis.
+.. note:: These playbooks are provided without support and are intended to be a guideline. Any issues encountered can be reported via the `cp-ansible GitHub repo <https://github.com/confluentinc/cp-ansible/issues>`__ and will be addressed on a best effort basis.
 
 
 ============
@@ -119,23 +117,24 @@ Running
 Run the whole setup
 ~~~~~~~~~~~~~~~~~~~
 
-```bash
-ansible-playbook -i hosts.yml all.yml
-```
+.. sourcecode:: bash
+
+   ansible-playbook -i hosts.yml all.yml
 
 Check for Changes
 ~~~~~~~~~~~~~~~~~
 
-```bash
-ansible-playbook --check -i hosts.yml all.yml
-```
+.. sourcecode:: bash
+
+   ansible-playbook --check -i hosts.yml all.yml
 
 Apply Changes
 ~~~~~~~~~~~~~
 
-```bash
-ansible-playbook -i hosts.yml all.yml
-```
+.. sourcecode:: bash
+
+   ansible-playbook -i hosts.yml all.yml
+
 
 ======================
 Additional information
