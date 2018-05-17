@@ -80,6 +80,20 @@ The service properties file templates in this repository use the plaintext SASL 
 if you choose to use Kerberos keytabs for authentication, you can modify `roles/<service>/templates/<service>_sasl_ssl.properties.j2` to use the SASL mechanism GSSAPI and update the JAAS
 configuration. Please consult [the security documentation](https://docs.confluent.io/current/kafka/authentication_sasl_gssapi.html) for specific examples on updating the configuration.
 
+## Variables
+
+ansible group variables: 
+
+`zookeeper_id`: a custom zookeeper id, if not specified, the id will be computed based on a loop index
+`broker.rack`: a rack (zone) that hosts the kafka broker. It enables the rack-awareness feature
+`confuent.version`: a dict with `major`, `minor`, `patch` that helps us to identify a specific CP version
+`confluent.oss`: whether to use the OSS Version
+`confluent.latest`: whether to upgrade to the latest version, or stick to confuent.version 
+
+## Calling 
+
+check `examples/plaintext/all_single_play.yaml` or `examples/plaintext/all_multiplays.yaml` to see how to implement this role
+ 
 ## Running
 
 ### Run the whole setup

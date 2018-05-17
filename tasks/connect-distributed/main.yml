@@ -1,0 +1,44 @@
+- name: connect distributed create group
+  group:
+    name: "{{ kafka.connect.distributed.group }}"
+  become: yes
+
+- name: connect distributed create user
+  user:
+    name: "{{ kafka.connect.distributed.user }}"
+    comment: "Connect Distributed User"
+    system: yes
+    group: "{{ kafka.connect.distributed.group }}"
+  become: yes
+
+- name: connect distributed create config
+  template:
+    src: connect-distributed/connect-distributed.properties.j2
+    dest: "{{ kafka.connect.distributed.config_file }}"
+    mode: 0640
+    owner: "{{ kafka.connect.distributed.user }}"
+    group: "{{ kafka.connect.distributed.group }}"
+  notify:
+    - restart connect distributed
+  become: yes
+
+- name: connect distributed add env var to service file
+  ini_file:
+    path: /usr/lib/systemd/system/confluent-kafka-connect.service
+    section: Service
+    # Mind the quote in option and option ! We want it to be a quoted string in the target file
+    option: "Environment='{{ var.key }}"
+    value: "{{ var.value }}'"
+    no_extra_spaces: yes
+  with_dict: "{{ kafka.connect.distributed.environment }}"
+  loop_control:
+    loop_var: var
+  notify: reload systemd
+  become: yes
+
+- name: connect distributed configure service
+  systemd:
+    name: "{{ kafka.connect.distributed.service_name }}"
+    enabled: "{{ kafka.connect.distributed.systemd.enabled }}"
+    state: "{{ kafka.connect.distributed.systemd.state }}"
+  become: yes
