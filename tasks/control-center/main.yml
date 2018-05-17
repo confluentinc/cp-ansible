@@ -1,6 +1,7 @@
 - name: control center create group
   group:
     name: "{{ confluent.control.center.group }}"
+  become: yes
 
 - name: control center create user
   user:
@@ -8,6 +9,7 @@
     comment: "Control Center User"
     system: yes
     group: "{{ confluent.control.center.group }}"
+  become: yes
 
 - name: control center create config
   template:
@@ -16,34 +18,27 @@
     mode: 0640
     owner: "{{ confluent.control.center.user }}"
     group: "{{ confluent.control.center.group }}"
-  when: security_mode == "plaintext"
   notify:
     - restart control center
+  become: yes
 
-- name: control center create config
-  template:
-    src: control-center/control-center_ssl.properties.j2
-    dest: "{{ confluent.control.center.config_file }}"
-    mode: 0640
-    owner: "{{ confluent.control.center.user }}"
-    group: "{{ confluent.control.center.group }}"
-  when: security_mode == "ssl"
-  notify:
-    - restart control center
-
-- name: control center create config
-  template:
-    src: control-center/control-center_sasl_ssl.properties.j2
-    dest: "{{ confluent.control.center.config_file }}"
-    mode: 0640
-    owner: "{{ confluent.control.center.user }}"
-    group: "{{ confluent.control.center.group }}"
-  when: security_mode == "sasl_ssl"
-  notify:
-    - restart control center
+- name: Control Center add env var to service file
+  ini_file:
+    path: /usr/lib/systemd/system/confluent-control-center.service
+    section: Service
+    # Mind the quote in option and option ! We want it to be a quoted string in the target file
+    option: "Environment='{{ var.key }}"
+    value: "{{ var.value }}'"
+    no_extra_spaces: yes
+  with_dict: "{{ confluent.control.center.environment }}"
+  loop_control:
+    loop_var: var
+  notify: reload systemd
+  become: yes
 
 - name: control center configure service
   systemd:
     name: "{{ confluent.control.center.service_name }}"
     enabled: "{{ confluent.control.center.systemd.enabled }}"
     state: "{{ confluent.control.center.systemd.state }}"
+  become: yes

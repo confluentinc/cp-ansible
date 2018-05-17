@@ -1,6 +1,7 @@
 - name: schema-registry create group
   group:
     name: "{{ schema.registry.group }}"
+  become: yes
 
 - name: schema-registry create user
   user:
@@ -8,6 +9,7 @@
     comment: "Schema Registry User"
     system: yes
     group: "{{ schema.registry.group }}"
+  become: yes
 
 - name: schema-registry create config
   template:
@@ -16,34 +18,27 @@
     mode: 0640
     owner: "{{ schema.registry.user }}"
     group: "{{ schema.registry.group }}"
-  when: security_mode == "plaintext"
   notify:
     - restart schema-registry
+  become: yes
 
-- name: schema-registry create config
-  template:
-    src: schema-registry/schema-registry_ssl.properties.j2
-    dest: "{{ schema.registry.config_file }}"
-    mode: 0640
-    owner: "{{ schema.registry.user }}"
-    group: "{{ schema.registry.group }}"
-  when: security_mode == "ssl"
-  notify:
-    - restart schema-registry
-
-- name: schema-registry create config
-  template:
-    src: schema-registry/schema-registry_sasl_ssl.properties.j2
-    dest: "{{ schema.registry.config_file }}"
-    mode: 0640
-    owner: "{{ schema.registry.user }}"
-    group: "{{ schema.registry.group }}"
-  when: security_mode == "sasl_ssl"
-  notify:
-    - restart schema-registry
+- name: Schema registry add env var to service file
+  ini_file:
+    path: /usr/lib/systemd/system/confluent-schema-registry.service
+    section: Service
+    # Mind the quote in option and option ! We want it to be a quoted string in the target file
+    option: "Environment='{{ var.key }}"
+    value: "{{ var.value }}'"
+    no_extra_spaces: yes
+  with_dict: "{{ schema.registry.environment }}"
+  loop_control:
+    loop_var: var
+  notify: restart schema registry with daemon_reload
+  become: yes
 
 - name: schema-registry configure service
   systemd:
     name: "{{ schema.registry.service_name }}"
     enabled: "{{ schema.registry.systemd.enabled }}"
     state: "{{ schema.registry.systemd.state }}"
+  become: yes
