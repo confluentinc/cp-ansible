@@ -1,13 +1,13 @@
 confluent_roles: []
 
 # Default var to identify ansible groups
-brokers: null
-zookeepers: null
-connects: null
-rests: null
-ksqls: null
-registries: null
-ccenter: null
+hosts:
+  kafka:
+    brokers: null
+    connects: null
+  zookeepers: null
+  schema:
+    registries: null
 
 # Default and global vars
 security_mode: plaintext
@@ -36,6 +36,12 @@ zookeeper:
     state: started
 
 confluent:
+  version:
+    major: 4
+    minor: 1
+    patch: 1
+  latest: yes
+  oss: false
   control:
     center:
       user: cp-control-center
@@ -99,8 +105,9 @@ kafka:
       enabled: yes
       state: started
     environment:
-      KAFKA_HEAP_OPTS: "-Xmx{{ [(ansible_memory_mb.real.total * 0.5) | int, 6 * 1024] | min }}M"
-  #    KAFKA_OPTS: "-Djava.net.preferIPv4Stack=true"
+      KAFKA_HEAP_OPTS: "-Xms{{ [(ansible_memory_mb.real.total * 0.5) | int, 6 * 1024] | min }}M -Xmx{{ [(ansible_memory_mb.real.total * 0.5) | int, 6 * 1024] | min }}M"
+      # Let's disable -loggc, which is not the normal behaviour we want
+      EXTRA_ARGS: "-name kafkaServer"
     config:
       group.initial.rebalance.delay.ms: 0
       log.retention.check.interval.ms: 300000
@@ -117,6 +124,7 @@ kafka:
       transaction.state.log.min.isr: 2
       transaction.state.log.replication.factor: 3
       zookeeper.connection.timeout.ms: 6000
+    config_non_oss:
       metric.reporters: io.confluent.metrics.reporter.ConfluentMetricsReporter
       confluent.metrics.reporter.bootstrap.servers: "{{inventory_hostname}}:9092"
 
@@ -127,9 +135,7 @@ kafka:
     service_name: confluent-kafka-rest
     config:
       listeners: http://0.0.0.0:8082
-    environment:
-      LOG_DIR: /var/log/kafka-rest
-  #    KAFKA_OPTS: "-Djava.net.preferIPv4Stack=true"
+    environment: {}
     systemd:
       enabled: yes
       state: started
@@ -143,7 +149,6 @@ ksql:
     application.id: ksql-server
     listeners: http://localhost:8088
   environment: {}
-#    KAFKA_OPTS: "-Djava.net.preferIPv4Stack=true"
   systemd:
     enabled: yes
     state: started
