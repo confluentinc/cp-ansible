@@ -86,9 +86,11 @@ ansible group variables:
 
 `zookeeper_id`: a custom zookeeper id, if not specified, the id will be computed based on a loop index
 `broker.rack`: a rack (zone) that hosts the kafka broker. It enables the rack-awareness feature
+`broker.zookeeper_chroot_path`: Used for multi projects zookeepers
 `confuent.version`: a dict with `major`, `minor`, `patch` that helps us to identify a specific CP version
 `confluent.oss`: whether to use the OSS Version
 `confluent.latest`: whether to upgrade to the latest version, or stick to confuent.version 
+
 
 ## Calling 
 
