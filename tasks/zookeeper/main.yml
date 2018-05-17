@@ -1,6 +1,8 @@
 - name: zookeeper create group
   group:
     name: "{{ zookeeper.group }}"
+    state: present
+  become: yes
 
 - name: zookeeper create user
   user:
@@ -8,6 +10,21 @@
     comment: "Zookeeper User"
     system: yes
     group: "{{ zookeeper.group }}"
+  become: yes
+
+- name: Ensure zookeeper data directories are created
+  file:
+    path: "{{ dir }}"
+    state: directory
+    owner: "{{ zookeeper.user }}"
+    group: "{{ zookeeper.group }}"
+    mode: 0750
+  become: yes
+  with_items:
+    - "{{ zookeeper.config.dataDir }}"
+    - "{{ zookeeper.config.dataLogDir }}"
+  loop_control:
+    loop_var: dir
 
 - name: zookeeper myid file
   template:
@@ -16,6 +33,8 @@
     mode: 0555
     owner: "{{ zookeeper.user }}"
     group: "{{ zookeeper.group }}"
+  become: yes
+  notify: restart zookeeper
 
 - name: zookeeper create config
   template:
@@ -24,9 +43,12 @@
     mode: 0400
     owner: "{{ zookeeper.user }}"
     group: "{{ zookeeper.group }}"
+  become: yes
+  notify: restart zookeeper
 
 - name: zookeeper configure service
   systemd:
     name: "{{ zookeeper.service_name }}"
     enabled: "{{ zookeeper.systemd.enabled }}"
     state: "{{ zookeeper.systemd.state }}"
+  become: yes
