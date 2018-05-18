@@ -12,7 +12,7 @@ Ansible Playbooks for Confluent Platform
 Overview
 ========
 
-Confluent provides Ansible playbooks for installing the `Confluent Platform <http://www.confluent.io>`__.
+Confluent provides `Ansible playbooks <https://github.com/confluentinc/cp-ansible>`__ for installing the `Confluent Platform <http://www.confluent.io>`__.
 
 .. note:: These playbooks are provided without support and are intended to be a guideline. Any issues encountered can be reported via the `cp-ansible GitHub repo <https://github.com/confluentinc/cp-ansible/issues>`__ and will be addressed on a best effort basis.
 
@@ -23,6 +23,7 @@ Requirements
 
 * Confluent Platform 4.1 or higher
 * Ansible 2.5.x or higher (on control node)
+* `Confluent Platform Ansible playbooks <https://github.com/confluentinc/cp-ansible>`__
 * passwordless ssh between all hosts
 * sudo access for ssh user for all hosts
 
@@ -30,7 +31,7 @@ Requirements
 Introduction
 ============
 
-Ansible provides a simple way to deploy, manage, and configure the Confluent Platform services. This repository provides playbooks and templates to easily spin up a Confluent Platform installation. Specifically this repository:
+Ansible provides a simple way to deploy, manage, and configure the Confluent Platform services. The `cp-ansible  <https://github.com/confluentinc/cp-ansible>`__ repository provides playbooks and templates to easily spin up a Confluent Platform installation. Specifically this repository:
 
 * Installs Confluent Platform packages
 * Starts services using systemd scripts
