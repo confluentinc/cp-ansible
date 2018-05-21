@@ -1,0 +1,57 @@
+---
+- name: broker group
+  group:
+    name: "{{ kafka.broker.group }}"
+  become: yes
+
+- name: broker user
+  user:
+    name: "{{ kafka.broker.user }}"
+    comment: "Kafka User"
+    system: yes
+    group: "{{ kafka.broker.group }}"
+  become: yes
+
+- name: create broker data directories
+  file:
+    path: "{{ directory }}"
+    owner: "{{ kafka.broker.user }}"
+    group: "{{ kafka.broker.group }}"
+    state: directory
+    mode: 0755
+  with_item: "{{ kafka.broker.datadir }}"
+  loop_control:
+    loop_var: directory
+  become: yes
+
+- name: broker plaintext config
+  template:
+    src: kafka-broker/server.properties.j2
+    dest: "{{ kafka.broker.config_file }}"
+    mode: 0640
+    owner: "{{ kafka.broker.user }}"
+    group: "{{ kafka.broker.group }}"
+  notify:
+    - restart kafka
+  become: yes
+
+- name: kafka broker add env var to service file
+  ini_file:
+    path: /usr/lib/systemd/system/confluent-kafka.service
+    section: Service
+    # Mind the quote in option and option ! We want it to be a quoted string in the target file
+    option: "Environment='{{ var.key }}"
+    value: "{{ var.value }}'"
+    no_extra_spaces: yes
+  with_dict: "{{ kafka.broker.environment | default({}) }}"
+  loop_control:
+    loop_var: var
+  notify: reload systemd
+  become: yes
+
+- name: broker configure service
+  systemd:
+    name: "{{ kafka.broker.service_name }}"
+    enabled: "{{ kafka.broker.systemd.enabled }}"
+    state: "{{ kafka.broker.systemd.state }}"
+  become: yes

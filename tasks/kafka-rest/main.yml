@@ -1,0 +1,45 @@
+---
+- name: kafka-rest create group
+  group:
+    name: "{{ kafkarest.group }}"
+  become: yes
+
+- name: kafka-rest create user
+  user:
+    name: "{{ kafkarest.user }}"
+    comment: "Kafka REST User"
+    system: yes
+    group: "{{ kafkarest.group }}"
+  become: yes
+
+- name: kafka-rest create config
+  template:
+    src: kafka-rest/kafka-rest.properties.j2
+    dest: "{{ kafkarest.config_file }}"
+    mode: 0640
+    owner: "{{ kafkarest.user }}"
+    group: "{{ kafkarest.group }}"
+  notify:
+    - restart kafka-rest
+  become: yes
+
+- name: kafka rest add env var to service file
+  ini_file:
+    path: /usr/lib/systemd/system/confluent-kafka-rest.service
+    section: Service
+    # Mind the quote in option and option ! We want it to be a quoted string in the target file
+    option: "Environment='{{ var.key }}"
+    value: "{{ var.value }}'"
+    no_extra_spaces: yes
+  with_dict: "{{ kafkarest.environment | default({}) }}"
+  loop_control:
+    loop_var: var
+  notify: reload systemd
+  become: yes
+
+- name: kafka-rest configure service
+  systemd:
+    name: "{{ kafkarest.service_name }}"
+    enabled: "{{ kafkarest.systemd.enabled }}"
+    state: "{{ kafkarest.systemd.state }}"
+  become: yes
