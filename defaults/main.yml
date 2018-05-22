@@ -1,0 +1,147 @@
+# List that hold the confluent sub roles to process
+confluent_roles: []
+broker:
+  config:
+    port: 9092
+
+confluent:
+  version:
+    major: 4
+    minor: 1
+    patch: 1-1
+  latest: no
+  oss: no
+  control:
+    center:
+      user: cp-control-center
+      group: confluent
+      config_file: /etc/confluent-control-center/control-center-production.properties
+      service_name: confluent-control-center
+      config:
+        confluent.controlcenter.streams.num.stream.threads: 8
+        confluent.controlcenter.data.dir: /var/lib/confluent/control-center
+      systemd:
+        enabled: yes
+        state: started
+kafka:
+  connect:
+    distributed:
+      config_file: /etc/kafka/connect-distributed.properties
+      service_name: confluent-kafka-connect
+      user: cp-kafka-connect
+      group: confluent
+      config:
+        consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
+        producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+        config.storage.replication.factor: 3
+        config.storage.topic: connect-configs
+        group.id: connect-cluster
+        internal.key.converter: org.apache.kafka.connect.json.JsonConverter
+        internal.key.converter.schemas.enable: false
+        internal.value.converter: org.apache.kafka.connect.json.JsonConverter
+        internal.value.converter.schemas.enable: false
+        offset.flush.interval.ms: 10000
+        offset.storage.replication.factor: 3
+        offset.storage.topic: connect-offsets
+        status.storage.replication.factor: 3
+        status.storage.topic: connect-status
+        key.converter: io.confluent.connect.avro.AvroConverter
+        value.converter: io.confluent.connect.avro.AvroConverter
+        plugin.path: /usr/share/java
+      systemd:
+        enabled: yes
+        state: started
+  tools:
+    user: cp-kafka
+    group: confluent
+    config_file: /etc/kafka/kafka-tools.properties
+    config:
+      client.id: tester
+  broker:
+    user: cp-kafka
+    group: confluent
+    config_file: /etc/kafka/server.properties
+    systemd_file: /usr/lib/systemd/system/confluent-kafka.service
+    service_name: confluent-kafka
+    datadir:
+      - /var/lib/kafka/data
+    systemd:
+      enabled: yes
+      state: started
+    config:
+      group.initial.rebalance.delay.ms: 0
+      log.retention.check.interval.ms: 300000
+      log.retention.hours: 168
+      log.segment.bytes: 1073741824
+      num.io.threads: 16
+      num.network.threads: 8
+      num.partitions: 1
+      num.recovery.threads.per.data.dir: 2
+      offsets.topic.replication.factor: 3
+      socket.receive.buffer.bytes: 102400
+      socket.request.max.bytes: 104857600
+      socket.send.buffer.bytes: 102400
+      transaction.state.log.min.isr: 2
+      transaction.state.log.replication.factor: 3
+      zookeeper.connection.timeout.ms: 6000
+    config_enterprise:
+      metric.reporters: io.confluent.metrics.reporter.ConfluentMetricsReporter
+      confluent.metrics.reporter.bootstrap.servers: "{{ inventory_hostname }}:9092"
+kafkarest:
+  user: cp-kafka-rest
+  group: confluent
+  config_file: /etc/kafka-rest/kafka-rest.properties
+  service_name: confluent-kafka-rest
+  config:
+    listeners: http://0.0.0.0:8082
+  environment:
+    LOG_DIR: /var/log/kafka-rest
+  systemd:
+    enabled: yes
+    state: started
+ksql:
+  config_file: /etc/ksql/ksql-server.properties
+  service_name: confluent-ksql
+  user: cp-ksql
+  group: confluent
+  config:
+    application.id: ksql-server
+    listeners: http://localhost:8088
+  systemd:
+    enabled: yes
+    state: started
+schema:
+  registry:
+    user: cp-schema-registry
+    group: confluent
+    config_file: /etc/schema-registry/schema-registry.properties
+    service_name: confluent-schema-registry
+    config:
+      listeners: http://0.0.0.0:8081
+      kafkastore.topic: _schemas
+      debug: false
+    environment:
+      SCHEMA_REGISTRY_HEAP_OPTS: "-Xmx1000M"
+    systemd:
+      enabled: yes
+      state: started
+
+zookeeper:
+  user: cp-kafka
+  group: confluent
+  config_file: /etc/kafka/zookeeper.properties
+  service_name: confluent-zookeeper
+  config:
+    clientPort: 2181
+    maxClientCnxns: 0
+    initLimit: 5
+    syncLimit: 2
+    autopurge.snapRetainCount: 10
+    autopurge.purgeInterval: 1
+    dataDir: /var/lib/zookeeper
+    dataLogDir: /var/lib/zookeeper/log
+  environment:
+    KAFKA_HEAP_OPTS: "-Xmx1000M"
+  systemd:
+    enabled: yes
+    state: started
