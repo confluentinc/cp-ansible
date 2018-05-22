@@ -1,0 +1,30 @@
+- name: Extract the confluent version
+  set_fact:
+    confluent_version: "{{ confluent_version | default([]) }} + [ '{{ versionvalue.value }}' ]"
+  with_dict: "{{ confluent.version }}"
+  loop_control:
+    loop_var: versionvalue
+
+- name: Install Java
+  package:
+    name: "{{ openjdk_package }}"
+    state: latest
+
+- name: Disable Require TTY in Sudoers (required for ansible synchronize)
+  lineinfile:
+    path: /etc/sudoers
+    state: absent
+    regexp: '^Defaults\s+requiretty.*$'
+
+# Import Distribution Specific tasks
+- name: "Include os {{ ansible_os_family }} specific"
+  include_tasks: "{{ ansible_os_family }}.yml"
+
+- name: Install the Confluent Platform
+  package:
+    name: "{{ package_name }}"
+    state: "{% if confluent.latest %}latest{% else %}present{% endif %}"
+  become: yes
+
+- import_tasks: ssl_certs.yml
+  when: security_mode == "ssl" or security_mode == "sasl_ssl"
