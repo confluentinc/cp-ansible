@@ -1,0 +1,68 @@
+---
+- name: zookeeper create group
+  group:
+    name: "{{ zookeeper.group }}"
+  become: yes
+
+- name: zookeeper create user
+  user:
+    name: "{{ zookeeper.user }}"
+    comment: "Zookeeper User"
+    system: yes
+    group: "{{ zookeeper.group }}"
+  become: yes
+
+- name: Ensure zookeeper data directories are created
+  file:
+    path: "{{ dir }}"
+    state: directory
+    owner: "{{ zookeeper.user }}"
+    group: "{{ zookeeper.group }}"
+    mode: 0750
+  become: yes
+  with_items:
+    - "{{ zookeeper.config.dataDir }}"
+    - "{{ zookeeper.config.dataLogDir }}"
+  loop_control:
+    loop_var: dir
+
+- name: zookeeper myid file
+  template:
+    src: zookeeper/myid.j2
+    dest: "{{ zookeeper.config.dataDir }}/myid"
+    mode: 0555
+    owner: "{{ zookeeper.user }}"
+    group: "{{ zookeeper.group }}"
+  become: yes
+
+- name: zookeeper create config
+  template:
+    src: zookeeper/zookeeper.properties.j2
+    dest: "{{ zookeeper.config_file }}"
+    mode: 0400
+    owner: "{{ zookeeper.user }}"
+    group: "{{ zookeeper.group }}"
+  become: yes
+
+- name: Zookeeper add env var to service file
+  ini_file:
+    path: /usr/lib/systemd/system/confluent-zookeeper.service
+    section: Service
+    # Mind the quote in option and option ! We want it to be a quoted string in the target file
+    option: "Environment='{{ var.key }}"
+    value: "{{ var.value }}'"
+    no_extra_spaces: yes
+  with_dict: "{{ zookeeper.environment | default({}) }}"
+  loop_control:
+    loop_var: var
+  notify: reload systemd
+  become: yes
+
+- name: zookeeper configure service
+  systemd:
+    name: "{{ zookeeper.service_name }}"
+    enabled: "{{ zookeeper.systemd.enabled }}"
+    state: "{{ zookeeper.systemd.state }}"
+  become: yes
+  notify:
+    - restart zookeeper
