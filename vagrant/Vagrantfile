@@ -1,0 +1,138 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+require 'set'
+
+VAGRANT_BOX = ENV['VAGRANT_BOX'] || "centos/7"
+
+ANSIBLE_LIMIT = ENV['ANSIBLE_LIMIT'] || 'all'
+
+CP_SECURITY_MODE = ENV['CP_SECURITY_MODE'] || 'plaintext'
+CP_KAFKA_LOG_RETENION_HOURS = (ENV['CP_KAFKA_LOG_RETENION_HOURS'] || '48').to_i
+
+# Consider extracting this to a YAML or JSON file
+machines = {
+  zk: {
+    ports: [2181],
+    groups: ["zookeeper"]
+  }, 
+  kafka: {
+    memory: 3072,
+    cpus: 2,
+    ports: [9092, 8081],
+    groups: ["broker", "schema-registry"],
+    vars: {"kafka" => '{"broker": {"id": 1}}'}
+  }, 
+  connect: {
+    ports: [8083],
+    groups: ["connect"]
+  }
+}
+
+Vagrant.configure("2") do |config|
+
+  if Vagrant.has_plugin?("vagrant-hostmanager")
+    config.hostmanager.enabled = true
+    config.hostmanager.manage_host = true
+    config.hostmanager.ignore_private_ip = false
+    config.hostmanager.include_offline = true
+  end
+
+  # More info on http://fgrehm.viewdocs.io/vagrant-cachier/usage
+  if Vagrant.has_plugin?("vagrant-cachier")
+    config.cache.scope = :machine
+  end
+  
+  config.vm.box = VAGRANT_BOX
+  config.vm.synced_folder '.', '/vagrant', disabled: true
+
+  machines.each_with_index do |(machine, machine_conf), index|
+    hostname = "cp.#{machine.to_s}.vagrant"
+    config.vm.define hostname do |v|
+      v.vm.network "private_network", ip: "192.168.100.#{101+index}"
+      v.vm.hostname = hostname
+
+      machine_conf[:ports].each do |port|
+        v.vm.network "forwarded_port", guest: port, host: port
+      end
+
+      v.vm.provider "virtualbox" do |vb|
+        vb.memory = machine_conf[:memory] || 1536 # Give overhead for 1G default heaps
+        vb.cpus = machine_conf[:cpus] || 1
+      end
+
+      if (index == machines.length - 1)
+        # This is only here for debugging purposes
+        if ["up", "provision"].include? ARGV[0]
+          puts "===> Provisioning"
+        end
+
+        v.vm.provision "ansible" do |ansible|
+          ansible.limit = ANSIBLE_LIMIT
+          ansible.playbook = "site.yml"
+          ansible.become = true
+          ansible.verbose = "vv"
+
+          groups = group_up(machines)
+
+          brokers = groups["broker"]
+          replication_factor = [3, brokers.length].min
+
+          group_vars = {
+            "all:vars" => {"security_mode" => CP_SECURITY_MODE},
+            "broker:vars" => {
+              "kafka_log_retention_hours" => CP_KAFKA_LOG_RETENION_HOURS,
+              "kafka_offsets_topic_replication_factor" => replication_factor,
+              "kafka_transaction_state_log_replication_factor" => replication_factor,
+              "kafka_confluent_metrics_reporter_topic_replicas" => replication_factor
+            }, 
+            "connect:vars" => {
+              "connect_distributed_config_storage_replication_factor" => replication_factor, 
+              "connect_distributed_offset_storage_replication_factor" => replication_factor,
+              "connect_distributed_status_storage_replication_factor" => replication_factor
+            }
+          }
+          ansible.groups = groups.merge(group_vars)
+          ansible.host_vars = host_vars(machines)
+        end # Ansible provisioner
+      end # If last machine
+    end # machine configuration
+  end # for each machine
+end
+
+# Helper method to define machine groupings
+def group_up (machines)
+  groups = Hash.new
+  machines.each do |name, config|
+    config[:groups].each do |group|
+      if !groups.has_key?(group)
+        groups[group] = Set.new
+      end
+      groups[group].add("cp.#{name}.vagrant")
+    end
+  end
+
+  groups.each do |k, v|
+    groups[k] = v.to_a
+  end
+
+  all_groups = Array.new
+  groups.each do |k, v|
+     all_groups.push(k)
+  end
+  groups["all_groups:children"] = all_groups
+
+  return groups
+end
+
+# Helper method to extract host vars
+def host_vars(machines)
+  hosts = Hash.new
+  machines.each do |name, config|
+    if config.has_key?(:vars)
+      hosts["cp.#{name}.vagrant"] = config[:vars]
+    end
+  end
+  
+  return hosts
+end
