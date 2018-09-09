@@ -3,10 +3,20 @@
 
 require 'set'
 require 'yaml'
+require 'json'
 
 $vagrant_box = ENV['VAGRANT_BOX'] || "bento/centos-7"
 
-$ansible_limit = ENV['ANSIBLE_LIMIT'] || 'all'
+# Short-circuting the 'ansible.limit' variable via Vagrant args
+arg0 = ARGV[0]
+arg1 = ARGV[1] || ""
+up_provisioning = (arg0 == "up" && arg1 != "--no-provision")
+host_provisioning = (arg0 == "provision" && arg1 != "")
+if host_provisioning
+  $ansible_limit = arg1
+else
+  $ansible_limit = ENV['ANSIBLE_LIMIT'] || 'all'
+end
 
 $cp_security_mode = ENV['CP_SECURITY_MODE'] || 'plaintext'
 
@@ -37,6 +47,23 @@ def ansible_provision(v, ansible_limit, group_vars, host_vars)
   end
 end
 
+def set_broker_id(name, machine_conf, broker_id)
+  # If broker already has variables
+  if machine_conf.key?("vars") && machine_conf["vars"].key?("kafka")
+    begin # try to parse the Python-dict formatted broker vars as JSON
+      existing_kafka_conf = JSON.parse(machine_conf["vars"]["kafka"])
+      # attempt to access existing broker id
+      broker_id = existing_kafka_conf["broker"]["id"]
+    rescue
+      puts "==> #{name} does not have a 'broker.id' value. Setting it to #{broker_id}."
+      machine_conf["vars"].merge({"kafka" => "{\"broker\": {\"id\": #{broker_id}}}"})
+    end
+  else # host vars don't exist, so set them
+    puts "==> #{name} does not have a 'broker.id' value. Setting it to #{broker_id}."
+    machine_conf["vars"] = {"kafka" => "{\"broker\": {\"id\": #{broker_id}}}"}
+  end
+end
+
 puts("==> Loading CP_PROFILE='#{$profile}'")
 machines = YAML.load_file(File.join(File.dirname(__FILE__), 'profiles', "#{$profile}.yml"))
 validate_machine_groups(machines)
@@ -64,6 +91,38 @@ Vagrant.configure("2") do |config|
   config.vm.synced_folder '.', '/vagrant', disabled: true
   config.ssh.insert_key = false
 
+  ############ Gathering Machine Variables ############
+  broker_index = 1
+
+  groups = group_up(machines)
+  brokers = groups["broker"]
+  # Services won't start if there are less brokers than their
+  # configured topic replication factors
+  replication_factor = [3, brokers.length].min
+
+  group_vars = {
+    "all:vars" => {"security_mode" => $cp_security_mode},
+    "broker:vars" => {
+      "kafka_log_retention_hours" => $kafka_retention_hours,
+      "kafka_offsets_topic_replication_factor" => replication_factor,
+      "kafka_transaction_state_log_replication_factor" => replication_factor,
+      "kafka_confluent_metrics_reporter_topic_replicas" => replication_factor
+    },
+    "connect-distributed:vars" => {
+      "connect_distributed_config_storage_replication_factor" => replication_factor,
+      "connect_distributed_offset_storage_replication_factor" => replication_factor,
+      "connect_distributed_status_storage_replication_factor" => replication_factor
+    },
+    "control-center:vars" => {
+      "confluent_controlcenter_internal_topics_replication" => replication_factor,
+      "confluent_metrics_topic_replication" => replication_factor,
+      "confluent_monitoring_interceptor_topic_replication" => replication_factor,
+      "confluent_controlcenter_command_topic_replication" => replication_factor
+    }
+  }
+  groups = groups.merge(group_vars)
+
+  ############ Provisioning loop ############
   machines.each_with_index do |(name, machine_conf), index|
 
     config.vm.define name.to_sym do |v|
@@ -90,50 +149,24 @@ Vagrant.configure("2") do |config|
         vb.customize ['modifyvm', :id, '--natdnshostresolver1', 'on']
         # Assign unique mac address
         vb.customize ['modifyvm', :id, '--macaddress1', 'auto']
-
         # guest should sync time if more than 10s off host
         vb.customize [ "guestproperty", "set", :id, "/VirtualBox/GuestAdd/VBoxService/--timesync-set-threshold", 1000 ]
       end
 
       v.vm.provision :shell, inline: "sed -i'' '/^127.0.0.1\\t#{v.vm.hostname}\\t#{name}$/d' /etc/hosts"
 
-      groups = group_up(machines)
+      if (up_provisioning || host_provisioning)
+        # Allow Vagrant to set incremental broker id
+        if machine_conf.key?("groups") && machine_conf["groups"].include?("broker")
+          set_broker_id(name, machine_conf, broker_index)
+          broker_index += 1
+        end
+      end
 
       if index == machines.length - 1
-        # This is only here for debugging purposes
-        arg0 = ARGV[0]
-        arg1 = ARGV[1] || ""
-        provisioning = (arg0 == "up" && arg1 != "--no-provision") || arg0 == "provision"
-        if provisioning
+        if (up_provisioning || host_provisioning)
           puts "==> Provisioning with ANSIBLE_LIMIT='#{$ansible_limit}'"
         end
-
-        brokers = groups["broker"]
-        # Services won't start if there are less brokers than their
-        # configured topic replication factors
-        replication_factor = [3, brokers.length].min
-
-        group_vars = {
-          "all:vars" => {"security_mode" => $cp_security_mode},
-          "broker:vars" => {
-            "kafka_log_retention_hours" => $kafka_retention_hours,
-            "kafka_offsets_topic_replication_factor" => replication_factor,
-            "kafka_transaction_state_log_replication_factor" => replication_factor,
-            "kafka_confluent_metrics_reporter_topic_replicas" => replication_factor
-          },
-          "connect-distributed:vars" => {
-            "connect_distributed_config_storage_replication_factor" => replication_factor,
-            "connect_distributed_offset_storage_replication_factor" => replication_factor,
-            "connect_distributed_status_storage_replication_factor" => replication_factor
-          },
-          "control-center:vars" => {
-            "confluent_controlcenter_internal_topics_replication" => replication_factor,
-            "confluent_metrics_topic_replication" => replication_factor,
-            "confluent_monitoring_interceptor_topic_replication" => replication_factor,
-            "confluent_controlcenter_command_topic_replication" => replication_factor
-          }
-        }
-        groups = groups.merge(group_vars)
 
         host_vars = host_vars(machines)
 
