@@ -1,12 +1,15 @@
-cp-ansible-vagrant
-===
+# cp-ansible-vagrant #
 
-## Setup
+Using Vagrant to get up and running.
 
-### Vagrant plugins
+1) Install VirtualBox https://www.virtualbox.org/  
+2) Install Vagrant http://www.vagrantup.com/  
+3) Vagrant plugins  
 
 ```bash
-vagrant plugin install vagrant-cachier vagrant-hostmanager vagrant-vbguest
+vagrant plugin install vagrant-hostmanager vagrant-vbguest
+# Optional
+vagrant plugin install vagrant-cachier # Caches & shares package downloads across VMs
 ```
 
 ### Define the hosts
@@ -57,9 +60,24 @@ To set a different security mode, find the sibling folders next to `roles/` in t
 CP_SECURITY_MODE=sasl_ssl vagrant up
 ```
 
+## Machine access
+
+To log into one of the machines:
+
+```bash
+vagrant ssh <machineName>
+```
+
 ## Provisioning
 
-By default, all services are provisioned according to their machine groups and targets defined in the `all.yml` file for the chosen security mode playbook.
+If you need to update the running cluster, you can re-run the provisioner (the
+step that installs software and configures services):
+
+```bash
+vagrant provision
+```
+
+By default, all services are provisioned according to their machine groups and targets defined in the `all.yml` file for the chosen security mode playbook.  
 The `ANSIBLE_LIMIT` variable can be used override this behavior to target specific machines. Its syntax matches the `--limit` flag or host pattern options of `ansible` and `ansible-playbook` commands.
 
 ### Provision a group
@@ -76,6 +94,14 @@ The machines are labelled in the `profiles/` directory. If we wanted to re-provi
 
 ```bash
 ANSIBLE_LIMIT='zk[01]' vagrant provision
+```
+
+## Cleanup
+
+If there is a change in the `CP_PROFILE` variable that uses different hostnames for the machines, or once we are done with the Vagrant environment, we can cleanup the cluster by destroying all VMs:
+
+```
+vagrant destroy -f
 ```
 
 ## References
