@@ -3,15 +3,15 @@
 {% set schema_registries = groups.get('schema-registry', []) %}
 {% set ksql_servers = groups.get('ksql', []) %}
 
-bootstrap.servers={% for host in groups['broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{broker.config.port}}{% endfor %}
+bootstrap.servers={{ groups['broker'] | format_host('{host}:{port}', {'port': broker.config.port}) | join(',') }}
 
-{% for key, value in cfg.items() %}
-{{key}}={{value}}
-{% endfor %}
+{{ cfg | to_properties }}
 
 {% if ksql_servers and cfg.get('confluent.controlcenter.ksql.enable', 'false').lower() == 'true' %}
 {% set ksql_server_port = hostvars[ksql_servers[0]].get('ksql_listener_port', 8088) %}
 # KSQL Server
+confluent.controlcenter.ksql.url={{ ksql_servers | first |
+    format_host('http://{host}:{ksql_listener_port}', {}, hostvars, {'ksql_listener_port': 8088}) }}
 confluent.controlcenter.ksql.url=http://{{ ksql_servers[0] }}:{{ ksql_server_port }}
 {% endif %}
 
