@@ -4,6 +4,49 @@ zookeeper:
 broker:
   config:
     port: 9092
+connect:
+  converter:
+    json:
+      value.converter: org.apache.kafka.connect.json.JsonConverter
+      value.converter.schemas.enable: false
+      key.converter: org.apache.kafka.connect.json.JsonConverter
+      key.converter.schemas.enable: false
+    avro:
+      value.converter: io.confluent.connect.avro.AvroConverter
+      value.converter.schema.registry.url: "{{ client.schema.registry.urls }}"
+      key.converter: io.confluent.connect.avro.AvroConverter
+      key.converter.schema.registry.url: "{{ client.schema.registry.urls }}"
+client_config: "{{ { 'plaintext':client.broker.properties.plaintext, 'sasl_ssl':client.broker.properties.sasl_ssl, 'ssl':client.broker.properties.sasl_ssl }[security_mode]| mandatory  }}"
+client:
+  schema:
+    registry:
+      enabled: "{{ groups.get('schema-registry', []) | non_zero }}"
+      urls: "{{ groups.get('schema-registry', []) | format_host('http://{host}:{schema_registry_listener_port}/', {}, hostvars, {'schema_registry_listener_port': 8081}) | join(',') }}"
+  zookeeper:
+    connect: "{{ groups['zookeeper'] | format_host('{host}:{port}', {'port': zookeeper.config.clientPort}) | join(',') }}"
+  broker:
+    bootstrap_servers: "{{ groups['broker'] | format_host('{host}:{port}', {'port': broker.config.port}) | join(',') }}"
+    properties:
+      plaintext:
+        ssl.endpoint.identification.algorithm: ""
+      sasl_ssl:
+        ssl.endpoint.identification.algorithm: ""
+        security.protocol: SASL_SSL
+        ssl.truststore.location: /var/ssl/private/client.truststore.jks
+        ssl.truststore.password: confluent
+        ssl.keystore.location: /var/ssl/private/client.keystore.jks
+        ssl.keystore.password: confluent
+        ssl.key.password: confluent
+        sasl.jaas.config: 'org.apache.kafka.common.security.plain.PlainLoginModule required username="client" password="client-secret";'
+        sasl.mechanism: PLAIN
+      ssl:
+        ssl.endpoint.identification.algorithm: ""
+        security.protocol: SSL
+        ssl.truststore.location: /var/ssl/private/client.truststore.jks
+        ssl.truststore.password: confluent
+        ssl.keystore.location: /var/ssl/private/client.keystore.jks
+        ssl.keystore.password: confluent
+        ssl.key.password: confluent
 confluent:
   package_name: confluent-platform-2.11
   support:

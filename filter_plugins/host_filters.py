@@ -14,18 +14,20 @@ def format_host(hosts, format, values={}, hostvars=None, lookupvars={}):
 
     return result
 
+
 def first(hosts):
     return [hosts[0]]
 
-def get_host(input):
-    result = "{}".format(input)
-    return result
+
+def non_zero(input):
+    return len(input) > 0
+
 
 class FilterModule(object):
     def filters(self):
         return {
-            'get_host': get_host,
             'format_host': format_host,
             'first': first,
+            'non_zero': non_zero,
         }
 

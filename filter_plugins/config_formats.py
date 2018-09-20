@@ -10,6 +10,8 @@ def to_ini(input):
             if isinstance(value, dict):
                 for k,v in sorted(value.items()):
                     result+="{}=\"{}={}\"\n".format(key, k, v)
+            elif isinstance(value, bool):
+                result += "{}={}\n".format(key, str(value).lower())
             else:
                 result += "{}={}\n".format(key, value)
 
@@ -20,23 +22,23 @@ def to_properties(input):
     input_sorted = sorted(input.items())
     result = ""
     for key, value in input_sorted:
-        result+="{}={}\n".format(key, value)
+        if isinstance(value, bool):
+            result += "{}={}\n".format(key, str(value).lower())
+        else:
+            result+="{}={}\n".format(key, value)
     return result
 
 
-def prefix_map(input, prefix):
-    result = {}
-    for key, value in input:
-        result[prefix + key] = value
+def append_prefix(input, prefix):
+    result = input.copy()
+    if isinstance(prefix, list):
+        for p in prefix:
+            for key, value in input.items():
+                result[p + key] = value
+    else:
+        for key, value in input.items():
+            result[prefix + key] = value
     return result
-
-
-def producer(input):
-    return prefix_map(input, 'producer.')
-
-
-def consumer(input):
-    return prefix_map(input, 'consumer.')
 
 
 class FilterModule(object):
@@ -44,8 +46,6 @@ class FilterModule(object):
         return {
             'to_properties': to_properties,
             'to_ini': to_ini,
-            'prefix_map': prefix_map,
-            'producer': producer,
-            'consumer': consumer,
+            'append_prefix': append_prefix
         }
 
