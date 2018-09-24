@@ -1,3 +1,22 @@
+connect_distributed_default:
+  bootstrap.servers: "{{ client.broker.bootstrap_servers }}"
+  rest.port: 8083
+  consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
+  producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+  config.storage.replication.factor: 3
+  config.storage.topic: connect-configs
+  group.id: connect-cluster
+  internal.key.converter: org.apache.kafka.connect.json.JsonConverter
+  internal.key.converter.schemas.enable: false
+  internal.value.converter: org.apache.kafka.connect.json.JsonConverter
+  internal.value.converter.schemas.enable: false
+  offset.flush.interval.ms: 10000
+  offset.storage.replication.factor: 3
+  offset.storage.topic: connect-offsets
+  status.storage.replication.factor: 3
+  status.storage.topic: connect-status
+  plugin.path: /usr/share/java
+converter_config: "{{ { False: connect.converter.json, True: connect.converter.avro }[client.schema.registry.enabled] }}"
 kafka:
   connect:
     distributed:
@@ -8,23 +27,7 @@ kafka:
       group: confluent
       environment:
         KAFKA_HEAP_OPTS: "-Xms256M -Xmx2G"
-      config:
-        rest.port: 8083
-        consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
-        producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
-        config.storage.replication.factor: 3
-        config.storage.topic: connect-configs
-        group.id: connect-cluster
-        internal.key.converter: org.apache.kafka.connect.json.JsonConverter
-        internal.key.converter.schemas.enable: false
-        internal.value.converter: org.apache.kafka.connect.json.JsonConverter
-        internal.value.converter.schemas.enable: false
-        offset.flush.interval.ms: 10000
-        offset.storage.replication.factor: 3
-        offset.storage.topic: connect-offsets
-        status.storage.replication.factor: 3
-        status.storage.topic: connect-status
-        plugin.path: /usr/share/java
+      config: "{{ client_config | append_prefix(['producer.', 'consumer.']) | combine(connect_distributed_default) | combine(converter_config) }}"
       systemd:
         enabled: yes
         state: started
