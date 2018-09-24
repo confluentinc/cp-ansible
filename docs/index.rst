@@ -101,7 +101,7 @@ SSL certificates provided by your own Certificate Authority and use Kerberos key
 Using your own SSL certificates
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The service properties file templates in this repository expect certificates to be stored under `/var/ssl/private`. In this directory, each host stores a keystore and trustore for clients 
+The service properties file templates in this repository expect certificates to be stored under `/var/ssl/private`. In this directory, each host stores a keystore and truststore for clients 
 and a keystore and truststore for Brokers. No differentiation between services is made for simplicity. You can update the exact path to the certificate stores by updating 
 `roles/<service>/templates/<service>_ssl.properties.j2` or `roles/<service>/templates/<service>_sasl_ssl.properties.j2` depending on the security mode you have chosen.
 
