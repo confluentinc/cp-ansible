@@ -1,3 +1,45 @@
+kafka_broker_config_default:
+  confluent.support.metrics.enable: "{{confluent.support.metrics_enabled}}"
+  confluent.support.customer.id: "{{confluent.support.customer_id}}"
+  zookeeper.connect: "{{ client.zookeeper.connect }}"
+  broker.id: "{{ broker.config.id | mandatory }}"
+  group.initial.rebalance.delay.ms: 0
+  log.retention.check.interval.ms: 300000
+  log.retention.hours: 168
+  log.segment.bytes: 1073741824
+  num.io.threads: 16
+  num.network.threads: 8
+  num.partitions: 1
+  num.recovery.threads.per.data.dir: 2
+  offsets.topic.replication.factor: 3
+  socket.receive.buffer.bytes: 102400
+  socket.request.max.bytes: 104857600
+  socket.send.buffer.bytes: 102400
+  transaction.state.log.min.isr: 2
+  transaction.state.log.replication.factor: 3
+  zookeeper.connection.timeout.ms: 6000
+  metric.reporters: io.confluent.metrics.reporter.ConfluentMetricsReporter
+  confluent.metrics.reporter.bootstrap.servers: "{{inventory_hostname}}:{{broker.config.port}}"
+  confluent.metrics.reporter.topic.replicas: 3
+  ssl.endpoint.identification.algorithm: ""
+  confluent.metrics.reporter.ssl.endpoint.identification.algorithm: ""
+kafka_broker_plaintext_config:
+  listeners: "PLAINTEXT://:{{broker.config.port}}"
+kafka_broker_ssl_config:
+  listeners: "SSL://:{{broker.config.port}}"
+  ssl.client.auth: "required"
+  security.inter.broker.protocol: "SSL"
+  confluent.metrics.reporter.security.protocol: SSL
+kafka_broker_sasl_ssl_config:
+  listeners: "SASL_SSL://:{{broker.config.port}}"
+  security.inter.broker.protocol: SASL_SSL
+  confluent.metrics.reporter.security.protocol: SASL_SSL
+  listener.name.sasl_ssl.plain.sasl.jaas.config: 'org.apache.kafka.common.security.plain.PlainLoginModule required username="broker" password="broker-secret" user_broker="broker-secret" user_client="client-secret";'
+  sasl.enabled.mechanisms: PLAIN
+  sasl.mechanism.inter.broker.protocol: PLAIN
+  confluent.metrics.reporter.sasl.mechanism: PLAIN
+  confluent.metrics.reporter.sasl.jaas.config: 'org.apache.kafka.common.security.plain.PlainLoginModule required username="client" password="client-secret";'
+kafka_broker_security_config: "{{ { 'plaintext':kafka_broker_plaintext_config, 'sasl_ssl':kafka_broker_sasl_ssl_config, 'ssl':kafka_broker_ssl_config }[security_mode]| mandatory  }}"
 kafka:
   broker:
     user: cp-kafka
@@ -13,24 +55,5 @@ kafka:
       state: started
     environment:
       KAFKA_HEAP_OPTS: "-Xmx1g"
-    config:
-      group.initial.rebalance.delay.ms: 0
-      log.retention.check.interval.ms: 300000
-      log.retention.hours: 168
-      log.segment.bytes: 1073741824
-      num.io.threads: 16
-      num.network.threads: 8
-      num.partitions: 1
-      num.recovery.threads.per.data.dir: 2
-      offsets.topic.replication.factor: 3
-      socket.receive.buffer.bytes: 102400
-      socket.request.max.bytes: 104857600
-      socket.send.buffer.bytes: 102400
-      transaction.state.log.min.isr: 2
-      transaction.state.log.replication.factor: 3
-      zookeeper.connection.timeout.ms: 6000
-      metric.reporters: io.confluent.metrics.reporter.ConfluentMetricsReporter
-      confluent.metrics.reporter.bootstrap.servers: "{{inventory_hostname}}:{{broker.config.port}}"
-      confluent.metrics.reporter.topic.replicas: 3
-      ssl.endpoint.identification.algorithm: ""
-      confluent.metrics.reporter.ssl.endpoint.identification.algorithm: ""
+    config: "{{ client_config | append_prefix('confluent.metrics.reporter.') | combine(kafka_broker_security_config) | combine(kafka_broker_config_default) }}"
+
