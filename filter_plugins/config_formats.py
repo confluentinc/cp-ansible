@@ -24,6 +24,8 @@ def to_properties(input):
     for key, value in input_sorted:
         if isinstance(value, bool):
             result += "{}={}\n".format(key, str(value).lower())
+        elif isinstance(value, list):
+            result += "{}={}\n".format(key, ','.join(value))
         else:
             result+="{}={}\n".format(key, value)
     return result
