@@ -3,11 +3,6 @@
 Ansible Playbooks for Confluent Platform
 ========================================
 
-.. contents:: Contents
-    :local:
-    :depth: 2
-
-
 ========
 Overview
 ========
