@@ -8,31 +8,25 @@ set -o nounset \
 # Cleanup files
 # rm -f *.crt *.csr *_creds *.jks *.srl *.key *.pem *.der *.p12
 
-echo $1 $2 $3 $4 $5 $6 $7 $8 $9 $10 $11 $12 > vars.txt
+echo $1 $2 $3 $4 $5 > vars.txt
 
 for i in broker client
 do
 	echo "------------------------------- $i -------------------------------"
 
 
-	# Create host keystore
-	keytool -genkey -noprompt \
-				 -alias $i \
-				 -dname "CN=$3,OU=$4,O=$5,L=$6,S=$7,C=$8" \
-				 -keystore $i.keystore.jks \
-				 -keyalg RSA \
-				 -storepass $9\
-				 -keypass $9
-
 
         # Import the CA cert into the keystore
-	keytool -noprompt -keystore $i.keystore.jks -alias CARoot -import -file $1  -storepass $9 -keypass $9
+	keytool -noprompt -keystore $i.keystore.jks -alias CARoot -import -file $1  -storepass $4 -keypass $4 -keyalg RSA
 
         # Import the host certificate into the keystore
-	keytool -noprompt -keystore $i.keystore.jks -alias test -import -file $2 -storepass $9 -keypass $9
+	keytool -noprompt -keystore $i.keystore.jks -alias test -import -file $2 -storepass $4 -keypass $4 -keyalg RSA
 
-	# Create truststore and import the CA cert
-	keytool -noprompt -keystore $i.truststore.jks -alias CARoot -import -file $1 -storepass $9 -keypass $9
+	# Import the private key into the keystore (must be pkcs12)
+        keytool -importkeystore -deststorepass $4 -destkeystore $i.keystore.jks -srcstorepass $4 -srckeystore $3 -srcstoretype PKCS12
+
+        # Create truststore and import the CA cert
+	keytool -noprompt -keystore $i.truststore.jks -alias CARoot -import -file $1 -storepass $4 -keypass $4 -keyalg RSA
 
 	# Save creds
   	echo "confluent" > ${i}_sslkey_creds
