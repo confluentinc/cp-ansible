@@ -6,7 +6,7 @@ Ansible provides a simple way to deploy, manage, and configure the Confluent Pla
 
 * Installs Confluent Platform packages
 * Starts services using systemd scripts
-* Provides configuration options for plaintext, SSL, and SASL_SSL communication amongst the services
+* Provides configuration options for plaintext, SSL, SASL_SSL, and user supplied self signed ssl communication amongst the services
 
 The services that can be installed from this repository are:
 

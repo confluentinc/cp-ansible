@@ -48,11 +48,12 @@ Scope
 In Scope
 ~~~~~~~~
 
-These Ansible playbooks are intended as a general template for setting up a production-ready proof of concept environment. There are three available templates.
+These Ansible playbooks are intended as a general template for setting up a production-ready proof of concept environment. There are four available templates.
 
 * PLAINTEXT -- use these templates if you have no requirements for a secured environment
 * SSL -- use these templates if you require only SSL encryption
 * SASL_SSL -- use these templates if you require plaintext SASL authentication and SSL encryption
+* SSL_SELFSIGNED -- use these templates if you require only SSL encryption, but using your own self signed certificates.  
 
 
 Out of Scope
@@ -75,8 +76,10 @@ Future work and additional features should be tracked in the GitHub issues for t
 How to use this repository
 ==========================
 
-PLAINTEXT, SSL, SASL_SSL each have example playbooks and hosts files in their respective `plaintext`, `ssl`, `sasl_ssl` directories.
+PLAINTEXT, SSL, SASL_SSL, SSL_SELFSIGNED each have example playbooks and hosts files in their respective `plaintext`, `ssl`, `sasl_ssl`, `ssl_selfsigned` directories.
 The `hosts.yml` and `all.yml` files at the repository root match the `sasl_ssl` and this can be considered the default path.
+
+Please note, the SSL_SELFSIGNED directory contains an additional `vars` directory which contains `security_vars.yml`.  You will need to fill in all fields in this file as well as provide your CA certificate, host certificate, and private key in pkcs12 format, in a location accessible from the host you are running the playbook from. 
 
 Setting up a `hosts.yml`
 ------------------------
@@ -96,9 +99,15 @@ SSL certificates provided by your own Certificate Authority and use Kerberos key
 Using your own SSL certificates
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Playbook(s): SSL, SASL_SSL
+
 The service properties file templates in this repository expect certificates to be stored under `/var/ssl/private`. In this directory, each host stores a keystore and truststore for clients 
 and a keystore and truststore for Brokers. No differentiation between services is made for simplicity. You can update the exact path to the certificate stores by updating 
 `roles/<service>/templates/<service>_ssl.properties.j2` or `roles/<service>/templates/<service>_sasl_ssl.properties.j2` depending on the security mode you have chosen.
+
+Playbook(s): SSL_SELFSIGNED
+
+This playbook is specifically designed to be run with your own selfsigned certificates.  You will need to update the `security_vars.yml` file with the names and paths to your ca cert, host certificate, and private key in pkcs12 format.  This playbook assumes that your certificate is a wildcard certificate and will setup client and Broker keystores and truststores.  It does not differenciate between services, for simplicity. 
 
 Using Kerberos keytabs for SASL authentication
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
