@@ -29,7 +29,7 @@ Below are the Kerberos Directories,
 3. kerberos_ssl_customcerts
 
 Prerequisites:
-1. Generate Keytabs and place the keytabs under /etc/security/keytabs folder in each of the host
+1. Generate Keytabs and place the keytabs under /root/keytabs folder in jump host, path to keytabs file is located in kerberos/hosts.yml, kerberos_ss/hosts.yml and kerberos_ssl_customcerts/hosts.yml
 2. Set the ansible roles path
 ex: export ANSIBLE_ROLES_PATH=/root/cp-ansible-internal/roles
 
