@@ -169,3 +169,4 @@ This repository makes use of the `systemd scripts provided in Confluent Platform
 Troubleshooting 
 ======================
 
+Ansible has general troubleshooting 
