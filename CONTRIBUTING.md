@@ -10,9 +10,9 @@ While we appreciate all code changes submitted, please understand that some PR's
 
 [Code of Conduct](#code-of-conduct)
 
-[How to ask questions?](#how-to-ask-questions)
+[How to ask questions](#how-to-ask-questions)
 
-[How to file a bug?](#how-to-file-a-bug)
+[How to file a bug](#how-to-file-a-bug)
 
 [How to file a feature request](#how-to-file-a-feature-request)
 
