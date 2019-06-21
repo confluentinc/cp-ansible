@@ -10,33 +10,33 @@ While we appreciate all code changes submitted, please understand that some PR's
 
 [Code of Conduct](#code-of-conduct)
 
-[How to ask questions?](#how_to_ask_questions?)
+[How to ask questions?](#how-to-ask-questions?)
 
-[How to file a bug?](#how_to_file_bug)
+[How to file a bug?](#how-to-file-a-bug)
 
-[How to file a feature request](#how_to_file_a_feature_request)
+[How to file a feature request](#how-to-file-a-feature-request)
 
-[How to file a pull request](#how_to_file_a_pull_request) 
+[How to file a pull request](#how-to-file-a-pull-request) 
 
 
 ## Code of Conduct
 
 This project and everyone participating in it is governed by the [CP-Ansible Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to [support@confluent.io](mailto:support@confluent.io).
 
-## Where/How to ask questions?
+## How to ask questions?
 
 You can ask questions via two methods:
 
 1. You can open an issue on the project itself, here on github, which will be answered on a best effort basis:
 
-```https://github.com/confluentinc/cp-ansible/issues/new```
+    ```https://github.com/confluentinc/cp-ansible/issues/new```
 
-Please be sure to tag the post as a `question`.
+    Please be sure to tag the post as a `question`.
 
 
 2. For Confluent Enterprise Support customers, we would strongly adivse you to open a Support ticket which will be addressed within your Support contract SLA:
 
-```https://support.confluent.io```
+    ```https://support.confluent.io```
 
 
 ## How to file a bug
@@ -45,15 +45,15 @@ You can file bugs via two methods:
 
 1. You can open an issue on the project itself, here on github, which will be answered on a best effort basis:
 
-```https://github.com/confluentinc/cp-ansible/issues/new```
+    ```https://github.com/confluentinc/cp-ansible/issues/new```
 
-Please be sure to tag the post as a `bug`.
+    Please be sure to tag the post as a `bug`.
 
 2. For Confluent Enterprise Support customers, we would strongly adivse you to open a Support ticket which will be addressed within your Support contract SLA:
 
-```https://support.confluent.io```
+    ```https://support.confluent.io```
 
-Please include the following on all bug reports:
+    Please include the following on all bug reports:
 
 * Use a clear and descriptive title for the issue to identify the problem.
 
@@ -69,13 +69,13 @@ Please include the following on all bug reports:
 
 1. You can open an issue on the project itself, here on github, which will be answered on a best effort basis:
 
-```https://github.com/confluentinc/cp-ansible/issues/new```
+    ```https://github.com/confluentinc/cp-ansible/issues/new```
 
 Please be sure to tag the post as a `enhancement`.
 
 2. For Confluent Enterprise Support customers, we would strongly adivse you to open a Support ticket which will be addressed within your Support contract SLA:
 
-```https://support.confluent.io```
+    ```https://support.confluent.io```
 
 Please include the following on all enhancement requests:
 
