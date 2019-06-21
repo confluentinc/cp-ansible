@@ -10,7 +10,7 @@ While we appreciate all code changes submitted, please understand that some PR's
 
 [Code of Conduct](#code-of-conduct)
 
-[How to ask questions?](#how-to-ask-questions?)
+[How to ask questions?](#how-to-ask-questions)
 
 [How to file a bug?](#how-to-file-a-bug)
 
@@ -23,7 +23,7 @@ While we appreciate all code changes submitted, please understand that some PR's
 
 This project and everyone participating in it is governed by the [CP-Ansible Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to [support@confluent.io](mailto:support@confluent.io).
 
-## How to ask questions?
+## How to ask questions
 
 You can ask questions via two methods:
 
@@ -87,7 +87,7 @@ Please include the following on all enhancement requests:
 
 * Describe the current behavior and explain which behavior you expected to see instead and why.
 
-## Pull Request Process
+## How to file a Pull Request
 
 The process described here has several goals:
 
