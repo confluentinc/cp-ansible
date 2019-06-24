@@ -67,7 +67,7 @@ These Ansible playbooks are intended as a general template for setting up a prod
 * SSL -- use these templates if you require only SSL encryption and would like the playbook to create the certificates for you
 * SASL_SSL -- use these templates if you require plaintext SASL authentication and SSL encryption and would like the playbook to create the certificates for you 
 * SSL_customcerts -- use these templates if you require only SSL encryption, but using your own self signed or CA certificates
-* Kerberos_SSL -- use these templates if you require SSL encryption and would like the playbook to create the certificates for you and you would like Kerberos authentication, providing our own KDC and keytabs
+* Kerberos_SSL -- use these templates if you require SSL encryption and would like the playbook to create the certificates for you and you would like Kerberos authentication, providing your own KDC and keytabs
 * Kerberos -- use these templates if you require Kerberos authentication and are providing your own KDC and keytabs 
 * Kerberos_ssl_customcerts -- use these templates if you require SSL encryption and will be providing your own certificates and also require kerberos authentication and are providing your own KDC and keytabs
 
@@ -82,7 +82,9 @@ The following are not in scope:
 Future work and additional features
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Future work and additional features should be files by opening a case with Confluent Support at https://support.confluent.io 
+For those with a Conluent Support contract, future work and additional features should be filed by opening a case with Confluent Support at https://support.confluent.io.
+
+For those without a Confluent Support Contract, please review the Contributing document [here]().
 
 
 ==========================
@@ -125,7 +127,7 @@ This playbook is specifically designed to be run with your own certificates as w
 Using Kerberos keytabs for SASL authentication
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-You can setup your own KDC and provide your own keytabs with the following playbooks:
+You can setup your own KDC, independently of these playbooks and provide your own keytabs:
 
 kerberos
 
