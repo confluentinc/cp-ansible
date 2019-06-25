@@ -127,16 +127,73 @@ This playbook is specifically designed to be run with your own certificates as w
 Using Kerberos keytabs for SASL authentication
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-You can setup your own KDC, independently of these playbooks and provide your own keytabs:
+The Kerberos playbooks assume the hostname for the keytabs.  If this is not the case in your environment, then you will need to manually copy the keytabs to each host.
+
+You will need to setup your own KDC, independently of these playbooks and provide your own keytabs.
 
 kerberos
 
-This playbook is specifically designed to be run with your own keytabs, against a KDC which you will have already setup.  You will need to 
+This playbook is specifically designed to be run with your own keytabs, against a KDC which you will have already setup.  You will need to update the following variables in the `hosts.yml` file:
+
+`realm` - Your Kerberos Realm, eg. confluent.example.com 
+
+`kdc_hostname` - The hostname of the machine that your KDC is installed on.
+
+`admin_hostname` - The hostname of the machine that your KDC is installed on.
+
+`keytab_source_dir` - The path to the location of your keytabs to be copied to the hosts 
 
 Kerberos_SSL
 
+This playbook is specifically designed to be run with your own keytabs, against a KDC which you will have already setup.  It will also create selfsigned certificates to enable SSL and distribute them, and configure the components accordingly.  
+
+You will need to update the following variables in the `hosts.yml` file:
+
+`realm` - Your Kerberos Realm, eg. confluent.example.com 
+
+`kdc_hostname` - The hostname of the machine that your KDC is installed on.
+
+`admin_hostname` - The hostname of the machine that your KDC is installed on.
+
+`keytab_source_dir` - The path to the location of your keytabs to be copied to the hosts 
+
 Kerberos_ssl_customcerts
 
+This playbook is specifically designed to be run with your own keytabs and your own SSL certificates, against a KDC which you will have already setup.  It will distribute the keytabs and SSL certificates and configure each component to work with both.  
+
+You will need to update the following variables in the `hosts.yml` file for kerberos:
+
+`realm` - Your Kerberos Realm, eg. confluent.example.com 
+
+`kdc_hostname` - The hostname of the machine that your KDC is installed on.
+
+`admin_hostname` - The hostname of the machine that your KDC is installed on.
+
+`keytab_source_dir` - The path to the location of your keytabs to be copied to the hosts 
+
+You will also need to update the following variables in the `security_vars.yml` file in the playbook's `vars` directory:
+
+`ssl_ca_certificate` - Enter the ca certificate name, eg. ca-cert
+
+`ssl_host_key` - Enter the host certificate name, eg. cert-signed
+
+`ssl_private_key` - Enter the private key file name, must be pkcs format, eg. keystore.p12
+
+`ssl_ca_certificate_path` - Enter the full path to the ca certificate on the host you are running the plabook from
+
+`ssl_host_key_path` - Enter the full path to the ca certificate on the host you are running the plabook from
+
+`ssl_private_key_path` - Enter the full path to the ca certificate on the host you are running the plabook from
+
+`host_keystore_storepass` - Set the following to the desired password fore each key-store
+
+`host_truststore_storepass` - Set the following to the desired password for each trust-store 
+
+`ca_cert_password` - Set the following to the password for the ca certificate
+
+`host_cert_password` - Set the following to the password for the host certificate
+
+`privatekey_keystore_password` - Set the following to the password for the private key key-store (pkcs12 file)
 
 Running
 -------
@@ -161,6 +218,51 @@ Apply Changes
 .. sourcecode:: bash
 
    ansible-playbook -i hosts.yml all.yml
+
+Example of Running Kerberos_ssl_customcerts
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This is a general example of running the Kerberos_ssl_customcerts playbook, as it is currently the most complext playbook available in the repository.
+
+We are assuming that you have already setup your infrastructure, KDC, generated keytabs, generated SSL certificates, for the purpose of this example.
+
+1. On your deployment host clone the CP-Ansible repostiory
+
+```git clone git@github.com:confluentinc/cp-ansible.git```
+
+2. Change directory to the repo
+
+```cd cp-ansible```
+
+3. Backup the existing `hosts.yml` and `all.yml`
+
+```cp hosts.yml hosts.backup```
+```cp all.yml all.backup```
+
+4. Change directory to the `Kerberos_ssl_customcerts` playbook
+
+```cd Kerberos_ssl_customcerts```
+
+5. Copy the `hosts.yml` and `all.yml` to the repository root 
+
+```cp hosts.yml <pathToRepo>/cp-ansible```
+```cp all.yml <pathToRepo>/cp-ansible```
+
+6. Change directory into the vars directory
+
+```cd <pathToRepo>/cp-ansible/Kerberos_ssl_customcerts/vars```
+
+7. Edit the security_vars.yml file and fill in the details as per the instructions in the file 
+
+8. change directory back to cp-ansible root
+
+```cd <pathToCP-Ansible>```
+
+9. Edit `hosts.yml` to reflect the hostnames of the servers you wish to install on 
+
+10. Edit `all.yml` to reflect the roles which 
+
+
 
 
 ======================
