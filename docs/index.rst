@@ -105,7 +105,7 @@ as makes sense for your use case.
 Template properties files 
 -------------------------
 
-Each service has <number> template properties files. Which properties file template will be used depends on the value of `security_mode` set. Valid options are `plaintext`, `ssl`, `sasl_ssl`, `SSL_customcerts`, `Kerberos_SSL`,`Kerberos`, `Kerberos_ssl_customcerts`.
+Each service has 8 template properties files. Which properties file template will be used depends on the value of `security_mode` set. Valid options are `plaintext`, `ssl`, `sasl_ssl`, `SSL_customcerts`, `Kerberos_SSL`,`Kerberos`, `Kerberos_ssl_customcerts`.
 The `SSL`, `SASL_SSL`, `Kerberos_SSL` hardcode some security parameters for ease of setup in a proof of concept environment. 
 
 For a production environment we would recommend using the `Kerberos_ssl_customcerts` playbook and providing your own SSL Certificates and Kerberos KDC with Keytabs to secure your environment.
@@ -130,6 +130,8 @@ Using Kerberos keytabs for SASL authentication
 You can setup your own KDC, independently of these playbooks and provide your own keytabs:
 
 kerberos
+
+This playbook is specifically designed to be run with your own keytabs, against a KDC which you will have already setup.  You will need to 
 
 Kerberos_SSL
 
