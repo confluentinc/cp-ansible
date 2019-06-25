@@ -260,17 +260,13 @@ Keytabs and SSL certificates should be located on the host in which you are runn
 
 ```cd <pathToCP-Ansible>```
 
-9. Edit `hosts.yml` to reflect the hostnames of the servers you wish to install on as well as the kerberos parameters 
+9. Edit `hosts.yml` to reflect the hostnames of the servers you wish to install on as well as the kerberos parameters mentioned in the playbook description above. 
 
 10. Edit `all.yml` to reflect the roles which you wish to install on each host.
 
-11. Run the playbok 
+11. Run the playbook
 
 ```ansible-playbook -i hosts.yml all.yml```
-
-12. 
-
-
 
 ======================
 Additional information
@@ -282,4 +278,17 @@ This repository makes use of the `systemd scripts provided in Confluent Platform
 Troubleshooting 
 ======================
 
-Ansible has general troubleshooting 
+From time to time a playbook run could fail for a variety of reasons.  In this instance we would recommend you do the following:
+
+1. Append -vvv to the playbook run command and pipe it to a file
+
+```ansible-playbook -vvvv -i hosts.yml all.yml >failure.txt```
+
+2. Open a support ticket with Confluent Support, please provide the following:
+
+    a. Playbook name you are running
+    b. The step at which the playbook failed
+    c. What specific changes you have made to the playbook 
+    d. Attach the output from the failed test as a compressed text file
+
+    
