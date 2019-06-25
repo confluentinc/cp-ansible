@@ -222,9 +222,11 @@ Apply Changes
 Example of Running Kerberos_ssl_customcerts
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This is a general example of running the Kerberos_ssl_customcerts playbook, as it is currently the most complext playbook available in the repository.
+This is a general example of running the Kerberos_ssl_customcerts playbook, as it is currently the most complex playbook available in the repository.
 
 We are assuming that you have already setup your infrastructure, KDC, generated keytabs, generated SSL certificates, for the purpose of this example.
+
+Keytabs and SSL certificates should be located on the host in which you are running Ansible from.  This allows the playbook to be pointed towards them so it can copy them to the appropriate locations on your behalf. 
 
 1. On your deployment host clone the CP-Ansible repostiory
 
@@ -258,10 +260,15 @@ We are assuming that you have already setup your infrastructure, KDC, generated 
 
 ```cd <pathToCP-Ansible>```
 
-9. Edit `hosts.yml` to reflect the hostnames of the servers you wish to install on 
+9. Edit `hosts.yml` to reflect the hostnames of the servers you wish to install on as well as the kerberos parameters 
 
-10. Edit `all.yml` to reflect the roles which 
+10. Edit `all.yml` to reflect the roles which you wish to install on each host.
 
+11. Run the playbok 
+
+```ansible-playbook -i hosts.yml all.yml```
+
+12. 
 
 
 
