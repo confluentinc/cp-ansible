@@ -18,7 +18,7 @@ Requirements
 
 General Requirements:
 
-* Confluent Platform 5.3.0 or higher - are we sure? 
+* Confluent Platform 5.3.x, 5.2.x, 5.1.x 
 * Ansible 2.5.x or higher (on control node)
 * `Confluent Platform Ansible playbooks <https://github.com/confluentinc/cp-ansible>`__
 * passwordless ssh between all hosts
