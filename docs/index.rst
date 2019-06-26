@@ -98,7 +98,7 @@ as makes sense for your use case.
 Template properties files 
 -------------------------
 
-Each service has eight template properties files. The properties file template will be used based on the value of ``security_mode`` set. Valid options are ``plaintext``, ``ssl``, ``sasl_ssl``, ``SSL_customcerts``, ``Kerberos_SSL``,``Kerberos``, ``Kerberos_ssl_customcerts``.
+Each service has eight template properties files. The properties file template will be used based on the value of ``security_mode`` set. Valid options are ``plaintext``, ``ssl``, ``sasl_ssl``, ``SSL_customcerts``, ``Kerberos_SSL``, ``Kerberos``, ``Kerberos_ssl_customcerts``.
 Several security parameters for ``SSL``, ``SASL_SSL``, ``Kerberos_SSL`` hardcode some security parameters for ease of setup in a proof of concept environment. 
 
 For a production environment, Confluent recommends using the `Kerberos_ssl_customcerts` playbook and providing your own SSL Certificates and Kerberos KDC with Keytabs to secure your environment.
