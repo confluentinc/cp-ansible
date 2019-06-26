@@ -84,22 +84,22 @@ For those without a Confluent Support Contract, please review the Contributing d
 How to use this repository
 ==========================
 
-Each playbook has its own directory within the repository containing a unique `all.yml` file at the root and where required a vars subdirectory containing a `security_vars.yml`, which is required to be filled in for SSL configuration. 
+Each playbook has its own directory within the repository containing a unique ``all.yml`` file at the root and where required a vars subdirectory containing a ``security_vars.yml``, which is required to be filled in for SSL configuration. 
 
 The default playbook in the root of the repo is PLAINTEXT.
 
 ------------------------
 
-This repository has a demo `hosts.yml` file in the root directory. This file is where you specify which roles will be run on each host. For more information on
+This repository has a demo ``hosts.yml`` file in the root directory. This file is where you specify which roles will be run on each host. For more information on
 the host file in general please see the `Ansible documentation <http://docs.ansible.com/ansible/latest/user_guide/intro_inventory.html#hosts-and-groups>`_. For this
-particular setup, you will want to ensure each host in your cluster is a member of the `preflight` role. Other than that, you can specify as many or as few of each service
+particular setup, you will want to ensure each host in your cluster is a member of the ``preflight`` role. Other than that, you can specify as many or as few of each service
 as makes sense for your use case.
 
 Template properties files 
 -------------------------
 
-Each service has eight template properties files. The properties file template will be used based on the value of `security_mode` set. Valid options are `plaintext`, `ssl`, `sasl_ssl`, `SSL_customcerts`, `Kerberos_SSL`,`Kerberos`, `Kerberos_ssl_customcerts`.
-Several security parameters for `SSL`, `SASL_SSL`, `Kerberos_SSL` hardcode some security parameters for ease of setup in a proof of concept environment. 
+Each service has eight template properties files. The properties file template will be used based on the value of ``security_mode`` set. Valid options are ``plaintext``, ``ssl``, ``sasl_ssl``, ``SSL_customcerts``, ``Kerberos_SSL``,``Kerberos``, ``Kerberos_ssl_customcerts``.
+Several security parameters for ``SSL``, ``SASL_SSL``, ``Kerberos_SSL`` hardcode some security parameters for ease of setup in a proof of concept environment. 
 
 For a production environment, Confluent recommends using the `Kerberos_ssl_customcerts` playbook and providing your own SSL Certificates and Kerberos KDC with Keytabs to secure your environment.
 
@@ -110,11 +110,11 @@ You can provide your own SSL certificates with the following playbooks:
 
 SSL_customcerts
 
-This playbook is specifically designed to run with your own certificates.  You will need to update the `security_vars.yml` file with the names and paths to your ca cert, host certificate, and private key in pkcs12 format.  This playbook assumes that your certificate is a wildcard certificate and will setup client and Broker keystores and truststores.  It does not differenciate between services, for simplicity. 
+This playbook is specifically designed to run with your own certificates.  You will need to update the ``security_vars.yml`` file with the names and paths to your ca cert, host certificate, and private key in pkcs12 format.  This playbook assumes that your certificate is a wildcard certificate and will setup client and Broker keystores and truststores.  It does not differenciate between services, for simplicity. 
 
 Kerberos_ssl_customcerts
 
-This playbook is specifically designed to be run with your own certificates as well as your own KDC and keytabs.  You will need to update the `security_vars.yml` file with the names and paths to your ca cert, host certificate, and private key in pkcs12 format.  This playbook assumes that your certificate is a wildcard certificate and will setup client and Broker keystores and truststores.  It does not differenciate between services, for simplicity. 
+This playbook is specifically designed to be run with your own certificates as well as your own KDC and keytabs.  You will need to update the ``security_vars.yml`` file with the names and paths to your ca cert, host certificate, and private key in pkcs12 format.  This playbook assumes that your certificate is a wildcard certificate and will setup client and Broker keystores and truststores.  It does not differenciate between services, for simplicity. 
 
 
 Using Kerberos keytabs for SASL authentication
@@ -128,27 +128,27 @@ kerberos
 
 This playbook is specifically designed to run with your own keytabs, against a KDC which you will have already setup.  You will need to update the following variables in the `hosts.yml` file:
 
-`realm` - Your Kerberos Realm (for example, confluent.example.com). 
+``realm`` - Your Kerberos Realm (for example, confluent.example.com). 
 
-`kdc_hostname` - The hostname of the machine that your KDC is installed on.
+``kdc_hostname`` - The hostname of the machine that your KDC is installed on.
 
-`admin_hostname` - The hostname of the machine that your KDC is installed on.
+``admin_hostname`` - The hostname of the machine that your KDC is installed on.
 
-`keytab_source_dir` - The path to the location of your keytabs to be copied to the hosts. 
+``keytab_source_dir`` - The path to the location of your keytabs to be copied to the hosts. 
 
 Kerberos_SSL
 
 This playbook is specifically designed to run with your own keytabs, against a KDC which you will have already setup.  It will also create selfsigned certificates to enable SSL and distribute them, and configure the components accordingly.  
 
-You need to update the following variables in the `hosts.yml` file:
+You need to update the following variables in the ``hosts.yml`` file:
 
-`realm` - Your Kerberos Realm (for example, confluent.example.com). 
+``realm`` - Your Kerberos Realm (for example, confluent.example.com). 
 
-`kdc_hostname` - The hostname of the machine that your KDC is installed on.
+``kdc_hostname`` - The hostname of the machine that your KDC is installed on.
 
-`admin_hostname` - The hostname of the machine that your KDC is installed on.
+``admin_hostname`` - The hostname of the machine that your KDC is installed on.
 
-`keytab_source_dir` - The path to the location of your keytabs to be copied to the hosts, 
+``keytab_source_dir`` - The path to the location of your keytabs to be copied to the hosts, 
 
 Kerberos_ssl_customcerts
 
@@ -156,37 +156,37 @@ This playbook is specifically designed to run with your own keytabs and your own
 
 You need to update the following variables in the `hosts.yml` file for kerberos:
 
-`realm` - Your Kerberos Realm (for example, confluent.example.com). 
+``realm`` - Your Kerberos Realm (for example, confluent.example.com). 
 
-`kdc_hostname` - The hostname of the machine that your KDC is installed on.
+``kdc_hostname`` - The hostname of the machine that your KDC is installed on.
 
-`admin_hostname` - The hostname of the machine that your KDC is installed on.
+``admin_hostname`` - The hostname of the machine that your KDC is installed on.
 
-`keytab_source_dir` - The path to the location of your keytabs to be copied to the hosts. 
+``keytab_source_dir`` - The path to the location of your keytabs to be copied to the hosts. 
 
-You will also need to update the following variables in the `security_vars.yml` file in the playbook's `vars` directory:
+You will also need to update the following variables in the ``security_vars.yml`` file in the playbook's ``vars`` directory:
 
-`ssl_ca_certificate` - Enter the ca certificate name (for example, ca-cert).
+``ssl_ca_certificate`` - Enter the ca certificate name (for example, ca-cert).
 
-`ssl_host_key` - Enter the host certificate name (for example, cert-signed).
+``ssl_host_key`` - Enter the host certificate name (for example, cert-signed).
 
-`ssl_private_key` - Enter the private key file name. It must be pkcs format (for example, keystore.p12).
+``ssl_private_key`` - Enter the private key file name. It must be pkcs format (for example, keystore.p12).
 
-`ssl_ca_certificate_path` - Enter the full path to the ca certificate on the host you are running the playbook from.
+``ssl_ca_certificate_path`` - Enter the full path to the ca certificate on the host you are running the playbook from.
 
-`ssl_host_key_path` - Enter the full path to the ca certificate on the host you are running the playbook from.
+``ssl_host_key_path`` - Enter the full path to the ca certificate on the host you are running the playbook from.
 
-`ssl_private_key_path` - Enter the full path to the ca certificate on the host you are running the playbook from.
+``ssl_private_key_path`` - Enter the full path to the ca certificate on the host you are running the playbook from.
 
-`host_keystore_storepass` - Set the following to the desired password for each key-store.
+``host_keystore_storepass`` - Set the following to the desired password for each key-store.
 
-`host_truststore_storepass` - Set the following to the desired password for each trust-store. 
+``host_truststore_storepass`` - Set the following to the desired password for each trust-store. 
 
-`ca_cert_password` - Set the following to the password for the ca certificate.
+``ca_cert_password`` - Set the following to the password for the ca certificate.
 
-`host_cert_password` - Set the following to the password for the host certificate.
+``host_cert_password`` - Set the following to the password for the host certificate.
 
-`privatekey_keystore_password` - Set the following to the password for the private key key-store (pkcs12 file).
+``privatekey_keystore_password`` - Set the following to the password for the private key key-store (pkcs12 file).
 
 Running
 -------
@@ -196,21 +196,21 @@ Run the whole setup
 
 .. sourcecode:: bash
 
-   `ansible-playbook -i hosts.yml all.yml`
+   ``ansible-playbook -i hosts.yml all.yml``
 
 Check for Changes
 ~~~~~~~~~~~~~~~~~
 
 .. sourcecode:: bash
 
-   `ansible-playbook --check -i hosts.yml all.yml`
+   ``ansible-playbook --check -i hosts.yml all.yml``
 
 Apply Changes
 ~~~~~~~~~~~~~
 
 .. sourcecode:: bash
 
-   `ansible-playbook -i hosts.yml all.yml`
+   ``ansible-playbook -i hosts.yml all.yml``
 
 Example of Running Kerberos_ssl_customcerts
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -228,43 +228,45 @@ Keytabs and SSL certificates should be located on the host where you are running
 
 1. Clone the CP-Ansible repostiory on your deployment host.
 
-`git clone git@github.com:confluentinc/cp-ansible.git`
+``git clone git@github.com:confluentinc/cp-ansible.git``
 
 2. Change to the repository directory.
 
-`cd cp-ansible`
+``cd cp-ansible``
 
-3. Back up the existing `hosts.yml` and `all.yml`
+3. Back up the existing ``hosts.yml`` and ``all.yml``
 
-`cp hosts.yml hosts.backup`
-`cp all.yml all.backup`
+``cp hosts.yml hosts.backup``
 
-4. Change to the `Kerberos_ssl_customcerts` playbook directory. 
+``cp all.yml all.backup``
 
-`cd Kerberos_ssl_customcerts`
+4. Change to the ``Kerberos_ssl_customcerts`` playbook directory. 
+
+``cd Kerberos_ssl_customcerts``
 
 5. Copy the `hosts.yml` and `all.yml` to the repository root. 
 
-`cp hosts.yml <pathToRepo>/cp-ansible`
-`cp all.yml <pathToRepo>/cp-ansible`
+``cp hosts.yml <pathToRepo>/cp-ansible``
+
+``cp all.yml <pathToRepo>/cp-ansible``
 
 6. Change to the vars subdirectory. 
 
-`cd <pathToRepo>/cp-ansible/Kerberos_ssl_customcerts/vars`
+``cd <pathToRepo>/cp-ansible/Kerberos_ssl_customcerts/vars``
 
-7. Edit the `security_vars.yml` file. Complete the details based on the instructions provided in the file.
+7. Edit the ``security_vars.yml`` file. Complete the details based on the instructions provided in the file.
 
 8. Change to the cp-ansible root directory.
 
-`cd <pathToCP-Ansible>`
+``cd <pathToCP-Ansible>``
 
-9. Edit `hosts.yml` to reflect the hostnames of the servers you want to install on, as well as the kerberos parameters mentioned in the playbook description above. 
+9. Edit ``hosts.yml`` to reflect the hostnames of the servers you want to install on, as well as the kerberos parameters mentioned in the playbook description above. 
 
-10. Edit `all.yml` to reflect the roles which you want installed on each host.
+10. Edit ``all.yml`` to reflect the roles which you want installed on each host.
 
 11. Run the playbook.
 
-`ansible-playbook -i hosts.yml all.yml`
+``ansible-playbook -i hosts.yml all.yml``
 
 ======================
 Additional information
