@@ -78,7 +78,7 @@ For those with a Confluent Support contract, future work and additional features
 
 Note: Kerberos Key Distribution Center (KDC) and Active Directory KDC configurations are not currently configured by these playbooks.
 
-For those without a Confluent Support Contract, please review the `Contributing document <CONTRIBUTING.md>`__.
+For those without a Confluent Support Contract, please review the `Contributing document <https://github.com/confluentinc/cp-ansible-internal/blob/master/CONTRIBUTING.md>`__.
 
 ==========================
 How to use this repository
