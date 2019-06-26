@@ -43,7 +43,7 @@ Ansible provides a simple way to deploy, manage, and configure the Confluent Pla
 
 * Installs Confluent Platform packages
 * Starts services using systemd scripts
-* Provides configuration options for plaintext, SSL, SASL_SSL, SASL_Kerberos, SSL_Kerberos, Kerberos, Kerberos_ssl_customcerts  communication amongst the services
+* Provides configuration options for plaintext, SSL, SASL_SSL, SASL_Kerberos, SSL_Kerberos, Kerberos, Kerberos_ssl_customcerts security between Confluent Platform component services.
 
 The services that can be installed from this repository are:
 
@@ -63,28 +63,28 @@ In Scope
 
 These Ansible playbooks are intended as a general template for setting up a production-ready proof of concept environment. There are four available templates.
 
-* PLAINTEXT -- use these templates if you have no requirements for a secured environment
-* SSL -- use these templates if you require only SSL encryption and would like the playbook to create the certificates for you
-* SASL_SSL -- use these templates if you require plaintext SASL authentication and SSL encryption and would like the playbook to create the certificates for you 
-* SSL_customcerts -- use these templates if you require only SSL encryption, but using your own self signed or CA certificates
-* Kerberos_SSL -- use these templates if you require SSL encryption and would like the playbook to create the certificates for you and you would like Kerberos authentication, providing your own KDC and keytabs
-* Kerberos -- use these templates if you require Kerberos authentication and are providing your own KDC and keytabs 
-* Kerberos_ssl_customcerts -- use these templates if you require SSL encryption and will be providing your own certificates and also require kerberos authentication and are providing your own KDC and keytabs
+* PLAINTEXT -- use these templates if you have no requirements for a secured environment.
+* SSL -- use these templates if you require only SSL encryption and would like the playbook to create the certificates for you.
+* SASL_SSL -- use these templates if you require plaintext SASL authentication and SSL encryption and would like the playbook to create the certificates for you. 
+* SSL_customcerts -- use these templates if you require only SSL encryption, but using your own self signed or CA certificates.
+* Kerberos_SSL -- use these templates if you require SSL encryption and would like the playbook to create the certificates for you and you would like Kerberos authentication, providing your own KDC and keytabs.
+* Kerberos -- use these templates if you require Kerberos authentication and are providing your own KDC and keytabs. 
+* Kerberos_ssl_customcerts -- use these templates if you require SSL encryption and will be providing your own certificates and also require kerberos authentication and are providing your own KDC and keytabs.
 
 Future Recommendations 
 ~~~~~~~~~~~~~~~~~~~~~~
 
 For those with a Confluent Support contract, future work and additional features should be filed by opening a case with Confluent Support at https://support.confluent.io.
 
-Note: A Kerberos Key Distribution Center (KDC) and Active Directory KDC configurations are not currently configured by these playbooks.
+Note: Kerberos Key Distribution Center (KDC) and Active Directory KDC configurations are not currently configured by these playbooks.
 
-For those without a Confluent Support Contract, please review the Contributing document [here]().
+For those without a Confluent Support Contract, please review the `Contributing document <CONTRIBUTING.md>`__.
 
 ==========================
 How to use this repository
 ==========================
 
-Each playbook has its own directory within the repository containing a unique ``all.yml`` file at the root and where required a vars subdirectory containing a ``security_vars.yml``, which is required to be filled in for SSL configuration. 
+Each playbook has its own directory within the repository containing a unique ``all.yml`` file at the root and, where required, a vars subdirectory containing a ``security_vars.yml``, which is required to be filled in for SSL configuration. 
 
 The default playbook in the root of the repo is PLAINTEXT.
 
@@ -92,14 +92,14 @@ The default playbook in the root of the repo is PLAINTEXT.
 
 This repository has a demo ``hosts.yml`` file in the root directory. This file is where you specify which roles will be run on each host. For more information on
 the host file in general please see the `Ansible documentation <http://docs.ansible.com/ansible/latest/user_guide/intro_inventory.html#hosts-and-groups>`_. For this
-particular setup, you will want to ensure each host in your cluster is a member of the ``preflight`` role. Other than that, you can specify as many or as few of each service
+particular setup, ensure each host in your cluster is a member of the ``preflight`` role. Other than that, you can specify as many or as few of each service
 as makes sense for your use case.
 
 Template properties files 
 -------------------------
 
 Each service has eight template properties files. The properties file template will be used based on the value of ``security_mode`` set. Valid options are ``plaintext``, ``ssl``, ``sasl_ssl``, ``SSL_customcerts``, ``Kerberos_SSL``, ``Kerberos``, ``Kerberos_ssl_customcerts``.
-Several security parameters for ``SSL``, ``SASL_SSL``, ``Kerberos_SSL`` hardcode some security parameters for ease of setup in a proof of concept environment. 
+Several security parameters for ``SSL``, ``SASL_SSL``, ``Kerberos_SSL`` are hardcoded for ease of setup in a proof of concept environment. 
 
 For a production environment, Confluent recommends using the `Kerberos_ssl_customcerts` playbook and providing your own SSL Certificates and Kerberos KDC with Keytabs to secure your environment.
 
@@ -110,11 +110,11 @@ You can provide your own SSL certificates with the following playbooks:
 
 SSL_customcerts
 
-This playbook is specifically designed to run with your own certificates.  You will need to update the ``security_vars.yml`` file with the names and paths to your ca cert, host certificate, and private key in pkcs12 format.  This playbook assumes that your certificate is a wildcard certificate and will setup client and Broker keystores and truststores.  It does not differenciate between services, for simplicity. 
+This playbook is specifically designed to run with your own certificates.  You will need to update the ``security_vars.yml`` file with the names and paths to your ca cert, host certificate, and private key in pkcs12 format.  This playbook assumes that your certificate is a wildcard certificate and will setup client and Broker keystores and truststores.  It does not differentiate between services, for simplicity. 
 
 Kerberos_ssl_customcerts
 
-This playbook is specifically designed to be run with your own certificates as well as your own KDC and keytabs.  You will need to update the ``security_vars.yml`` file with the names and paths to your ca cert, host certificate, and private key in pkcs12 format.  This playbook assumes that your certificate is a wildcard certificate and will setup client and Broker keystores and truststores.  It does not differenciate between services, for simplicity. 
+This playbook is specifically designed to run with your own certificates as well as your own KDC and keytabs.  You will need to update the ``security_vars.yml`` file with the names and paths to your ca cert, host certificate, and private key in pkcs12 format.  This playbook assumes that your certificate is a wildcard certificate and will setup client and Broker keystores and truststores.  It does not differenciate between services, for simplicity. 
 
 
 Using Kerberos keytabs for SASL authentication
@@ -122,7 +122,7 @@ Using Kerberos keytabs for SASL authentication
 
 The Kerberos playbooks assume the hostname for the keytabs. If this is not the case in your environment, then you will need to manually copy the keytabs to each host.
 
-Note: You need to setup your own KDC, independently of these playbooks and provide your own keytabs.
+Note: You need to setup your own KDC independently of these playbooks and provide your own keytabs.
 
 kerberos
 
@@ -224,9 +224,9 @@ We are assuming that you have already setup the following:
 * generated keytabs
 * generated SSL certificates
 
-Keytabs and SSL certificates should be located on the host where you are running Ansible from.  This allows the playbook to be pointed towards them so it can copy them to the appropriate locations on your behalf. 
+Keytabs and SSL certificates should be located on the host where you are running Ansible from.  This allows the playbook to be pointed towards them so it can copy them to the appropriate locations.
 
-1. Clone the CP-Ansible repostiory on your deployment host.
+1. Clone the CP-Ansible repository on your deployment host.
 
 ``git clone git@github.com:confluentinc/cp-ansible.git``
 
@@ -234,7 +234,7 @@ Keytabs and SSL certificates should be located on the host where you are running
 
 ``cd cp-ansible``
 
-3. Back up the existing ``hosts.yml`` and ``all.yml``
+3. Back up the existing ``hosts.yml`` and ``all.yml``.
 
 ``cp hosts.yml hosts.backup``
 
