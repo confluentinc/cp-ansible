@@ -196,21 +196,21 @@ Run the whole setup
 
 .. sourcecode:: bash
 
-   ansible-playbook -i hosts.yml all.yml
+   `ansible-playbook -i hosts.yml all.yml`
 
 Check for Changes
 ~~~~~~~~~~~~~~~~~
 
 .. sourcecode:: bash
 
-   ansible-playbook --check -i hosts.yml all.yml
+   `ansible-playbook --check -i hosts.yml all.yml`
 
 Apply Changes
 ~~~~~~~~~~~~~
 
 .. sourcecode:: bash
 
-   ansible-playbook -i hosts.yml all.yml
+   `ansible-playbook -i hosts.yml all.yml`
 
 Example of Running Kerberos_ssl_customcerts
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -228,35 +228,35 @@ Keytabs and SSL certificates should be located on the host where you are running
 
 1. Clone the CP-Ansible repostiory on your deployment host.
 
-```git clone git@github.com:confluentinc/cp-ansible.git```
+`git clone git@github.com:confluentinc/cp-ansible.git`
 
 2. Change to the repository directory.
 
-```cd cp-ansible```
+`cd cp-ansible`
 
 3. Back up the existing `hosts.yml` and `all.yml`
 
-```cp hosts.yml hosts.backup```
-```cp all.yml all.backup```
+`cp hosts.yml hosts.backup`
+`cp all.yml all.backup`
 
 4. Change to the `Kerberos_ssl_customcerts` playbook directory. 
 
-```cd Kerberos_ssl_customcerts```
+`cd Kerberos_ssl_customcerts`
 
 5. Copy the `hosts.yml` and `all.yml` to the repository root. 
 
-```cp hosts.yml <pathToRepo>/cp-ansible```
-```cp all.yml <pathToRepo>/cp-ansible```
+`cp hosts.yml <pathToRepo>/cp-ansible`
+`cp all.yml <pathToRepo>/cp-ansible`
 
 6. Change to the vars subdirectory. 
 
-```cd <pathToRepo>/cp-ansible/Kerberos_ssl_customcerts/vars```
+`cd <pathToRepo>/cp-ansible/Kerberos_ssl_customcerts/vars`
 
 7. Edit the `security_vars.yml` file. Complete the details based on the instructions provided in the file.
 
 8. Change to the cp-ansible root directory.
 
-```cd <pathToCP-Ansible>```
+`cd <pathToCP-Ansible>`
 
 9. Edit `hosts.yml` to reflect the hostnames of the servers you want to install on, as well as the kerberos parameters mentioned in the playbook description above. 
 
@@ -264,7 +264,7 @@ Keytabs and SSL certificates should be located on the host where you are running
 
 11. Run the playbook.
 
-```ansible-playbook -i hosts.yml all.yml```
+`ansible-playbook -i hosts.yml all.yml`
 
 ======================
 Additional information
