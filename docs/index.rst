@@ -280,7 +280,7 @@ From time to time a playbook run could fail for a variety of reasons.  Complete 
 
 1. Append -vvv to the playbook run command and pipe it to a file.
 
-```ansible-playbook -vvvv -i hosts.yml all.yml >failure.txt```
+``ansible-playbook -vvvv -i hosts.yml all.yml >failure.txt``
 
 2. Open a support ticket with `Confluent Support <https://support.confluent.io>`__ and provide the following:
 
