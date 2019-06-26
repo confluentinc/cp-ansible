@@ -282,7 +282,7 @@ From time to time a playbook run could fail for a variety of reasons.  Complete 
 
 ```ansible-playbook -vvvv -i hosts.yml all.yml >failure.txt```
 
-2. Open a support ticket with _Confluent Support: `https://support.confluent.io` and provide the following:
+2. Open a support ticket with `Confluent Support https://support.confluent.io`__ and provide the following:
 
     a. Playbook name you are running.
     b. The step at which the playbook failed.
