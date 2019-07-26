@@ -7,6 +7,19 @@
     comment: "Connect Distributed User"
     system: yes
     group: "{{ksql.group}}"
+- name: Change keytabs ownership
+  file:
+    path: "{{ksql.keytab}}"
+    group: "{{ksql.group}}"
+    mode: '650'
+    recurse: yes
+- name: change streams directory ownership
+  file: 
+    path: "{{ksql.streamsDataDir}}"
+    owner: "{{ksql.user}}"
+    group: "{{ksql.group}}"
+    state: directory
+    mode: 0750
 - name: ksql create config
   template:
     src: ksql.properties.j2
@@ -37,6 +50,56 @@
   when: security_mode == "sasl_ssl"
   notify:
     - restart ksql
+- name: ksql create config
+  template:
+    src: ksql_ssl_customcerts.properties.j2
+    dest: "{{ksql.config_file}}"
+    mode: 0640
+    owner: "{{ksql.user}}"
+    group: "{{ksql.group}}"
+  when: security_mode == "ssl_customcerts"
+  notify:
+    - restart ksql
+- name: ksql ssl kerberos config
+  template:
+    src: ksql_kerberos.properties.j2
+    dest: "{{ksql.config_file}}"
+    mode: 0640
+    owner: "{{ksql.user}}"
+    group: "{{ksql.group}}"
+  when: security_mode == "kerberos"
+  notify:
+    - restart ksql
+- name: ksql ssl kerberos config
+  template:
+    src: ksql_kerberos_ssl.properties.j2
+    dest: "{{ksql.config_file}}"
+    mode: 0640
+    owner: "{{ksql.user}}"
+    group: "{{ksql.group}}"
+  when: security_mode == "kerberos_ssl"
+  notify:
+    - restart ksql
+- name: ksql ssl kerberos config
+  template:
+    src: ksql_kerberos_ssl_customcerts.properties.j2
+    dest: "{{ksql.config_file}}"
+    mode: 0640
+    owner: "{{ksql.user}}"
+    group: "{{ksql.group}}"
+  when: security_mode == "kerberos_ssl_customcerts"
+  notify:
+    - restart ksql
+- name: ksql Jaas config
+  template:
+    src: ksql-server_jaas.conf.j2
+    dest: "{{ksql.jaas_file}}"
+    mode: 0640
+    owner: "{{ksql.user}}"
+    group: "{{ksql.group}}"
+  when: security_mode == "kerberos" or security_mode == "kerberos_ssl" or security_mode == "kerberos_ssl_customcerts"
+  notify:
+    - restart ksql
 - name: create systemd override file
   file:
     path: "{{ksql.systemd_override}}"
@@ -51,6 +114,18 @@
     mode: 0640
     owner: "{{ksql.user}}"
     group: "{{ksql.group}}"
+  when: security_mode == "plaintext" or security_mode == "sasl_ssl" or security_mode == "ssl_customcerts"
+  notify:
+    - reload systemd
+    - restart ksql
+- name: write environment variables
+  template:
+    src: kerberosenvironment.j2
+    dest: "{{ksql.systemd_override}}/override.conf"
+    mode: 0640
+    owner: "{{ksql.user}}"
+    group: "{{ksql.group}}"
+  when: security_mode == "kerberos" or security_mode == "kerberos_ssl" or security_mode == "kerberos_ssl_customcerts"
   notify:
     - reload systemd
     - restart ksql
