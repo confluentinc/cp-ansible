@@ -7,6 +7,12 @@
     comment: "Kafka User"
     system: yes
     group: "{{kafka.broker.group}}"
+- name: Change keytabs ownership
+  file:
+    path: "{{kafka.broker.keytab}}"
+    group: "{{kafka.broker.group}}"
+    mode: '650'
+    recurse: yes
 - name: create broker data directories
   file:
     path: "{{item}}"
@@ -45,6 +51,56 @@
   when: security_mode == "sasl_ssl"
   notify:
     - restart kafka
+- name: broker ssl custom signed config
+  template:
+    src: server_ssl_self_signed.properties.j2
+    dest: "{{kafka.broker.config_file}}"
+    mode: 0640
+    owner: "{{kafka.broker.user}}"
+    group: "{{kafka.broker.group}}"
+  when: security_mode == "ssl_customcerts"
+  notify:
+    - restart kafka
+- name: broker gssapi kerberos config
+  template:
+    src: server_kerberos.properties.j2
+    dest: "{{kafka.broker.config_file}}"
+    mode: 0640
+    owner: "{{kafka.broker.user}}"
+    group: "{{kafka.broker.group}}"
+  when: security_mode == "kerberos"
+  notify:
+    - restart kafka
+- name: broker ssl kerberos config
+  template:
+    src: server_kerberos_ssl.properties.j2
+    dest: "{{kafka.broker.config_file}}"
+    mode: 0640
+    owner: "{{kafka.broker.user}}"
+    group: "{{kafka.broker.group}}"
+  when: security_mode == "kerberos_ssl"
+  notify:
+    - restart kafka
+- name: broker ssl kerberos config
+  template:
+    src: server_kerberos_ssl.self_signed.properties.j2
+    dest: "{{kafka.broker.config_file}}"
+    mode: 0640
+    owner: "{{kafka.broker.user}}"
+    group: "{{kafka.broker.group}}"
+  when: security_mode == "kerberos_ssl_customcerts"
+  notify:
+    - restart kafka
+- name: broker Jaas config
+  template:
+    src: kafka_server_jaas.conf.j2
+    dest: "{{kafka.broker.jaas_file}}"
+    mode: 0640
+    owner: "{{kafka.broker.user}}"
+    group: "{{kafka.broker.group}}"
+  when: security_mode == "kerberos" or security_mode == "kerberos_ssl" or security_mode == "kerberos_ssl_customcerts"
+  notify:
+    - restart kafka
 - name: create systemd override file
   file:
     path: "{{kafka.broker.systemd_override}}"
@@ -59,6 +115,18 @@
     mode: 0640
     owner: "{{kafka.broker.user}}"
     group: "{{kafka.broker.group}}"
+  when: security_mode == "plaintext" or security_mode == "sasl_ssl" or security_mode == "ssl_customcerts"
+  notify:
+    - reload systemd
+    - restart kafka
+- name: write environment variables
+  template:
+    src: kerberos_environment.j2
+    dest: "{{kafka.broker.systemd_override}}/override.conf"
+    mode: 0640
+    owner: "{{kafka.broker.user}}"
+    group: "{{kafka.broker.group}}"
+  when: security_mode == "kerberos" or security_mode == "kerberos_ssl" or security_mode == "kerberos_ssl_customcerts"
   notify:
     - reload systemd
     - restart kafka
@@ -67,3 +135,5 @@
     name: "{{kafka.broker.service_name}}"
     enabled: "{{kafka.broker.systemd.enabled}}"
     state: "{{kafka.broker.systemd.state}}"
+
+
