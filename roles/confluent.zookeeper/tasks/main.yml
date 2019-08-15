@@ -56,24 +56,32 @@
   when: security_mode == "kerberos" or security_mode == "kerberos_ssl" or security_mode == "kerberos_ssl_customcerts"
   notify:
     - restart zookeeper
-- name: create systemd override file
-  file:
-    path: "{{zookeeper.systemd_override}}"
-    owner: "{{zookeeper.user}}"
-    group: "{{zookeeper.group}}"
-    state: directory
-    mode: 0640
-- name: write environment variables
-  template:
-    src: environment.j2
-    dest: "{{zookeeper.systemd_override}}/override.conf"
-    mode: 0640
-    owner: "{{zookeeper.user}}"
-    group: "{{zookeeper.group}}"
+
+- name: Update Service File with Environment Variables
+  lineinfile:
+    path: "{{zookeeper.systemd_file}}"
+    regexp: ".*{{item.key}}.*"
+    line: "Environment='{{item.key}}={{item.value}}'"
+    insertafter: "ExecStart=.*"
+  with_dict: "{{ zookeeper_service_environment_overrides }}"
   notify:
     - reload systemd
     - restart zookeeper
-- name: zookeeper configure service
+
+- name: Update Service File with Service Overrides
+  lineinfile:
+    path: "{{zookeeper.systemd_file}}"
+    regexp: "{{item.key}}.*"
+    line: "{{item.key}}={{item.value}}"
+    insertafter: "ExecStart=.*"
+  with_dict: "{{ zookeeper_service_overrides }}"
+  notify:
+    - reload systemd
+    - restart zookeeper
+
+- meta: flush_handlers
+
+- name: Start Zookeeper Service
   systemd:
     name: "{{zookeeper.service_name}}"
     enabled: "{{zookeeper.systemd.enabled}}"

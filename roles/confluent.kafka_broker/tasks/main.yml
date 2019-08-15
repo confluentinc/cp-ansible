@@ -3,14 +3,14 @@
   yum:
     name: "{{item}}-{{confluent.package_version}}"
     state: latest
-  loop: "{{kafka_broker.packages}}"
+  loop: "{{kafka_broker_packages}}"
   when: ansible_os_family == "RedHat"
 
 - name: Install the Kafka Broker Packages
   apt:
     name: "{{item}}={{confluent.package_version}}"
     update_cache: yes
-  loop: "{{kafka_broker.packages}}"
+  loop: "{{kafka_broker_packages}}"
   when: ansible_os_family == "Debian"
 
 # Configure environment
@@ -117,32 +117,41 @@
   when: security_mode == "kerberos" or security_mode == "kerberos_ssl" or security_mode == "kerberos_ssl_customcerts"
   notify:
     - restart kafka
-- name: create systemd override file
-  file:
-    path: "{{kafka_broker.systemd_override}}"
-    owner: "{{kafka_broker.user}}"
-    group: "{{kafka_broker.group}}"
-    state: directory
-    mode: 0640
-- name: write environment variables
-  template:
-    src: environment.j2
-    dest: "{{kafka_broker.systemd_override}}/override.conf"
-    mode: 0640
-    owner: "{{kafka_broker.user}}"
-    group: "{{kafka_broker.group}}"
+
+- name: Update Service File with Environment Variables
+  lineinfile:
+    path: "{{kafka_broker.systemd_file}}"
+    regexp: ".*{{item.key}}.*"
+    line: "Environment='{{item.key}}={{item.value}}'"
+    insertafter: "ExecStart=.*"
+  with_dict: "{{ kafka_broker_service_environment_overrides }}"
   notify:
     - reload systemd
     - restart kafka
-- name: tune virtual memory settings
+
+- name: Update Service File with Service Overrides
+  lineinfile:
+    path: "{{kafka_broker.systemd_file}}"
+    regexp: "{{item.key}}.*"
+    line: "{{item.key}}={{item.value}}"
+    insertafter: "ExecStart=.*"
+  with_dict: "{{ kafka_broker_service_overrides }}"
+  notify:
+    - reload systemd
+    - restart kafka
+
+- name: Tune virtual memory settings
   lineinfile:
     path: /etc/sysctl.conf
     regexp: "{{ item.key }}.*"
     line: "{{ item.key }}={{ item.value }}"
-  with_dict: "{{ kafka_broker.sysctl }}"
+  with_dict: "{{ kafka_broker_sysctl }}"
   notify:
     - load sysctl
-- name: broker configure service
+
+- meta: flush_handlers
+
+- name: Start Kafka Broker Service
   systemd:
     name: "{{kafka_broker.service_name}}"
     enabled: "{{kafka_broker.systemd.enabled}}"
