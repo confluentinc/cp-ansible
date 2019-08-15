@@ -99,24 +99,51 @@
   when: security_mode == "kerberos_ssl_customcerts"
   notify:
     - restart kafka-rest
-- name: create systemd override file
-  file:
-    path: "{{kafka_rest.systemd_override}}"
-    owner: "{{kafka_rest.user}}"
-    group: "{{kafka_rest.group}}"
-    state: directory
-    mode: 0640
-- name: write environment variables
-  template:
-    src: environment.j2
-    dest: "{{kafka_rest.systemd_override}}/override.conf"
-    mode: 0640
-    owner: "{{kafka_rest.user}}"
-    group: "{{kafka_rest.group}}"
+
+
+# - name: create systemd override file
+#   file:
+#     path: "{{kafka_rest.systemd_override}}"
+#     owner: "{{kafka_rest.user}}"
+#     group: "{{kafka_rest.group}}"
+#     state: directory
+#     mode: 0640
+# - name: write environment variables
+#   template:
+#     src: environment.j2
+#     dest: "{{kafka_rest.systemd_override}}/override.conf"
+#     mode: 0640
+#     owner: "{{kafka_rest.user}}"
+#     group: "{{kafka_rest.group}}"
+#   notify:
+#     - reload systemd
+#     - restart kafka-rest
+
+- name: Update Service File with Environment Variables
+  lineinfile:
+    path: "{{kafka_rest.systemd_file}}"
+    regexp: ".*{{item.key}}.*"
+    line: "Environment='{{item.key}}={{item.value}}'"
+    insertafter: "ExecStart=.*"
+  with_dict: "{{ kafka_rest_service_environment_overrides }}"
   notify:
     - reload systemd
     - restart kafka-rest
-- name: kafka-rest configure service
+
+- name: Update Service File with Service Overrides
+  lineinfile:
+    path: "{{kafka_rest.systemd_file}}"
+    regexp: "{{item.key}}.*"
+    line: "{{item.key}}={{item.value}}"
+    insertafter: "ExecStart=.*"
+  with_dict: "{{ kafka_rest_service_overrides }}"
+  notify:
+    - reload systemd
+    - restart kafka-rest
+
+- meta: flush_handlers
+
+- name: Start Kafka Rest Service
   systemd:
     name: "{{kafka_rest.service_name}}"
     enabled: "{{kafka_rest.systemd.enabled}}"

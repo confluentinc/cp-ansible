@@ -116,24 +116,52 @@
   when: security_mode == "kerberos" or security_mode == "kerberos_ssl" or security_mode == "kerberos_ssl_customcerts"
   notify:
     - restart ksql
-- name: create systemd override file
-  file:
-    path: "{{ksql.systemd_override}}"
-    owner: "{{ksql.user}}"
-    group: "{{ksql.group}}"
-    state: directory
-    mode: 0640
-- name: write environment variables
-  template:
-    src: environment.j2
-    dest: "{{ksql.systemd_override}}/override.conf"
-    mode: 0640
-    owner: "{{ksql.user}}"
-    group: "{{ksql.group}}"
+
+
+
+# - name: create systemd override file
+#   file:
+#     path: "{{ksql.systemd_override}}"
+#     owner: "{{ksql.user}}"
+#     group: "{{ksql.group}}"
+#     state: directory
+#     mode: 0640
+# - name: write environment variables
+#   template:
+#     src: environment.j2
+#     dest: "{{ksql.systemd_override}}/override.conf"
+#     mode: 0640
+#     owner: "{{ksql.user}}"
+#     group: "{{ksql.group}}"
+#   notify:
+#     - reload systemd
+#     - restart ksql
+
+- name: Update Service File with Environment Variables
+  lineinfile:
+    path: "{{ksql.systemd_file}}"
+    regexp: ".*{{item.key}}.*"
+    line: "Environment='{{item.key}}={{item.value}}'"
+    insertafter: "ExecStart=.*"
+  with_dict: "{{ ksql_service_environment_overrides }}"
   notify:
     - reload systemd
     - restart ksql
-- name: ksql configure service
+
+- name: Update Service File with Service Overrides
+  lineinfile:
+    path: "{{ksql.systemd_file}}"
+    regexp: "{{item.key}}.*"
+    line: "{{item.key}}={{item.value}}"
+    insertafter: "ExecStart=.*"
+  with_dict: "{{ ksql_service_overrides }}"
+  notify:
+    - reload systemd
+    - restart ksql
+
+- meta: flush_handlers
+
+- name: Start Ksql Service
   systemd:
     name: "{{ksql.service_name}}"
     enabled: "{{ksql.systemd.enabled}}"
