@@ -1,10 +1,19 @@
+zookeeper_jaas_file: /etc/kafka/kafka_server_jaas.conf
+zookeeper_jaas_java_arg: "-Djava.security.auth.login.config={{zookeeper_jaas_file}}"
+zookeeper_open_file_limit: "{{open_file_limit}}"
+zookeeper_jolokia_java_arg: "-javaagent:{{jolokia_jar_path}}=port={{zookeeper_jolokia_port}},host=0.0.0.0"
+zookeeper_service_environment_overrides:
+  KAFKA_HEAP_OPTS: "-Xmx1g"
+  KAFKA_OPTS: "{{ zookeeper_jolokia_java_arg + ' ' + zookeeper_jaas_java_arg if security_mode in ['kerberos', 'kerberos_ssl', 'kerberos_ssl_customcerts'] else zookeeper_jolokia_java_arg }}"
+zookeeper_service_overrides:
+  LimitNOFILE: "{{zookeeper_open_file_limit}}"
+
 zookeeper:
   user: cp-kafka
   group: confluent
   config_file: /etc/kafka/zookeeper.properties
   service_name: confluent-zookeeper
   systemd_override: /etc/systemd/system/confluent-zookeeper.service.d
-  jaas_file: /etc/kafka/zookeeper_jaas.conf
   keytab: /etc/security/keytabs
   properties:
     maxClientCnxns: 0
@@ -13,11 +22,6 @@ zookeeper:
     autopurge.snapRetainCount: 10
     autopurge.purgeInterval: 1
     dataDir: /var/lib/zookeeper
-  environment:
-    KAFKA_HEAP_OPTS: "-Xmx1000M"
-    LimitNOFILE: 500000
-  kerberosEnvironment:
-    KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/zookeeper_jaas.conf"
   systemd:
     enabled: yes
     state: started
