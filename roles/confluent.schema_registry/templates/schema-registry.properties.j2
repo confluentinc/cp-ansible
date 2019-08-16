@@ -1,4 +1,30 @@
-{% include './includes/base_schema-registry.properties.j2' %}
+# Maintained by Ansible
+{% for key, value in schema_registry.properties.items() %}
+{{key}}={{value}}
+{% endfor %}
 
-# Kafka Broker Configuration
-kafkastore.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}PLAINTEXT://{{ host }}:{{kafka_port}}{% endfor %}
+kafkastore.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{security_protocol}}://{{ host }}:{{kafka_port}}{% endfor %}
+
+
+kafkastore.security.protocol={{security_protocol}}
+
+{% if ssl_enabled|bool %}
+kafkastore.ssl.truststore.location=/var/ssl/private/client.truststore.jks
+kafkastore.ssl.truststore.password={{host_truststore_storepass}}
+kafkastore.ssl.keystore.location=/var/ssl/private/client.keystore.jks
+kafkastore.ssl.keystore.password={{host_keystore_storepass}}
+kafkastore.ssl.key.password={{host_cert_password}}
+{% endif %}
+{% if sasl_protocol == 'plain' %}
+kafkastore.sasl.mechanism=PLAIN
+kafkastore.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="client" password="client-secret";
+{% endif %}
+{% if sasl_protocol == 'kerberos' %}
+kafkastore.sasl.mechanism=GSSAPI
+kafkastore.sasl.kerberos.service.name=kafka
+kafkastore.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKey=true \
+   keyTab="{{kerberos.keytab_dir}}/schemaregistry-{{inventory_hostname}}.keytab" \
+   principal="schemaregistry/{{inventory_hostname}}@{{kerberos.realm|upper()}}";
+{% endif %}
