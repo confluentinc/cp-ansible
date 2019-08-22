@@ -1,0 +1,52 @@
+kafka_broker_jaas_file: /etc/kafka/kafka_server_jaas.conf
+kafka_broker_jaas_java_arg: "-Djava.security.auth.login.config={{kafka_broker_jaas_file}}"
+kafka_broker_jolokia_java_arg: "-javaagent:{{jolokia_jar_path}}=port={{kafka_broker_jolokia_port}},host=0.0.0.0"
+kafka_broker_open_file_limit: "{{open_file_limit}}"
+kafka_broker_service_overrides:
+  LimitNOFILE: "{{kafka_broker_open_file_limit}}"
+kafka_broker_service_environment_overrides:
+  KAFKA_HEAP_OPTS: "-Xmx1g"
+  KAFKA_OPTS: "{{ kafka_broker_jolokia_java_arg + ' ' + kafka_broker_jaas_java_arg if security_mode in ['kerberos', 'kerberos_ssl', 'kerberos_ssl_customcerts'] else kafka_broker_jolokia_java_arg }}"
+
+kafka_broker_sysctl:
+  vm.swappiness: 1
+  vm.dirty_background_ratio: 5
+  vm.dirty_ratio: 60
+
+kafka_broker_packages:
+  - confluent-kafka-2.12
+  - confluent-rebalancer
+
+kafka_broker:
+  user: cp-kafka
+  group: confluent
+  config_file: /etc/kafka/server.properties
+  systemd_file: /usr/lib/systemd/system/confluent-kafka.service
+  systemd_override: /etc/systemd/system/confluent-kafka.service.d
+  service_name: confluent-kafka
+  datadir:
+    - /var/lib/kafka/data
+  systemd:
+    enabled: yes
+    state: started
+  properties:
+    group.initial.rebalance.delay.ms: 0
+    log.retention.check.interval.ms: 300000
+    log.retention.hours: 168
+    log.segment.bytes: 1073741824
+    num.io.threads: 16
+    num.network.threads: 8
+    num.partitions: 1
+    num.recovery.threads.per.data.dir: 2
+    offsets.topic.replication.factor: 3
+    socket.receive.buffer.bytes: 102400
+    socket.request.max.bytes: 104857600
+    socket.send.buffer.bytes: 102400
+    transaction.state.log.min.isr: 2
+    transaction.state.log.replication.factor: 3
+    zookeeper.connection.timeout.ms: 6000
+    metric.reporters: io.confluent.metrics.reporter.ConfluentMetricsReporter
+    confluent.metrics.reporter.bootstrap.servers: "{{inventory_hostname}}:{{kafka_port}}"
+    confluent.metrics.reporter.topic.replicas: 3
+    ssl.endpoint.identification.algorithm: ""
+    confluent.metrics.reporter.ssl.endpoint.identification.algorithm: ""

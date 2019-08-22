@@ -1,0 +1,126 @@
+# Install Packages
+- name: Install the Kafka Connect Packages
+  yum:
+    name: "{{item}}-{{confluent.package_version}}"
+    state: latest
+  loop: "{{kafka_connect_packages}}"
+  when: ansible_os_family == "RedHat"
+
+- name: Install the Kafka Connect Packages
+  apt:
+    name: "{{item}}={{confluent.package_version}}"
+    update_cache: yes
+  loop: "{{kafka_connect_packages}}"
+  when: ansible_os_family == "Debian"
+
+# Configure environment
+- name: connect distributed create group
+  group:
+    name: "{{kafka_connect.group}}"
+- name: connect distributed create user
+  user:
+    name: "{{kafka_connect.user}}"
+    comment: "Connect Distributed User"
+    system: yes
+    group: "{{kafka_connect.group}}"
+- name: Change keytabs ownership
+  file:
+    path: "{{kerberos.keytab_dir}}"
+    group: "{{kafka_connect.group}}"
+    mode: '650'
+    recurse: yes
+- name: connect distributed create config
+  template:
+    src: connect-distributed.properties.j2
+    dest: "{{kafka_connect.config_file}}"
+    mode: 0640
+    owner: "{{kafka_connect.user}}"
+    group: "{{kafka_connect.group}}"
+  when: security_mode == "plaintext"
+  notify:
+    - restart connect distributed
+- name: connect distributed create config
+  template:
+    src: connect-distributed_ssl.properties.j2
+    dest: "{{kafka_connect.config_file}}"
+    mode: 0640
+    owner: "{{kafka_connect.user}}"
+    group: "{{kafka_connect.group}}"
+  when: security_mode == "ssl"
+  notify:
+    - restart connect distributed
+- name: connect distributed create config
+  template:
+    src: connect-distributed_sasl_ssl.properties.j2
+    dest: "{{kafka_connect.config_file}}"
+    mode: 0640
+    owner: "{{kafka_connect.user}}"
+    group: "{{kafka_connect.group}}"
+  when: security_mode == "sasl_ssl"
+  notify:
+    - restart connect distributed
+- name: connect distributed create config
+  template:
+    src: connect-distributed_ssl_customcerts.properties.j2
+    dest: "{{kafka_connect.config_file}}"
+    mode: 0640
+    owner: "{{kafka_connect.user}}"
+    group: "{{kafka_connect.group}}"
+  when: security_mode == "ssl_customcerts"
+- name: connect distributed create kerberos config
+  template:
+    src: connect-distributed_kerberos.properties.j2
+    dest: "{{kafka_connect.config_file}}"
+    mode: 0640
+    owner: "{{kafka_connect.user}}"
+    group: "{{kafka_connect.group}}"
+  when: security_mode == "kerberos"
+  notify:
+    - restart connect distributed
+- name: connect distributed create kerberos ssl config
+  template:
+    src: connect-distributed_kerberos_ssl.properties.j2
+    dest: "{{kafka_connect.config_file}}"
+    mode: 0640
+    owner: "{{kafka_connect.user}}"
+    group: "{{kafka_connect.group}}"
+  when: security_mode == "kerberos_ssl"
+  notify:
+    - restart connect distributed
+- name: connect distributed create kerberos ssl config
+  template:
+    src: connect-distributed_kerberos_ssl_customcerts.properties.j2
+    dest: "{{kafka_connect.config_file}}"
+    mode: 0640
+    owner: "{{kafka_connect.user}}"
+    group: "{{kafka_connect.group}}"
+  when: security_mode == "kerberos_ssl_customcerts"
+  notify:
+    - restart connect distributed
+
+- name: Create Service Override Directory
+  file:
+    path: "{{kafka_connect.systemd_override}}"
+    owner: "{{kafka_connect.user}}"
+    group: "{{kafka_connect.group}}"
+    state: directory
+    mode: 0640
+
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{kafka_connect.systemd_override}}/override.conf"
+    mode: 0640
+    owner: "{{kafka_connect.user}}"
+    group: "{{kafka_connect.group}}"
+  notify:
+    - reload systemd
+    - restart connect distributed
+
+- meta: flush_handlers
+
+- name: Start Connect Service
+  systemd:
+    name: "{{kafka_connect.service_name}}"
+    enabled: "{{kafka_connect.systemd.enabled}}"
+    state: "{{kafka_connect.systemd.state}}"

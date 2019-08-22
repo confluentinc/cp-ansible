@@ -1,0 +1,34 @@
+{% set cfg = control_center.properties %}
+{% set connect_servers = groups.get('kafka_connect', []) %}
+{% set schema_registries = groups.get('schema_registry', []) %}
+{% set ksql_servers = groups.get('ksql', []) %}
+
+bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_port}}{% endfor %}
+
+{% for key, value in cfg.items() %}
+{{key}}={{value}}
+{% endfor %}
+
+{% if ksql_servers and cfg.get('confluent.controlcenter.ksql.enable', 'false').lower() == 'true' %}
+{% set ksql_server_port = hostvars[ksql_servers[0]].get('ksql_listener_port', 8088) %}
+# KSQL Server
+confluent.controlcenter.ksql.url=http://{{ ksql_servers[0] }}:{{ ksql_server_port }}
+confluent.controlcenter.ksql.advertised.url=http://{{ ksql_servers[0] }}:{{ ksql_server_port }}
+{% endif %}
+
+{% if schema_registries and cfg.get('confluent.controlcenter.schema.registry.enable', 'false').lower() == 'true' %}
+# Schema Registry
+confluent.controlcenter.schema.registry.url={% for host in groups.get('schema_registry', []) -%}
+{% set schema_registry_port = hostvars[host].get('schema_registry_listener_port', 8081) %}
+{% if loop.index > 1%},{% endif %}
+http://{{ host }}:{{ schema_registry_port }}
+{%- endfor %}
+{% endif %}
+
+{% if connect_servers %}
+# Kafka Connect
+confluent.controlcenter.connect.cluster={% for host in connect_servers -%}{% if loop.index > 1%},{% endif %}
+{% set connect_config = hostvars[host].get('kafka', dict()).get('connect', dict()).get('distributed', dict()).get('config', dict()) %}
+http://{{ host }}:{{ connect_config.get('rest.port', 8083) }}
+{%- endfor %}
+{% endif %}
