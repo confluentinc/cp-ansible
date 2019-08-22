@@ -1,0 +1,155 @@
+# Install Packages
+- name: Install the Kafka Broker Packages
+  yum:
+    name: "{{item}}-{{confluent.package_version}}"
+    state: latest
+  loop: "{{kafka_broker_packages}}"
+  when: ansible_os_family == "RedHat"
+
+- name: Install the Kafka Broker Packages
+  apt:
+    name: "{{item}}={{confluent.package_version}}"
+    update_cache: yes
+  loop: "{{kafka_broker_packages}}"
+  when: ansible_os_family == "Debian"
+
+# Configure environment
+- name: broker group
+  group:
+    name: "{{kafka_broker.group}}"
+- name: broker user
+  user:
+    name: "{{kafka_broker.user}}"
+    comment: "Kafka User"
+    system: yes
+    group: "{{kafka_broker.group}}"
+- name: Change keytabs ownership
+  file:
+    path: "{{kerberos.keytab_dir}}"
+    group: "{{kafka_broker.group}}"
+    mode: '650'
+    recurse: yes
+- name: create broker data directories
+  file:
+    path: "{{item}}"
+    owner: "{{kafka_broker.user}}"
+    group: "{{kafka_broker.group}}"
+    state: directory
+    mode: 0755
+  with_items: "{{kafka_broker.datadir}}"
+- name: broker plaintext config
+  template:
+    src: server.properties.j2
+    dest: "{{kafka_broker.config_file}}"
+    mode: 0640
+    owner: "{{kafka_broker.user}}"
+    group: "{{kafka_broker.group}}"
+  when: security_mode == "plaintext"
+  notify:
+    - restart kafka
+- name: broker ssl config
+  template:
+    src: server_ssl.properties.j2
+    dest: "{{kafka_broker.config_file}}"
+    mode: 0640
+    owner: "{{kafka_broker.user}}"
+    group: "{{kafka_broker.group}}"
+  when: security_mode == "ssl"
+  notify:
+    - restart kafka
+- name: broker sasl_ssl config
+  template:
+    src: server_sasl_ssl.properties.j2
+    dest: "{{kafka_broker.config_file}}"
+    mode: 0640
+    owner: "{{kafka_broker.user}}"
+    group: "{{kafka_broker.group}}"
+  when: security_mode == "sasl_ssl"
+  notify:
+    - restart kafka
+- name: broker ssl custom signed config
+  template:
+    src: server_ssl_self_signed.properties.j2
+    dest: "{{kafka_broker.config_file}}"
+    mode: 0640
+    owner: "{{kafka_broker.user}}"
+    group: "{{kafka_broker.group}}"
+  when: security_mode == "ssl_customcerts"
+  notify:
+    - restart kafka
+- name: broker gssapi kerberos config
+  template:
+    src: server_kerberos.properties.j2
+    dest: "{{kafka_broker.config_file}}"
+    mode: 0640
+    owner: "{{kafka_broker.user}}"
+    group: "{{kafka_broker.group}}"
+  when: security_mode == "kerberos"
+  notify:
+    - restart kafka
+- name: broker ssl kerberos config
+  template:
+    src: server_kerberos_ssl.properties.j2
+    dest: "{{kafka_broker.config_file}}"
+    mode: 0640
+    owner: "{{kafka_broker.user}}"
+    group: "{{kafka_broker.group}}"
+  when: security_mode == "kerberos_ssl"
+  notify:
+    - restart kafka
+- name: broker ssl kerberos config
+  template:
+    src: server_kerberos_ssl.self_signed.properties.j2
+    dest: "{{kafka_broker.config_file}}"
+    mode: 0640
+    owner: "{{kafka_broker.user}}"
+    group: "{{kafka_broker.group}}"
+  when: security_mode == "kerberos_ssl_customcerts"
+  notify:
+    - restart kafka
+- name: broker Jaas config
+  template:
+    src: kafka_server_jaas.conf.j2
+    dest: "{{kafka_broker_jaas_file}}"
+    mode: 0640
+    owner: "{{kafka_broker.user}}"
+    group: "{{kafka_broker.group}}"
+  when: security_mode == "kerberos" or security_mode == "kerberos_ssl" or security_mode == "kerberos_ssl_customcerts"
+  notify:
+    - restart kafka
+
+- name: Create Service Override Directory
+  file:
+    path: "{{kafka_broker.systemd_override}}"
+    owner: "{{kafka_broker.user}}"
+    group: "{{kafka_broker.group}}"
+    state: directory
+    mode: 0640
+
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{kafka_broker.systemd_override}}/override.conf"
+    mode: 0640
+    owner: "{{kafka_broker.user}}"
+    group: "{{kafka_broker.group}}"
+  notify:
+    - reload systemd
+    - restart kafka
+
+- name: Tune virtual memory settings
+  lineinfile:
+    path: /etc/sysctl.conf
+    regexp: "{{ item.key }}.*"
+    line: "{{ item.key }}={{ item.value }}"
+  with_dict: "{{ kafka_broker_sysctl }}"
+  notify:
+    - load sysctl
+
+- meta: flush_handlers
+
+- name: Start Kafka Broker Service
+  systemd:
+    name: "{{kafka_broker.service_name}}"
+    enabled: "{{kafka_broker.systemd.enabled}}"
+    state: "{{kafka_broker.systemd.state}}"

@@ -1,0 +1,48 @@
+kafka_connect_jolokia_java_arg: "-javaagent:{{jolokia_jar_path}}=port={{kafka_connect_jolokia_port}},host=0.0.0.0"
+kafka_connect_open_file_limit: "{{open_file_limit}}"
+kafka_connect_service_overrides:
+  LimitNOFILE: "{{kafka_connect_open_file_limit}}"
+kafka_connect_service_environment_overrides:
+  KAFKA_HEAP_OPTS: "-Xms256M -Xmx2G"
+  KAFKA_OPTS: "{{kafka_connect_jolokia_java_arg}}"
+
+kafka_connect_packages:
+  - confluent-kafka-connect-elasticsearch
+  - confluent-kafka-connect-jdbc
+  - confluent-kafka-connect-jms
+  - confluent-kafka-connect-replicator
+  - confluent-kafka-connect-s3
+  - confluent-kafka-connect-storage-common
+
+kafka_connect:
+  config_file: /etc/kafka/connect-distributed.properties
+  service_name: confluent-kafka-connect
+  systemd_file: /usr/lib/systemd/system/confluent-kafka-connect.service
+  systemd_override: /etc/systemd/system/confluent-kafka-connect.service.d
+  user: cp-kafka-connect
+  group: confluent
+  properties:
+    rest.port: 8083
+    consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
+    producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+    ssl.endpoint.identification.algorithm: ""
+    consumer.ssl.endpoint.identification.algorithm: ""
+    producer.ssl.endpoint.identification.algorithm: ""
+    config.storage.replication.factor: 3
+    config.storage.topic: connect-configs
+    group.id: connect-cluster
+    internal.key.converter: org.apache.kafka.connect.json.JsonConverter
+    internal.key.converter.schemas.enable: false
+    internal.value.converter: org.apache.kafka.connect.json.JsonConverter
+    internal.value.converter.schemas.enable: false
+    offset.flush.interval.ms: 10000
+    offset.storage.replication.factor: 3
+    offset.storage.topic: connect-offsets
+    status.storage.replication.factor: 3
+    status.storage.topic: connect-status
+    key.converter: io.confluent.connect.avro.AvroConverter
+    value.converter: io.confluent.connect.avro.AvroConverter
+    plugin.path: /usr/share/java
+  systemd:
+    enabled: yes
+    state: started

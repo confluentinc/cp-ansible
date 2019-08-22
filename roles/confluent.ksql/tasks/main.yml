@@ -1,3 +1,19 @@
+# Install Packages
+- name: Install the KSQL Packages
+  yum:
+    name: "{{item}}-{{confluent.package_version}}"
+    state: latest
+  loop: "{{ksql_packages}}"
+  when: ansible_os_family == "RedHat"
+
+- name: Install the KSQL Packages
+  apt:
+    name: "{{item}}={{confluent.package_version}}"
+    update_cache: yes
+  loop: "{{ksql_packages}}"
+  when: ansible_os_family == "Debian"
+
+# Configure environment
 - name: ksql create group
   group:
     name: "{{ksql.group}}"
@@ -9,12 +25,12 @@
     group: "{{ksql.group}}"
 - name: Change keytabs ownership
   file:
-    path: "{{ksql.keytab}}"
+    path: "{{kerberos.keytab_dir}}"
     group: "{{ksql.group}}"
     mode: '650'
     recurse: yes
 - name: change streams directory ownership
-  file: 
+  file:
     path: "{{ksql.streamsDataDir}}"
     owner: "{{ksql.user}}"
     group: "{{ksql.group}}"
@@ -93,44 +109,37 @@
 - name: ksql Jaas config
   template:
     src: ksql-server_jaas.conf.j2
-    dest: "{{ksql.jaas_file}}"
+    dest: "{{ksql_jaas_file}}"
     mode: 0640
     owner: "{{ksql.user}}"
     group: "{{ksql.group}}"
   when: security_mode == "kerberos" or security_mode == "kerberos_ssl" or security_mode == "kerberos_ssl_customcerts"
   notify:
     - restart ksql
-- name: create systemd override file
+
+- name: Create Service Override Directory
   file:
     path: "{{ksql.systemd_override}}"
     owner: "{{ksql.user}}"
     group: "{{ksql.group}}"
     state: directory
     mode: 0640
-- name: write environment variables
+
+- name: Write Service Overrides
   template:
-    src: environment.j2
+    src: override.conf.j2
     dest: "{{ksql.systemd_override}}/override.conf"
     mode: 0640
     owner: "{{ksql.user}}"
     group: "{{ksql.group}}"
-  when: security_mode == "plaintext" or security_mode == "sasl_ssl" or security_mode == "ssl_customcerts"
   notify:
     - reload systemd
     - restart ksql
-- name: write environment variables
-  template:
-    src: kerberosenvironment.j2
-    dest: "{{ksql.systemd_override}}/override.conf"
-    mode: 0640
-    owner: "{{ksql.user}}"
-    group: "{{ksql.group}}"
-  when: security_mode == "kerberos" or security_mode == "kerberos_ssl" or security_mode == "kerberos_ssl_customcerts"
-  notify:
-    - reload systemd
-    - restart ksql
-- name: ksql configure service
+
+- meta: flush_handlers
+
+- name: Start Ksql Service
   systemd:
     name: "{{ksql.service_name}}"
     enabled: "{{ksql.systemd.enabled}}"
-    state: "{{ksql.systemd.state}}"    
+    state: "{{ksql.systemd.state}}"

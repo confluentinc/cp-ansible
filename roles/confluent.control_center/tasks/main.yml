@@ -1,0 +1,128 @@
+# Install Packages
+- name: Install the Control Center Packages
+  yum:
+    name: "{{item}}-{{confluent.package_version}}"
+    state: latest
+  loop: "{{control_center_packages}}"
+  when: ansible_os_family == "RedHat"
+
+- name: Install the Control Center Packages
+  apt:
+    name: "{{item}}={{confluent.package_version}}"
+    update_cache: yes
+  loop: "{{control_center_packages}}"
+  when: ansible_os_family == "Debian"
+
+# Configure environment
+- name: control center create group
+  group:
+    name: "{{control_center.group}}"
+- name: control center create user
+  user:
+    name: "{{control_center.user}}"
+    comment: "Control Center User"
+    system: yes
+    group: "{{control_center.group}}"
+- name: Change keytabs ownership
+  file:
+    path: "{{kerberos.keytab_dir}}"
+    group: "{{control_center.group}}"
+    mode: '650'
+    recurse: yes
+- name: control center create config
+  template:
+    src: control-center.properties.j2
+    dest: "{{control_center.config_file}}"
+    mode: 0640
+    owner: "{{control_center.user}}"
+    group: "{{control_center.group}}"
+  when: security_mode == "plaintext"
+  notify:
+    - restart control center
+- name: control center create config
+  template:
+    src: control-center_ssl.properties.j2
+    dest: "{{control_center.config_file}}"
+    mode: 0640
+    owner: "{{control_center.user}}"
+    group: "{{control_center.group}}"
+  when: security_mode == "ssl"
+  notify:
+    - restart control center
+- name: control center create config
+  template:
+    src: control-center_sasl_ssl.properties.j2
+    dest: "{{control_center.config_file}}"
+    mode: 0640
+    owner: "{{control_center.user}}"
+    group: "{{control_center.group}}"
+  when: security_mode == "sasl_ssl"
+  notify:
+    - restart control center
+- name: control center create config
+  template:
+    src: control-center_kerberos.properties.j2
+    dest: "{{control_center.config_file}}"
+    mode: 0640
+    owner: "{{control_center.user}}"
+    group: "{{control_center.group}}"
+  when: security_mode == "kerberos"
+  notify:
+    - restart control center
+- name: control center create kerberos ssl config
+  template:
+    src: control-center_kerberos_ssl.properties.j2
+    dest: "{{control_center.config_file}}"
+    mode: 0640
+    owner: "{{control_center.user}}"
+    group: "{{control_center.group}}"
+  when: security_mode == "kerberos_ssl"
+  notify:
+    - restart control center
+- name: control center create kerberos ssl config
+  template:
+    src: control-center_kerberos_ssl_customcerts.properties.j2
+    dest: "{{control_center.config_file}}"
+    mode: 0640
+    owner: "{{control_center.user}}"
+    group: "{{control_center.group}}"
+  when: security_mode == "kerberos_ssl_customcerts"
+  notify:
+    - restart control center
+- name: control center create config
+  template:
+    src: control-center_ssl_customcerts.properties.j2
+    dest: "{{control_center.config_file}}"
+    mode: 0640
+    owner: "{{control_center.user}}"
+    group: "{{control_center.group}}"
+  when: security_mode == "ssl_customcerts"
+  notify:
+    - restart control center
+
+- name: Create Service Override Directory
+  file:
+    path: "{{control_center.systemd_override}}"
+    owner: "{{control_center.user}}"
+    group: "{{control_center.group}}"
+    state: directory
+    mode: 0640
+
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{control_center.systemd_override}}/override.conf"
+    mode: 0640
+    owner: "{{control_center.user}}"
+    group: "{{control_center.group}}"
+  notify:
+    - reload systemd
+    - restart control center
+
+- meta: flush_handlers
+
+- name: Start Control Center Service
+  systemd:
+    name: "{{control_center.service_name}}"
+    enabled: "{{control_center.systemd.enabled}}"
+    state: "{{control_center.systemd.state}}"

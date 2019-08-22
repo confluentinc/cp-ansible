@@ -1,23 +1,30 @@
 ksql_listener_port: 8088
 
+ksql_jaas_file: /etc/ksql/ksql-server_jaas.conf
+ksql_jaas_java_arg: "-Djava.security.auth.login.config={{ksql_jaas_file}}"
+ksql_jolokia_java_arg: "-javaagent:{{jolokia_jar_path}}=port={{ksql_jolokia_port}},host=0.0.0.0"
+ksql_open_file_limit: "{{open_file_limit}}"
+ksql_service_environment_overrides:
+  KSQL_HEAP_OPTS: "-Xmx3g"
+  KSQL_OPTS: "{{ ksql_jolokia_java_arg + ' ' + ksql_jaas_java_arg if security_mode in ['kerberos', 'kerberos_ssl', 'kerberos_ssl_customcerts'] else ksql_jolokia_java_arg }}"
+ksql_service_overrides:
+  LimitNOFILE: "{{ksql_open_file_limit}}"
+
+ksql_packages:
+    - confluent-ksql
+
 ksql:
   config_file: /etc/ksql/ksql-server.properties
   service_name: confluent-ksql
+  systemd_file: /usr/lib/systemd/system/confluent-ksql.service
   systemd_override: /etc/systemd/system/confluent-ksql.service.d
   user: cp-ksql
   group: confluent
-  keytab: /etc/security/keytabs
-  jaas_file: /etc/ksql/ksql-server_jaas.conf
   streamsDataDir: /var/lib/kafka-streams
   systemd:
     enabled: yes
     state: started
-  environment:
-    KSQL_HEAP_OPTS: "-Xmx3g"
-  kerberosEnvironment:
-    KSQL_HEAP_OPTS: "-Xmx3g"
-    KSQL_OPTS: "-Djava.security.auth.login.config=/etc/ksql/ksql-server.jaas.conf"
-  config:
+  properties:
     application.id: ksql-server
     listeners: http://0.0.0.0:{{ksql_listener_port}}
     ssl.endpoint.identification.algorithm: ""

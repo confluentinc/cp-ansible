@@ -1,3 +1,19 @@
+# Install Packages
+- name: Install the Zookeeper Packages
+  yum:
+    name: "{{item}}-{{confluent.package_version}}"
+    state: latest
+  loop: "{{zookeeper_packages}}"
+  when: ansible_os_family == "RedHat"
+
+- name: Install the Zookeeper Packages
+  apt:
+    name: "{{item}}={{confluent.package_version}}"
+    update_cache: yes
+  loop: "{{zookeeper_packages}}"
+  when: ansible_os_family == "Debian"
+
+# Configure environment
 - name: zookeeper create group
   group:
     name: "{{zookeeper.group}}"
@@ -9,14 +25,14 @@
     group: "{{zookeeper.group}}"
 - name: Change keytabs ownership
   file:
-    path: "{{zookeeper.keytab}}"
+    path: "{{kerberos.keytab_dir}}"
     group: "{{zookeeper.group}}"
     mode: '650'
     recurse: yes
 - name: zookeeper myid file
   template:
     src: myid.j2
-    dest: "{{zookeeper.config.dataDir}}/myid"
+    dest: "{{zookeeper.properties.dataDir}}/myid"
     mode: 0555
     owner: "{{zookeeper.user}}"
     group: "{{zookeeper.group}}"
@@ -33,43 +49,36 @@
 - name: zookeeper Jaas config
   template:
     src: zookeeper_jaas.conf.j2
-    dest: "{{zookeeper.jaas_file}}"
+    dest: "{{zookeeper_jaas_file}}"
     mode: 0640
     owner: "{{zookeeper.user}}"
     group: "{{zookeeper.group}}"
   when: security_mode == "kerberos" or security_mode == "kerberos_ssl" or security_mode == "kerberos_ssl_customcerts"
   notify:
     - restart zookeeper
-- name: create systemd override file
+
+- name: Create Service Override Directory
   file:
     path: "{{zookeeper.systemd_override}}"
     owner: "{{zookeeper.user}}"
     group: "{{zookeeper.group}}"
     state: directory
     mode: 0640
-- name: write environment variables
+
+- name: Write Service Overrides
   template:
-    src: environment.j2
+    src: override.conf.j2
     dest: "{{zookeeper.systemd_override}}/override.conf"
     mode: 0640
     owner: "{{zookeeper.user}}"
     group: "{{zookeeper.group}}"
-  when: security_mode == "plaintext" or security_mode == "sasl_ssl" or security_mode == "ssl_customcerts"
   notify:
     - reload systemd
     - restart zookeeper
-- name: write environment variables
-  template:
-    src: kerberos_environment.j2
-    dest: "{{zookeeper.systemd_override}}/override.conf"
-    mode: 0640
-    owner: "{{zookeeper.user}}"
-    group: "{{zookeeper.group}}"
-  when: security_mode == "kerberos" or security_mode == "kerberos_ssl" or security_mode == "kerberos_ssl_customcerts"
-  notify:
-    - reload systemd
-    - restart zookeeper
-- name: zookeeper configure service
+
+- meta: flush_handlers
+
+- name: Start Zookeeper Service
   systemd:
     name: "{{zookeeper.service_name}}"
     enabled: "{{zookeeper.systemd.enabled}}"
