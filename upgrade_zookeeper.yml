@@ -1,0 +1,119 @@
+- name: Zookeeper Upgrade - Prep
+  hosts: zookeeper
+  gather_facts: no
+  # Running serial=1 because add_host has problems
+  # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
+  serial: 1
+  tags:
+    - prep
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    # - package_facts:
+    #     manager: auto
+    #
+    # - name: Get Current Package Version
+    #   set_fact:
+    #     kafka_broker_current_version: "{{ ansible_facts.packages['confluent-kafka-2.12'][0]['version'] }}"
+
+    # Need nc util, yum install nc
+    - name: Get Leader/Follower
+      shell: echo stat | nc localhost 2181 | grep Mode
+      register: leader_query
+
+    - name: Add host to Follower Group
+      add_host:
+        name: "{{ inventory_hostname }}"
+        group: zookeeper_followers
+      delegate_to: localhost
+      when: '"follower" in leader_query.stdout'
+
+    - name: Add host to Leader Group
+      add_host:
+        name: "{{ inventory_hostname }}"
+        group: zookeeper_leader
+      delegate_to: localhost
+      when: '"leader" in leader_query.stdout'
+
+    - debug:
+        msg: "Leader: {{inventory_hostname}}"
+      when: '"leader" in leader_query.stdout'
+
+- name: Zookeeper Upgrade
+  # Putting leader group last here with serial=1 so the leader runs last
+  hosts: zookeeper_followers,zookeeper_leader
+  serial: 1
+  tags:
+    - upgrade
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - name: Create Backup Directory
+      file:
+        path: /tmp/zookeeper-upgrade-backup
+        state: directory
+        mode: 0640
+
+    - name: Backup Configuration files
+      copy:
+        src: "{{ item }}"
+        remote_src: yes
+        dest: "/tmp/zookeeper-upgrade-backup/{{ item | basename }}"
+      loop:
+        - "{{ zookeeper.config_file }}"
+        - "{{ zookeeper.systemd_file }}"
+        - "{{ zookeeper.systemd_override }}"
+
+    - name: Stop Zookeeper Service
+      systemd:
+        name: "{{ zookeeper_service_name }}"
+        state: stopped
+
+    - name: Configure Repositories
+      import_role:
+        name: confluent.common
+      vars:
+        install_java: false
+
+    - name: Install the Zookeeper Packages - Red Hat
+      yum:
+        name: "{{item}}-{{confluent.package_version}}"
+        state: latest
+      loop: "{{ zookeeper_packages }}"
+      when: ansible_os_family == "RedHat"
+
+    - name: Install the Zookeeper Packages - Debian
+      apt:
+        name: "{{item}}={{confluent.package_version}}"
+        update_cache: yes
+      loop: "{{ zookeeper_packages }}"
+      when: ansible_os_family == "Debian"
+
+    - name: Put back configuration
+      copy:
+        dest: "{{ item }}"
+        remote_src: yes
+        src: "/tmp/zookeeper-upgrade-backup/{{ item | basename }}"
+      loop:
+        - "{{ zookeeper.config_file }}"
+
+    - name: Restart Zookeeper Service
+      systemd:
+        name: "{{ zookeeper_service_name }}"
+        state: restarted
+
+    - name: Wait for Health Check to return
+      shell: echo ruok | nc localhost 2181
+      register: ruok
+      until: ruok.rc == 0
+      retries: 30
+      delay: 5
+
+    - name: Wait for Health Check to return OK
+      shell: echo ruok | nc localhost 2181
+      register: ruok
+      until: '"imok" in ruok.stdout'
+      retries: 30
+      delay: 5

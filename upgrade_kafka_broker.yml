@@ -1,0 +1,150 @@
+- name: Kafka Broker Upgrade - Prep
+  hosts: kafka_broker
+  gather_facts: no
+  # Running serial=1 because add_host has problems
+  # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
+  serial: 1
+  tags:
+    - prep
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - package_facts:
+        manager: auto
+
+    - name: Get Current Package Version
+      set_fact:
+        kafka_broker_current_version: "{{ ansible_facts.packages['confluent-kafka-2.12'][0]['version'] }}"
+
+    - debug:
+        msg: "Current version: {{kafka_broker_current_version}}"
+
+# What if jolokia off??
+# ./bin/zookeeper-shell.sh [ZK_IP] get /controller
+# /usr/bin/zookeeper-shell node1.example.com:2181 get /controller
+# https://stackoverflow.com/questions/48287339/how-to-know-the-broker-that-is-the-active-controller
+
+
+    - name: Get ActiveControllerCount
+      uri:
+        url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ActiveControllerCount"
+        return_content: yes
+        status_code: 200
+      register: active_controller_count_query
+    # {"request":{"mbean":"kafka.controller:name=ActiveControllerCount,type=KafkaController","type":"read"},"value":{"Value":0},"timestamp":1566258602,"status":200}
+
+    - set_fact:
+        active_controller_count: "{{ active_controller_count_query['json']['value']['Value'] }}"
+
+    - name: Add host to Non Controller Group
+      add_host:
+        name: "{{ inventory_hostname }}"
+        group: kafka_broker_non_controllers
+      delegate_to: localhost
+      when: active_controller_count|int == 0
+
+    - name: Add host to Controller Group
+      add_host:
+        name: "{{ inventory_hostname }}"
+        group: kafka_broker_controller
+      delegate_to: localhost
+      when: active_controller_count|int == 1
+
+    - debug:
+        msg: "Controller: {{inventory_hostname}}"
+      when: active_controller_count|int == 1
+
+- name: Kafka Broker Upgrade
+  # Putting controller group last here with serial=1 has the controller as the last host to run
+  hosts: kafka_broker_non_controllers,kafka_broker_controller
+  serial: 1
+  tags:
+    - upgrade
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - name: Create Backup Directory
+      file:
+        path: /tmp/kafka-broker-upgrade-backup
+        state: directory
+        mode: 0640
+
+    - name: Backup Configuration files
+      copy:
+        src: "{{ item }}"
+        remote_src: yes
+        dest: "/tmp/kafka-broker-upgrade-backup/{{ item | basename }}"
+      loop:
+        - "{{ kafka_broker.config_file }}"
+        - "{{ kafka_broker.systemd_file }}"
+        - "{{ kafka_broker.systemd_override }}"
+
+    - name: Stop Kafka Broker Service
+      systemd:
+        name: confluent-kafka
+        state: stopped
+
+    - name: Configure Repositories
+      import_role:
+        name: confluent.common
+      vars:
+        install_java: false
+
+    - name: Install the Kafka Broker Packages - Red Hat
+      yum:
+        name: "{{item}}-{{confluent.package_version}}"
+        state: latest
+      loop: "{{kafka_broker_packages}}"
+      when: ansible_os_family == "RedHat"
+
+    - name: Install the Kafka Broker Packages - Debian
+      apt:
+        name: "{{item}}={{confluent.package_version}}"
+        update_cache: yes
+      loop: "{{kafka_broker_packages}}"
+      when: ansible_os_family == "Debian"
+
+    - name: Put back configuration
+      copy:
+        dest: "{{ item }}"
+        remote_src: yes
+        src: "/tmp/kafka-broker-upgrade-backup/{{ item | basename }}"
+      loop:
+        - "{{ kafka_broker.config_file }}"
+
+    - name: Restart Kafka Broker Service
+      systemd:
+        name: confluent-kafka
+        state: restarted
+
+    - name: Wait for Under Replicated Partitions Metric to return 200
+      uri:
+        url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 60
+      delay: 5
+
+    - name: Wait for Under Replicated Partitions Metric to return Data
+      uri:
+        url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
+        status_code: 200
+      register: result
+      until: result['json']['value'] is defined
+      retries: 60
+      delay: 5
+
+    # curl localhost:7771/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions
+    # {"request":{"mbean":"kafka.server:name=UnderReplicatedPartitions,type=ReplicaManager","type":"read"},"value":{"Value":0},"timestamp":1565819946,"status":200}
+    - name: Wait for Under Replicated Partitions Metric to equal Zero
+      uri:
+        url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
+        return_content: yes
+        status_code: 200
+      register: result
+      until: result['json']['value']['Value'] == 0
+      retries: 60
+      delay: 5
