@@ -1,11 +1,53 @@
-- name: Kafka Broker Upgrade - Prep
+- name: Kafka Broker Upgrade - Config Prep
+  hosts: kafka_broker
+  gather_facts: no
+  vars:
+    current_version: 5.2
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - name: Check if Controlled Shutdown set to false
+      lineinfile:
+        name: "{{kafka_broker.config_file}}"
+        line: controlled.shutdown.enable=false
+        state: present
+      # With check_mode enabled, no change will actually be made
+      # Testing if adding this line *would* require a change
+      check_mode: yes
+      register: line_present
+
+    # if line is missing or set to true, no need for a change, default value is true
+    - name: Error out when Controlled Shutdown set to false
+      fail:
+        msg: "Property controlled.shutdown.enable is set to false within {{kafka_broker.config_file}}. Set to true and restart"
+      when: line_present is not changed
+
+    - set_fact:
+        inter_broker_protocol_version: 2.2
+        log_message_format_version: 2.2
+      when: current_version == 5.2
+
+    - name: Set Inter-Broker Protocol Version to Current Version
+      lineinfile:
+        name: "{{kafka_broker.config_file}}"
+        line: "inter.broker.protocol.version={{inter_broker_protocol_version}}"
+        regexp: inter.broker.protocol.version.*
+        state: present
+
+    - name: Set Log Message Format Version to Current Version
+      lineinfile:
+        name: "{{kafka_broker.config_file}}"
+        line: "log.message.format.version={{log_message_format_version}}"
+        regexp: log.message.format.version.*
+        state: present
+
+- name: Kafka Broker Upgrade - Host Ordering
   hosts: kafka_broker
   gather_facts: no
   # Running serial=1 because add_host has problems
   # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
   serial: 1
-  tags:
-    - prep
   tasks:
     - import_role:
         name: confluent.variables
@@ -18,14 +60,8 @@
         kafka_broker_current_version: "{{ ansible_facts.packages['confluent-kafka-2.12'][0]['version'] }}"
 
     - debug:
-        msg: "Current version: {{kafka_broker_current_version}}"
-      when: kafka_broker_current_version == confluent_package_version
-
-# What if jolokia off??
-# ./bin/zookeeper-shell.sh [ZK_IP] get /controller
-# /usr/bin/zookeeper-shell node1.example.com:2181 get /controller
-# https://stackoverflow.com/questions/48287339/how-to-know-the-broker-that-is-the-active-controller
-
+        msg: "Current version: {{kafka_broker_current_version}}   Upgrade to version: {{confluent_package_version}}"
+      # when: kafka_broker_current_version == confluent_package_version
 
     - name: Get ActiveControllerCount
       uri:
@@ -33,32 +69,33 @@
         return_content: yes
         status_code: 200
       register: active_controller_count_query
-    # {"request":{"mbean":"kafka.controller:name=ActiveControllerCount,type=KafkaController","type":"read"},"value":{"Value":0},"timestamp":1566258602,"status":200}
 
     - set_fact:
         active_controller_count: "{{ active_controller_count_query['json']['value']['Value'] }}"
 
+    - debug:
+        msg: "Active Controller: {{inventory_hostname}}"
+      when: active_controller_count|int == 1
+
     - name: Add host to Non Controller Group
       add_host:
         name: "{{ inventory_hostname }}"
-        group: kafka_broker_non_controllers
+        group: upgrade_non_controllers
       delegate_to: localhost
       when: active_controller_count|int == 0
+        # - kafka_broker_current_version != confluent_package_version
 
     - name: Add host to Controller Group
       add_host:
         name: "{{ inventory_hostname }}"
-        group: kafka_broker_controller
+        group: upgrade_controller
       delegate_to: localhost
       when: active_controller_count|int == 1
-
-    - debug:
-        msg: "Controller: {{inventory_hostname}}"
-      when: active_controller_count|int == 1
+        # - kafka_broker_current_version != confluent_package_version
 
 - name: Kafka Broker Upgrade
   # Putting controller group last here with serial=1 has the controller as the last host to run
-  hosts: kafka_broker_non_controllers,kafka_broker_controller
+  hosts: upgrade_non_controllers,upgrade_controller
   serial: 1
   tags:
     - upgrade
@@ -82,35 +119,8 @@
         - "{{ kafka_broker.systemd_file }}"
         - "{{ kafka_broker.systemd_override }}"
 
-    - name: Wait for Under Replicated Partitions Metric to return 200
-      uri:
-        url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
-        status_code: 200
-      register: result
-      until: result.status == 200
-      retries: 60
-      delay: 5
-
-    - name: Wait for Under Replicated Partitions Metric to return Data
-      uri:
-        url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
-        status_code: 200
-      register: result
-      until: result['json']['value'] is defined
-      retries: 60
-      delay: 5
-
-    # curl localhost:7771/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions
-    # {"request":{"mbean":"kafka.server:name=UnderReplicatedPartitions,type=ReplicaManager","type":"read"},"value":{"Value":0},"timestamp":1565819946,"status":200}
-    - name: Wait for Under Replicated Partitions Metric to equal Zero
-      uri:
-        url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
-        return_content: yes
-        status_code: 200
-      register: result
-      until: result['json']['value']['Value'] == 0
-      retries: 60
-      delay: 5
+    - name: Wait for Under Replicated Partitions on Broker
+      import_tasks: tasks/wait_for_urp.yml
 
     - name: Stop Kafka Broker Service
       systemd:
@@ -150,32 +160,35 @@
         name: confluent-kafka
         state: restarted
 
-    - name: Wait for Under Replicated Partitions Metric to return 200
-      uri:
-        url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
-        status_code: 200
-      register: result
-      until: result.status == 200
-      retries: 60
-      delay: 5
+    - name: Wait for Under Replicated Partitions on Broker
+      import_tasks: tasks/wait_for_urp.yml
 
-    - name: Wait for Under Replicated Partitions Metric to return Data
-      uri:
-        url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
-        status_code: 200
-      register: result
-      until: result['json']['value'] is defined
-      retries: 60
-      delay: 5
 
-    # curl localhost:7771/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions
-    # {"request":{"mbean":"kafka.server:name=UnderReplicatedPartitions,type=ReplicaManager","type":"read"},"value":{"Value":0},"timestamp":1565819946,"status":200}
-    - name: Wait for Under Replicated Partitions Metric to equal Zero
-      uri:
-        url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
-        return_content: yes
-        status_code: 200
-      register: result
-      until: result['json']['value']['Value'] == 0
-      retries: 60
-      delay: 5
+- name: Kafka Broker Upgrade - Set Inter-Broker Protocol to Current Version
+  hosts: kafka_broker
+  gather_facts: no
+  serial: 1
+  vars:
+    upgrade_to_version: 5.3
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - set_fact:
+        inter_broker_protocol_version: 2.3
+      when: upgrade_to_version == 5.3
+
+    - name: Set Inter-Broker Protocol Version to Current Version
+      lineinfile:
+        name: "{{kafka_broker.config_file}}"
+        line: "inter.broker.protocol.version={{inter_broker_protocol_version}}"
+        regexp: inter.broker.protocol.version.*
+        state: present
+
+    - name: Restart Kafka Broker Service
+      systemd:
+        name: confluent-kafka
+        state: restarted
+
+    - name: Wait for Under Replicated Partitions on Broker
+      import_tasks: tasks/wait_for_urp.yml
