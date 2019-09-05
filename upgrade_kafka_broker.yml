@@ -1,27 +1,39 @@
 - name: Kafka Broker Upgrade - Config Prep
   hosts: kafka_broker
   gather_facts: no
+  serial: 1
   vars:
     current_version: 5.2
   tasks:
     - import_role:
         name: confluent.variables
 
-    - name: Check if Controlled Shutdown set to false
+    # - name: Check if Controlled Shutdown set to false
+    #   lineinfile:
+    #     name: "{{kafka_broker.config_file}}"
+    #     line: controlled.shutdown.enable=false
+    #     state: present
+    #   # With check_mode enabled, no change will actually be made
+    #   # Testing if adding this line *would* require a change
+    #   check_mode: yes
+    #   register: line_present
+    #
+    # # if line is missing or set to true, no need for a change, default value is true
+    # - name: Error out when Controlled Shutdown set to false
+    #   fail:
+    #     msg: "Property controlled.shutdown.enable is set to false within {{kafka_broker.config_file}}. Set to true and restart"
+    #   when: line_present is not changed
+
+    - name: Make sure Controlled Shutdown Property is not set to False
       lineinfile:
         name: "{{kafka_broker.config_file}}"
+        # Default value for controlled.shutdown.enable is true
+        # Removing the line and restarting the service will set it to true
         line: controlled.shutdown.enable=false
-        state: present
-      # With check_mode enabled, no change will actually be made
-      # Testing if adding this line *would* require a change
-      check_mode: yes
-      register: line_present
-
-    # if line is missing or set to true, no need for a change, default value is true
-    - name: Error out when Controlled Shutdown set to false
-      fail:
-        msg: "Property controlled.shutdown.enable is set to false within {{kafka_broker.config_file}}. Set to true and restart"
-      when: line_present is not changed
+        state: absent
+      notify:
+        - Restart Kafka
+        - Wait for URP
 
     - set_fact:
         inter_broker_protocol_version: 2.2
@@ -187,12 +199,3 @@
       notify:
         - Restart Kafka
         - Wait for URP
-
-  handlers:
-    - name: Restart Kafka
-      systemd:
-        name: "{{kafka_broker_service_name}}"
-        state: restarted
-
-    - name: Wait for URP
-      include_tasks: tasks/wait_for_urp.yml
