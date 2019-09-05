@@ -1,0 +1,33 @@
+- name: Kafka Broker Upgrade - Set Log Message Format Version to Current Version
+  hosts: kafka_broker
+  gather_facts: no
+  serial: 1
+  vars:
+    upgrade_to_version: 5.3
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - set_fact:
+        log_message_format_version: 2.3
+      when: upgrade_to_version == 5.3
+
+    - name: Set Log Message Format Version to Current Version
+      lineinfile:
+        name: "{{kafka_broker.config_file}}"
+        line: "log.message.format.version={{log_message_format_version}}"
+        regexp: log.message.format.version.*
+        state: present
+      register: line
+      notify:
+        - Restart Kafka
+        - Wait for URP
+
+  handlers:
+    - name: Restart Kafka
+      systemd:
+        name: "{{kafka_broker_service_name}}"
+        state: restarted
+
+    - name: Wait for URP
+      include_tasks: tasks/wait_for_urp.yml
