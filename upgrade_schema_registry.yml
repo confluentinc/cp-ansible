@@ -1,10 +1,6 @@
 - name: Schema Registry Upgrade
   hosts: schema_registry
-  # Running serial=1 because add_host has problems
-  # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
   serial: 1
-  tags:
-    - prep
   tasks:
     - import_role:
         name: confluent.variables
@@ -16,58 +12,18 @@
       set_fact:
         schema_registry_current_version: "{{ ansible_facts.packages['confluent-schema-registry'][0]['version'] }}"
 
-    - debug: var=schema_registry_current_version
+    - debug:
+        msg: "Current version: {{schema_registry_current_version}}   Upgrade to version: {{confluent_package_version}}"
 
-    - name: Create Backup Directory
-      file:
-        path: /tmp/upgrade/schema-registry
-        state: directory
-        mode: 0640
-
-    - name: Backup Configuration files
-      copy:
-        src: "{{ item }}"
-        remote_src: yes
-        dest: "/tmp/upgrade/schema-registry/{{ item | basename }}"
-      loop:
-        - "{{ schema_registry.config_file }}"
-        - "{{ schema_registry.systemd_file }}"
-        - "{{ schema_registry.systemd_override }}"
-
-    - name: Stop Schema Registry Service
-      systemd:
-        name: "{{ schema_registry_service_name }}"
-        state: stopped
-
-    - name: Configure Repositories
-      import_role:
-        name: confluent.common
+    - name: Upgrade Schema Registry
+      include_tasks: tasks/upgrade_component.yml
       vars:
-        install_java: false
-
-    - name: Install the Schema Registry Packages - Red Hat
-      yum:
-        name: "{{item}}{{confluent_package_redhat_suffix}}"
-        state: latest
-      loop: "{{ schema_registry_packages }}"
-      when: ansible_os_family == "RedHat"
-
-    - name: Install the Schema Registry Packages - Debian
-      apt:
-        name: "{{item}}{{confluent_package_debian_suffix}}"
-        update_cache: yes
-      loop: "{{ schema_registry_packages }}"
-      when: ansible_os_family == "Debian"
-
-    - name: Put back configuration
-      copy:
-        dest: "{{ item }}"
-        remote_src: yes
-        src: "/tmp/upgrade/schema-registry/{{ item | basename }}"
-      loop:
-        - "{{ schema_registry.config_file }}"
-
-    - name: Restart Schema Registry Service
-      systemd:
-        name: "{{ schema_registry_service_name }}"
-        state: restarted
+        service_name: "{{ schema_registry_service_name }}"
+        packages: "{{ schema_registry_packages }}"
+        backup_files:
+          - "{{ schema_registry.config_file }}"
+          - "{{ schema_registry.systemd_file }}"
+          - "{{ schema_registry.systemd_override }}"
+        restore_files:
+          - "{{ schema_registry.config_file }}"
+      when: schema_registry_current_version != confluent_package_version

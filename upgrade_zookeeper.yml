@@ -18,8 +18,7 @@
         zookeeper_current_version: "{{ ansible_facts.packages['confluent-kafka-2.12'][0]['version'] }}"
 
     - debug:
-        msg: "Current version: {{kafka_broker_current_version}}"
-      when: zookeeper_current_version == confluent_package_version
+        msg: "Current version: {{zookeeper_current_version}}   Upgrade to version: {{confluent_package_version}}"
 
     - name: Get Leader/Follower
       shell: echo stat | nc localhost 2181 | grep Mode
@@ -28,16 +27,16 @@
     - name: Add host to Follower Group
       add_host:
         name: "{{ inventory_hostname }}"
-        group: zookeeper_followers
+        group: upgrade_zookeeper_followers
       delegate_to: localhost
-      when: '"follower" in leader_query.stdout'
+      when: '"follower" in leader_query.stdout' and zookeeper_current_version != confluent_package_version
 
     - name: Add host to Leader Group
       add_host:
         name: "{{ inventory_hostname }}"
-        group: zookeeper_leader
+        group: upgrade_zookeeper_leader
       delegate_to: localhost
-      when: '"leader" in leader_query.stdout'
+      when: '"leader" in leader_query.stdout' and zookeeper_current_version != confluent_package_version
 
     - debug:
         msg: "Leader: {{inventory_hostname}}"
@@ -45,7 +44,7 @@
 
 - name: Zookeeper Upgrade
   # Putting leader group last here with serial=1 so the leader runs last
-  hosts: zookeeper_followers,zookeeper_leader
+  hosts: upgrade_zookeeper_followers,upgrade_zookeeper_leader
   serial: 1
   tags:
     - upgrade
