@@ -29,14 +29,18 @@
         name: "{{ inventory_hostname }}"
         group: upgrade_zookeeper_followers
       delegate_to: localhost
-      when: '"follower" in leader_query.stdout' and zookeeper_current_version != confluent_package_version
+      when:
+        - '"follower" in leader_query.stdout'
+        - zookeeper_current_version != confluent_package_version
 
     - name: Add host to Leader Group
       add_host:
         name: "{{ inventory_hostname }}"
         group: upgrade_zookeeper_leader
       delegate_to: localhost
-      when: '"leader" in leader_query.stdout' and zookeeper_current_version != confluent_package_version
+      when:
+        - '"leader" in leader_query.stdout'
+        - zookeeper_current_version != confluent_package_version
 
     - debug:
         msg: "Leader: {{inventory_hostname}}"
@@ -54,7 +58,7 @@
 
     - name: Create Backup Directory
       file:
-        path: /tmp/zookeeper-upgrade-backup
+        path: "/tmp/upgrade/{{ zookeeper_service_name }}"
         state: directory
         mode: 0640
 
@@ -62,7 +66,7 @@
       copy:
         src: "{{ item }}"
         remote_src: yes
-        dest: "/tmp/zookeeper-upgrade-backup/{{ item | basename }}"
+        dest: "/tmp/upgrade/{{ zookeeper_service_name }}/{{ item | basename }}"
       loop:
         - "{{ zookeeper.config_file }}"
         - "{{ zookeeper.systemd_file }}"
@@ -97,9 +101,12 @@
       copy:
         dest: "{{ item }}"
         remote_src: yes
-        src: "/tmp/zookeeper-upgrade-backup/{{ item | basename }}"
+        src: "/tmp/upgrade/{{ zookeeper_service_name }}/{{ item | basename }}"
       loop:
         - "{{ zookeeper.config_file }}"
+
+    - name: reload systemd
+      command: systemctl daemon-reload
 
     - name: Restart Zookeeper Service
       systemd:
