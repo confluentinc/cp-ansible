@@ -3,7 +3,7 @@
   gather_facts: no
   serial: 1
   vars:
-    start_version: 5.2
+    start_version: 5.3
   tasks:
     - import_role:
         name: confluent.variables
@@ -111,66 +111,17 @@
     - import_role:
         name: confluent.variables
 
-    - name: Create Backup Directory
-      file:
-        # path: /tmp/upgrade/kafka-broker-upgrade-backup
-        path: "/tmp/upgrade/{{ kafka_broker_service_name }}"
-        state: directory
-        mode: 0640
-
-    - name: Backup Configuration files
-      copy:
-        src: "{{ item }}"
-        remote_src: yes
-        dest: "/tmp/upgrade/{{ kafka_broker_service_name }}/{{ item | basename }}"
-      loop:
-        - "{{ kafka_broker.config_file }}"
-        - "{{ kafka_broker.systemd_file }}"
-        - "{{ kafka_broker.systemd_override }}"
-
-    - name: Wait for Under Replicated Partitions on Broker
-      import_tasks: tasks/wait_for_urp.yml
-
-    - name: Stop Kafka Broker Service
-      systemd:
-        name: confluent-kafka
-        state: stopped
-
-    - name: Configure Repositories
-      import_role:
-        name: confluent.common
+    - name: Upgrade Kafka Broker
+      include_tasks: tasks/upgrade_component.yml
       vars:
-        install_java: false
-
-    - name: Install the Kafka Broker Packages - Red Hat
-      yum:
-        name: "{{item}}{{confluent_package_redhat_suffix}}"
-        state: latest
-      loop: "{{kafka_broker_packages}}"
-      when: ansible_os_family == "RedHat"
-
-    - name: Install the Kafka Broker Packages - Debian
-      apt:
-        name: "{{item}}{{confluent_package_debian_suffix}}"
-        update_cache: yes
-      loop: "{{kafka_broker_packages}}"
-      when: ansible_os_family == "Debian"
-
-    - name: Put back configuration
-      copy:
-        dest: "{{ item }}"
-        remote_src: yes
-        src: "/tmp/upgrade/{{ kafka_broker_service_name }}/{{ item | basename }}"
-      loop:
-        - "{{ kafka_broker.config_file }}"
-
-    - name: reload systemd
-      command: systemctl daemon-reload
-
-    - name: Restart Kafka Broker Service
-      systemd:
-        name: confluent-kafka
-        state: restarted
+        service_name: "{{ kafka_broker_service_name }}"
+        packages: "{{ kafka_broker_packages }}"
+        backup_files:
+          - "{{ kafka_broker.config_file }}"
+          - "{{ kafka_broker.systemd_file }}"
+          - "{{ kafka_broker.systemd_override }}"
+        restore_files:
+          - "{{ kafka_broker.config_file }}"
 
     - name: Wait for Under Replicated Partitions on Broker
       import_tasks: tasks/wait_for_urp.yml

@@ -56,62 +56,17 @@
     - import_role:
         name: confluent.variables
 
-    - name: Create Backup Directory
-      file:
-        path: "/tmp/upgrade/{{ zookeeper_service_name }}"
-        state: directory
-        mode: 0640
-
-    - name: Backup Configuration files
-      copy:
-        src: "{{ item }}"
-        remote_src: yes
-        dest: "/tmp/upgrade/{{ zookeeper_service_name }}/{{ item | basename }}"
-      loop:
-        - "{{ zookeeper.config_file }}"
-        - "{{ zookeeper.systemd_file }}"
-        - "{{ zookeeper.systemd_override }}"
-
-    - name: Stop Zookeeper Service
-      systemd:
-        name: "{{ zookeeper_service_name }}"
-        state: stopped
-
-    - name: Configure Repositories
-      import_role:
-        name: confluent.common
+    - name: Upgrade Zookeeper
+      include_tasks: tasks/upgrade_component.yml
       vars:
-        install_java: false
-
-    - name: Install the Zookeeper Packages - Red Hat
-      yum:
-        name: "{{item}}{{confluent_package_redhat_suffix}}"
-        state: latest
-      loop: "{{ zookeeper_packages }}"
-      when: ansible_os_family == "RedHat"
-
-    - name: Install the Zookeeper Packages - Debian
-      apt:
-        name: "{{item}}{{confluent_package_debian_suffix}}"
-        update_cache: yes
-      loop: "{{ zookeeper_packages }}"
-      when: ansible_os_family == "Debian"
-
-    - name: Put back configuration
-      copy:
-        dest: "{{ item }}"
-        remote_src: yes
-        src: "/tmp/upgrade/{{ zookeeper_service_name }}/{{ item | basename }}"
-      loop:
-        - "{{ zookeeper.config_file }}"
-
-    - name: reload systemd
-      command: systemctl daemon-reload
-
-    - name: Restart Zookeeper Service
-      systemd:
-        name: "{{ zookeeper_service_name }}"
-        state: restarted
+        service_name: "{{ zookeeper_service_name }}"
+        packages: "{{ zookeeper_packages }}"
+        backup_files:
+          - "{{ zookeeper.config_file }}"
+          - "{{ zookeeper.systemd_file }}"
+          - "{{ zookeeper.systemd_override }}"
+        restore_files:
+          - "{{ zookeeper.config_file }}"
 
     - name: Wait for Health Check to return
       shell: echo ruok | nc localhost 2181
