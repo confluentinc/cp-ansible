@@ -10,31 +10,50 @@
 
     - name: Get Current Package Version
       set_fact:
-        kafka_rest_current_version: "{{ ansible_facts.packages['confluent-kafka-rest'][0]['version'] }}"
+        control_center_current_version: "{{ ansible_facts.packages['confluent-control-center'][0]['version'] }}"
 
     - debug:
-        msg: "Current version: {{kafka_rest_current_version}}   Upgrade to version: {{confluent_package_version}}"
+        msg: "Current version: {{control_center_current_version}}   Upgrade to version: {{confluent_package_version}}"
 
-    - name: Upgrade Kafka Connect
+    - name: Upgrade Control Center
       include_tasks: tasks/upgrade_component.yml
       vars:
-        service_name: "{{ kafka_rest_service_name }}"
-        packages: "{{ kafka_rest_packages }}"
+        service_name: "{{ control_center_service_name }}"
+        packages: "{{ control_center_packages }}"
         backup_files:
-          - "{{ kafka_rest.config_file }}"
-          - "{{ kafka_rest.systemd_file }}"
-          - "{{ kafka_rest.systemd_override }}"
+          - "{{ control_center.config_file }}"
+          - "{{ control_center.systemd_file }}"
+          - "{{ control_center.systemd_override }}"
         restore_files:
-          - "{{ kafka_rest.config_file }}"
-      when: kafka_rest_current_version != confluent_package_version
+          - "{{ control_center.config_file }}"
+      when: control_center_current_version != confluent_package_version
 
-    - name: Wait for API to return 200
+    # - name: Wait for API to return 200
+    #   uri:
+    #     url: "http://localhost:{{kafka_rest_port}}/topics"
+    #     status_code: 200
+    #   register: result
+    #   until: result.status == 200
+    #   retries: 60
+    #   delay: 5
+    #   # when: ssl_enabled|bool
+    #   # http vs https??
+
+    - name: Wait for webpage to serve HTTP content
       uri:
-        url: "http://localhost:{{kafka_rest_port}}/topics"
-        status_code: 200
+        url: "http://localhost:{{control_center_listenter_port}}"
       register: result
       until: result.status == 200
       retries: 60
       delay: 5
-      # when: ssl_enabled|bool
-      # http vs https??
+      when: not ssl_enabled|bool
+
+    - name: Wait for webpage to serve HTTPS content
+      uri:
+        url: "https://localhost:{{control_center_listenter_port}}"
+        validate_certs: no
+      register: result
+      until: result.status == 200
+      retries: 60
+      delay: 5
+      when: ssl_enabled|bool
