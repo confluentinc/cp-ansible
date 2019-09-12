@@ -7,12 +7,29 @@
     - import_role:
         name: confluent.variables
 
-    - package_facts:
+    - name: Get Package Facts - RedHat
+      package_facts:
         manager: auto
+      when: ansible_os_family == "RedHat"
 
-    - name: Get Current Package Version
+    - name: Set Current Package Version - RedHat
       set_fact:
         schema_registry_current_version: "{{ ansible_facts.packages['confluent-schema-registry'][0]['version'] }}"
+      when: ansible_os_family == "RedHat"
+
+    - name: Get Package Facts - Debian
+      # Bug in ansible 2.8 with apt package manager and package_facts module
+      # https://github.com/ansible/ansible/pull/56008
+      # when above pull fixed, shouldn't need Debain v RedHat logic
+      shell: apt list confluent-schema-registry -a | grep installed | cut -d ' ' -f2 | cut -d '-' -f1
+      register: schema_registry_package_query
+      when: ansible_os_family == "Debian"
+
+    - name: Set Current Package Version - Debian
+      set_fact:
+        schema_registry_current_version: "{{ schema_registry_package_query.stdout }}"
+      when: ansible_os_family == "Debian"
+
 
     - debug:
         msg: "Current version: {{schema_registry_current_version}}   Upgrade to version: {{confluent_package_version}}"
@@ -24,7 +41,6 @@
         packages: "{{ schema_registry_packages }}"
         backup_files:
           - "{{ schema_registry.config_file }}"
-          - "{{ schema_registry.systemd_file }}"
           - "{{ schema_registry.systemd_override }}"
         restore_files:
           - "{{ schema_registry.config_file }}"
