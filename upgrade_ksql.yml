@@ -5,12 +5,28 @@
     - import_role:
         name: confluent.variables
 
-    - package_facts:
+    - name: Get Package Facts - RedHat
+      package_facts:
         manager: auto
+      when: ansible_os_family == "RedHat"
 
-    - name: Get Current Package Version
+    - name: Set Current Package Version - RedHat
       set_fact:
         ksql_current_version: "{{ ansible_facts.packages['confluent-ksql'][0]['version'] }}"
+      when: ansible_os_family == "RedHat"
+
+    - name: Get Package Facts - Debian
+      # Bug in ansible 2.8 with apt package manager and package_facts module
+      # https://github.com/ansible/ansible/pull/56008
+      # when above pull fixed, shouldn't need Debain v RedHat logic
+      shell: apt list confluent-ksql -a | grep installed | cut -d ' ' -f2 | cut -d '-' -f1
+      register: ksql_package_query
+      when: ansible_os_family == "Debian"
+
+    - name: Set Current Package Version - Debian
+      set_fact:
+        ksql_current_version: "{{ ksql_package_query.stdout }}"
+      when: ansible_os_family == "Debian"
 
     - debug:
         msg: "Current version: {{ksql_current_version}}   Upgrade to version: {{confluent_package_version}}"
@@ -22,7 +38,6 @@
         packages: "{{ ksql_packages }}"
         backup_files:
           - "{{ ksql.config_file }}"
-          - "{{ ksql.systemd_file }}"
           - "{{ ksql.systemd_override }}"
         restore_files:
           - "{{ ksql.config_file }}"
@@ -36,5 +51,3 @@
       until: result.status == 200
       retries: 60
       delay: 5
-      # when: ssl_enabled|bool
-      # http vs https??
