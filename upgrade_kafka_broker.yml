@@ -55,7 +55,6 @@
 
 - name: Kafka Broker Upgrade - Host Ordering
   hosts: kafka_broker
-  gather_facts: no
   # Running serial=1 because add_host has problems
   # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
   serial: 1
@@ -63,12 +62,28 @@
     - import_role:
         name: confluent.variables
 
-    - package_facts:
+    - name: Get Package Facts - RedHat
+      package_facts:
         manager: auto
+      when: ansible_os_family == "RedHat"
 
-    - name: Get Current Package Version
+    - name: Set Current Package Version - RedHat
       set_fact:
         kafka_broker_current_version: "{{ ansible_facts.packages['confluent-kafka-2.12'][0]['version'] }}"
+      when: ansible_os_family == "RedHat"
+
+    - name: Get Package Facts - Debian
+      # Bug in ansible 2.8 with apt package manager and package_facts module
+      # https://github.com/ansible/ansible/pull/56008
+      # when above pull fixed, shouldn't need Debain v RedHat logic
+      shell: apt list confluent-kafka-2.12 -a | grep installed | cut -d ' ' -f2 | cut -d '-' -f1
+      register: kafka_broker_package_query
+      when: ansible_os_family == "Debian"
+
+    - name: Set Current Package Version - Debian
+      set_fact:
+        kafka_broker_current_version: "{{ kafka_broker_package_query.stdout }}"
+      when: ansible_os_family == "Debian"
 
     - debug:
         msg: "Current version: {{kafka_broker_current_version}}   Upgrade to version: {{confluent_package_version}}"
@@ -118,7 +133,6 @@
         packages: "{{ kafka_broker_packages }}"
         backup_files:
           - "{{ kafka_broker.config_file }}"
-          - "{{ kafka_broker.systemd_file }}"
           - "{{ kafka_broker.systemd_override }}"
         restore_files:
           - "{{ kafka_broker.config_file }}"
