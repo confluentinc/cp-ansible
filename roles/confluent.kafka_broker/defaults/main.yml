@@ -1,12 +1,19 @@
-kafka_broker_jaas_file: /etc/kafka/kafka_server_jaas.conf
-kafka_broker_jaas_java_arg: "-Djava.security.auth.login.config={{kafka_broker_jaas_file}}"
-kafka_broker_jolokia_java_arg: "-javaagent:{{jolokia_jar_path}}=port={{kafka_broker_jolokia_port}},host=0.0.0.0"
 kafka_broker_open_file_limit: "{{open_file_limit}}"
+
+kafka_broker_jaas_file: /etc/kafka/kafka_server_jaas.conf
+kafka_broker_jaas_java_arg_buildout: "-Djava.security.auth.login.config={{kafka_broker_jaas_file}}"
+kafka_broker_jaas_java_arg: "{{ kafka_broker_jaas_java_arg_buildout if security_mode in ['kerberos', 'kerberos_ssl', 'kerberos_ssl_customcerts'] else '' }}"
+
+kafka_broker_jolokia_java_arg_buildout: "-javaagent:{{jolokia_jar_path}}=port={{kafka_broker_jolokia_port}},host=0.0.0.0"
+kafka_broker_jolokia_java_arg: "{{ kafka_broker_jolokia_java_arg_buildout if jolokia_enabled|bool else '' }}"
+
+kafka_broker_kafka_opts_buildout: "{{ kafka_broker_jolokia_java_arg + ' ' + kafka_broker_jaas_java_arg if kafka_broker_jolokia_java_arg != '' or kafka_broker_jaas_java_arg != '' else '' }}"
+
 kafka_broker_service_overrides:
   LimitNOFILE: "{{kafka_broker_open_file_limit}}"
 kafka_broker_service_environment_overrides:
   KAFKA_HEAP_OPTS: "-Xmx1g"
-  KAFKA_OPTS: "{{ kafka_broker_jolokia_java_arg + ' ' + kafka_broker_jaas_java_arg if sasl_protocol == 'kerberos' else kafka_broker_jolokia_java_arg }}"
+  KAFKA_OPTS: "{{ kafka_broker_kafka_opts_buildout }}"
 
 kafka_broker_sysctl:
   vm.swappiness: 1
