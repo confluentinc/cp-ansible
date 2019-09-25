@@ -9,28 +9,53 @@
       name: confluent.kerberos
     when: security_mode in ["kerberos", "kerberos_ssl", "kerberos_ssl_customcerts"] and kerberos_configure|bool
 
-# Run the cert generation on the first zookeeper instance, which has java
-- name: Certificate Generation
+# # Run the cert generation on the first zookeeper instance, which has java
+# - name: Certificate Generation
+#   hosts: zookeeper[0]
+#   gather_facts: no
+#   tags:
+#     - always
+#   tasks:
+#   - import_role:
+#       name: confluent.ssl_customcerts
+#     when: security_mode in ["kerberos_ssl_customcerts", "ssl_customcerts"]
+#   - import_role:
+#       name: confluent.ssl_CA
+#     when: security_mode in ["ssl", "sasl_ssl", "kerberos_ssl"]
+#
+# - name: Certificate Syncing
+#   hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest
+#   tags:
+#     - always
+#   tasks:
+#   - import_role:
+#       name: confluent.ssl_sync
+#     when: security_mode in ["kerberos_ssl_customcerts", "ssl_customcerts", "ssl", "sasl_ssl", "kerberos_ssl"]
+
+# - name: Certificate Creation
+#   hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest
+#   tags:
+#     - always
+#   tasks:
+#   - import_role:
+#       name: confluent.ssl
+#     when: security_mode in ["kerberos_ssl_customcerts", "ssl_customcerts", "ssl", "sasl_ssl", "kerberos_ssl"]
+
+- name: Generate Certificate Authority for Self Signed Certs
   hosts: zookeeper[0]
   gather_facts: no
-  tags:
-    - always
   tasks:
-  - import_role:
-      name: confluent.ssl_customcerts
-    when: security_mode in ["kerberos_ssl_customcerts", "ssl_customcerts"]
-  - import_role:
-      name: confluent.ssl_CA
-    when: security_mode in ["ssl", "sasl_ssl", "kerberos_ssl"]
+  - include_role:
+      name: confluent.CA
+    when: security_mode in ["kerberos_ssl_customcerts", "ssl_customcerts", "ssl", "sasl_ssl", "kerberos_ssl"] and generate_ca|bool
 
-- name: Certificate Syncing
+- name: Certificate Generation
   hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest
-  tags:
-    - always
+  gather_facts: no
   tasks:
-  - import_role:
-      name: confluent.ssl_sync
-    when: security_mode in ["kerberos_ssl_customcerts", "ssl_customcerts", "ssl", "sasl_ssl", "kerberos_ssl"]
+  - include_role:
+      name: confluent.ssl_unique_certs
+    when: security_mode in ["kerberos_ssl_customcerts", "ssl_customcerts", "ssl", "sasl_ssl", "kerberos_ssl"] and unique_certs|bool
 
 - name: Zookeeper Provisioning
   hosts: zookeeper
@@ -77,15 +102,6 @@
   - import_role:
       name: confluent.ksql
 
-- name: Control Center Provisioning
-  hosts: control_center
-  gather_facts: no
-  tags:
-    - control_center
-  tasks:
-  - import_role:
-      name: confluent.control_center
-
 - name: Kafka Rest Provisioning
   hosts: kafka_rest
   gather_facts: no
@@ -94,3 +110,12 @@
   tasks:
   - import_role:
       name: confluent.kafka_rest
+
+- name: Control Center Provisioning
+  hosts: control_center
+  gather_facts: no
+  tags:
+    - control_center
+  tasks:
+  - import_role:
+      name: confluent.control_center
