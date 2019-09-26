@@ -1,0 +1,35 @@
+- name: Copy Signed Host Cert to Host
+  copy:
+    src: "{{ssl_signed_cert_path}}"
+    dest: /var/ssl/private/generation/signed.crt
+
+- name: Copy Host Keystore to Host
+  copy:
+    src: "{{ssl_keystore_path}}"
+    dest: /var/ssl/private/generation/keystore.jks
+
+- name: Import the CA cert into the Keystore
+  shell: |
+    keytool -noprompt -keystore {{keystore_path}} \
+      -alias CARoot \
+      -import -file /var/ssl/private/generation/{{CA_cert}} \
+      -storepass {{keystore_pass}} \
+      -keypass {{CA_pass}}
+
+- name: Import the Host Certificate into the keystore
+  shell: |
+    keytool -noprompt -keystore {{keystore_path}} \
+      -alias host \
+      -import -file /var/ssl/private/generation/signed.crt \
+      -storepass {{keystore_pass}} \
+      -keypass {{keystore_key_pass}} \
+      -keyalg RSA
+
+- name: Import the Host Certificate into the keystore (must be in pkcs12)
+  shell: |
+    keytool -importkeystore \
+      -deststorepass {{host_keystore_storepass}} \
+      -destkeystore {{keystore_path}} \
+      -srcstorepass {{privatekey_keystore_password}} \
+      -srckeystore /var/ssl/private/generation/keystore.jks \
+      -srcstoretype PKCS12
