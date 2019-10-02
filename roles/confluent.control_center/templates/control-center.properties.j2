@@ -1,2 +1,68 @@
-# Maintained by Ansible
-{% include './includes/base_control-center.properties.j2' %}
+bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_port}}{% endfor %}
+
+{% set cfg = control_center.properties %}
+{% for key, value in cfg.items() %}
+{{key}}={{value}}
+{% endfor %}
+
+{% set ksql_servers = groups.get('ksql', []) %}
+{% if ksql_servers and cfg.get('confluent.controlcenter.ksql.enable', 'false').lower() == 'true' %}
+{% set ksql_server_port = hostvars[ksql_servers[0]].get('ksql_listener_port', 8088) %}
+# KSQL Server
+confluent.controlcenter.ksql.url=http://{{ ksql_servers[0] }}:{{ ksql_server_port }}
+confluent.controlcenter.ksql.advertised.url=http://{{ ksql_servers[0] }}:{{ ksql_server_port }}
+{% endif %}
+
+{% set schema_registries = groups.get('schema_registry', []) %}
+{% if schema_registries and cfg.get('confluent.controlcenter.schema.registry.enable', 'false').lower() == 'true' %}
+# Schema Registry
+confluent.controlcenter.schema.registry.url={% for host in groups.get('schema_registry', []) -%}
+{% set schema_registry_port = hostvars[host].get('schema_registry_listener_port', 8081) %}
+{% if loop.index > 1%},{% endif %}
+http://{{ host }}:{{ schema_registry_port }}
+{%- endfor %}
+{% endif %}
+
+
+{% set connect_servers = groups.get('kafka_connect', []) %}
+{% if connect_servers %}
+# Kafka Connect
+confluent.controlcenter.connect.cluster={% for host in connect_servers -%}{% if loop.index > 1%},{% endif %}
+{% set connect_config = hostvars[host].get('kafka', dict()).get('connect', dict()).get('distributed', dict()).get('config', dict()) %}
+http://{{ host }}:{{ connect_config.get('rest.port', 8083) }}
+{%- endfor %}
+{% endif %}
+
+
+# Kafka Brokers
+confluent.controlcenter.streams.security.protocol={{security_protocol}}
+{% if ssl_enabled|bool %}
+confluent.controlcenter.streams.ssl.truststore.location=/var/ssl/private/client.truststore.jks
+confluent.controlcenter.streams.ssl.truststore.password={{host_truststore_storepass}}
+confluent.controlcenter.streams.ssl.keystore.location=/var/ssl/private/client.keystore.jks
+confluent.controlcenter.streams.ssl.keystore.password={{host_keystore_storepass}}
+confluent.controlcenter.streams.ssl.key.password={{host_cert_password}}
+{% endif %}
+{% if sasl_protocol == 'plain' %}
+confluent.controlcenter.streams.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="client" password="client-secret";
+confluent.controlcenter.streams.sasl.mechanism=PLAIN
+{% endif %}
+{% if sasl_protocol == 'kerberos' %}
+confluent.controlcenter.streams.sasl.mechanism=GSSAPI
+confluent.controlcenter.streams.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+confluent.controlcenter.streams.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKey=true \
+   keyTab="{{kerberos.keytab_dir}}/{{control_center_kerberos_keytab_path | basename}}" \
+   principal="{{control_center_kerberos_principal}}";
+{% endif %}
+
+{% if ssl_enabled|bool %}
+# Control Center SSL
+confluent.controlcenter.rest.ssl.keystore.location=/var/ssl/private/client.keystore.jks
+confluent.controlcenter.rest.ssl.keystore.password={{host_keystore_storepass}}
+confluent.controlcenter.rest.ssl.key.password={{host_cert_password}}
+confluent.controlcenter.rest.ssl.truststore.location=/var/ssl/private/client.truststore.jks
+confluent.controlcenter.rest.ssl.truststore.password={{host_truststore_storepass}}
+confluent.controlcenter.rest.listeners=https://0.0.0.0:9021
+{% endif %}
