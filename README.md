@@ -25,8 +25,11 @@ You can find the documentation for running CP-Ansible at https://docs.confluent.
 
 ## Contributing
 
-If you would like to contribute to the CP-Ansible project, please refer to the [CONTRIBUTE.md](https://github.com/confluentinc/cp-ansible/blob/5.3.2-SNAPSHOT-post/CONTRIBUTING.md)
+
+If you would like to contribute to the CP-Ansible project, please refer to the [CONTRIBUTE.md](https://github.com/confluentinc/cp-ansible/blob/5.3.0-post/CONTRIBUTING.md)
+
+
 
 ## License
 
-[Apache 2.0](https://github.com/confluentinc/cp-ansible/blob/5.1.x/LICENSE.md) 
+[Apache 2.0](https://github.com/confluentinc/cp-ansible/blob/5.1.x/LICENSE.md)
