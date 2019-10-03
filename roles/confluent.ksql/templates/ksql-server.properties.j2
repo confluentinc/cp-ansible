@@ -1,0 +1,58 @@
+# Maintained by Ansible
+bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_port}}{% endfor %}
+
+{% set schema_registries = groups.get('schema_registry', []) %}
+
+{% if schema_registries %}
+ksql.schema.registry.url={% include './includes/schema_registry_urls.j2' %}
+{% endif %}
+
+{% for key, value in ksql.properties.items() %}
+{{key}}={{value}}
+{% endfor %}
+
+security.protocol={{security_protocol}}
+
+{% if ssl_enabled|bool %}
+ssl.truststore.location=/var/ssl/private/client.truststore.jks
+ssl.truststore.password={{host_truststore_storepass}}
+ssl.keystore.location=/var/ssl/private/client.keystore.jks
+ssl.keystore.password={{host_keystore_storepass}}
+ssl.key.password={{host_cert_password}}
+{% endif %}
+{% if sasl_protocol == 'plain' %}
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="client" password="client-secret";
+{% endif %}
+{% if sasl_protocol == 'kerberos' %}
+sasl.mechanism=GSSAPI
+sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKey=true \
+   keyTab="{{kerberos.keytab_dir}}/{{ksql_kerberos_keytab_path | basename}}" \
+   principal="{{ksql_kerberos_principal}}";
+{% endif %}
+
+# Monitoring
+confluent.monitoring.interceptor.security.protocol={{security_protocol}}
+{% if ssl_enabled|bool %}
+confluent.monitoring.interceptor.ssl.truststore.location=/var/ssl/private/client.truststore.jks
+confluent.monitoring.interceptor.ssl.truststore.password={{host_truststore_storepass}}
+confluent.monitoring.interceptor.ssl.keystore.location=/var/ssl/private/client.keystore.jks
+confluent.monitoring.interceptor.ssl.keystore.password={{host_keystore_storepass}}
+confluent.monitoring.interceptor.ssl.key.password={{host_cert_password}}
+{% endif %}
+{% if sasl_protocol == 'plain' %}
+confluent.monitoring.interceptor.sasl.mechanism=PLAIN
+confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="client" password="client-secret";
+{% endif %}
+{% if sasl_protocol == 'kerberos' %}
+confluent.monitoring.interceptor.sasl.mechanism=GSSAPI
+confluent.monitoring.interceptor.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+confluent.monitoring.interceptor.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKey=true \
+   keyTab="{{kerberos.keytab_dir}}/{{ksql_kerberos_keytab_path | basename}}" \
+   principal="{{ksql_kerberos_principal}}";
+{% endif %}
