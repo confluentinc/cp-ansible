@@ -1,31 +1,61 @@
+# ssl_ca_cert_filepath
+# ssl_ca_password
+# ssl_signed_cert_filepath
+# ssl_keystore_filepath
+# ssl_keystore_key_password
+# ssl_keystore_store_password
+
+    # ssl_ca_cert_filepath: "{{inventory_dir}}/certs/ca.crt"
+    # ssl_ca_password: capassword
+    # ssl_signed_cert_filepath: "{{inventory_dir}}/certs/client-ca1-signed.crt"
+    # ssl_keystore_filepath: "{{inventory_dir}}/certs/keystore.jks"
+    # ssl_keystore_key_password: keypassword
+    # ssl_keystore_store_password: keypassword
+    # keystore_pass: "{{ssl_keystore_key_password}}"
+    # keystore_key_pass: "{{ssl_keystore_key_password}}"
+
 - name: Copy CA Cert to Host
   copy:
-    src: "{{CA_cert_file_path}}"
-    dest: "/var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}}"
+    src: "{{ssl_ca_cert_filepath}}"
+    dest: "/var/ssl/private/generation/{{ssl_ca_cert_filepath|basename}}"
+
+# - name: Create Truststore and Import the CA Cert
+#   shell: |
+#     keytool -noprompt -keystore {{truststore_path}} \
+#       -alias CARoot -import -file /var/ssl/private/generation/{{ssl_ca_cert_filepath|basename}} \
+#       -storepass {{truststore_pass}} -keypass {{ssl_ca_password}}
 
 - name: Create Truststore and Import the CA Cert
   shell: |
     keytool -noprompt -keystore {{truststore_path}} \
-      -alias CARoot -import -file /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
-      -storepass {{truststore_pass}} -keypass {{CA_pass}}
+      -alias CARoot -import -file /var/ssl/private/generation/{{ssl_ca_cert_filepath|basename}} \
+      -storepass {{truststore_storepass}} -keypass {{truststore_storepass}}
 
 - name: Copy Signed Host Cert to Host
   copy:
-    src: "{{ssl_signed_cert_path}}"
+    src: "{{ssl_signed_cert_filepath}}"
     dest: /var/ssl/private/generation/signed.crt
 
 - name: Copy Host Keystore to Host
   copy:
-    src: "{{ssl_keystore_path}}"
+    src: "{{ssl_keystore_filepath}}"
     dest: /var/ssl/private/generation/keystore.jks
+
+# - name: Import the CA cert into the Keystore
+#   shell: |
+#     keytool -noprompt -keystore {{keystore_path}} \
+#       -alias CARoot \
+#       -import -file /var/ssl/private/generation/{{ssl_ca_cert_filepath|basename}} \
+#       -storepass {{keystore_pass}} \
+#       -keypass {{ssl_ca_password}}
 
 - name: Import the CA cert into the Keystore
   shell: |
     keytool -noprompt -keystore {{keystore_path}} \
       -alias CARoot \
-      -import -file /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
+      -import -file /var/ssl/private/generation/{{ssl_ca_cert_filepath|basename}} \
       -storepass {{keystore_pass}} \
-      -keypass {{CA_pass}}
+      -keypass {{keystore_pass}}
 
 - name: Import the Host Certificate into the keystore
   shell: |
@@ -33,14 +63,23 @@
       -alias host \
       -import -file /var/ssl/private/generation/signed.crt \
       -storepass {{keystore_pass}} \
-      -keypass {{keystore_key_pass}} \
+      -keypass {{keystore_pass}} \
       -keyalg RSA
 
-- name: Import the Host Certificate into the keystore (must be in pkcs12)
+# - name: Import the Host Certificate into the keystore
+#   shell: |
+#     keytool -noprompt -keystore {{keystore_path}} \
+#       -alias host \
+#       -import -file /var/ssl/private/generation/signed.crt \
+#       -storepass {{keystore_pass}} \
+#       -keypass {{ssl_keystore_key_password}} \
+#       -keyalg RSA
+
+- name: Import the keystore into the keystore (must be in pkcs12)
   shell: |
     keytool -importkeystore \
-      -deststorepass {{host_keystore_storepass}} \
-      -destkeystore {{keystore_path}} \
-      -srcstorepass {{privatekey_keystore_password}} \
+      -srcstorepass {{ssl_keystore_store_password}} \
       -srckeystore /var/ssl/private/generation/keystore.jks \
-      -srcstoretype PKCS12
+      -srcstoretype PKCS12 \
+      -deststorepass {{keystore_pass}} \
+      -destkeystore {{keystore_path}}
