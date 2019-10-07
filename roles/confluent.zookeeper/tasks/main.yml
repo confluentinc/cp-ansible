@@ -14,29 +14,45 @@
   when: ansible_os_family == "Debian"
 
 # Configure environment
-- name: zookeeper create group
+- name: Create Zookeeper Group
   group:
     name: "{{zookeeper.group}}"
-- name: zookeeper create user
+
+- name: Create Zookeeper User
   user:
     name: "{{zookeeper.user}}"
     comment: "Zookeeper User"
     system: yes
     group: "{{zookeeper.group}}"
-- name: Change keytabs ownership
+
+- name: Create Keytabs Directory
   file:
     path: "{{kerberos.keytab_dir}}"
     group: "{{zookeeper.group}}"
     mode: '650'
     recurse: yes
-- name: zookeeper myid file
+  when: sasl_protocol == 'kerberos'
+
+- name: Copy in Keytab File
+  copy:
+    src: "{{zookeeper_kerberos_keytab_path}}"
+    dest: "{{kerberos.keytab_dir}}/{{zookeeper_kerberos_keytab_path | basename}}"
+    owner: "{{zookeeper.user}}"
+    group: "{{zookeeper.group}}"
+    mode: '600'
+  when: sasl_protocol == 'kerberos'
+  notify:
+    - restart zookeeper
+
+- name: Create Zookeeper myid File
   template:
     src: myid.j2
     dest: "{{zookeeper.properties.dataDir}}/myid"
     mode: 0555
     owner: "{{zookeeper.user}}"
     group: "{{zookeeper.group}}"
-- name: zookeeper create config
+
+- name: Create Zookeeper Config
   template:
     src: zookeeper.properties.j2
     dest: "{{zookeeper.config_file}}"
@@ -46,14 +62,15 @@
   register: zookeeper_config
   notify:
     - restart zookeeper
-- name: zookeeper Jaas config
+
+- name: Create Zookeeper Jaas config
   template:
     src: zookeeper_jaas.conf.j2
     dest: "{{zookeeper_jaas_file}}"
     mode: 0640
     owner: "{{zookeeper.user}}"
     group: "{{zookeeper.group}}"
-  when: security_mode == "kerberos" or security_mode == "kerberos_ssl" or security_mode == "kerberos_ssl_customcerts"
+  when: sasl_protocol == "kerberos"
   notify:
     - restart zookeeper
 

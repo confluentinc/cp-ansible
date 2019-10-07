@@ -1,2 +1,138 @@
 # Maintained by Ansible
-{% include './includes/base_connect-distributed.properties.j2' %}
+bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_port}}{% endfor %}
+
+{% set schema_registries = groups.get('schema_registry', []) %}
+{% if schema_registries %}
+value.converter.schema.registry.url={% include './includes/schema_registry_urls.j2' %}
+
+key.converter.schema.registry.url={% include './includes/schema_registry_urls.j2' %}
+{% endif %}
+
+{% for key, value in kafka_connect.properties.items() %}
+{{key}}={{value}}
+{% endfor %}
+
+security.protocol={{security_protocol}}
+
+{% if ssl_enabled|bool %}
+ssl.truststore.location=/var/ssl/private/client.truststore.jks
+ssl.truststore.password={{host_truststore_storepass}}
+ssl.keystore.location=/var/ssl/private/client.keystore.jks
+ssl.keystore.password={{host_keystore_storepass}}
+ssl.key.password={{host_cert_password}}
+# for 2 Way SSL
+ssl.client.auth=requested
+{% endif %}
+{% if sasl_protocol == 'kerberos' %}
+sasl.mechanism=GSSAPI
+sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKey=true \
+   keyTab="{{kerberos.keytab_dir}}/{{kafka_connect_kerberos_keytab_path | basename}}" \
+   principal="{{kafka_connect_kerberos_principal}}";
+{% endif %}
+{% if sasl_protocol == 'plain' %}
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="client" password="client-secret";
+{% endif %}
+
+# Connect Producer Configuration
+producer.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_port}}{% endfor %}
+
+producer.security.protocol={{security_protocol}}
+{% if ssl_enabled|bool %}
+producer.ssl.truststore.location=/var/ssl/private/client.truststore.jks
+producer.ssl.truststore.password={{host_truststore_storepass}}
+producer.ssl.keystore.location=/var/ssl/private/client.keystore.jks
+producer.ssl.keystore.password={{host_keystore_storepass}}
+producer.ssl.key.password={{host_cert_password}}
+{% endif %}
+{% if sasl_protocol == 'kerberos' %}
+producer.sasl.mechanism=GSSAPI
+producer.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+producer.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKey=true \
+   keyTab="{{kerberos.keytab_dir}}/{{kafka_connect_kerberos_keytab_path | basename}}" \
+   principal="{{kafka_connect_kerberos_principal}}";
+{% endif %}
+{% if sasl_protocol == 'plain' %}
+producer.sasl.mechanism=PLAIN
+producer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="client" password="client-secret";
+{% endif %}
+
+# Connect Consumer Configuration
+consumer.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_port}}{% endfor %}
+
+consumer.security.protocol={{security_protocol}}
+{% if ssl_enabled|bool %}
+consumer.ssl.truststore.location=/var/ssl/private/client.truststore.jks
+consumer.ssl.truststore.password={{host_truststore_storepass}}
+consumer.ssl.keystore.location=/var/ssl/private/client.keystore.jks
+consumer.ssl.keystore.password={{host_keystore_storepass}}
+consumer.ssl.key.password={{host_cert_password}}
+{% endif %}
+{% if sasl_protocol == 'kerberos' %}
+consumer.sasl.mechanism=GSSAPI
+consumer.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+consumer.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKey=true \
+   keyTab="{{kerberos.keytab_dir}}/{{kafka_connect_kerberos_keytab_path | basename}}" \
+   principal="{{kafka_connect_kerberos_principal}}";
+{% endif %}
+{% if sasl_protocol == 'plain' %}
+consumer.sasl.mechanism=PLAIN
+consumer.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="client" password="client-secret";
+{% endif %}
+
+# Producer Monitoring Configuration
+producer.confluent.monitoring.interceptor.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_port}}{% endfor %}
+
+producer.confluent.monitoring.interceptor.security.protocol={{security_protocol}}
+{% if ssl_enabled|bool %}
+producer.confluent.monitoring.interceptor.ssl.truststore.location=/var/ssl/private/client.truststore.jks
+producer.confluent.monitoring.interceptor.ssl.truststore.password={{host_truststore_storepass}}
+producer.confluent.monitoring.interceptor.ssl.keystore.location=/var/ssl/private/client.keystore.jks
+producer.confluent.monitoring.interceptor.ssl.keystore.password={{host_keystore_storepass}}
+producer.confluent.monitoring.interceptor.ssl.key.password={{host_cert_password}}
+{% endif %}
+{% if sasl_protocol == 'kerberos' %}
+producer.confluent.monitoring.interceptor.sasl.mechanism=GSSAPI
+producer.confluent.monitoring.interceptor.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+producer.confluent.monitoring.interceptor.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKey=true \
+   keyTab="{{kerberos.keytab_dir}}/{{kafka_connect_kerberos_keytab_path | basename}}" \
+   principal="{{kafka_connect_kerberos_principal}}";
+{% endif %}
+{% if sasl_protocol == 'plain' %}
+producer.confluent.monitoring.interceptor.sasl.mechanism=PLAIN
+producer.confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="client" password="client-secret";
+{% endif %}
+
+# Consumer Monitoring Configuration
+consumer.confluent.monitoring.interceptor.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_port}}{% endfor %}
+
+consumer.confluent.monitoring.interceptor.security.protocol={{security_protocol}}
+{% if ssl_enabled|bool %}
+consumer.confluent.monitoring.interceptor.ssl.truststore.location=/var/ssl/private/client.truststore.jks
+consumer.confluent.monitoring.interceptor.ssl.truststore.password={{host_truststore_storepass}}
+consumer.confluent.monitoring.interceptor.ssl.keystore.location=/var/ssl/private/client.keystore.jks
+consumer.confluent.monitoring.interceptor.ssl.keystore.password={{host_keystore_storepass}}
+consumer.confluent.monitoring.interceptor.ssl.key.password={{host_cert_password}}
+{% endif %}
+{% if sasl_protocol == 'kerberos' %}
+consumer.confluent.monitoring.interceptor.sasl.mechanism=GSSAPI
+consumer.confluent.monitoring.interceptor.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+consumer.confluent.monitoring.interceptor.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKey=true \
+   keyTab="{{kerberos.keytab_dir}}/{{kafka_connect_kerberos_keytab_path | basename}}" \
+   principal="{{kafka_connect_kerberos_principal}}";
+{% endif %}
+{% if sasl_protocol == 'plain' %}
+consumer.confluent.monitoring.interceptor.sasl.mechanism=PLAIN
+consumer.confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="client" password="client-secret";
+{% endif %}
