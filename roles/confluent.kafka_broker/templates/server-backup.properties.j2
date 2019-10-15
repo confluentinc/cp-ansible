@@ -1,0 +1,56 @@
+# Maintained by Ansible
+zookeeper.connect={% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{zookeeper.properties.clientPort}}{% endfor %}
+
+log.dirs={% for logdir in kafka_broker.datadir %}{% if loop.index > 1%},{% endif %}{{ logdir }}{% endfor %}
+
+broker.id={{ broker_id | default(groups.kafka_broker.index(inventory_hostname) + 1)}}
+
+{% for key, value in kafka_broker.properties.items() %}
+{{key}}={{value}}
+{% endfor %}
+
+listeners={{kafka_broker_security_protocol}}://:{{kafka_port}}
+
+security.inter.broker.protocol={{kafka_broker_security_protocol}}
+{% if kafka_broker_ssl_enabled|bool %}
+ssl.truststore.location={{truststore_path}}
+ssl.truststore.password={{truststore_storepass}}
+ssl.keystore.location={{keystore_path}}
+ssl.keystore.password={{keystore_storepass}}
+ssl.key.password={{keystore_keypass}}
+{% endif %}
+{% if kafka_broker_ssl_mutual_auth_enabled|bool %}
+ssl.client.auth=required
+{% endif %}
+{% if sasl_protocol == 'plain' %}
+sasl.enabled.mechanisms=PLAIN
+sasl.mechanism.inter.broker.protocol=PLAIN
+listener.name.sasl_ssl.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="broker" password="broker-secret" user_broker="broker-secret" user_client="client-secret";
+{% endif %}
+{% if sasl_protocol == 'kerberos' %}
+sasl.enabled.mechanisms=GSSAPI
+sasl.mechanism.inter.broker.protocol=GSSAPI
+sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+{% endif %}
+
+confluent.metrics.reporter.security.protocol={{kafka_broker_security_protocol}}
+{% if kafka_broker_ssl_enabled|bool %}
+confluent.metrics.reporter.ssl.truststore.location={{truststore_path}}
+confluent.metrics.reporter.ssl.truststore.password={{truststore_storepass}}
+confluent.metrics.reporter.ssl.keystore.location={{keystore_path}}
+confluent.metrics.reporter.ssl.keystore.password={{keystore_storepass}}
+confluent.metrics.reporter.ssl.key.password={{keystore_keypass}}
+{% endif %}
+{% if sasl_protocol == 'plain' %}
+confluent.metrics.reporter.sasl.mechanism=PLAIN
+confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="client" password="client-secret";
+{% endif %}
+{% if sasl_protocol == 'kerberos' %}
+confluent.metrics.reporter.sasl.mechanism=GSSAPI
+confluent.metrics.reporter.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+confluent.metrics.reporter.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKey=true \
+   keyTab="{{kerberos.keytab_dir}}/{{kafka_broker_kerberos_keytab_path | basename}}" \
+   principal="{{kafka_broker_kerberos_principal}}";
+{% endif %}
