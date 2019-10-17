@@ -5,13 +5,6 @@
     - import_role:
         name: confluent.variables_handlers
 
-    - name: Make sure Status Storage Topic Property set
-      lineinfile:
-        name: "{{kafka_connect.config_file}}"
-        line: "status.storage.topic={{kafka_connect_status_storage_topic}}"
-        regexp: status.storage.topic.*
-        state: present
-
     - name: Get Package Facts - RedHat
       package_facts:
         manager: auto
@@ -51,7 +44,7 @@
           - "{{ kafka_connect.config_file }}"
       when: kafka_connect_current_version != confluent_package_version
 
-    - name: Wait for API to return 200
+    - name: Wait for API to return 200 - HTTP
       uri:
         url: "http://localhost:8083/connectors"
         status_code: 200
@@ -59,3 +52,15 @@
       until: result.status == 200
       retries: 60
       delay: 5
+      when: not kafka_connect_ssl_enabled|bool
+
+    - name: Wait for API to return 200 - HTTPS
+      uri:
+        url: "https://localhost:8083/connectors"
+        status_code: 200
+        validate_certs: no
+      register: result
+      until: result.status == 200
+      retries: 60
+      delay: 5
+      when: kafka_connect_ssl_enabled|bool
