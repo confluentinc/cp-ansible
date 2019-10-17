@@ -14,21 +14,21 @@ listener.security.protocol.map={{kafka_broker_internal_listener_name}}:{{kafka_b
 
 ## Inter Broker Listener Configuration
 inter.broker.listener.name={{kafka_broker_internal_listener_name}}
-{% if kafka_broker_internal_listener_sasl_protocol|upper != 'NONE' %}
-sasl.mechanism.inter.broker.protocol={{kafka_broker_internal_listener_sasl_protocol|upper}}
+{% if kafka_broker_internal_listener_sasl_protocol_normalized != 'none' %}
+sasl.mechanism.inter.broker.protocol={{kafka_broker_internal_listener_sasl_protocol_normalized}}
 {% endif %}
 {% if kafka_broker_sasl_enabled_mechanisms|length > 0 %}
 sasl.enabled.mechanisms={% for mechanism in kafka_broker_sasl_enabled_mechanisms %}{% if loop.index > 1%},{% endif %}{{ mechanism|upper }}{% endfor %}
 
 {% endif %}
-{% if kafka_broker_internal_listener_sasl_protocol|lower == 'kerberos' or kafka_broker_external_listener_sasl_protocol|lower == 'kerberos' %}
+{% if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms %}
 sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
 {% endif %}
 {% with %}
 {% set listener_name = kafka_broker_internal_listener_name %}
 {% set listener_ssl_enabled = kafka_broker_internal_listener_ssl_enabled %}
 {% set listener_ssl_mutual_auth_enabled = kafka_broker_internal_listener_ssl_mutual_auth_enabled %}
-{% set listener_sasl_protocol = kafka_broker_internal_listener_sasl_protocol %}
+{% set listener_sasl_protocol = kafka_broker_internal_listener_sasl_protocol_normalized %}
 {% include 'listener.j2' %}
 {% endwith %}
 
@@ -37,7 +37,7 @@ sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
 {% set listener_name = kafka_broker_external_listener_name %}
 {% set listener_ssl_enabled = kafka_broker_external_listener_ssl_enabled %}
 {% set listener_ssl_mutual_auth_enabled = kafka_broker_external_listener_ssl_mutual_auth_enabled %}
-{% set listener_sasl_protocol = kafka_broker_external_listener_sasl_protocol %}
+{% set listener_sasl_protocol = kafka_broker_external_listener_sasl_protocol_normalized %}
 {% include 'listener.j2' %}
 {% endwith %}
 
@@ -52,11 +52,12 @@ confluent.metrics.reporter.ssl.keystore.password={{keystore_storepass}}
 confluent.metrics.reporter.ssl.key.password={{keystore_keypass}}
 {% endif %}
 {% endif %}
-{% if kafka_broker_external_listener_sasl_protocol|upper == 'PLAIN' %}
+{% if kafka_broker_external_listener_sasl_protocol_normalized == 'PLAIN' %}
 confluent.metrics.reporter.sasl.mechanism=PLAIN
-confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="client" password="client-secret";
+confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+   username="client" password="client-secret";
 {% endif %}
-{% if kafka_broker_external_listener_sasl_protocol|lower == 'kerberos' %}
+{% if kafka_broker_external_listener_sasl_protocol_normalized == 'GSSAPI' %}
 confluent.metrics.reporter.sasl.mechanism=GSSAPI
 confluent.metrics.reporter.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
 confluent.metrics.reporter.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
@@ -64,4 +65,9 @@ confluent.metrics.reporter.sasl.jaas.config=com.sun.security.auth.module.Krb5Log
    storeKey=true \
    keyTab="{{kerberos.keytab_dir}}/{{kafka_broker_kerberos_keytab_path | basename}}" \
    principal="{{kafka_broker_kerberos_principal}}";
+{% endif %}
+{% if kafka_broker_external_listener_sasl_protocol_normalized == 'SCRAM-SHA-256' %}
+confluent.metrics.reporter.sasl.mechanism=SCRAM-SHA-256
+confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
+   username="{{sasl_scram_client_principal}}" password="{{sasl_scram_client_password}}";
 {% endif %}
