@@ -1,13 +1,6 @@
 zookeeper:
   properties:
     clientPort: 2181
-kafka_port: 9092
-control_center_listenter_port: 9021
-schema_registry_listener_port: 8081
-kafka_rest_port: 8082
-kafka_connect_rest_port: 8083
-ksql_listener_port: 8088
-
 kerberos:
   keytab_dir: /etc/security/keytabs
 
@@ -38,19 +31,67 @@ kafka_broker_jmxexporter_port: 8080
 
 open_file_limit: 500000
 
-host_truststore_storepass: confluent
-host_keystore_storepass: confluent
-host_cert_password: confluent
-
-# TODO remove security_mode in place of these vars and put in plaintext defaults
-ssl_enabled: "{{ true if 'ssl' in security_mode else false }}"
-customcerts: "{{ true if security_mode in ['ssl_customcerts', 'kerberos_ssl_customcerts'] else false }}"
-sasl_protocol: "{{ 'kerberos' if 'kerberos' in security_mode else 'plain' if security_mode in ['sasl_ssl'] else 'none' }}"
+# Other options: kerberos, plain
+sasl_protocol: none
 
 kerberos_configure: true
 
 kafka_connect_status_storage_topic: connect-status
 
-
 rbac_enabled: false
 confluent_server_enabled: "{{ true if rbac_enabled|bool else false }}"
+
+ssl_enabled: false
+ssl_mutual_auth_enabled: false
+
+kafka_broker_ssl_enabled: "{{ ssl_enabled }}"
+kafka_broker_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+kafka_port: 9092
+# Should default to 'PLAINTEXT'
+kafka_broker_security_protocol: >-
+  {{ 'SASL_SSL' if sasl_protocol == 'kerberos' or sasl_protocol == 'plain' and kafka_broker_ssl_enabled|bool
+  else 'SASL_PLAINTEXT' if sasl_protocol == 'kerberos' or sasl_protocol == 'plain' and not kafka_broker_ssl_enabled|bool
+  else 'SSL' if kafka_broker_ssl_enabled|bool and sasl_protocol == 'none'
+  else 'PLAINTEXT' }}
+
+ssl_provided_keystore_and_truststore: false
+ssl_custom_certs: false
+# With self_signed on and ssl_enabled off, self_signed var should not get honored
+self_signed: "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_certs|bool else true }}"
+ssl_self_signed_ca_cert_filename: snakeoil-ca-1.crt
+ssl_self_signed_ca_key_filename: snakeoil-ca-1.key
+ssl_self_signed_ca_password: capassword123
+regenerate_ca: true
+
+truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
+truststore_path: /var/ssl/private/client.truststore.jks
+keystore_path: /var/ssl/private/client.keystore.jks
+keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
+keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else keystore_storepass }}"
+
+certs_updated: false
+
+schema_registry_ssl_enabled: "{{ssl_enabled}}"
+schema_registry_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+schema_registry_http_protocol: "{{ 'https' if schema_registry_ssl_enabled|bool else 'http' }}"
+schema_registry_listener_port: 8081
+
+kafka_rest_ssl_enabled: "{{ssl_enabled}}"
+kafka_rest_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+kafka_rest_http_protocol: "{{ 'https' if kafka_rest_ssl_enabled|bool else 'http' }}"
+kafka_rest_port: 8082
+
+kafka_connect_ssl_enabled: "{{ssl_enabled}}"
+kafka_connect_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+kafka_connect_http_protocol: "{{ 'https' if kafka_connect_ssl_enabled|bool else 'http' }}"
+kafka_connect_rest_port: 8083
+
+ksql_ssl_enabled: "{{ssl_enabled}}"
+ksql_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+ksql_http_protocol: "{{ 'https' if ksql_ssl_enabled|bool else 'http' }}"
+ksql_listener_port: 8088
+
+control_center_ssl_enabled: "{{ssl_enabled}}"
+control_center_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+control_center_http_protocol: "{{ 'https' if control_center_ssl_enabled|bool else 'http' }}"
+control_center_port: 9021
