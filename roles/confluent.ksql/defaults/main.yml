@@ -1,19 +1,20 @@
-ksql_listener_port: 8088
-
 ksql_open_file_limit: "{{open_file_limit}}"
 
 ksql_jaas_file: /etc/ksql/ksql-server_jaas.conf
 ksql_jaas_java_arg_buildout: "-Djava.security.auth.login.config={{ksql_jaas_file}}"
-ksql_jaas_java_arg: "{{ ksql_jaas_java_arg_buildout if security_mode in ['kerberos', 'kerberos_ssl', 'kerberos_ssl_customcerts'] else '' }}"
+ksql_jaas_java_arg: "{{ ksql_jaas_java_arg_buildout if sasl_protocol == 'kerberos' else '' }}"
 
 ksql_jolokia_java_arg_buildout: "-javaagent:{{jolokia_jar_path}}=port={{ksql_jolokia_port}},host=0.0.0.0"
 ksql_jolokia_java_arg: "{{ ksql_jolokia_java_arg_buildout if jolokia_enabled|bool else '' }}"
 
-ksql_kafka_opts_buildout: "{{ ksql_jolokia_java_arg + ' ' + ksql_jaas_java_arg if ksql_jolokia_java_arg != '' or ksql_jaas_java_arg != '' else '' }}"
+ksql_ssl_java_arg_buildout: "-Djavax.net.ssl.keyStore={{keystore_path}} -Djavax.net.ssl.trustStore={{truststore_path}} -Djavax.net.ssl.keyStorePassword={{keystore_storepass}} -Djavax.net.ssl.trustStorePassword={{truststore_storepass}}"
+ksql_ssl_java_arg: "{{ ksql_ssl_java_arg_buildout if schema_registry_ssl_enabled|bool else '' }}"
+
+ksql_opts_buildout: "{{ ksql_jolokia_java_arg + ' ' + ksql_jaas_java_arg + ' ' + ksql_ssl_java_arg if ksql_jolokia_java_arg != '' or ksql_jaas_java_arg != '' or ksql_ssl_java_arg != '' else '' }}"
 
 ksql_service_environment_overrides:
   KSQL_HEAP_OPTS: "-Xmx3g"
-  KAFKA_OPTS: "{{ ksql_kafka_opts_buildout }}"
+  KSQL_OPTS: "{{ ksql_opts_buildout }}"
 ksql_service_overrides:
   LimitNOFILE: "{{ksql_open_file_limit}}"
 
@@ -34,6 +35,9 @@ ksql:
     state: started
   properties:
     application.id: ksql-server
-    listeners: http://0.0.0.0:{{ksql_listener_port}}
-    ssl.endpoint.identification.algorithm: ""
+    ksql.internal.topic.replicas: 3
+    ksql.streams.replication.factor: 3
     ksql.streams.state.dir: /var/lib/kafka-streams
+    ksql.streams.num.standby.replicas: 1
+    ksql.streams.producer.delivery.timeout.ms: 2147483647
+    ksql.streams.producer.max.block.ms: 9223372036854775807

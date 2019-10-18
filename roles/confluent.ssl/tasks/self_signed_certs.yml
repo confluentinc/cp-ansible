@@ -1,0 +1,65 @@
+- name: Create Certificate Authority and Copy to Ansible Host
+  include_tasks: certificate_authority.yml
+  run_once: true
+  when: self_signed|bool and regenerate_ca|bool
+
+- name: Copy CA Cert to Host
+  copy:
+    src: "generated_ssl_files/{{ssl_self_signed_ca_cert_filename}}"
+    dest: "/var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}}"
+
+- name: Copy CA Key to Host
+  copy:
+    src: "generated_ssl_files/{{ssl_self_signed_ca_key_filename}}"
+    dest: "/var/ssl/private/generation/{{ssl_self_signed_ca_key_filename}}"
+
+- name: Create Truststore and Import the CA Cert
+  shell: |
+    keytool -noprompt -keystore {{truststore_path}} -storetype pkcs12 \
+      -alias CARoot -import -file /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
+      -storepass {{truststore_storepass}} -keypass {{truststore_storepass}}
+
+- name: Create Keystore
+  shell: |
+    keytool -genkey -noprompt \
+      -storetype pkcs12 \
+      -alias {{inventory_hostname}} \
+      -dname "CN={{inventory_hostname}},OU=TEST,O=CONFLUENT,L=PaloAlto,S=Ca,C=US" \
+      -ext san=dns:{{inventory_hostname}} \
+      -keystore {{keystore_path}} \
+      -keyalg RSA \
+      -storepass {{keystore_storepass}} \
+      -keypass {{keystore_storepass}}
+
+- name: Create Certificate Signing Request
+  shell: |
+    keytool -keystore {{keystore_path}} \
+      -alias {{inventory_hostname}} \
+      -certreq -file /var/ssl/private/generation/client.csr \
+      -storepass {{keystore_storepass}} \
+      -keypass {{keystore_storepass}}
+
+- name: Sign CSR with the Certificate Authority
+  shell: |
+    openssl x509 -req -CA /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
+      -CAkey /var/ssl/private/generation/{{ssl_self_signed_ca_key_filename}} \
+      -in /var/ssl/private/generation/client.csr \
+      -out /var/ssl/private/generation/client-signed.crt \
+      -days {{keystore_expiration_days}} -CAcreateserial \
+      -passin pass:{{ssl_self_signed_ca_password}}
+
+- name: Import the CA cert into the Keystore
+  shell: |
+    keytool -noprompt -keystore {{keystore_path}} \
+      -alias CARoot \
+      -import -file /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
+      -storepass {{keystore_storepass}} \
+      -keypass {{keystore_storepass}}
+
+- name: Import the Signed Host Cert into the Keystore
+  shell: |
+    keytool -noprompt -keystore {{keystore_path}} \
+      -alias {{inventory_hostname}} \
+      -import -file /var/ssl/private/generation/client-signed.crt \
+      -storepass {{keystore_storepass}} \
+      -keypass {{keystore_storepass}}
