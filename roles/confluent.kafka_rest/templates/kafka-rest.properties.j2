@@ -1,23 +1,35 @@
 # Maintained by Ansible
-bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_port}}{% endfor %}
-
 {% for key, value in kafka_rest.properties.items() %}
 {{key}}={{value}}
 {% endfor %}
 
-{% set schema_registries = groups.get('schema_registry', []) %}
-{% if schema_registries %}
-schema.registry.url={% include './includes/schema_registry_urls.j2' %}
+# Kafka Rest Configuration
+listeners={{kafka_rest_http_protocol}}://0.0.0.0:{{kafka_rest_port}}
+host.name={{inventory_hostname}}
+{% if kafka_rest_ssl_enabled|bool %}
+ssl.keystore.location={{keystore_path}}
+ssl.keystore.password={{keystore_storepass}}
+ssl.key.password={{keystore_keypass}}
+{% if kafka_rest_ssl_mutual_auth_enabled|bool %}
+ssl.client.auth=false
+#Set to true if you wish to force Client SSL Authentication
+ssl.truststore.location={{truststore_path}}
+ssl.truststore.password={{truststore_storepass}}
+{% endif %}
 {% endif %}
 
+# Kafka Broker Configuration
+bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_port}}{% endfor %}
 
-client.security.protocol={{security_protocol}}
-{% if ssl_enabled|bool %}
-client.ssl.truststore.location=/var/ssl/private/client.truststore.jks
-client.ssl.truststore.password={{host_truststore_storepass}}
-client.ssl.keystore.location=/var/ssl/private/client.keystore.jks
-client.ssl.keystore.password={{host_keystore_storepass}}
-client.ssl.key.password={{host_cert_password}}
+client.security.protocol={{kafka_broker_security_protocol}}
+{% if kafka_broker_ssl_enabled|bool %}
+client.ssl.truststore.location={{truststore_path}}
+client.ssl.truststore.password={{truststore_storepass}}
+{% if kafka_broker_ssl_mutual_auth_enabled|bool %}
+client.ssl.keystore.location={{keystore_path}}
+client.ssl.keystore.password={{keystore_storepass}}
+client.ssl.key.password={{keystore_keypass}}
+{% endif %}
 {% endif %}
 {% if sasl_protocol == 'plain' %}
 client.sasl.mechanism=PLAIN
@@ -31,4 +43,11 @@ client.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
    storeKey=true \
    keyTab="{{kerberos.keytab_dir}}/{{kafka_rest_kerberos_keytab_path | basename}}" \
    principal="{{kafka_rest_kerberos_principal}}";
+{% endif %}
+
+{% set schema_registries = groups.get('schema_registry', []) %}
+{% if schema_registries %}
+# Schema Registry Configuration
+schema.registry.url={% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}
+
 {% endif %}
