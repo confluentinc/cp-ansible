@@ -1,57 +1,57 @@
-# Install Packages
-- name: Install the Kafka Broker Packages
-  yum:
-    name: "{{item}}-{{confluent.package_version}}"
-    state: latest
-  loop: "{{kafka_broker_packages}}"
-  when: ansible_os_family == "RedHat"
-
-- name: Install the Kafka Broker Packages
-  apt:
-    name: "{{item}}={{confluent.package_version}}"
-    update_cache: yes
-  loop: "{{kafka_broker_packages}}"
-  when: ansible_os_family == "Debian"
-
-# Configure Environment
-- name: Kafka Broker group
-  group:
-    name: "{{kafka_broker.group}}"
-
-- name: Kafka Broker user
-  user:
-    name: "{{kafka_broker.user}}"
-    comment: "Kafka User"
-    system: yes
-    group: "{{kafka_broker.group}}"
-
-- name: Create Keytabs Directory
-  file:
-    path: "{{kerberos.keytab_dir}}"
-    group: "{{kafka_broker.group}}"
-    mode: '650'
-    recurse: yes
-  when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
-
-- name: Copy in Keytab File
-  copy:
-    src: "{{kafka_broker_kerberos_keytab_path}}"
-    dest: "{{kerberos.keytab_dir}}/{{kafka_broker_kerberos_keytab_path | basename}}"
-    mode: '600'
-    owner: "{{kafka_broker.user}}"
-    group: "{{kafka_broker.group}}"
-  when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
-  notify:
-    - restart kafka
-
-- name: Create Kafka Broker Data Directories
-  file:
-    path: "{{item}}"
-    owner: "{{kafka_broker.user}}"
-    group: "{{kafka_broker.group}}"
-    state: directory
-    mode: 0755
-  with_items: "{{kafka_broker.datadir}}"
+# # Install Packages
+# - name: Install the Kafka Broker Packages
+#   yum:
+#     name: "{{item}}-{{confluent.package_version}}"
+#     state: latest
+#   loop: "{{kafka_broker_packages}}"
+#   when: ansible_os_family == "RedHat"
+#
+# - name: Install the Kafka Broker Packages
+#   apt:
+#     name: "{{item}}={{confluent.package_version}}"
+#     update_cache: yes
+#   loop: "{{kafka_broker_packages}}"
+#   when: ansible_os_family == "Debian"
+#
+# # Configure Environment
+# - name: Kafka Broker group
+#   group:
+#     name: "{{kafka_broker.group}}"
+#
+# - name: Kafka Broker user
+#   user:
+#     name: "{{kafka_broker.user}}"
+#     comment: "Kafka User"
+#     system: yes
+#     group: "{{kafka_broker.group}}"
+#
+# - name: Create Keytabs Directory
+#   file:
+#     path: "{{kerberos.keytab_dir}}"
+#     group: "{{kafka_broker.group}}"
+#     mode: '650'
+#     recurse: yes
+#   when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
+#
+# - name: Copy in Keytab File
+#   copy:
+#     src: "{{kafka_broker_kerberos_keytab_path}}"
+#     dest: "{{kerberos.keytab_dir}}/{{kafka_broker_kerberos_keytab_path | basename}}"
+#     mode: '600'
+#     owner: "{{kafka_broker.user}}"
+#     group: "{{kafka_broker.group}}"
+#   when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
+#   notify:
+#     - restart kafka
+#
+# - name: Create Kafka Broker Data Directories
+#   file:
+#     path: "{{item}}"
+#     owner: "{{kafka_broker.user}}"
+#     group: "{{kafka_broker.group}}"
+#     state: directory
+#     mode: 0755
+#   with_items: "{{kafka_broker.datadir}}"
 
 - name: Create Kafka Broker Config
   template:
@@ -62,71 +62,73 @@
     group: "{{kafka_broker.group}}"
   notify:
     - restart kafka
-
-- name: Create Kafka Broker Jaas Config
-  template:
-    src: kafka_server_jaas.conf.j2
-    dest: "{{kafka_broker_jaas_file}}"
-    mode: 0640
-    owner: "{{kafka_broker.user}}"
-    group: "{{kafka_broker.group}}"
-  when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
-  notify:
-    - restart kafka
-
-- name: Create SCRAM Users
-  shell: |
-    kafka-configs --zookeeper localhost:2181 --alter \
-      --add-config 'SCRAM-SHA-256=[password={{ item.value['password'] }}]' \
-      --entity-type users --entity-name {{ item.value['principal'] }}
-  loop: "{{ sasl_scram_users|dict2items }}"
-  delegate_to: "{{ groups['zookeeper'][0] }}"
-  run_once: true
-  when: "'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms"
-
-- name: Deploy JMX Exporter Config File
-  copy:
-    src: "kafka.yml"
-    dest: "{{jmxexporter_install_path}}/"
-  when: jmxexporter_enabled|bool
-
-- name: Create Service Override Directory
-  file:
-    path: "{{kafka_broker.systemd_override}}"
-    owner: "{{kafka_broker.user}}"
-    group: "{{kafka_broker.group}}"
-    state: directory
-    mode: 0640
-
-- name: Write Service Overrides
-  template:
-    src: override.conf.j2
-    dest: "{{kafka_broker.systemd_override}}/override.conf"
-    mode: 0640
-    owner: "{{kafka_broker.user}}"
-    group: "{{kafka_broker.group}}"
-  notify:
-    - reload systemd
-    - restart kafka
-
-- name: Tune virtual memory settings
-  lineinfile:
-    path: /etc/sysctl.conf
-    regexp: "{{ item.key }}.*"
-    line: "{{ item.key }}={{ item.value }}"
-  with_dict: "{{ kafka_broker_sysctl }}"
-  notify:
-    - load sysctl
-
-- name: Certs were Updated - Trigger Restart
-  command: /bin/true
-  notify: restart kafka
-  when: certs_updated|bool
-
-- meta: flush_handlers
-
-- name: Start Kafka Broker Service
-  systemd:
-    name: "{{kafka_broker.service_name}}"
-    enabled: "{{kafka_broker.systemd.enabled}}"
-    state: "{{kafka_broker.systemd.state}}"
+# 
+# - name: Create Kafka Broker Jaas Config
+#   template:
+#     src: kafka_server_jaas.conf.j2
+#     dest: "{{kafka_broker_jaas_file}}"
+#     mode: 0640
+#     owner: "{{kafka_broker.user}}"
+#     group: "{{kafka_broker.group}}"
+#   when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
+#   tags:
+#     - config
+#   notify:
+#     - restart kafka
+#
+# - name: Create SCRAM Users
+#   shell: |
+#     kafka-configs --zookeeper localhost:2181 --alter \
+#       --add-config 'SCRAM-SHA-256=[password={{ item.value['password'] }}]' \
+#       --entity-type users --entity-name {{ item.value['principal'] }}
+#   loop: "{{ sasl_scram_users|dict2items }}"
+#   delegate_to: "{{ groups['zookeeper'][0] }}"
+#   run_once: true
+#   when: "'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms"
+#
+# - name: Deploy JMX Exporter Config File
+#   copy:
+#     src: "kafka.yml"
+#     dest: "{{jmxexporter_install_path}}/"
+#   when: jmxexporter_enabled|bool
+#
+# - name: Create Service Override Directory
+#   file:
+#     path: "{{kafka_broker.systemd_override}}"
+#     owner: "{{kafka_broker.user}}"
+#     group: "{{kafka_broker.group}}"
+#     state: directory
+#     mode: 0640
+#
+# - name: Write Service Overrides
+#   template:
+#     src: override.conf.j2
+#     dest: "{{kafka_broker.systemd_override}}/override.conf"
+#     mode: 0640
+#     owner: "{{kafka_broker.user}}"
+#     group: "{{kafka_broker.group}}"
+#   notify:
+#     - reload systemd
+#     - restart kafka
+#
+# - name: Tune virtual memory settings
+#   lineinfile:
+#     path: /etc/sysctl.conf
+#     regexp: "{{ item.key }}.*"
+#     line: "{{ item.key }}={{ item.value }}"
+#   with_dict: "{{ kafka_broker_sysctl }}"
+#   notify:
+#     - load sysctl
+#
+# - name: Certs were Updated - Trigger Restart
+#   command: /bin/true
+#   notify: restart kafka
+#   when: certs_updated|bool
+#
+# - meta: flush_handlers
+#
+# - name: Start Kafka Broker Service
+#   systemd:
+#     name: "{{kafka_broker.service_name}}"
+#     enabled: "{{kafka_broker.systemd.enabled}}"
+#     state: "{{kafka_broker.systemd.state}}"
