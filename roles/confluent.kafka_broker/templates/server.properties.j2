@@ -9,8 +9,8 @@ broker.id={{ broker_id | default(groups.kafka_broker.index(inventory_hostname) +
 {{key}}={{value}}
 {% endfor %}
 
-listeners={{kafka_broker_listeners.internal.name}}://:{{kafka_broker_listeners.internal.port}},{{kafka_broker_external_listener_name}}://:{{kafka_broker_external_listener_port}}
-listener.security.protocol.map={{kafka_broker_listeners.internal.name}}:{{ kafka_broker_listeners.internal.sasl_protocol | normalize_sasl_protocol | kafka_protocol(kafka_broker_listeners.internal.ssl_enabled)}},{{kafka_broker_external_listener_name}}:{{kafka_broker_external_listener_security_protocol}}
+listeners={{kafka_broker_listeners.internal.name}}://:{{kafka_broker_listeners.internal.port}},{{kafka_broker_listeners.external.name}}://:{{kafka_broker_listeners.external.port}}
+listener.security.protocol.map={{kafka_broker_listeners.internal.name}}:{{ kafka_broker_listeners.internal.sasl_protocol | normalize_sasl_protocol | kafka_protocol(kafka_broker_listeners.internal.ssl_enabled)}},{{kafka_broker_listeners.external.name}}:{{kafka_broker_listeners.external.sasl_protocol | normalize_sasl_protocol | kafka_protocol(kafka_broker_listeners.external.ssl_enabled)}}
 
 ## Inter Broker Listener Configuration
 inter.broker.listener.name={{kafka_broker_listeners.internal.name}}
@@ -34,30 +34,30 @@ sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
 
 ## External Client Listener Configuration
 {% with %}
-{% set listener_name = kafka_broker_external_listener_name %}
-{% set listener_ssl_enabled = kafka_broker_external_listener_ssl_enabled %}
-{% set listener_ssl_mutual_auth_enabled = kafka_broker_external_listener_ssl_mutual_auth_enabled %}
-{% set listener_sasl_protocol = kafka_broker_external_listener_sasl_protocol_normalized %}
+{% set listener_name = kafka_broker_listeners.external.name %}
+{% set listener_ssl_enabled = kafka_broker_listeners.external.ssl_enabled %}
+{% set listener_ssl_mutual_auth_enabled = kafka_broker_listeners.external.ssl_mutual_auth_enabled %}
+{% set listener_sasl_protocol = kafka_broker_listeners.external.sasl_protocol | normalize_sasl_protocol %}
 {% include 'listener.j2' %}
 {% endwith %}
 
 ## Metrics Reporter Configuration
-confluent.metrics.reporter.security.protocol={{kafka_broker_external_listener_security_protocol}}
-{% if kafka_broker_external_listener_ssl_enabled|bool %}
+confluent.metrics.reporter.security.protocol={{kafka_broker_listeners.external.sasl_protocol | normalize_sasl_protocol | kafka_protocol(kafka_broker_listeners.external.ssl_enabled)}}
+{% if kafka_broker_listeners.external.ssl_enabled|bool %}
 confluent.metrics.reporter.ssl.truststore.location={{truststore_path}}
 confluent.metrics.reporter.ssl.truststore.password={{truststore_storepass}}
-{% if kafka_broker_external_listener_ssl_mutual_auth_enabled|bool %}
+{% if kafka_broker_listeners.external.ssl_mutual_auth_enabled|bool %}
 confluent.metrics.reporter.ssl.keystore.location={{keystore_path}}
 confluent.metrics.reporter.ssl.keystore.password={{keystore_storepass}}
 confluent.metrics.reporter.ssl.key.password={{keystore_keypass}}
 {% endif %}
 {% endif %}
-{% if kafka_broker_external_listener_sasl_protocol_normalized == 'PLAIN' %}
+{% if kafka_broker_listeners.external.sasl_protocol | normalize_sasl_protocol == 'PLAIN' %}
 confluent.metrics.reporter.sasl.mechanism=PLAIN
 confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
    username="{{sasl_plain_users.admin.principal}}" password="{{sasl_plain_users.admin.password}}";
 {% endif %}
-{% if kafka_broker_external_listener_sasl_protocol_normalized == 'GSSAPI' %}
+{% if kafka_broker_listeners.external.sasl_protocol | normalize_sasl_protocol == 'GSSAPI' %}
 confluent.metrics.reporter.sasl.mechanism=GSSAPI
 confluent.metrics.reporter.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
 confluent.metrics.reporter.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
@@ -66,7 +66,7 @@ confluent.metrics.reporter.sasl.jaas.config=com.sun.security.auth.module.Krb5Log
    keyTab="{{kerberos.keytab_dir}}/{{kafka_broker_kerberos_keytab_path | basename}}" \
    principal="{{kafka_broker_kerberos_principal}}";
 {% endif %}
-{% if kafka_broker_external_listener_sasl_protocol_normalized == 'SCRAM-SHA-256' %}
+{% if kafka_broker_listeners.external.sasl_protocol | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
 confluent.metrics.reporter.sasl.mechanism=SCRAM-SHA-256
 confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
    username="{{sasl_scram_users.admin.principal}}" password="{{sasl_scram_users.admin.password}}";
