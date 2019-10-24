@@ -9,8 +9,10 @@ broker.id={{ broker_id | default(groups.kafka_broker.index(inventory_hostname) +
 {{key}}={{value}}
 {% endfor %}
 
-listeners={{kafka_broker_listeners.internal.name}}://:{{kafka_broker_listeners.internal.port}},{{kafka_broker_listeners.external.name}}://:{{kafka_broker_listeners.external.port}}
-listener.security.protocol.map={{kafka_broker_listeners.internal.name}}:{{ kafka_broker_listeners.internal.sasl_protocol | kafka_protocol(kafka_broker_listeners.internal.ssl_enabled)}},{{kafka_broker_listeners.external.name}}:{{kafka_broker_listeners.external.sasl_protocol | kafka_protocol(kafka_broker_listeners.external.ssl_enabled)}}
+listeners={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener.value['name'] }}://:{{ listener.value['port'] }}{% endfor %}
+
+listener.security.protocol.map={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener.value['name'] }}:{{ listener.value['sasl_protocol'] | kafka_protocol(listener.value['ssl_enabled'])}}{% endfor %}
+
 
 ## Inter Broker Listener Configuration
 inter.broker.listener.name={{kafka_broker_listeners.internal.name}}
@@ -24,23 +26,17 @@ sasl.enabled.mechanisms={% for mechanism in kafka_broker_sasl_enabled_mechanisms
 {% if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms %}
 sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
 {% endif %}
+
+{% for listener in kafka_broker_listeners|dict2items %}
 {% with %}
-{% set listener_name = kafka_broker_listeners.internal.name %}
-{% set listener_ssl_enabled = kafka_broker_listeners.internal.ssl_enabled %}
-{% set listener_ssl_mutual_auth_enabled = kafka_broker_listeners.internal.ssl_mutual_auth_enabled %}
-{% set listener_sasl_protocol = kafka_broker_listeners.internal.sasl_protocol | normalize_sasl_protocol %}
+{% set listener_name = listener.value['name'] %}
+{% set listener_ssl_enabled = listener.value['ssl_enabled'] %}
+{% set listener_ssl_mutual_auth_enabled = listener.value['ssl_mutual_auth_enabled'] %}
+{% set listener_sasl_protocol = listener.value['sasl_protocol'] | normalize_sasl_protocol %}
 {% include 'listener.j2' %}
 {% endwith %}
 
-## External Client Listener Configuration
-{% with %}
-{% set listener_name = kafka_broker_listeners.external.name %}
-{% set listener_ssl_enabled = kafka_broker_listeners.external.ssl_enabled %}
-{% set listener_ssl_mutual_auth_enabled = kafka_broker_listeners.external.ssl_mutual_auth_enabled %}
-{% set listener_sasl_protocol = kafka_broker_listeners.external.sasl_protocol | normalize_sasl_protocol %}
-{% include 'listener.j2' %}
-{% endwith %}
-
+{% endfor %}
 ## Metrics Reporter Configuration
 confluent.metrics.reporter.security.protocol={{kafka_broker_listeners.external.sasl_protocol | kafka_protocol(kafka_broker_listeners.external.ssl_enabled)}}
 {% if kafka_broker_listeners.external.ssl_enabled|bool %}
