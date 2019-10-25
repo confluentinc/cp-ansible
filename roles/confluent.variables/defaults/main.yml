@@ -56,19 +56,25 @@ keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_tru
 
 certs_updated: false
 
-kafka_broker_listeners:
+kafka_broker_default_listeners:
+  external:
+    name: "{{ 'EXTERNAL' if kafka_broker_configure_additional_brokers|bool else 'DEFAULT' }}"
+    port: 9092
+    ssl_enabled: "{{ ssl_enabled }}"
+    ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+    sasl_protocol: "{{ sasl_protocol }}"
+
+kafka_broker_custom_listeners:
   internal:
     name: INTERNAL
     port: 9091
     ssl_enabled: "{{ ssl_enabled }}"
     ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
     sasl_protocol: "{{ sasl_protocol }}"
-  external:
-    name: EXTERNAL
-    port: 9092
-    ssl_enabled: "{{ ssl_enabled }}"
-    ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
-    sasl_protocol: "{{ sasl_protocol }}"
+
+kafka_broker_configure_additional_brokers: false
+kafka_broker_listeners: "{{ kafka_broker_default_listeners | combine(kafka_broker_custom_listeners, recursive=True) if kafka_broker_configure_additional_brokers|bool else  kafka_broker_default_listeners}}"
+kafka_broker_inter_broker_listener_name: "{{ 'internal' if kafka_broker_configure_additional_brokers|bool else 'external' }}"
 
 # Uses custom filter to create a list of all sasl_protocols, removes ['none'], and reduces to unique items
 kafka_broker_sasl_enabled_mechanisms: "{{ kafka_broker_listeners | get_sasl_mechanisms | difference(['none']) | unique }}"
