@@ -116,6 +116,20 @@
       delegate_to: localhost
       when: active_controller_count|int == 1 and kafka_broker_current_version != confluent_package_version
 
+    - name: Add host to Non Controller Group - Rolling Restart
+      add_host:
+        name: "{{ inventory_hostname }}"
+        group: upgrade_non_controllers
+      delegate_to: localhost
+      when: active_controller_count|int == 0 and rolling_restart|bool
+
+    - name: Add host to Controller Group - Rolling Restart
+      add_host:
+        name: "{{ inventory_hostname }}"
+        group: upgrade_controller
+      delegate_to: localhost
+      when: active_controller_count|int == 1 and rolling_restart|bool
+
 - name: Kafka Broker Upgrade
   # Putting controller group last here with serial=1 has the controller as the last host to run
   hosts: upgrade_non_controllers,upgrade_controller
@@ -135,9 +149,14 @@
           - "{{ kafka_broker.config_file }}"
           - "{{ kafka_broker.systemd_override }}"
           - "{{ kafka_broker.log_file }}"
+          - "{{ zookeeper.config_file }}"
+          - "{{ zookeeper.systemd_override }}"
+          - "{{ zookeeper.log_file }}"
         restore_files:
           - "{{ kafka_broker.config_file }}"
           - "{{ kafka_broker.log_file }}"
+          - "{{ zookeeper.config_file }}"
+          - "{{ zookeeper.log_file }}"
 
     - name: Wait for Under Replicated Partitions on Broker
       import_tasks: tasks/wait_for_urp.yml
