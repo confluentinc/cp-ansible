@@ -164,8 +164,39 @@
         - "{{ zookeeper.config_file }}"
         - "{{ zookeeper.log_file }}"
 
+    - name: Add Trust Empty Snapshot Property
+      lineinfile:
+        name: "{{zookeeper.config_file}}"
+        line: snapshot.trust.empty=true
+        regexp: snapshot.trust.empty=.*
+
     - name: reload systemd
       command: systemctl daemon-reload
+
+    - name: Restart Service
+      systemd:
+        name: "{{ zookeeper_service_name }}"
+        state: restarted
+
+    - name: Wait for Zookeeper Status
+      shell: echo srvr | nc localhost 2181
+      register: srvr
+      until: srvr.rc == 0
+      retries: 30
+      delay: 5
+
+    - name: Wait for Zookeeper Quorum
+      shell: echo srvr | nc localhost 2181
+      register: srvr
+      until: '"Latency min/avg/max:" in srvr.stdout'
+      retries: 30
+      delay: 5
+
+    - name: Remove Trust Empty Snapshot Property
+      lineinfile:
+        name: "{{zookeeper.config_file}}"
+        regexp: snapshot.trust.empty=.*
+        state: absent
 
     - name: Restart Service
       systemd:
