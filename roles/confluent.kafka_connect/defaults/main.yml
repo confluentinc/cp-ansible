@@ -6,8 +6,6 @@ kafka_connect_java_args:
 
 kafka_connect_final_java_args: "{{ kafka_connect_java_args + [ kafka_connect_custom_java_args ] }}"
 
-# kafka_connect_log4j_file: /etc/kafka/connect_distributed_log4j.properties
-
 kafka_connect_open_file_limit: "{{open_file_limit}}"
 kafka_connect_service_overrides:
   LimitNOFILE: "{{kafka_connect_open_file_limit}}"
@@ -16,8 +14,9 @@ kafka_connect_service_environment_overrides:
   KAFKA_OPTS: "{{ kafka_connect_final_java_args | java_arg_build_out }}"
   KAFKA_LOG4J_OPTS: "-Dlog4j.configuration=file:{{kafka_connect.log4j_file}}"
 
+kafka_connect_default_replication_factor: 3
+
 kafka_connect:
-  # log4j_file: "{{kafka_connect_log4j_file}}"
   appender_log_path: /var/log/kafka/
   appender_log_name: connect-distributed.log
   appender_max_log_files: 10
@@ -26,7 +25,7 @@ kafka_connect:
     rest.port: "{{kafka_connect_rest_port}}"
     consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
     producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
-    config.storage.replication.factor: 3
+    config.storage.replication.factor: "{{ [ groups['kafka_broker'] | length, kafka_connect_default_replication_factor ] | min }}"
     config.storage.topic: connect-configs
     group.id: connect-cluster
     internal.key.converter: org.apache.kafka.connect.json.JsonConverter
@@ -34,9 +33,9 @@ kafka_connect:
     internal.value.converter: org.apache.kafka.connect.json.JsonConverter
     internal.value.converter.schemas.enable: "false"
     offset.flush.interval.ms: 10000
-    offset.storage.replication.factor: 3
+    offset.storage.replication.factor: "{{ [ groups['kafka_broker'] | length, kafka_connect_default_replication_factor ] | min }}"
     offset.storage.topic: connect-offsets
-    status.storage.replication.factor: 3
+    status.storage.replication.factor: "{{ [ groups['kafka_broker'] | length, kafka_connect_default_replication_factor ] | min }}"
     status.storage.topic: connect-status
     key.converter: io.confluent.connect.avro.AvroConverter
     value.converter: io.confluent.connect.avro.AvroConverter
