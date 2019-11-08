@@ -15,25 +15,21 @@ kafka_broker_java_args:
 
 kafka_broker_final_java_args: "{{ kafka_broker_java_args + [ kafka_broker_custom_java_args ] }}"
 
-kafka_broker_log4j_file: /etc/kafka/kafka_server_log4j.properties
-
 kafka_broker_service_overrides:
   LimitNOFILE: "{{kafka_broker_open_file_limit}}"
 kafka_broker_service_environment_overrides:
   KAFKA_HEAP_OPTS: "-Xmx1g"
   KAFKA_OPTS: "{{ kafka_broker_final_java_args | java_arg_build_out }}"
-  KAFKA_LOG4J_OPTS: "-Dlog4j.configuration=file:{{kafka_broker_log4j_file}}"
+  KAFKA_LOG4J_OPTS: "-Dlog4j.configuration=file:{{kafka_broker.log4j_file}}"
 
 kafka_broker_sysctl:
   vm.swappiness: 1
   vm.dirty_background_ratio: 5
   vm.dirty_ratio: 60
 
+kafka_broker_default_replication_factor: 3
+
 kafka_broker:
-  # user: cp-kafka
-  # group: confluent
-  # config_file: /etc/kafka/server.properties
-  log4j_file: "{{kafka_broker_log4j_file}}"
   appender_log_path: /var/log/kafka/
   kafka_appender_log_name: server.log
   kafka_appender_max_log_files: 10
@@ -53,9 +49,6 @@ kafka_broker:
   authorizer_appender_log_name: kafka-authorizer.log
   authorizer_appender_max_log_files: 10
   authorizer_appender_log_file_size: 100MB
-  # systemd_file: /usr/lib/systemd/system/confluent-kafka.service
-  # systemd_override: /etc/systemd/system/confluent-kafka.service.d
-  # service_name: confluent-kafka
   datadir:
     - /var/lib/kafka
   properties:
@@ -72,12 +65,12 @@ kafka_broker:
     socket.request.max.bytes: 104857600
     socket.send.buffer.bytes: 102400
     transaction.state.log.min.isr: 2
-    transaction.state.log.replication.factor: 1
+    transaction.state.log.replication.factor: "{{ [ groups['kafka_broker'] | length, kafka_broker_default_replication_factor ] | min }}"
     zookeeper.connection.timeout.ms: 6000
-    confluent.license.topic.replication.factor: 1
-    confluent.metadata.topic.replication.factor: 1
+    confluent.license.topic.replication.factor: "{{ [ groups['kafka_broker'] | length, kafka_broker_default_replication_factor ] | min }}"
+    confluent.metadata.topic.replication.factor: "{{ [ groups['kafka_broker'] | length, kafka_broker_default_replication_factor ] | min }}"
     metric.reporters: io.confluent.metrics.reporter.ConfluentMetricsReporter
     confluent.metrics.reporter.bootstrap.servers: "{{inventory_hostname}}:{{kafka_port}}"
-    confluent.metrics.reporter.topic.replicas: 3
+    confluent.metrics.reporter.topic.replicas: "{{ [ groups['kafka_broker'] | length, kafka_broker_default_replication_factor ] | min }}"
     confluent.support.metrics.enable: "{{confluent.support.metrics_enabled|bool|lower}}"
     confluent.support.customer.id: "{{confluent.support.customer_id}}"
