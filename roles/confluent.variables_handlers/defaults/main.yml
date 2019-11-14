@@ -40,7 +40,7 @@ kerberos_configure: true
 rbac_enabled: false
 confluent_server_enabled: "{{ true if rbac_enabled|bool else false }}"
 
-# Other options: kerberos, plain
+# Other options: kerberos, plain, scram
 sasl_protocol: none
 
 ssl_enabled: false
@@ -56,15 +56,38 @@ ssl_self_signed_ca_key_filename: snakeoil-ca-1.key
 ssl_self_signed_ca_password: capassword123
 regenerate_ca: true
 
-kafka_port: 9092
-kafka_broker_ssl_enabled: "{{ ssl_enabled }}"
-kafka_broker_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+kafka_broker_default_listeners:
+  external:
+    name: "{{ 'EXTERNAL' if kafka_broker_configure_additional_brokers|bool else 'DEFAULT' }}"
+    port: 9092
+    ssl_enabled: "{{ ssl_enabled }}"
+    ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+    sasl_protocol: "{{ sasl_protocol }}"
+
+kafka_broker_custom_listeners:
+  internal:
+    name: INTERNAL
+    port: 9091
+    ssl_enabled: "{{ ssl_enabled }}"
+    ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+    sasl_protocol: "{{ sasl_protocol }}"
+
+kafka_broker_configure_additional_brokers: true
+kafka_broker_listeners: "{{ kafka_broker_default_listeners | combine(kafka_broker_custom_listeners, recursive=True) if kafka_broker_configure_additional_brokers|bool else  kafka_broker_default_listeners}}"
+kafka_broker_inter_broker_listener_name: "{{ 'internal' if kafka_broker_configure_additional_brokers|bool else 'external' }}"
+
+# Uses custom filter to create a list of all sasl_protocols, removes ['none'], and reduces to unique items
+kafka_broker_sasl_enabled_mechanisms: "{{ kafka_broker_listeners | get_sasl_mechanisms | difference(['none']) | unique }}"
+
+# kafka_port: 9092
+# kafka_broker_ssl_enabled: "{{ ssl_enabled }}"
+# kafka_broker_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 # Should default to 'PLAINTEXT'
-kafka_broker_security_protocol: >-
-  {{ 'SASL_SSL' if (sasl_protocol == 'kerberos' or sasl_protocol == 'plain') and kafka_broker_ssl_enabled|bool
-  else 'SASL_PLAINTEXT' if (sasl_protocol == 'kerberos' or sasl_protocol == 'plain') and not kafka_broker_ssl_enabled|bool
-  else 'SSL' if kafka_broker_ssl_enabled|bool and sasl_protocol == 'none'
-  else 'PLAINTEXT' }}
+# kafka_broker_security_protocol: >-
+#   {{ 'SASL_SSL' if (sasl_protocol == 'kerberos' or sasl_protocol == 'plain') and kafka_broker_ssl_enabled|bool
+#   else 'SASL_PLAINTEXT' if (sasl_protocol == 'kerberos' or sasl_protocol == 'plain') and not kafka_broker_ssl_enabled|bool
+#   else 'SSL' if kafka_broker_ssl_enabled|bool and sasl_protocol == 'none'
+#   else 'PLAINTEXT' }}
 kafka_broker_truststore_path: "/var/ssl/private/kafka_broker.truststore.jks"
 kafka_broker_keystore_path: "/var/ssl/private/kafka_broker.keystore.jks"
 kafka_broker_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
@@ -84,6 +107,7 @@ schema_registry_keystore_path: "/var/ssl/private/schema_registry.keystore.jks"
 schema_registry_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 schema_registry_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 schema_registry_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else schema_registry_keystore_storepass }}"
+schema_registry_kafka_listener_name: external
 schema_registry:
   log4j_file: /etc/schema-registry/schema_registry_log4j.properties
 
@@ -97,6 +121,7 @@ kafka_rest_keystore_path: "/var/ssl/private/kafka_rest.keystore.jks"
 kafka_rest_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_rest_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_rest_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_rest_keystore_storepass }}"
+kafka_rest_kafka_listener_name: external
 kafka_rest:
   log4j_file: /etc/kafka-rest/kafka-rest_log4j.properties
 
@@ -109,6 +134,7 @@ kafka_connect_keystore_path: "/var/ssl/private/kafka_connect.keystore.jks"
 kafka_connect_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_connect_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_connect_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_connect_keystore_storepass }}"
+kafka_connect_kafka_listener_name: external
 kafka_connect:
   log4j_file: /etc/kafka/connect_distributed_log4j.properties
 
@@ -121,6 +147,7 @@ ksql_keystore_path: "/var/ssl/private/ksql.keystore.jks"
 ksql_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 ksql_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 ksql_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else ksql_keystore_storepass }}"
+ksql_kafka_listener_name: external
 ksql:
   log4j_file: /etc/ksql/ksql-server_log4j.properties
   jaas_file: /etc/ksql/ksql-server_jaas.conf
@@ -134,6 +161,7 @@ control_center_keystore_path: "/var/ssl/private/control_center.keystore.jks"
 control_center_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 control_center_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 control_center_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_keystore_storepass }}"
+control_center_kafka_listener_name: external
 control_center:
   log4j_file: /etc/confluent-control-center/control-center_log4j.properties
 
@@ -142,3 +170,49 @@ zookeeper:
     clientPort: 2181
   log4j_file: /etc/kafka/zookeeper_log4j.properties
   jaas_file: /etc/kafka/zookeeper_jaas.conf
+
+sasl_scram_users:
+  admin:
+    principal: admin
+    password: admin-secret
+  client:
+    principal: client
+    password: client-secret
+  kafka_connect:
+    principal: kafka_connect
+    password: kafka_connect-secret
+  control_center:
+    principal: control_center
+    password: control_center-secret
+  kafka_rest:
+    principal: kafka_rest
+    password: kafka_rest-secret
+  ksql:
+    principal: ksql
+    password: ksql-secret
+  schema_registry:
+    principal: schema_registry
+    password: schema_registry-secret
+
+sasl_plain_users:
+  admin:
+    principal: admin
+    password: admin-secret
+  client:
+    principal: client
+    password: client-secret
+  kafka_connect:
+    principal: kafka_connect
+    password: kafka_connect-secret
+  control_center:
+    principal: control_center
+    password: control_center-secret
+  kafka_rest:
+    principal: kafka_rest
+    password: kafka_rest-secret
+  ksql:
+    principal: ksql
+    password: ksql-secret
+  schema_registry:
+    principal: schema_registry
+    password: schema_registry-secret

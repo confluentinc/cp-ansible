@@ -34,7 +34,8 @@
     keystore_path: "{{kafka_broker_keystore_path}}"
     keystore_storepass: "{{kafka_broker_keystore_storepass}}"
     keystore_keypass: "{{kafka_broker_keystore_keypass}}"
-  when: kafka_broker_ssl_enabled|bool
+#  when: kafka_broker_ssl_enabled|bool
+  when: kafka_broker_listeners | ssl_required
 
 - name: Create Keytabs Directory
   file:
@@ -42,7 +43,7 @@
     group: "{{kafka_broker.group}}"
     mode: '650'
     recurse: yes
-  when: sasl_protocol == 'kerberos'
+  when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
 
 - name: Copy in Keytab File
   copy:
@@ -51,7 +52,7 @@
     mode: '600'
     owner: "{{kafka_broker.user}}"
     group: "{{kafka_broker.group}}"
-  when: sasl_protocol == 'kerberos'
+  when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
   notify:
     - Restart Kafka
 
@@ -99,9 +100,19 @@
     mode: 0640
     owner: "{{kafka_broker.user}}"
     group: "{{kafka_broker.group}}"
-  when: sasl_protocol == "kerberos"
+  when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
   notify:
     - Restart Kafka
+
+- name: Create SCRAM Users
+  shell: |
+    kafka-configs --zookeeper localhost:2181 --alter \
+      --add-config 'SCRAM-SHA-256=[password={{ item.value['password'] }}]' \
+      --entity-type users --entity-name {{ item.value['principal'] }}
+  loop: "{{ sasl_scram_users|dict2items }}"
+  delegate_to: "{{ groups['zookeeper'][0] }}"
+  run_once: true
+  when: "'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms"
 
 - name: Deploy JMX Exporter Config File
   copy:
