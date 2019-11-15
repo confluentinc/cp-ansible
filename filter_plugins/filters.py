@@ -55,5 +55,5 @@ class FilterModule(object):
         java_args = ''
         for value in java_arg_list:
             if value != '':
-                java_args = ' ' + value
+                java_args = java_args + ' ' + value
         return java_args[1:]
