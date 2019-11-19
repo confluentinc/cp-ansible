@@ -1,7 +1,4 @@
-Import-Module ActiveDirectory
-
-param (
-    [Parameter(Mandatory=$true)][string]$realm,
+Param (
     [Parameter(Mandatory=$true)][string]$ad_domain,
     [Parameter(Mandatory=$true)][string]$ldap_root,
     [Parameter(Mandatory=$true)][string]$user_name,
@@ -10,13 +7,18 @@ param (
     [Parameter(Mandatory=$true)][string]$keytab_dir
  )
 
-Write-Host "realm: $realm"
 Write-Host "ad_domain: $ad_domain"
 Write-Host "ldap_root: $ldap_root"
+Write-Host "user_name: $user_name"
+Write-Host "upn: $upn"
+Write-Host "extra_spn: $extra_spn"
+Write-Host "keytab_dir: $keytab_dir"
+
+Import-Module ActiveDirectory
 
 # Create user
-$userPrincipalName = $user_name + "@" + $ad_domain
-Write-Host "Creating user $userPrincipalName"
+$initialUpn = $user_name + "@" + $ad_domain
+Write-Host "Creating user $initialUpn"
 New-ADUser `
     -Name:$user_name `
     -OtherAttributes:@{"msDS-SupportedEncryptionTypes"="24"} `
@@ -25,10 +27,10 @@ New-ADUser `
     -Type:"user" `
     -ChangePasswordAtLogon:$false `
     -PasswordNeverExpires:$true `
-    -UserPrincipalName:$userPrincipalName    
+    -UserPrincipalName:$initialUpn    
 
 # Generate KeyTab
-$keytabFile = $keytab_dir + $user_name + ".keytab"
+$keytabFile = $keytab_dir + "\" + $user_name + ".keytab"
 Write-Host "Generating keytab $keytabFile with $upn"
 ktpass `
     /out $keytabFile `
