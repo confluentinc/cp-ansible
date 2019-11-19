@@ -25,13 +25,23 @@
     system: yes
     group: "{{control_center.group}}"
 
+- import_role:
+    name: confluent.ssl
+  vars:
+    truststore_storepass: "{{control_center_truststore_storepass}}"
+    truststore_path: "{{control_center_truststore_path}}"
+    keystore_path: "{{control_center_keystore_path}}"
+    keystore_storepass: "{{control_center_keystore_storepass}}"
+    keystore_keypass: "{{control_center_keystore_keypass}}"
+  when: control_center_ssl_enabled|bool or kafka_broker_listeners[control_center_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
+
 - name: Create Keytabs Directory
   file:
     path: "{{kerberos.keytab_dir}}"
     group: "{{control_center.group}}"
     mode: '650'
     recurse: yes
-  when: sasl_protocol == 'kerberos'
+  when: kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
 - name: Copy in Keytab File
   copy:
@@ -40,7 +50,7 @@
     mode: '600'
     owner: "{{control_center.user}}"
     group: "{{control_center.group}}"
-  when: sasl_protocol == 'kerberos'
+  when: kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
   notify:
     - restart control center
 
@@ -48,6 +58,24 @@
   template:
     src: control-center.properties.j2
     dest: "{{control_center.config_file}}"
+    mode: 0640
+    owner: "{{control_center.user}}"
+    group: "{{control_center.group}}"
+  notify:
+    - restart control center
+
+- name: Create Logs Directory
+  file:
+    path: "{{control_center.appender_log_path}}"
+    group: "{{control_center.group}}"
+    owner: "{{control_center.user}}"
+    mode: '764'
+    recurse: yes
+
+- name: Create Control Center log4j Config
+  template:
+    src: control-center_log4j.properties.j2
+    dest: "{{control_center.log4j_file}}"
     mode: 0640
     owner: "{{control_center.user}}"
     group: "{{control_center.group}}"

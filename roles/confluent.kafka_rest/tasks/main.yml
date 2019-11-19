@@ -25,13 +25,23 @@
     system: yes
     group: "{{kafka_rest.group}}"
 
+- import_role:
+    name: confluent.ssl
+  vars:
+    truststore_storepass: "{{kafka_rest_truststore_storepass}}"
+    truststore_path: "{{kafka_rest_truststore_path}}"
+    keystore_path: "{{kafka_rest_keystore_path}}"
+    keystore_storepass: "{{kafka_rest_keystore_storepass}}"
+    keystore_keypass: "{{kafka_rest_keystore_keypass}}"
+  when: kafka_rest_ssl_enabled|bool or kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
+
 - name: Create Keytabs Directory
   file:
     path: "{{kerberos.keytab_dir}}"
     group: "{{kafka_rest.group}}"
     mode: '650'
     recurse: yes
-  when: sasl_protocol == 'kerberos'
+  when: kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
 - name: Copy in Keytab File
   copy:
@@ -40,7 +50,7 @@
     mode: '600'
     owner: "{{kafka_rest.user}}"
     group: "{{kafka_rest.group}}"
-  when: sasl_protocol == 'kerberos'
+  when: kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
   notify:
     - restart kafka-rest
 
@@ -48,6 +58,24 @@
   template:
     src: kafka-rest.properties.j2
     dest: "{{kafka_rest.config_file}}"
+    mode: 0640
+    owner: "{{kafka_rest.user}}"
+    group: "{{kafka_rest.group}}"
+  notify:
+    - restart kafka-rest
+
+- name: Create Logs Directory
+  file:
+    path: "{{kafka_rest.appender_log_path}}"
+    owner: "{{kafka_rest.user}}"
+    group: "{{kafka_rest.group}}"
+    mode: '764'
+    recurse: yes
+
+- name: Create Kafka Rest log4j Config
+  template:
+    src: kafka-rest_log4j.properties.j2
+    dest: "{{kafka_rest.log4j_file}}"
     mode: 0640
     owner: "{{kafka_rest.user}}"
     group: "{{kafka_rest.group}}"
