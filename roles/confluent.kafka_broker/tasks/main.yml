@@ -105,13 +105,24 @@
 
 - name: Create SCRAM Users
   shell: |
-    kafka-configs --zookeeper localhost:2181 --alter \
+    kafka-configs --zookeeper localhost:{{zookeeper_client_port}} --alter \
       --add-config 'SCRAM-SHA-256=[password={{ item.value['password'] }}]' \
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram_users|dict2items }}"
   delegate_to: "{{ groups['zookeeper'][0] }}"
   run_once: true
-  when: "'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms"
+  when: "'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms and not zookeeper_ssl_enabled|bool"
+
+- name: Create SCRAM Users (TLS Enabled)
+  shell: |
+    KAFKA_OPTS="-Dzookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty -Dzookeeper.client.secure=true -Dzookeeper.ssl.keyStore.location={{kafka_broker_keystore_path}} -Dzookeeper.ssl.trustStore.location={{kafka_broker_truststore_path}} -Dzookeeper.ssl.keyStore.password={{kafka_broker_keystore_storepass}} -Dzookeeper.ssl.trustStore.password={{kafka_broker_truststore_storepass}}" \
+    kafka-configs --zookeeper {{inventory_hostname}}:{{zookeeper_client_port}} --alter \
+      --add-config 'SCRAM-SHA-256=[password={{ item.value['password'] }}]' \
+      --entity-type users --entity-name {{ item.value['principal'] }}
+  loop: "{{ sasl_scram_users|dict2items }}"
+  delegate_to: "{{ groups['zookeeper'][0] }}"
+  run_once: true
+  when: "'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms and zookeeper_ssl_enabled|bool"
 
 - name: Deploy JMX Exporter Config File
   copy:
