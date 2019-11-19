@@ -30,7 +30,6 @@ class FilterModule(object):
         return kafka_protocol
 
     def kafka_protocol_defaults(self, listener, default_ssl_enabled, default_sasl_protocol):
-        print listener
         ssl_enabled = listener.get('ssl_enabled', default_ssl_enabled)
         sasl_protocol = listener.get('sasl_protocol', default_sasl_protocol)
         sasl_protocol_normalized = self.normalize_sasl_protocol(sasl_protocol)
@@ -40,7 +39,6 @@ class FilterModule(object):
     def get_sasl_mechanisms(self, listeners_dict, default_sasl_protocol):
         mechanisms = []
         for listener in listeners_dict:
-            #sasl_protocol = listeners_dict[listener]['sasl_protocol']
             sasl_protocol = listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)
             mechanisms = mechanisms + [self.normalize_sasl_protocol(sasl_protocol)]
         return mechanisms
@@ -48,7 +46,6 @@ class FilterModule(object):
     def ssl_required(self, listeners_dict, default_ssl_enabled):
         ssl_required = False
         for listener in listeners_dict:
-            # ssl_enabled = listeners_dict[listener]['ssl_enabled']
             ssl_enabled = listeners_dict[listener].get('ssl_enabled', default_ssl_enabled)
             ssl_required = ssl_required or ssl_enabled
         return ssl_required
