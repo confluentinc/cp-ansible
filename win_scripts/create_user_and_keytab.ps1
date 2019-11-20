@@ -31,6 +31,7 @@ New-ADUser `
 
 # Generate KeyTab
 $keytabFile = $keytab_dir + "\" + $user_name + ".keytab"
+
 Write-Host "Generating keytab $keytabFile with $upn"
 ktpass `
     /out $keytabFile `
@@ -46,7 +47,13 @@ $identity = "CN=" + $user_name + "," + $ldap_root
 Write-Host "Enabling user account for $identity"
 Enable-ADAccount -Identity:$identity
 
-if ([string]::IsNullOrEmpty($extra_spn)) {
+Write-Host "Adding extra spn"
+if (![string]::IsNullOrEmpty($extra_spn)) {
     # Add extraSPN
+    Write-Host "Adding extra spn $extra_spn"
     setspn -S $extra_spn $user_name
+} else {
+    Write-Host "Not adding extra spn because it is null or empty: $extra_spn"
 }
+
+
