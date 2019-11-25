@@ -1,16 +1,30 @@
-- include_tasks: ubuntu_jvm.yml
-  when:
-    - install_java|bool
-    - ansible_distribution == "Ubuntu"
-
-- include_tasks: debian_jvm.yml
-  when: ansible_distribution == 'Debian'
-
-- name: Add Confluent apt key
+---
+- name: Add Confluent Apt Key
   apt_key:
     url: "{{confluent_common_repository_debian_key_url}}"
     state: present
-- name: Add Confluent apt repo
+  when: not custom_apt_repo|bool
+
+- name: Add Confluent Apt Repo
   apt_repository:
     repo: "{{confluent_common_repository_debian_repository}}"
     state: present
+  when: not custom_apt_repo|bool
+
+- name: Add Custom Apt Repo
+  copy:
+    src: "{{custom_apt_repo_filepath}}"
+    dest: /etc/apt/sources.list.d/custom_confluent.list
+  when: custom_apt_repo|bool
+  notify:
+    - apt-get update
+
+- meta: flush_handlers
+
+- import_tasks: ubuntu_jvm.yml
+  when:
+    - ansible_distribution == "Ubuntu"
+    - install_java|bool
+
+- import_tasks: debian_jvm.yml
+  when: ansible_distribution == "Debian"
