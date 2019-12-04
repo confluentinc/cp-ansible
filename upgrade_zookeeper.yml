@@ -1,0 +1,219 @@
+- name: Zookeeper Upgrade - Prep
+  hosts: zookeeper
+  # Running serial=1 because add_host has problems
+  # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
+  serial: 1
+  tags:
+    - prep
+  tasks:
+    - import_role:
+        name: confluent.variables_handlers
+
+    - name: Zookeeper is Running
+      systemd:
+        name: "{{zookeeper_service_name}}"
+        state: started
+
+    - name: Wait for Zookeeper Status
+      shell: echo srvr | nc localhost 2181
+      register: srvr
+      until: srvr.rc == 0
+      retries: 30
+      delay: 5
+
+    - name: Wait for Zookeeper Quorum
+      shell: echo srvr | nc localhost 2181
+      register: srvr
+      until: '"Latency min/avg/max:" in srvr.stdout'
+      retries: 30
+      delay: 5
+
+    - name: Get Package Facts - RedHat
+      package_facts:
+        manager: auto
+      when: ansible_os_family == "RedHat"
+
+    - name: Set Current Package Version - RedHat
+      set_fact:
+        zookeeper_current_version: "{{ ansible_facts.packages['confluent-server'][0]['version'] }}"
+      when: ansible_os_family == "RedHat" and confluent_server_enabled|bool
+
+    - name: Set Current Package Version - RedHat
+      set_fact:
+        zookeeper_current_version: "{{ ansible_facts.packages['confluent-kafka-2.12'][0]['version'] }}"
+      when: ansible_os_family == "RedHat" and not confluent_server_enabled|bool
+
+    - name: Get Package Facts - Debian
+      # Bug in ansible 2.8 with apt package manager and package_facts module
+      # https://github.com/ansible/ansible/pull/56008
+      # when above pull fixed, shouldn't need Debain v RedHat logic
+      shell: "apt list {{zookeeper_main_package}} -a | grep installed | cut -d ' ' -f2 | cut -d '-' -f1"
+      register: zookeeper_package_query
+      when: ansible_os_family == "Debian"
+
+    - name: Set Current Package Version - Debian
+      set_fact:
+        zookeeper_current_version: "{{ zookeeper_package_query.stdout }}"
+      when: ansible_os_family == "Debian"
+
+    - debug:
+        msg: "Current version: {{zookeeper_current_version}}   Upgrade to version: {{confluent_package_version}}"
+
+    - name: Get Leader/Follower
+      shell: echo srvr | nc localhost 2181 | grep Mode
+      register: leader_query
+
+    - name: Add host to Follower Group
+      add_host:
+        name: "{{ inventory_hostname }}"
+        group: upgrade_zookeeper_followers
+      delegate_to: localhost
+      when:
+        - '"follower" in leader_query.stdout'
+        - zookeeper_current_version != confluent_package_version
+
+    - name: Add host to Leader Group
+      add_host:
+        name: "{{ inventory_hostname }}"
+        group: upgrade_zookeeper_leader
+      delegate_to: localhost
+      when:
+        - '"leader" in leader_query.stdout'
+        - zookeeper_current_version != confluent_package_version
+
+    - debug:
+        msg: "Leader: {{inventory_hostname}}"
+      when: '"leader" in leader_query.stdout'
+
+- name: Zookeeper Upgrade
+  # Putting leader group last here with serial=1 so the leader runs last
+  hosts: upgrade_zookeeper_followers,upgrade_zookeeper_leader
+  serial: 1
+  tags:
+    - upgrade
+  tasks:
+    - import_role:
+        name: confluent.variables_handlers
+
+    - name: Create Backup Directory
+      file:
+        path: "/tmp/upgrade/{{ zookeeper_service_name }}"
+        state: directory
+        mode: 0640
+
+    - set_fact:
+        timestamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+
+    - name: Backup Configuration files
+      copy:
+        src: "{{ item }}"
+        remote_src: yes
+        dest: "/tmp/upgrade/{{ zookeeper_service_name }}/{{ item | basename }}-{{timestamp}}"
+      loop:
+        - "{{ zookeeper.config_file }}"
+        - "{{ zookeeper.systemd_override }}"
+        - "{{ kafka_broker.config_file }}"
+        - "{{ kafka_broker.systemd_override }}"
+
+    - name: Stop Service
+      systemd:
+        name: "{{ zookeeper_service_name }}"
+        state: stopped
+
+    - name: Wait for Zookeeper Status on Another Zookeeper Node
+      shell: echo srvr | nc localhost 2181
+      register: srvr
+      until: srvr.rc == 0
+      retries: 30
+      delay: 5
+      delegate_to: "{{ groups['zookeeper'] | difference([inventory_hostname]) | first }}"
+
+    - name: Wait for Zookeeper Quorum on Another Zookeeper Node
+      shell: echo srvr | nc localhost 2181
+      register: srvr
+      until: '"Latency min/avg/max:" in srvr.stdout'
+      retries: 30
+      delay: 5
+      delegate_to: "{{ groups['zookeeper'] | difference([inventory_hostname]) | first }}"
+
+    - name: Configure Repositories
+      import_role:
+        name: confluent.common
+      vars:
+        install_java: false
+
+    - name: Install the Packages - Red Hat
+      yum:
+        name: "{{item}}{{confluent_package_redhat_suffix}}"
+        state: latest
+      loop: "{{ zookeeper_packages }}"
+      when: ansible_os_family == "RedHat"
+
+    - name: Install the Packages - Debian
+      apt:
+        name: "{{item}}{{confluent_package_debian_suffix}}"
+        update_cache: yes
+      loop: "{{ zookeeper_packages }}"
+      when: ansible_os_family == "Debian"
+
+    - name: Put back configuration
+      copy:
+        dest: "{{ item }}"
+        remote_src: yes
+        src: "/tmp/upgrade/{{ zookeeper_service_name }}/{{ item | basename }}-{{timestamp}}"
+      loop:
+        - "{{ zookeeper.config_file }}"
+        - "{{ kafka_broker.config_file }}"
+
+    - name: Add Trust Empty Snapshot Property
+      lineinfile:
+        name: "{{zookeeper.config_file}}"
+        line: snapshot.trust.empty=true
+        regexp: snapshot.trust.empty=.*
+
+    - name: reload systemd
+      command: systemctl daemon-reload
+
+    - name: Restart Service
+      systemd:
+        name: "{{ zookeeper_service_name }}"
+        state: restarted
+
+    - name: Wait for Zookeeper Status
+      shell: echo srvr | nc localhost 2181
+      register: srvr
+      until: srvr.rc == 0
+      retries: 30
+      delay: 5
+
+    - name: Wait for Zookeeper Quorum
+      shell: echo srvr | nc localhost 2181
+      register: srvr
+      until: '"Latency min/avg/max:" in srvr.stdout'
+      retries: 30
+      delay: 5
+
+    - name: Remove Trust Empty Snapshot Property
+      lineinfile:
+        name: "{{zookeeper.config_file}}"
+        regexp: snapshot.trust.empty=.*
+        state: absent
+
+    - name: Restart Service
+      systemd:
+        name: "{{ zookeeper_service_name }}"
+        state: restarted
+
+    - name: Wait for Zookeeper Status
+      shell: echo srvr | nc localhost 2181
+      register: srvr
+      until: srvr.rc == 0
+      retries: 30
+      delay: 5
+
+    - name: Wait for Zookeeper Quorum
+      shell: echo srvr | nc localhost 2181
+      register: srvr
+      until: '"Latency min/avg/max:" in srvr.stdout'
+      retries: 30
+      delay: 5

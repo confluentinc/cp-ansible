@@ -1,0 +1,172 @@
+- name: Kafka Broker Upgrade - Config Prep
+  hosts: kafka_broker
+  gather_facts: no
+  serial: 1
+  vars:
+    kafka_broker_upgrade_start_version: "5.3"
+  tasks:
+    - import_role:
+        name: confluent.variables_handlers
+
+    - name: Kafka is Running
+      systemd:
+        name: "{{kafka_broker_service_name}}"
+        state: started
+
+    - set_fact:
+        inter_broker_protocol_version: 2.3
+        log_message_format_version: 2.3
+      when: kafka_broker_upgrade_start_version is match('5.3.*')
+
+    - set_fact:
+        inter_broker_protocol_version: 2.4
+        log_message_format_version: 2.4
+      when: kafka_broker_upgrade_start_version is match('5.4.*')
+
+    - name: Set Inter-Broker Protocol Version to Current Version
+      lineinfile:
+        name: "{{kafka_broker.config_file}}"
+        line: "inter.broker.protocol.version={{inter_broker_protocol_version}}"
+        regexp: inter.broker.protocol.version.*
+        state: present
+
+    - name: Set Log Message Format Version to Current Version
+      lineinfile:
+        name: "{{kafka_broker.config_file}}"
+        line: "log.message.format.version={{log_message_format_version}}"
+        regexp: log.message.format.version.*
+        state: present
+
+    - name: Make sure Controlled Shutdown Property is not set to False
+      lineinfile:
+        name: "{{kafka_broker.config_file}}"
+        # Default value for controlled.shutdown.enable is true
+        # Removing the line and restarting the service will set property to true
+        line: controlled.shutdown.enable=false
+        state: absent
+      notify:
+        - Restart Kafka
+        - Wait for URP
+
+- name: Kafka Broker Upgrade - Host Ordering
+  hosts: kafka_broker
+  # Running serial=1 because add_host has problems
+  # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
+  serial: 1
+  tasks:
+    - import_role:
+        name: confluent.variables_handlers
+
+    - name: Get Package Facts - RedHat
+      package_facts:
+        manager: auto
+      when: ansible_os_family == "RedHat"
+
+    - name: Set Current Package Version - RedHat
+      set_fact:
+        kafka_broker_current_version: "{{ ansible_facts.packages['confluent-server'][0]['version'] }}"
+      when: ansible_os_family == "RedHat" and confluent_server_enabled|bool
+
+    - name: Set Current Package Version - RedHat
+      set_fact:
+        kafka_broker_current_version: "{{ ansible_facts.packages['confluent-kafka-2.12'][0]['version'] }}"
+      when: ansible_os_family == "RedHat" and not confluent_server_enabled|bool
+
+    - name: Get Package Facts - Debian
+      # Bug in ansible 2.8 with apt package manager and package_facts module
+      # https://github.com/ansible/ansible/pull/56008
+      # when above pull fixed, shouldn't need Debain v RedHat logic
+      shell: "apt list {{kafka_broker_main_package}} -a | grep installed | cut -d ' ' -f2 | cut -d '-' -f1"
+      register: kafka_broker_package_query
+      when: ansible_os_family == "Debian"
+
+    - name: Set Current Package Version - Debian
+      set_fact:
+        kafka_broker_current_version: "{{ kafka_broker_package_query.stdout }}"
+      when: ansible_os_family == "Debian"
+
+    - debug:
+        msg: "Current version: {{kafka_broker_current_version}}   Upgrade to version: {{confluent_package_version}}"
+
+    - name: Get ActiveControllerCount
+      uri:
+        url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ActiveControllerCount"
+        return_content: yes
+        status_code: 200
+      register: active_controller_count_query
+
+    - set_fact:
+        active_controller_count: "{{ active_controller_count_query['json']['value']['Value'] }}"
+
+    - debug:
+        msg: "Active Controller: {{inventory_hostname}}"
+      when: active_controller_count|int == 1
+
+    - name: Add host to Non Controller Group
+      add_host:
+        name: "{{ inventory_hostname }}"
+        group: upgrade_non_controllers
+      delegate_to: localhost
+      when: active_controller_count|int == 0 and kafka_broker_current_version != confluent_package_version
+
+    - name: Add host to Controller Group
+      add_host:
+        name: "{{ inventory_hostname }}"
+        group: upgrade_controller
+      delegate_to: localhost
+      when: active_controller_count|int == 1 and kafka_broker_current_version != confluent_package_version
+
+- name: Kafka Broker Upgrade
+  # Putting controller group last here with serial=1 has the controller as the last host to run
+  hosts: upgrade_non_controllers,upgrade_controller
+  serial: 1
+  tags:
+    - upgrade
+  tasks:
+    - import_role:
+        name: confluent.variables_handlers
+
+    - name: Upgrade Kafka Broker
+      include_tasks: tasks/upgrade_component.yml
+      vars:
+        service_name: "{{ kafka_broker_service_name }}"
+        packages: "{{ kafka_broker_packages }}"
+        backup_files:
+          - "{{ kafka_broker.config_file }}"
+          - "{{ kafka_broker.systemd_override }}"
+          - "{{ zookeeper.config_file }}"
+          - "{{ zookeeper.systemd_override }}"
+        restore_files:
+          - "{{ kafka_broker.config_file }}"
+          - "{{ zookeeper.config_file }}"
+
+    - name: Wait for Under Replicated Partitions on Broker
+      import_tasks: tasks/wait_for_urp.yml
+
+
+#  probably put in own file
+- name: Kafka Broker Upgrade - Set Inter-Broker Protocol to Current Version
+  hosts: kafka_broker
+  gather_facts: no
+  serial: 1
+  tags:
+    - inter_broker_protocol_version
+  vars:
+    upgrade_to_version: 5.3
+  tasks:
+    - import_role:
+        name: confluent.variables_handlers
+
+    - set_fact:
+        inter_broker_protocol_version: 2.3
+      when: upgrade_to_version == 5.3
+
+    - name: Set Inter-Broker Protocol Version to Current Version
+      lineinfile:
+        name: "{{kafka_broker.config_file}}"
+        line: "inter.broker.protocol.version={{inter_broker_protocol_version}}"
+        regexp: inter.broker.protocol.version.*
+        state: present
+      notify:
+        - Restart Kafka
+        - Wait for URP
