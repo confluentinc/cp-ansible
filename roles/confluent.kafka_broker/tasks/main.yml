@@ -1,14 +1,15 @@
+---
 # Install Packages
 - name: Install the Kafka Broker Packages
   yum:
-    name: "{{item}}-{{confluent.package_version}}"
+    name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{kafka_broker_packages}}"
   when: ansible_os_family == "RedHat"
 
 - name: Install the Kafka Broker Packages
   apt:
-    name: "{{item}}={{confluent.package_version}}"
+    name: "{{item}}{{confluent_package_debian_suffix}}"
     update_cache: yes
   loop: "{{kafka_broker_packages}}"
   when: ansible_os_family == "Debian"
@@ -24,6 +25,16 @@
     comment: "Kafka User"
     system: yes
     group: "{{kafka_broker.group}}"
+
+- import_role:
+    name: confluent.ssl
+  vars:
+    truststore_storepass: "{{kafka_broker_truststore_storepass}}"
+    truststore_path: "{{kafka_broker_truststore_path}}"
+    keystore_path: "{{kafka_broker_keystore_path}}"
+    keystore_storepass: "{{kafka_broker_keystore_storepass}}"
+    keystore_keypass: "{{kafka_broker_keystore_keypass}}"
+  when: kafka_broker_listeners | ssl_required(ssl_enabled)
 
 - name: Create Keytabs Directory
   file:
@@ -42,7 +53,7 @@
     group: "{{kafka_broker.group}}"
   when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
   notify:
-    - restart kafka
+    - Restart Kafka
 
 - name: Create Kafka Broker Data Directories
   file:
@@ -61,7 +72,7 @@
     owner: "{{kafka_broker.user}}"
     group: "{{kafka_broker.group}}"
   notify:
-    - restart kafka
+    - Restart Kafka
 
 - name: Create Logs Directory
   file:
@@ -70,7 +81,7 @@
     owner: "{{kafka_broker.user}}"
     mode: '764'
     recurse: yes
-  
+
 - name: Create Kafka Broker log4j Config
   template:
     src: kafka_server_log4j.properties.j2
@@ -79,18 +90,18 @@
     owner: "{{kafka_broker.user}}"
     group: "{{kafka_broker.group}}"
   notify:
-    - restart kafka
+    - Restart Kafka
 
 - name: Create Kafka Broker Jaas Config
   template:
     src: kafka_server_jaas.conf.j2
-    dest: "{{kafka_broker_jaas_file}}"
+    dest: "{{kafka_broker.jaas_file}}"
     mode: 0640
     owner: "{{kafka_broker.user}}"
     group: "{{kafka_broker.group}}"
   when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
   notify:
-    - restart kafka
+    - Restart Kafka
 
 - name: Create SCRAM Users
   shell: |
@@ -110,7 +121,7 @@
 
 - name: Create Service Override Directory
   file:
-    path: "{{kafka_broker.systemd_override}}"
+    path: "{{kafka_broker.systemd_override | dirname }}"
     owner: "{{kafka_broker.user}}"
     group: "{{kafka_broker.group}}"
     state: directory
@@ -119,13 +130,13 @@
 - name: Write Service Overrides
   template:
     src: override.conf.j2
-    dest: "{{kafka_broker.systemd_override}}/override.conf"
+    dest: "{{ kafka_broker.systemd_override }}"
     mode: 0640
     owner: "{{kafka_broker.user}}"
     group: "{{kafka_broker.group}}"
   notify:
     - reload systemd
-    - restart kafka
+    - Restart Kafka
 
 - name: Tune virtual memory settings
   lineinfile:
@@ -138,13 +149,13 @@
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
-  notify: restart kafka
+  notify: Restart Kafka
   when: certs_updated|bool
 
 - meta: flush_handlers
 
 - name: Start Kafka Broker Service
   systemd:
-    name: "{{kafka_broker.service_name}}"
-    enabled: "{{kafka_broker.systemd.enabled}}"
-    state: "{{kafka_broker.systemd.state}}"
+    name: "{{kafka_broker_service_name}}"
+    enabled: yes
+    state: started

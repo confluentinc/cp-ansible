@@ -1,0 +1,65 @@
+- name: KSQL Upgrade
+  hosts: ksql
+  serial: 1
+  tasks:
+    - import_role:
+        name: confluent.variables_handlers
+
+    - name: Get Package Facts - RedHat
+      package_facts:
+        manager: auto
+      when: ansible_os_family == "RedHat"
+
+    - name: Set Current Package Version - RedHat
+      set_fact:
+        ksql_current_version: "{{ ansible_facts.packages['confluent-ksql'][0]['version'] }}"
+      when: ansible_os_family == "RedHat"
+
+    - name: Get Package Facts - Debian
+      # Bug in ansible 2.8 with apt package manager and package_facts module
+      # https://github.com/ansible/ansible/pull/56008
+      # when above pull fixed, shouldn't need Debain v RedHat logic
+      shell: apt list confluent-ksql -a | grep installed | cut -d ' ' -f2 | cut -d '-' -f1
+      register: ksql_package_query
+      when: ansible_os_family == "Debian"
+
+    - name: Set Current Package Version - Debian
+      set_fact:
+        ksql_current_version: "{{ ksql_package_query.stdout }}"
+      when: ansible_os_family == "Debian"
+
+    - debug:
+        msg: "Current version: {{ksql_current_version}}   Upgrade to version: {{confluent_package_version}}"
+
+    - name: Upgrade Kafka Connect
+      include_tasks: tasks/upgrade_component.yml
+      vars:
+        service_name: "{{ ksql_service_name }}"
+        packages: "{{ ksql_packages }}"
+        backup_files:
+          - "{{ ksql.config_file }}"
+          - "{{ ksql.systemd_override }}"
+        restore_files:
+          - "{{ ksql.config_file }}"
+      when: ksql_current_version != confluent_package_version
+
+    - name: Wait for API to return 200 - HTTP
+      uri:
+        url: "http://localhost:{{ksql_listener_port}}/info"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 60
+      delay: 5
+      when: not ksql_ssl_enabled|bool
+
+    - name: Wait for API to return 200 - HTTPS
+      uri:
+        url: "https://localhost:{{ksql_listener_port}}/info"
+        status_code: 200
+        validate_certs: no
+      register: result
+      until: result.status == 200
+      retries: 60
+      delay: 5
+      when: ksql_ssl_enabled|bool

@@ -1,14 +1,14 @@
 # Install Packages
 - name: Install the KSQL Packages
   yum:
-    name: "{{item}}-{{confluent.package_version}}"
+    name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{ksql_packages}}"
   when: ansible_os_family == "RedHat"
 
 - name: Install the KSQL Packages
   apt:
-    name: "{{item}}={{confluent.package_version}}"
+    name: "{{item}}{{confluent_package_debian_suffix}}"
     update_cache: yes
   loop: "{{ksql_packages}}"
   when: ansible_os_family == "Debian"
@@ -25,13 +25,23 @@
     system: yes
     group: "{{ksql.group}}"
 
+- import_role:
+    name: confluent.ssl
+  vars:
+    truststore_storepass: "{{ksql_truststore_storepass}}"
+    truststore_path: "{{ksql_truststore_path}}"
+    keystore_path: "{{ksql_keystore_path}}"
+    keystore_storepass: "{{ksql_keystore_storepass}}"
+    keystore_keypass: "{{ksql_keystore_keypass}}"
+  when: ksql_ssl_enabled|bool or kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
+
 - name: Create Keytabs Directory
   file:
     path: "{{kerberos.keytab_dir}}"
     group: "{{ksql.group}}"
     mode: '650'
     recurse: yes
-  when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | normalize_sasl_protocol == 'GSSAPI'
+  when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
 - name: Copy in Keytab File
   copy:
@@ -40,13 +50,13 @@
     mode: '600'
     owner: "{{ksql.user}}"
     group: "{{ksql.group}}"
-  when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | normalize_sasl_protocol == 'GSSAPI'
+  when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
   notify:
     - restart ksql
 
 - name: Change streams directory ownership
   file:
-    path: "{{ksql.streamsDataDir}}"
+    path: "{{ksql_streams_state_dir}}"
     owner: "{{ksql.user}}"
     group: "{{ksql.group}}"
     state: directory
@@ -83,17 +93,17 @@
 - name: Ksql Jaas Config
   template:
     src: ksql-server_jaas.conf.j2
-    dest: "{{ksql_jaas_file}}"
+    dest: "{{ksql.jaas_file}}"
     mode: 0640
     owner: "{{ksql.user}}"
     group: "{{ksql.group}}"
-  when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | normalize_sasl_protocol == 'GSSAPI'
+  when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
   notify:
     - restart ksql
 
 - name: Create Service Override Directory
   file:
-    path: "{{ksql.systemd_override}}"
+    path: "{{ksql.systemd_override | dirname}}"
     owner: "{{ksql.user}}"
     group: "{{ksql.group}}"
     state: directory
@@ -102,7 +112,7 @@
 - name: Write Service Overrides
   template:
     src: override.conf.j2
-    dest: "{{ksql.systemd_override}}/override.conf"
+    dest: "{{ksql.systemd_override}}"
     mode: 0640
     owner: "{{ksql.user}}"
     group: "{{ksql.group}}"
@@ -119,6 +129,6 @@
 
 - name: Start Ksql Service
   systemd:
-    name: "{{ksql.service_name}}"
-    enabled: "{{ksql.systemd.enabled}}"
-    state: "{{ksql.systemd.state}}"
+    name: "{{ksql_service_name}}"
+    enabled: yes
+    state: started
