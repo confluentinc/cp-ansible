@@ -165,11 +165,32 @@
         - "{{ zookeeper.config_file }}"
         - "{{ kafka_broker.config_file }}"
 
-    - name: Add Trust Empty Snapshot Property
+    - name: Search for existing snapshot files
+      find:
+        paths: "{{zookeeper_data_dir}}/version-2"
+        patterns: "snapshot.*"
+      register: snapshot_files
+
+    - name: Download empty snapshot file
+      get_url:
+        url: "{{zookeeper_upgrade_empty_snapshot_url}}"
+        dest: "{{zookeeper_data_dir}}/version-2/snapshot.0"
+        owner: "{{zookeeper.user}}"
+        group: "{{zookeeper.group}}"
+        mode: 0644
+      when: "snapshot_files.files | length == 0"
+
+    - name: Add Disable Admin Server Property
       lineinfile:
         name: "{{zookeeper.config_file}}"
-        line: snapshot.trust.empty=true
-        regexp: snapshot.trust.empty=.*
+        line: admin.enableServer=false
+        regexp: admin.enableServer=.*
+
+    # - name: Add Trust Empty Snapshot Property
+    #   lineinfile:
+    #     name: "{{zookeeper.config_file}}"
+    #     line: snapshot.trust.empty=true
+    #     regexp: snapshot.trust.empty=.*
 
     - name: reload systemd
       command: systemctl daemon-reload
@@ -193,27 +214,27 @@
       retries: 30
       delay: 5
 
-    - name: Remove Trust Empty Snapshot Property
-      lineinfile:
-        name: "{{zookeeper.config_file}}"
-        regexp: snapshot.trust.empty=.*
-        state: absent
-
-    - name: Restart Service
-      systemd:
-        name: "{{ zookeeper_service_name }}"
-        state: restarted
-
-    - name: Wait for Zookeeper Status
-      shell: echo srvr | nc localhost 2181
-      register: srvr
-      until: srvr.rc == 0
-      retries: 30
-      delay: 5
-
-    - name: Wait for Zookeeper Quorum
-      shell: echo srvr | nc localhost 2181
-      register: srvr
-      until: '"Latency min/avg/max:" in srvr.stdout'
-      retries: 30
-      delay: 5
+    # - name: Remove Trust Empty Snapshot Property
+    #   lineinfile:
+    #     name: "{{zookeeper.config_file}}"
+    #     regexp: snapshot.trust.empty=.*
+    #     state: absent
+    #
+    # - name: Restart Service
+    #   systemd:
+    #     name: "{{ zookeeper_service_name }}"
+    #     state: restarted
+    #
+    # - name: Wait for Zookeeper Status
+    #   shell: echo srvr | nc localhost 2181
+    #   register: srvr
+    #   until: srvr.rc == 0
+    #   retries: 30
+    #   delay: 5
+    #
+    # - name: Wait for Zookeeper Quorum
+    #   shell: echo srvr | nc localhost 2181
+    #   register: srvr
+    #   until: '"Latency min/avg/max:" in srvr.stdout'
+    #   retries: 30
+    #   delay: 5
