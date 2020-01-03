@@ -1,0 +1,63 @@
+- name: Control Center Upgrade
+  hosts: control_center
+  serial: 1
+  tasks:
+    - import_role:
+        name: confluent.variables_handlers
+
+    - name: Get Package Facts - RedHat
+      package_facts:
+        manager: auto
+      when: ansible_os_family == "RedHat"
+
+    - name: Set Current Package Version - RedHat
+      set_fact:
+        control_center_current_version: "{{ ansible_facts.packages['confluent-control-center'][0]['version'] }}"
+      when: ansible_os_family == "RedHat"
+
+    - name: Get Package Facts - Debian
+      # Bug in ansible 2.8 with apt package manager and package_facts module
+      # https://github.com/ansible/ansible/pull/56008
+      # when above pull fixed, shouldn't need Debain v RedHat logic
+      shell: apt list confluent-control-center -a | grep installed | cut -d ' ' -f2 | cut -d '-' -f1
+      register: control_center_package_query
+      when: ansible_os_family == "Debian"
+
+    - name: Set Current Package Version - Debian
+      set_fact:
+        control_center_current_version: "{{ control_center_package_query.stdout }}"
+      when: ansible_os_family == "Debian"
+
+    - debug:
+        msg: "Current version: {{control_center_current_version}}   Upgrade to version: {{confluent_package_version}}"
+
+    - name: Upgrade Control Center
+      include_tasks: tasks/upgrade_component.yml
+      vars:
+        service_name: "{{ control_center_service_name }}"
+        packages: "{{ control_center_packages }}"
+        backup_files:
+          - "{{ control_center.config_file }}"
+          - "{{ control_center.systemd_override }}"
+        restore_files:
+          - "{{ control_center.config_file }}"
+      when: control_center_current_version != confluent_package_version
+
+    - name: Wait for webpage to serve HTTP content
+      uri:
+        url: "http://localhost:{{control_center_listenter_port}}"
+      register: result
+      until: result.status == 200
+      retries: 60
+      delay: 5
+      when: not ssl_enabled|bool
+
+    - name: Wait for webpage to serve HTTPS content
+      uri:
+        url: "https://localhost:{{control_center_listenter_port}}"
+        validate_certs: no
+      register: result
+      until: result.status == 200
+      retries: 60
+      delay: 5
+      when: ssl_enabled|bool
