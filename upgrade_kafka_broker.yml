@@ -8,6 +8,19 @@
     - import_role:
         name: confluent.variables_handlers
 
+    - name: Get Package Facts
+      package_facts:
+        manager: auto
+      # when: ansible_os_family == "RedHat"
+
+    - set_fact:
+        confluent_server_enabled: true
+      when: ansible_facts.packages['confluent-server'] is defined
+
+    - set_fact:
+        confluent_server_enabled: false
+      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
+
     - name: Kafka is Running
       systemd:
         name: "{{kafka_broker_service_name}}"
@@ -101,7 +114,7 @@
     #   when: ansible_os_family == "Debian"
 
     - debug:
-        msg: "Current version: {{kafka_broker_current_version}}   Upgrade to version: {{confluent_package_version}}"
+        msg: "Current version: {{kafka_broker_current_version}}   Upgrade to version: {{confluent_full_package_version}}"
 
     - name: Get ActiveControllerCount
       uri:
@@ -122,14 +135,14 @@
         name: "{{ inventory_hostname }}"
         group: upgrade_non_controllers
       delegate_to: localhost
-      when: active_controller_count|int == 0 and kafka_broker_current_version != confluent_package_version
+      when: active_controller_count|int == 0 and kafka_broker_current_version != confluent_full_package_version
 
     - name: Add host to Controller Group
       add_host:
         name: "{{ inventory_hostname }}"
         group: upgrade_controller
       delegate_to: localhost
-      when: active_controller_count|int == 1 and kafka_broker_current_version != confluent_package_version
+      when: active_controller_count|int == 1 and kafka_broker_current_version != confluent_full_package_version
 
 - name: Kafka Broker Upgrade
   # Putting controller group last here with serial=1 has the controller as the last host to run
