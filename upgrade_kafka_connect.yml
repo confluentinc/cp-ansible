@@ -5,29 +5,22 @@
     - import_role:
         name: confluent.variables_handlers
 
-    - name: Get Package Facts - RedHat
+    - name: Get Package Facts
       package_facts:
         manager: auto
-      when: ansible_os_family == "RedHat"
 
-    - name: Set Current Package Version - RedHat
+    - set_fact:
+        confluent_server_enabled: true
+      when: ansible_facts.packages['confluent-server'] is defined
+
+    - set_fact:
+        confluent_server_enabled: false
+      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
+
+    - name: Set Current Package Version
       set_fact:
         # Choosing last package in kafka_connect_packages in case upgrade fails in middle of package installing
         kafka_connect_current_version: "{{ ansible_facts.packages['confluent-kafka-connect-replicator'][0]['version'] }}"
-      when: ansible_os_family == "RedHat"
-
-    - name: Get Package Facts - Debian
-      # Bug in ansible 2.8 with apt package manager and package_facts module
-      # https://github.com/ansible/ansible/pull/56008
-      # when above pull fixed, shouldn't need Debain v RedHat logic
-      shell: apt list confluent-kafka-connect-replicator -a | grep installed | cut -d ' ' -f2 | cut -d '-' -f1
-      register: kafka_connect_package_query
-      when: ansible_os_family == "Debian"
-
-    - name: Set Current Package Version - Debian
-      set_fact:
-        kafka_connect_current_version: "{{ kafka_connect_package_query.stdout }}"
-      when: ansible_os_family == "Debian"
 
     - debug:
         msg: "Current version: {{kafka_connect_current_version}}   Upgrade to version: {{confluent_package_version}}"
@@ -42,11 +35,13 @@
           - "{{ kafka_connect.systemd_override }}"
         restore_files:
           - "{{ kafka_connect.config_file }}"
-      when: kafka_connect_current_version != confluent_package_version
+      when:
+        - kafka_connect_current_version != confluent_full_package_version
+        - kafka_connect_current_version != confluent_package_version
 
     - name: Wait for API to return 200 - HTTP
       uri:
-        url: "http://localhost:{{kafka_connect_rest_port}}/connectors"        
+        url: "http://localhost:{{kafka_connect_rest_port}}/connectors"
         status_code: 200
       register: result
       until: result.status == 200
