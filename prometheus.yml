@@ -1,0 +1,31 @@
+---
+- hosts: kafka3.ivan.confluent.nerdynick.net
+  tags:
+    - prometheus
+  vars:
+    kafka_broker_jmxexporter_port: 8080
+    zookeeper_jmxexporter_port: 8080
+    prometheus_scrape_configs:
+      - job_name: "prometheus"
+        scrape_interval: 5s
+        metrics_path: "{{ prometheus_metrics_path }}"
+        static_configs:
+          - targets:
+              - "{{ ansible_fqdn | default(ansible_host) | default('localhost') }}:9090"
+      - job_name: "kafka"
+        metrics_path: "{{ prometheus_metrics_path }}"
+        scrape_interval: 5s
+        static_configs:
+          - targets: "[{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}'{{ host }}:{{kafka_broker_jmxexporter_port}}'{% endfor %}]"
+            labels:
+              env: 'dev'
+      - job_name: "zookeeper"
+        metrics_path: "{{ prometheus_metrics_path }}"
+        scrape_interval: 5s
+        static_configs:
+          - targets: "[{% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}'{{ host }}:{{zookeeper_jmxexporter_port}}'{% endfor %}]"
+            labels:
+              env: 'dev'
+  tasks:
+  - import_role:
+      name: cloudalchemy.prometheus
