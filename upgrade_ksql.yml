@@ -1,0 +1,60 @@
+- name: KSQL Upgrade
+  hosts: ksql
+  serial: 1
+  tasks:
+    - import_role:
+        name: confluent.variables_handlers
+
+    - name: Get Package Facts
+      package_facts:
+        manager: auto
+
+    - set_fact:
+        confluent_server_enabled: true
+      when: ansible_facts.packages['confluent-server'] is defined
+
+    - set_fact:
+        confluent_server_enabled: false
+      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
+
+    - name: Set Current Package Version
+      set_fact:
+        ksql_current_version: "{{ ansible_facts.packages['confluent-ksql'][0]['version'] }}"
+
+    - debug:
+        msg: "Current version: {{ksql_current_version}}   Upgrade to version: {{confluent_package_version}}"
+
+    - name: Upgrade Kafka Connect
+      include_tasks: tasks/upgrade_component.yml
+      vars:
+        service_name: "{{ ksql_service_name }}"
+        packages: "{{ ksql_packages }}"
+        backup_files:
+          - "{{ ksql.config_file }}"
+          - "{{ ksql.systemd_override }}"
+        restore_files:
+          - "{{ ksql.config_file }}"
+      when:
+        - ksql_current_version != confluent_full_package_version
+        - ksql_current_version != confluent_package_version
+
+    - name: Wait for API to return 200 - HTTP
+      uri:
+        url: "http://localhost:{{ksql_listener_port}}/info"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 60
+      delay: 5
+      when: not ksql_ssl_enabled|bool
+
+    - name: Wait for API to return 200 - HTTPS
+      uri:
+        url: "https://localhost:{{ksql_listener_port}}/info"
+        status_code: 200
+        validate_certs: no
+      register: result
+      until: result.status == 200
+      retries: 60
+      delay: 5
+      when: ksql_ssl_enabled|bool
