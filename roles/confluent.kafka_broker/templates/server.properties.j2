@@ -14,6 +14,52 @@ enable.fips=true
 security.providers=io.confluent.kafka.security.fips.provider.BcFipsProviderCreator,io.confluent.kafka.security.fips.provider.BcFipsJsseProviderCreator
 {% endif %}
 
+{% if rbac_mtls_3_port|bool %}
+############################# TOKEN LISTENER #############################
+listener.name.token.sasl.enabled.mechanisms=OAUTHBEARER
+listener.name.token.oauthbearer.sasl.jaas.config= \
+    org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+        publicKeyPath="{{rbac_mtls_3_port_public_pem_path}}{{rbac_mtls_public_pem_name}}";
+listener.name.token.oauthbearer.sasl.server.callback.handler.class=io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler
+listener.name.token.oauthbearer.sasl.login.callback.handler.class=io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler
+############################# Authorization Settings #############################
+authorizer.class.name=io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer
+confluent.authorizer.access.rule.providers=ZK_ACL,CONFLUENT
+confluent.authorizer.group.provider=CONFLUENT
+super.users=User:"{{ rbac_mtls_broker_admin }}"
+confluent.metadata.server.listeners=http://0.0.0.0:8090
+confluent.metadata.server.advertised.listeners={{CHANGE TO HOSTNAME VAR}}:8090
+############################# MDS Token Service Settings - enable token generation #############################
+confluent.metadata.server.token.auth.enable=true
+confluent.metadata.server.token.max.lifetime.ms=3600000
+confluent.metadata.server.token.key.path={{rbac_mtls_3_port_private_pem_path}}
+confluent.metadata.server.public.key.path={{rbac_mtls_3_port_public_pem_path}}
+confluent.metadata.server.token.signature.algorithm=RS256
+confluent.metadata.server.authentication.method=BEARER
+############################# Identity Provider Settings(LDAP - local OpenLDAP) #############################
+ldap.java.naming.factory.initial=com.sun.jndi.ldap.LdapCtxFactory
+ldap.com.sun.jndi.ldap.read.timeout=3000
+ldap.java.naming.provider.url=ldap://{{rbac_mtls_ldap_url}}:{{rbac_mtls_ldap_port}}
+# how mds authenticates to ldap server
+ldap.java.naming.security.principal=CN={{rbac_mtls_ldap_principal}},CN=Users,DC=qe,DC=confluent,DC=io
+ldap.java.naming.security.credentials={{rbac_mtls_ldap_princiapl_password}}
+ldap.java.naming.security.authentication=simple
+# ldap search mode (GROUPS is default)
+#ldap.search.mode=GROUPS
+#ldap.search.mode=USERS
+# how to search for users
+ldap.user.search.base=CN=Users,DC=qe,DC=confluent,DC=io
+# how to search for groups
+ldap.group.search.base=CN=Users,DC=qe,DC=confluent,DC=io
+# which attribute in ldap record corresponds to user name
+ldap.user.name.attribute=sAMAccountName
+ldap.user.memberof.attribute.pattern=CN=(.*),CN=Users,DC=qe,DC=confluent,DC=io
+ldap.group.object.class=group
+ldap.group.name.attribute=sAMAccountName
+ldap.group.member.attribute.pattern=CN=(.*),CN=Users,DC=qe,DC=confluent,DC=io
+confluent.security.event.logger.enabled=false
+{% endif %}
+
 listeners={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default('') }}:{{ listener['value']['port'] }}{% endfor %}
 
 listener.security.protocol.map={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | kafka_protocol_defaults(sasl_protocol, ssl_enabled)}}{% endfor %}
