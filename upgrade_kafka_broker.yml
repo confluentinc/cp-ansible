@@ -1,5 +1,17 @@
-- name: Kafka Broker Upgrade - Config Prep
+- name: Kafka Broker - Host Ordering
   hosts: kafka_broker
+  # Running serial=1 because add_host has problems
+  # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
+  serial: 1
+  tasks:
+    - name: Create Ordered Kafka Broker Groups
+      import_tasks: tasks/create_ordered_kafka_groups.yml
+      vars:
+        controller_group: controller
+        non_controller_group: non_controllers
+
+- name: Kafka Broker Upgrade - Config Prep
+  hosts: non_controllers,controller
   gather_facts: no
   serial: 1
   vars:
@@ -19,11 +31,6 @@
     - set_fact:
         confluent_server_enabled: false
       when: ansible_facts.packages['confluent-kafka-2.12'] is defined
-
-    - name: Kafka is Running
-      systemd:
-        name: "{{kafka_broker_service_name}}"
-        state: started
 
     - set_fact:
         inter_broker_protocol_version: 2.3
@@ -62,12 +69,15 @@
 
 - name: Kafka Broker Upgrade - Host Ordering
   hosts: kafka_broker
-  # Running serial=1 because add_host has problems
-  # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
   serial: 1
   tasks:
-    - import_role:
-        name: confluent.variables_handlers
+
+    # Sets active_controller_count var for each host
+    - name: Create Ordered Kafka Broker Groups
+      import_tasks: tasks/create_ordered_kafka_groups.yml
+      vars:
+        controller_group: controller
+        non_controller_group: non_controllers
 
     - name: Get Package Facts
       package_facts:
@@ -93,20 +103,6 @@
 
     - debug:
         msg: "Current version: {{kafka_broker_current_version}}   Upgrade to version: {{confluent_package_version}}"
-
-    - name: Get ActiveControllerCount
-      uri:
-        url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ActiveControllerCount"
-        return_content: yes
-        status_code: 200
-      register: active_controller_count_query
-
-    - set_fact:
-        active_controller_count: "{{ active_controller_count_query['json']['value']['Value'] }}"
-
-    - debug:
-        msg: "Active Controller: {{inventory_hostname}}"
-      when: active_controller_count|int == 1
 
     - name: Add host to Non Controller Group
       add_host:
@@ -154,8 +150,19 @@
     - name: Wait for Under Replicated Partitions on Broker
       import_tasks: tasks/wait_for_urp.yml
 
-- name: Kafka Broker Upgrade - Set Inter-Broker Protocol to Current Version
+# Kafka Restarted, need to figure out the new controller
+- name: Kafka Broker - Host Ordering
   hosts: kafka_broker
+  serial: 1
+  tasks:
+    - name: Create Ordered Kafka Broker Groups
+      import_tasks: tasks/create_ordered_kafka_groups.yml
+      vars:
+        controller_group: kafka_broker_controller
+        non_controller_group: kafka_broker_non_controllers
+
+- name: Kafka Broker Upgrade - Set Inter-Broker Protocol to Current Version
+  hosts: kafka_broker_non_controllers,kafka_broker_controller
   gather_facts: no
   serial: 1
   tags:
