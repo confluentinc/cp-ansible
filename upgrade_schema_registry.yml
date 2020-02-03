@@ -1,0 +1,62 @@
+- name: Schema Registry Upgrade
+  hosts: schema_registry
+  serial: 1
+  # there is a schema registry leader, should think about the master/follower thing
+  # look in schema reg docs
+  tasks:
+    - import_role:
+        name: confluent.variables_handlers
+
+    - name: Get Package Facts
+      package_facts:
+        manager: auto
+
+    - set_fact:
+        confluent_server_enabled: true
+      when: ansible_facts.packages['confluent-server'] is defined
+
+    - set_fact:
+        confluent_server_enabled: false
+      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
+
+    - name: Set Current Package Version
+      set_fact:
+        schema_registry_current_version: "{{ ansible_facts.packages['confluent-schema-registry'][0]['version'] }}"
+
+    - debug:
+        msg: "Current version: {{schema_registry_current_version}}   Upgrade to version: {{confluent_package_version}}"
+
+    - name: Upgrade Schema Registry
+      include_tasks: tasks/upgrade_component.yml
+      vars:
+        service_name: "{{ schema_registry_service_name }}"
+        packages: "{{ schema_registry_packages }}"
+        backup_files:
+          - "{{ schema_registry.config_file }}"
+          - "{{ schema_registry.systemd_override }}"
+        restore_files:
+          - "{{ schema_registry.config_file }}"
+      when:
+        - schema_registry_current_version != confluent_full_package_version
+        - schema_registry_current_version != confluent_package_version
+
+    - name: Wait for API to return 200 - HTTP
+      uri:
+        url: "http://localhost:{{schema_registry_listener_port}}/config"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 60
+      delay: 5
+      when: not schema_registry_ssl_enabled|bool
+
+    - name: Wait for API to return 200 - HTTPS
+      uri:
+        url: "https://localhost:{{schema_registry_listener_port}}/config"
+        status_code: 200
+        validate_certs: no
+      register: result
+      until: result.status == 200
+      retries: 60
+      delay: 5
+      when: schema_registry_ssl_enabled|bool
