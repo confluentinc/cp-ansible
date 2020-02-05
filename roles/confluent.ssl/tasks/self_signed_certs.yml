@@ -9,8 +9,73 @@
     src: "generated_ssl_files/{{ssl_self_signed_ca_key_filename}}"
     dest: "/var/ssl/private/generation/{{ssl_self_signed_ca_key_filename}}"
 
-- include_tasks: self_signed_certs_regular.yml
+- set_fact:
+    extra_args: ""
   when: not fips_enabled|bool
 
-- include_tasks: self_signed_certs_fips.yml
+- set_fact:
+    extra_args: "-providerpath {{fips_jar_path}} -providerclass {{fips_provider_class}}"
   when: fips_enabled|bool
+
+- name: Create Truststore and Import the CA Cert
+  shell: |
+    keytool -noprompt -keystore {{truststore_path}} -storetype pkcs12 \
+      -alias CARoot -import -file /var/ssl/private/generation/snakeoil-ca-1.crt \
+      -storepass {{truststore_storepass}} -keypass {{truststore_storepass}} {{extra_args}}
+
+- name: Create Keystore
+  shell: |
+    keytool -genkey -noprompt \
+      -storetype pkcs12 \
+      -keyalg RSA -keysize 2048 \
+      -alias {{inventory_hostname}} \
+      -dname "CN={{common_name}},OU=TEST,O=CONFLUENT,L=PaloAlto,S=Ca,C=US" \
+      -ext "SAN=dns:{{inventory_hostname}}" \
+      -keystore {{keystore_path}} \
+      -storepass {{keystore_storepass}} \
+      -keypass {{keystore_storepass}} {{extra_args}}
+
+- name: Create Certificate Signing Request
+  shell: |
+    keytool -keystore {{keystore_path}} \
+      -storetype pkcs12 \
+      -alias {{inventory_hostname}} \
+      -certreq -file /var/ssl/private/generation/client.csr \
+      -ext "SAN=dns:{{inventory_hostname}}" \
+      -storepass {{keystore_storepass}} \
+      -keypass {{keystore_storepass}} {{extra_args}}
+
+- name: Create Openssl Config for SAN
+  template:
+    src: openssl-san.cnf.j2
+    dest: /var/ssl/private/generation/openssl-san.cnf
+
+- name: Sign CSR with the Certificate Authority
+  shell: |
+    openssl x509 -req -CA /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
+      -CAkey /var/ssl/private/generation/{{ssl_self_signed_ca_key_filename}} \
+      -in /var/ssl/private/generation/client.csr \
+      -out /var/ssl/private/generation/client-signed.crt \
+      -days {{keystore_expiration_days}} -CAcreateserial \
+      -passin pass:{{ssl_self_signed_ca_password}} \
+      -extfile /var/ssl/private/generation/openssl-san.cnf \
+      -extensions v3_req
+
+- name: Import the CA cert into the Keystore
+  shell: |
+    keytool -noprompt -keystore {{keystore_path}} \
+      -storetype pkcs12 \
+      -alias CARoot \
+      -import -file /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
+      -storepass {{keystore_storepass}} \
+      -keypass {{keystore_storepass}} {{extra_args}}
+
+- name: Import the Signed Host Cert into the Keystore
+  shell: |
+    keytool -noprompt -keystore {{keystore_path}} \
+      -storetype pkcs12 \
+      -alias {{inventory_hostname}} \
+      -import -file /var/ssl/private/generation/client-signed.crt \
+      -ext "SAN=dns:{{inventory_hostname}}" \
+      -storepass {{keystore_storepass}} \
+      -keypass {{keystore_storepass}} {{extra_args}}
