@@ -93,19 +93,38 @@ confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.scr
 {% endif %}
 
 {% if rbac_mtls_3_port|bool %}
-############################# TOKEN LISTENER #############################
+############################# TLS Listener Mapping Rules #############################
+listener.name.internal.ssl.principal.mapping.rules= \
+        RULE:{{ rbac_mtls_internal_map_rule }}
+        DEFAULT
+
+listener.name.external.ssl.principal.mapping.rules= \
+        RULE:{{ rbac_mtls_external_map_rule }}
+        DEFAULT
+
+############################# Token Listener #############################
 listener.name.token.sasl.enabled.mechanisms=OAUTHBEARER
 listener.name.token.oauthbearer.sasl.jaas.config= \
     org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
         publicKeyPath="{{rbac_mtls_3_port_public_pem_path}}{{rbac_mtls_public_pem_name}}";
 listener.name.token.oauthbearer.sasl.server.callback.handler.class=io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler
 listener.name.token.oauthbearer.sasl.login.callback.handler.class=io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler
+
+############################ MDS TLS Settings #####################################
+
+confluent.metadata.server.ssl.keystore.location={{kafka_broker_truststore_path}}
+confluent.metadata.server.ssl.keystore.password={{kafka_broker_keystore_storepass}}
+confluent.metadata.server.ssl.key.password={{kafka_broker_keystore_keypass}}
+confluent.metadata.server.ssl.truststore.location={{kafka_broker_keystore_path}}
+confluent.metadata.server.ssl.truststore.password={{kafka_broker_truststore_storepass}}
+
 ############################# Authorization Settings #############################
 authorizer.class.name=io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer
 confluent.authorizer.access.rule.providers=ZK_ACL,CONFLUENT
 confluent.authorizer.group.provider=CONFLUENT
-super.users=User:{{ rbac_mtls_broker_admin }}
+super.users=User:{{ rbac_mtls_broker_admin }};User:{{ rbac_mtls_admin }}
 confluent.metadata.server.listeners=http://0.0.0.0:8090
+
 ############################# MDS Token Service Settings - enable token generation #############################
 confluent.metadata.server.token.auth.enable=true
 confluent.metadata.server.token.max.lifetime.ms=3600000
@@ -113,6 +132,7 @@ confluent.metadata.server.token.key.path={{rbac_mtls_3_port_private_pem_path}}{{
 confluent.metadata.server.public.key.path={{rbac_mtls_3_port_public_pem_path}}{{rbac_mtls_public_pem_name}}
 confluent.metadata.server.token.signature.algorithm=RS256
 confluent.metadata.server.authentication.method=BEARER
+
 ############################# Identity Provider Settings(LDAP - local OpenLDAP) #############################
 ldap.java.naming.factory.initial=com.sun.jndi.ldap.LdapCtxFactory
 ldap.com.sun.jndi.ldap.read.timeout=3000
