@@ -51,6 +51,42 @@
     group: "{{schema_registry.group}}"
   when: kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
+- name: export certificate to pem format for MDS login to create user
+  delegate_to: {{ groups['kafka_broker'[0]] }}
+  shell: |
+    openssl pkcs12 -in /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
+      -out /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}}.pem \
+      -passin pass:{{ssl_self_signed_ca_password}} -passout pass:{{ssl_self_signed_ca_password}}
+  when: rbac_mtls_3_port:bool
+
+# - name: Login to MDS to create Schema Registry User
+#   uri:
+#     url: https://{{ groups['kafka_broker'[0]] }}:8090/security/1.0/authenticate
+#     return_content: yes
+#     user: {{ rbac_mtls_broker_admin }}
+#     password: 
+#     register: login
+#   delegate_facts: True
+#   delegate_to: {{ groups['kafka_broker'[0]] }}
+#   when: rbac_mtls_3_port:bool 
+
+# - name: Create Schema Registry user, using Token
+#   uri:
+#     url: https://{{ groups['kafka_broker'[0]] }}:8090/security/1.0/principals/User:{{rbac_mtls_broker_admin}}/roles/SystemAdmin
+#     method: POST
+#     return_content: yes
+#     headers:
+#       Cookie: "{{ login.set_cookie }}"
+#   delegate_facts: True
+#   delegate_to: {{ groups['kafka_broker'[0]] }}
+#   when: rbac_mtls_3_port:bool 
+
+- name: Remove exported pem file for MDS login
+  delegate_to: {{ groups['kafka_broker'[0]] }}
+  shell: |
+    rm -rf /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}}.pem
+  when: rbac_mtls_3_port:bool
+
 - name: Create Schema Registry Config
   template:
     src: schema-registry.properties.j2
