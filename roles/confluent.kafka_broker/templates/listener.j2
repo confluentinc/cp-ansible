@@ -12,9 +12,11 @@ listener.name.{{listener.value.name|lower}}.ssl.truststore.type=pkcs12
 listener.name.{{listener.value.name|lower}}.ssl.enabled.protocols=TLSv1.2
 {% endif %}
 {% endif %}
+
 {% if listener['value']['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
 listener.name.{{listener.value.name|lower}}.ssl.client.auth=required
 {% endif %}
+
 {% if listener['value']['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
 listener.name.{{listener.value.name|lower}}.sasl.enabled.mechanisms=PLAIN
 listener.name.{{listener.value.name|lower}}.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
@@ -26,6 +28,7 @@ listener.name.{{listener.value.name|lower}}.plain.sasl.jaas.config=org.apache.ka
 {% endif %}
 {% endfor %}
 {% endif %}
+
 {% if listener['value']['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
 listener.name.{{listener.value.name|lower}}.sasl.enabled.mechanisms=GSSAPI
 listener.name.{{listener.value.name|lower}}.gssapi.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
@@ -34,8 +37,31 @@ listener.name.{{listener.value.name|lower}}.gssapi.sasl.jaas.config=com.sun.secu
   keyTab="{{kerberos.keytab_dir}}/{{kafka_broker_kerberos_keytab_path | basename}}" \
   principal="{{kafka_broker_kerberos_principal}}";
 {% endif %}
+
 {% if listener['value']['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
 listener.name.{{listener.value.name|lower}}.sasl.enabled.mechanisms=SCRAM-SHA-256
 listener.name.{{listener.value.name|lower}}.scram-sha-256.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
    username="{{sasl_scram_users.admin.principal}}" password="{{sasl_scram_users.admin.password}}";
+{% endif %}
+
+{% if listener['value']['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'RBAC' %}
+listener.name.{{listener.value.name|lower}}.sasl.enabled.mechanisms=OAUTHBEARER
+listener.name.{{listener.value.name|lower}}.oauthbearer.sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+publicKeyPath={{rbac_mds_public_key_path}};
+
+listener.name.{{listener.value.name|lower}}.oauthbearer.sasl.server.callback.handler.class=io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler
+listener.name.{{listener.value.name|lower}}.oauthbearer.sasl.login.callback.handler.class=io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler
+{% endif %}
+
+{% if listener['value']['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'OAUTHBEARER' %}
+listener.name.{{listener.value.name|lower}}.sasl.enabled.mechanisms=OAUTHBEARER
+listener.name.{{listener.value.name|lower}}.oauthbearer.sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+{% for option in listener.value.options|dict2items %}
+  {{ option['key'] }}="{{ option['value']}}"{% if loop.index != loop|length %} \
+{% else %}
+;
+{% endif %}
+{% endfor %}
+listener.name.{{listener.value.name|lower}}.oauthbearer.sasl.server.callback.handler.class={{listener.value.server_callback}}
+listener.name.{{listener.value.name|lower}}.oauthbearer.sasl.login.callback.handler.class={{listener.value.login_callback}}
 {% endif %}
