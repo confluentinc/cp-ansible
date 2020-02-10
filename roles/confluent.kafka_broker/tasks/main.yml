@@ -25,7 +25,7 @@
     system: yes
     group: "{{kafka_broker.group}}"
 
-- import_role:
+- include_role:
     name: confluent.ssl
   vars:
     truststore_storepass: "{{kafka_broker_truststore_storepass}}"
@@ -33,6 +33,7 @@
     keystore_path: "{{kafka_broker_keystore_path}}"
     keystore_storepass: "{{kafka_broker_keystore_storepass}}"
     keystore_keypass: "{{kafka_broker_keystore_keypass}}"
+    service_name: kafka_broker
   when: kafka_broker_listeners | ssl_required(ssl_enabled)
 
 - name: Create Keytabs Directory
@@ -138,10 +139,11 @@
     - Restart Kafka
 
 - name: Tune virtual memory settings
-  lineinfile:
-    path: /etc/sysctl.conf
-    regexp: "{{ item.key }}.*"
-    line: "{{ item.key }}={{ item.value }}"
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: "{{ kafka_broker_sysctl_file }}"
   with_dict: "{{ kafka_broker_sysctl }}"
   notify:
     - load sysctl
@@ -158,3 +160,9 @@
     name: "{{kafka_broker_service_name}}"
     enabled: yes
     state: started
+
+- name: Wait for Under Replicated Partitions on Broker
+  include_tasks: tasks/wait_for_urp.yml
+  when:
+    - health_checks_enabled|bool
+    - jolokia_enabled|bool
