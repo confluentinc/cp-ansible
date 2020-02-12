@@ -32,6 +32,7 @@
     keystore_path: "{{ksql_keystore_path}}"
     keystore_storepass: "{{ksql_keystore_storepass}}"
     keystore_keypass: "{{ksql_keystore_keypass}}"
+    service_name: ksql
   when: ksql_ssl_enabled|bool or kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
 - name: Create Keytabs Directory
@@ -131,3 +132,28 @@
     name: "{{ksql_service_name}}"
     enabled: yes
     state: started
+
+- name: Wait for API to return 200 - HTTP
+  uri:
+    url: "http://localhost:{{ksql_listener_port}}/info"
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 60
+  delay: 5
+  when:
+    - not ksql_ssl_enabled|bool
+    - health_checks_enabled|bool
+
+- name: Wait for API to return 200 - HTTPS
+  uri:
+    url: "https://localhost:{{ksql_listener_port}}/info"
+    status_code: 200
+    validate_certs: no
+  register: result
+  until: result.status == 200
+  retries: 60
+  delay: 5
+  when:
+    - ksql_ssl_enabled|bool
+    - health_checks_enabled|bool

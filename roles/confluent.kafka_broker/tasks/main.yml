@@ -33,6 +33,7 @@
     keystore_path: "{{kafka_broker_keystore_path}}"
     keystore_storepass: "{{kafka_broker_keystore_storepass}}"
     keystore_keypass: "{{kafka_broker_keystore_keypass}}"
+    service_name: kafka_broker
   when: kafka_broker_listeners | ssl_required(ssl_enabled)
 
 - name: Create Keytabs Directory
@@ -115,7 +116,10 @@
 - name: Deploy JMX Exporter Config File
   copy:
     src: "kafka.yml"
-    dest: "{{jmxexporter_install_path}}/"
+    dest: "{{kafka_broker_jmxexporter_config_path}}"
+    mode: 0640
+    owner: "{{kafka_broker.user}}"
+    group: "{{kafka_broker.group}}"
   when: jmxexporter_enabled|bool
 
 - name: Create Service Override Directory
@@ -159,3 +163,9 @@
     name: "{{kafka_broker_service_name}}"
     enabled: yes
     state: started
+
+- name: Wait for Under Replicated Partitions on Broker
+  include_tasks: tasks/wait_for_urp.yml
+  when:
+    - health_checks_enabled|bool
+    - jolokia_enabled|bool

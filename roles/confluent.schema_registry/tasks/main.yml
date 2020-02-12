@@ -32,6 +32,7 @@
     keystore_path: "{{schema_registry_keystore_path}}"
     keystore_storepass: "{{schema_registry_keystore_storepass}}"
     keystore_keypass: "{{schema_registry_keystore_keypass}}"
+    service_name: schema_registry
   when: schema_registry_ssl_enabled|bool or kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
 - name: Create Keytabs Directory
@@ -110,3 +111,28 @@
     name: "{{schema_registry_service_name}}"
     enabled: yes
     state: started
+
+- name: Wait for API to return 200 - HTTP
+  uri:
+    url: "http://localhost:{{schema_registry_listener_port}}/config"
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 60
+  delay: 5
+  when:
+    - not schema_registry_ssl_enabled|bool
+    - health_checks_enabled|bool
+
+- name: Wait for API to return 200 - HTTPS
+  uri:
+    url: "https://localhost:{{schema_registry_listener_port}}/config"
+    status_code: 200
+    validate_certs: no
+  register: result
+  until: result.status == 200
+  retries: 60
+  delay: 5
+  when:
+    - schema_registry_ssl_enabled|bool
+    - health_checks_enabled|bool
