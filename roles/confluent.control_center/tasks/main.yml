@@ -53,6 +53,59 @@
   notify:
     - restart control center
 
+- name: Create pem file Directory
+  file:
+    path: "{{rbac_mtls_3_port_public_pem_path}}"
+    group: "{{kafka_broker.group}}"
+    mode: '650'
+    recurse: yes
+  when: rbac_mtls_3_port|bool 
+
+- name: Copy in public pem files
+  copy:
+    src: "{{rbac_mtls_public_pem_path}}{{rbac_mtls_public_pem_name}}"
+    dest: "{{rbac_mtls_3_port_public_pem_path}}"
+    mode: '755'
+    owner: "{{kafka_broker.user}}"
+    group: "{{kafka_broker.group}}"
+  when: rbac_mtls_3_port|bool
+
+- name: export certificate to pem format for MDS login to create user
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  shell: |
+    openssl pkcs12 -in /var/ssl/private/kafka_broker.keystore.jks \
+      -out /var/ssl/private/kafka_broker.keystore.pem \
+      -passin pass:{{keystore_storepass}} -passout pass:{{keystore_storepass}}
+  when: rbac_mtls_3_port|bool and ssl_enabled|bool
+
+- name: Login to MDS to create Kafka Connect User
+  uri:
+    url: http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/authenticate
+    return_content: yes
+    url_username: "{{ rbac_mtls_broker_admin }}"
+  register: login
+  delegate_facts: True
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  when: rbac_mtls_3_port|bool 
+
+# - name: Create Schema Registry user, using Token
+#   uri:
+#     url: https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/principals/User:/roles/SystemAdmin
+#    
+#     method: POST
+#     return_content: yes
+#     headers:
+#       Cookie: "{{ login.set_cookie }}"
+#   delegate_facts: True
+#   delegate_to: {{ groups['kafka_broker'[0]] }}
+#   when: rbac_mtls_3_port|bool 
+
+- name: Remove exported pem file for MDS login
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  shell: |
+     rm -rf /var/ssl/private/kafka_broker.keystore.pem
+  when: rbac_mtls_3_port|bool and ssl_enabled|bool
+  
 - name: Create Control Center Config
   template:
     src: control-center.properties.j2
