@@ -51,6 +51,13 @@
     group: "{{schema_registry.group}}"
   when: kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
+- name: Get Kafka Cluster ID from Zookeeper
+  delegate_to: "{{ groups['zookeeper'][0] }}"
+  shell: |
+    bin/zookeeper-shell localhost:2181 get /cluster/id
+  register: cluster_id  
+  when: rbac_enabled|bool 
+
 - name: export certificate to pem format for MDS login to create user
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   shell: |
@@ -59,7 +66,7 @@
       -passin pass:{{keystore_storepass}} -passout pass:{{keystore_storepass}}
   when: rbac_enabled|bool and ssl_enabled|bool
 
-- name: Login to MDS to create Schema Registry User
+- name: Login to MDS to get Security Token 
   uri:
     url: http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/authenticate
     return_content: yes
@@ -69,17 +76,38 @@
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   when: rbac_enabled|bool 
 
-# - name: Create Schema Registry user, using Token
-#   uri:
-#     url: https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/principals/User:/roles/SystemAdmin
-#    
-#     method: POST
-#     return_content: yes
-#     headers:
-#       Cookie: "{{ login.set_cookie }}"
-#   delegate_facts: True
-#   delegate_to: {{ groups['kafka_broker'[0]] }}
-#   when: rbac_enabled|bool 
+- name: Grant role SecurityAdmin to Schema Registry user (Work in Progress )
+  uri:
+    url: http://{{ groups['kafka_broker'][0] }}:8090/principals/{{rbac_mtls_schema_registry_user}}/roles/SecurityAdmin
+    method: POST
+    body_format: json 
+    body: "{{ 'clusters': {'kafka-cluster': '{{cluster_id}}'','schema-registry-cluster': '{{schema-registry- groups['schema_registry'][0] }}-{{schema_registry_listener_port}}'}}"
+    status_code: 204
+  delegate_facts: True
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  when: rbac_enabled|bool 
+
+- name: Grant schema registry ResourceOwner on the group that Schema Registry nodes use to coordinate across the cluster (Work in Progress)
+  uri:
+    url: http://{{ groups['kafka_broker'][0] }}:8090/principals/{{rbac_mtls_schema_registry_user}}/roles/ResourceOwner
+    method: POST
+    body_format: json 
+    body: {"scope": {"clusters": {"kafka-cluster": "{{cluster_id}}","schema-registry-cluster": "{{schema-registry- groups['schema_registry'][0] }}-{{schema_registry_listener_port}}"}},"resourcePatterns": [{"resourceType": "string","name": "string","patternType": "string"}]}
+    status_code: 204
+  delegate_facts: True
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  when: rbac_enabled|bool 
+
+name: Grant schema registry ResourceOwner on the kafka topic where schems are stored (Work IN progress)
+  uri:
+    url: http://{{ groups['kafka_broker'][0] }}:8090/principals/{{rbac_mtls_schema_registry_user}}/roles/ResourceOwner
+    method: POST
+    body_format: json 
+    body: "{{ 'clusters': {'kafka-cluster': '{{cluster_id}}'','schema-registry-cluster': '{{schema-registry- groups['schema_registry'][0] }}-{{schema_registry_listener_port}}'}}"
+    status_code: 204
+  delegate_facts: True
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  when: rbac_enabled|bool 
 
 - name: Remove exported pem file for MDS login
   delegate_to: "{{ groups['kafka_broker'][0] }}"
