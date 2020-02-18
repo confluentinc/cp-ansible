@@ -66,29 +66,48 @@
       -passin pass:{{keystore_storepass}} -passout pass:{{keystore_storepass}}
   when: rbac_enabled|bool and ssl_enabled|bool
 
-- name: Login to MDS to get Security Token 
-  uri:
-    url: http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/authenticate
-    url_username: "{{ rbac_mtls_broker_admin }}"
-    url_password: "{{rbac_mtls_broker_admin_password}}"
-    return_content: yes
-    force_basic_auth: yes
-    follow_redirects: yes
-  register: cluster_id
-  delegate_facts: True
+- name: Login to MDS to get Security Token
   delegate_to: "{{ groups['kafka_broker'][0] }}"
-  when: rbac_enabled|bool 
+  delegate_facts: true
+  shell: |
+    curl -u "{{rbac_mtls_broker_admin}}":"{{rbac_mtls_broker_admin_password}}" -s http://localhost:8090/security/1.0/authenticate | jq 2> /dev/null | grep set-cookie | jq -r auth_token=
+  register: rbac_token 
+  when: rbac_enabled|bool and ssl_enabled|bool
 
-- name: Grant role SecurityAdmin to Schema Registry user (Work in Progress )
-  uri:
-    url: http://{{ groups['kafka_broker'][0] }}:8090/principals/{{rbac_mtls_schema_registry_user}}/roles/SecurityAdmin
-    method: POST
-    body_format: json 
-    body: "{{ 'clusters':{'kafka-cluster':'{{cluster_id}}'','schema-registry-cluster':'{{schema-registry- groups['schema_registry'][0] }}-{{schema_registry_listener_port}}'}}"
-    status_code: 204
-  delegate_facts: True
+- name: Grant role SecurityAdmin to Schema Registry user
   delegate_to: "{{ groups['kafka_broker'][0] }}"
-  when: rbac_enabled|bool 
+  delegate_facts: true
+  shell: |
+    curl http://localhost:8090/security/1.0/principals/User:{{rbac_mtls_schema_registry_user}}/roles/SystemAdmin \
+    -X POST \
+    -d "{ \"clusters\": {\"kafka-cluster\": \"{{cluster_id}}"}}" \
+    -H "Content-Type: application/json" \
+	  -H "Authorization:"{{rbac_token}}"
+  when: rbac_enabled|bool and ssl_enabled|bool
+
+# - name: Login to MDS to get Security Token 
+#   uri:
+#     url: http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/authenticate
+#     url_username: "{{ rbac_mtls_broker_admin }}"
+#     url_password: "{{rbac_mtls_broker_admin_password}}"
+#     return_content: yes
+#     force_basic_auth: yes
+#     follow_redirects: yes
+#   register: cluster_id
+#   delegate_facts: True
+#   delegate_to: "{{ groups['kafka_broker'][0] }}"
+#   when: rbac_enabled|bool 
+
+# - name: Grant role SecurityAdmin to Schema Registry user (Work in Progress )
+#   uri:
+#     url: http://{{ groups['kafka_broker'][0] }}:8090/principals/{{rbac_mtls_schema_registry_user}}/roles/SecurityAdmin
+#     method: POST
+#     body_format: json 
+#     body: "{{ 'clusters':{'kafka-cluster':'{{cluster_id}}'','schema-registry-cluster':'{{schema-registry- groups['schema_registry'][0] }}-{{schema_registry_listener_port}}'}}"
+#     status_code: 204
+#   delegate_facts: True
+#   delegate_to: "{{ groups['kafka_broker'][0] }}"
+#   when: rbac_enabled|bool 
 
 # - name: Grant schema registry ResourceOwner on the group that Schema Registry nodes use to coordinate across the cluster (Work in Progress)
 #   uri:
