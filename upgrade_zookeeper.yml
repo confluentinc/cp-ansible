@@ -14,31 +14,10 @@
         name: "{{zookeeper_service_name}}"
         state: started
 
-    - name: Install NetCat - RedHat
-      yum:
-        name: nc
-        state: present
-      when: ansible_os_family == "RedHat"
-
-    - name: Install NetCat - Debian
-      apt:
-        name: netcat-openbsd
-        state: present
-      when: ansible_os_family == "Debian"
-
-    - name: Wait for Zookeeper Status
-      shell: echo srvr | nc localhost 2181
-      register: srvr
-      until: srvr.rc == 0
-      retries: 30
-      delay: 5
-
-    - name: Wait for Zookeeper Quorum
-      shell: echo srvr | nc localhost 2181
-      register: srvr
-      until: '"Latency min/avg/max:" in srvr.stdout'
-      retries: 30
-      delay: 5
+    - name: Zookeeper Health Check
+      import_role:
+        name: confluent.zookeeper
+        tasks_from: health_check.yml
 
     - name: Get Package Facts
       package_facts:
@@ -66,7 +45,9 @@
         msg: "Current version: {{zookeeper_current_version}}   Upgrade to version: {{confluent_package_version}}"
 
     - name: Get Leader/Follower
-      shell: echo srvr | nc localhost 2181 | grep Mode
+      shell: "{{zookeeper_health_check_command}} | grep Mode"
+      args:
+        executable: /bin/bash
       register: leader_query
 
     - name: Add host to Follower Group
@@ -128,19 +109,9 @@
         state: stopped
 
     - name: Wait for Zookeeper Status on Another Zookeeper Node
-      shell: echo srvr | nc localhost 2181
-      register: srvr
-      until: srvr.rc == 0
-      retries: 30
-      delay: 5
-      delegate_to: "{{ groups['zookeeper'] | difference([inventory_hostname]) | first }}"
-
-    - name: Wait for Zookeeper Quorum on Another Zookeeper Node
-      shell: echo srvr | nc localhost 2181
-      register: srvr
-      until: '"Latency min/avg/max:" in srvr.stdout'
-      retries: 30
-      delay: 5
+      import_role:
+        name: confluent.zookeeper
+        tasks_from: health_check.yml
       delegate_to: "{{ groups['zookeeper'] | difference([inventory_hostname]) | first }}"
 
     - name: Configure Repositories
@@ -201,16 +172,7 @@
         name: "{{ zookeeper_service_name }}"
         state: restarted
 
-    - name: Wait for Zookeeper Status
-      shell: echo srvr | nc localhost 2181
-      register: srvr
-      until: srvr.rc == 0
-      retries: 30
-      delay: 5
-
-    - name: Wait for Zookeeper Quorum
-      shell: echo srvr | nc localhost 2181
-      register: srvr
-      until: '"Latency min/avg/max:" in srvr.stdout'
-      retries: 30
-      delay: 5
+    - name: Zookeeper Health Check
+      import_role:
+        name: confluent.zookeeper
+        tasks_from: health_check.yml
