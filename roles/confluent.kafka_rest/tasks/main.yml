@@ -1,3 +1,8 @@
+---
+- include_role:
+    name: confluent.common
+  when: not common_role_completed|bool
+
 # Install Packages
 - name: Install the Kafka Rest Packages
   yum:
@@ -35,24 +40,15 @@
     service_name: kafka_rest
   when: kafka_rest_ssl_enabled|bool or kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
-- name: Create Keytabs Directory
-  file:
-    path: "{{kerberos.keytab_dir}}"
-    group: "{{kafka_rest.group}}"
-    mode: '650'
-    recurse: yes
+- name: Configure Kerberos
+  include_role:
+    name: confluent.kerberos
+  vars:
+    kerberos_group: "{{kafka_rest.group}}"
+    kerberos_user: "{{kafka_rest.user}}"
+    kerberos_keytab_path: "{{kafka_rest_kerberos_keytab_path}}"
+    kerberos_handler: "restart kafka-rest"
   when: kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
-
-- name: Copy in Keytab File
-  copy:
-    src: "{{kafka_rest_kerberos_keytab_path}}"
-    dest: "{{kerberos.keytab_dir}}/{{kafka_rest_kerberos_keytab_path | basename}}"
-    mode: '600'
-    owner: "{{kafka_rest.user}}"
-    group: "{{kafka_rest.group}}"
-  when: kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
-  notify:
-    - restart kafka-rest
 
 - name: Create Kafka Rest Config
   template:

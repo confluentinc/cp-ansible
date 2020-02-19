@@ -1,3 +1,8 @@
+---
+- include_role:
+    name: confluent.common
+  when: not common_role_completed|bool
+
 # Install Packages
 - name: Install the Control Center Packages
   yum:
@@ -35,24 +40,15 @@
     service_name: control_center
   when: control_center_ssl_enabled|bool or kafka_broker_listeners[control_center_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
-- name: Create Keytabs Directory
-  file:
-    path: "{{kerberos.keytab_dir}}"
-    group: "{{control_center.group}}"
-    mode: '650'
-    recurse: yes
+- name: Configure Kerberos
+  include_role:
+    name: confluent.kerberos
+  vars:
+    kerberos_group: "{{control_center.group}}"
+    kerberos_user: "{{control_center.user}}"
+    kerberos_keytab_path: "{{control_center_kerberos_keytab_path}}"
+    kerberos_handler: "restart control center"
   when: kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
-
-- name: Copy in Keytab File
-  copy:
-    src: "{{control_center_kerberos_keytab_path}}"
-    dest: "{{kerberos.keytab_dir}}/{{control_center_kerberos_keytab_path | basename}}"
-    mode: '600'
-    owner: "{{control_center.user}}"
-    group: "{{control_center.group}}"
-  when: kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
-  notify:
-    - restart control center
 
 - name: Create Control Center Config
   template:
