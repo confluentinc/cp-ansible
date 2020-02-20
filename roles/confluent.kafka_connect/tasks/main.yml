@@ -76,35 +76,56 @@
     openssl pkcs12 -in /var/ssl/private/kafka_broker.keystore.jks \
       -out /var/ssl/private/kafka_broker.keystore.pem \
       -passin pass:{{keystore_storepass}} -passout pass:{{keystore_storepass}}
-  when: rbac_enabled|bool and ssl_enabled|bool
-
-- name: Login to MDS to create Kafka Connect User
-  uri:
-    url: http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/authenticate
-    return_content: yes
-    url_username: "{{ rbac_mtls_broker_admin }}"
-  register: login
-  delegate_facts: True
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
   when: rbac_enabled|bool 
 
-# - name: Create Schema Registry user, using Token
-#   uri:
-#     url: https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/principals/User:/roles/SystemAdmin
-#    
-#     method: POST
-#     return_content: yes
-#     headers:
-#       Cookie: "{{ login.set_cookie }}"
-#   delegate_facts: True
-#   delegate_to: {{ groups['kafka_broker'[0]] }}
-#   when: rbac_enabled|bool 
+- name: Login to MDS to get Security Token
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl -u "{{rbac_mtls_broker_admin}}":"{{rbac_mtls_broker_admin_password}}" -s http://localhost:8090/security/1.0/authenticate 2> /dev/null | grep auth_token | jq -r .auth_token
+  register: rbac_token 
+  when: rbac_enabled|bool
+
+- name: Grant role Security Admin to Connect user
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_connect_user}}/roles/SecurityAdmin -X POST -d '{ "clusters": {"kafka-cluster":"{{cluster_id.stdout}}"}}' -H "Content-Type: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}"
+  when: rbac_enabled|bool 
+
+- name: Grant Connect user ResourceOwner on the group that Connect nodes use to coordinate across the cluster 
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_connect_user}}/roles/ResourceOwner/bindings -X POST -d '{ "scope": {"clusters": {"kafka-cluster":"{{cluster_id.stdout}}"}}, "resourcePatterns": [{"resourceType": "Group", "name": "connect-cluster"]}' -H "Content-Type: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}"
+  when: rbac_enabled|bool 
+
+- name: Grant Connect ResourceOwner on the Config topic where Connect configs are stored
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_connect_user}}/roles/ResourceOwner/bindings -X POST -d '{ "scope": {"clusters": {"kafka-cluster":"{{cluster_id.stdout}}"}}, "resourcePatterns": [{"resourceType": "Topic", "name": "connect-configs" }]}' -H "Content-Type: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}"
+  when: rbac_enabled|bool 
+
+- name: Grant Connect ResourceOwner on the offset storage topic 
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_connect_user}}/roles/ResourceOwner/bindings -X POST -d '{ "scope": {"clusters": {"kafka-cluster":"{{cluster_id.stdout}}"}}, "resourcePatterns": [{"resourceType": "Topic", "name": "connect-offsets" }]}' -H "Content-Type: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}"
+  when: rbac_enabled|bool 
+
+- name: Grant Connect ResourceOwner on the offset storage topic 
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_connect_user}}/roles/ResourceOwner/bindings -X POST -d '{ "scope": {"clusters": {"kafka-cluster":"{{cluster_id.stdout}}"}}, "resourcePatterns": [{"resourceType": "Topic", "name": "connect-status" }]}' -H "Content-Type: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}"
+  when: rbac_enabled|bool 
 
 - name: Remove exported pem file for MDS login
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
-  shell: |
-     rm -rf /var/ssl/private/kafka_broker.keystore.pem
-  when: rbac_enabled|bool and ssl_enabled|bool
+  file:
+     path: /var/ssl/private/kafka_broker_keystore.pem
+     state: absent
+  when: rbac_enabled|bool and ssl_enabled|bool 
 
 
 - name: Create Connect Distributed Config
