@@ -52,24 +52,34 @@ kafkastore.sasl.mechanism=SCRAM-SHA-256
 kafkastore.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
    username="{{sasl_scram_users.schema_registry.principal}}" password="{{sasl_scram_users.schema_registry.password}}";
 {% endif %}
+
 {% if rbac_enabled|bool %}
 ##################### RBAC #####################
 # These properties install the Schema Registry security plugin, and configure it to use RBAC for
 # authorization and OAuth for authentication
+
+# WHEN RBAC IS ENABLED, ZK CONNECTION IS NEEDED FOR LICENSE
+kafkastore.connection.url={% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{zookeeper.properties.clientPort}}{% endfor %}
+
+
 schema.registry.resource.extension.class=io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension
 confluent.schema.registry.authorizer.class=io.confluent.kafka.schemaregistry.security.authorizer.rbac.RbacAuthorizer
 rest.servlet.initializor.classes=io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
 confluent.schema.registry.auth.mechanism=JETTY_AUTH
 
 # location of metadata service
-confluent.metadata.bootstrap.server.urls={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:8090{% endfor %}
+confluent.metadata.bootstrap.server.urls={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}http://{{ host }}:8090{% endfor %}
 
 # credentials to use with MDS
 confluent.metadata.http.auth.credentials.provider=BASIC
+{% if rbac_enabled|bool and ssl_enabled|bool}
+confluent.metadata.basic.auth.user.info={{ host }}:{{ rbac_mtls_schema_registry_user_password}}
+{% endif %}
+{% if rbac_enabled|bool and ssl_enabled|bool and ssl_custom_certs|bool}
 confluent.metadata.basic.auth.user.info={{ rbac_mtls_schema_registry_user }}:{{ rbac_mtls_schema_registry_user_password}}
-
-#path to a public key that should be used to verify json web tokens during authentication
-public.key.path="{{rbac_enabled_public_pem_path}}{{rbac_mtls_public_pem_name}}"
+{% endif %}
+# path to a public key that should be used to verify json web tokens during authentication
+public.key.path={{rbac_enabled_public_pem_path}}{{rbac_mtls_public_pem_name}}
 
 authentication.roles=**
 
