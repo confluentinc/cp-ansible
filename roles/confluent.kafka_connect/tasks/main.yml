@@ -1,3 +1,8 @@
+---
+- include_role:
+    name: confluent.common
+  when: not common_role_completed|bool
+  
 # Install Packages
 - name: Install the Kafka Connect Packages
   yum:
@@ -24,7 +29,7 @@
     system: yes
     group: "{{kafka_connect.group}}"
 
-- import_role:
+- include_role:
     name: confluent.ssl
   vars:
     truststore_storepass: "{{kafka_connect_truststore_storepass}}"
@@ -32,26 +37,18 @@
     keystore_path: "{{kafka_connect_keystore_path}}"
     keystore_storepass: "{{kafka_connect_keystore_storepass}}"
     keystore_keypass: "{{kafka_connect_keystore_keypass}}"
+    service_name: kafka_connect
   when: kafka_connect_ssl_enabled|bool or kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
-- name: Create Keytabs Directory
-  file:
-    path: "{{kerberos.keytab_dir}}"
-    group: "{{kafka_connect.group}}"
-    mode: '650'
-    recurse: yes
+- name: Configure Kerberos
+  include_role:
+    name: confluent.kerberos
+  vars:
+    kerberos_group: "{{kafka_connect.group}}"
+    kerberos_user: "{{kafka_connect.user}}"
+    kerberos_keytab_path: "{{kafka_connect_kerberos_keytab_path}}"
+    kerberos_handler: "restart connect distributed"
   when: kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
-
-- name: Copy in Keytab File
-  copy:
-    src: "{{kafka_connect_kerberos_keytab_path}}"
-    dest: "{{kerberos.keytab_dir}}/{{kafka_connect_kerberos_keytab_path | basename}}"
-    mode: '600'
-    owner: "{{kafka_connect.user}}"
-    group: "{{kafka_connect.group}}"
-  when: kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
-  notify:
-    - restart connect distributed
 
 - name: Create Connect Distributed Config
   template:
@@ -112,3 +109,28 @@
     name: "{{kafka_connect_service_name}}"
     enabled: yes
     state: started
+
+- name: Wait for API to return 200 - HTTP
+  uri:
+    url: "http://localhost:{{kafka_connect_rest_port}}/connectors"
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 60
+  delay: 10
+  when:
+    - not kafka_connect_ssl_enabled|bool
+    - health_checks_enabled|bool
+
+- name: Wait for API to return 200 - HTTPS
+  uri:
+    url: "https://localhost:{{kafka_connect_rest_port}}/connectors"
+    status_code: 200
+    validate_certs: no
+  register: result
+  until: result.status == 200
+  retries: 60
+  delay: 10
+  when:
+    - kafka_connect_ssl_enabled|bool
+    - health_checks_enabled|bool

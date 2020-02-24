@@ -14,13 +14,14 @@ class FilterModule(object):
         normalized = 'GSSAPI' if protocol.lower() == 'kerberos' \
             else 'SCRAM-SHA-256' if protocol.upper() == 'SCRAM' \
             else 'PLAIN' if protocol.upper() == 'PLAIN' \
+            else 'OAUTHBEARER' if protocol.upper() == 'OAUTHBEARER' \
             else 'none'
         return normalized
 
     def kafka_protocol_normalized(self, sasl_protocol_normalized, ssl_enabled):
-        kafka_protocol = 'SASL_SSL' if ssl_enabled and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-256'] \
-            else 'SASL_PLAINTEXT' if not ssl_enabled and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-256'] \
-            else 'SSL' if ssl_enabled and sasl_protocol_normalized == 'none' \
+        kafka_protocol = 'SASL_SSL' if ssl_enabled == True and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-256', 'OAUTHBEARER'] \
+            else 'SASL_PLAINTEXT' if ssl_enabled == False and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-256', 'OAUTHBEARER'] \
+            else 'SSL' if ssl_enabled == True and sasl_protocol_normalized == 'none' \
             else 'PLAINTEXT'
         return kafka_protocol
 
@@ -47,7 +48,7 @@ class FilterModule(object):
         ssl_required = False
         for listener in listeners_dict:
             ssl_enabled = listeners_dict[listener].get('ssl_enabled', default_ssl_enabled)
-            ssl_required = ssl_required or ssl_enabled
+            ssl_required = ssl_required == True or ssl_enabled == True
         return ssl_required
 
     def java_arg_build_out(self, java_arg_list):
