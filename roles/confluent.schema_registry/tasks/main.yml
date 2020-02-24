@@ -51,6 +51,8 @@
     group: "{{schema_registry.group}}"
   when: kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
+## RBAC Configuration
+
 - name: Create pem file Directory
   file:
     path: "{{rbac_enabled_public_pem_path}}"
@@ -120,21 +122,21 @@
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
-    curl -X POST http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_mtls_schema_registry_user}}/roles/SecurityAdmin -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d '{"clusters":{"kafka-cluster": "{{cluster_id.stdout}}", "schema-registry-cluster": "schema-registry"}}"'
+    curl -X POST http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_schema_registry_principal}}/roles/SecurityAdmin -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d '{"clusters":{"kafka-cluster": "{{cluster_id.stdout}}", "schema-registry-cluster": "schema-registry"}}"'
   when: rbac_enabled|bool and ssl_enabled|bool and ssl_custom_certs|bool
 
 - name: Grant schema registry ResourceOwner on the group that Schema Registry nodes use to coordinate across the cluster when using custom certificates
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
-    curl -X POST http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_mtls_schema_registry_user}}/roles/ResourceOwner/bindings -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d '{"scope":{"clusters":{"kafka-cluster": "{{cluster_id.stdout}}"}}, "resourcePatterns":[{"resourceType":"Group","name": "schema-registry","patternType":"LITERAL"}]}'
+    curl -X POST http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_schema_registry_principal}}/roles/ResourceOwner/bindings -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d '{"scope":{"clusters":{"kafka-cluster": "{{cluster_id.stdout}}"}}, "resourcePatterns":[{"resourceType":"Group","name": "schema-registry","patternType":"LITERAL"}]}'
   when: rbac_enabled|bool and ssl_enabled|bool and ssl_custom_certs|bool
 
 - name: Grant schema registry ResourceOwner on the kafka topic where schemas are stored when using custom certificates
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
-    curl http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_mtls_schema_registry_user}}/roles/ResourceOwner/bindings -X POST -d '{ "scope": {"clusters": {"kafka-cluster":"{{cluster_id.stdout}}"}}, "resourcePatterns": [{"resourceType": "Topic", "name": "_schemas" }]}' -H "Content-Type: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}"
+    curl http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_schema_registry_principal}}/roles/ResourceOwner/bindings -X POST -d '{ "scope": {"clusters": {"kafka-cluster":"{{cluster_id.stdout}}"}}, "resourcePatterns": [{"resourceType": "Topic", "name": "_schemas" }]}' -H "Content-Type: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}"
   when: rbac_enabled|bool and ssl_enabled|bool and ssl_custom_certs|bool
 
 - name: Remove exported pem file for MDS login
