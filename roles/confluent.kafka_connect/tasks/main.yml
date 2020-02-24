@@ -100,44 +100,78 @@
   delegate_facts: true
   shell: |
     curl -X POST http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{inventory_hostname}}/roles/SecurityAdmin" -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d "{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}","connect-cluster":"connect-cluster"}}
-  when: rbac_enabled|bool and ssl_enabled|bool
-
-## Configure users for RBAC with MTLS and custom certificates
+  when: (rbac_enabled|bool and ssl_enabled|bool) and not (ssl_custom_certs|bool)
 
 - name: Grant Connect user ResourceOwner on the group that Connect nodes use to coordinate across the cluster 
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
     curl -X POST http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{inventory_hostname}}/roles/ResourceOwner/bindings" -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d "{"scope":{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}"}},"resourcePatterns":[{"resourceType":"Group","name":"connect-cluster","patternType":"LITERAL"}]}
-  when: rbac_enabled|bool and ssl_enabled|bool
+  when: (rbac_enabled|bool and ssl_enabled|bool) and not (ssl_custom_certs|bool)
 
 - name: Grant Connect ResourceOwner on the Config topic where Connect configs are stored
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
     curl -X POST http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{inventory_hostname}}/roles/ResourceOwner/bindings -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d "{"scope":{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}"}},"resourcePatterns":[{"resourceType":"Topic","name":"config.storage.topic","patternType":"LITERAL"}]}
-  when: rbac_enabled|bool and ssl_enabled|bool
+  when: (rbac_enabled|bool and ssl_enabled|bool) and not (ssl_custom_certs|bool)
 
 - name: Grant Connect ResourceOwner on the offset storage topic 
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
     curl -X POST "http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{inventory_hostname}}/roles/ResourceOwner/bindings" -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d "{"scope":{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}"}},"resourcePatterns":[{"resourceType":"Topic","name":"offset.storage.topic","patternType":"LITERAL"}]}"
-  when: rbac_enabled|bool and ssl_enabled|bool
+  when: (rbac_enabled|bool and ssl_enabled|bool) and not (ssl_custom_certs|bool)
 
 - name: Grant Connect ResourceOwner on the offset status topic 
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
     curl -X POST "http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{inventory_hostname}}/roles/ResourceOwner/bindings" -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d "{"scope":{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}"}},"resourcePatterns":[{"resourceType":"Topic","name":"status.storage.topic","patternType":"LITERAL"}]}"
-  when: rbac_enabled|bool and ssl_enabled|bool
+  when: (rbac_enabled|bool and ssl_enabled|bool) and not (ssl_custom_certs|bool)
+
+## Configure users for RBAC with MTLS and custom certificates
+
+- name: Grant role Security Admin to Connect user
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl -X POST http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_connect_principal}}/roles/SecurityAdmin" -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d "{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}","connect-cluster":"connect-cluster"}}
+  when: rbac_enabled|bool and ssl_enabled|bool and ssl_custom_certs|bool
+
+- name: Grant Connect user ResourceOwner on the group that Connect nodes use to coordinate across the cluster 
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl -X POST http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_connect_principal}}/roles/ResourceOwner/bindings" -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d "{"scope":{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}"}},"resourcePatterns":[{"resourceType":"Group","name":"connect-cluster","patternType":"LITERAL"}]}
+  when: rbac_enabled|bool and ssl_enabled|bool and ssl_custom_certs|bool
+
+- name: Grant Connect ResourceOwner on the Config topic where Connect configs are stored
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl -X POST http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_connect_principal}}/roles/ResourceOwner/bindings -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d "{"scope":{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}"}},"resourcePatterns":[{"resourceType":"Topic","name":"config.storage.topic","patternType":"LITERAL"}]}
+  when: rbac_enabled|bool and ssl_enabled|bool and ssl_custom_certs|bool
+
+- name: Grant Connect ResourceOwner on the offset storage topic 
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl -X POST "http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_connect_principal}}/roles/ResourceOwner/bindings" -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d "{"scope":{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}"}},"resourcePatterns":[{"resourceType":"Topic","name":"offset.storage.topic","patternType":"LITERAL"}]}"
+  when: rbac_enabled|bool and ssl_enabled|bool and ssl_custom_certs|bool
+
+- name: Grant Connect ResourceOwner on the offset status topic 
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl -X POST "http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_connect_principal}}/roles/ResourceOwner/bindings" -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d "{"scope":{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}"}},"resourcePatterns":[{"resourceType":"Topic","name":"status.storage.topic","patternType":"LITERAL"}]}"
+  when: rbac_enabled|bool and ssl_enabled|bool and ssl_custom_certs|bool
 
 - name: Remove exported pem file for MDS login
   file:
      path: /var/ssl/private/kafka_broker_keystore.pem
      state: absent
   when: rbac_enabled|bool and ssl_enabled|bool 
-
 
 - name: Create Connect Distributed Config
   template:
