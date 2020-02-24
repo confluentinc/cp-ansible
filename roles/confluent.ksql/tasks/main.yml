@@ -29,6 +29,14 @@
     system: yes
     group: "{{ksql.group}}"
 
+- name: Set Ksql streams dir permissions
+  file:
+    path: "{{ksql.properties['ksql.streams.state.dir']}}"
+    owner: "{{ksql.user}}"
+    group: "{{ksql.group}}"
+    state: directory
+    mode: 0755
+
 - include_role:
     name: confluent.ssl
   vars:
@@ -72,10 +80,10 @@
 - name: Create Logs Directory
   file:
     path: "{{ksql.appender_log_path}}"
+    state: directory
     group: "{{ksql.group}}"
     owner: "{{ksql.user}}"
     mode: '764'
-    recurse: yes
 
 - name: Create Ksql log4j Config
   template:
@@ -130,27 +138,8 @@
     enabled: yes
     state: started
 
-- name: Wait for API to return 200 - HTTP
-  uri:
-    url: "http://localhost:{{ksql_listener_port}}/info"
-    status_code: 200
-  register: result
-  until: result.status == 200
-  retries: 60
-  delay: 5
+- name: Health Check
+  include_tasks: health_check.yml
   when:
-    - not ksql_ssl_enabled|bool
     - health_checks_enabled|bool
-
-- name: Wait for API to return 200 - HTTPS
-  uri:
-    url: "https://localhost:{{ksql_listener_port}}/info"
-    status_code: 200
-    validate_certs: no
-  register: result
-  until: result.status == 200
-  retries: 60
-  delay: 5
-  when:
-    - ksql_ssl_enabled|bool
-    - health_checks_enabled|bool
+    - not ansible_check_mode
