@@ -1,4 +1,4 @@
-#!/usr/bin/python
+    #!/usr/bin/python
 
 # Copyright: (c) 2019, Confluent Inc
 
@@ -121,6 +121,7 @@ def run_module():
     # when the connector doesn't exist
     #
     result['changed'] = False
+    result['deleted_connector_names'] = []
     output_messages = []
     try:
         current_connector_names = get_current_connectors(connect_url=module.params['connect_url'])
@@ -158,6 +159,7 @@ def run_module():
                 output_messages.append("New connector {} installed.".format(connector['name']))
 
         result['message'] = " ".join(output_messages)
+        result['deleted_connector_names'] = deleted_connector_names
 
     except Exception as e:
         result['message'] = str(e)
