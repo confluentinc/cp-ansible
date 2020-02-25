@@ -6,6 +6,8 @@ class FilterModule(object):
             'kafka_protocol': self.kafka_protocol,
             'kafka_protocol_defaults': self.kafka_protocol_defaults,
             'get_sasl_mechanisms': self.get_sasl_mechanisms,
+            'get_hostnames': self.get_hostnames,
+            'cert_extension': self.cert_extension,
             'ssl_required': self.ssl_required,
             'java_arg_build_out': self.java_arg_build_out
         }
@@ -43,6 +45,17 @@ class FilterModule(object):
             sasl_protocol = listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)
             mechanisms = mechanisms + [self.normalize_sasl_protocol(sasl_protocol)]
         return mechanisms
+
+    def get_hostnames(self, listeners_dict, default_hostname):
+        hostnames = []
+        for listener in listeners_dict:
+            hostname = listeners_dict[listener].get('hostname', default_hostname)
+            hostnames = hostnames + [hostname]
+        return hostnames
+
+    def cert_extension(self, hostnames):
+        extension = 'dns:'+",dns:".join(hostnames)
+        return extension
 
     def ssl_required(self, listeners_dict, default_ssl_enabled):
         ssl_required = False
