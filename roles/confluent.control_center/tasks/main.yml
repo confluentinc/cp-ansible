@@ -53,6 +53,8 @@
   notify:
     - restart control center
 
+## RBAC Configuration
+
 - name: Create pem file Directory
   file:
     path: "{{rbac_enabled_public_pem_path}}"
@@ -83,7 +85,7 @@
     openssl pkcs12 -in /var/ssl/private/kafka_broker.keystore.jks \
       -out /var/ssl/private/kafka_broker.keystore.pem \
       -passin pass:{{keystore_storepass}} -passout pass:{{keystore_storepass}}
-  when: rbac_enabled|bool 
+  when: rbac_enabled|bool and ssl_enabled|bool 
 
 - name: Login to MDS to get Security Token
   delegate_to: "{{ groups['kafka_broker'][0] }}"
@@ -93,32 +95,29 @@
   register: rbac_token 
   when: rbac_enabled|bool
 
-- name: Grant role Security Admin to Schema Registry user
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
-  delegate_facts: true
-  shell: |
-    curl http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_mtls_schema_registry_user}}/roles/SecurityAdmin -X POST -d '{ "clusters": {"kafka-cluster":"{{cluster_id.stdout}}"}}' -H "Content-Type: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}"
-  when: rbac_enabled|bool 
+## Configure users for RBAC with MTLS and self signed certificates
 
-- name: Grant schema registry ResourceOwner on the group that Schema Registry nodes use to coordinate across the cluster 
+- name: Grant role System Admin to Control Center user when using self signed certificates
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
-    curl http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_mtls_schema_registry_user}}/roles/ResourceOwner/bindings -X POST -d '{ "scope": {"clusters": {"kafka-cluster":"{{cluster_id.stdout}}"}}, "resourcePatterns": [{"resourceType": "Group", "name": "schema-registry-{{groups['schema_registry'][0]}}-{{schema_registry_listener_port}}"}]}' -H "Content-Type: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}"
-  when: rbac_enabled|bool 
+    curl -X POST http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{inventory_hostname}}/roles/SystemAdmin -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d '{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}}'
+  when: (rbac_enabled|bool and ssl_enabled|bool) and not (ssl_custom_certs|bool)
 
-- name: Grant schema registry ResourceOwner on the kafka topic where schemas are stored
+## Configure users for RBAC with MTLS and custom certificates 
+
+- name: Grant role System Admin to Control Center user when using self signed certificates
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
-    curl http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_mtls_schema_registry_user}}/roles/ResourceOwner/bindings -X POST -d '{ "scope": {"clusters": {"kafka-cluster":"{{cluster_id.stdout}}"}}, "resourcePatterns": [{"resourceType": "Topic", "name": "_schemas" }]}' -H "Content-Type: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}"
-  when: rbac_enabled|bool 
+    curl -X POST http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{rbac_c3_principal}}/roles/SystemAdmin -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d '{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}}'
+  when: rbac_enabled|bool and ssl_enabled|bool and ssl_custom_certs|bool
 
 - name: Remove exported pem file for MDS login
   file:
      path: /var/ssl/private/kafka_broker_keystore.pem
      state: absent
-  when: rbac_enabled|bool and ssl_enabled|bool 
+  when: rbac_enabled|bool and ssl_enabled|bool
   
 - name: Create Control Center Config
   template:
