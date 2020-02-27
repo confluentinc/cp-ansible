@@ -44,6 +44,10 @@ message:
     description: The output message that the module generates
     type: str
     returned: always
+deleted_connector_names:
+    description: The name of the deleted connectors
+    type: list of str
+    returned: always
 '''
 
 import json
@@ -105,7 +109,7 @@ def run_module():
         active_connectors=dict(type='list', required=True),
     )
 
-    result = dict(changed=False, message='')
+    result = dict(changed=False, message='', deleted_connector_names=[])
 
     module = AnsibleModule(argument_spec=module_args, supports_check_mode=True)
 
@@ -120,8 +124,6 @@ def run_module():
     # note: using the logic below because PUT /connectors/<name>/config has proven to be unreliable
     # when the connector doesn't exist
     #
-    result['changed'] = False
-    result['deleted_connector_names'] = []
     output_messages = []
     try:
         current_connector_names = get_current_connectors(connect_url=module.params['connect_url'])
