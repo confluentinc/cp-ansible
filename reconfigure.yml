@@ -1,0 +1,132 @@
+---
+- import_playbook: generate_certificate_authority.yml
+
+# - name: Generate CA for Self Signed Certs
+#   hosts: zookeeper[0]
+#   gather_facts: no
+#   tags: certificate_authority
+#   tasks:
+#   - import_role:
+#       name: confluent.variables_handlers
+#   - name: Create Certificate Authority and Copy to Ansible Host
+#     include_tasks: tasks/certificate_authority.yml
+#     when:
+#       - self_signed|bool
+#       - regenerate_ca|bool
+#       - ssl_enabled|bool
+
+- name: Zookeeper Host Ordering
+  hosts: zookeeper
+  tags: zookeeper
+  serial: 1
+  tasks:
+    - import_role:
+        name: confluent.variables_handlers
+
+    - name: Zookeeper is Running
+      systemd:
+        name: "{{zookeeper_service_name}}"
+        state: started
+
+    - name: Zookeeper Health Check
+      import_role:
+        name: confluent.zookeeper
+        tasks_from: health_check.yml
+
+    - name: Get Leader/Follower
+      shell: "{{zookeeper_health_check_command}} | grep Mode"
+      args:
+        executable: /bin/bash
+      register: leader_query
+
+    - name: Add host to Follower Group
+      add_host:
+        name: "{{ inventory_hostname }}"
+        group: zookeeper_followers
+      delegate_to: localhost
+      when: '"follower" in leader_query.stdout'
+
+    - name: Add host to Leader Group
+      add_host:
+        name: "{{ inventory_hostname }}"
+        group: zookeeper_leader
+      delegate_to: localhost
+      when: '"leader" in leader_query.stdout'
+
+    - debug:
+        msg: "Leader: {{inventory_hostname}}"
+      when: '"leader" in leader_query.stdout'
+
+- name: Reconfigure Zookeeper
+  hosts: zookeeper_followers,zookeeper_leader
+  environment: "{{ proxy_env }}"
+  tags: zookeeper
+  serial: 1
+  tasks:
+  - import_role:
+      name: confluent.zookeeper
+
+- name: Kafka Broker Host Ordering
+  hosts: kafka_broker
+  tags: kafka_broker
+  serial: 1
+  tasks:
+    - name: Create Ordered Kafka Broker Groups
+      import_tasks: tasks/create_ordered_kafka_groups.yml
+      vars:
+        controller_group: controller
+        non_controller_group: non_controllers
+
+- name: Reconfigure Kafka Broker
+  hosts: non_controllers,controller
+  tags: kafka_broker
+  environment: "{{ proxy_env }}"
+  serial: 1
+  tasks:
+  - import_role:
+      name: confluent.kafka_broker
+
+- name: Reconfigure Schema Registry
+  hosts: schema_registry
+  tags: schema_registry
+  environment: "{{ proxy_env }}"
+  serial: 1
+  tasks:
+  - import_role:
+      name: confluent.schema_registry
+
+- name: Reconfigure Kafta Connect
+  hosts: kafka_connect
+  tags: kafka_connect
+  environment: "{{ proxy_env }}"
+  serial: 1
+  tasks:
+  - import_role:
+      name: confluent.kafka_connect
+
+- name: Reconfigure KSQL
+  hosts: ksql
+  tags: ksql
+  environment: "{{ proxy_env }}"
+  serial: 1
+  tasks:
+  - import_role:
+      name: confluent.ksql
+
+- name: Reconfigure Kafka Rest
+  hosts: kafka_rest
+  tags: kafka_rest
+  environment: "{{ proxy_env }}"
+  serial: 1
+  tasks:
+  - import_role:
+      name: confluent.kafka_rest
+
+- name: Reconfigure Control Center
+  hosts: control_center
+  tags: control_center
+  environment: "{{ proxy_env }}"
+  serial: 1
+  tasks:
+  - import_role:
+      name: confluent.control_center
