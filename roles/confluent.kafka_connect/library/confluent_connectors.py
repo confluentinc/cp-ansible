@@ -71,7 +71,7 @@ def install_new_connector(connect_url, name, config):
     data = json.dumps({'name': name, 'config': config})
     headers = {'Content-Type': 'application/json'}
     r = open_url(method='POST', url=connect_url, data=data, headers=headers)
-    return r.getcode() in (200, 201)
+    return r.getcode() in (200, 201, 409)
 
 def update_existing_connector(connect_url, name, config):
     url = "{}/{}/config".format(connect_url, name)
