@@ -1,5 +1,17 @@
-- name: Kafka Broker Upgrade - Config Prep
+- name: Kafka Broker - Host Ordering
   hosts: kafka_broker
+  # Running serial=1 because add_host has problems
+  # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
+  serial: 1
+  tasks:
+    - name: Create Ordered Kafka Broker Groups
+      import_tasks: tasks/create_ordered_kafka_groups.yml
+      vars:
+        controller_group: controller
+        non_controller_group: non_controllers
+
+- name: Kafka Broker Upgrade - Config Prep
+  hosts: non_controllers,controller
   gather_facts: no
   serial: 1
   vars:
@@ -8,10 +20,17 @@
     - import_role:
         name: confluent.variables_handlers
 
-    - name: Kafka is Running
-      systemd:
-        name: "{{kafka_broker_service_name}}"
-        state: started
+    - name: Get Package Facts
+      package_facts:
+        manager: auto
+
+    - set_fact:
+        confluent_server_enabled: true
+      when: ansible_facts.packages['confluent-server'] is defined
+
+    - set_fact:
+        confluent_server_enabled: false
+      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
 
     - set_fact:
         inter_broker_protocol_version: 2.3
@@ -50,75 +69,64 @@
 
 - name: Kafka Broker Upgrade - Host Ordering
   hosts: kafka_broker
-  # Running serial=1 because add_host has problems
-  # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
   serial: 1
   tasks:
-    - import_role:
-        name: confluent.variables_handlers
+    # Sets active_controller_count var for each host
+    - name: Create Ordered Kafka Broker Groups
+      import_tasks: tasks/create_ordered_kafka_groups.yml
+      vars:
+        controller_group: controller
+        non_controller_group: non_controllers
 
-    - name: Get Package Facts - RedHat
+    - name: Get Package Facts
       package_facts:
         manager: auto
-      when: ansible_os_family == "RedHat"
 
-    - name: Set Current Package Version - RedHat
+    - set_fact:
+        confluent_server_enabled: true
+      when: ansible_facts.packages['confluent-server'] is defined
+
+    - set_fact:
+        confluent_server_enabled: false
+      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
+
+    - name: Set Current Package Version
       set_fact:
         kafka_broker_current_version: "{{ ansible_facts.packages['confluent-server'][0]['version'] }}"
-      when: ansible_os_family == "RedHat" and confluent_server_enabled|bool
+      when: confluent_server_enabled|bool
 
-    - name: Set Current Package Version - RedHat
+    - name: Set Current Package Version
       set_fact:
         kafka_broker_current_version: "{{ ansible_facts.packages['confluent-kafka-2.12'][0]['version'] }}"
-      when: ansible_os_family == "RedHat" and not confluent_server_enabled|bool
-
-    - name: Get Package Facts - Debian
-      # Bug in ansible 2.8 with apt package manager and package_facts module
-      # https://github.com/ansible/ansible/pull/56008
-      # when above pull fixed, shouldn't need Debain v RedHat logic
-      shell: "apt list {{kafka_broker_main_package}} -a | grep installed | cut -d ' ' -f2 | cut -d '-' -f1"
-      register: kafka_broker_package_query
-      when: ansible_os_family == "Debian"
-
-    - name: Set Current Package Version - Debian
-      set_fact:
-        kafka_broker_current_version: "{{ kafka_broker_package_query.stdout }}"
-      when: ansible_os_family == "Debian"
+      when: not confluent_server_enabled|bool
 
     - debug:
         msg: "Current version: {{kafka_broker_current_version}}   Upgrade to version: {{confluent_package_version}}"
-
-    - name: Get ActiveControllerCount
-      uri:
-        url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ActiveControllerCount"
-        return_content: yes
-        status_code: 200
-      register: active_controller_count_query
-
-    - set_fact:
-        active_controller_count: "{{ active_controller_count_query['json']['value']['Value'] }}"
-
-    - debug:
-        msg: "Active Controller: {{inventory_hostname}}"
-      when: active_controller_count|int == 1
 
     - name: Add host to Non Controller Group
       add_host:
         name: "{{ inventory_hostname }}"
         group: upgrade_non_controllers
       delegate_to: localhost
-      when: active_controller_count|int == 0 and kafka_broker_current_version != confluent_package_version
+      when:
+        - active_controller_count|int == 0
+        - kafka_broker_current_version != confluent_full_package_version
+        - kafka_broker_current_version != confluent_package_version
 
     - name: Add host to Controller Group
       add_host:
         name: "{{ inventory_hostname }}"
         group: upgrade_controller
       delegate_to: localhost
-      when: active_controller_count|int == 1 and kafka_broker_current_version != confluent_package_version
+      when:
+        - active_controller_count|int == 1
+        - kafka_broker_current_version != confluent_full_package_version
+        - kafka_broker_current_version != confluent_package_version
 
 - name: Kafka Broker Upgrade
   # Putting controller group last here with serial=1 has the controller as the last host to run
   hosts: upgrade_non_controllers,upgrade_controller
+  environment: "{{ proxy_env }}"
   serial: 1
   tags:
     - upgrade
@@ -142,10 +150,19 @@
     - name: Wait for Under Replicated Partitions on Broker
       import_tasks: tasks/wait_for_urp.yml
 
-
-#  probably put in own file
-- name: Kafka Broker Upgrade - Set Inter-Broker Protocol to Current Version
+# Kafka Restarted, need to figure out the new controller
+- name: Kafka Broker - Host Ordering
   hosts: kafka_broker
+  serial: 1
+  tasks:
+    - name: Create Ordered Kafka Broker Groups
+      import_tasks: tasks/create_ordered_kafka_groups.yml
+      vars:
+        controller_group: kafka_broker_controller
+        non_controller_group: kafka_broker_non_controllers
+
+- name: Kafka Broker Upgrade - Set Inter-Broker Protocol to Current Version
+  hosts: kafka_broker_non_controllers,kafka_broker_controller
   gather_facts: no
   serial: 1
   tags:

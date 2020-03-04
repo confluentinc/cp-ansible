@@ -1,32 +1,26 @@
 - name: Control Center Upgrade
   hosts: control_center
+  environment: "{{ proxy_env }}"
   serial: 1
   tasks:
     - import_role:
         name: confluent.variables_handlers
-    
-    - name: Get Package Facts - RedHat
+
+    - name: Get Package Facts
       package_facts:
         manager: auto
-      when: ansible_os_family == "RedHat"
 
-    - name: Set Current Package Version - RedHat
+    - set_fact:
+        confluent_server_enabled: true
+      when: ansible_facts.packages['confluent-server'] is defined
+
+    - set_fact:
+        confluent_server_enabled: false
+      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
+
+    - name: Set Current Package Version
       set_fact:
         control_center_current_version: "{{ ansible_facts.packages['confluent-control-center'][0]['version'] }}"
-      when: ansible_os_family == "RedHat"
-
-    - name: Get Package Facts - Debian
-      # Bug in ansible 2.8 with apt package manager and package_facts module
-      # https://github.com/ansible/ansible/pull/56008
-      # when above pull fixed, shouldn't need Debain v RedHat logic
-      shell: apt list confluent-control-center -a | grep installed | cut -d ' ' -f2 | cut -d '-' -f1
-      register: control_center_package_query
-      when: ansible_os_family == "Debian"
-
-    - name: Set Current Package Version - Debian
-      set_fact:
-        control_center_current_version: "{{ control_center_package_query.stdout }}"
-      when: ansible_os_family == "Debian"
 
     - debug:
         msg: "Current version: {{control_center_current_version}}   Upgrade to version: {{confluent_package_version}}"
@@ -41,7 +35,9 @@
           - "{{ control_center.systemd_override }}"
         restore_files:
           - "{{ control_center.config_file }}"
-      when: control_center_current_version != confluent_package_version
+      when:
+        - control_center_current_version != confluent_full_package_version
+        - control_center_current_version != confluent_package_version
 
     - name: Wait for webpage to serve HTTP content
       uri:
