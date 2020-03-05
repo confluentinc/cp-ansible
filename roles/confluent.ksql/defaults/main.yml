@@ -1,9 +1,7 @@
-ksql_open_file_limit: "{{open_file_limit}}"
 ksql_streams_state_dir: /var/lib/kafka-streams
 
 ksql_jaas_java_arg_buildout: "-Djava.security.auth.login.config={{ksql.jaas_file}}"
 ksql_jolokia_java_arg_buildout: "-javaagent:{{jolokia_jar_path}}=port={{ksql_jolokia_port}},host=0.0.0.0"
-ksql_ssl_java_arg_buildout: "-Djavax.net.ssl.keyStore={{ksql_keystore_path}} -Djavax.net.ssl.trustStore={{ksql_truststore_path}} -Djavax.net.ssl.keyStorePassword={{ksql_keystore_storepass}} -Djavax.net.ssl.trustStorePassword={{ksql_truststore_storepass}}"
 ksql_log4j_java_arg_buildout: "-Dlog4j.configuration=file:{{ksql.log4j_file}}"
 
 ksql_custom_log4j: "{{ custom_log4j }}"
@@ -11,20 +9,20 @@ ksql_custom_log4j: "{{ custom_log4j }}"
 ksql_custom_java_args: ""
 ksql_java_args:
   - "{{ ksql_jaas_java_arg_buildout if kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | normalize_sasl_protocol == 'GSSAPI' else '' }}"
-  - "{{ ksql_jolokia_java_arg_buildout if jolokia_enabled|bool else '' }}"
-  - "{{ ksql_ssl_java_arg_buildout if schema_registry_ssl_enabled|bool else '' }}"
+  - "{{ ksql_jolokia_java_arg_buildout if ksql_jolokia_enabled|bool else '' }}"
   - "{{ ksql_log4j_java_arg_buildout if ksql_custom_log4j|bool else '' }}"
 
 ksql_final_java_args: "{{ ksql_java_args + [ ksql_custom_java_args ] }}"
 
+ksql_service_overrides:
+  LimitNOFILE: 100000
 ksql_service_environment_overrides:
   KSQL_HEAP_OPTS: "-Xmx3g"
   KSQL_OPTS: "{{ ksql_final_java_args | java_arg_build_out }}"
 
-ksql_service_overrides:
-  LimitNOFILE: "{{ ksql_open_file_limit }}"
+ksql_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | length, 3 ] | min }}"
 
-ksql_default_internal_replication_factor: 3
+ksql_service_id: default_
 
 ksql:
   appender_log_path: /var/log/confluent/ksql/
@@ -40,8 +38,9 @@ ksql:
   streamsDataDir: "{{ksql_streams_state_dir}}"
   properties:
     application.id: ksql-server
-    ksql.internal.topic.replicas: "{{ [ groups['kafka_broker'] | length, ksql_default_internal_replication_factor ] | min }}"
-    ksql.streams.replication.factor: "{{ [ groups['kafka_broker'] | length, ksql_default_internal_replication_factor ] | min }}"
+    ksql.service.id: "{{ ksql_service_id }}"
+    ksql.internal.topic.replicas: "{{ ksql_default_internal_replication_factor }}"
+    ksql.streams.replication.factor: "{{ ksql_default_internal_replication_factor }}"
     ksql.streams.state.dir: "{{ksql_streams_state_dir}}"
     ksql.streams.num.standby.replicas: 1
     ksql.streams.producer.delivery.timeout.ms: 2147483647

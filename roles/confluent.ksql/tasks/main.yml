@@ -1,3 +1,8 @@
+---
+- include_role:
+    name: confluent.common
+  when: not common_role_completed|bool
+
 # Install Packages
 - name: Install the KSQL Packages
   yum:
@@ -24,6 +29,14 @@
     system: yes
     group: "{{ksql.group}}"
 
+- name: Set Ksql streams dir permissions
+  file:
+    path: "{{ksql.properties['ksql.streams.state.dir']}}"
+    owner: "{{ksql.user}}"
+    group: "{{ksql.group}}"
+    state: directory
+    mode: 0755
+
 - include_role:
     name: confluent.ssl
   vars:
@@ -32,26 +45,19 @@
     keystore_path: "{{ksql_keystore_path}}"
     keystore_storepass: "{{ksql_keystore_storepass}}"
     keystore_keypass: "{{ksql_keystore_keypass}}"
+    service_name: ksql
+    hostnames: "{{ [inventory_hostname] }}"
   when: ksql_ssl_enabled|bool or kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
-- name: Create Keytabs Directory
-  file:
-    path: "{{kerberos.keytab_dir}}"
-    group: "{{ksql.group}}"
-    mode: '650'
-    recurse: yes
+- name: Configure Kerberos
+  include_role:
+    name: confluent.kerberos
+  vars:
+    kerberos_group: "{{ksql.group}}"
+    kerberos_user: "{{ksql.user}}"
+    kerberos_keytab_path: "{{ksql_kerberos_keytab_path}}"
+    kerberos_handler: "restart ksql"
   when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
-
-- name: Copy in Keytab File
-  copy:
-    src: "{{ksql_kerberos_keytab_path}}"
-    dest: "{{kerberos.keytab_dir}}/{{ksql_kerberos_keytab_path | basename}}"
-    mode: '600'
-    owner: "{{ksql.user}}"
-    group: "{{ksql.group}}"
-  when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
-  notify:
-    - restart ksql
 
 - name: Change streams directory ownership
   file:
@@ -74,10 +80,10 @@
 - name: Create Logs Directory
   file:
     path: "{{ksql.appender_log_path}}"
+    state: directory
     group: "{{ksql.group}}"
     owner: "{{ksql.user}}"
     mode: '764'
-    recurse: yes
 
 - name: Create Ksql log4j Config
   template:
@@ -131,3 +137,9 @@
     name: "{{ksql_service_name}}"
     enabled: yes
     state: started
+
+- name: Health Check
+  include_tasks: health_check.yml
+  when:
+    - health_checks_enabled|bool
+    - not ansible_check_mode
