@@ -63,6 +63,7 @@ key.converter.schema.registry.url={% for host in groups['schema_registry'] %}{% 
 {% endif %}
 
 # Connect Producer Configuration
+producer.interceptor.classes
 producer.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
 
 producer.security.protocol={{kafka_broker_listeners[kafka_connect_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
@@ -112,6 +113,7 @@ consumer.sasl.mechanism=SCRAM-SHA-256
 
 {% if kafka_connect_metrics.enabled|bool %}
 # Producer Monitoring Configuration
+producer.interceptor.classes={{kafka_connect_metrics.producer_interceptors|combine["io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"]|join(',')}}
 producer.confluent.monitoring.interceptor.bootstrap.servers={{kafka_connect_metrics_bootstrap_servers}}
 producer.confluent.monitoring.interceptor.security.protocol={{kafka_connect_metrics.listener | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
 {% if kafka_connect_metrics.listener.ssl_enabled | default(ssl_enabled) | bool %}
@@ -142,10 +144,13 @@ producer.confluent.monitoring.interceptor.sasl.mechanism=SCRAM-SHA-256
 producer.confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
    username="{{sasl_scram_users.kafka_connect.principal}}" password="{{sasl_scram_users.kafka_connect.password}}";
 {% endif %}
+{% elif kafka_connect_metrics.producer_interceptors|length %}
+producer.interceptor.classes={{kafka_connect_metrics.producer_interceptors|join(',')}}
 {% endif %}
 
 {% if kafka_connect_metrics.enabled|bool %}
 # Consumer Monitoring Configuration
+consumer.interceptor.classes={{kafka_connect_metrics.consumer_interceptors|combine["io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"]|join(',')}}
 consumer.confluent.monitoring.interceptor.bootstrap.servers={{kafka_connect_metrics_bootstrap_servers}}
 consumer.confluent.monitoring.interceptor.security.protocol={{kafka_connect_metrics.listener | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
 {% if kafka_connect_metrics.listener.ssl_enabled | default(ssl_enabled) | bool %}
@@ -176,4 +181,6 @@ consumer.confluent.monitoring.interceptor.sasl.mechanism=SCRAM-SHA-256
 consumer.confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
    username="{{sasl_scram_users.kafka_connect.principal}}" password="{{sasl_scram_users.kafka_connect.password}}";
 {% endif %}
+{% elif kafka_connect_metrics.consumer_interceptors|length %}
+consumer.interceptor.classes={{kafka_connect_metrics.consumer_interceptors|join(',')}}
 {% endif %}
