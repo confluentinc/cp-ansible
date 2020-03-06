@@ -28,6 +28,13 @@
     comment: "Control Center User"
     system: yes
     group: "{{control_center.group}}"
+    
+- name: Set Control Center Data Dir permissions
+  file:
+    path: "{{control_center.properties['confluent.controlcenter.data.dir']}}"
+    owner: "{{control_center.user}}"
+    group: "{{control_center.group}}"
+    mode: 0755
 
 - include_role:
     name: confluent.ssl
@@ -38,6 +45,7 @@
     keystore_storepass: "{{control_center_keystore_storepass}}"
     keystore_keypass: "{{control_center_keystore_keypass}}"
     service_name: control_center
+    hostnames: "{{ [inventory_hostname] }}"
   when: control_center_ssl_enabled|bool or kafka_broker_listeners[control_center_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
 - name: Configure Kerberos
@@ -63,10 +71,10 @@
 - name: Create Logs Directory
   file:
     path: "{{control_center.appender_log_path}}"
+    state: directory
     group: "{{control_center.group}}"
     owner: "{{control_center.user}}"
     mode: '764'
-    recurse: yes
 
 - name: Create RocksDB Directory
   file:
@@ -90,9 +98,9 @@
 - name: Create Service Override Directory
   file:
     path: "{{control_center.systemd_override | dirname}}"
+    state: directory
     owner: "{{control_center.user}}"
     group: "{{control_center.group}}"
-    state: directory
     mode: 0640
 
 - name: Write Service Overrides
@@ -119,25 +127,8 @@
     enabled: yes
     state: started
 
-- name: Wait for webpage to serve HTTP content
-  uri:
-    url: "http://localhost:{{control_center_port}}"
-  register: result
-  until: result.status == 200
-  retries: 60
-  delay: 10
+- name: Health Check
+  include_tasks: health_check.yml
   when:
-    - not control_center_ssl_enabled|bool
     - health_checks_enabled|bool
-
-- name: Wait for webpage to serve HTTPS content
-  uri:
-    url: "https://localhost:{{control_center_port}}"
-    validate_certs: no
-  register: result
-  until: result.status == 200
-  retries: 60
-  delay: 10
-  when:
-    - control_center_ssl_enabled|bool
-    - health_checks_enabled|bool
+    - not ansible_check_mode
