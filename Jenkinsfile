@@ -8,14 +8,14 @@ def config = jobConfig {
 }
 
 def job = {
-    stage("Access to git url?") {
-        echo "Running unit and integration tests"
-        sh "env"
-        sh "pwd"
-        sh "git branch"
-        sh "git log"
+    stage("Trigger Master Pipeline with Git Info") {
 
+        GIT_COMMIT = sh (
+            script: 'git rev-parse --short HEAD',
+            returnStdout: true
+        ).trim()
 
+        echo "Git committer: ${GIT_COMMIT}"
 
     }
 }
