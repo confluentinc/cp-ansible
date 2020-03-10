@@ -8,7 +8,7 @@ def config = jobConfig {
 }
 
 def job = {
-    stage("Hello world") {
+    stage("Access to git url?") {
         echo "Running unit and integration tests"
         sh "env"
     }
