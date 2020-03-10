@@ -10,7 +10,7 @@ def config = jobConfig {
 def job = {
     stage("Hello world") {
         echo "Running unit and integration tests"
-        sh "echo hello world"
+        sh "env"
     }
 }
 
