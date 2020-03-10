@@ -17,7 +17,7 @@ def job = {
 
         echo "Git committer: ${GIT_COMMIT}"
 
-        build job: '../../../ansible-dom-test', parameters: [string(name:'GIT_COMMIT_HASH', value: "${GIT_COMMIT}")]
+        build job: 'Jenkins/ansible-dom-test', parameters: [string(name:'GIT_COMMIT_HASH', value: "${GIT_COMMIT}")]
     }
 }
 
