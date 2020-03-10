@@ -82,7 +82,7 @@
   shell: |
     openssl pkcs12 -in /var/ssl/private/kafka_broker.keystore.jks \
       -out /var/ssl/private/kafka_broker.keystore.pem \
-      -passin pass:{{kafka_broker_keystore_storepass}} -passout pass:{{kafka_broker_keystore_storepass}}
+      -passin pass:{{kafka_broker_keystore_storepass}} -passout pass:{{kafka_broker_keystore_storepass}} -clcerts
   when: rbac_enabled|bool and ssl_enabled|bool 
 
 - name: Login to MDS to get Security Token
@@ -99,7 +99,7 @@
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
-    curl -X POST http://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{inventory_hostname}}/roles/SecurityAdmin -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d '{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}","schema-registry-cluster":"schema-registry"}}"'
+    curl --insecure --key /var/ssl/private/kafka_broker.keystore.pem:{{kafka_broker_keystore_storepass}} -X POST https://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{inventory_hostname}}/roles/SecurityAdmin -H "accept: application/json" -H "Authorization: Bearer {{rbac_token.stdout}}" -H "Content-Type: application/json" -d '{"clusters":{"kafka-cluster":"{{cluster_id.stdout}}","schema-registry-cluster":"schema-registry"}}"'
   when: (rbac_enabled|bool and ssl_enabled|bool) and not (ssl_custom_certs|bool)
 
 - name: Grant schema registry ResourceOwner on the group that Schema Registry nodes use to coordinate across the cluster when using self signed certificates
