@@ -17,6 +17,8 @@ def job = {
 
         echo "Git committer: ${GIT_COMMIT}"
 
+        build job: '../../../ansible-dom-test', parameters: [[$class: 'StringParameterValue', name: 'GIT_COMMIT_HASH', value: GIT_COMMIT]]
+
     }
 }
 
