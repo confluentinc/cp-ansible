@@ -11,6 +11,12 @@ def job = {
     stage("Access to git url?") {
         echo "Running unit and integration tests"
         sh "env"
+        sh "pwd"
+        sh "git branch"
+        sh "git log"
+
+
+
     }
 }
 
