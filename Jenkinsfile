@@ -15,9 +15,13 @@ def job = {
             returnStdout: true
         ).trim()
 
-        echo "Git committer: ${GIT_COMMIT}"
+        echo "Git commit: ${GIT_COMMIT}"
 
-        build job: '/ansible-dom-test', parameters: [string(name:'GIT_COMMIT_HASH', value: "${GIT_COMMIT}")]
+        build job: '/ansible-dom-master', parameters: [
+                        string(name: 'BRANCH_OR_COMMIT', value: "commit"),
+                        string(name: 'GIT_COMMIT_HASH', value: GIT_COMMIT),
+                        string(name: 'QUICK_OR_FULL', value: "quick")
+                    ]
     }
 }
 
