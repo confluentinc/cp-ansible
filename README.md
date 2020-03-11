@@ -31,4 +31,4 @@ If you would like to contribute to the CP-Ansible project, please refer to the [
 
 ## License
 
-[Apache 2.0](https://github.com/confluentinc/cp-ansible/blob/5.1.x/LICENSE.md)
+[Apache 2.0](https://github.com/confluentinc/cp-ansible/blob/5.3.x/LICENSE.md)
