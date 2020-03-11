@@ -9,7 +9,7 @@ def config = jobConfig {
 
 def job = {
     stage("Hello world") {
-        echo "Running unit and integration tests"
+        echo "NON confluent engineer"
         sh "env"
     }
 }
