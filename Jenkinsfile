@@ -46,7 +46,7 @@ def job = {
 
                     cd test/terraform
                     terraform init
-                    terraform apply --auto-approve -var vpc_id=$VPC_ID -var vpc_id=$SUBNET_ID
+                    terraform apply --auto-approve -var vpc_id=$VPC_ID -var subnet=$SUBNET_ID
                     cat hosts.yml
                     sleep 60s
                 '''
