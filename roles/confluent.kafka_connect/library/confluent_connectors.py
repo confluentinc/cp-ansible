@@ -67,7 +67,7 @@ def remove_connector(connect_url, name):
     r = open_url(method='DELETE', url=url)
     return r.getcode() == 200
 
-def install_new_connector(connect_url, name, config):
+def create_new_connector(connect_url, name, config):
     data = json.dumps({'name': name, 'config': config})
     headers = {'Content-Type': 'application/json'}
     r = open_url(method='POST', url=connect_url, data=data, headers=headers)
@@ -150,12 +150,12 @@ def run_module():
                 result['changed'] = changed
 
             except ValueError:
-                result['changed'] = install_new_connector(
+                result['changed'] = create_new_connector(
                     connect_url=module.params['connect_url'],
                     name=connector['name'],
                     config=connector['config']
                 )
-                output_messages.append("New connector {} installed.".format(connector['name']))
+                output_messages.append("New connector {} created.".format(connector['name']))
 
         result['message'] = " ".join(output_messages)
 
