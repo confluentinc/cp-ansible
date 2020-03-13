@@ -10,14 +10,14 @@ ANSIBLE_METADATA = {
 
 DOCUMENTATION = '''
 ---
-module: confluent_connectors
+module: kafka_connectors
 
-short_description: This module allows setting up Confluent connectors from Ansible.
+short_description: This module allows setting up Kafka connectors from Ansible.
 
 version_added: "2.4"
 
 description:
-    - "This module allows setting up Confluent connectors from Ansible. It registers the new ones,
+    - "This module allows setting up Kafka connectors from Ansible. It registers the new ones,
     updates the existing ones and removes the deleted ones."
 
 options:
