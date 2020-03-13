@@ -124,7 +124,7 @@ def run_module():
     output_messages = []
     try:
         current_connector_names = get_current_connectors(connect_url=module.params['connect_url'])
-        active_connector_names = [c['name'] for c in module.params['active_connectors']]
+        active_connector_names = (c['name'] for c in module.params['active_connectors'])
         deleted_connector_names = set(current_connector_names) - set(active_connector_names)
 
         for to_delete in deleted_connector_names:
