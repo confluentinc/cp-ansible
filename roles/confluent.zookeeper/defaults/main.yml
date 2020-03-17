@@ -1,17 +1,21 @@
-zookeeper_jaas_java_arg_buildout: "-Djava.security.auth.login.config={{zookeeper.jaas_file}}"
-zookeeper_jolokia_java_arg_buildout: "-javaagent:{{jolokia_jar_path}}=port={{zookeeper_jolokia_port}},host=0.0.0.0"
-zookeeper_log4j_java_arg_buildout: "-Dlog4j.configuration=file:{{zookeeper.log4j_file}}"
-zookeeper_jmxexporter_java_arg_buildout: "-javaagent:{{jmxexporter_jar_path}}={{zookeeper_jmxexporter_port}}:{{zookeeper_jmxexporter_config_path}}"
+# zookeeper_jaas_java_arg_buildout: "-Djava.security.auth.login.config={{zookeeper.jaas_file}}"
+# zookeeper_jolokia_java_arg_buildout: "-javaagent:{{jolokia_jar_path}}=port={{zookeeper_jolokia_port}},host=0.0.0.0"
+# zookeeper_log4j_java_arg_buildout: "-Dlog4j.configuration=file:{{zookeeper.log4j_file}}"
+# zookeeper_jmxexporter_java_arg_buildout: "-javaagent:{{jmxexporter_jar_path}}={{zookeeper_jmxexporter_port}}:{{zookeeper_jmxexporter_config_path}}"
 
 zookeeper_custom_log4j: "{{ custom_log4j }}"
 
-zookeeper_custom_java_args: ""
 zookeeper_java_args:
-  - "{{ zookeeper_jaas_java_arg_buildout if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms else '' }}"
-  - "{{ zookeeper_jolokia_java_arg_buildout if zookeeper_jolokia_enabled|bool else '' }}"
-  - "{{ zookeeper_log4j_java_arg_buildout if zookeeper_custom_log4j|bool else '' }}"
-  - "{{ zookeeper_jmxexporter_java_arg_buildout if zookeeper_jmxexporter_enabled|bool else '' }}"
+  # - "{{ zookeeper_jaas_java_arg_buildout if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms else '' }}"
+  - "{% if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms %}-Djava.security.auth.login.config={{zookeeper.jaas_file}}{% endif %}"
+  # - "{{ zookeeper_jolokia_java_arg_buildout if zookeeper_jolokia_enabled|bool else '' }}"
+  - "{% if zookeeper_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=port={{zookeeper_jolokia_port}},host=0.0.0.0{% endif %}"
+  # - "{{ zookeeper_log4j_java_arg_buildout if zookeeper_custom_log4j|bool else '' }}"
+  - "{% if zookeeper_custom_log4j|bool %}-Dlog4j.configuration=file:{{zookeeper.log4j_file}}{% endif %}"
+  # - "{{ zookeeper_jmxexporter_java_arg_buildout if zookeeper_jmxexporter_enabled|bool else '' }}"
+  - "{% if zookeeper_jmxexporter_enabled|bool %}-javaagent:{{jmxexporter_jar_path}}={{zookeeper_jmxexporter_port}}:{{zookeeper_jmxexporter_config_path}}{% endif %}"
 
+zookeeper_custom_java_args: ""
 zookeeper_final_java_args: "{{ zookeeper_java_args + [ zookeeper_custom_java_args ] }}"
 
 zookeeper_service_overrides:
@@ -20,7 +24,9 @@ zookeeper_service_overrides:
   Group: "{{ zookeeper_group if zookeeper_group != zookeeper_default_group else '' }}"
 zookeeper_service_environment_overrides:
   KAFKA_HEAP_OPTS: "-Xmx1g"
-  KAFKA_OPTS: "{{ zookeeper_final_java_args | java_arg_build_out }}"
+  # KAFKA_OPTS: "{{ zookeeper_final_java_args | java_arg_build_out }}"
+  KAFKA_OPTS: "{{ zookeeper_final_java_args | reject('equalto', '') | join(' ') }}"
+
 
 zookeeper_peer_port: 2888
 zookeeper_leader_port: 3888

@@ -1,27 +1,27 @@
-kafka_broker_jaas_java_arg_buildout: "-Djava.security.auth.login.config={{kafka_broker.jaas_file}}"
-# kafka_broker_jolokia_java_arg_buildout: "-javaagent:{{jolokia_jar_path}}=port={{kafka_broker_jolokia_port}},host=0.0.0.0"
+---
+# kafka_broker_jaas_java_arg_buildout: "-Djava.security.auth.login.config={{kafka_broker.jaas_file}}"
 kafka_broker_jolokia_ssl_enabled: "{{ ssl_enabled }}"
-kafka_broker_jolokia_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
-kafka_broker_jolokia_java_arg_buildout: |-
-  -javaagent:{{jolokia_jar_path}}=port={{kafka_broker_jolokia_port}},host=0.0.0.0{% if kafka_broker_jolokia_ssl_enabled|bool %},keystore={{kafka_broker_keystore_path}},keystorePassword={{kafka_broker_keystore_storepass}},protocol=https{% if kafka_broker_jolokia_ssl_mutual_auth_enabled|bool %},useSslClientAuthentication=true{% endif %}{% endif %}
-
+# kafka_broker_jolokia_java_arg_buildout: "-javaagent:{{jolokia_jar_path}}=port={{kafka_broker_jolokia_port}},host=0.0.0.0{% if kafka_broker_jolokia_ssl_enabled|bool %},keystore={{kafka_broker_keystore_path}},keystorePassword={{kafka_broker_keystore_storepass}},protocol=https{% endif %}"
 kafka_broker_jolokia_urp_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{inventory_hostname}}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
-
-
-kafka_broker_jmxexporter_java_arg_buildout: "-javaagent:{{jmxexporter_jar_path}}={{kafka_broker_jmxexporter_port}}:{{kafka_broker_jmxexporter_config_path}}"
-kafka_broker_ssl_java_arg_buildout: "-Djavax.net.ssl.keyStore={{kafka_broker_keystore_path}} -Djavax.net.ssl.trustStore={{kafka_broker_truststore_path}} -Djavax.net.ssl.keyStorePassword={{kafka_broker_keystore_storepass}} -Djavax.net.ssl.trustStorePassword={{kafka_broker_truststore_storepass}}"
-kafka_broker_log4j_java_arg_buildout: "-Dlog4j.configuration=file:{{kafka_broker.log4j_file}}"
+# kafka_broker_jmxexporter_java_arg_buildout: "-javaagent:{{jmxexporter_jar_path}}={{kafka_broker_jmxexporter_port}}:{{kafka_broker_jmxexporter_config_path}}"
+# kafka_broker_ssl_java_arg_buildout: "-Djavax.net.ssl.keyStore={{kafka_broker_keystore_path}} -Djavax.net.ssl.trustStore={{kafka_broker_truststore_path}} -Djavax.net.ssl.keyStorePassword={{kafka_broker_keystore_storepass}} -Djavax.net.ssl.trustStorePassword={{kafka_broker_truststore_storepass}}"
+# kafka_broker_log4j_java_arg_buildout: "-Dlog4j.configuration=file:{{kafka_broker.log4j_file}}"
 
 kafka_broker_custom_log4j: true
 
-kafka_broker_custom_java_args: ""
 kafka_broker_java_args:
-  - "{{ kafka_broker_jaas_java_arg_buildout if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms else '' }}"
-  - "{{ kafka_broker_jolokia_java_arg_buildout if kafka_broker_jolokia_enabled|bool else '' }}"
-  - "{{ kafka_broker_jmxexporter_java_arg_buildout if kafka_broker_jmxexporter_enabled|bool else '' }}"
-  - "{{ kafka_broker_ssl_java_arg_buildout if schema_registry_ssl_enabled|bool else '' }}"
-  - "{{ kafka_broker_log4j_java_arg_buildout if kafka_broker_custom_log4j|bool else '' }}"
+  # - "{{ kafka_broker_jaas_java_arg_buildout if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms else '' }}"
+  - "{% if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms %}-Djava.security.auth.login.config={{kafka_broker.jaas_file}}{% endif %}"
+  # - "{{ kafka_broker_jolokia_java_arg_buildout if kafka_broker_jolokia_enabled|bool else '' }}"
+  - "{% if kafka_broker_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=port={{kafka_broker_jolokia_port}},host=0.0.0.0{% if kafka_broker_jolokia_ssl_enabled|bool %},keystore={{kafka_broker_keystore_path}},keystorePassword={{kafka_broker_keystore_storepass}},protocol=https{% endif %}{% endif %}"
+  # - "{{ kafka_broker_jmxexporter_java_arg_buildout if kafka_broker_jmxexporter_enabled|bool else '' }}"
+  - "{% if kafka_broker_jmxexporter_enabled|bool %}-javaagent:{{jmxexporter_jar_path}}={{kafka_broker_jmxexporter_port}}:{{kafka_broker_jmxexporter_config_path}}{% endif %}"
+  # - "{{ kafka_broker_ssl_java_arg_buildout if schema_registry_ssl_enabled|bool else '' }}"
+  - "{% if schema_registry_ssl_enabled|bool %}-Djavax.net.ssl.keyStore={{kafka_broker_keystore_path}} -Djavax.net.ssl.trustStore={{kafka_broker_truststore_path}} -Djavax.net.ssl.keyStorePassword={{kafka_broker_keystore_storepass}} -Djavax.net.ssl.trustStorePassword={{kafka_broker_truststore_storepass}}{% endif %}"
+  # - "{{ kafka_broker_log4j_java_arg_buildout if kafka_broker_custom_log4j|bool else '' }}"
+  - "{% if kafka_broker_custom_log4j|bool %}-Dlog4j.configuration=file:{{kafka_broker.log4j_file}}{% endif %}"
 
+kafka_broker_custom_java_args: ""
 kafka_broker_final_java_args: "{{ kafka_broker_java_args + [ kafka_broker_custom_java_args ] }}"
 
 # Kafka already has LimitNOFILE value set in unit file, empty value will not get written to override.conf
@@ -31,7 +31,7 @@ kafka_broker_service_overrides:
   Group: "{{ kafka_broker_group if kafka_broker_group != kafka_broker_default_group else '' }}"
 kafka_broker_service_environment_overrides:
   KAFKA_HEAP_OPTS: "-Xmx1g"
-  KAFKA_OPTS: "{{ kafka_broker_final_java_args | java_arg_build_out }}"
+  KAFKA_OPTS: "{{ kafka_broker_final_java_args | reject('equalto', '') | join(' ') }}"
 
 kafka_broker_sysctl:
   vm.swappiness: 1
