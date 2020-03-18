@@ -1,8 +1,29 @@
 ---
+- name: Install python-apt and gnupg
+  apt:
+    name: "{{item}}"
+    state: present
+  loop:
+    - python-apt
+    - gnupg
+
+- name: Get Package Facts
+  package_facts:
+    manager: auto
+
+- debug:
+    msg: Trigger apt-get update
+  notify: apt-get update
+  changed_when: true
+  when: ansible_facts.packages['apt-transport-https'] is not defined
+
+- meta: flush_handlers
+
 - name: Install apt-transport-https
   shell: apt-get install apt-transport-https -y --force-yes
   args:
     warn: no
+  when: ansible_facts.packages['apt-transport-https'] is not defined
 
 - name: Add Confluent Apt Key
   apt_key:
@@ -21,8 +42,7 @@
     src: "{{custom_apt_repo_filepath}}"
     dest: /etc/apt/sources.list.d/custom_confluent.list
   when: custom_apt_repo|bool
-  notify:
-    - apt-get update
+  notify: apt-get update
 
 - meta: flush_handlers
 
