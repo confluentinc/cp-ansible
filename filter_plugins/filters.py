@@ -24,7 +24,7 @@ class FilterModule(object):
         kafka_protocol = 'SASL_SSL' if ssl_enabled == True and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-256', 'OAUTHBEARER'] \
             else 'SASL_PLAINTEXT' if not ssl_enabled and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-256', 'OAUTHBEARER'] \
             else 'SSL' if ssl_enabled and sasl_protocol_normalized == 'none' \
-            else 'PLAINTEXT
+            else 'PLAINTEXT'
         return kafka_protocol
 
     def kafka_protocol(self, sasl_protocol, ssl_enabled):
