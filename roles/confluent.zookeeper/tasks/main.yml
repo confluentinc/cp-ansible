@@ -3,7 +3,6 @@
     name: confluent.common
   when: not common_role_completed|bool
 
-# Install Packages
 - name: Install the Zookeeper Packages
   yum:
     name: "{{item}}{{confluent_package_redhat_suffix}}"
@@ -16,6 +15,7 @@
     name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{zookeeper_packages}}"
   when: ansible_os_family == "Debian"
+
 
 - name: Install EPEL to gain access to additional tools
   yum:
@@ -36,23 +36,24 @@
   when: ansible_os_family == "Debian" and rbac_enabled|bool 
 
 # Configure environment
+
 - name: Create Zookeeper Group
   group:
-    name: "{{zookeeper.group}}"
+    name: "{{zookeeper_group}}"
 
 - name: Create Zookeeper User
   user:
-    name: "{{zookeeper.user}}"
+    name: "{{zookeeper_user}}"
     comment: "Zookeeper User"
     system: yes
-    group: "{{zookeeper.group}}"
+    group: "{{zookeeper_group}}"
 
 - name: Configure Kerberos
   include_role:
     name: confluent.kerberos
   vars:
-    kerberos_group: "{{zookeeper.group}}"
-    kerberos_user: "{{zookeeper.user}}"
+    kerberos_group: "{{zookeeper_group}}"
+    kerberos_user: "{{zookeeper_user}}"
     kerberos_keytab_path: "{{zookeeper_kerberos_keytab_path}}"
     kerberos_handler: "restart zookeeper"
   when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
@@ -60,26 +61,33 @@
 - name: Set Zookeeper dataDir ownership
   file:
     path: "{{zookeeper.properties.dataDir}}"
-    owner: "{{zookeeper.user}}"
-    group: "{{zookeeper.group}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
     state: directory
     mode: 0750
+
+- name: Set Ownership of Data Dir files
+  file:
+    path: "{{zookeeper.properties.dataDir}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+    recurse: true
 
 - name: Create Zookeeper myid File
   template:
     src: myid.j2
     dest: "{{zookeeper.properties.dataDir}}/myid"
     mode: 0555
-    owner: "{{zookeeper.user}}"
-    group: "{{zookeeper.group}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
 
 - name: Create Zookeeper Config
   template:
     src: zookeeper.properties.j2
     dest: "{{zookeeper.config_file}}"
     mode: 0400
-    owner: "{{zookeeper.user}}"
-    group: "{{zookeeper.group}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
   register: zookeeper_config
   notify:
     - restart zookeeper
@@ -88,17 +96,17 @@
   file:
     path: "{{zookeeper.log_path}}"
     state: directory
-    group: "{{zookeeper.group}}"
-    owner: "{{zookeeper.user}}"
-    mode: '764'
+    group: "{{zookeeper_group}}"
+    owner: "{{zookeeper_user}}"
+    mode: 0750
 
 - name: Create Zookeeper log4j config
   template:
     src: zookeeper_log4j.properties.j2
     dest: "{{zookeeper.log4j_file}}"
     mode: 0640
-    owner: "{{zookeeper.user}}"
-    group: "{{zookeeper.group}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
   notify:
     - restart zookeeper
 
@@ -107,8 +115,8 @@
     src: zookeeper_jaas.conf.j2
     dest: "{{zookeeper.jaas_file}}"
     mode: 0640
-    owner: "{{zookeeper.user}}"
-    group: "{{zookeeper.group}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
   when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
   notify:
     - restart zookeeper
@@ -118,15 +126,15 @@
     src: "zookeeper.yml"
     dest: "{{zookeeper_jmxexporter_config_path}}"
     mode: 0640
-    owner: "{{zookeeper.user}}"
-    group: "{{zookeeper.group}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
   when: jmxexporter_enabled|bool
 
 - name: Create Service Override Directory
   file:
     path: "{{zookeeper.systemd_override | dirname}}"
-    owner: "{{zookeeper.user}}"
-    group: "{{zookeeper.group}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
     state: directory
     mode: 0640
 
@@ -135,8 +143,8 @@
     src: override.conf.j2
     dest: "{{zookeeper.systemd_override}}"
     mode: 0640
-    owner: "{{zookeeper.user}}"
-    group: "{{zookeeper.group}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
   notify:
     - reload systemd
     - restart zookeeper
