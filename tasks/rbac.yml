@@ -1,0 +1,70 @@
+- name: Create pem file Directory
+  file:
+    path: "{{rbac_enabled_public_pem_path}}"
+    group: "{{kafka_broker_group}}"
+    mode: '650'
+    recurse: yes
+
+- name: Copy in public pem files
+  copy:
+    src: "{{token_services_public_pem_file}}"
+    dest: "{{rbac_enabled_public_pem_path}}"
+    mode: '755'
+    owner: "{{kafka_broker_user}}"
+    group: "{{kafka_broker_group}}"
+
+# - name: Get Kafka Cluster ID from Zookeeper
+#   include_tasks: tasks/get_cluster_id.yml
+
+- name: Get Kafka Cluster ID from Zookeeper
+  shell: /bin/zookeeper-shell localhost:2181 get /cluster/id | grep version
+  delegate_to: "{{ groups['zookeeper'][0] }}"
+  register: cluster_id_query
+
+- set_fact:
+    cluster_id_json: "{{ cluster_id_query.stdout }}"
+
+- name: Set cluster_id Variable
+  set_fact:
+    cluster_id: "{{ cluster_id_json.id }}"
+
+- name: export certificate to pem format for MDS login to create user
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  shell: |
+    openssl pkcs12 -in /var/ssl/private/kafka_broker.truststore.jks \
+      -out /var/ssl/private/kafka_broker.truststore.pem \
+      -passin pass:{{kafka_broker_truststore_storepass}} -passout pass:{{kafka_broker_truststore_storepass}}
+
+# - name: Login to MDS to get Security Token
+#   delegate_to: "{{ groups['kafka_broker'][0] }}"
+#   delegate_facts: true
+#   shell: |
+#     curl --cacert /var/ssl/private/kafka_broker.keystore.pem -u "{{mds_super_user}}":"{{mds_super_user_password}}" -s https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/authenticate 2> /dev/null | grep auth_token | jq -r .auth_token
+#   register: rbac_token 
+
+- name: Login to MDS to get Security Token
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl --cacert /var/ssl/private/kafka_broker.keystore.pem -u "{{mds_super_user}}":"{{mds_super_user_password}}" -s https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/authenticate 2> /dev/null | grep auth_token
+  register: rbac_token_query
+
+- set_fact:
+  rbac_token_json: "{{ rbac_token_query.stdout }}"
+
+- name: Set rback_token Variable
+  set_fact:
+    rbac_token: "{{ rbac_token_json.id }}"
+
+- name: Configure RBAC with mTLS self signed certificates
+  include_tasks: rbac_mtls_self_signed.yml
+  when: not ssl_custom_certs|bool
+
+- name: Configure RBAC with mTLS custom certs
+  include_tasks: rbac_mtls_custom_certs.yml
+  when: ssl_custom_certs|bool
+
+- name: Remove exported pem file for MDS login
+  file:
+     path: /var/ssl/private/kafka_broker_truststore.pem
+     state: absent
