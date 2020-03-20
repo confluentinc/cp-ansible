@@ -17,20 +17,11 @@ def job = {
 
     withDockerServer([uri: dockerHost()]) {
         stage('Run Integration Tests') {
-            parallel (
-                'common': {
-                    sh '''
-                        cd roles/confluent.commom
-                        molecule test --all
-                    '''
-                },
-                'c3': {
-                    sh '''
-                        cd roles/confluent.control_center
-                        molecule test --all
-                    '''
-                }
-            )
+            // TODO investigate parallelizing this
+            sh '''
+                cd roles/confluent.control_center
+                molecule test --all
+            '''
         }
     }
 
