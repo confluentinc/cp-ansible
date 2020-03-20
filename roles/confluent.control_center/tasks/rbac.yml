@@ -20,15 +20,15 @@
 - name: export certificate to pem format for MDS login to create user
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   shell: |
-    openssl pkcs12 -in /var/ssl/private/kafka_broker.keystore.jks \
-      -out /var/ssl/private/kafka_broker.keystore.pem \
-      -passin pass:{{kafka_broker_keystore_storepass}} -passout pass:{{kafka_broker_keystore_storepass}} -clcerts
+    openssl pkcs12 -in /var/ssl/private/kafka_broker.truststore.jks \
+      -out /var/ssl/private/kafka_broker.truststore.pem \
+      -passin pass:{{kafka_broker_truststore_storepass}} -passout pass:{{kafka_broker_truststore_storepass}}
 
 - name: Login to MDS to get Security Token
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
-    curl --insecure --key /var/ssl/private/kafka_broker.keystore.pem:{{kafka_broker_keystore_storepass}} -u "{{mds_super_user}}":"{{mds_super_user_password}}" -s https://localhost:8090/security/1.0/authenticate 2> /dev/null | grep auth_token | jq -r .auth_token
+    curl --cacert /var/ssl/private/kafka_broker.keystore.pem -u "{{mds_super_user}}":"{{mds_super_user_password}}" -s https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/authenticate 2> /dev/null | grep auth_token | jq -r .auth_token
   register: rbac_token 
 
 - name: Configure RBAC with mTLS self signed certificates
@@ -41,5 +41,5 @@
 
 - name: Remove exported pem file for MDS login
   file:
-     path: /var/ssl/private/kafka_broker_keystore.pem
+     path: /var/ssl/private/kafka_broker_truststore.pem
      state: absent
