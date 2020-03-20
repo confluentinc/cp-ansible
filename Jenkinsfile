@@ -14,23 +14,22 @@ def job = {
             sudo pip install molecule docker
         '''
     }
+
     stage('Run Integration Tests') {
-        withDockerServer([uri: dockerHost()]) {
-            parallel {
-                stage('Run C3 Tests') {
-                    sh '''
-                        cd roles/confluent.control_center
-                        molecule test --all
-                    '''
-                }
-                stage('Run Common Tests') {
-                    sh '''
-                        cd roles/confluent.commom
-                        molecule test --all
-                    '''
-                }
+        parallel (
+            'common': {
+                sh '''
+                    cd roles/confluent.commom
+                    molecule test --all
+                '''
+            },
+            'c3': {
+                sh '''
+                    cd roles/confluent.control_center
+                    molecule test --all
+                '''
             }
-        }
+        )
     }
 }
 
