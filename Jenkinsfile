@@ -8,9 +8,17 @@ def config = jobConfig {
 }
 
 def job = {
-    stage("Hello world") {
-        echo "Running unit and integration tests"
-        sh "env"
+    stage('Install Molecule and Latest Ansible') {
+        sh '''
+            sudo pip install --upgrade 'ansible==2.9.*'
+            sudo pip install molecule docker
+        '''
+    }
+    stage('Test Each Role with Molecule') {
+        sh '''
+            chmod +x test-all.sh
+            ./test-all.sh
+        '''
     }
 }
 

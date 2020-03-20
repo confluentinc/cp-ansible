@@ -1,5 +1,9 @@
 for d in roles/* ; do
     pushd $d
-    [ -d "molecule/" ] && echo "Running Molecule Test in role $d" && molecule test --all
+    if [ -d "molecule" ]
+    then
+        echo "Running Molecule Test in role $d"
+        molecule test --all
+    fi
     popd
 done
