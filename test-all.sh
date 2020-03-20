@@ -1,3 +1,5 @@
+#!/bin/bash
+
 for d in roles/* ; do
     pushd $d
     if [ -d "molecule" ]
