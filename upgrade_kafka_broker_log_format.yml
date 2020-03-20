@@ -1,12 +1,36 @@
-- name: Kafka Broker Upgrade - Set Log Message Format Version to Current Version
+- name: Kafka Broker - Host Ordering
   hosts: kafka_broker
+  # Running serial=1 because add_host has problems
+  # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
+  serial: 1
+  tasks:
+    - name: Create Ordered Kafka Broker Groups
+      import_tasks: tasks/create_ordered_kafka_groups.yml
+      vars:
+        controller_group: controller
+        non_controller_group: non_controllers
+
+- name: Kafka Broker Upgrade - Set Log Message Format Version to Current Version
+  hosts: non_controllers,controller
   gather_facts: no
   serial: 1
   vars:
-    kafka_broker_upgrade_end_version: "5.3"
+    kafka_broker_upgrade_end_version: "5.4"
   tasks:
     - import_role:
         name: confluent.variables_handlers
+
+    - name: Get Package Facts
+      package_facts:
+        manager: auto
+
+    - set_fact:
+        confluent_server_enabled: true
+      when: ansible_facts.packages['confluent-server'] is defined
+
+    - set_fact:
+        confluent_server_enabled: false
+      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
 
     - set_fact:
         log_message_format_version: 2.3

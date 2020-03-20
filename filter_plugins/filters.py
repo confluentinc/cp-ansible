@@ -6,6 +6,8 @@ class FilterModule(object):
             'kafka_protocol': self.kafka_protocol,
             'kafka_protocol_defaults': self.kafka_protocol_defaults,
             'get_sasl_mechanisms': self.get_sasl_mechanisms,
+            'get_hostnames': self.get_hostnames,
+            'cert_extension': self.cert_extension,
             'ssl_required': self.ssl_required,
             'java_arg_build_out': self.java_arg_build_out
         }
@@ -14,13 +16,14 @@ class FilterModule(object):
         normalized = 'GSSAPI' if protocol.lower() == 'kerberos' \
             else 'SCRAM-SHA-256' if protocol.upper() == 'SCRAM' \
             else 'PLAIN' if protocol.upper() == 'PLAIN' \
+            else 'OAUTHBEARER' if protocol.upper() == 'OAUTHBEARER' \
             else 'none'
         return normalized
 
     def kafka_protocol_normalized(self, sasl_protocol_normalized, ssl_enabled):
-        kafka_protocol = 'SASL_SSL' if ssl_enabled and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-256'] \
-            else 'SASL_PLAINTEXT' if not ssl_enabled and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-256'] \
-            else 'SSL' if ssl_enabled and sasl_protocol_normalized == 'none' \
+        kafka_protocol = 'SASL_SSL' if ssl_enabled == True and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-256', 'OAUTHBEARER'] \
+            else 'SASL_PLAINTEXT' if ssl_enabled == False and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-256', 'OAUTHBEARER'] \
+            else 'SSL' if ssl_enabled == True and sasl_protocol_normalized == 'none' \
             else 'PLAINTEXT'
         return kafka_protocol
 
@@ -43,11 +46,22 @@ class FilterModule(object):
             mechanisms = mechanisms + [self.normalize_sasl_protocol(sasl_protocol)]
         return mechanisms
 
+    def get_hostnames(self, listeners_dict, default_hostname):
+        hostnames = []
+        for listener in listeners_dict:
+            hostname = listeners_dict[listener].get('hostname', default_hostname)
+            hostnames = hostnames + [hostname]
+        return hostnames
+
+    def cert_extension(self, hostnames):
+        extension = 'dns:'+",dns:".join(hostnames)
+        return extension
+
     def ssl_required(self, listeners_dict, default_ssl_enabled):
         ssl_required = False
         for listener in listeners_dict:
             ssl_enabled = listeners_dict[listener].get('ssl_enabled', default_ssl_enabled)
-            ssl_required = ssl_required or ssl_enabled
+            ssl_required = ssl_required == True or ssl_enabled == True
         return ssl_required
 
     def java_arg_build_out(self, java_arg_list):

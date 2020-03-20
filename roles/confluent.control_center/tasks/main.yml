@@ -1,3 +1,8 @@
+---
+- include_role:
+    name: confluent.common
+  when: not common_role_completed|bool
+
 # Install Packages
 - name: Install the Control Center Packages
   yum:
@@ -9,7 +14,6 @@
 - name: Install the Control Center Packages
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
-    update_cache: yes
   loop: "{{control_center_packages}}"
   when: ansible_os_family == "Debian"
 
@@ -24,8 +28,15 @@
     comment: "Control Center User"
     system: yes
     group: "{{control_center.group}}"
+    
+- name: Set Control Center Data Dir permissions
+  file:
+    path: "{{control_center.properties['confluent.controlcenter.data.dir']}}"
+    owner: "{{control_center.user}}"
+    group: "{{control_center.group}}"
+    mode: 0755
 
-- import_role:
+- include_role:
     name: confluent.ssl
   vars:
     truststore_storepass: "{{control_center_truststore_storepass}}"
@@ -33,26 +44,19 @@
     keystore_path: "{{control_center_keystore_path}}"
     keystore_storepass: "{{control_center_keystore_storepass}}"
     keystore_keypass: "{{control_center_keystore_keypass}}"
+    service_name: control_center
+    hostnames: "{{ [inventory_hostname] }}"
   when: control_center_ssl_enabled|bool or kafka_broker_listeners[control_center_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
-- name: Create Keytabs Directory
-  file:
-    path: "{{kerberos.keytab_dir}}"
-    group: "{{control_center.group}}"
-    mode: '650'
-    recurse: yes
+- name: Configure Kerberos
+  include_role:
+    name: confluent.kerberos
+  vars:
+    kerberos_group: "{{control_center.group}}"
+    kerberos_user: "{{control_center.user}}"
+    kerberos_keytab_path: "{{control_center_kerberos_keytab_path}}"
+    kerberos_handler: "restart control center"
   when: kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
-
-- name: Copy in Keytab File
-  copy:
-    src: "{{control_center_kerberos_keytab_path}}"
-    dest: "{{kerberos.keytab_dir}}/{{control_center_kerberos_keytab_path | basename}}"
-    mode: '600'
-    owner: "{{control_center.user}}"
-    group: "{{control_center.group}}"
-  when: kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
-  notify:
-    - restart control center
 
 - name: Create Control Center Config
   template:
@@ -67,10 +71,10 @@
 - name: Create Logs Directory
   file:
     path: "{{control_center.appender_log_path}}"
+    state: directory
     group: "{{control_center.group}}"
     owner: "{{control_center.user}}"
     mode: '764'
-    recurse: yes
 
 - name: Create Control Center log4j Config
   template:
@@ -85,9 +89,9 @@
 - name: Create Service Override Directory
   file:
     path: "{{control_center.systemd_override | dirname}}"
+    state: directory
     owner: "{{control_center.user}}"
     group: "{{control_center.group}}"
-    state: directory
     mode: 0640
 
 - name: Write Service Overrides
@@ -113,3 +117,9 @@
     name: "{{control_center_service_name}}"
     enabled: yes
     state: started
+
+- name: Health Check
+  include_tasks: health_check.yml
+  when:
+    - health_checks_enabled|bool
+    - not ansible_check_mode

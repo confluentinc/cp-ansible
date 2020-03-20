@@ -1,8 +1,6 @@
-kafka_broker_open_file_limit: "{{open_file_limit}}"
-
 kafka_broker_jaas_java_arg_buildout: "-Djava.security.auth.login.config={{kafka_broker.jaas_file}}"
 kafka_broker_jolokia_java_arg_buildout: "-javaagent:{{jolokia_jar_path}}=port={{kafka_broker_jolokia_port}},host=0.0.0.0"
-kafka_broker_jmxexporter_java_arg_buildout: "-javaagent:{{jmxexporter_jar_path}}={{kafka_broker_jmxexporter_port}}:{{jmxexporter_install_path}}/kafka.yml"
+kafka_broker_jmxexporter_java_arg_buildout: "-javaagent:{{jmxexporter_jar_path}}={{kafka_broker_jmxexporter_port}}:{{kafka_broker_jmxexporter_config_path}}"
 kafka_broker_ssl_java_arg_buildout: "-Djavax.net.ssl.keyStore={{kafka_broker_keystore_path}} -Djavax.net.ssl.trustStore={{kafka_broker_truststore_path}} -Djavax.net.ssl.keyStorePassword={{kafka_broker_keystore_storepass}} -Djavax.net.ssl.trustStorePassword={{kafka_broker_truststore_storepass}}"
 kafka_broker_log4j_java_arg_buildout: "-Dlog4j.configuration=file:{{kafka_broker.log4j_file}}"
 
@@ -11,15 +9,16 @@ kafka_broker_custom_log4j: true
 kafka_broker_custom_java_args: ""
 kafka_broker_java_args:
   - "{{ kafka_broker_jaas_java_arg_buildout if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms else '' }}"
-  - "{{ kafka_broker_jolokia_java_arg_buildout if jolokia_enabled|bool else '' }}"
-  - "{{ kafka_broker_jmxexporter_java_arg_buildout if jmxexporter_enabled|bool else '' }}"
+  - "{{ kafka_broker_jolokia_java_arg_buildout if kafka_broker_jolokia_enabled|bool else '' }}"
+  - "{{ kafka_broker_jmxexporter_java_arg_buildout if kafka_broker_jmxexporter_enabled|bool else '' }}"
   - "{{ kafka_broker_ssl_java_arg_buildout if schema_registry_ssl_enabled|bool else '' }}"
   - "{{ kafka_broker_log4j_java_arg_buildout if kafka_broker_custom_log4j|bool else '' }}"
 
 kafka_broker_final_java_args: "{{ kafka_broker_java_args + [ kafka_broker_custom_java_args ] }}"
 
+# Kafka already has LimitNOFILE value set in unit file, empty value will not get written to override.conf
 kafka_broker_service_overrides:
-  LimitNOFILE: "{{kafka_broker_open_file_limit}}"
+  LimitNOFILE:
 kafka_broker_service_environment_overrides:
   KAFKA_HEAP_OPTS: "-Xmx1g"
   KAFKA_OPTS: "{{ kafka_broker_final_java_args | java_arg_build_out }}"
@@ -29,7 +28,9 @@ kafka_broker_sysctl:
   vm.dirty_background_ratio: 5
   vm.dirty_ratio: 60
 
-kafka_broker_default_replication_factor: 3
+kafka_broker_sysctl_file: /etc/sysctl.conf
+
+kafka_broker_default_interal_replication_factor: "{{ [ groups['kafka_broker'] | length, 3 ] | min }}"
 
 kafka_broker:
   appender_log_path: /var/log/kafka/
@@ -52,7 +53,7 @@ kafka_broker:
   authorizer_appender_max_log_files: 10
   authorizer_appender_log_file_size: 100MB
   datadir:
-    - /var/lib/kafka
+    - /var/lib/kafka/data
   properties:
     group.initial.rebalance.delay.ms: 0
     log.retention.check.interval.ms: 300000
@@ -62,17 +63,17 @@ kafka_broker:
     num.network.threads: 8
     num.partitions: 1
     num.recovery.threads.per.data.dir: 2
-    offsets.topic.replication.factor: "{{ [ groups['kafka_broker'] | length, kafka_broker_default_replication_factor ] | min }}"
+    offsets.topic.replication.factor: "{{kafka_broker_default_interal_replication_factor}}"
     socket.receive.buffer.bytes: 102400
     socket.request.max.bytes: 104857600
     socket.send.buffer.bytes: 102400
     transaction.state.log.min.isr: 2
-    transaction.state.log.replication.factor: "{{ [ groups['kafka_broker'] | length, kafka_broker_default_replication_factor ] | min }}"
-    zookeeper.connection.timeout.ms: 6000
-    confluent.license.topic.replication.factor: "{{ [ groups['kafka_broker'] | length, kafka_broker_default_replication_factor ] | min }}"
-    confluent.metadata.topic.replication.factor: "{{ [ groups['kafka_broker'] | length, kafka_broker_default_replication_factor ] | min }}"
+    transaction.state.log.replication.factor: "{{kafka_broker_default_interal_replication_factor}}"
+    zookeeper.connection.timeout.ms: 18000
+    confluent.license.topic.replication.factor: "{{kafka_broker_default_interal_replication_factor}}"
+    confluent.metadata.topic.replication.factor: "{{kafka_broker_default_interal_replication_factor}}"
     metric.reporters: io.confluent.metrics.reporter.ConfluentMetricsReporter
     confluent.metrics.reporter.bootstrap.servers: "{{inventory_hostname}}:{{kafka_broker_listeners.external.port}}"
-    confluent.metrics.reporter.topic.replicas: "{{ [ groups['kafka_broker'] | length, kafka_broker_default_replication_factor ] | min }}"
+    confluent.metrics.reporter.topic.replicas: "{{kafka_broker_default_interal_replication_factor}}"
     confluent.support.metrics.enable: "{{confluent.support.metrics_enabled|bool|lower}}"
     confluent.support.customer.id: "{{confluent.support.customer_id}}"

@@ -1,0 +1,35 @@
+---
+# Run these tasks over kafka_broker group with serial: 1
+# Creates two variable defined groups: non_controller_group, controller
+- import_role:
+    name: confluent.variables_handlers
+
+- name: Get ActiveControllerCount
+  uri:
+    url: "http://localhost:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ActiveControllerCount"
+    return_content: yes
+    status_code: 200
+  register: active_controller_count_query
+
+- set_fact:
+    active_controller_count: "{{ active_controller_count_query['json']['value']['Value'] }}"
+
+- debug:
+    msg: "Active Controller: {{inventory_hostname}}"
+  when: active_controller_count|int == 1
+
+- name: Add host to Non Controller Group
+  add_host:
+    name: "{{ inventory_hostname }}"
+    group: "{{ non_controller_group }}"
+  delegate_to: localhost
+  when:
+    - active_controller_count|int == 0
+
+- name: Add host to Controller Group
+  add_host:
+    name: "{{ inventory_hostname }}"
+    group: "{{ controller_group }}"
+  delegate_to: localhost
+  when:
+    - active_controller_count|int == 1

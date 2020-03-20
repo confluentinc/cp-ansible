@@ -4,7 +4,7 @@ listener.name.{{listener.value.name|lower}}.ssl.truststore.password={{kafka_brok
 listener.name.{{listener.value.name|lower}}.ssl.keystore.location={{kafka_broker_keystore_path}}
 listener.name.{{listener.value.name|lower}}.ssl.keystore.password={{kafka_broker_keystore_storepass}}
 listener.name.{{listener.value.name|lower}}.ssl.key.password={{kafka_broker_keystore_keypass}}
-{% if pkcs12_enabled|bool %}
+{% if listener['value']['pkcs12_enabled'] | default(pkcs12_enabled) | bool %}
 listener.name.{{listener.value.name|lower}}.ssl.keymanager.algorithm=PKIX
 listener.name.{{listener.value.name|lower}}.ssl.trustmanager.algorithm=PKIX
 listener.name.{{listener.value.name|lower}}.ssl.keystore.type=pkcs12
@@ -18,7 +18,7 @@ listener.name.{{listener.value.name|lower}}.ssl.client.auth=required
 {% if listener['value']['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
 listener.name.{{listener.value.name|lower}}.sasl.enabled.mechanisms=PLAIN
 listener.name.{{listener.value.name|lower}}.plain.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-  username="{{sasl_scram_users.admin.principal}}" password="{{sasl_scram_users.admin.password}}" \
+  username="{{sasl_plain_users.admin.principal}}" password="{{sasl_plain_users.admin.password}}" \
 {% for user in sasl_plain_users|dict2items %}
   user_{{ user['value']['principal'] }}="{{ user['value']['password'] }}"{% if loop.index != loop|length %} \
 {% else %}
@@ -38,4 +38,16 @@ listener.name.{{listener.value.name|lower}}.gssapi.sasl.jaas.config=com.sun.secu
 listener.name.{{listener.value.name|lower}}.sasl.enabled.mechanisms=SCRAM-SHA-256
 listener.name.{{listener.value.name|lower}}.scram-sha-256.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
    username="{{sasl_scram_users.admin.principal}}" password="{{sasl_scram_users.admin.password}}";
+{% endif %}
+{% if listener['value']['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'OAUTHBEARER' %}
+listener.name.{{listener.value.name|lower}}.sasl.enabled.mechanisms=OAUTHBEARER
+listener.name.{{listener.value.name|lower}}.oauthbearer.sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+{% for option in listener.value.options|dict2items %}
+  {{ option['key'] }}="{{ option['value']}}"{% if loop.index != loop|length %} \
+{% else %}
+;
+{% endif %}
+{% endfor %}
+listener.name.{{listener.value.name|lower}}.oauthbearer.sasl.server.callback.handler.class={{listener.value.server_callback}}
+listener.name.{{listener.value.name|lower}}.oauthbearer.sasl.login.callback.handler.class={{listener.value.login_callback}}
 {% endif %}
