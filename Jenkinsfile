@@ -14,11 +14,13 @@ def job = {
             sudo pip install molecule docker
         '''
     }
-    stage('Test Each Role with Molecule') {
-        sh '''
-            chmod +x test-all.sh
-            ./test-all.sh
-        '''
+    stage('Get PR Params') {
+        withDockerServer([uri: dockerHost()]) {
+            sh '''
+                chmod +x test-all.sh
+                ./test-all.sh
+            '''
+        }
     }
 }
 
