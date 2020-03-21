@@ -18,6 +18,7 @@ def job = {
     withDockerServer([uri: dockerHost()]) {
         stage('Run Integration Tests') {
             // TODO investigate parallelizing this
+            // TODO might need to delete docker image before starting run
             sh '''
                 cd roles/confluent.control_center
                 molecule test --all
