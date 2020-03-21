@@ -25,9 +25,11 @@ You can find the documentation for running CP-Ansible at https://docs.confluent.
 
 ## Contributing
 
-
 If you would like to contribute to the CP-Ansible project, please refer to the [CONTRIBUTE.md](https://github.com/confluentinc/cp-ansible/blob/5.4.x/CONTRIBUTING.md)
 
+## Testing
+
+Molecule configuration and playbooks have been added to each role to enable with local development and testing using Docker containers, refer to the [TESTING.md](https://github.com/confluentinc/cp-ansible/blob/5.4.x/TESTING.md) for documentation.
 
 ## License
 
