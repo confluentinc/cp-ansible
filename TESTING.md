@@ -1,6 +1,6 @@
 # Testing CP-Ansible
 
-Each role has Molecule configuration for testing with Docker containers. To get started
+Each role has Molecule configuration which enable fast and easy development and testing with Docker containers.
 
 ## Prerequisites
 
@@ -11,7 +11,7 @@ pip install molecule docker
 
 ## Using Molecule
 
-Molecule has a very easy cli that comes with the python package. Below are instructions for a few of its commands
+Molecule comes with a CLI. Below are instructions for a few of its commands:
 
 ### Running a role
 
@@ -28,7 +28,7 @@ Each docker container is named inside the molecule.yml file, copy the name and r
 molecule login -h <container-name>
 ```
 
-### Running Role Tests
+### Running Tests
 
 To run the test cases, which are defined in the verify.yml playbooks, run:
 ```
@@ -44,7 +44,7 @@ molecule destroy
 
 ## Creating Scenarios
 
-In some roles within the molecule directory you will find multiple subdirectories, which can be referred to as scenarios. Use a scenario as an inventory file, you can configure docker containers, ansible groups, variables, etc. When developing new features for the role you can create a new scenario simply by duplicating the default one and customizing. Edit the verify.yml to have test assertions for your scenario.
+In some roles within the molecule directory you will find multiple subdirectories, which can be referred to as scenarios. Use a scenario as an inventory file, you can configure docker hosts, ansible groups, variables, etc. When developing new features for the role you can create a new scenario simply by duplicating the default one and customizing. Edit the verify.yml to have test assertions for your scenario.
 
 All of the above commands can be run against your scenario, ie:
 ```
@@ -53,7 +53,7 @@ molecule converge -s <scenario-name>
 
 ## Running a full test suite
 
-To confirm that your code does not break any tests make sure to test all scenarios for a role with:
+To confirm that your code does not break any tests make sure to test all scenarios pass for a role with:
 ```
 molecule test --all
 ```
