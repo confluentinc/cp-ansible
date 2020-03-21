@@ -19,6 +19,7 @@ def job = {
         stage('Run Integration Tests') {
             // TODO investigate parallelizing this
             // TODO might need to delete docker image before starting run
+            // docker rmi molecule_local/geerlingguy/docker-centos7-ansible
             sh '''
                 cd roles/confluent.control_center
                 molecule test --all
