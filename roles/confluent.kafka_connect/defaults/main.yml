@@ -1,63 +1,64 @@
 kafka_connect_jolokia_java_arg_buildout: "-javaagent:{{jolokia_jar_path}}=port={{kafka_connect_jolokia_port}},host=0.0.0.0"
-kafka_connect_jolokia_java_arg: "{{ kafka_connect_jolokia_java_arg_buildout if jolokia_enabled|bool else '' }}"
+kafka_connect_log4j_java_arg_buildout: "-Dlog4j.configuration=file:{{kafka_connect.log4j_file}}"
 
-kafka_connect_log4j_file: /etc/kafka/connect_distributed_log4j.properties
+kafka_connect_custom_log4j: "{{ custom_log4j }}"
 
-kafka_connect_open_file_limit: "{{open_file_limit}}"
+kafka_connect_custom_java_args: ""
+kafka_connect_java_args:
+  - "{{ kafka_connect_jolokia_java_arg_buildout if kafka_connect_jolokia_enabled|bool else '' }}"
+  - "{{ kafka_connect_log4j_java_arg_buildout if kafka_connect_custom_log4j|bool else '' }}"
+
+kafka_connect_final_java_args: "{{ kafka_connect_java_args + [ kafka_connect_custom_java_args ] }}"
+
+# Empty values will not be written into override.conf
 kafka_connect_service_overrides:
-  LimitNOFILE: "{{kafka_connect_open_file_limit}}"
+  LimitNOFILE: 100000
+  User: "{{ kafka_connect_user if kafka_connect_user != kafka_connect_default_user else '' }}"
+  Group: "{{ kafka_connect_group if kafka_connect_group != kafka_connect_default_group else '' }}"
 kafka_connect_service_environment_overrides:
   KAFKA_HEAP_OPTS: "-Xms256M -Xmx2G"
-  KAFKA_OPTS: "{{kafka_connect_jolokia_java_arg}}"
-  KAFKA_LOG4J_OPTS: "-Dlog4j.configuration=file:{{kafka_connect_log4j_file}}"
+  KAFKA_OPTS: "{{ kafka_connect_final_java_args | java_arg_build_out }}"
 
-kafka_connect_packages:
-  - confluent-common
-  - confluent-kafka-2.12
-  - confluent-kafka-connect-storage-common
-  - confluent-kafka-connect-s3
-  - confluent-kafka-connect-elasticsearch
-  - confluent-kafka-connect-jdbc
-  - confluent-kafka-connect-jms
-  - confluent-kafka-connect-replicator
-  - confluent-rest-utils
-  - confluent-security
-  - confluent-control-center-fe
-  - confluent-control-center
-  - confluent-schema-registry
+kafka_connect_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | length, 3 ] | min }}"
+
+kafka_connect_group_id: connect-cluster
+
+kafka_connect_plugins_path: 
+- /usr/share/java
+kafka_connect_confluent_hub_install: "{{kafka_connect_confluent_hub_plugins|length >0}}" 
+kafka_connect_confluent_hub_client:
+  file: "http://client.hub.confluent.io/confluent-hub-client-latest.tar.gz"
+  is_remote: yes
+  install_dir: /etc/kafka/confluent-hub 
+kafka_connect_confluent_hub_plugins: []
+kafka_connect_confluent_hub_plugins_dest: /usr/share/java
+kafka_connect_plugins: []
+kafka_connect_plugins_remote: []
+kafka_connect_plugins_dest: /usr/share/java
+
 
 kafka_connect:
-  config_file: /etc/kafka/connect-distributed.properties
-  log4j_file: "{{kafka_connect_log4j_file}}"
   appender_log_path: /var/log/kafka/
   appender_log_name: connect-distributed.log
   appender_max_log_files: 10
   appender_log_file_size: 100MB
-  service_name: confluent-kafka-connect
-  systemd_file: /usr/lib/systemd/system/confluent-kafka-connect.service
-  systemd_override: /etc/systemd/system/confluent-kafka-connect.service.d
-  user: cp-kafka-connect
-  group: confluent
   properties:
     rest.port: "{{kafka_connect_rest_port}}"
     consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
     producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
-    config.storage.replication.factor: 3
-    config.storage.topic: connect-configs
-    group.id: connect-cluster
+    config.storage.replication.factor: "{{ kafka_connect_default_internal_replication_factor }}"
+    config.storage.topic: "{{kafka_connect_group_id}}-configs"
+    group.id: "{{kafka_connect_group_id}}"
     internal.key.converter: org.apache.kafka.connect.json.JsonConverter
-    internal.key.converter.schemas.enable: false
+    internal.key.converter.schemas.enable: "false"
     internal.value.converter: org.apache.kafka.connect.json.JsonConverter
-    internal.value.converter.schemas.enable: false
+    internal.value.converter.schemas.enable: "false"
     offset.flush.interval.ms: 10000
-    offset.storage.replication.factor: 3
-    offset.storage.topic: connect-offsets
-    status.storage.replication.factor: 3
-    status.storage.topic: connect-status
+    offset.storage.replication.factor: "{{ kafka_connect_default_internal_replication_factor }}"
+    offset.storage.topic: "{{kafka_connect_group_id}}-offsets"
+    status.storage.replication.factor: "{{ kafka_connect_default_internal_replication_factor }}"
+    status.storage.topic: "{{kafka_connect_group_id}}-status"
     key.converter: io.confluent.connect.avro.AvroConverter
     value.converter: io.confluent.connect.avro.AvroConverter
-    plugin.path: /usr/share/java
+    plugin.path: "{{(kafka_connect_plugins_path + [kafka_connect_confluent_hub_plugins_dest, kafka_connect_plugins_dest]) | unique | join(',')}}"
     connector.client.config.override.policy: All
-  systemd:
-    enabled: yes
-    state: started

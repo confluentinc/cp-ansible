@@ -1,34 +1,47 @@
 ---
 - name: Add Confluent Apt Key
   apt_key:
-    url: "{{confluent_common.repository.debian.key_url}}"
+    url: "{{confluent_common_repository_debian_key_url}}"
     state: present
   when: not custom_apt_repo|bool
 
 - name: Add Confluent Apt Repo
   apt_repository:
-    repo: "{{confluent_common.repository.debian.repository}}"
-    state: present
+    repo: "{{confluent_common_repository_debian_repository}}"
+    update_cache: no
   when: not custom_apt_repo|bool
+  notify: apt-get update
 
 - name: Add Custom Apt Repo
   copy:
     src: "{{custom_apt_repo_filepath}}"
     dest: /etc/apt/sources.list.d/custom_confluent.list
   when: custom_apt_repo|bool
-  notify:
-    - apt-get update
-
-- meta: flush_handlers
+  notify: apt-get update
 
 - name: Add open JDK repo
   apt_repository:
     repo: "{{ubuntu_java_repository}}"
+    update_cache: no
   when:
     - not custom_apt_repo|bool
     - install_java|bool
+  notify: apt-get update
+
+- name: Symlinking Apt Method http and https
+  file:
+    src: "/usr/lib/apt/methods/http"
+    dest: "/usr/lib/apt/methods/https"
+    state: link
+
+- meta: flush_handlers
 
 - name: Install Java
   apt:
     name: "{{ubuntu_java_package_name}}"
   when: install_java|bool
+
+- name: Install Unzip
+  apt:
+    name: unzip
+    state: present

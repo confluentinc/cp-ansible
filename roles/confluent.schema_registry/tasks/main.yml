@@ -1,89 +1,99 @@
+---
+- include_role:
+    name: confluent.common
+  when: not common_role_completed|bool
+
 # Install Packages
 - name: Install the Schema Registry Packages
   yum:
-    name: "{{item}}-{{confluent.package_version}}"
+    name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{schema_registry_packages}}"
   when: ansible_os_family == "RedHat"
 
 - name: Install the Schema Registry Packages
   apt:
-    name: "{{item}}={{confluent.package_version}}"
+    name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{schema_registry_packages}}"
   when: ansible_os_family == "Debian"
 
 # Configure environment
 - name: Schema Registry Group
   group:
-    name: "{{schema_registry.group}}"
+    name: "{{schema_registry_group}}"
 
 - name: Schema Registry User
   user:
-    name: "{{schema_registry.user}}"
+    name: "{{schema_registry_user}}"
     comment: "Schema Registry User"
     system: yes
-    group: "{{schema_registry.group}}"
+    group: "{{schema_registry_group}}"
 
-- name: Create Keytabs Directory
-  file:
-    path: "{{kerberos.keytab_dir}}"
-    group: "{{schema_registry.group}}"
-    mode: '650'
-    recurse: yes
-  when: kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | normalize_sasl_protocol == 'GSSAPI'
+- include_role:
+    name: confluent.ssl
+  vars:
+    truststore_storepass: "{{schema_registry_truststore_storepass}}"
+    truststore_path: "{{schema_registry_truststore_path}}"
+    keystore_path: "{{schema_registry_keystore_path}}"
+    keystore_storepass: "{{schema_registry_keystore_storepass}}"
+    keystore_keypass: "{{schema_registry_keystore_keypass}}"
+    service_name: schema_registry
+    hostnames: "{{ [inventory_hostname] }}"
+  when: schema_registry_ssl_enabled|bool or kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
-- name: Copy in Keytab File
-  copy:
-    src: "{{schema_registry_kerberos_keytab_path}}"
-    dest: "{{kerberos.keytab_dir}}/{{schema_registry_kerberos_keytab_path | basename}}"
-    mode: '600'
-    owner: "{{schema_registry.user}}"
-    group: "{{schema_registry.group}}"
-  when: kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | normalize_sasl_protocol == 'GSSAPI'
+- name: Configure Kerberos
+  include_role:
+    name: confluent.kerberos
+  vars:
+    kerberos_group: "{{schema_registry_group}}"
+    kerberos_user: "{{schema_registry_user}}"
+    kerberos_keytab_path: "{{schema_registry_kerberos_keytab_path}}"
+    kerberos_handler: "restart schema-registry"
+  when: kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
 - name: Create Schema Registry Config
   template:
     src: schema-registry.properties.j2
     dest: "{{schema_registry.config_file}}"
     mode: 0640
-    owner: "{{schema_registry.user}}"
-    group: "{{schema_registry.group}}"
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
   notify:
     - restart schema-registry
 
 - name: Create Logs Directory
   file:
     path: "{{schema_registry.appender_log_path}}"
-    group: "{{schema_registry.group}}"
-    owner: "{{schema_registry.user}}"
+    state: directory
+    group: "{{schema_registry_group}}"
+    owner: "{{schema_registry_user}}"
     mode: '764'
-    recurse: yes
 
 - name: Create Schema Registry log4j Config
   template:
     src: schema_registry_log4j.properties.j2
     dest: "{{schema_registry.log4j_file}}"
     mode: 0640
-    owner: "{{schema_registry.user}}"
-    group: "{{schema_registry.group}}"
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
   notify:
     - restart schema-registry
 
 - name: Create Service Override Directory
   file:
-    path: "{{schema_registry.systemd_override}}"
-    owner: "{{schema_registry.user}}"
-    group: "{{schema_registry.group}}"
+    path: "{{schema_registry.systemd_override | dirname}}"
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
     state: directory
     mode: 0640
 
 - name: Write Service Overrides
   template:
     src: override.conf.j2
-    dest: "{{schema_registry.systemd_override}}/override.conf"
+    dest: "{{schema_registry.systemd_override}}"
     mode: 0640
-    owner: "{{schema_registry.user}}"
-    group: "{{schema_registry.group}}"
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
   notify:
     - reload systemd
     - restart schema-registry
@@ -97,6 +107,12 @@
 
 - name: Start Schema Registry Service
   systemd:
-    name: "{{schema_registry.service_name}}"
-    enabled: "{{schema_registry.systemd.enabled}}"
-    state: "{{schema_registry.systemd.state}}"
+    name: "{{schema_registry_service_name}}"
+    enabled: yes
+    state: started
+
+- name: Health Check
+  include_tasks: health_check.yml
+  when:
+    - health_checks_enabled|bool
+    - not ansible_check_mode

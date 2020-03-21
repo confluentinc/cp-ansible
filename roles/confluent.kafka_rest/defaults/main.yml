@@ -1,42 +1,30 @@
 kafka_rest_jolokia_java_arg_buildout: "-javaagent:{{jolokia_jar_path}}=port={{kafka_rest_jolokia_port}},host=0.0.0.0"
-kafka_rest_jolokia_java_arg: "{{ kafka_rest_jolokia_java_arg_buildout if jolokia_enabled|bool else '' }}"
+kafka_rest_log4j_java_arg_buildout: "-Dlog4j.configuration=file:{{kafka_rest.log4j_file}}"
+kafka_rest_ssl_java_arg_buildout: "-Djavax.net.ssl.keyStore={{kafka_rest_keystore_path}} -Djavax.net.ssl.trustStore={{kafka_rest_truststore_path}} -Djavax.net.ssl.keyStorePassword={{kafka_rest_keystore_storepass}} -Djavax.net.ssl.trustStorePassword={{kafka_rest_truststore_storepass}}"
 
-kafka_rest_ssl_java_arg_buildout: "-Djavax.net.ssl.keyStore={{keystore_path}} -Djavax.net.ssl.trustStore={{truststore_path}} -Djavax.net.ssl.keyStorePassword={{keystore_storepass}} -Djavax.net.ssl.trustStorePassword={{truststore_storepass}}"
-kafka_rest_ssl_java_arg: "{{ kafka_rest_ssl_java_arg_buildout if schema_registry_ssl_enabled|bool else '' }}"
+kafka_rest_custom_log4j: "{{ custom_log4j }}"
 
-kafka_rest_opts_buildout: "{{ kafka_rest_jolokia_java_arg + ' ' + kafka_rest_ssl_java_arg if kafka_rest_jolokia_java_arg != '' or kafka_rest_ssl_java_arg != '' else '' }}"
+kafka_rest_custom_java_args: ""
+kafka_rest_java_args:
+  - "{{ kafka_rest_jolokia_java_arg_buildout if kafka_rest_jolokia_enabled|bool else '' }}"
+  - "{{ kafka_rest_log4j_java_arg_buildout if kafka_rest_custom_log4j|bool else '' }}"
+  - "{{ kafka_rest_ssl_java_arg_buildout if schema_registry_ssl_enabled|bool else '' }}"
 
-kafka_rest_log4j_file: /etc/kafka-rest/kafka-rest_log4j.properties
+kafka_rest_final_java_args: "{{ kafka_rest_java_args + [ kafka_rest_custom_java_args ] }}"
 
-kafka_rest_open_file_limit: "{{open_file_limit}}"
+# Rest Proxy already has LimitNOFILE value set in unit file, empty value will not get written to override.conf
 kafka_rest_service_overrides:
-  LimitNOFILE: "{{kafka_rest_open_file_limit}}"
+  LimitNOFILE:
+  User: "{{ kafka_rest_user if kafka_rest_user != kafka_rest_default_user else '' }}"
+  Group: "{{ kafka_rest_group if kafka_rest_group != kafka_rest_default_group else '' }}"
 kafka_rest_service_environment_overrides:
   LOG_DIR: /var/log/kafka-rest
-  KAFKAREST_OPTS: "{{kafka_rest_opts_buildout}}"
-  KAFKAREST_LOG4J_OPTS: "-Dlog4j.configuration=file:{{kafka_rest_log4j_file}}"
-
-kafka_rest_packages:
-  - confluent-common
-  - confluent-kafka-2.12
-  - confluent-rest-utils
-  - confluent-kafka-rest
-  - confluent-security
+  KAFKAREST_OPTS: "{{ kafka_rest_final_java_args | java_arg_build_out }}"
 
 kafka_rest:
-  user: cp-kafka-rest
-  group: confluent
-  config_file: /etc/kafka-rest/kafka-rest.properties
-  log4j_file: "{{kafka_rest_log4j_file}}"
   appender_log_path: /var/log/rest-proxy/
   appender_log_name: rest-proxy.log
   appender_max_log_files: 10
   appender_log_file_size: 100MB
-  service_name: confluent-kafka-rest
-  systemd_file: /usr/lib/systemd/system/confluent-kafka-rest.service
-  systemd_override: /etc/systemd/system/confluent-kafka-rest.service.d
   properties:
     id: "{{groups.kafka_rest.index(inventory_hostname) + 1}}"
-  systemd:
-    enabled: yes
-    state: started

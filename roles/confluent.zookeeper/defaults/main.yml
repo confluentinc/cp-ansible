@@ -1,41 +1,35 @@
-zookeeper_open_file_limit: "{{open_file_limit}}"
-
-zookeeper_jaas_file: /etc/kafka/zookeeper_jaas.conf
-zookeeper_jaas_java_arg_buildout: "-Djava.security.auth.login.config={{zookeeper_jaas_file}}"
-zookeeper_jaas_java_arg: "{{ zookeeper_jaas_java_arg_buildout if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms else '' }}"
-
+zookeeper_jaas_java_arg_buildout: "-Djava.security.auth.login.config={{zookeeper.jaas_file}}"
 zookeeper_jolokia_java_arg_buildout: "-javaagent:{{jolokia_jar_path}}=port={{zookeeper_jolokia_port}},host=0.0.0.0"
-zookeeper_jolokia_java_arg: "{{ zookeeper_jolokia_java_arg_buildout if jolokia_enabled|bool else '' }}"
+zookeeper_log4j_java_arg_buildout: "-Dlog4j.configuration=file:{{zookeeper.log4j_file}}"
+zookeeper_jmxexporter_java_arg_buildout: "-javaagent:{{jmxexporter_jar_path}}={{zookeeper_jmxexporter_port}}:{{zookeeper_jmxexporter_config_path}}"
 
-zookeeper_kafka_opts_buildout: "{{ zookeeper_jolokia_java_arg + ' ' + zookeeper_jaas_java_arg if zookeeper_jolokia_java_arg != '' or zookeeper_jaas_java_arg != '' else '' }}"
+zookeeper_custom_log4j: "{{ custom_log4j }}"
 
-zookeeper_log4j_file: /etc/kafka/zookeeper_log4j.properties
+zookeeper_custom_java_args: ""
+zookeeper_java_args:
+  - "{{ zookeeper_jaas_java_arg_buildout if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms else '' }}"
+  - "{{ zookeeper_jolokia_java_arg_buildout if zookeeper_jolokia_enabled|bool else '' }}"
+  - "{{ zookeeper_log4j_java_arg_buildout if zookeeper_custom_log4j|bool else '' }}"
+  - "{{ zookeeper_jmxexporter_java_arg_buildout if zookeeper_jmxexporter_enabled|bool else '' }}"
 
-zookeeper_service_environment_overrides:
-  KAFKA_HEAP_OPTS: "-Xmx1g"
-  KAFKA_OPTS: "{{ zookeeper_kafka_opts_buildout }}"
-  KAFKA_LOG4J_OPTS: "-Dlog4j.configuration=file:{{zookeeper_log4j_file}}"
+zookeeper_final_java_args: "{{ zookeeper_java_args + [ zookeeper_custom_java_args ] }}"
 
 zookeeper_service_overrides:
-  LimitNOFILE: "{{zookeeper_open_file_limit}}"
+  LimitNOFILE: 100000
+  User: "{{ zookeeper_user if zookeeper_user != zookeeper_default_user else '' }}"
+  Group: "{{ zookeeper_group if zookeeper_group != zookeeper_default_group else '' }}"
+zookeeper_service_environment_overrides:
+  KAFKA_HEAP_OPTS: "-Xmx1g"
+  KAFKA_OPTS: "{{ zookeeper_final_java_args | java_arg_build_out }}"
 
-zookeeper_packages:
-  - confluent-common
-  - confluent-kafka-2.12
+zookeeper_peer_port: 2888
+zookeeper_leader_port: 3888
 
 zookeeper:
-  user: cp-kafka
-  group: confluent
-  config_file: /etc/kafka/zookeeper.properties
-  log4j_file: "{{zookeeper_log4j_file}}"
   log_path: /var/log/kafka/
   log_name: zookeeper-server.log
   max_log_files: 10
   log_file_size: 100MB
-  service_name: confluent-zookeeper
-  systemd_file: /usr/lib/systemd/system/confluent-zookeeper.service
-  systemd_override: /etc/systemd/system/confluent-zookeeper.service.d
-  keytab: /etc/security/keytabs
   properties:
     maxClientCnxns: 0
     initLimit: 5
@@ -43,6 +37,4 @@ zookeeper:
     autopurge.snapRetainCount: 10
     autopurge.purgeInterval: 1
     dataDir: /var/lib/zookeeper
-  systemd:
-    enabled: yes
-    state: started
+    admin.enableServer: "false"
