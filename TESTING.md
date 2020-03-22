@@ -4,7 +4,7 @@ Each role has Molecule configuration which enable fast and easy development and 
 
 ## Prerequisites
 
-Make sure Docker is running and install these python libraries:
+Make sure Docker is running and increase the CPU/Memory available to Docker in your Preferences. Next install these python libraries:
 ```
 pip install molecule docker
 ```
