@@ -1,0 +1,104 @@
+---
+- hosts: kerberos_server
+  tasks:
+    - import_role:
+        name: kerberos_server
+
+    - name: Create Keytabs Directory
+      file:
+        path: /tmp/keytabs/
+        state: directory
+        mode: 0755
+
+- hosts: zookeeper
+  gather_facts: no
+  tasks:
+    - name: addprinc
+      shell: "kadmin.local -q 'addprinc -randkey {{ zookeeper_kerberos_principal }}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+    - name: Create keytab
+      shell: "kadmin.local -q 'xst -norandkey -k /tmp/keytabs/{{zookeeper_kerberos_keytab_path | basename}} {{zookeeper_kerberos_principal}}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+- hosts: kafka_broker
+  gather_facts: no
+  tasks:
+    - name: addprinc
+      shell: "kadmin.local -q 'addprinc -randkey {{ kafka_broker_kerberos_principal }}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+    - name: Create keytab
+      shell: "kadmin.local -q 'xst -norandkey -k /tmp/keytabs/{{kafka_broker_kerberos_keytab_path | basename}} {{kafka_broker_kerberos_principal}}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+- hosts: schema_registry
+  gather_facts: no
+  tasks:
+    - name: addprinc
+      shell: "kadmin.local -q 'addprinc -randkey {{schema_registry_kerberos_principal}}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+    - name: Create keytab
+      shell: "kadmin.local -q 'xst -norandkey -k /tmp/keytabs/{{schema_registry_kerberos_keytab_path | basename}} {{schema_registry_kerberos_principal}}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+
+- hosts: kafka_rest
+  gather_facts: no
+  tasks:
+    - name: addprinc
+      shell: "kadmin.local -q 'addprinc -randkey {{kafka_rest_kerberos_principal}}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+    - name: Create keytab
+      shell: "kadmin.local -q 'xst -norandkey -k /tmp/keytabs/{{kafka_rest_kerberos_keytab_path | basename}} {{kafka_rest_kerberos_principal}}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+- hosts: kafka_connect
+  gather_facts: no
+  tasks:
+    - name: addprinc
+      shell: "kadmin.local -q 'addprinc -randkey {{kafka_connect_kerberos_principal}}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+    - name: Create keytab
+      shell: "kadmin.local -q 'xst -norandkey -k /tmp/keytabs/{{kafka_connect_kerberos_keytab_path | basename}} {{kafka_connect_kerberos_principal}}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+- hosts: ksql
+  gather_facts: no
+  tasks:
+    - name: addprinc
+      shell: "kadmin.local -q 'addprinc -randkey {{ksql_kerberos_principal}}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+    - name: Create keytab
+      shell: "kadmin.local -q 'xst -norandkey -k /tmp/keytabs/{{ksql_kerberos_keytab_path | basename}} {{ksql_kerberos_principal}}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+- hosts: control_center
+  gather_facts: no
+  tasks:
+    - name: addprinc
+      shell: "kadmin.local -q 'addprinc -randkey {{control_center_kerberos_principal}}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+    - name: Create keytab
+      shell: "kadmin.local -q 'xst -norandkey -k /tmp/keytabs/{{control_center_kerberos_keytab_path | basename}} {{control_center_kerberos_principal}}'"
+      delegate_to: "{{ groups['kerberos_server'][0] }}"
+
+- hosts: kerberos_server
+  gather_facts: no
+  tasks:
+  - name: Install Rsync
+    yum:
+      name: rsync
+      state: present
+
+  - name: Copy Keytabs Back to Ansible Host
+    synchronize:
+      src: /tmp/keytabs/
+      dest: keytabs
+      mode: pull
+      use_ssh_args: yes
