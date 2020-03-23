@@ -1,0 +1,18 @@
+- name: Grant SecurityAdmin role on KSQL user 
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl --cacert /var/ssl/private/kafka_broker.truststore.pem -X POST https://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{principal_name}}/roles/SecurityAdmin -H "accept: application/json" -H "Authorization: Bearer {{rbac_token}}" -H "Content-Type: application/json" -d '{"clusters":{"kafka-cluster":"{{cluster_id}}","ksql-cluster":"default_"}}'
+
+- name: Grant Resource owner of KSQL Cluster on KSQL User
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl --cacert /var/ssl/private/kafka_broker.truststore.pem -X POST https://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{principal_name}}/roles/ResourceOwner/bindings -d '{ "scope": {"clusters": {"kafka-cluster":"{{cluster_id}}","ksql-cluster":"default_"}},"resourcePatterns":[{"resourceType": "KsqlCluster","name": "ksql-cluster"}]}' -H "Content-Type: application/json" -H "Authorization: Bearer {{rbac_token}}"
+
+- name: Grant ksql user the ResourceOwner role with three resourcePatterns
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  shell: |
+    curl --cacert /var/ssl/private/kafka_broker.truststore.pem -X POST https://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{principal_name}}/roles/ResourceOwner/bindings -d '{ "scope": {"clusters": {"kafka-cluster":"{{cluster_id}}"}}, "resourcePatterns": [{"resourceType": "Topic", "name": "_confluent-ksql-default__command_topic","patternType":"LITERAL"},{"resourceType":"Topic","name":"default_-ksql_processing_log","patternType":"LITERAL"},{"resourceType":"Group","name":"_confluent-ksql-default_","patternType":"PREFIXED"}]}' -H "Content-Type: application/json" -H "Authorization: Bearer {{rbac_token}}"
+ 
