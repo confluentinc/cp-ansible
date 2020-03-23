@@ -16,17 +16,24 @@ def job = {
     }
 
     withDockerServer([uri: dockerHost()]) {
-        stage('Run Integration Tests') {
+        stage('Integration Test - Self Signed Certs') {
             // TODO investigate parallelizing this
             // TODO might need to delete docker image before starting run
-            // docker rmi molecule_local/geerlingguy/docker-centos7-ansible
+            sh '''
+                docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
+                cd roles/confluent.control_center
+                molecule test
+            '''
+        }
+        stage('Integration Test - Kerberos') {
+            // TODO investigate parallelizing this
+            // TODO might need to delete docker image before starting run
             sh '''
                 cd roles/confluent.control_center
-                molecule test --all
+                molecule test -s kerberos
             '''
         }
     }
-
 }
 
 runJob config, job
