@@ -26,8 +26,6 @@ def job = {
             '''
         }
         stage('Integration Test - Kerberos') {
-            // TODO investigate parallelizing this
-            // TODO might need to delete docker image before starting run
             sh '''
                 cd roles/confluent.control_center
                 molecule test -s kerberos
