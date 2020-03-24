@@ -1,0 +1,194 @@
+# - name: Install libselinux-python
+#   yum:
+#     name: libselinux-python
+#     state: present
+
+# - name: disable SELinux
+#   action: selinux policy=targeted state=disabled
+
+- name: Get Package Facts
+  package_facts:
+    manager: auto
+
+- name: Disable SELinux
+  selinux:
+    policy: targeted
+    state: disabled
+  when: ansible_facts.packages['selinux-policy'] is defined
+
+- name: Install LDAP Server Packages
+  yum:
+    name: "{{item}}"
+    state: latest
+  loop:
+    - rsyslog
+    - libselinux-python
+    - openldap
+    - openldap-servers
+    - compat-openldap
+    - openldap-clients
+    - openldap-devel
+    - nss-pam-ldapd
+
+- name: Start slapd Service
+  service:
+    name: slapd
+    enabled: yes
+    state: started
+
+- name: generate password sha
+  shell: slappasswd -h {SSHA} -s "{{ ldap_admin_password }}"
+  register: password_output
+
+- set_fact:
+    ldap_admin_password_sha: "{{ password_output.stdout }}"
+
+- name: Create config file
+  template:
+    src: db.ldif.j2
+    dest: /tmp/db.ldif
+
+- name: Load config file
+  shell: ldapmodify -Y EXTERNAL  -H ldapi:/// -f /tmp/db.ldif
+
+- name: Copy file with owner and permissions
+  copy:
+    src: /usr/share/openldap-servers/DB_CONFIG.example
+    dest: /var/lib/ldap/DB_CONFIG
+    remote_src: yes
+
+- name: Recursively change ownership of a /var/lib/ldap
+  file:
+    path: /var/lib/ldap/
+    state: directory
+    recurse: yes
+    owner: ldap
+    group: ldap
+
+- name: Load config file
+  shell: "{{item}}"
+  loop:
+    - ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/cosine.ldif
+    - ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/nis.ldif
+    - ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/inetorgperson.ldif
+
+- name: Create base groups config file
+  template:
+    src: base.ldif.j2
+    dest: /tmp/base.ldif
+
+- name: Create base groups
+  shell: "ldapadd -x -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -f /tmp/base.ldif -w {{ldap_admin_password}}"
+
+- name: Create LDAP Users
+  include_tasks: create_user.yml
+  vars:
+    ldap_user: "{{item.username}}"
+    ldap_user_uid: "{{item.uid}}"
+    ldap_user_gid: "{{item.guid}}"
+    ldap_user_password: "{{item.password}}"
+  loop: "{{ ldap_users }}"
+
+
+# - name: Create user config file
+#   template:
+#     src: user.ldif.j2
+#     dest: /tmp/user.ldif
+#
+# - name: Create user
+#   shell: "ldapadd -x -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -f /tmp/user.ldif -w {{ldap_admin_password}}"
+#
+# - name: Set password
+#   shell: "ldappasswd -s {{ldap_user_pass}} -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -x 'uid={{ldap_user}},ou={{ldap_rbac_group}},dc={{ldap_dc}},dc={{ldap_dc_extension}}' -w {{ldap_admin_password}}"
+#
+# - set_fact:
+#     ldap_user: "{{ldap_schema_registry_user}}"
+#     ldap_user_uid: "{{ldap_schema_registry_user_uid}}"
+#     ldap_user_gid: "{{ldap_schema_registry_user_gid}}"
+#
+# - name: Create schema registry user config file
+#   template:
+#     src: user.ldif.j2
+#     dest: /tmp/schema_registry.ldif
+#
+# - name: Create schema registry user
+#   shell: "ldapadd -x -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -f /tmp/schema_registry.ldif -w {{ldap_admin_password}}"
+#
+# - name: Set schema registry user password
+#   shell: "ldappasswd -s {{ldap_user_pass}} -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -x 'uid={{ldap_schema_registry_user}},ou={{ldap_rbac_group}},dc={{ldap_dc}},dc={{ldap_dc_extension}}' -w {{ldap_admin_password}}"
+#
+# - set_fact:
+#     ldap_user: "{{ldap_connect_user}}"
+#     ldap_user_uid: "{{ldap_connect_user_uid}}"
+#     ldap_user_gid: "{{ldap_connect_user_gid}}"
+#
+# - name: Create connect  user config file
+#   template:
+#     src: user.ldif.j2
+#     dest: /tmp/connect_worker.ldif
+#
+# - name: Create connect user
+#   shell: "ldapadd -x -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -f /tmp/connect_worker.ldif -w {{ldap_admin_password}}"
+#
+# - name: Set connect user password
+#   shell: "ldappasswd -s {{ldap_user_pass}} -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -x 'uid={{ldap_connect_user}},ou={{ldap_rbac_group}},dc={{ldap_dc}},dc={{ldap_dc_extension}}' -w {{ldap_admin_password}}"
+#
+# - set_fact:
+#     ldap_user: "{{ldap_rest_proxy_user}}"
+#     ldap_user_uid: "{{ldap_rest_proxy_user_uid}}"
+#     ldap_user_gid: "{{ldap_rest_proxy_user_gid}}"
+#
+# - name: Create rest server user config file
+#   template:
+#     src: user.ldif.j2
+#     dest: /tmp/rest.ldif
+#
+# - name: Create rest user
+#   shell: "ldapadd -x -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -f /tmp/rest.ldif -w {{ldap_admin_password}}"
+#
+# - name: Set rest user password
+#   shell: "ldappasswd -s {{ldap_user_pass}} -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -x 'uid={{ldap_rest_proxy_user}},ou={{ldap_rbac_group}},dc={{ldap_dc}},dc={{ldap_dc_extension}}' -w {{ldap_admin_password}}"
+#
+# - set_fact:
+#     ldap_user: "{{ldap_control_center_user}}"
+#     ldap_user_uid: "{{ldap_control_center_user_uid}}"
+#     ldap_user_gid: "{{ldap_control_center_user_gid}}"
+#
+# - name: Create control center user config file
+#   template:
+#     src: user.ldif.j2
+#     dest: /tmp/control_center.ldif
+#
+# - name: Create control center user
+#   shell: "ldapadd -x -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -f /tmp/control_center.ldif -w {{ldap_admin_password}}"
+#
+# - name: Set control center user password
+#   shell: "ldappasswd -s {{ldap_user_pass}} -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -x 'uid={{ldap_control_center_user}},ou={{ldap_rbac_group}},dc={{ldap_dc}},dc={{ldap_dc_extension}}' -w {{ldap_admin_password}}"
+#
+# - set_fact:
+#     ldap_user: "{{ldap_ksql_user}}"
+#     ldap_user_uid: "{{ldap_ksql_user_uid}}"
+#     ldap_user_gid: "{{ldap_ksql_user_gid}}"
+#
+# - name: Create ksql user config file
+#   template:
+#     src: user.ldif.j2
+#     dest: /tmp/ksql.ldif
+#
+# - name: Create ksql user
+#   shell: "ldapadd -x -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -f /tmp/ksql.ldif -w {{ldap_admin_password}}"
+#
+# - name: Set ksql user password
+#   shell: "ldappasswd -s {{ldap_user_pass}} -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -x 'uid={{ldap_ksql_user}},ou={{ldap_rbac_group}},dc={{ldap_dc}},dc={{ldap_dc_extension}}' -w {{ldap_admin_password}}"
+
+- name: Enable logging in rsyslog
+  lineinfile:
+    path: /etc/rsyslog.conf
+    line: local4.* /var/log/ldap.log
+    regexp: '.*ldap.log.*'
+  notify:
+    - restart rsyslog
+
+- name: Configure TLS
+  include_tasks: tls.yml
+  when: ldaps_enabled|bool
