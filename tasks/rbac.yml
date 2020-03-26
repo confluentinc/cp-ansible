@@ -6,13 +6,6 @@
       principal_name: "{{rbac_principal_name}}"
   when: ssl_custom_certs|bool or ssl_provided_keystore_and_truststore|bool
 
-- name: Create pem file Directory
-  file:
-    path: "{{rbac_enabled_public_pem_path}}"
-    group: "{{kafka_broker_group}}"
-    mode: '650'
-    recurse: yes
-
 - name: Copy in public pem files
   copy:
     src: "{{token_services_public_pem_file}}"
@@ -22,10 +15,16 @@
     group: "{{kafka_broker_group}}"
 
 - name: Get Kafka Cluster ID from Zookeeper
+  shell: /bin/zookeeper-shell localhost:2181 get /cluster/id | grep version
   delegate_to: "{{ groups['zookeeper'][0] }}"
-  shell: |
-    /bin/zookeeper-shell localhost:2181 get /cluster/id 2> /dev/null | grep version | jq -r .id
-  register: cluster_id  
+  register: cluster_id_query
+
+- set_fact:
+    cluster_id_json: "{{ cluster_id_query.stdout }}"
+
+- name: Set cluster_id Variable
+  set_fact:
+    cluster_id: "{{ cluster_id_json.id }}"
 
 - name: export CA to pem format for MDS login to create user
   delegate_to: "{{ groups['kafka_broker'][0] }}"
@@ -33,7 +32,7 @@
     openssl pkcs12 -in /var/ssl/private/kafka_broker.truststore.jks \
       -out /var/ssl/private/kafka_broker.truststore.pem \
       -passin pass:{{kafka_broker_truststore_storepass}} -passout pass:{{kafka_broker_truststore_storepass}}
- 
+
 - name: convert keystore to pem format
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   shell: |
@@ -44,7 +43,7 @@
   shell: |
     openssl pkcs12 -in /var/ssl/private/kafka_broker.keystore.p12 -nokeys -out /var/ssl/private/cert.pem -passin pass:{{kafka_broker_keystore_storepass}}
 
-- name: export private key from pem 
+- name: export private key from pem
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   shell: |
     openssl pkcs12 -in /var/ssl/private/kafka_broker.keystore.p12 -nodes -nocerts -out /var/ssl/private/key.pem -passin pass:{{kafka_broker_keystore_storepass}}
@@ -53,5 +52,12 @@
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
-    curl --cacert /var/ssl/private/kafka_broker.truststore.pem --key /var/ssl/private/key.pem --cert /var/ssl/private/cert.pem -u "{{mds_super_user}}":"{{mds_super_user_password}}" -s https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/authenticate 2> /dev/null | grep auth_token | jq -r .auth_token
-  register: rbac_token
+    curl --cacert /var/ssl/private/kafka_broker.truststore.pem --key /var/ssl/private/key.pem --cert /var/ssl/private/cert.pem -u "{{mds_super_user}}":"{{mds_super_user_password}}" -s https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/authenticate 2> /dev/null | grep auth_token
+  register: rbac_token_query
+
+- set_fact:
+    rbac_token_query_stdout: "{{ rbac_token_query.stdout }}"
+
+- name: Set rbac_token Variable
+  set_fact:
+    rbac_token: "{{ rbac_token_query_stdout.auth_token }}"
