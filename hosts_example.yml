@@ -154,6 +154,52 @@ all:
     #   properties:
     #     key: val
 
+    #### RBAC with  Mutual TLS authentication Configuration with 3 listeners ####
+    ##
+    ## To Enable RBAC uncomment the following line:
+    # rbac_enabled: true
+    ##
+    ## By default we setup 2 listeners, Internal, External, you will need to add a third Token listener as per the following example, under each Broker host
+    ## 
+    # kafka_broker_custom_listeners:
+    #   client_listener:  
+    #     name: Token
+    #     port: 9093
+    #     ssl_enabled: true
+    #     ssl_mutual_auth_enabled: true
+    #     sasl_protocol: oauth
+    ##
+    ## Please note, the Token listener is for impersonation only, do not use it for client connections.
+    ##
+    #### mTLS configuration
+    ##
+    ## You will need to provide the principal from your certificates, under each Broker in the cluster.  See Broker section for more details.
+    ##
+    ## You will need to provide the principal mapping rules for the DN within your certificates:
+    ##
+    # mtls_ldap_internal_map_rule: | 
+    #  RULE:^.*[Cc][Nn]=([a-zA-Z0-9-.]*).*$/$1/L, \
+    #  DEFAULT
+    # mtls_ldap_external_map_rule: |
+    #  RULE:^.*[Cc][Nn]=([a-zA-Z0-9-.]*).*$/$1/L, \
+    #  DEFAULT
+    ##
+    #### OAuth configuration
+    ##
+    ## For impersonation to take place, you will need to supply a private and public pem file for token generation.  Please see the documentation for
+    ## further details.
+    ##
+    # token_services_public_pem_file: /home/ec2-user/keys/public.pem
+    # token_services_private_pem_file: /home/ec2-user/keys/tokenKeypair.pem
+    ##
+    #### MDS Configuration
+    ##
+    ## You will need to specify a super user name for user creation. Note: user must exist in LDAP with the same password.
+    ##
+    # mds_super_user: <Your desired admin name>
+    # mds_super_user_password: <ldap password>
+    ##
+    ##
 zookeeper:
   ## To configure Zookeeper to run as a custom user, uncomment below
   # vars:
@@ -183,6 +229,29 @@ kafka_broker:
   #   kafka_broker:
   #     datadir:
   #       - /var/lib/kafka/my-data
+  
+  #### LDAP Configuration
+  ##
+  ## You will need to specify the following authentication and lookup details for your LDAP server in order for RBAC to lookup and validate users.
+  ##
+  # rbac_ldap_url: <URL for LDAP server>
+  # rbac_ldap_port: <Port number or LDAP server, typically 389>
+  # rbac_ldap_principal: <Principal for authenticating to LDAP server>
+  # rbac_ldap_princiapl_password: <Password for LDAP server principal>
+  # rbac_ldap_user_search_base: <User search base dn, eg. CN=Users,DC=qe,DC=confluent,DC=io>
+  # rbac_ldap_group_search_base: <Group search base dn, eg. CN=Users,DC=qe,DC=confluent,DC=io>
+  # rbac_ldap_url: ip-10-0-0-196.eu-west-2.compute.internal
+  # rbac_ldap_port: 389 or 636 if using ldaps
+  # rbac_ldap_principal: mds
+  # rbac_ldap_princiapl_password: password
+  # rbac_ldap_user_search_base: OU=rbac,DC=example,DC=com
+  # rbac_ldap_group_search_base: OU=rbac,DC=example,DC=com
+  ##
+  ## If you are using LDAPS, please uncomment the following:
+  ##
+  # rbac_ldaps: true
+  ##
+  
   hosts:
     ip-172-31-34-246.us-east-2.compute.internal:
       ## By default the first host will get broker id=1, second gets id=2. Set broker_id to customize
@@ -198,6 +267,11 @@ kafka_broker:
       ## For kerberos sasl protocol, EACH host will need these two variables:
       # kafka_broker_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/ip-172-31-34-246.us-east-2.compute.internal>
       # kafka_broker_kerberos_principal: <The principal configured in kdc server, eg. kafka/ip-172-31-34-246.us-east-2.compute.internal@REALM.EXAMPLE.COM>
+
+      ## For mTLS with RBAC when providing your own certificates or keystore/truststore, you will need to set the following variable with your certificates principal name:
+      # rbac_principal_name: <The (CN) in your certificate>
+      ## for Mtls with RBAC when providing your own certficiates or keystore/truststore, you will need to set the following variable with your ldap password for the certificate principal:
+      # rbac_principal_password: <LDAP password for CN>
     ip-172-31-37-15.us-east-2.compute.internal:
       # broker_id: 2
       # kafka_broker:
@@ -221,7 +295,11 @@ schema_registry:
       ## For kerberos sasl protocol, EACH host will need these two variables:
       # schema_registry_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/schemaregistry-ip-172-31-34-246.us-east-2.compute.internal
       # schema_registry_kerberos_principal: The principal configured in kdc server ex: schemaregistry/ip-172-31-34-246.us-east-2.compute.internal@REALM.EXAMPLE.COM>
-
+      
+      ## For mTLS with RBAC when providing your own certificates or keystore/truststore, you will need to set the following variable with your certificates principal name:
+      # rbac_principal_name: <The (CN) in your certificate>
+      ## for Mtls with RBAC when providing your own certficiates or keystore/truststore, you will need to set the following variable with your ldap password for the certificate principal:
+      # rbac_principal_password: <LDAP password for CN>
 kafka_rest:
   ## To configure Rest Proxy to run as a custom user, uncomment below
   # vars:
@@ -233,6 +311,11 @@ kafka_rest:
       # kafka_rest_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/restproxy-ip-172-31-34-246.us-east-2.compute.internal
       # kafka_rest_kerberos_principal: The principal configured in kdc server ex: restproxy/ip-172-31-34-246.us-east-2.compute.internal@REALM.EXAMPLE.COM>
 
+      ## For mTLS with RBAC when providing your own certificates or keystore/truststore, you will need to set the following variable with your certificates principal name:
+      # rbac_principal_name: <The (CN) in your certificate>
+      ## for Mtls with RBAC when providing your own certficiates or keystore/truststore, you will need to set the following variable with your ldap password for the certificate principal:
+      # rbac_principal_password: <LDAP password for CN>
+
 ksql:
   ## To configure KSQL to run as a custom user, uncomment below
   # vars:
@@ -243,6 +326,11 @@ ksql:
       ## For kerberos sasl protocol, EACH host will need these two variables:
       # ksql_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/ksql-ip-172-31-37-15.us-east-2.compute.internal
       # ksql_kerberos_principal: The principal configured in kdc server ex: ksql/ip-172-31-37-15.us-east-2.compute.internal@REALM.EXAMPLE.COM>
+
+      ## For mTLS with RBAC when providing your own certificates or keystore/truststore, you will need to set the following variable with your certificates principal name:
+      # rbac_principal_name: <The (CN) in your certificate>
+      ## for Mtls with RBAC when providing your own certficiates or keystore/truststore, you will need to set the following variable with your ldap password for the certificate principal:
+      # rbac_principal_password: <LDAP password for CN>
 
 #### To configure multiple ksql clusters, make use of child groups and follow the example below
 ## Note: There can only be one ksql group, so comment out above section, if configuring multiple ksql clusters
@@ -279,6 +367,11 @@ kafka_connect:
       # kafka_connect_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/connect-ip-172-31-34-246.us-east-2.compute.internal
       # kafka_connect_kerberos_principal: The principal configured in kdc server ex: connect/ip-172-31-34-246.us-east-2.compute.internal@REALM.EXAMPLE.COM>
 
+      ## For mTLS with RBAC when providing your own certificates or keystore/truststore, you will need to set the following variable with your certificates principal name:
+      # rbac_principal_name: <The (CN) in your certificate>
+      ## for Mtls with RBAC when providing your own certficiates or keystore/truststore, you will need to set the following variable with your ldap password for the certificate principal:
+      # rbac_principal_password: <LDAP password for CN>
+
 #### To configure multiple connect clusters, make use of child groups and follow the example below
 ## Note: There can only be one kafka_connect group, so comment out above section, if configuring multiple connect clusters
 ## Decide on a name for each connect cluster (that is not 'kafka_connect') and use that as ansible group name
@@ -311,6 +404,12 @@ control_center:
       ## For kerberos sasl protocol, EACH host will need these two variables:
       # control_center_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/controlcenter-ip-172-31-37-15.us-east-2.compute.internal
       # control_center_kerberos_principal: The principal configured in kdc server ex: controlcenter/ip-172-31-37-15.us-east-2.compute.internal@REALM.EXAMPLE.COM>
+
+      ## For mTLS with RBAC when providing your own certificates or keystore/truststore, you will need to set the following variable with your certificates principal name:
+      # rbac_principal_name: <The (CN) in your certificate>
+      ## for Mtls with RBAC when providing your own certficiates or keystore/truststore, you will need to set the following variable with your ldap password for the certificate principal:
+      # rbac_principal_password: <LDAP password for CN>
+      
   # ## If you are configuring multiple connect or ksql clusters, the below variables are mandatory.
   # # The group names must match the group names as they are in your inventory
   # vars:
