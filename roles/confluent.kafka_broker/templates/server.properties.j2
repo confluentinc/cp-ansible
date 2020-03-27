@@ -14,9 +14,13 @@ enable.fips=true
 security.providers=io.confluent.kafka.security.fips.provider.BcFipsProviderCreator,io.confluent.kafka.security.fips.provider.BcFipsJsseProviderCreator
 {% endif %}
 
-listener.security.protocol.map={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | kafka_protocol_defaults(sasl_protocol, ssl_enabled)}}{% endfor %}
 
-listeners={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://:{{ listener['value']['port'] }}{% endfor %}
+
+
+listeners={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default('') }}:{{ listener['value']['port'] }}{% endfor %}
+
+
+listener.security.protocol.map={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | kafka_protocol_defaults(sasl_protocol, ssl_enabled)}}{% endfor %}
 
 advertised.listeners={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(inventory_hostname) }}:{{ listener['value']['port'] }}{% endfor %}
 
@@ -72,6 +76,7 @@ confluent.metrics.reporter.ssl.truststore.type=pkcs12
 {% endif %}
 {% endif %}
 {% endif %}
+
 {% if kafka_broker_listeners.external.sasl_protocol | normalize_sasl_protocol == 'PLAIN' %}
 confluent.metrics.reporter.sasl.mechanism=PLAIN
 confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
@@ -90,4 +95,70 @@ confluent.metrics.reporter.sasl.jaas.config=com.sun.security.auth.module.Krb5Log
 confluent.metrics.reporter.sasl.mechanism=SCRAM-SHA-256
 confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
    username="{{sasl_scram_users.admin.principal}}" password="{{sasl_scram_users.admin.password}}";
+{% endif %}
+
+{% if rbac_enabled|bool %}
+############################# TLS Listener Mapping Rules #############################
+listener.name.internal.ssl.principal.mapping.rules= {{ mtls_ldap_internal_map_rule }}
+listener.name.external.ssl.principal.mapping.rules= {{ mtls_ldap_external_map_rule }}
+
+############################ MDS TLS Settings #####################################
+{% if mds_ssl_enabled|bool %}
+confluent.metadata.server.ssl.keystore.location={{kafka_broker_keystore_path}}
+confluent.metadata.server.ssl.keystore.password={{kafka_broker_keystore_storepass}}
+confluent.metadata.server.ssl.key.password={{kafka_broker_keystore_keypass}}
+{% if mds_ssl_mutual_auth_enabled|bool %}
+confluent.metadata.server.ssl.truststore.location={{kafka_broker_truststore_path}}
+confluent.metadata.server.ssl.truststore.password={{kafka_broker_truststore_storepass}}
+confluent.metadata.server.ssl.client.auth=true 
+{% endif %}
+{% endif %}
+
+
+############################# Authorization Settings #############################
+authorizer.class.name=io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer
+confluent.authorizer.access.rule.providers=ZK_ACL,CONFLUENT
+confluent.authorizer.group.provider=CONFLUENT
+{% if ssl_enabled|bool and ssl_custom_certs|bool and rbac_enabled|bool %}
+super.users=User:{{ mds_super_user }}{{';'}}{% for host in groups['kafka_broker'] %}User:{{ hostvars[host]['rbac_principal_name'] }}{% if (loop.index > 0) and (loop.index < groups['kafka_broker'] | length)%}{{';'}}{% endif %}{% endfor %}
+{% elif ssl_enabled|bool and ssl_provided_keystore_and_truststore|bool and rbac_enabled|bool %}
+super.users=User:{{ mds_super_user }}{{';'}}{% for host in groups['kafka_broker'] %}User:{{ hostvars[host]['rbac_principal_name']}}{% if (loop.index > 0) and (loop.index < groups['kafka_broker'] | length)%}{{';'}}{% endif %}{% endfor %}
+{% elif ssl_enabled|bool and rbac_enabled|bool %}
+super.users=User:{{ mds_super_user }}{{';'}}{% for host in groups['kafka_broker'] %}User:{{ host }}{% if (loop.index > 0) and (loop.index < groups['kafka_broker'] | length) %}{{';'}}{% endif %}{% endfor %}
+{% endif %}
+
+confluent.metadata.server.listeners=https://0.0.0.0:8090
+confluent.metadata.server.advertised.listeners=https://{{ inventory_hostname }}:8090
+
+############################# MDS Token Service Settings - enable token generation #############################
+confluent.metadata.server.token.auth.enable=true
+confluent.metadata.server.token.max.lifetime.ms=3600000
+confluent.metadata.server.token.key.path={{rbac_enabled_private_pem_path}}
+confluent.metadata.server.public.key.path={{rbac_enabled_public_pem_path}}
+confluent.metadata.server.token.signature.algorithm=RS256
+confluent.metadata.server.authentication.method=BEARER
+
+############################# Identity Provider Settings(LDAP - local OpenLDAP) #############################
+ldap.java.naming.factory.initial=com.sun.jndi.ldap.LdapCtxFactory
+ldap.com.sun.jndi.ldap.read.timeout=3000
+ldap.java.naming.provider.url=ldap{%if rbac_ldaps|bool%}s{% endif %}://{{rbac_ldap_url}}:{{rbac_ldap_port}}
+ldap.java.naming.security.principal=uid={{rbac_ldap_principal}},{{rbac_ldap_user_search_base}}
+ldap.java.naming.security.credentials={{rbac_ldap_princiapl_password}}
+ldap.java.naming.security.authentication=simple
+# ldap search mode (GROUPS is default)
+#ldap.search.mode=GROUPS
+#ldap.search.mode=USERS
+# how to search for users
+ldap.user.search.base={{rbac_ldap_user_search_base}}
+# how to search for groups
+ldap.group.search.base={{rbac_ldap_group_search_base}}
+# which attribute in ldap record corresponds to user name
+ldap.user.name.attribute=uid
+ldap.user.memberof.attribute.pattern=CN=(.*),{{rbac_ldap_user_search_base}}
+#ldap.group.object.class=inetOrgPerson
+ldap.group.name.attribute=cn
+ldap.group.member.attribute.pattern=CN=(.*),{{rbac_ldap_user_search_base}}
+confluent.security.event.logger.enabled=false
+#ldap.user.password.attribute=userPassword
+ldap.user.object.class=account
 {% endif %}

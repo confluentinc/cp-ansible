@@ -16,6 +16,24 @@
   loop: "{{kafka_broker_packages}}"
   when: ansible_os_family == "Debian"
 
+- name: Install EPEL to gain access to additional tools
+  yum:
+     name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+     state: present
+  when: ansible_os_family == "RedHat" and rbac_enabled|bool 
+
+- name: Install JQ to parse json on cmd line
+  yum:
+     name: jq
+     state: latest
+  when: ansible_os_family == "RedHat" and rbac_enabled|bool 
+
+- name: Install JQ to parse json on cmd line
+  apt:
+     name: jq
+     state: latest
+  when: ansible_os_family == "Debian" and rbac_enabled|bool 
+  
 - name: Kafka Broker group
   group:
     name: "{{kafka_broker_group}}"
@@ -38,6 +56,24 @@
     service_name: kafka_broker
     hostnames: "{{ kafka_broker_listeners | get_hostnames(inventory_hostname) | unique }}"
   when: kafka_broker_listeners | ssl_required(ssl_enabled)
+
+- name: Copy in public pem files
+  copy:
+    src: "{{token_services_public_pem_file}}"
+    dest: "{{rbac_enabled_public_pem_path}}"
+    mode: '755'
+    owner: "{{kafka_broker_user}}"
+    group: "{{kafka_broker_group}}"
+  when: rbac_enabled|bool
+
+- name: Copy in private pem files
+  copy:
+    src: "{{token_services_private_pem_file}}"
+    dest: "{{rbac_enabled_private_pem_path}}"
+    mode: '755'
+    owner: "{{kafka_broker_user}}"
+    group: "{{kafka_broker_group}}"
+  when: rbac_enabled|bool
 
 - name: Configure Kerberos
   include_role:
@@ -175,7 +211,7 @@
     state: started
 
 - name: Wait for Under Replicated Partitions on Broker
-  include_tasks: tasks/wait_for_urp.yml
+  include_tasks: ../../tasks/wait_for_urp.yml
   when:
     - health_checks_enabled|bool
     - jolokia_enabled|bool

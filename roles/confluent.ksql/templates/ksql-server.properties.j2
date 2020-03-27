@@ -83,3 +83,34 @@ confluent.monitoring.interceptor.sasl.mechanism=SCRAM-SHA-256
 confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
    username="{{sasl_scram_users.ksql.principal}}" password="{{sasl_scram_users.ksql.password}}";
 {% endif %}
+
+{% if rbac_enabled|bool %}
+###################### Set KSQL RBAC settings ######################
+# Enable Confluent KSQL security plugin
+ksql.security.extension.class=io.confluent.ksql.security.KsqlConfluentSecurityExtension
+
+# Enable KSQL OAuth authentication
+rest.servlet.initializor.classes=io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+websocket.servlet.initializor.classes=io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+oauth.jwt.public.key.path={{rbac_enabled_public_pem_path}}
+confluent.metadata.public.key.path={{rbac_enabled_public_pem_path}}
+public.key.path={{rbac_enabled_public_pem_path}}
+
+# location of metadata service
+confluent.metadata.bootstrap.server.urls={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}https://{{ host }}:8090{% endfor %}
+
+# Credentials to access the Metadata service
+
+confluent.metadata.basic.auth.user.info={{ principal_name }}:{{ rbac_principal_password }}
+
+
+confluent.metadata.http.auth.credentials.provider=BASIC
+
+############################ MDS TLS Settings #####################################
+confluent.metadata.server.ssl.keystore.location={{ksql_keystore_path}}
+confluent.metadata.server.ssl.keystore.password={{ksql_keystore_storepass}}
+confluent.metadata.server.ssl.key.password={{ksql_keystore_keypass}}
+confluent.metadata.server.ssl.truststore.location={{ksql_truststore_path}}
+confluent.metadata.server.ssl.truststore.password={{ksql_truststore_storepass}}
+
+{% endif %}

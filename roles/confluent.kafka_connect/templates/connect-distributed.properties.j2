@@ -175,3 +175,59 @@ consumer.confluent.monitoring.interceptor.sasl.mechanism=SCRAM-SHA-256
 consumer.confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
    username="{{sasl_scram_users.kafka_connect.principal}}" password="{{sasl_scram_users.kafka_connect.password}}";
 {% endif %}
+
+{% if rbac_enabled|bool %}
+###################### REST extensions: RBAC and Secret Registry ######################
+# rest.extension.classes=io.confluent.connect.security.ConnectSecurityExtension,io.confluent.connect.secretregistry.ConnectSecretRegistryExtension
+rest.extension.classes=io.confluent.connect.security.ConnectSecurityExtension
+
+
+# Connect Secret Registry to Kafka
+#config.providers.secret.param.kafkastore.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:9093{% endfor %}
+
+#config.providers.secret.param.kafkastore.security.protocol=SASL_SSL
+
+# SASL/OAUTHBEARER
+#config.providers.secret.param.kafkastore.sasl.mechanism=OAUTHBEARER
+#config.providers.secret.param.kafkastore.sasl.login.callback.handler.class=io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler
+#config.providers.secret.param.kafkastore.sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+#    username="{{inventory_hostname}}" \
+#    password="{{rbac_principal_password}}" \
+#    metadataServerUrls={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:8090{% endfor %};
+
+# truststore
+#config.providers.secret.param.kafkastore.ssl.truststore.location={{kafka_connect_truststore_path}}
+#config.providers.secret.param.kafkastore.ssl.truststore.password={{kafka_connect_truststore_storepass}}
+
+#keystore
+#config.providers.secret.param.kafkastore.ssl.keystore.location={{kafka_connect_keystore_path}}
+#config.providers.secret.param.kafkastore.ssl.keystore.password={{kafka_connect_keystore_storepass}}
+#config.providers.secret.param.kafkastore.ssl.key.password={{kafka_connect_keystore_storepass}}
+
+#config.providers.secret.param.kafkastore.ssl.client.auth=true
+#config.providers.secret.param.kafkastore.ssl.endpoint.identification.algorithm=HTTPS
+
+
+##################### RBAC #####################
+### Authentication
+rest.servlet.initializor.classes=io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+
+# The path to a directory containing public keys that should be used to verify json web tokens
+# during authentication
+public.key.path={{rbac_enabled_public_pem_path}}
+
+# location of metadata service
+# For SSL settings connect will use top level ssl.* configs
+confluent.metadata.bootstrap.server.urls={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}https://{{ host }}:8090{% endfor %}
+
+# credentials to use with MDS
+confluent.metadata.basic.auth.user.info={{principal_name}}:{{rbac_principal_password}}
+confluent.metadata.http.auth.credentials.provider=BASIC
+
+############################ MDS TLS Settings #####################################
+confluent.metadata.server.ssl.keystore.location={{kafka_connect_keystore_path}}
+confluent.metadata.server.ssl.keystore.password={{kafka_connect_keystore_keypass}}
+confluent.metadata.server.ssl.key.password={{kafka_connect_keystore_keypass}}
+confluent.metadata.server.ssl.truststore.location={{kafka_connect_truststore_path}}
+confluent.metadata.server.ssl.truststore.password={{kafka_connect_truststore_storepass}}
+{% endif %}

@@ -18,6 +18,8 @@ ssl.truststore.password={{kafka_rest_truststore_storepass}}
 {% endif %}
 {% endif %}
 
+zookeeper.connect={% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{zookeeper.properties.clientPort}}{% endfor %}
+
 # Kafka Broker Configuration
 bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}{% endfor %}
 
@@ -63,4 +65,30 @@ schema.registry.ssl.keystore.location={{kafka_rest_keystore_path}}
 schema.registry.ssl.keystore.password={{kafka_rest_keystore_storepass}}
 schema.registry.ssl.key.password={{kafka_rest_keystore_keypass}}
 {% endif %}
+{% endif %}
+
+{% if rbac_enabled|bool %}
+################################ OAuth Bearer Token for RBAC ################################
+kafka.rest.resource.extension.class=io.confluent.kafkarest.security.KafkaRestSecurityResourceExtension
+rest.servlet.initializor.classes=io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+confluent.metadata.bootstrap.server.urls={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}https://{{ host }}:8090{% endfor %}
+
+public.key.path={{rbac_enabled_public_pem_path}}
+confluent.metadata.server.urls.max.age.ms=60000
+client.confluent.metadata.server.urls.max.age.ms=60000
+
+# Credentials to use with the MDS
+{% if (rbac_enabled|bool and ssl_enabled|bool) and not (ssl_custom_certs|bool)%}
+confluent.metadata.basic.auth.user.info={{inventory_hostname}}:{{rbac_principal_password}}
+{% endif %}
+{% if rbac_enabled|bool and ssl_enabled|bool and ssl_custom_certs|bool %}
+confluent.metadata.basic.auth.user.info={{rbac_principal_name}}:{{rbac_principal_password}}
+{% endif %}
+confluent.metadata.http.auth.credentials.provider=BASIC
+############################ MDS TLS Settings #####################################
+confluent.metadata.server.ssl.keystore.location={{kafka_rest_keystore_path}}
+confluent.metadata.server.ssl.keystore.password={{kafka_rest_keystore_storepass}}
+confluent.metadata.server.ssl.key.password={{kafka_rest_keystore_keypass}}
+confluent.metadata.server.ssl.truststore.location={{kafka_rest_truststore_path}}
+confluent.metadata.server.ssl.truststore.password={{kafka_rest_truststore_storepass}}
 {% endif %}
