@@ -15,10 +15,16 @@
     group: "{{kafka_broker_group}}"
 
 - name: Get Kafka Cluster ID from Zookeeper
+  shell: /bin/zookeeper-shell localhost:2181 get /cluster/id | grep version
   delegate_to: "{{ groups['zookeeper'][0] }}"
-  shell: |
-    /bin/zookeeper-shell localhost:2181 get /cluster/id 2> /dev/null | grep version | jq -r .id
-  register: cluster_id  
+  register: cluster_id_query
+
+- set_fact:
+    cluster_id_json: "{{ cluster_id_query.stdout }}"
+
+- name: Set cluster_id Variable
+  set_fact:
+    cluster_id: "{{ cluster_id_json.id }}"
 
 - name: export CA to pem format for MDS login to create user
   delegate_to: "{{ groups['kafka_broker'][0] }}"
@@ -46,6 +52,14 @@
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
-    curl --cacert /var/ssl/private/kafka_broker.truststore.pem --key /var/ssl/private/key.pem --cert /var/ssl/private/cert.pem -u "{{mds_super_user}}":"{{mds_super_user_password}}" -s https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/authenticate 2> /dev/null | grep auth_token | jq -r .auth_token
-  register: rbac_token
+    curl --cacert /var/ssl/private/kafka_broker.truststore.pem --key /var/ssl/private/key.pem --cert /var/ssl/private/cert.pem \
+      -u "{{mds_super_user}}":"{{mds_super_user_password}}" \
+      -s https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/authenticate
+  register: rbac_token_query
 
+- set_fact:
+    rbac_token_query_stdout: "{{ rbac_token_query.stdout }}"
+
+- name: Set rbac_token Variable
+  set_fact:
+    rbac_token: "{{ rbac_token_query_stdout.auth_token }}"
