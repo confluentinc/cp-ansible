@@ -1,30 +1,20 @@
 ---
-# - name: Install OpenSSL - RedHat
-#   yum:
-#     name: openssl
-#     state: present
-#   when: ansible_os_family == "RedHat"
-#
-# - name: Install OpenSSL - Debian
-#   apt:
-#     name: openssl
-#     state: present
-#   when: ansible_os_family == "Debian"
-
 - name: Copy CA Cert to Host
   copy:
     src: "{{ssl_ca_cert_filepath}}"
-    dest: "/var/ssl/private/generation/{{ssl_ca_cert_filepath|basename}}"
+    dest: "/var/ssl/private/ca.crt"
 
 - name: Copy Signed Cert to Host
   copy:
     src: "{{ssl_signed_cert_filepath}}"
-    dest: /var/ssl/private/generation/signed.crt
+    # dest: /var/ssl/private/generation/signed.crt
+    dest: /var/ssl/private/{{service_name}}.crt
 
 - name: Copy Key to Host
   copy:
     src: "{{ssl_key_filepath}}"
-    dest: /var/ssl/private/generation/key.pem
+    # dest: /var/ssl/private/generation/key.pem
+    dest: /var/ssl/private/{{service_name}}.key
 
 - set_fact:
     extra_args: ""
@@ -39,15 +29,15 @@
     keytool -noprompt -keystore {{truststore_path}} \
       -storetype pkcs12 \
       -alias CARoot \
-      -import -file /var/ssl/private/generation/{{ssl_ca_cert_filepath|basename}} \
+      -import -file /var/ssl/private/ca.crt \
       -storepass {{truststore_storepass}} \
       -keypass {{truststore_storepass}} {{extra_args}}
 
 - name: Put Key and Signed Cert into pkcs12 Format
   shell: |
     openssl pkcs12 -export \
-      -in /var/ssl/private/generation/signed.crt \
-      -inkey /var/ssl/private/generation/key.pem \
+      -in /var/ssl/private/{{service_name}}.crt \
+      -inkey /var/ssl/private/{{service_name}}.key \
       -passin pass:{{ssl_key_password}} \
       -out /var/ssl/private/generation/client.p12 \
       -name kafkassl \
@@ -70,6 +60,6 @@
       -storetype pkcs12 \
       -keyalg RSA \
       -alias CARoot \
-      -import -file /var/ssl/private/generation/{{ssl_ca_cert_filepath|basename}} \
+      -import -file /var/ssl/private/ca.crt \
       -storepass {{keystore_storepass}} \
       -keypass {{keystore_storepass}} {{extra_args}}
