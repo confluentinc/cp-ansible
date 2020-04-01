@@ -26,33 +26,42 @@
   set_fact:
     cluster_id: "{{ cluster_id_json.id }}"
 
-- name: export CA to pem format for MDS login to create user
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
-  shell: |
-    openssl pkcs12 -in /var/ssl/private/kafka_broker.truststore.jks \
-      -out /var/ssl/private/kafka_broker.truststore.pem \
-      -passin pass:{{kafka_broker_truststore_storepass}} -passout pass:{{kafka_broker_truststore_storepass}}
+# - name: export CA to pem format for MDS login to create user
+#   delegate_to: "{{ groups['kafka_broker'][0] }}"
+#   shell: |
+#     openssl pkcs12 -in /var/ssl/private/kafka_broker.truststore.jks \
+#       -out /var/ssl/private/kafka_broker.truststore.pem \
+#       -passin pass:{{kafka_broker_truststore_storepass}} -passout pass:{{kafka_broker_truststore_storepass}}
+#
+# - name: convert keystore to pem format
+#   delegate_to: "{{ groups['kafka_broker'][0] }}"
+#   shell: |
+#     keytool -noprompt -importkeystore -srckeystore /var/ssl/private/kafka_broker.keystore.jks -srcstorepass {{kafka_broker_keystore_storepass}} -destkeystore /var/ssl/private/kafka_broker.keystore.p12 -deststoretype PKCS12 -deststorepass {{kafka_broker_keystore_storepass}} -destkeypass {{kafka_broker_keystore_storepass}}
+#
+# - name: export certificate from pem
+#   delegate_to: "{{ groups['kafka_broker'][0] }}"
+#   shell: |
+#     openssl pkcs12 -in /var/ssl/private/kafka_broker.keystore.p12 -nokeys -out /var/ssl/private/cert.pem -passin pass:{{kafka_broker_keystore_storepass}}
+#
+# - name: export private key from pem
+#   delegate_to: "{{ groups['kafka_broker'][0] }}"
+#   shell: |
+#     openssl pkcs12 -in /var/ssl/private/kafka_broker.keystore.p12 -nodes -nocerts -out /var/ssl/private/key.pem -passin pass:{{kafka_broker_keystore_storepass}}
 
-- name: convert keystore to pem format
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
-  shell: |
-    keytool -noprompt -importkeystore -srckeystore /var/ssl/private/kafka_broker.keystore.jks -srcstorepass {{kafka_broker_keystore_storepass}} -destkeystore /var/ssl/private/kafka_broker.keystore.p12 -deststoretype PKCS12 -deststorepass {{kafka_broker_keystore_storepass}} -destkeypass {{kafka_broker_keystore_storepass}}
-
-- name: export certificate from pem
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
-  shell: |
-    openssl pkcs12 -in /var/ssl/private/kafka_broker.keystore.p12 -nokeys -out /var/ssl/private/cert.pem -passin pass:{{kafka_broker_keystore_storepass}}
-
-- name: export private key from pem
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
-  shell: |
-    openssl pkcs12 -in /var/ssl/private/kafka_broker.keystore.p12 -nodes -nocerts -out /var/ssl/private/key.pem -passin pass:{{kafka_broker_keystore_storepass}}
+# - name: Login to MDS to get Security Token
+#   delegate_to: "{{ groups['kafka_broker'][0] }}"
+#   delegate_facts: true
+#   shell: |
+#     curl --cacert /var/ssl/private/kafka_broker.truststore.pem --key /var/ssl/private/key.pem --cert /var/ssl/private/cert.pem \
+#       -u "{{mds_super_user}}":"{{mds_super_user_password}}" \
+#       -s https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/authenticate
+#   register: rbac_token_query
 
 - name: Login to MDS to get Security Token
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
-    curl --cacert /var/ssl/private/kafka_broker.truststore.pem --key /var/ssl/private/key.pem --cert /var/ssl/private/cert.pem \
+    curl --cacert /var/ssl/private/ca.crt --key /var/ssl/private/kafka_broker.key --cert /var/ssl/private/kafka_broker.crt \
       -u "{{mds_super_user}}":"{{mds_super_user_password}}" \
       -s https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/authenticate
   register: rbac_token_query

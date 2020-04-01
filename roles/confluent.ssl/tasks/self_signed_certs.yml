@@ -1,25 +1,35 @@
 ---
-- name: Install OpenSSL - RedHat
-  yum:
-    name: openssl
-    state: present
-  when: ansible_os_family == "RedHat"
+# - name: Install OpenSSL - RedHat
+#   yum:
+#     name: openssl
+#     state: present
+#   when: ansible_os_family == "RedHat"
+#
+# - name: Install OpenSSL - Debian
+#   apt:
+#     name: openssl
+#     state: present
+#   when: ansible_os_family == "Debian"
 
-- name: Install OpenSSL - Debian
-  apt:
-    name: openssl
-    state: present
-  when: ansible_os_family == "Debian"
-  
+# - name: Copy CA Cert to Host
+#   copy:
+#     src: "generated_ssl_files/{{ssl_self_signed_ca_cert_filename}}"
+#     dest: "/var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}}"
+#
+# - name: Copy CA Key to Host
+#   copy:
+#     src: "generated_ssl_files/{{ssl_self_signed_ca_key_filename}}"
+#     dest: "/var/ssl/private/generation/{{ssl_self_signed_ca_key_filename}}"
+
 - name: Copy CA Cert to Host
   copy:
     src: "generated_ssl_files/{{ssl_self_signed_ca_cert_filename}}"
-    dest: "/var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}}"
+    dest: "/var/ssl/private/ca.crt"
 
 - name: Copy CA Key to Host
   copy:
     src: "generated_ssl_files/{{ssl_self_signed_ca_key_filename}}"
-    dest: "/var/ssl/private/generation/{{ssl_self_signed_ca_key_filename}}"
+    dest: "/var/ssl/private/ca.key"
 
 - set_fact:
     extra_args: ""
@@ -34,7 +44,7 @@
     keytool -noprompt -keystore {{truststore_path}} \
       -storetype pkcs12 \
       -alias CARoot \
-      -import -file /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
+      -import -file /var/ssl/private/ca.crt \
       -storepass {{truststore_storepass}} \
       -keypass {{truststore_storepass}} {{extra_args}}
 
@@ -49,6 +59,14 @@
       -keystore {{keystore_path}} \
       -storepass {{keystore_storepass}} \
       -keypass {{keystore_storepass}} {{extra_args}}
+
+- name: Export Key from Keystore
+  shell: |
+    openssl pkcs12 \
+        -in {{keystore_path}} \
+        -passin pass:{{keystore_storepass}} \
+        -nodes -nocerts \
+        -out /var/ssl/private/{{service_name}}.key
 
 - name: Create Certificate Signing Request
   shell: |
@@ -67,10 +85,10 @@
 
 - name: Sign CSR with the Certificate Authority
   shell: |
-    openssl x509 -req -CA /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
-      -CAkey /var/ssl/private/generation/{{ssl_self_signed_ca_key_filename}} \
+    openssl x509 -req -CA /var/ssl/private/ca.crt \
+      -CAkey /var/ssl/private/ca.key \
       -in /var/ssl/private/generation/client.csr \
-      -out /var/ssl/private/generation/client-signed.crt \
+      -out /var/ssl/private/{{service_name}}.crt \
       -days {{keystore_expiration_days}} -CAcreateserial \
       -passin pass:{{ssl_self_signed_ca_password}} \
       -extfile /var/ssl/private/generation/openssl-san.cnf \
@@ -81,7 +99,7 @@
     keytool -noprompt -keystore {{keystore_path}} \
       -storetype pkcs12 \
       -alias CARoot \
-      -import -file /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
+      -import -file /var/ssl/private/ca.crt \
       -storepass {{keystore_storepass}} \
       -keypass {{keystore_storepass}} {{extra_args}}
 
@@ -90,7 +108,7 @@
     keytool -noprompt -keystore {{keystore_path}} \
       -storetype pkcs12 \
       -alias {{inventory_hostname}} \
-      -import -file /var/ssl/private/generation/client-signed.crt \
+      -import -file /var/ssl/private/{{service_name}}.crt \
       -ext "SAN={{hostnames | cert_extension}}" \
       -storepass {{keystore_storepass}} \
       -keypass {{keystore_storepass}} {{extra_args}}
