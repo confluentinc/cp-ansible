@@ -1,18 +1,33 @@
 ---
+- set_fact:
+    ssl_ca_cert: "/var/ssl/private/generation/{{ssl_ca_cert_filepath|basename}}"
+    ssl_signed_cert: /var/ssl/private/generation/signed.crt
+    ssl_key: /var/ssl/private/generation/key.pem
+  when: not ssl_custom_certs_skip_copy
+
+- set_fact:
+    ssl_ca_cert: "{{ssl_ca_cert_filepath|basename}}"
+    ssl_signed_cert: "{{ssl_ca_cert_filepath}}"
+    ssl_key:  "{{ssl_signed_cert_filepath}}"
+  when: ssl_custom_certs_skip_copy
+
 - name: Copy CA Cert to Host
   copy:
     src: "{{ssl_ca_cert_filepath}}"
-    dest: "/var/ssl/private/generation/{{ssl_ca_cert_filepath|basename}}"
+    dest: /var/ssl/private/generation/signed.crt
+  when: not ssl_custom_certs_skip_copy
 
 - name: Copy Signed Cert to Host
   copy:
     src: "{{ssl_signed_cert_filepath}}"
     dest: /var/ssl/private/generation/signed.crt
+  when: not ssl_custom_certs_skip_copy
 
 - name: Copy Key to Host
   copy:
     src: "{{ssl_key_filepath}}"
     dest: /var/ssl/private/generation/key.pem
+  when: not ssl_custom_certs_skip_copy
 
 - set_fact:
     extra_args: ""
@@ -27,15 +42,20 @@
     keytool -noprompt -keystore {{truststore_path}} \
       -storetype pkcs12 \
       -alias CARoot \
-      -import -file /var/ssl/private/generation/{{ssl_ca_cert_filepath|basename}} \
+      -import -file {{ssl_ca_cert}} \
       -storepass {{truststore_storepass}} \
       -keypass {{truststore_storepass}} {{extra_args}}
+  when: not ssl_add_ca_chain
+
+- name: Create Truststore and Import the CA Chain
+  include_tasks: import_ca_chain.yml
+  when: ssl_add_ca_chain
 
 - name: Put Key and Signed Cert into pkcs12 Format
   shell: |
     openssl pkcs12 -export \
-      -in /var/ssl/private/generation/signed.crt \
-      -inkey /var/ssl/private/generation/key.pem \
+      -in {{ssl_signed_cert}} \
+      -inkey {{ssl_key}} \
       -passin pass:{{ssl_key_password}} \
       -out /var/ssl/private/generation/client.p12 \
       -name kafkassl \
@@ -58,6 +78,6 @@
       -storetype pkcs12 \
       -keyalg RSA \
       -alias CARoot \
-      -import -file /var/ssl/private/generation/{{ssl_ca_cert_filepath|basename}} \
+      -import -file {{ssl_ca_cert}} \
       -storepass {{keystore_storepass}} \
       -keypass {{keystore_storepass}} {{extra_args}}
