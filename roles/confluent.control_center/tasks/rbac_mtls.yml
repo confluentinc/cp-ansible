@@ -1,7 +1,19 @@
+---
+- set_fact:
+    certificate_args: ""
+  when: not mds_ssl_enabled|bool
+
+- set_fact:
+    certificate_args: "--cacert /var/ssl/private/ca.crt"
+  when: mds_ssl_enabled|bool and not mds_ssl_mutual_auth_enabled
+
+- set_fact:
+    certificate_args: "--cacert /var/ssl/private/ca.crt --key /var/ssl/private/control_center.key --cert /var/ssl/private/control_center.crt"
+  when: mds_ssl_enabled|bool and mds_ssl_mutual_auth_enabled
+
 - name: Grant role System Admin to Control Center user
   delegate_facts: true
   shell: |
-    curl --cacert /var/ssl/private/ca.crt --key /var/ssl/private/control_center.key --cert /var/ssl/private/control_center.crt \
-      -X POST https://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{principal_name}}/roles/SystemAdmin \
-      -H "accept: application/json" -H "Authorization: Bearer {{rbac_token}}" -H "Content-Type: application/json" \
+    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{principal_name}}/roles/SystemAdmin \
+      -H "accept: application/json" -H "Authorization: Bearer {{rbac_token}}" -H "Content-Type: application/json" {{certificate_args}} \
       -d '{"clusters":{"kafka-cluster":"{{cluster_id}}"}}'
