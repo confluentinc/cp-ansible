@@ -26,13 +26,24 @@
   set_fact:
     cluster_id: "{{ cluster_id_json.id }}"
 
+- set_fact:
+    certificate_args: ""
+  when: not mds_ssl_enabled|bool
+
+- set_fact:
+    certificate_args: "--cacert /var/ssl/private/ca.crt"
+  when: mds_ssl_enabled|bool and not mds_ssl_mutual_auth_enabled
+
+- set_fact:
+    certificate_args: "--cacert /var/ssl/private/ca.crt --key /var/ssl/private/kafka_broker.key --cert /var/ssl/private/kafka_broker.crt"
+  when: mds_ssl_enabled|bool and mds_ssl_mutual_auth_enabled
+
 - name: Login to MDS to get Security Token
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
-    curl --cacert /var/ssl/private/ca.crt --key /var/ssl/private/kafka_broker.key --cert /var/ssl/private/kafka_broker.crt \
-      -u "{{mds_super_user}}":"{{mds_super_user_password}}" \
-      -s https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/authenticate
+    curl {{certificate_args}} -u "{{mds_super_user}}":"{{mds_super_user_password}}" \
+      -s {{mds_http_protocol}}://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/authenticate
   register: rbac_token_query
 
 - set_fact:
