@@ -5,27 +5,39 @@
     - import_role:
         name: ../default/roles/confluent.ldap
 
-    - name: Install OpenSSL and Rsync - RedHat
+    - name: Install OpenSSL Rsync and Java
       yum:
         name: "{{item}}"
         state: present
       loop:
         - openssl
         - rsync
-      when: ansible_os_family == "RedHat"
+        - java-1.8.0-openjdk
 
     - name: Create SSL Certificate Generation Directory
       file:
         path: /var/ssl/private/generation
         state: directory
         mode: 0755
-      run_once: true
+
+    - name: Copy in cert generation files in
+      copy:
+        src: "{{item}}"
+        dest: "/var/ssl/private/generation/{{item|basename}}"
+        mode: 0777
+      loop:
+        - certs/hosts
+        - certs/certs-create.sh
+
+    - name: Run
+      shell: "./certs-create.sh"
+      args:
+        chdir: /var/ssl/private/generation/
 
     - name: Create 2048-bit RSA Private key
       shell: |
         openssl genrsa \
           -out /var/ssl/private/generation/{{token_services_private_pem_file|basename}} 2048
-      run_once: true
 
     - name: Extract Public key
       shell: |
@@ -33,11 +45,9 @@
           -in /var/ssl/private/generation/{{token_services_private_pem_file|basename}} \
           -outform PEM -pubout \
           -out /var/ssl/private/generation/{{token_services_public_pem_file|basename}}
-      run_once: true
 
     - name: Copy Generated SSL Files Back to Ansible Host
       synchronize:
         src: /var/ssl/private/generation/
         dest: generated_ssl_files
         mode: pull
-      run_once: true
