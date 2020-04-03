@@ -6,6 +6,7 @@
       principal_name: "{{rbac_principal_name}}"
   when: ssl_custom_certs|bool or ssl_provided_keystore_and_truststore|bool
 
+# TODO this needs to move into the component role since it has wrong user on it
 - name: Copy in public pem files
   copy:
     src: "{{token_services_public_pem_file}}"
@@ -26,35 +27,24 @@
   set_fact:
     cluster_id: "{{ cluster_id_json.id }}"
 
-- name: export CA to pem format for MDS login to create user
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
-  shell: |
-    openssl pkcs12 -in /var/ssl/private/kafka_broker.truststore.jks \
-      -out /var/ssl/private/kafka_broker.truststore.pem \
-      -passin pass:{{kafka_broker_truststore_storepass}} -passout pass:{{kafka_broker_truststore_storepass}}
+- set_fact:
+    certificate_args: ""
+  when: not mds_ssl_enabled|bool
 
-- name: convert keystore to pem format
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
-  shell: |
-    keytool -noprompt -importkeystore -srckeystore /var/ssl/private/kafka_broker.keystore.jks -srcstorepass {{kafka_broker_keystore_storepass}} -destkeystore /var/ssl/private/kafka_broker.keystore.p12 -deststoretype PKCS12 -deststorepass {{kafka_broker_keystore_storepass}} -destkeypass {{kafka_broker_keystore_storepass}}
+- set_fact:
+    certificate_args: "--cacert /var/ssl/private/ca.crt"
+  when: mds_ssl_enabled|bool and not mds_ssl_mutual_auth_enabled|bool
 
-- name: export certificate from pem
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
-  shell: |
-    openssl pkcs12 -in /var/ssl/private/kafka_broker.keystore.p12 -nokeys -out /var/ssl/private/cert.pem -passin pass:{{kafka_broker_keystore_storepass}}
-
-- name: export private key from pem
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
-  shell: |
-    openssl pkcs12 -in /var/ssl/private/kafka_broker.keystore.p12 -nodes -nocerts -out /var/ssl/private/key.pem -passin pass:{{kafka_broker_keystore_storepass}}
+- set_fact:
+    certificate_args: "--cacert /var/ssl/private/ca.crt --key /var/ssl/private/kafka_broker.key --cert /var/ssl/private/kafka_broker.crt"
+  when: mds_ssl_enabled|bool and mds_ssl_mutual_auth_enabled|bool
 
 - name: Login to MDS to get Security Token
   delegate_to: "{{ groups['kafka_broker'][0] }}"
   delegate_facts: true
   shell: |
-    curl --cacert /var/ssl/private/kafka_broker.truststore.pem --key /var/ssl/private/key.pem --cert /var/ssl/private/cert.pem \
-      -u "{{mds_super_user}}":"{{mds_super_user_password}}" \
-      -s https://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/authenticate
+    curl {{certificate_args}} -u "{{mds_super_user}}":"{{mds_super_user_password}}" \
+      -s {{mds_http_protocol}}://"{{ groups['kafka_broker'][0] }}":8090/security/1.0/authenticate
   register: rbac_token_query
 
 - set_fact:
