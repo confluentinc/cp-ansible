@@ -23,35 +23,23 @@ ssl.client.auth=false
 # Kafka Broker Configuration
 kafkastore.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[schema_registry_kafka_listener_name]['port']}}{% endfor %}
 
-kafkastore.security.protocol={{kafka_broker_listeners[schema_registry_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
-{% if kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool %}
-kafkastore.ssl.truststore.location={{schema_registry_truststore_path}}
-kafkastore.ssl.truststore.password={{schema_registry_truststore_storepass}}
-{% if kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
-kafkastore.ssl.keystore.location={{schema_registry_keystore_path}}
-kafkastore.ssl.keystore.password={{schema_registry_keystore_storepass}}
-kafkastore.ssl.key.password={{schema_registry_keystore_keypass}}
-{% endif %}
-{% endif %}
-{% if kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
-kafkastore.sasl.mechanism=PLAIN
-kafkastore.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-   username="{{sasl_plain_users.schema_registry.principal}}" password="{{sasl_plain_users.schema_registry.password}}";
-{% endif %}
-{% if kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
-kafkastore.sasl.mechanism=GSSAPI
-kafkastore.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
-kafkastore.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
-   useKeyTab=true \
-   storeKey=true \
-   keyTab="{{kerberos.keytab_dir}}/{{schema_registry_kerberos_keytab_path | basename}}" \
-   principal="{{schema_registry_kerberos_principal}}";
-{% endif %}
-{% if kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
-kafkastore.sasl.mechanism=SCRAM-SHA-256
-kafkastore.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
-   username="{{sasl_scram_users.schema_registry.principal}}" password="{{sasl_scram_users.schema_registry.password}}";
-{% endif %}
+{% set config_prefix = 'kafkastore' %}
+{% set listener = kafka_broker_listeners[schema_registry_kafka_listener_name] %}
+{% set truststore_path = schema_registry_truststore_path %}
+{% set truststore_storepass = schema_registry_truststore_storepass %}
+{% set keystore_path = schema_registry_keystore_path %}
+{% set keystore_storepass = schema_registry_keystore_storepass %}
+{% set keystore_keypass = schema_registry_keystore_keypass %}
+{% set sasl_plain_username = sasl_plain_users.schema_registry.principal %}
+{% set sasl_plain_password = sasl_plain_users.schema_registry.password %}
+{% set sasl_scram_username = sasl_scram_users.schema_registry.principal %}
+{% set sasl_scram_password = sasl_scram_users.schema_registry.password %}
+{% set kerberos_keytab_path = schema_registry_kerberos_keytab_path %}
+{% set kerberos_principal = schema_registry_kerberos_principal %}
+{% set oauth_username = schema_registry_ldap_user %}
+{% set oauth_password = schema_registry_ldap_password %}
+{% include 'kafka_client.j2' %}
+
 
 {% if rbac_enabled|bool %}
 ##################### RBAC #####################
@@ -72,7 +60,7 @@ confluent.metadata.bootstrap.server.urls={% for host in groups['kafka_broker'] %
 
 # credentials to use with MDS
 confluent.metadata.http.auth.credentials.provider=BASIC
-confluent.metadata.basic.auth.user.info={{ principal_name }}:{{ rbac_principal_password }}
+confluent.metadata.basic.auth.user.info={{ schema_registry_ldap_user }}:{{ schema_registry_ldap_password }}
 
 # path to a public key that should be used to verify json web tokens during authentication
 public.key.path={{rbac_enabled_public_pem_path}}
