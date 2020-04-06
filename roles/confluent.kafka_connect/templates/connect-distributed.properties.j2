@@ -23,35 +23,23 @@ listeners.{{kafka_connect_http_protocol|lower}}.ssl.truststore.password={{kafka_
 # Kafka Broker Configuration
 bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
 
-security.protocol={{kafka_broker_listeners[kafka_connect_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool %}
-ssl.truststore.location={{kafka_connect_truststore_path}}
-ssl.truststore.password={{kafka_connect_truststore_storepass}}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
-ssl.keystore.location={{kafka_connect_keystore_path}}
-ssl.keystore.password={{kafka_connect_keystore_storepass}}
-ssl.key.password={{kafka_connect_keystore_keypass}}
-{% endif %}
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
-sasl.mechanism=PLAIN
-sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-   username="{{sasl_plain_users.kafka_connect.principal}}" password="{{sasl_plain_users.kafka_connect.password}}";
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
-sasl.mechanism=GSSAPI
-sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
-sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
-   useKeyTab=true \
-   storeKey=true \
-   keyTab="{{kerberos.keytab_dir}}/{{kafka_connect_kerberos_keytab_path | basename}}" \
-   principal="{{kafka_connect_kerberos_principal}}";
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
-sasl.mechanism=SCRAM-SHA-256
-sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
-   username="{{sasl_scram_users.kafka_connect.principal}}" password="{{sasl_scram_users.kafka_connect.password}}";
-{% endif %}
+{% set config_prefix = '' %}
+{% set listener = kafka_broker_listeners[kafka_connect_kafka_listener_name] %}
+{% set truststore_path = kafka_connect_truststore_path %}
+{% set truststore_storepass = kafka_connect_truststore_storepass %}
+{% set keystore_path = kafka_connect_keystore_path %}
+{% set keystore_storepass = kafka_connect_keystore_storepass %}
+{% set keystore_keypass = kafka_connect_keystore_keypass %}
+{% set sasl_plain_username = sasl_plain_users.kafka_connect.principal %}
+{% set sasl_plain_password = sasl_plain_users.kafka_connect.password %}
+{% set sasl_scram_username = sasl_scram_users.kafka_connect.principal %}
+{% set sasl_scram_password = sasl_scram_users.kafka_connect.password %}
+{% set kerberos_keytab_path = kafka_connect_kerberos_keytab_path %}
+{% set kerberos_principal = kafka_connect_kerberos_principal %}
+{% set oauth_username = kafka_connect_ldap_user %}
+{% set oauth_password = kafka_connect_ldap_password %}
+{% include 'kafka_client.j2' %}
+
 
 
 {% set schema_registries = groups.get('schema_registry', []) %}
@@ -62,119 +50,38 @@ key.converter.schema.registry.url={% for host in groups['schema_registry'] %}{% 
 
 {% endif %}
 
+
+
 # Connect Producer Configuration
 producer.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
 
-producer.security.protocol={{kafka_broker_listeners[kafka_connect_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool %}
-producer.ssl.truststore.location={{kafka_connect_truststore_path}}
-producer.ssl.truststore.password={{kafka_connect_truststore_storepass}}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
-producer.ssl.keystore.location={{kafka_connect_keystore_path}}
-producer.ssl.keystore.password={{kafka_connect_keystore_storepass}}
-producer.ssl.key.password={{kafka_connect_keystore_keypass}}
-{% endif %}
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
-producer.sasl.mechanism=PLAIN
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
-producer.sasl.mechanism=GSSAPI
-producer.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
-producer.sasl.mechanism=SCRAM-SHA-256
-{% endif %}
+{% set config_prefix = 'producer.' %}
+{% include 'kafka_client.j2' %}
+
 
 # Connect Consumer Configuration
 consumer.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
 
-consumer.security.protocol={{kafka_broker_listeners[kafka_connect_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool %}
-consumer.ssl.truststore.location={{kafka_connect_truststore_path}}
-consumer.ssl.truststore.password={{kafka_connect_truststore_storepass}}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
-consumer.ssl.keystore.location={{kafka_connect_keystore_path}}
-consumer.ssl.keystore.password={{kafka_connect_keystore_storepass}}
-consumer.ssl.key.password={{kafka_connect_keystore_keypass}}
-{% endif %}
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
-consumer.sasl.mechanism=PLAIN
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
-consumer.sasl.mechanism=GSSAPI
-consumer.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
-consumer.sasl.mechanism=SCRAM-SHA-256
-{% endif %}
+{% set config_prefix = 'consumer.' %}
+{% include 'kafka_client.j2' %}
+
+
 
 # Producer Monitoring Configuration
 producer.confluent.monitoring.interceptor.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
 
-producer.confluent.monitoring.interceptor.security.protocol={{kafka_broker_listeners[kafka_connect_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool %}
-producer.confluent.monitoring.interceptor.ssl.truststore.location={{kafka_connect_truststore_path}}
-producer.confluent.monitoring.interceptor.ssl.truststore.password={{kafka_connect_truststore_storepass}}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
-producer.confluent.monitoring.interceptor.ssl.keystore.location={{kafka_connect_keystore_path}}
-producer.confluent.monitoring.interceptor.ssl.keystore.password={{kafka_connect_keystore_storepass}}
-producer.confluent.monitoring.interceptor.ssl.key.password={{kafka_connect_keystore_keypass}}
-{% endif %}
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
-producer.confluent.monitoring.interceptor.sasl.mechanism=PLAIN
-producer.confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-   username="{{sasl_plain_users.kafka_connect.principal}}" password="{{sasl_plain_users.kafka_connect.password}}";
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
-producer.confluent.monitoring.interceptor.sasl.mechanism=GSSAPI
-producer.confluent.monitoring.interceptor.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
-producer.confluent.monitoring.interceptor.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
-   useKeyTab=true \
-   storeKey=true \
-   keyTab="{{kerberos.keytab_dir}}/{{kafka_connect_kerberos_keytab_path | basename}}" \
-   principal="{{kafka_connect_kerberos_principal}}";
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
-producer.confluent.monitoring.interceptor.sasl.mechanism=SCRAM-SHA-256
-producer.confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
-   username="{{sasl_scram_users.kafka_connect.principal}}" password="{{sasl_scram_users.kafka_connect.password}}";
-{% endif %}
+{% set config_prefix = 'producer.confluent.monitoring.interceptor.' %}
+{% include 'kafka_client.j2' %}
+
+
 
 # Consumer Monitoring Configuration
 consumer.confluent.monitoring.interceptor.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
 
-consumer.confluent.monitoring.interceptor.security.protocol={{kafka_broker_listeners[kafka_connect_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool %}
-consumer.confluent.monitoring.interceptor.ssl.truststore.location={{kafka_connect_truststore_path}}
-consumer.confluent.monitoring.interceptor.ssl.truststore.password={{kafka_connect_truststore_storepass}}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
-consumer.confluent.monitoring.interceptor.ssl.keystore.location={{kafka_connect_keystore_path}}
-consumer.confluent.monitoring.interceptor.ssl.keystore.password={{kafka_connect_keystore_storepass}}
-consumer.confluent.monitoring.interceptor.ssl.key.password={{kafka_connect_keystore_keypass}}
-{% endif %}
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
-consumer.confluent.monitoring.interceptor.sasl.mechanism=PLAIN
-consumer.confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-   username="{{sasl_plain_users.kafka_connect.principal}}" password="{{sasl_plain_users.kafka_connect.password}}";
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
-consumer.confluent.monitoring.interceptor.sasl.mechanism=GSSAPI
-consumer.confluent.monitoring.interceptor.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
-consumer.confluent.monitoring.interceptor.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
-   useKeyTab=true \
-   storeKey=true \
-   keyTab="{{kerberos.keytab_dir}}/{{kafka_connect_kerberos_keytab_path | basename}}" \
-   principal="{{kafka_connect_kerberos_principal}}";
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
-consumer.confluent.monitoring.interceptor.sasl.mechanism=SCRAM-SHA-256
-consumer.confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
-   username="{{sasl_scram_users.kafka_connect.principal}}" password="{{sasl_scram_users.kafka_connect.password}}";
-{% endif %}
+{% set config_prefix = 'consumer.confluent.monitoring.interceptor.' %}
+{% include 'kafka_client.j2' %}
+
+
 
 {% if rbac_enabled|bool %}
 ###################### RBAC and Secret Registry ######################
@@ -232,7 +139,7 @@ public.key.path={{rbac_enabled_public_pem_path}}
 confluent.metadata.bootstrap.server.urls={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}https://{{ host }}:8090{% endfor %}
 
 # credentials to use with MDS
-confluent.metadata.basic.auth.user.info={{principal_name}}:{{rbac_principal_password}}
+confluent.metadata.basic.auth.user.info={{kafka_connect_ldap_user}}:{{kafka_connect_ldap_password}}
 confluent.metadata.http.auth.credentials.provider=BASIC
 
 {% if mds_ssl_enabled|bool %}
