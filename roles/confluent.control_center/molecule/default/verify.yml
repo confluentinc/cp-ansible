@@ -100,8 +100,19 @@
       shell: |
         curl -k -X PUT https://localhost:8083/connectors/conn1/config \
           -H "Content-Type: application/json" -u mds:password \
-          -d '{"connector.class": "org.apache.kafka.connect.file.FileStreamSinkConnector","tasks.max": "1","topics": "${secret:conn1:topic}","file": "/tmp/file-sink-test.txt","principal.service.name": "mds","principal.service.password": "password","consumer.override.security.protocol": "SASL_SSL","consumer.override.sasl.mechanism": "OAUTHBEARER","consumer.override.sasl.login.callback.handler.class": "io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler","consumer.override.bootstrap.servers": "kafka-broker1:9093"}'
+          -d '{"connector.class": "org.apache.kafka.connect.file.FileStreamSinkConnector",
+          "tasks.max": "1",
+          "topics": "${secret:conn1:topic}",
+          "file": "/tmp/file-sink-test.txt",
+          "principal.service.name": "mds",
+          "principal.service.password": "password",
+          "consumer.override.security.protocol": "SASL_SSL",
+          "consumer.override.sasl.mechanism": "OAUTHBEARER",
+          "consumer.override.sasl.login.callback.handler.class": "io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler",
+          "consumer.override.bootstrap.servers": "kafka-broker1:9092"}'
       register: connector_create_output
+
+    - debug: var=connector_create_output
 
     - name: Wait connector status to return 200
       uri:
@@ -128,6 +139,21 @@
       until: connector_status_response.json.connector.state == 'RUNNING'
       retries: 10
       delay: 5
+
+    - name: Wait connector tasks to return Running
+      uri:
+        url: https://localhost:8083/connectors/conn1/status
+        status_code: 200
+        validate_certs: no
+        url_username: mds
+        url_password: password
+        force_basic_auth: true
+      register: connector_status_response
+      # until: connector_status_response.json.tasks[0].state == 'RUNNING'
+      # retries: 10
+      # delay: 5
+
+    - debug: var=connector_status_response
 
 - name: Verify - ksql
   hosts: ksql
