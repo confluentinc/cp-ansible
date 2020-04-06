@@ -91,40 +91,12 @@ config.providers=secret
 config.providers.secret.class=io.confluent.connect.secretregistry.rbac.config.provider.InternalSecretConfigProvider
 config.providers.secret.param.master.encryption.key={{kafka_connect_secret_registry_key}}
 
-
 config.providers.secret.param.kafkastore.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
 
-config.providers.secret.param.kafkastore.security.protocol={{kafka_broker_listeners[kafka_connect_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool %}
-config.providers.secret.param.kafkastore.ssl.truststore.location={{kafka_connect_truststore_path}}
-config.providers.secret.param.kafkastore.ssl.truststore.password={{kafka_connect_truststore_storepass}}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
-config.providers.secret.param.kafkastore.ssl.keystore.location={{kafka_connect_keystore_path}}
-config.providers.secret.param.kafkastore.ssl.keystore.password={{kafka_connect_keystore_storepass}}
-config.providers.secret.param.kafkastore.ssl.key.password={{kafka_connect_keystore_keypass}}
-{% endif %}
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
-config.providers.secret.param.kafkastore.sasl.mechanism=PLAIN
-config.providers.secret.param.kafkastore.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-   username="{{sasl_plain_users.kafka_connect.principal}}" password="{{sasl_plain_users.kafka_connect.password}}";
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
-config.providers.secret.param.kafkastore.sasl.mechanism=GSSAPI
-config.providers.secret.param.kafkastore.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
-config.providers.secret.param.kafkastore.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
-   useKeyTab=true \
-   storeKey=true \
-   keyTab="{{kerberos.keytab_dir}}/{{kafka_connect_kerberos_keytab_path | basename}}" \
-   principal="{{kafka_connect_kerberos_principal}}";
-{% endif %}
-{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
-config.providers.secret.param.kafkastore.sasl.mechanism=SCRAM-SHA-256
-config.providers.secret.param.kafkastore.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
-   username="{{sasl_scram_users.kafka_connect.principal}}" password="{{sasl_scram_users.kafka_connect.password}}";
-{% endif %}
-{% endif %}
+{% set config_prefix = 'config.providers.secret.param.kafkastore.' %}
+{% include 'kafka_client.j2' %}
 
+{% endif %}
 
 ##################### RBAC #####################
 ### Authentication
