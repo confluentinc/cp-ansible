@@ -1,0 +1,48 @@
+---
+- name: Install OpenSSL and Rsync - RedHat
+  yum:
+    name: "{{item}}"
+    state: present
+  loop:
+    - openssl
+    - rsync
+  when: ansible_os_family == "RedHat"
+
+- name: Install OpenSSL and Rsync - Debian
+  apt:
+    name: "{{item}}"
+    state: present
+  loop:
+    - openssl
+    - rsync
+  when: ansible_os_family == "Debian"
+
+- name: Create SSL Certificate Generation Directory
+  file:
+    path: /var/ssl/private/generation
+    state: directory
+    mode: 0755
+
+- name: Create MDS Private key
+  shell: |
+    openssl genrsa \
+      -out /var/ssl/private/generation/{{token_services_private_pem_file|basename}} 2048
+
+- name: Extract MDS Public key
+  shell: |
+    openssl rsa \
+      -in /var/ssl/private/generation/{{token_services_private_pem_file|basename}} \
+      -outform PEM -pubout \
+      -out /var/ssl/private/generation/{{token_services_public_pem_file|basename}}
+
+- name: Copy Generated SSL Files Back to Ansible Host
+  synchronize:
+    src: /var/ssl/private/generation/
+    dest: generated_ssl_files
+    mode: pull
+    use_ssh_args: yes
+
+- name: Delete SSL Certificate Generation Directory
+  file:
+    path: /var/ssl/private/generation
+    state: absent
