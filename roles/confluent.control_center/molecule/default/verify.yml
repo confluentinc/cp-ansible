@@ -1,39 +1,39 @@
 ---
-- name: Verify - kafka_broker
-  hosts: kafka_broker
-  gather_facts: no
-  tasks:
-    - name: Check line in server.properties
-      shell: |
-        grep -Fq 'ldap.java.naming.provider.url=ldap://ldap1:389' /etc/kafka/server.properties
-      register: linecheck
-      check_mode: no
-      changed_when: no
-      failed_when: linecheck.rc != 0
-
-- name: Verify - schema_registry
-  hosts: schema_registry
-  gather_facts: no
-  tasks:
-    - name: Check line properties file
-      shell: |
-        grep -Fq 'public.key.path=/var/ssl/private/public.pem' /etc/schema-registry/schema-registry.properties
-      register: linecheck
-      check_mode: no
-      changed_when: no
-      failed_when: linecheck.rc != 0
-
-- name: Verify - kafka_rest
-  hosts: kafka_rest
-  gather_facts: no
-  tasks:
-    - name: Check line properties file
-      shell: |
-        grep -Fq 'public.key.path=/var/ssl/private/public.pem' /etc/kafka-rest/kafka-rest.properties
-      register: linecheck
-      check_mode: no
-      changed_when: no
-      failed_when: linecheck.rc != 0
+# - name: Verify - kafka_broker
+#   hosts: kafka_broker
+#   gather_facts: no
+#   tasks:
+#     - name: Check line in server.properties
+#       shell: |
+#         grep -Fq 'ldap.java.naming.provider.url=ldap://ldap1:389' /etc/kafka/server.properties
+#       register: linecheck
+#       check_mode: no
+#       changed_when: no
+#       failed_when: linecheck.rc != 0
+#
+# - name: Verify - schema_registry
+#   hosts: schema_registry
+#   gather_facts: no
+#   tasks:
+#     - name: Check line properties file
+#       shell: |
+#         grep -Fq 'public.key.path=/var/ssl/private/public.pem' /etc/schema-registry/schema-registry.properties
+#       register: linecheck
+#       check_mode: no
+#       changed_when: no
+#       failed_when: linecheck.rc != 0
+#
+# - name: Verify - kafka_rest
+#   hosts: kafka_rest
+#   gather_facts: no
+#   tasks:
+#     - name: Check line properties file
+#       shell: |
+#         grep -Fq 'public.key.path=/var/ssl/private/public.pem' /etc/kafka-rest/kafka-rest.properties
+#       register: linecheck
+#       check_mode: no
+#       changed_when: no
+#       failed_when: linecheck.rc != 0
 
 - name: Verify - kafka_connect
   hosts: kafka_connect
@@ -61,24 +61,12 @@
     - set_fact:
         connect_cluster_json: "{{connect_cluster_query.json}}"
 
-    - name: Set Kafka Cluster Id
+    - debug: var=connect_cluster_json
+    
+    - name: Set kafka_cluster_id Variable
       set_fact:
         kafka_cluster_id: "{{connect_cluster_json.kafka_cluster_id}}"
 
-    # - name: Login via Rest API
-    #   shell: |
-    #     curl --cacert /var/ssl/private/ca.crt --key /var/ssl/private/kafka_connect.key \
-    #       --cert /var/ssl/private/kafka_connect.crt -u "mds":"password" \
-    #       -s https://kafka-broker1:8090/security/1.0/authenticate
-    #   register: login_response
-    #
-    # - set_fact:
-    #     login_response_stdout: "{{login_response.stdout}}"
-    #
-    # - name: Set rbac_token Variable
-    #   set_fact:
-    #     auth_token: "{{ login_response_stdout.auth_token }}"
-    #
     # - name: Grant role System Admin to mds user on Connect Cluster and Kafka Cluster
     #   shell: |
     #     curl -X POST https://kafka-broker1:8090/security/1.0/principals/User:mds/roles/SystemAdmin \
@@ -86,17 +74,41 @@
     #       --cacert /var/ssl/private/ca.crt --key /var/ssl/private/kafka_connect.key --cert /var/ssl/private/kafka_connect.crt \
     #       -d '{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}","connect-cluster":"connect-cluster"}}'
 
-    - name: Grant role System Admin to mds user on Connect Cluster and Kafka Cluster
+    - name: Grant role System Admin to connect_worker on Connect Cluster and Kafka Cluster
       shell: |
-        curl -X POST https://kafka-broker1:8090/security/1.0/principals/User:mds/roles/SystemAdmin \
-          -H "accept: application/json" -u "mds":"password" -H "Content-Type: application/json" \
+        curl -X POST https://kafka-broker1:8090/security/1.0/principals/User:connect_worker/roles/SystemAdmin \
+          -u "mds":"password" -H "Content-Type: application/json" \
           --cacert /var/ssl/private/ca.crt --key /var/ssl/private/kafka_connect.key --cert /var/ssl/private/kafka_connect.crt \
           -d '{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}","connect-cluster":"connect-cluster"}}'
       register: output
 
+    - debug: var=output
+
+    # # Grant ResourceOwner on the Secret resource named conn1
+    # - name: Grant connect_worker ResourceOwner on the Secret resource named conn1
+    #   shell: |
+    #     curl -X POST https://kafka-broker1:8090/security/1.0/principals/User:connect_worker/roles/ResourceOwner/bindings \
+    #       -u mds:password -H "Content-Type: application/json" \
+    #       --cacert /var/ssl/private/ca.crt --key /var/ssl/private/kafka_connect.key --cert /var/ssl/private/kafka_connect.crt \
+    #       -d '{"scope":{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}","connect-cluster":"connect-cluster"}},"resourcePatterns":[{"resourceType":"Secret","name":"conn1"}]}'
+    #   register: output
+
+# For the user that creates the connector:
+# Grant ResourceOwner on the Connector resource named conn1
+
+# For the principal for the connector itself:
+# Grant ResourceOwner on the Group resource named connect-conn1
+# Grant ResourceOwner on the Topic resource named t1
+
+
+    # - name: Create secret
+    #   shell: |
+    #     curl -u mds:password -H 'Content-Type: application/json' \
+    #       -d '{"secret": "t1"}' -k https://localhost:8083/secret/paths/conn1/keys/topic/versions
+
     - name: Create secret
       shell: |
-        curl -u mds:password -H 'Content-Type: application/json' \
+        curl -u connect_worker:conn_pass -H 'Content-Type: application/json' \
           -d '{"secret": "t1"}' -k https://localhost:8083/secret/paths/conn1/keys/topic/versions
 
     - name: Create test sink file
@@ -107,13 +119,13 @@
     - name: Create connector
       shell: |
         curl -k -X PUT https://localhost:8083/connectors/conn1/config \
-          -H "Content-Type: application/json" -u mds:password \
+          -H "Content-Type: application/json" -u connect_worker:conn_pass \
           -d '{"connector.class": "org.apache.kafka.connect.file.FileStreamSinkConnector",
           "tasks.max": "1",
           "topics": "${secret:conn1:topic}",
           "file": "/tmp/file-sink-test.txt",
-          "principal.service.name": "mds",
-          "principal.service.password": "password",
+          "principal.service.name": "connect_worker",
+          "principal.service.password": "conn_pass",
           "consumer.override.security.protocol": "SASL_SSL",
           "consumer.override.sasl.mechanism": "OAUTHBEARER",
           "consumer.override.sasl.login.callback.handler.class": "io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler",
@@ -127,8 +139,8 @@
         url: https://localhost:8083/connectors/conn1/status
         status_code: 200
         validate_certs: no
-        url_username: mds
-        url_password: password
+        url_username: connect_worker
+        url_password: conn_pass
         force_basic_auth: true
       register: result
       until: result.status == 200
@@ -140,8 +152,8 @@
         url: https://localhost:8083/connectors/conn1/status
         status_code: 200
         validate_certs: no
-        url_username: mds
-        url_password: password
+        url_username: connect_worker
+        url_password: conn_pass
         force_basic_auth: true
       register: connector_status_response
       until: connector_status_response.json.connector.state == 'RUNNING'
@@ -153,34 +165,36 @@
         url: https://localhost:8083/connectors/conn1/status
         status_code: 200
         validate_certs: no
-        url_username: mds
-        url_password: password
+        url_username: connect_worker
+        url_password: conn_pass
         force_basic_auth: true
       register: connector_status_response
-      until: connector_status_response.json.tasks[0].state == 'RUNNING'
-      retries: 10
-      delay: 5
+      # until: connector_status_response.json.tasks[0].state == 'RUNNING'
+      # retries: 10
+      # delay: 5
 
-- name: Verify - ksql
-  hosts: ksql
-  gather_facts: no
-  tasks:
-    - name: Check line properties file
-      shell: |
-        grep -Fq 'public.key.path=/var/ssl/private/public.pem' /etc/ksql/ksql-server.properties
-      register: linecheck
-      check_mode: no
-      changed_when: no
-      failed_when: linecheck.rc != 0
-
-- name: Verify - control_center
-  hosts: control_center
-  gather_facts: no
-  tasks:
-    - name: Check line properties file
-      shell: |
-        grep -Fq 'public.key.path=/var/ssl/private/public.pem' /etc/confluent-control-center/control-center-production.properties
-      register: linecheck
-      check_mode: no
-      changed_when: no
-      failed_when: linecheck.rc != 0
+    - debug: var=connector_status_response
+#
+# - name: Verify - ksql
+#   hosts: ksql
+#   gather_facts: no
+#   tasks:
+#     - name: Check line properties file
+#       shell: |
+#         grep -Fq 'public.key.path=/var/ssl/private/public.pem' /etc/ksql/ksql-server.properties
+#       register: linecheck
+#       check_mode: no
+#       changed_when: no
+#       failed_when: linecheck.rc != 0
+#
+# - name: Verify - control_center
+#   hosts: control_center
+#   gather_facts: no
+#   tasks:
+#     - name: Check line properties file
+#       shell: |
+#         grep -Fq 'public.key.path=/var/ssl/private/public.pem' /etc/confluent-control-center/control-center-production.properties
+#       register: linecheck
+#       check_mode: no
+#       changed_when: no
+#       failed_when: linecheck.rc != 0
