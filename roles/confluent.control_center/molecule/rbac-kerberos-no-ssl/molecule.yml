@@ -13,6 +13,17 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+  - name: kerberos1
+    hostname: kerberos1.confluent
+    groups:
+      - kerberos_server
+    image: geerlingguy/docker-centos7-ansible
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: zookeeper1
     hostname: zookeeper1.confluent
     groups:
@@ -133,30 +144,17 @@ provisioner:
   inventory:
     group_vars:
       all:
-        ssl_enabled: true
-        ssl_mutual_auth_enabled: true
-
-        ssl_custom_certs: true
-        ssl_ca_cert_filepath: generated_ssl_files/ca.crt
-        ssl_signed_cert_filepath: "generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
-        ssl_key_filepath: "generated_ssl_files/{{inventory_hostname}}-key.pem"
-        ssl_key_password: keypass
+        # ssl_enabled: true
+        # ssl_mutual_auth_enabled: true
 
         rbac_enabled: true
-        mds_ssl_mutual_auth_enabled: false
+        mds_ssl_enabled: false
 
-        token_services_public_pem_file: generated_ssl_files/public.pem
-        token_services_private_pem_file: generated_ssl_files/tokenKeypair.pem
-
-        rbac_ldaps: false
-        rbac_ldap_url: ldap1
-        rbac_ldap_port: 389
-        rbac_ldap_principal: mds
-        rbac_ldap_princiapl_password: password
-        rbac_ldap_user_search_base: OU=rbac,DC=example,DC=com
-        rbac_ldap_group_search_base: OU=rbac,DC=example,DC=com
-
+        # Listeners
         kafka_broker_custom_listeners:
+          broker:
+            ssl_enabled: false
+            sasl_protocol: kerberos
           internal:
             ssl_enabled: true
             sasl_protocol: OAUTH
@@ -167,6 +165,16 @@ provisioner:
             ssl_mutual_auth_enabled: true
             sasl_protocol: none
 
+        # LDAP Config
+        rbac_ldaps: false
+        rbac_ldap_url: ldap1
+        rbac_ldap_port: 389
+        rbac_ldap_principal: mds
+        rbac_ldap_princiapl_password: password
+        rbac_ldap_user_search_base: OU=rbac,DC=example,DC=com
+        rbac_ldap_group_search_base: OU=rbac,DC=example,DC=com
+
+        # LDAP Users
         mds_super_user: mds
         mds_super_user_password: password
 
@@ -184,6 +192,33 @@ provisioner:
 
         control_center_ldap_user: control_center
         control_center_ldap_password: password
+
+        # Kerberos Config
+        kerberos_kafka_broker_primary: kafka
+        kerberos:
+          realm: realm.example.com
+          kdc_hostname: kerberos1
+          admin_hostname: kerberos1
+
+      # Zookeeper needs principals if any listener has kerberos on
+      zookeeper:
+        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        zookeeper_kerberos_keytab_path: "roles/confluent.control_center/molecule/rbac-kerberos-no-ssl/keytabs/zookeeper-{{inventory_hostname}}.keytab"
+      kafka_broker:
+        kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        kafka_broker_kerberos_keytab_path: "roles/confluent.control_center/molecule/rbac-kerberos-no-ssl/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
+
+      kerberos_server:
+        realm_name: "{{ kerberos.realm | upper }}"
+        kerberos_principals:
+          - principal: "zookeeper/zookeeper1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker2.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-kafka-broker2.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker3.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-kafka-broker3.keytab"
 
       ldap_server:
         ldaps_enabled: false
