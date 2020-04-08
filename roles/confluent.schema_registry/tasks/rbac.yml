@@ -1,4 +1,15 @@
 ---
+- name: Copy in MDS Public Pem File
+  copy:
+    src: "{{token_services_public_pem_file}}"
+    dest: "{{rbac_enabled_public_pem_path}}"
+    mode: '755'
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+
+- name: Get Kafka Cluster Id
+  include_tasks: ../../tasks/get_kafka_cluster_id.yml
+
 - set_fact:
     certificate_args: ""
   when: not mds_ssl_enabled|bool
@@ -14,17 +25,17 @@
 - name: Grant Schema Registry user the role SecurityAdmin on the Schema Registry cluster.
   shell: |
     curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{schema_registry_ldap_user}}/roles/SecurityAdmin \
-      -H "accept: application/json" -H "Authorization: Bearer {{rbac_token}}" -H "Content-Type: application/json" {{certificate_args}} \
-      -d '{"clusters":{"kafka-cluster": "{{cluster_id}}", "schema-registry-cluster": "{{schema_registry.properties['schema.registry.group.id']}}"}}"'
+      -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
+      -d '{"clusters":{"kafka-cluster": "{{kafka_cluster_id}}", "schema-registry-cluster": "{{schema_registry.properties['schema.registry.group.id']}}"}}"'
 
 - name: Grant Schema Registry user ResourceOwner on the group that Schema Registry nodes use to coordinate across the cluster
   shell: |
     curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{schema_registry_ldap_user}}/roles/ResourceOwner/bindings \
-      -H "accept: application/json" -H "Authorization: Bearer {{rbac_token}}" -H "Content-Type: application/json" {{certificate_args}} \
-      -d '{"scope":{"clusters":{"kafka-cluster": "{{cluster_id}}"}}, "resourcePatterns":[{"resourceType":"Group","name": "{{schema_registry.properties['schema.registry.group.id']}}","patternType":"LITERAL"}]}'
+      -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
+      -d '{"scope":{"clusters":{"kafka-cluster": "{{kafka_cluster_id}}"}}, "resourcePatterns":[{"resourceType":"Group","name": "{{schema_registry.properties['schema.registry.group.id']}}","patternType":"LITERAL"}]}'
 
 - name: Grant Schema Registry user ResourceOwner on the kafka topic where schemas are stored
   shell: |
     curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:8090/security/1.0/principals/User:{{schema_registry_ldap_user}}/roles/ResourceOwner/bindings \
-      -H "accept: application/json" -H "Authorization: Bearer {{rbac_token}}"  -H "Content-Type: application/json" {{certificate_args}} \
-      -d '{ "scope": {"clusters": {"kafka-cluster":"{{cluster_id}}"}}, "resourcePatterns": [{"resourceType": "Topic", "name": "{{schema_registry.properties['kafkastore.topic']}}" }]}'
+      -u "{{mds_super_user}}":"{{mds_super_user_password}}"  -H "Content-Type: application/json" {{certificate_args}} \
+      -d '{ "scope": {"clusters": {"kafka-cluster":"{{kafka_cluster_id}}"}}, "resourcePatterns": [{"resourceType": "Topic", "name": "{{schema_registry.properties['kafkastore.topic']}}" }]}'
