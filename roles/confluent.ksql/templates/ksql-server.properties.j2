@@ -2,6 +2,9 @@
 
 # KSQL Configuration
 listeners={{ksql_http_protocol}}://0.0.0.0:{{ksql_listener_port}}
+{% for key, value in ksql.properties.items() %}
+{{key}}={{value}}
+{% endfor %}
 
 
 # Kafka Broker Configuration
@@ -24,11 +27,6 @@ bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%}
 {% set oauth_password = ksql_ldap_password %}
 {% include 'kafka_client.j2' %}
 
-
-{% for key, value in ksql.properties.items() %}
-{{key}}={{value}}
-{% endfor %}
-
 {% set schema_registries = groups.get('schema_registry', []) %}
 {% if schema_registries %}
 # Schema Registry Configuration
@@ -46,36 +44,26 @@ ksql.schema.registry.basic.auth.user.info={{ ksql_ldap_user }}:{{ ksql_ldap_pass
 {% endif %}
 {% endif %}
 
-
 # Monitoring Configuration
 confluent.monitoring.interceptor.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[ksql_kafka_listener_name]['port']}}{% endfor %}
 
 {% set config_prefix = 'confluent.monitoring.interceptor.' %}
 {% include 'kafka_client.j2' %}
 
-
-
 {% if rbac_enabled|bool %}
-###################### Set KSQL RBAC settings ######################
-# Enable Confluent KSQL security plugin
+# RBAC Configuration
 ksql.security.extension.class=io.confluent.ksql.security.KsqlConfluentSecurityExtension
-
-# Enable KSQL OAuth authentication
 rest.servlet.initializor.classes=io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
 websocket.servlet.initializor.classes=io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
 oauth.jwt.public.key.path={{rbac_enabled_public_pem_path}}
-confluent.metadata.public.key.path={{rbac_enabled_public_pem_path}}
 public.key.path={{rbac_enabled_public_pem_path}}
 
-# location of metadata service
 confluent.metadata.bootstrap.server.urls={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{mds_http_protocol}}://{{ host }}:{{mds_port}}{% endfor %}
 
-# Credentials to access the Metadata service
+confluent.metadata.public.key.path={{rbac_enabled_public_pem_path}}
 confluent.metadata.basic.auth.user.info={{ ksql_ldap_user }}:{{ ksql_ldap_password }}
 confluent.metadata.http.auth.credentials.provider=BASIC
-
 {% if mds_ssl_enabled|bool %}
-############################ MDS TLS Settings #####################################
 confluent.metadata.server.ssl.truststore.location={{ksql_truststore_path}}
 confluent.metadata.server.ssl.truststore.password={{ksql_truststore_storepass}}
 {% if mds_ssl_mutual_auth_enabled|bool %}

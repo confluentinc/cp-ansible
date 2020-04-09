@@ -40,35 +40,25 @@ kafkastore.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.
 {% set oauth_password = schema_registry_ldap_password %}
 {% include 'kafka_client.j2' %}
 
-
 {% if rbac_enabled|bool %}
-##################### RBAC #####################
-# These properties install the Schema Registry security plugin, and configure it to use RBAC for
-# authorization and OAuth for authentication
-
-# WHEN RBAC IS ENABLED, ZK CONNECTION IS NEEDED FOR LICENSE
+# Zookeeper Configuration
 kafkastore.connection.url={% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{zookeeper.properties.clientPort}}{% endfor %}
 
 
+# RBAC Configuration
 schema.registry.resource.extension.class=io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension
 confluent.schema.registry.authorizer.class=io.confluent.kafka.schemaregistry.security.authorizer.rbac.RbacAuthorizer
 rest.servlet.initializor.classes=io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
 confluent.schema.registry.auth.mechanism=JETTY_AUTH
+public.key.path={{rbac_enabled_public_pem_path}}
+authentication.roles=**
 
-# location of metadata service
 confluent.metadata.bootstrap.server.urls={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ mds_http_protocol }}://{{ host }}:{{mds_port}}{% endfor %}
 
-# credentials to use with MDS
 confluent.metadata.http.auth.credentials.provider=BASIC
 confluent.metadata.basic.auth.user.info={{ schema_registry_ldap_user }}:{{ schema_registry_ldap_password }}
 
-# path to a public key that should be used to verify json web tokens during authentication
-public.key.path={{rbac_enabled_public_pem_path}}
-
-authentication.roles=**
-
 {% if mds_ssl_enabled|bool %}
-############################ MDS TLS Settings #####################################
 confluent.metadata.server.ssl.truststore.location={{schema_registry_truststore_path}}
 confluent.metadata.server.ssl.truststore.password={{schema_registry_truststore_storepass}}
 {% if mds_ssl_mutual_auth_enabled|bool %}
@@ -77,6 +67,4 @@ confluent.metadata.server.ssl.keystore.password={{schema_registry_keystore_keypa
 confluent.metadata.server.ssl.key.password={{schema_registry_keystore_keypass}}
 {% endif %}
 {% endif %}
-
-
 {% endif %}
