@@ -1,6 +1,6 @@
-### RBAC MTLS User provided certificates example 
+### RBAC Kerberos TLS example 
 ##
-## The following is an example inventory file of the configuration required for setting up a kafka cluster with RBAC mTLS enabled.  We have removed all comments from
+## The following is an example inventory file of the configuration required for setting up a kafka cluster with RBAC Kerberos and TLS enabled.  We have removed all comments from
 ## the standard inventory example to help with understanding the formatting.
 
 all:
@@ -11,16 +11,15 @@ all:
     ansible_ssh_private_key_file: /home/ec2-user/guest.pem
     health_checks_enabled: true 
     ssl_enabled: true
-    ssl_mutual_auth_enabled: true
     ssl_custom_certs: true
     ssl_ca_cert_filepath: "/home/ec2-user/repos/tools/generated_ssl_files/confluent-root-certificate.crt"
+    sasl_protocol: kerberos
+    kerberos_kafka_broker_primary: kafka
+    kerberos:
+       realm: confluent.example.com
+       kdc_hostname: ip-10-0-0-10.eu-west-2.compute.internal
+       admin_hostname: ip-10-0-0-10.eu-west-2.compute.internal
     rbac_enabled: true
-    mtls_ldap_internal_map_rule: |
-      RULE:^.*[Cc][Nn]=([a-zA-Z0-9-.]*).*$/$1/L, \
-      DEFAULT
-    mtls_ldap_external_map_rule: |
-      RULE:^.*[Cc][Nn]=([a-zA-Z0-9-.]*).*$/$1/L, \
-      DEFAULT
     token_services_public_pem_file: /home/ec2-user/keys/public.pem
     token_services_private_pem_file: /home/ec2-user/keys/tokenKeypair.pem
     mds_super_user: mds
@@ -31,7 +30,6 @@ all:
     rbac_ldap_principal_password: password
     rbac_ldap_user_search_base: OU=rbac,DC=example,DC=com
     rbac_ldap_group_search_base: OU=rbac,DC=example,DC=com
-    rbac_ldaps: true
     schema_registry_ldap_user: schema_registry
     schema_registry_ldap_password: password
     kafka_connect_ldap_user: connect_worker
@@ -45,8 +43,14 @@ all:
 zookeeper:
   hosts:
     ip-10-0-0-250.eu-west-2.compute.internal:
+      zookeeper_kerberos_keytab_path: /tmp/keytabs/zookeeper-ip-10-0-0-250.eu-west-2.compute.internal.keytab
+      zookeeper_kerberos_principal: /tmp/zookeeper/ip-10-0-0-250.eu-west-2compute.internal@confluent.example.com
     ip-10-0-0-239.eu-west-2.compute.internal:
+      zookeeper_kerberos_keytab_path: /tmp/keytabs/zookeeper-ip-10-0-0-239.eu-west-2.compute.internal.keytab
+      zookeeper_kerberos_principal: /tmp/zookeeper/ip-10-0-0-239.eu-west-2compute.internal@confluent.example.com
     ip-10-0-0-19.eu-west-2.compute.internal:
+      zookeeper_kerberos_keytab_path: /tmp/keytabs/zookeeper-ip-10-0-0-19.eu-west-2.compute.internal.keytab
+      zookeeper_kerberos_principal: /tmp/zookeeper/ip-10-0-0-19.eu-west-2compute.internal@confluent.example.com
 
 kafka_broker:
   hosts:
@@ -58,10 +62,12 @@ kafka_broker:
           ssl_enabled: true
           ssl_mutual_auth_enabled: true
           sasl_protocol: OAUTH
+      kafka_broker_kerberos_keytab_path: /tmp/keytabs/kafka-ip-10-0-0-38.eu-west-2.compute.internal
+      kafka_broker_kerberos_principal: kafka/ip-10-0-0-38.eu-west-2.compute.internal@confluent.example.com
       ssl_signed_cert_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/ip-10-0-0-38.eu-west-2.compute.internal-server.crt"
       ssl_key_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/ip-10-0-0-38.eu-west-2.compute.internal-server-private-key.key"
       ssl_key_password: password
-      
+
     ip-10-0-0-160.eu-west-2.compute.internal:
       kafka_broker_custom_listeners:
         client_listener:
@@ -70,6 +76,8 @@ kafka_broker:
           ssl_enabled: true
           ssl_mutual_auth_enabled: true
           sasl_protocol: OAUTH
+      kafka_broker_kerberos_keytab_path: /tmp/keytabs/kafka-ip-10-0-0-160.eu-west-2.compute.internal
+      kafka_broker_kerberos_principal: kafka/ip-10-0-0-160.eu-west-2.compute.internal@confluent.example.com
       ssl_signed_cert_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/ip-10-0-0-160.eu-west-2.compute.internal-server.crt"
       ssl_key_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/ip-10-0-0-160.eu-west-2.compute.internal-server-private-key.key"
       ssl_key_password: password
@@ -82,6 +90,8 @@ kafka_broker:
           ssl_enabled: true
           ssl_mutual_auth_enabled: true
           sasl_protocol: OAUTH
+      kafka_broker_kerberos_keytab_path: /tmp/keytabs/kafka-ip-10-0-0-136.eu-west-2.compute.internal
+      kafka_broker_kerberos_principal: kafka/ip-10-0-0-136.eu-west-2.compute.internal@confluent.example.com
       ssl_signed_cert_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/ip-10-0-0-136.eu-west-2.compute.internal-server.crt"
       ssl_key_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/ip-10-0-0-136.eu-west-2.compute.internal-server-private-key.key"
       ssl_key_password: password
@@ -89,18 +99,24 @@ kafka_broker:
 schema_registry:
   hosts:
     ip-10-0-0-235.eu-west-2.compute.internal:
+      schema_registry_kerberos_keytab_path: /tmp/keytabs/schemaregistry-ip-10-0-0-235.eu-west-2.compute.internal
+      schema_registry_kerberos_principal: schemaregistry/ip-10-0-0-235.eu-west-2.compute.internal@confluent.example.com
       ssl_signed_cert_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/ip-10-0-0-235.eu-west-2.compute.internal-server.crt"
       ssl_key_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/ip-10-0-0-235.eu-west-2.compute.internal-server-private-key.key"
       ssl_key_password: password
-      
+
 kafka_connect:
   hosts:
     ip-10-0-0-29.eu-west-2.compute.internal:
+      kafka_connect_kerberos_keytab_path: /tmp/keytabs/connect-ip-10-0-0-29.eu-west-2.compute.internal
+      kafka_connect_kerberos_principal: connect/ip-10-0-0-29.eu-west-2.compute.internal@confluent.example.com
       ssl_signed_cert_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/ip-10-0-0-29.eu-west-2.compute.internal-server.crt"
       ssl_key_filepath: "/home/ec2-user/repos/tools/generated_ssl_files/ip-10-0-0-29.eu-west-2.compute.internal-server-private-key.key"
       ssl_key_password: password
       
     ip-10-0-0-22.eu-west-2.compute.internal:
+      kafka_connect_kerberos_keytab_path: /tmp/keytabs/connect-ip-10-0-0-22.eu-west-2.compute.internal
+      kafka_connect_kerberos_principal: connect/ip-10-0-0-22.eu-west-2.compute.internal@confluent.example.com
       ssl_signed_cert_filepath: "/home/ec2-user/repos/tools/generated_ssl_files/ip-10-0-0-22.eu-west-2.compute.internal-server.crt"
       ssl_key_filepath: "/home/ec2-user/repos/tools/generated_ssl_files/ip-10-0-0-22.eu-west-2.compute.internal-server-private-key.key"
       ssl_key_password: password
@@ -108,6 +124,8 @@ kafka_connect:
 kafka_rest:
   hosts:
     ip-10-0-0-74.eu-west-2.compute.internal:
+      kafka_rest_kerberos_keytab_path: /tmp/keytabs/restproxy-ip-10-0-0-74.eu-west-2.compute.internal
+      kafka_rest_kerberos_principal: restproxy/ip-10-0-0-74.eu-west-2.compute.internal@confluent.example.com
       ssl_signed_cert_filepath: "/home/ec2-user/repos/tools/generated_ssl_files/ip-10-0-0-74.eu-west-2.compute.internal-server.crt"
       ssl_key_filepath: "/home/ec2-user/repos/tools/generated_ssl_files/ip-10-0-0-74.eu-west-2.compute.internal-server-private-key.key"
       ssl_key_password: password
@@ -115,6 +133,9 @@ kafka_rest:
 ksql:
   hosts:
     ip-10-0-0-181.eu-west-2.compute.internal:
+      ksql_kerberos_keytab_path: /tmp/keytabs/ksql-ip-10-0-0-181.eu-west-2.compute.internal
+      ksql_kerberos_principal: ksql/ip-10-0-0-181.eu-west-2.compute.internall@confluent.example.com
+      ip-10-0-0-181.eu-west-2.compute.internal:
       ssl_signed_cert_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/ip-10-0-0-181.eu-west-2.compute.internal-server.crt"
       ssl_key_filepath: "/home/ec2-user/repos/generated_ssl_files/ip-10-0-0-181.eu-west-2.compute.internal-server-private-key.key"
       ssl_key_password: password
@@ -122,7 +143,8 @@ ksql:
 control_center:
   hosts:
     ip-10-0-0-237.eu-west-2.compute.internal:
+      control_center_kerberos_keytab_path: /tmp/keytabs/controlcenter-ip-10-0-0-237.eu-west-2.compute.internal
+      control_center_kerberos_principal: controlcenter/ip-10-0-0-237.eu-west-2.compute.internal@confluent.example.com
       ssl_signed_cert_filepath: "/home/ec2-user/repos/generated_ssl_files/ip-10-0-0-237.eu-west-2.compute.internal-server.crt"
       ssl_key_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/ip-10-0-0-237.eu-west-2.compute.internal-server-private-key.key"
       ssl_key_password: password
-      
