@@ -102,28 +102,28 @@ all:
     ## Fips only works with ssl_enabled: true and confluent_server_enabled: true
     # fips_enabled: true
 
-    #### Configuring Different Security on both Listeners ####
+    #### Configuring Multiple Listeners ####
     ## CP-Ansible will configure two listeners on the broker: an internal listener for the broker to communicate and an external for the components and other clients.
     ## If you only need one listener uncomment this line:
     # kafka_broker_configure_additional_brokers: false
     ## By default both of these listeners will follow whatever you set for ssl_enabled and sasl_protocol.
     ## To configure different security settings on the internal and external listeners set the following variables:
     # kafka_broker_custom_listeners:
-    #   internal:
-    #     name: INTERNAL
+    #   broker:
+    #     name: BROKER
     #     port: 9091
     #     ssl_enabled: false
     #     ssl_mutual_auth_enabled: false
     #     sasl_protocol: none
-    #   external:
-    #     name: EXTERNAL
+    #   internal:
+    #     name: INTERNAL
     #     port: 9092
     #     ssl_enabled: true
     #     ssl_mutual_auth_enabled: false
     #     sasl_protocol: scram
     ## You can even add additional listeners, make sure all variables are set
-    #   client_listener:
-    #     name: CLIENT
+    #   external:
+    #     name: EXTERNAL
     #     port: 9093
     #     ssl_enabled: true
     #     ssl_mutual_auth_enabled: true
@@ -140,6 +140,42 @@ all:
     #       tasks.max: "1"
     #       file: "path/to/file.txt"
     #       topics: "test_topic"
+
+    #### Configuring Role Based Access Control ####
+    ## To have CP-Ansible configure Components for RBAC and create necessary role bindings, set these Mandtory variables:
+    ## Note: Confluent Components will be configured to connect to the "internal" listener automatically
+    ## DO NOT UPDATE the internal listener
+    ## Note: It is recommended to create an additional listener for external clients, but the interbroker one would also work
+    # rbac_enabled: true
+    ## LDAP Connection Vars
+    # rbac_ldap_url: <URL for LDAP server>
+    # rbac_ldap_port: <Port number or LDAP server, typically 389>
+    # rbac_ldap_principal: <Principal for authenticating to LDAP server>
+    # rbac_ldap_principal_password: <Password for LDAP server principal>
+    # rbac_ldap_user_search_base: <User search base dn, eg. CN=Users,DC=qe,DC=confluent,DC=io>
+    # rbac_ldap_group_search_base: <Group search base dn, eg. CN=Users,DC=qe,DC=confluent,DC=io>
+    # rbac_ldaps: true/false #If ldap is encrypted
+    ## LDAP Users
+    # mds_super_user: <Your desired admin name>
+    # mds_super_user_password: <ldap password>
+    # schema_registry_ldap_user: <Your Schema Registry username in LDAP>
+    # schema_registry_ldap_password <Your schema  registry user's LDAP password>
+    # kafka_connect_ldap_user: <Your Connect username in LDAP>
+    # kafka_connect_ldap_password: <Your Connect user's password in LDAP>
+    # ksql_ldap_user: <Your KSQL username in LDAP>
+    # ksql_ldap_password: <Your KSQL user's password in LDAP>
+    # kafka_rest_ldap_user: <Your REST Proxy's username in LDAP>
+    # kafka_rest_password: <Your REST Proxy's password in LDAP>
+    # control_center_ldap_user: <Your Control Center username in LDAP>
+    # control_center_ldap_password: <Your Control Center password in LDAP>
+    ## Below are optional variables
+    # create_mds_certs: false # To provide your own MDS Certs set this variable and the next two
+    # token_services_public_pem_file: /path/to/public.pem
+    # token_services_private_pem_file: /path/to/tokenKeypair.pem
+    # mds_acls_enabled: false #to turn off mds based acls, they are on by default if rbac is on
+    # mds_ssl_enabled: true/false #defaults to whatever ssl_enabled var is set to
+    # mds_ssl_mutual_auth_enabled: true/false #defaults to whatever ssl_mutual_auth_enabled var is set to
+
 
     ## To set custom properties for each service
     ## Find property options in the Confluent Documentation
@@ -166,89 +202,6 @@ all:
     #   properties:
     #     key: val
 
-    #### RBAC with Mutual TLS authentication Configuration with 3 listeners ####
-    ##
-    ## To Enable RBAC uncomment the following line:
-    # rbac_enabled: true
-    ##
-    ## By default we setup 2 listeners, Internal, External, you will need to add a third Token listener as per the following example, under each Broker host
-    ## 
-    # kafka_broker_custom_listeners:
-    #   client_listener:  
-    #     name: Token
-    #     port: 9093
-    #     ssl_enabled: true
-    #     ssl_mutual_auth_enabled: true
-    #     sasl_protocol: oauth
-    ##
-    ## Please note, the Token listener is for impersonation only, do not use it for client connections.
-    ##
-    #### mTLS configuration
-    ##
-    ## You will need to provide the principal from your certificates, under each Broker in the cluster.  See Broker section for more details.
-    ##
-    ## You will need to provide the principal mapping rules for the DN within your certificates:
-    ##
-    # mtls_ldap_internal_map_rule: | 
-    #  RULE:^.*[Cc][Nn]=([a-zA-Z0-9-.]*).*$/$1/L, \
-    #  DEFAULT
-    # mtls_ldap_external_map_rule: |
-    #  RULE:^.*[Cc][Nn]=([a-zA-Z0-9-.]*).*$/$1/L, \
-    #  DEFAULT
-    ##
-    #### OAuth configuration
-    ##
-    ## For impersonation to take place, you will need to supply a private and public pem file for token generation.  Please see the documentation for
-    ## further details.
-    ##
-    # token_services_public_pem_file: /home/ec2-user/keys/public.pem
-    # token_services_private_pem_file: /home/ec2-user/keys/tokenKeypair.pem
-    ##
-    #### MDS Configuration
-    ##
-    ## You will need to specify a super user name for user creation. Note: user must exist in LDAP with the same password.
-    ##
-    # mds_super_user: <Your desired admin name>
-    # mds_super_user_password: <ldap password>
-    ##
-    ##
-
-    #### LDAP Configuration
-    ##
-    ## You will need to specify the following authentication and lookup details for your LDAP server in order for RBAC to lookup and validate users.
-    ##
-    # rbac_ldap_url: <URL for LDAP server>
-    # rbac_ldap_port: <Port number or LDAP server, typically 389>
-    # rbac_ldap_principal: <Principal for authenticating to LDAP server>
-    # rbac_ldap_principal_password: <Password for LDAP server principal>
-    # rbac_ldap_user_search_base: <User search base dn, eg. CN=Users,DC=qe,DC=confluent,DC=io>
-    # rbac_ldap_group_search_base: <Group search base dn, eg. CN=Users,DC=qe,DC=confluent,DC=io>
-    ##
-    ## If you are using LDAPS, please uncomment the following:
-    ##
-    # rbac_ldaps: true
-    #
-    ## Note: We assume that the certificates for your Kafka cluster have been signed by the same CA as those for your LDAP server.
-    ##
-    ## LDAP RBAC users for Component Authentication:
-    ##
-    ## Each component in the cluster requires a user in LDAP, to authenticate as with the MDS to receive the appropriate bindings.  They can be specified here:
-    ##
-    # schema_registry_ldap_user: <Your Schema Registry username in LDAP>
-    # schema_registry_ldap_password <Your schema  registry user's LDAP password>
-    ##
-    # kafka_connect_ldap_user: <Your Connect username in LDAP>
-    # kafka_connect_ldap_password: <Your Connect user's password in LDAP> 
-    ##
-    # ksql_ldap_user: <Your KSQL username in LDAP>
-    # ksql_ldap_password: <Your KSQL user's password in LDAP>
-    ##
-    # kafka_rest_ldap_user: <Your REST Proxy's username in LDAP>
-    # kafka_rest_password: <Your REST Proxy's password in LDAP>
-    ##
-    # control_center_ldap_user: <Your Control Center username in LDAP>
-    # control_center_ldap_password: <Your Control Center password in LDAP>
-    ##
 zookeeper:
   ## To configure Zookeeper to run as a custom user, uncomment below
   # vars:
@@ -317,7 +270,7 @@ schema_registry:
       ## For kerberos sasl protocol, EACH host will need these two variables:
       # schema_registry_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/schemaregistry-ip-172-31-34-246.us-east-2.compute.internal
       # schema_registry_kerberos_principal: The principal configured in kdc server ex: schemaregistry/ip-172-31-34-246.us-east-2.compute.internal@REALM.EXAMPLE.COM>
-           
+
 kafka_rest:
   ## To configure Rest Proxy to run as a custom user, uncomment below
   # vars:
@@ -374,10 +327,10 @@ kafka_connect:
   #
   ## Adding Connector Paths.
   ## NOTE: This variable is mapped to the `plugin.path` Kafka Connect property.
-  #   kafka_connect_plugins_path: 
+  #   kafka_connect_plugins_path:
   #   - /usr/share/java
   #   - /my/connectors/dir
-  # 
+  #
   ## Installing Connectors From Confluent Hub
   #   kafka_connect_confluent_hub_plugins:
   #   - jcustenborder/kafka-connect-spooldir:2.0.43
