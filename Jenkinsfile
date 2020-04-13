@@ -28,7 +28,7 @@ def job = {
         stage('RBAC - Scram - 1way SSL w Custom Certs') {
             sh '''
                 cd roles/confluent.control_center
-                molecule test -s rbac-custom-certs-1way-mds
+                molecule test -s rbac-scram-custom-1way
             '''
         }
         stage('RBAC - Kerberos - no SSL') {
