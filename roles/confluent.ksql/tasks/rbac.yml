@@ -17,6 +17,13 @@
     certificate_args: "--cacert {{ksql_ca_cert_path}} --key {{ksql_key_path}} --cert {{ksql_cert_path}}"
   when: mds_ssl_enabled|bool and mds_ssl_mutual_auth_enabled|bool
 
+- name: Grant role System Admin to Additional KSQL Super Users
+  shell: |
+    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{item}}/roles/SystemAdmin \
+      -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
+      -d '{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}","ksql-cluster":"{{ksql.properties['ksql.service.id']}}"}}'
+  loop: "{{ksql_additional_super_users}}"
+
 - name: Grant SecurityAdmin role on KSQL user
   shell: |
     curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/SecurityAdmin \
