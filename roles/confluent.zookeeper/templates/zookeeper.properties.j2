@@ -1,7 +1,22 @@
 # Maintained by Ansible
+# SSSD requiers to define hostname in /etc/hosts, it can make zookeeper listen on localhost. So use ansible_default_ipv4 insted of hostname
 {% for key, value in zookeeper.properties.items() %}
 {{key}}={{value}}
 {% endfor %}
+
+{% if zookeeper_sasl_digestmd5_enabled %}
+quorum.auth.enableSasl=true
+quorum.auth.learnerRequireSasl=true
+quorum.auth.serverRequireSasl=true
+quorum.auth.learner.loginContext=QuorumLearner
+quorum.auth.server.loginContext=QuorumServer
+quorum.cnxn.threads.size=20
+requireClientAuthScheme=sasl
 {% for host in groups['zookeeper'] %}
-server.{{ hostvars[host]['zookeeper_id'] | default(groups.zookeeper.index(host) + 1)}}={{ host }}:{{zookeeper_peer_port}}:{{zookeeper_leader_port}}
+authProvider.{{ hostvars[host]['zookeeper_id'] | default(groups.zookeeper.index(host) + 1)}}=org.apache.zookeeper.server.auth.SASLAuthenticationProvider
+{% endfor %}
+{% endif %}
+
+{% for host in groups['zookeeper'] %}
+server.{{ hostvars[host]['zookeeper_id'] | default(groups.zookeeper.index(host) + 1)}}={{ hostvars[host]['ansible_default_ipv4']['address'] }}:{{zookeeper_peer_port}}:{{zookeeper_leader_port}}
 {% endfor %}

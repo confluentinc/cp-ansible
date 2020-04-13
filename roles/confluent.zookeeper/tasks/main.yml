@@ -96,9 +96,11 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-  when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
+  when: ("'GSSAPI' in kafka_broker_sasl_enabled_mechanisms") or
+        (zookeeper_sasl_digestmd5_enabled)
   notify:
     - restart zookeeper
+  
 
 - name: Deploy JMX Exporter Config File
   copy:
@@ -146,3 +148,23 @@
   when:
     - health_checks_enabled|bool
     - not ansible_check_mode
+
+- name: "Set zookeeper ACLs: {{zookeeper_sasl_digestmd5_superuser_login}} - Full, anyone - Read"
+  shell: |
+    /usr/bin/zookeeper-shell {{groups['zookeeper'][0]}}:{{zookeeper.properties.clientPort}} setAcl / 'sasl:{{zookeeper_sasl_digestmd5_superuser_login}}:cdraw,world:anyone:r'
+  delegate_to: "{{ groups['zookeeper'][0] }}"
+  run_once: true
+  environment:
+    - KAFKA_OPTS: "-Djava.security.auth.login.config={{kafka_broker.jaas_file}}"
+  when: zookeeper_sasl_digestmd5_enabled
+
+
+- name: Make CLI tools work with secured zookeeper, add KAFKA_OPTS environment variable into /etc/profile
+  lineinfile:
+    dest: "/etc/profile"
+    state: present
+    regexp: "^export KAFKA_OPTS"
+    line: "export KAFKA_OPTS=-Djava.security.auth.login.config={{kafka_broker.jaas_file}}"
+  when: zookeeper_sasl_digestmd5_enabled
+
+  
