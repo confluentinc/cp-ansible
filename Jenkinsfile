@@ -25,7 +25,7 @@ def job = {
                 molecule test -s default
             '''
         }
-        stage('RBAC - Custom Certs - 1way MDS') {
+        stage('RBAC - Scram - 1way SSL w Custom Certs') {
             sh '''
                 cd roles/confluent.control_center
                 molecule test -s rbac-custom-certs-1way-mds
