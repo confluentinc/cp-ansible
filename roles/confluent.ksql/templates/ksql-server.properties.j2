@@ -6,26 +6,44 @@ listeners={{ksql_http_protocol}}://0.0.0.0:{{ksql_listener_port}}
 {{key}}={{value}}
 {% endfor %}
 
-
 # Kafka Broker Configuration
 bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[ksql_kafka_listener_name]['port']}}{% endfor %}
 
-{% set config_prefix = '' %}
-{% set listener = kafka_broker_listeners[ksql_kafka_listener_name] %}
-{% set truststore_path = ksql_truststore_path %}
-{% set truststore_storepass = ksql_truststore_storepass %}
-{% set keystore_path = ksql_keystore_path %}
-{% set keystore_storepass = ksql_keystore_storepass %}
-{% set keystore_keypass = ksql_keystore_keypass %}
-{% set sasl_plain_username = sasl_plain_users.ksql.principal %}
-{% set sasl_plain_password = sasl_plain_users.ksql.password %}
-{% set sasl_scram_username = sasl_scram_users.ksql.principal %}
-{% set sasl_scram_password = sasl_scram_users.ksql.password %}
-{% set kerberos_keytab_path = ksql_kerberos_keytab_path %}
-{% set kerberos_principal = ksql_kerberos_principal %}
-{% set oauth_username = ksql_ldap_user %}
-{% set oauth_password = ksql_ldap_password %}
-{% include 'kafka_client.j2' %}
+security.protocol={{kafka_broker_listeners[ksql_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
+{% if kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool %}
+# KSQL SSL properties shared with Kafka Broker
+ssl.truststore.location={{ksql_truststore_path}}
+ssl.truststore.password={{ksql_truststore_storepass}}
+ssl.keystore.location={{ksql_keystore_path}}
+ssl.keystore.password={{ksql_keystore_storepass}}
+ssl.key.password={{ksql_keystore_keypass}}
+{% endif %}
+{% if kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+   username="{{sasl_plain_users.ksql.principal}}" password="{{sasl_plain_users.ksql.password}}";
+{% endif %}
+{% if kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
+sasl.mechanism=GSSAPI
+sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKey=true \
+   keyTab="{{kerberos.keytab_dir}}/{{ksql_kerberos_keytab_path | basename}}" \
+   principal="{{ksql_kerberos_principal}}";
+{% endif %}
+{% if kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
+sasl.mechanism=SCRAM-SHA-256
+sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
+   username="{{sasl_scram_users.ksql.principal}}" password="{{sasl_scram_users.ksql.password}}";
+{% endif %}
+{% if kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'OAUTHBEARER' %}
+sasl.mechanism=OAUTHBEARER
+sasl.login.callback.handler.class=io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler
+sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+   username="{{ksql_ldap_user}}" password="{{ksql_ldap_password}}" \
+   metadataServerUrls="{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{mds_http_protocol}}://{{ host }}:{{mds_port}}{% endfor %}";
+{% endif %}
 
 {% set schema_registries = groups.get('schema_registry', []) %}
 {% if schema_registries %}
@@ -48,6 +66,20 @@ ksql.schema.registry.basic.auth.user.info={{ ksql_ldap_user }}:{{ ksql_ldap_pass
 confluent.monitoring.interceptor.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[ksql_kafka_listener_name]['port']}}{% endfor %}
 
 {% set config_prefix = 'confluent.monitoring.interceptor.' %}
+{% set listener = kafka_broker_listeners[ksql_kafka_listener_name] %}
+{% set truststore_path = ksql_truststore_path %}
+{% set truststore_storepass = ksql_truststore_storepass %}
+{% set keystore_path = ksql_keystore_path %}
+{% set keystore_storepass = ksql_keystore_storepass %}
+{% set keystore_keypass = ksql_keystore_keypass %}
+{% set sasl_plain_username = sasl_plain_users.ksql.principal %}
+{% set sasl_plain_password = sasl_plain_users.ksql.password %}
+{% set sasl_scram_username = sasl_scram_users.ksql.principal %}
+{% set sasl_scram_password = sasl_scram_users.ksql.password %}
+{% set kerberos_keytab_path = ksql_kerberos_keytab_path %}
+{% set kerberos_principal = ksql_kerberos_principal %}
+{% set oauth_username = ksql_ldap_user %}
+{% set oauth_password = ksql_ldap_password %}
 {% include 'kafka_client.j2' %}
 
 {% if rbac_enabled|bool %}
@@ -63,13 +95,4 @@ confluent.metadata.bootstrap.server.urls={% for host in groups['kafka_broker'] %
 confluent.metadata.public.key.path={{rbac_enabled_public_pem_path}}
 confluent.metadata.basic.auth.user.info={{ ksql_ldap_user }}:{{ ksql_ldap_password }}
 confluent.metadata.http.auth.credentials.provider=BASIC
-{% if mds_ssl_enabled|bool %}
-confluent.metadata.server.ssl.truststore.location={{ksql_truststore_path}}
-confluent.metadata.server.ssl.truststore.password={{ksql_truststore_storepass}}
-{% if mds_ssl_mutual_auth_enabled|bool %}
-confluent.metadata.server.ssl.keystore.location={{ksql_keystore_path}}
-confluent.metadata.server.ssl.keystore.password={{ksql_keystore_keypass}}
-confluent.metadata.server.ssl.key.password={{ksql_keystore_keypass}}
-{% endif %}
-{% endif %}
 {% endif %}
