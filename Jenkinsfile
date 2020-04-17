@@ -22,19 +22,19 @@ def job = {
             sh '''
                 docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
                 cd roles/confluent.test
-                molecule test -s default
+                molecule test -s rbac-mtls-rhel
             '''
         }
         stage('RBAC - Scram - 1way SSL w Custom Certs') {
             sh '''
                 cd roles/confluent.test
-                molecule test -s rbac-scram-custom-1way
+                molecule test -s rbac-scram-custom-1way-rhel
             '''
         }
         stage('RBAC - Kerberos - no SSL') {
             sh '''
                 cd roles/confluent.test
-                molecule test -s rbac-kerberos-no-ssl
+                molecule test -s rbac-kerberos-no-ssl-debian
             '''
         }
     }
