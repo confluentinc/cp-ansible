@@ -7,17 +7,7 @@ platforms:
     groups:
       - ldap_server
     image: geerlingguy/docker-centos7-ansible
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
-  - name: kerberos1
-    hostname: kerberos1.confluent
-    groups:
-      - kerberos_server
-    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -144,10 +134,20 @@ provisioner:
   inventory:
     group_vars:
       all:
-        ssl_enabled: false
-        sasl_protocol: kerberos
+        ssl_enabled: true
+        sasl_protocol: scram
+
+        ssl_custom_certs: true
+        ssl_ca_cert_filepath: roles/confluent.test/molecule/rbac-scram-custom-1way-rhel/generated_ssl_files/ca.crt
+        ssl_signed_cert_filepath: "roles/confluent.test/molecule/rbac-scram-custom-1way-rhel/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "roles/confluent.test/molecule/rbac-scram-custom-1way-rhel/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        ssl_key_password: keypass
 
         rbac_enabled: true
+
+        create_mds_certs: false
+        token_services_public_pem_file: roles/confluent.test/molecule/rbac-scram-custom-1way-rhel/generated_ssl_files/public.pem
+        token_services_private_pem_file: roles/confluent.test/molecule/rbac-scram-custom-1way-rhel/generated_ssl_files/tokenKeypair.pem
 
         kafka_broker_custom_listeners:
           client_listener:
@@ -172,22 +172,14 @@ provisioner:
         control_center_ldap_user: control_center
         control_center_ldap_password: password
 
-        kerberos_kafka_broker_primary: kafka
-        kerberos:
-          realm: realm.example.com
-          kdc_hostname: kerberos1
-          admin_hostname: kerberos1
+        rbac_component_additional_super_users:
+          - user1
 
-      zookeeper:
-        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        zookeeper_kerberos_keytab_path: "roles/confluent.control_center/molecule/rbac-kerberos-no-ssl/keytabs/zookeeper-{{inventory_hostname}}.keytab"
       kafka_broker:
-        kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        kafka_broker_kerberos_keytab_path: "roles/confluent.control_center/molecule/rbac-kerberos-no-ssl/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
         ldap_config: |
           ldap.java.naming.factory.initial=com.sun.jndi.ldap.LdapCtxFactory
           ldap.com.sun.jndi.ldap.read.timeout=3000
-          ldap.java.naming.provider.url=ldap://ldap1:389
+          ldap.java.naming.provider.url=ldaps://ldap1:636
           ldap.java.naming.security.principal=uid=mds,OU=rbac,DC=example,DC=com
           ldap.java.naming.security.credentials=password
           ldap.java.naming.security.authentication=simple
@@ -200,22 +192,13 @@ provisioner:
           confluent.security.event.logger.enabled=false
           ldap.user.object.class=account
 
-      kerberos_server:
-        realm_name: "{{ kerberos.realm | upper }}"
-        kerberos_principals:
-          - principal: "zookeeper/zookeeper1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
-          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
-          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker2.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/kafka_broker-kafka-broker2.keytab"
-          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker3.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/kafka_broker-kafka-broker3.keytab"
-
-        
       ldap_server:
-        ldaps_enabled: false
-        ldaps_custom_certs: false
+        ldaps_enabled: true
+        ldaps_custom_certs: true
+        ssl_custom_certs: true
+        ssl_ca_cert_filepath: generated_ssl_files/ca.crt
+        ssl_signed_cert_filepath: "generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "generated_ssl_files/{{inventory_hostname}}-key.pem"
 
         ldap_admin_password: ldppassword
 
@@ -248,6 +231,11 @@ provisioner:
             password: "{{mds_super_user_password}}"
             uid: 9993
             guid: 93
+          - username: user1
+            password: user1p
+            uid: 9992
+            guid: 92
+
 verifier:
   name: ansible
 scenario:

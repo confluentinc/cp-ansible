@@ -21,20 +21,20 @@ def job = {
             // TODO might need to delete docker image before starting run
             sh '''
                 docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
-                cd roles/confluent.control_center
-                molecule test -s default
+                cd roles/confluent.test
+                molecule test -s rbac-mtls-rhel
             '''
         }
         stage('RBAC - Scram - 1way SSL w Custom Certs') {
             sh '''
-                cd roles/confluent.control_center
-                molecule test -s rbac-scram-custom-1way
+                cd roles/confluent.test
+                molecule test -s rbac-scram-custom-1way-rhel
             '''
         }
         stage('RBAC - Kerberos - no SSL') {
             sh '''
-                cd roles/confluent.control_center
-                molecule test -s rbac-kerberos-no-ssl
+                cd roles/confluent.test
+                molecule test -s rbac-kerberos-no-ssl-debian
             '''
         }
     }
