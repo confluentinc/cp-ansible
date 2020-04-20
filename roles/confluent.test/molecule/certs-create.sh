@@ -29,7 +29,17 @@ keytool -noprompt -import \
     -storepass truststorepass \
     -keypass truststorepass
 
-filename="hosts"
+
+echo "  >>>  Create MDS Private Key"
+openssl genrsa \
+    -out /var/ssl/private/generation/tokenKeypair.pem 2048
+
+echo "  >>>  Create MDS Public Key"
+openssl rsa -in /var/ssl/private/generation/tokenKeypair.pem \
+ -outform PEM -pubout -out /var/ssl/private/generation/public.pem
+
+
+filename="certificate-hosts"
 # remove the empty lines
 for line in `sed '/^$/d' $filename`; do
 
