@@ -1,0 +1,31 @@
+---
+- name: RBAC Setup Tasks
+  include_tasks: ../../tasks/rbac_setup.yml
+  vars:
+    user: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+
+- set_fact:
+    certificate_args: ""
+  when: not mds_ssl_enabled|bool
+
+- set_fact:
+    certificate_args: "--cacert {{control_center_ca_cert_path}}"
+  when: mds_ssl_enabled|bool and not mds_ssl_mutual_auth_enabled|bool
+
+- set_fact:
+    certificate_args: "--cacert {{control_center_ca_cert_path}} --key {{control_center_key_path}} --cert {{control_center_cert_path}}"
+  when: mds_ssl_enabled|bool and mds_ssl_mutual_auth_enabled|bool
+
+- name: Grant role System Admin to Additional Control Center super users
+  shell: |
+    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{item}}/roles/SystemAdmin \
+      -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
+      -d '{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}"}}'
+  loop: "{{control_center_additional_super_users}}"
+
+- name: Grant role System Admin to Control Center user
+  shell: |
+    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{control_center_ldap_user}}/roles/SystemAdmin \
+      -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
+      -d '{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}"}}'
