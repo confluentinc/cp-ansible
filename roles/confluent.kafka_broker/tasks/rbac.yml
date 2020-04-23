@@ -1,0 +1,43 @@
+---
+- name: Get Principal used on the Inter Broker Listener
+  include_tasks: set_principal.yml
+
+# TODO customers might want to add to this list, so should put in defaults
+- name: Initialize Super Users List
+  set_fact:
+    super_users: []
+
+- name: Add each Broker Principal to Super Users List
+  set_fact:
+    super_users: "{{ super_users }} + [ '{{ hostvars[item]['kafka_broker_principal'] }}' ]"
+  loop: "{{ groups['kafka_broker'] }}"
+
+- name: Add MDS Super User to Super Users List
+  set_fact:
+    super_users: "{{ super_users }} + [ 'User:{{ mds_super_user }}' ]"
+
+- name: Remove Duplicates in Super Users List
+  set_fact:
+    super_users: "{{ super_users | unique }}"
+
+- name: Create SSL Certificate Directory
+  file:
+    path: /var/ssl/private
+    state: directory
+    mode: 0755
+
+- name: Copy in public pem files
+  copy:
+    src: "{{token_services_public_pem_file}}"
+    dest: "{{rbac_enabled_public_pem_path}}"
+    mode: '755'
+    owner: "{{kafka_broker_user}}"
+    group: "{{kafka_broker_group}}"
+
+- name: Copy in private pem files
+  copy:
+    src: "{{token_services_private_pem_file}}"
+    dest: "{{rbac_enabled_private_pem_path}}"
+    mode: '755'
+    owner: "{{kafka_broker_user}}"
+    group: "{{kafka_broker_group}}"
