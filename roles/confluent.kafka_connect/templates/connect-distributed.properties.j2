@@ -51,15 +51,58 @@ key.converter.schema.registry.url={% for host in groups['schema_registry'] %}{% 
 # Connect Producer Configuration
 producer.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
 
-{% set config_prefix = 'producer.' %}
-{% include 'kafka_client.j2' %}
-
+producer.security.protocol={{kafka_broker_listeners[kafka_connect_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
+{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool %}
+producer.ssl.truststore.location={{kafka_connect_truststore_path}}
+producer.ssl.truststore.password={{kafka_connect_truststore_storepass}}
+{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
+producer.ssl.keystore.location={{kafka_connect_keystore_path}}
+producer.ssl.keystore.password={{kafka_connect_keystore_storepass}}
+producer.ssl.key.password={{kafka_connect_keystore_keypass}}
+{% endif %}
+{% endif %}
+{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
+producer.sasl.mechanism=PLAIN
+{% endif %}
+{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
+producer.sasl.mechanism=GSSAPI
+producer.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+{% endif %}
+{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
+producer.sasl.mechanism=SCRAM-SHA-256
+{% endif %}
+{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'OAUTHBEARER' %}
+producer.sasl.mechanism=OAUTHBEARER
+producer.sasl.login.callback.handler.class=io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler
+{% endif %}
 
 # Connect Consumer Configuration
 consumer.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
 
-{% set config_prefix = 'consumer.' %}
-{% include 'kafka_client.j2' %}
+consumer.security.protocol={{kafka_broker_listeners[kafka_connect_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
+{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool %}
+consumer.ssl.truststore.location={{kafka_connect_truststore_path}}
+consumer.ssl.truststore.password={{kafka_connect_truststore_storepass}}
+{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
+consumer.ssl.keystore.location={{kafka_connect_keystore_path}}
+consumer.ssl.keystore.password={{kafka_connect_keystore_storepass}}
+consumer.ssl.key.password={{kafka_connect_keystore_keypass}}
+{% endif %}
+{% endif %}
+{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
+consumer.sasl.mechanism=PLAIN
+{% endif %}
+{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
+consumer.sasl.mechanism=GSSAPI
+consumer.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+{% endif %}
+{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
+consumer.sasl.mechanism=SCRAM-SHA-256
+{% endif %}
+{% if kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'OAUTHBEARER' %}
+consumer.sasl.mechanism=OAUTHBEARER
+consumer.sasl.login.callback.handler.class=io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler
+{% endif %}
 
 # Producer Monitoring Configuration
 producer.confluent.monitoring.interceptor.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
