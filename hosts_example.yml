@@ -54,6 +54,7 @@ all:
     # ssl_keystore_store_password: mystorepassword
     # ssl_truststore_filepath: "/tmp/certs/truststore.jks"
     # ssl_truststore_password: truststorepass
+    # ssl_truststore_ca_cert_alias: <alias to the ca certificate in the truststore eg. CARoot>
 
     #### Certificate Regeneration ####
     ## When using self signed certificates, each playbook run will regenerate the CA, to turn this off, uncomment this line:
@@ -64,6 +65,7 @@ all:
 
     #### Monitoring Configuration ####
     ## Jolokia is enabled by default. The Jolokia jar gets pulled from the internet and enabled on all the components
+    ## If you plan to use the upgrade playbooks, it is recommended to leave jolokia enabled because kafka broker health checks depend on jolokias metrics
     ## To disable, uncomment this line:
     # jolokia_enabled: false
     ## During setup, the hosts will download the jolokia agent jar from Maven. To update that jar download set this var
@@ -102,26 +104,26 @@ all:
     ## Fips only works with ssl_enabled: true and confluent_server_enabled: true
     # fips_enabled: true
 
-    #### Configuring Different Security on both Listeners ####
+    #### Configuring Multiple Listeners ####
     ## CP-Ansible will configure two listeners on the broker: an internal listener for the broker to communicate and an external for the components and other clients.
     ## If you only need one listener uncomment this line:
     # kafka_broker_configure_additional_brokers: false
     ## By default both of these listeners will follow whatever you set for ssl_enabled and sasl_protocol.
     ## To configure different security settings on the internal and external listeners set the following variables:
     # kafka_broker_custom_listeners:
-    #   internal:
-    #     name: INTERNAL
+    #   broker:
+    #     name: BROKER
     #     port: 9091
     #     ssl_enabled: false
     #     ssl_mutual_auth_enabled: false
     #     sasl_protocol: none
-    #   external:
-    #     name: EXTERNAL
+    #   internal:
+    #     name: INTERNAL
     #     port: 9092
     #     ssl_enabled: true
     #     ssl_mutual_auth_enabled: false
     #     sasl_protocol: scram
-    ## You can even add additional listeners, make sure all variables are set
+    ## You can even add additional listeners, make sure name and port are unique
     #   client_listener:
     #     name: CLIENT
     #     port: 9093
@@ -140,6 +142,41 @@ all:
     #       tasks.max: "1"
     #       file: "path/to/file.txt"
     #       topics: "test_topic"
+
+    #### Configuring Role Based Access Control ####
+    ## To have CP-Ansible configure Components for RBAC and create necessary role bindings, set these Mandtory variables:
+    ## Note: Confluent Components will be configured to connect to the "internal" listener automatically
+    ## DO NOT UPDATE the internal listener
+    ## Note: It is recommended to create an additional listener for external clients, but the interbroker one would also work
+    ## Note: An authentication mode must be selected on all listeners, for example (ssl_enabled=false and ssl_mutual_auth_enabled=false) or sasl_protocol=none is not supported. 
+    # rbac_enabled: true
+    ##
+    ## LDAP Users
+    ## Note: Below users must already exist in your LDAP environment.  See kafka_broker vars, for LDAP connection details.
+    # mds_super_user: <Your mds super user which has the ability to bootstrap RBAC roles and permissions>
+    # mds_super_user_password: <ldap password>
+    # schema_registry_ldap_user: <Your Schema Registry username in LDAP>
+    # schema_registry_ldap_password <Your schema  registry user's LDAP password>
+    # kafka_connect_ldap_user: <Your Connect username in LDAP>
+    # kafka_connect_ldap_password: <Your Connect user's password in LDAP>
+    # ksql_ldap_user: <Your KSQL username in LDAP>
+    # ksql_ldap_password: <Your KSQL user's password in LDAP>
+    # kafka_rest_ldap_user: <Your REST Proxy's username in LDAP>
+    # kafka_rest_ldap_password: <Your REST Proxy's password in LDAP>
+    # control_center_ldap_user: <Your Control Center username in LDAP>
+    # control_center_ldap_password: <Your Control Center password in LDAP>
+    ## Below are optional variables
+    # create_mds_certs: false # To provide your own MDS Certs set this variable and the next two
+    # token_services_public_pem_file: /path/to/public.pem
+    # token_services_private_pem_file: /path/to/tokenKeypair.pem
+    # mds_acls_enabled: false #to turn off mds based acls, they are on by default if rbac is on
+    # mds_ssl_enabled: true/false #defaults to whatever ssl_enabled var is set to
+    # mds_ssl_mutual_auth_enabled: true/false #defaults to whatever ssl_mutual_auth_enabled var is set to
+    ## Allow the playbooks to configure additional users as system admins on the platform, set the list below
+    # rbac_component_additional_system_admins:
+    #   - user1
+    #   - user2
+
 
     ## To set custom properties for each service
     ## Find property options in the Confluent Documentation
@@ -195,6 +232,25 @@ kafka_broker:
   #   kafka_broker:
   #     datadir:
   #       - /var/lib/kafka/my-data
+  #
+  ##  To configure LDAP for RBAC enablement, you will need to provide the appropiate properties to connect to your LDAP server
+  ##  using the ldap_config varible under the vars block.  The following is an example:
+  #
+  #   ldap_config: |
+  #     ldap.java.naming.factory.initial=com.sun.jndi.ldap.LdapCtxFactory
+  #     ldap.com.sun.jndi.ldap.read.timeout=3000
+  #     ldap.java.naming.provider.url=ldap://ldap1:389
+  #     ldap.java.naming.security.principal=uid=mds,OU=rbac,DC=example,DC=com
+  #     ldap.java.naming.security.credentials=password
+  #     ldap.java.naming.security.authentication=simple
+  #     ldap.user.search.base=OU=rbac,DC=example,DC=com
+  #     ldap.group.search.base=OU=rbac,DC=example,DC=com
+  #     ldap.user.name.attribute=uid
+  #     ldap.user.memberof.attribute.pattern=CN=(.*),OU=rbac,DC=example,DC=com
+  #     ldap.group.name.attribute=cn
+  #     ldap.group.member.attribute.pattern=CN=(.*),OU=rbac,DC=example,DC=com
+  #     ldap.user.object.class=account
+  ##
   hosts:
     ip-172-31-34-246.us-east-2.compute.internal:
       ## By default the first host will get broker id=1, second gets id=2. Set broker_id to customize
@@ -287,13 +343,12 @@ kafka_connect:
   #   kafka_connect_group: custom-group
   #
   #### Connectors and the Confluent Hub
-  #
   ## Adding Connector Paths.
   ## NOTE: This variable is mapped to the `plugin.path` Kafka Connect property.
-  #   kafka_connect_plugins_path: 
+  #   kafka_connect_plugins_path:
   #   - /usr/share/java
   #   - /my/connectors/dir
-  # 
+  #
   ## Installing Connectors From Confluent Hub
   #   kafka_connect_confluent_hub_plugins:
   #   - jcustenborder/kafka-connect-spooldir:2.0.43
@@ -305,11 +360,19 @@ kafka_connect:
   ## Installing Connectors from Archive files in remote server (ie Nexus)
   #   kafka_connect_plugins_remote:
   #   - http://myhost.com/connect_archive.zip
+  #
+  #### RBAC with Connect Secret Registry
+  ## By default the secret registry will be enabled when RBAC is on. To customize the key set this var:
+  # kafka_connect_secret_registry_key: <your own key>
+  ## To disable the feature:
+  # kafka_connect_secret_registry_enabled: false
+  #
   hosts:
     ip-172-31-34-246.us-east-2.compute.internal:
       ## For kerberos sasl protocol, EACH host will need these two variables:
       # kafka_connect_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/connect-ip-172-31-34-246.us-east-2.compute.internal
       # kafka_connect_kerberos_principal: The principal configured in kdc server ex: connect/ip-172-31-34-246.us-east-2.compute.internal@REALM.EXAMPLE.COM>
+
 
 #### To configure multiple connect clusters, make use of child groups and follow the example below
 ## Note: There can only be one kafka_connect group, so comment out above section, if configuring multiple connect clusters
@@ -318,7 +381,7 @@ kafka_connect:
 #   vars:
 #     # Decide on a group id for each connect cluster. This is a mandatory variable, and must be unique for each cluster
 #     # The group id will be the name of the connect cluster within c3
-#     kafka_connect_group_id: connect_syslog
+#     kafka_connect_group_id: connect-syslog
 #   hosts:
 #     ip-172-31-34-246.us-east-2.compute.internal:
 #
@@ -343,6 +406,7 @@ control_center:
       ## For kerberos sasl protocol, EACH host will need these two variables:
       # control_center_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/controlcenter-ip-172-31-37-15.us-east-2.compute.internal
       # control_center_kerberos_principal: The principal configured in kdc server ex: controlcenter/ip-172-31-37-15.us-east-2.compute.internal@REALM.EXAMPLE.COM>
+
   # ## If you are configuring multiple connect or ksql clusters, the below variables are mandatory.
   # # The group names must match the group names as they are in your inventory
   # vars:

@@ -14,7 +14,7 @@ enable.fips=true
 security.providers=io.confluent.kafka.security.fips.provider.BcFipsProviderCreator,io.confluent.kafka.security.fips.provider.BcFipsJsseProviderCreator
 {% endif %}
 
-listener.security.protocol.map={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | kafka_protocol_defaults(sasl_protocol, ssl_enabled)}}{% endfor %}
+listener.security.protocol.map={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}
 
 listeners={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://:{{ listener['value']['port'] }}{% endfor %}
 
@@ -55,39 +55,57 @@ confluent.schema.registry.ssl.key.password={{kafka_broker_keystore_keypass}}
 {% endif %}
 {% endif %}
 
-## Metrics Reporter Configuration
-confluent.metrics.reporter.security.protocol={{kafka_broker_listeners.external | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
-{% if kafka_broker_listeners.external.ssl_enabled|bool %}
-confluent.metrics.reporter.ssl.truststore.location={{kafka_broker_truststore_path}}
-confluent.metrics.reporter.ssl.truststore.password={{kafka_broker_truststore_storepass}}
-{% if kafka_broker_listeners.external.ssl_mutual_auth_enabled|bool %}
-confluent.metrics.reporter.ssl.keystore.location={{kafka_broker_keystore_path}}
-confluent.metrics.reporter.ssl.keystore.password={{kafka_broker_keystore_storepass}}
-confluent.metrics.reporter.ssl.key.password={{kafka_broker_keystore_keypass}}
-{% if pkcs12_enabled|bool %}
-confluent.metrics.reporter.ssl.keymanager.algorithm=PKIX
-confluent.metrics.reporter.ssl.trustmanager.algorithm=PKIX
-confluent.metrics.reporter.ssl.keystore.type=pkcs12
-confluent.metrics.reporter.ssl.truststore.type=pkcs12
+{% if kafka_broker_metrics_reporter_enabled|bool %}
+######## Metrics Reporter #########
+metric.reporters=io.confluent.metrics.reporter.ConfluentMetricsReporter
+confluent.metrics.reporter.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}}{% endfor %}
+
+confluent.metrics.reporter.topic.replicas={{kafka_broker_default_interal_replication_factor}}
+{% set config_prefix = 'confluent.metrics.reporter.' %}
+{% set listener = kafka_broker_listeners[kafka_broker_inter_broker_listener_name] %}
+{% set truststore_path = kafka_broker_truststore_path %}
+{% set truststore_storepass = kafka_broker_truststore_storepass %}
+{% set keystore_path = kafka_broker_keystore_path %}
+{% set keystore_storepass = kafka_broker_keystore_storepass %}
+{% set keystore_keypass = kafka_broker_keystore_keypass %}
+{% set sasl_plain_username = sasl_plain_users.admin.principal %}
+{% set sasl_plain_password = sasl_plain_users.admin.password %}
+{% set sasl_scram_username = sasl_scram_users.admin.principal %}
+{% set sasl_scram_password = sasl_scram_users.admin.password %}
+{% set kerberos_keytab_path = kafka_broker_kerberos_keytab_path %}
+{% set kerberos_principal = kafka_broker_kerberos_principal %}
+{% include 'kafka_client.j2' %}
+{% endif %}
+
+{% if rbac_enabled|bool %}
+# MDS Configuration
+confluent.metadata.server.listeners={{mds_http_protocol}}://0.0.0.0:{{mds_port}}
+confluent.metadata.server.advertised.listeners={{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(inventory_hostname) }}:{{mds_port}}
+confluent.metadata.server.token.auth.enable=true
+confluent.metadata.server.token.max.lifetime.ms=3600000
+confluent.metadata.server.token.key.path={{rbac_enabled_private_pem_path}}
+confluent.metadata.server.public.key.path={{rbac_enabled_public_pem_path}}
+confluent.metadata.server.token.signature.algorithm=RS256
+confluent.metadata.server.authentication.method=BEARER
+{% if mds_ssl_enabled|bool %}
+confluent.metadata.server.ssl.keystore.location={{kafka_broker_keystore_path}}
+confluent.metadata.server.ssl.keystore.password={{kafka_broker_keystore_storepass}}
+confluent.metadata.server.ssl.key.password={{kafka_broker_keystore_keypass}}
+{% if mds_ssl_mutual_auth_enabled|bool %}
+confluent.metadata.server.ssl.truststore.location={{kafka_broker_truststore_path}}
+confluent.metadata.server.ssl.truststore.password={{kafka_broker_truststore_storepass}}
+confluent.metadata.server.ssl.client.auth=true
 {% endif %}
 {% endif %}
-{% endif %}
-{% if kafka_broker_listeners.external.sasl_protocol | normalize_sasl_protocol == 'PLAIN' %}
-confluent.metrics.reporter.sasl.mechanism=PLAIN
-confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-   username="{{sasl_plain_users.admin.principal}}" password="{{sasl_plain_users.admin.password}}";
-{% endif %}
-{% if kafka_broker_listeners.external.sasl_protocol | normalize_sasl_protocol == 'GSSAPI' %}
-confluent.metrics.reporter.sasl.mechanism=GSSAPI
-confluent.metrics.reporter.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
-confluent.metrics.reporter.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
-   useKeyTab=true \
-   storeKey=true \
-   keyTab="{{kerberos.keytab_dir}}/{{kafka_broker_kerberos_keytab_path | basename}}" \
-   principal="{{kafka_broker_kerberos_principal}}";
-{% endif %}
-{% if kafka_broker_listeners.external.sasl_protocol | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
-confluent.metrics.reporter.sasl.mechanism=SCRAM-SHA-256
-confluent.metrics.reporter.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
-   username="{{sasl_scram_users.admin.principal}}" password="{{sasl_scram_users.admin.password}}";
+
+# Authorization Configuration
+authorizer.class.name=io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer
+confluent.authorizer.access.rule.providers=CONFLUENT{% if mds_acls_enabled|bool %},ZK_ACL{% endif %}
+
+confluent.authorizer.group.provider=CONFLUENT
+super.users={{super_users | join(';')}}
+
+# LDAP Configuration
+{{ldap_config}}
+
 {% endif %}
