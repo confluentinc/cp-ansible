@@ -24,13 +24,7 @@
       -d '{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}","ksql-cluster":"{{ksql.properties['ksql.service.id']}}"}}'
   loop: "{{ksql_additional_system_admins}}"
 
-- name: Grant SecurityAdmin role on KSQL user
-  shell: |
-    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/SecurityAdmin \
-      -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
-      -d '{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}","ksql-cluster":"{{ksql.properties['ksql.service.id']}}"}}'
-
-- name: Grant Resource owner of KSQL Cluster on KSQL User
+- name: Grant ResourceOwner of KSQL Cluster on KSQL User
   shell: |
     curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/ResourceOwner/bindings \
       -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
@@ -47,3 +41,11 @@
     curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/DeveloperWrite/bindings \
       -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
       -d '{ "scope": {"clusters": {"kafka-cluster":"{{kafka_cluster_id}}"}}, "resourcePatterns": [{"resourceType": "TransactionalId", "name": "{{ksql.properties['ksql.service.id']}}","patternType":"LITERAL"}]}'
+
+# TODO find a way to get around hardcoding this sr cluster id
+- name: Grant ksql user the DeveloperRead role on resourceType Subject in Schema Registry Cluster
+  shell: |
+    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/DeveloperRead/bindings \
+      -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
+      -d '{ "scope": {"clusters": {"kafka-cluster":"{{kafka_cluster_id}}","schema-registry-cluster":"schema-registry"}}, "resourcePatterns": [{"resourceType": "Subject", "name": "_confluent-ksql-{{ksql.properties['ksql.service.id']}}","patternType":"PREFIXED"}]}'
+  when: "'schema_registry' in groups"
