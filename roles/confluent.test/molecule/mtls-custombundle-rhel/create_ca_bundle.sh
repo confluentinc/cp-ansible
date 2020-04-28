@@ -60,14 +60,21 @@ openssl genrsa -out intermediate/private/intermediate.key 2048
 openssl req -config intermediate/openssl.conf -sha256 -new -key intermediate/private/intermediate.key -out intermediate/certs/intermediate.csr -subj '/CN=Interm.'
 openssl ca -batch -config root-ca/openssl.conf -keyfile root-ca/private/ca.key -cert root-ca/certs/ca.crt -extensions v3_req -notext -md sha256 -in intermediate/certs/intermediate.csr -out intermediate/certs/intermediate.crt
 
+mkdir requests
 mkdir out
 
-cat root-ca/certs/ca.crt intermediate/certs/intermediate.crt > out/ca.chain
+cp root-ca/certs/ca.crt out/ca.crt
+# cp intermediate/certs/intermediate.crt out/intermediate.crt
+# cat root-ca/certs/ca.crt intermediate/certs/intermediate.crt > out/ca.chain
 
 filename="certificate-hosts"
 # remove the empty lines
 for I in `sed '/^$/d' $filename`; do
   #for I in `seq 1 3` ; do
-  openssl req -new -keyout out/$I.key -out out/$I.request -days 365 -nodes -subj "/CN=$I" -newkey rsa:2048
-  openssl ca -batch -config root-ca/openssl.conf -keyfile intermediate/private/intermediate.key -cert intermediate/certs/intermediate.crt -out out/$I.crt -infiles out/$I.request
+  openssl req -new -keyout out/$I.key -out requests/$I.request -days 365 -nodes -subj "/CN=$I" -newkey rsa:2048
+  # openssl ca -batch -config root-ca/openssl.conf -keyfile intermediate/private/intermediate.key -cert intermediate/certs/intermediate.crt -out out/$I.crt -infiles requests/$I.request
+  openssl ca -batch -config root-ca/openssl.conf -keyfile intermediate/private/intermediate.key -cert intermediate/certs/intermediate.crt -out out/$I.crt -notext -infiles requests/$I.request
+
+  # create full chain
+  cat out/$I.crt intermediate/certs/intermediate.crt > out/$I.chain
 done
