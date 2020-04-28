@@ -51,30 +51,50 @@ basicConstraints = CA:TRUE
 ' > $C/openssl.conf
 done
 
-# Create Root CA
-openssl genrsa -out root-ca/private/ca.key 2048
-openssl req -config root-ca/openssl.conf -new -x509 -days 3650 -key root-ca/private/ca.key -sha256 -extensions v3_req -out root-ca/certs/ca.crt -subj '/CN=Root-ca'
-
-# Create intermediate CA and Sign by Root CA
-openssl genrsa -out intermediate/private/intermediate.key 2048
-openssl req -config intermediate/openssl.conf -sha256 -new -key intermediate/private/intermediate.key -out intermediate/certs/intermediate.csr -subj '/CN=Interm.'
-openssl ca -batch -config root-ca/openssl.conf -keyfile root-ca/private/ca.key -cert root-ca/certs/ca.crt -extensions v3_req -notext -md sha256 -in intermediate/certs/intermediate.csr -out intermediate/certs/intermediate.crt
-
 mkdir requests
 mkdir out
 
-cp root-ca/certs/ca.crt out/ca.crt
-# cp intermediate/certs/intermediate.crt out/intermediate.crt
-# cat root-ca/certs/ca.crt intermediate/certs/intermediate.crt > out/ca.chain
+# Create Root CA1
+openssl genrsa -out root-ca/private/ca1.key 2048
+openssl req -config root-ca/openssl.conf -new -x509 -days 3650 -key root-ca/private/ca1.key -sha256 -extensions v3_req -out root-ca/certs/ca1.crt -subj '/CN=Root-ca1'
 
-filename="certificate-hosts"
+# Create intermediate CA1 and Sign by Root CA1
+openssl genrsa -out intermediate/private/intermediate1.key 2048
+openssl req -config intermediate/openssl.conf -sha256 -new -key intermediate/private/intermediate1.key -out intermediate/certs/intermediate1.csr -subj '/CN=Intermediate1'
+openssl ca -batch -config root-ca/openssl.conf -keyfile root-ca/private/ca1.key -cert root-ca/certs/ca1.crt -extensions v3_req -notext -md sha256 -in intermediate/certs/intermediate1.csr -out intermediate/certs/intermediate1.crt
+
+filename="ca1-hosts"
 # remove the empty lines
 for I in `sed '/^$/d' $filename`; do
   #for I in `seq 1 3` ; do
   openssl req -new -keyout out/$I.key -out requests/$I.request -days 365 -nodes -subj "/CN=$I" -newkey rsa:2048
-  # openssl ca -batch -config root-ca/openssl.conf -keyfile intermediate/private/intermediate.key -cert intermediate/certs/intermediate.crt -out out/$I.crt -infiles requests/$I.request
-  openssl ca -batch -config root-ca/openssl.conf -keyfile intermediate/private/intermediate.key -cert intermediate/certs/intermediate.crt -out out/$I.crt -notext -infiles requests/$I.request
+  openssl ca -batch -config root-ca/openssl.conf -keyfile intermediate/private/intermediate1.key -cert intermediate/certs/intermediate1.crt -out out/$I.crt -notext -infiles requests/$I.request
 
   # create full chain
-  cat out/$I.crt intermediate/certs/intermediate.crt > out/$I.chain
+  cat out/$I.crt intermediate/certs/intermediate1.crt > out/$I.chain
 done
+
+# DUPLICATING CODE... whatever
+
+# Create Root CA2
+openssl genrsa -out root-ca/private/ca2.key 2048
+openssl req -config root-ca/openssl.conf -new -x509 -days 3650 -key root-ca/private/ca2.key -sha256 -extensions v3_req -out root-ca/certs/ca2.crt -subj '/CN=Root-ca2'
+
+# Create intermediate CA2 and Sign by Root CA2
+openssl genrsa -out intermediate/private/intermediate2.key 2048
+openssl req -config intermediate/openssl.conf -sha256 -new -key intermediate/private/intermediate2.key -out intermediate/certs/intermediate2.csr -subj '/CN=Intermediate2'
+openssl ca -batch -config root-ca/openssl.conf -keyfile root-ca/private/ca2.key -cert root-ca/certs/ca2.crt -extensions v3_req -notext -md sha256 -in intermediate/certs/intermediate2.csr -out intermediate/certs/intermediate2.crt
+
+filename="ca2-hosts"
+# remove the empty lines
+for I in `sed '/^$/d' $filename`; do
+  #for I in `seq 1 3` ; do
+  openssl req -new -keyout out/$I.key -out requests/$I.request -days 365 -nodes -subj "/CN=$I" -newkey rsa:2048
+  openssl ca -batch -config root-ca/openssl.conf -keyfile intermediate/private/intermediate2.key -cert intermediate/certs/intermediate2.crt -out out/$I.crt -notext -infiles requests/$I.request
+
+  # create full chain
+  cat out/$I.crt intermediate/certs/intermediate2.crt > out/$I.chain
+done
+
+# Create CA Bundle
+cat root-ca/certs/ca1.crt root-ca/certs/ca2.crt > out/caBundle.pem
