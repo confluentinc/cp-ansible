@@ -11,7 +11,9 @@ def job = {
     stage('Install Molecule and Latest Ansible') {
         sh '''
             sudo pip install --upgrade 'ansible==2.9.*'
-            sudo pip install molecule docker virtualenv
+            sudo pip install molecule docker virtualenv      
+            cd roles/confluent.test
+            virtualenv virtenv
         '''
     }
 
