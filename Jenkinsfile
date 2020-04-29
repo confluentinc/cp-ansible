@@ -11,7 +11,7 @@ def job = {
     stage('Install Molecule and Latest Ansible') {
         sh '''
             sudo pip install --upgrade 'ansible==2.9.*'
-            sudo pip install molecule docker
+            sudo pip install molecule docker virtualenv
         '''
     }
 
@@ -25,18 +25,21 @@ def job = {
                 docker rmi molecule_local/geerlingguy/docker-ubuntu1804-ansible || true
 
                 cd roles/confluent.test
+                source virtenv/bin/activate
                 molecule test -s rbac-scram-custom-rhel
             '''
         }
         stage('RBAC - mTLS - Provided Keystores - Ubuntu') {
             sh '''
                 cd roles/confluent.test
+                source virtenv/bin/activate
                 molecule test -s rbac-mtls-provided-ubuntu
             '''
         }
         stage('RBAC - Kerberos - no SSL - Debian') {
             sh '''
                 cd roles/confluent.test
+                source virtenv/bin/activate
                 molecule test -s rbac-kerberos-debian
             '''
         }
