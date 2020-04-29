@@ -10,46 +10,36 @@ host.name={{inventory_hostname}}
 ssl.keystore.location={{kafka_rest_keystore_path}}
 ssl.keystore.password={{kafka_rest_keystore_storepass}}
 ssl.key.password={{kafka_rest_keystore_keypass}}
-{% if kafka_rest_ssl_mutual_auth_enabled|bool %}
-ssl.client.auth=false
-#Set to true if you wish to force Client SSL Authentication
+{% if kafka_rest_ssl_mutual_auth_enabled|bool or mds_ssl_enabled|bool %}
 ssl.truststore.location={{kafka_rest_truststore_path}}
 ssl.truststore.password={{kafka_rest_truststore_storepass}}
+ssl.client.auth=false
 {% endif %}
 {% endif %}
+
+# Zookeeper Configuration
+zookeeper.connect={% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{zookeeper.properties.clientPort}}{% endfor %}
+
 
 # Kafka Broker Configuration
 bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}{% endfor %}
 
-client.security.protocol={{kafka_broker_listeners[kafka_rest_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
-{% if kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool %}
-client.ssl.truststore.location={{kafka_rest_truststore_path}}
-client.ssl.truststore.password={{kafka_rest_truststore_storepass}}
-{% if kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
-client.ssl.keystore.location={{kafka_rest_keystore_path}}
-client.ssl.keystore.password={{kafka_rest_keystore_storepass}}
-client.ssl.key.password={{kafka_rest_keystore_keypass}}
-{% endif %}
-{% endif %}
-{% if kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
-client.sasl.mechanism=PLAIN
-client.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-   username="{{sasl_plain_users.kafka_rest.principal}}" password="{{sasl_plain_users.kafka_rest.password}}";
-{% endif %}
-{% if kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
-client.sasl.mechanism=GSSAPI
-client.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
-client.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
-   useKeyTab=true \
-   storeKey=true \
-   keyTab="{{kerberos.keytab_dir}}/{{kafka_rest_kerberos_keytab_path | basename}}" \
-   principal="{{kafka_rest_kerberos_principal}}";
-{% endif %}
-{% if kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
-client.sasl.mechanism=SCRAM-SHA-256
-client.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
-  username="{{sasl_scram_users.kafka_rest.principal}}" password="{{sasl_scram_users.kafka_rest.password}}";
-{% endif %}
+{% set config_prefix = 'client.' %}
+{% set listener = kafka_broker_listeners[kafka_rest_kafka_listener_name] %}
+{% set truststore_path = kafka_rest_truststore_path %}
+{% set truststore_storepass = kafka_rest_truststore_storepass %}
+{% set keystore_path = kafka_rest_keystore_path %}
+{% set keystore_storepass = kafka_rest_keystore_storepass %}
+{% set keystore_keypass = kafka_rest_keystore_keypass %}
+{% set sasl_plain_username = sasl_plain_users.kafka_rest.principal %}
+{% set sasl_plain_password = sasl_plain_users.kafka_rest.password %}
+{% set sasl_scram_username = sasl_scram_users.kafka_rest.principal %}
+{% set sasl_scram_password = sasl_scram_users.kafka_rest.password %}
+{% set kerberos_keytab_path = kafka_rest_kerberos_keytab_path %}
+{% set kerberos_principal = kafka_rest_kerberos_principal %}
+{% set oauth_username = kafka_rest_ldap_user %}
+{% set oauth_password = kafka_rest_ldap_password %}
+{% include 'kafka_client.j2' %}
 
 {% set schema_registries = groups.get('schema_registry', []) %}
 {% if schema_registries %}
@@ -63,4 +53,18 @@ schema.registry.ssl.keystore.location={{kafka_rest_keystore_path}}
 schema.registry.ssl.keystore.password={{kafka_rest_keystore_storepass}}
 schema.registry.ssl.key.password={{kafka_rest_keystore_keypass}}
 {% endif %}
+{% endif %}
+
+{% if rbac_enabled|bool %}
+# RBAC Configuration
+kafka.rest.resource.extension.class=io.confluent.kafkarest.security.KafkaRestSecurityResourceExtension
+rest.servlet.initializor.classes=io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+public.key.path={{rbac_enabled_public_pem_path}}
+client.confluent.metadata.server.urls.max.age.ms=60000
+
+confluent.metadata.bootstrap.server.urls={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{mds_http_protocol}}://{{ host }}:{{mds_port}}{% endfor %}
+
+confluent.metadata.server.urls.max.age.ms=60000
+confluent.metadata.basic.auth.user.info={{kafka_rest_ldap_user}}:{{kafka_rest_ldap_password}}
+confluent.metadata.http.auth.credentials.provider=BASIC
 {% endif %}

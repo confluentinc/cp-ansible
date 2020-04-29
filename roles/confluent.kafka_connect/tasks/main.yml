@@ -26,7 +26,7 @@
   user:
     name: "{{kafka_connect_user}}"
     comment: "Connect Distributed User"
-    system: yes
+    system: true
     group: "{{kafka_connect_group}}"
 
 - include_role:
@@ -39,6 +39,9 @@
     keystore_keypass: "{{kafka_connect_keystore_keypass}}"
     service_name: kafka_connect
     hostnames: "{{ [inventory_hostname] }}"
+    ca_cert_path: "{{kafka_connect_ca_cert_path}}"
+    cert_path: "{{kafka_connect_cert_path}}"
+    key_path: "{{kafka_connect_key_path}}"
   when: kafka_connect_ssl_enabled|bool or kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
 - name: Configure Kerberos
@@ -51,6 +54,10 @@
     kerberos_handler: "restart connect distributed"
   when: kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
+- name: Configure RBAC
+  include_tasks: rbac.yml
+  when: rbac_enabled|bool
+
 - name: Create Connect Distributed Config
   template:
     src: connect-distributed.properties.j2
@@ -60,6 +67,9 @@
     group: "{{kafka_connect_group}}"
   notify:
     - restart connect distributed
+
+- name: Managing Connectors
+  include_tasks: connectors.yml
 
 - name: Create Logs Directory
   file:
@@ -108,7 +118,7 @@
 - name: Start Connect Service
   systemd:
     name: "{{kafka_connect_service_name}}"
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Health Check
@@ -116,3 +126,10 @@
   when:
     - health_checks_enabled|bool
     - not ansible_check_mode
+
+- name: Register connector configs and remove deleted connectors
+  kafka_connectors:
+    connect_url: "{{kafka_connect_http_protocol}}://{{groups['kafka_connect'][0]}}:{{kafka_connect_rest_port}}/connectors"
+    active_connectors: "{{ kafka_connect_connectors }}"
+  when: kafka_connect_connectors is defined
+  run_once: true

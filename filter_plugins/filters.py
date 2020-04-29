@@ -15,7 +15,7 @@ class FilterModule(object):
         normalized = 'GSSAPI' if protocol.lower() == 'kerberos' \
             else 'SCRAM-SHA-256' if protocol.upper() == 'SCRAM' \
             else 'PLAIN' if protocol.upper() == 'PLAIN' \
-            else 'OAUTHBEARER' if protocol.upper() == 'OAUTHBEARER' \
+            else 'OAUTHBEARER' if protocol.upper() == 'OAUTH' \
             else 'none'
         return normalized
 

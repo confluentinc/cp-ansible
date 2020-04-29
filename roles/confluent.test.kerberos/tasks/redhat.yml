@@ -1,0 +1,25 @@
+---
+
+- name: Install the kerberos packages
+  yum: name={{ redhat_pkg }} state=present
+
+- name: Copy the kdc acl configuration file
+  template: src=kadm5.acl.j2 dest=/var/kerberos/krb5kdc/kadm5.acl
+  notify:
+    - restart kerberos
+
+- name: Copy the client configuration file
+  template: src=krb5.conf.j2 dest=/etc/krb5.conf
+
+- name: Link /dev/random to /dev/urandom
+  file: path=/dev/random src=/dev/urandom state=link force=yes
+
+- name: Create the initial kerberos database
+  shell: echo -e "{{ master_db_pass }}\n{{ master_db_pass }}" | kdb5_util create -s; touch /var/kerberos/db_created creates=/var/kerberos/db_created
+
+- name: Start the kerberos services
+  service: name={{ item }} state=started enabled=yes
+  with_items: "{{ redhat_service }}"
+
+- name: Create an admin for the administering the kerberos database
+  shell: echo -e "{{ kadmin_pass }}\n{{ kadmin_pass }}" | kadmin.local  -q "addprinc {{ kadmin_user }}/admin"; touch /var/kerberos/admin_created creates=/var/kerberos/admin_created

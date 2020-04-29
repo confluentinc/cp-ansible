@@ -26,7 +26,7 @@
   user:
     name: "{{kafka_rest_user}}"
     comment: "Kafka REST User"
-    system: yes
+    system: true
     group: "{{kafka_rest_group}}"
 
 - include_role:
@@ -39,6 +39,9 @@
     keystore_keypass: "{{kafka_rest_keystore_keypass}}"
     service_name: kafka_rest
     hostnames: "{{ [inventory_hostname] }}"
+    ca_cert_path: "{{kafka_rest_ca_cert_path}}"
+    cert_path: "{{kafka_rest_cert_path}}"
+    key_path: "{{kafka_rest_key_path}}"
   when: kafka_rest_ssl_enabled|bool or kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
 - name: Configure Kerberos
@@ -50,6 +53,22 @@
     kerberos_keytab_path: "{{kafka_rest_kerberos_keytab_path}}"
     kerberos_handler: "restart kafka-rest"
   when: kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
+
+- name: Create SSL Certificate Directory
+  file:
+    path: /var/ssl/private
+    state: directory
+    mode: 0755
+  when: rbac_enabled|bool
+
+- name: Copy in MDS Public Pem File
+  copy:
+    src: "{{token_services_public_pem_file}}"
+    dest: "{{rbac_enabled_public_pem_path}}"
+    mode: '755'
+    owner: "{{kafka_rest_user}}"
+    group: "{{kafka_rest_group}}"
+  when: rbac_enabled|bool
 
 - name: Create Kafka Rest Config
   template:
@@ -108,7 +127,7 @@
 - name: Start Kafka Rest Service
   systemd:
     name: "{{kafka_rest_service_name}}"
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Health Check

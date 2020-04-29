@@ -1,8 +1,9 @@
+---
 kerberos:
   keytab_dir: /etc/security/keytabs
 
-confluent_repo_version: 5.4
-confluent_package_version: 5.4.0
+confluent_repo_version: 5.5
+confluent_package_version: 5.5.0
 confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
 confluent_package_debian_suffix: "{{ '=' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
@@ -50,7 +51,7 @@ custom_yum_repofile: false
 custom_apt_repo: false
 kerberos_configure: true
 
-rbac_enabled: false
+open_file_limit: 500000
 
 confluent_server_enabled: true
 
@@ -88,24 +89,26 @@ zookeeper:
   jaas_file: /etc/kafka/zookeeper_jaas.conf
 
 kafka_broker_default_listeners:
-  external:
-    name: "{{ 'EXTERNAL' if kafka_broker_configure_additional_brokers|bool else 'DEFAULT' }}"
+  internal:
+    name: INTERNAL
     port: 9092
     ssl_enabled: "{{ ssl_enabled }}"
     ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
-    sasl_protocol: "{{ sasl_protocol }}"
+    sasl_protocol: "{{ 'OAUTH' if rbac_enabled|bool else sasl_protocol }}"
 
 kafka_broker_custom_listeners:
-  internal:
-    name: INTERNAL
+  broker:
+    name: BROKER
     port: 9091
     ssl_enabled: "{{ ssl_enabled }}"
     ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
     sasl_protocol: "{{ sasl_protocol }}"
 
+
 kafka_broker_configure_additional_brokers: true
 kafka_broker_listeners: "{{ kafka_broker_default_listeners | combine(kafka_broker_custom_listeners, recursive=True) if kafka_broker_configure_additional_brokers|bool else  kafka_broker_default_listeners}}"
-kafka_broker_inter_broker_listener_name: "{{ 'internal' if kafka_broker_configure_additional_brokers|bool else 'external' }}"
+kafka_broker_inter_broker_listener_name: "{{ 'broker' if kafka_broker_configure_additional_brokers|bool else 'internal' }}"
+
 
 # Uses custom filter to create a list of all sasl_protocols, removes ['none'], and reduces to unique items
 kafka_broker_sasl_enabled_mechanisms: "{{ kafka_broker_listeners | get_sasl_mechanisms(sasl_protocol) | difference(['none']) | unique }}"
@@ -117,6 +120,9 @@ kafka_broker_keystore_path: "/var/ssl/private/kafka_broker.keystore.jks"
 kafka_broker_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_broker_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_broker_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_broker_keystore_storepass }}"
+kafka_broker_ca_cert_path: "/var/ssl/private/ca.crt"
+kafka_broker_cert_path: "/var/ssl/private/kafka_broker.crt"
+kafka_broker_key_path: "/var/ssl/private/kafka_broker.key"
 kafka_broker:
   log4j_file: /etc/kafka/kafka_server_log4j.properties
   jaas_file: /etc/kafka/kafka_server_jaas.conf
@@ -133,7 +139,10 @@ schema_registry_keystore_path: "/var/ssl/private/schema_registry.keystore.jks"
 schema_registry_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 schema_registry_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 schema_registry_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else schema_registry_keystore_storepass }}"
-schema_registry_kafka_listener_name: external
+schema_registry_ca_cert_path: "/var/ssl/private/ca.crt"
+schema_registry_cert_path: "/var/ssl/private/schema_registry.crt"
+schema_registry_key_path: "/var/ssl/private/schema_registry.key"
+schema_registry_kafka_listener_name: internal
 schema_registry:
   log4j_file: /etc/schema-registry/schema_registry_log4j.properties
 
@@ -148,7 +157,10 @@ kafka_rest_keystore_path: "/var/ssl/private/kafka_rest.keystore.jks"
 kafka_rest_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_rest_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_rest_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_rest_keystore_storepass }}"
-kafka_rest_kafka_listener_name: external
+kafka_rest_ca_cert_path: "/var/ssl/private/ca.crt"
+kafka_rest_cert_path: "/var/ssl/private/kafka_rest.crt"
+kafka_rest_key_path: "/var/ssl/private/kafka_rest.key"
+kafka_rest_kafka_listener_name: internal
 kafka_rest:
   log4j_file: /etc/kafka-rest/kafka-rest_log4j.properties
 
@@ -163,7 +175,10 @@ kafka_connect_keystore_path: "/var/ssl/private/kafka_connect.keystore.jks"
 kafka_connect_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_connect_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_connect_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_connect_keystore_storepass }}"
-kafka_connect_kafka_listener_name: external
+kafka_connect_ca_cert_path: "/var/ssl/private/ca.crt"
+kafka_connect_cert_path: "/var/ssl/private/kafka_connect.crt"
+kafka_connect_key_path: "/var/ssl/private/kafka_connect.key"
+kafka_connect_kafka_listener_name: internal
 kafka_connect:
   log4j_file: /etc/kafka/connect_distributed_log4j.properties
 
@@ -178,10 +193,13 @@ ksql_keystore_path: "/var/ssl/private/ksql.keystore.jks"
 ksql_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 ksql_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 ksql_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else ksql_keystore_storepass }}"
-ksql_kafka_listener_name: external
+ksql_ca_cert_path: "/var/ssl/private/ca.crt"
+ksql_cert_path: "/var/ssl/private/ksql.crt"
+ksql_key_path: "/var/ssl/private/ksql.key"
+ksql_kafka_listener_name: internal
 ksql:
-  log4j_file: /etc/ksql/ksql-server_log4j.properties
-  jaas_file: /etc/ksql/ksql-server_jaas.conf
+  log4j_file: "/etc/ksqldb/ksql-server_log4j.properties"
+  jaas_file: "/etc/ksqldb/ksql-server_jaas.conf"
 
 control_center_user: "{{control_center_default_user}}"
 control_center_group: "{{control_center_default_group}}"
@@ -195,7 +213,10 @@ control_center_keystore_path: "/var/ssl/private/control_center.keystore.jks"
 control_center_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 control_center_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 control_center_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_keystore_storepass }}"
-control_center_kafka_listener_name: external
+control_center_ca_cert_path: "/var/ssl/private/ca.crt"
+control_center_cert_path: "/var/ssl/private/control_center.crt"
+control_center_key_path: "/var/ssl/private/control_center.key"
+control_center_kafka_listener_name: internal
 control_center:
   log4j_file: /etc/confluent-control-center/control-center_log4j.properties
 
@@ -244,3 +265,23 @@ sasl_plain_users:
   schema_registry:
     principal: schema_registry
     password: schema_registry-secret
+
+rbac_enabled: false
+mds_acls_enabled: "{{rbac_enabled}}"
+rbac_enabled_public_pem_path: /var/ssl/private/public.pem
+rbac_enabled_private_pem_path: /var/ssl/private/tokenKeypair.pem
+
+mds_ssl_enabled: "{{ssl_enabled}}"
+mds_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
+mds_http_protocol: "{{ 'https' if mds_ssl_enabled|bool else 'http' }}"
+mds_port: 8090
+
+create_mds_certs: "{{ rbac_enabled }}"
+token_services_public_pem_file: generated_ssl_files/public.pem
+token_services_private_pem_file: generated_ssl_files/tokenKeypair.pem
+
+rbac_component_additional_system_admins: []
+schema_registry_additional_system_admins: "{{rbac_component_additional_system_admins}}"
+ksql_additional_system_admins: "{{rbac_component_additional_system_admins}}"
+kafka_connect_additional_system_admins: "{{rbac_component_additional_system_admins}}"
+control_center_additional_system_admins: "{{rbac_component_additional_system_admins}}"

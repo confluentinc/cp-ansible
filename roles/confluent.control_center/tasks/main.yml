@@ -26,7 +26,7 @@
   user:
     name: "{{control_center_user}}"
     comment: "Control Center User"
-    system: yes
+    system: true
     group: "{{control_center_group}}"
 
 - name: Set Control Center Data Dir permissions
@@ -54,6 +54,9 @@
     keystore_keypass: "{{control_center_keystore_keypass}}"
     service_name: control_center
     hostnames: "{{ [inventory_hostname] }}"
+    ca_cert_path: "{{control_center_ca_cert_path}}"
+    cert_path: "{{control_center_cert_path}}"
+    key_path: "{{control_center_key_path}}"
   when: control_center_ssl_enabled|bool or kafka_broker_listeners[control_center_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
 - name: Configure Kerberos
@@ -65,6 +68,10 @@
     kerberos_keytab_path: "{{control_center_kerberos_keytab_path}}"
     kerberos_handler: "restart control center"
   when: kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
+
+- name: Configure RBAC
+  include_tasks: rbac.yml
+  when: rbac_enabled|bool
 
 - name: Create Control Center Config
   template:
@@ -93,8 +100,8 @@
 - name: Create RocksDB Directory
   file:
     path: "{{control_center_rocksdb_path}}"
-    group: "{{control_center.group}}"
-    owner: "{{control_center.user}}"
+    group: "{{control_center_group}}"
+    owner: "{{control_center_user}}"
     mode: '764'
     state: directory
   when: control_center_rocksdb_path != ""
@@ -102,9 +109,9 @@
 - name: Set Permission to RocksDB Files
   file:
     path: "{{control_center_rocksdb_path}}"
-    group: "{{control_center.group}}"
-    owner: "{{control_center.user}}"
-    recurse: yes
+    group: "{{control_center_group}}"
+    owner: "{{control_center_user}}"
+    recurse: true
   when: control_center_rocksdb_path != ""
 
 - name: Create Control Center log4j Config
@@ -146,7 +153,7 @@
 - name: Start Control Center Service
   systemd:
     name: "{{control_center_service_name}}"
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Health Check
