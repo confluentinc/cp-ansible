@@ -1,0 +1,20 @@
+---
+- name: Create trustCA directory
+  file:
+    path: /var/ssl/private/generation/trustCAs
+    state: directory
+    mode: 0755
+
+- name: Split CA Certificate Bundle into Cert Files
+  shell: |
+    cat {{ca_cert_path}} | awk 'split_after==1{n++;split_after=0} /-----END CERTIFICATE-----/ {split_after=1} {print > ("/var/ssl/private/generation/trustCAs/ca" n ".pem")}'
+
+- name: Create Truststore with Certificates
+  shell: |
+    for file in /var/ssl/private/generation/trustCAs/*; do
+        fileName="${file##*/}"
+        keytool -noprompt -keystore {{truststore_path}} \
+            -alias "$fileName" \
+            -trustcacerts -import -file "$file" \
+            -deststorepass {{truststore_storepass}}
+    done
