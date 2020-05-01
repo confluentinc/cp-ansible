@@ -16,6 +16,8 @@ While we appreciate all code changes submitted, please understand that some PR's
 
 [How to file a feature request](#how-to-file-a-feature-request)
 
+[How to test](#how-to-test)
+
 [How to file a pull request](#how-to-file-a-pull-request) 
 
 
@@ -34,7 +36,7 @@ You can ask questions via two methods:
     Please be sure to tag the post as a `question`.
 
 
-2. For Confluent Enterprise Support customers, we would strongly adivse you to open a Support ticket which will be addressed within your Support contract SLA:
+2. For Confluent Enterprise Support customers, we would strongly advise you to open a Support ticket which will be addressed within your Support contract SLA:
 
     ```https://support.confluent.io```
 
@@ -99,8 +101,9 @@ The process described here has several goals:
 Please follow these steps to have your contribution considered by the maintainers:
 
 1. Follow all instructions in [the template](PULL_REQUEST_TEMPLATE.md)
-2. Follow the styleguides
-3. After you submit your pull request, verify that all status checks are passing
+2. Make sure you have reviewed [How to test](HOW_TO_TEST.md)
+3. Follow the styleguides
+4. After you submit your pull request, verify that all status checks are passing
 
 While the prerequisites above must be satisfied prior to having your pull request reviewed, the reviewer(s) may ask you to complete additional design work, tests, or other changes before your pull request can be ultimately accepted.
 
