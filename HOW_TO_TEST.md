@@ -18,7 +18,7 @@ The following is a list of the most common commands used with Molecule.
 
 ### Running a role
 
-Molecule allows for testing a role and will live inside a role's directory in a sub directory named "molecule". Currently, most tests reside inside a special role called confluent.test.
+Molecule allows for testing a role and will live inside a role's directory in a sub directory named molecule. Currently, most tests reside inside a special role called confluent.test in sub directories which use the following naming convention:
 
 ```<functionality tested>-<security mechanism>-<OS>```
 
