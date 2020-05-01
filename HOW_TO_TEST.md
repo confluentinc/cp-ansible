@@ -22,9 +22,12 @@ Molecule allows for testing a role and will live inside a role's directory in a 
 
 ```<functionality tested>-<security mechanism>-<OS>```
 
-To run a role do the following:
+To get a list of the scenarios:
 
 ```ls roles/confluent.test/molecule```
+
+To the run scenarios: 
+
 ```cd roles/confluent.test```
 ```molecule converge -s <scenario name>```
 
