@@ -51,13 +51,7 @@ Simply run:
 
 Within ```roles/confluent.test/molecule``` you can find a series of directories, which can be referred to as scenarios. Use a scenario as an inventory file, you can configure docker containers, ansible groups, variables, etc. When developing new features for the role you can create a new scenario simply by duplicating the default one and customizing. Edit the verify.yml to have test assertions for your scenario.
 
-All of the above commands can be run against your scenario, ie:
-```
-molecule converge -s <scenario-name>
-```
-
 More details on building scenarios can be found [here](https://molecule.readthedocs.io/en/latest/getting-started.html?highlight=scenarios#molecule-scenarios).
-
 
 ## Running a full test suite
 
