@@ -10,13 +10,15 @@ Starting with CP-Ansible 5.5.0, we have included testing via the [Molecule](http
 
 ```pip install molecule docker```
 
+Note: We recommend increasing your docker memory to at least 20GB of RAM and your CPU to 10.
+
 ## Using Molecule
 
 The following is a list of the most common commands used with Molecule.
 
 ### Running a role
 
-We have created a ```confluent.test``` role which contains all current scenarios for CP-Ansible under the ```molecule``` directory.  Each scenario named using the following format:
+Molecule allows for testing a role and will live inside a role's directory in a sub directory named "molecule". Currently, most tests reside inside a special role called confluent.test.
 
 ```<functionality tested>-<security mechanism>-<OS>```
 
@@ -24,26 +26,26 @@ To run a role do the following:
 
 ```ls roles/confluent.test/molecule```
 ```cd roles/confluent.test```
-```molecule converge <rolename>```
+```molecule converge -s <scenario name>```
 
 
 ### SSHing into a container
 
 Each docker container is named inside the molecule.yml file, copy the name and run:
 
-```molecule login -h <container-name>```
+```molecule login -s <scenario name> -h <container-name>```
 
 ### Running Role Tests
 
 To run the test cases, which are defined in the verify.yml playbooks, run:
 
-```molecule verify```
+```molecule verify -s <scenario name>```
 
 ### Destroying the Containers
 
 Simply run:
 
-```molecule destroy```
+```molecule destroy -s <scenario name>```
 
 ## Creating Scenarios
 
