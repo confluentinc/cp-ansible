@@ -8,7 +8,8 @@ class FilterModule(object):
             'get_sasl_mechanisms': self.get_sasl_mechanisms,
             'get_hostnames': self.get_hostnames,
             'cert_extension': self.cert_extension,
-            'ssl_required': self.ssl_required
+            'ssl_required': self.ssl_required,
+            'java_arg_build_out': self.java_arg_build_out
         }
 
     def normalize_sasl_protocol(self, protocol):
@@ -62,3 +63,10 @@ class FilterModule(object):
             ssl_enabled = listeners_dict[listener].get('ssl_enabled', default_ssl_enabled)
             ssl_required = ssl_required == True or ssl_enabled == True
         return ssl_required
+
+    def java_arg_build_out(self, java_arg_list):
+        java_args = ''
+        for value in java_arg_list:
+            if value != '':
+                java_args = java_args + ' ' + value
+        return java_args[1:]
