@@ -15,28 +15,9 @@ confluent:
 
 jolokia_enabled: true
 jolokia_jar_path: /opt/jolokia/jolokia.jar
-zookeeper_jolokia_enabled: "{{jolokia_enabled}}"
-zookeeper_jolokia_port: 7770
-kafka_broker_jolokia_enabled: "{{jolokia_enabled}}"
-kafka_broker_jolokia_port: 7771
-schema_registry_jolokia_enabled: "{{jolokia_enabled}}"
-schema_registry_jolokia_port: 7772
-kafka_connect_jolokia_enabled: "{{jolokia_enabled}}"
-kafka_connect_jolokia_port: 7773
-ksql_jolokia_enabled: "{{jolokia_enabled}}"
-ksql_jolokia_port: 7774
-kafka_rest_jolokia_enabled: "{{jolokia_enabled}}"
-kafka_rest_jolokia_port: 7775
 
 jmxexporter_enabled: false
 jmxexporter_jar_path: /opt/prometheus/jmx_prometheus_javaagent.jar
-zookeeper_jmxexporter_enabled: "{{jmxexporter_enabled}}"
-zookeeper_jmxexporter_config_path: /opt/prometheus/zookeeper.yml
-zookeeper_jmxexporter_port: 8079
-kafka_broker_jmxexporter_enabled: "{{jmxexporter_enabled}}"
-kafka_broker_jmxexporter_config_path: /opt/prometheus/kafka.yml
-kafka_broker_jmxexporter_port: 8080
-
 
 fips_enabled: false
 fips_jar_path: /usr/share/java/kafka/bc-fips-1.0.1.jar
@@ -53,7 +34,6 @@ open_file_limit: 500000
 confluent_server_enabled: true
 
 health_checks_enabled: true
-zookeeper_health_check_command: "exec 42<>/dev/tcp/127.0.0.1/{{zookeeper.properties.clientPort}}; echo -e 'srvr' >&42; cat <&42"
 
 common_role_completed: false
 
@@ -77,6 +57,7 @@ ssl_self_signed_ca_cert_filename: snakeoil-ca-1.crt
 ssl_self_signed_ca_key_filename: snakeoil-ca-1.key
 ssl_self_signed_ca_password: capassword123
 
+# Zookeeper Variables
 zookeeper_user: "{{zookeeper_default_user}}"
 zookeeper_group: "{{zookeeper_default_group}}"
 zookeeper:
@@ -85,6 +66,16 @@ zookeeper:
   log4j_file: /etc/kafka/zookeeper_log4j.properties
   jaas_file: /etc/kafka/zookeeper_jaas.conf
 
+zookeeper_jolokia_enabled: "{{jolokia_enabled}}"
+zookeeper_jolokia_port: 7770
+
+zookeeper_jmxexporter_enabled: "{{jmxexporter_enabled}}"
+zookeeper_jmxexporter_config_path: /opt/prometheus/zookeeper.yml
+zookeeper_jmxexporter_port: 8079
+
+zookeeper_health_check_command: "exec 42<>/dev/tcp/127.0.0.1/{{zookeeper.properties.clientPort}}; echo -e 'srvr' >&42; cat <&42"
+
+# Kafka Broker Variables
 kafka_broker_default_listeners:
   internal:
     name: INTERNAL
@@ -101,11 +92,9 @@ kafka_broker_custom_listeners:
     ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
     sasl_protocol: "{{ sasl_protocol }}"
 
-
 kafka_broker_configure_additional_brokers: true
 kafka_broker_listeners: "{{ kafka_broker_default_listeners | combine(kafka_broker_custom_listeners, recursive=True) if kafka_broker_configure_additional_brokers|bool else  kafka_broker_default_listeners}}"
 kafka_broker_inter_broker_listener_name: "{{ 'broker' if kafka_broker_configure_additional_brokers|bool else 'internal' }}"
-
 
 # Uses custom filter to create a list of all sasl_protocols, removes ['none'], and reduces to unique items
 kafka_broker_sasl_enabled_mechanisms: "{{ kafka_broker_listeners | get_sasl_mechanisms(sasl_protocol) | difference(['none']) | unique }}"
@@ -123,8 +112,21 @@ kafka_broker_key_path: "/var/ssl/private/kafka_broker.key"
 kafka_broker:
   log4j_file: /etc/kafka/kafka_server_log4j.properties
   jaas_file: /etc/kafka/kafka_server_jaas.conf
+
 kafka_broker_schema_validation_enabled: false
 
+kafka_broker_jolokia_enabled: "{{jolokia_enabled}}"
+kafka_broker_jolokia_port: 7771
+kafka_broker_jolokia_ssl_enabled: "{{ ssl_enabled }}"
+kafka_broker_jolokia_java_arg_ssl_addon: ",keystore={{kafka_broker_keystore_path}},keystorePassword={{kafka_broker_keystore_storepass}},protocol=https"
+kafka_broker_jolokia_urp_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{inventory_hostname}}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
+kafka_broker_jolokia_active_controller_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{inventory_hostname}}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ActiveControllerCount"
+
+kafka_broker_jmxexporter_enabled: "{{jmxexporter_enabled}}"
+kafka_broker_jmxexporter_config_path: /opt/prometheus/kafka.yml
+kafka_broker_jmxexporter_port: 8080
+
+# Schema Registry Variables
 schema_registry_user: "{{schema_registry_default_user}}"
 schema_registry_group: "{{schema_registry_default_group}}"
 schema_registry_listener_port: 8081
@@ -143,6 +145,11 @@ schema_registry_kafka_listener_name: internal
 schema_registry:
   log4j_file: /etc/schema-registry/schema_registry_log4j.properties
 
+schema_registry_jolokia_enabled: "{{jolokia_enabled}}"
+schema_registry_jolokia_port: 7772
+schema_registry_jolokia_ssl_enabled: "{{ schema_registry_ssl_enabled }}"
+
+# Kafka Rest Variables
 kafka_rest_user: "{{kafka_rest_default_user}}"
 kafka_rest_group: "{{kafka_rest_default_group}}"
 kafka_rest_port: 8082
@@ -161,6 +168,11 @@ kafka_rest_kafka_listener_name: internal
 kafka_rest:
   log4j_file: /etc/kafka-rest/kafka-rest_log4j.properties
 
+kafka_rest_jolokia_enabled: "{{jolokia_enabled}}"
+kafka_rest_jolokia_port: 7775
+kafka_rest_jolokia_ssl_enabled: "{{ kafka_rest_ssl_enabled }}"
+
+# Kafka Connect Variables
 kafka_connect_user: "{{kafka_connect_default_user}}"
 kafka_connect_group: "{{kafka_connect_default_group}}"
 kafka_connect_rest_port: 8083
@@ -179,6 +191,11 @@ kafka_connect_kafka_listener_name: internal
 kafka_connect:
   log4j_file: /etc/kafka/connect_distributed_log4j.properties
 
+kafka_connect_jolokia_enabled: "{{jolokia_enabled}}"
+kafka_connect_jolokia_port: 7773
+kafka_connect_jolokia_ssl_enabled: "{{ kafka_connect_ssl_enabled }}"
+
+# KSQL Variables
 ksql_user: "{{ksql_default_user}}"
 ksql_group: "{{ksql_default_group}}"
 ksql_listener_port: 8088
@@ -198,6 +215,11 @@ ksql:
   log4j_file: "/etc/ksqldb/ksql-server_log4j.properties"
   jaas_file: "/etc/ksqldb/ksql-server_jaas.conf"
 
+ksql_jolokia_enabled: "{{jolokia_enabled}}"
+ksql_jolokia_port: 7774
+ksql_jolokia_ssl_enabled: "{{ ksql_ssl_enabled }}"
+
+# Control Center Variables
 control_center_user: "{{control_center_default_user}}"
 control_center_group: "{{control_center_default_group}}"
 control_center_port: 9021
