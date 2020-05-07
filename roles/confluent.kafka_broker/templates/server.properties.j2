@@ -1,6 +1,4 @@
 # Maintained by Ansible
-zookeeper.connect={% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{zookeeper_client_port}}{% endfor %}
-
 log.dirs={% for logdir in kafka_broker.datadir %}{% if loop.index > 1%},{% endif %}{{ logdir }}{% endfor %}
 
 broker.id={{ broker_id | default(groups.kafka_broker.index(inventory_hostname) + 1)}}
@@ -9,9 +7,6 @@ broker.id={{ broker_id | default(groups.kafka_broker.index(inventory_hostname) +
 {{key}}={{value}}
 {% endfor %}
 
-{% if zookeeper_sasl_protocol in ['kerberos', 'digest'] %}
-zookeeper.set.acl=true
-{% endif %}
 {% if fips_enabled|bool %}
 enable.fips=true
 security.providers=io.confluent.kafka.security.fips.provider.BcFipsProviderCreator,io.confluent.kafka.security.fips.provider.BcFipsJsseProviderCreator
@@ -41,6 +36,23 @@ sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
 {% include 'listener.j2' %}
 
 {% endfor %}
+
+# Zookeeper Configuration
+zookeeper.connect={% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{zookeeper_client_port}}{% endfor %}
+
+{% if zookeeper_ssl_enabled | bool %}
+zookeeper.ssl.client.enable=true
+zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+zookeeper.ssl.truststore.location={{kafka_broker_truststore_path}}
+zookeeper.ssl.truststore.password={{kafka_broker_truststore_storepass}}
+{% if zookeeper_ssl_mutual_auth_enabled | bool %}
+zookeeper.ssl.keystore.location={{kafka_broker_keystore_path}}
+zookeeper.ssl.keystore.password={{kafka_broker_keystore_storepass}}
+{% endif %}
+{% endif %}
+{% if zookeeper_sasl_protocol in ['kerberos', 'digest'] %}
+zookeeper.set.acl=true
+{% endif %}
 
 {% if kafka_broker_schema_validation_enabled|bool %}
 {% set schema_registries = groups.get('schema_registry', []) %}
