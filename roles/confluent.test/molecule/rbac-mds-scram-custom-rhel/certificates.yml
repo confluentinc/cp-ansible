@@ -1,0 +1,54 @@
+---
+- name: Install OpenSSL Rsync and Java
+  hosts: mds-zookeeper1
+  tasks:
+    - name: Install OpenSSL Rsync and Java
+      yum:
+        name: "{{item}}"
+        state: present
+      loop:
+        - openssl
+        - rsync
+        - java-1.8.0-openjdk
+      when: ansible_os_family == "RedHat"
+
+    - name: Install OpenSSL Rsync and Java
+      apt:
+        name: "{{item}}"
+        state: present
+      loop:
+        - openssl
+        - rsync
+        - openjdk-8-jdk
+      when: ansible_os_family == "Debian"
+
+    - name: Create SSL Certificate Generation Directory
+      file:
+        path: /var/ssl/private/generation
+        state: directory
+        mode: 0755
+
+    - name: Copy in cert generation files in
+      copy:
+        src: "{{item}}"
+        dest: "/var/ssl/private/generation/{{item|basename}}"
+        mode: 0777
+      loop:
+        - certificate-hosts
+        - certs-create.sh
+
+    - name: Run
+      shell: "./certs-create.sh"
+      args:
+        chdir: /var/ssl/private/generation/
+
+    - name: Copy Generated SSL Files Back to Ansible Host
+      synchronize:
+        src: /var/ssl/private/generation/
+        dest: "generated_ssl_files"
+        mode: pull
+
+    - name: Delete SSL Certificate Generation Directory
+      file:
+        path: /var/ssl/private/generation
+        state: absent
