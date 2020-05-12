@@ -55,6 +55,39 @@ schema.registry.ssl.key.password={{kafka_rest_keystore_keypass}}
 {% endif %}
 {% endif %}
 
+# Monitoring Configuration
+confluent.monitoring.interceptor.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}{% endfor %}
+
+confluent.monitoring.interceptor.security.protocol={{kafka_broker_listeners[kafka_rest_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
+{% if kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool %}
+confluent.monitoring.interceptor.ssl.truststore.location={{kafka_rest_truststore_path}}
+confluent.monitoring.interceptor.ssl.truststore.password={{kafka_rest_truststore_storepass}}
+{% if kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
+confluent.monitoring.interceptor.ssl.keystore.location={{kafka_rest_keystore_path}}
+confluent.monitoring.interceptor.ssl.keystore.password={{kafka_rest_keystore_storepass}}
+confluent.monitoring.interceptor.ssl.key.password={{kafka_rest_keystore_keypass}}
+{% endif %}
+{% endif %}
+{% if kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
+confluent.monitoring.interceptor.sasl.mechanism=PLAIN
+confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
+   username="{{sasl_plain_users.kafka_rest.principal}}" password="{{sasl_plain_users.kafka_rest.password}}";
+{% endif %}
+{% if kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
+confluent.monitoring.interceptor.sasl.mechanism=GSSAPI
+confluent.monitoring.interceptor.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
+confluent.monitoring.interceptor.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true \
+   storeKey=true \
+   keyTab="{{kerberos.keytab_dir}}/{{kafka_rest_kerberos_keytab_path | basename}}" \
+   principal="{{kafka_rest_kerberos_principal}}";
+{% endif %}
+{% if kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
+confluent.monitoring.interceptor.sasl.mechanism=SCRAM-SHA-256
+confluent.monitoring.interceptor.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
+   username="{{sasl_scram_users.kafka_rest.principal}}" password="{{sasl_scram_users.kafka_rest.password}}";
+{% endif %}
+
 {% if rbac_enabled|bool %}
 # RBAC Configuration
 kafka.rest.resource.extension.class=io.confluent.kafkarest.security.KafkaRestSecurityResourceExtension
