@@ -1,74 +1,18 @@
 # Maintained by Ansible
-log.dirs={% for logdir in kafka_broker.datadir %}{% if loop.index > 1%},{% endif %}{{ logdir }}{% endfor %}
 
 broker.id={{ broker_id | default(groups.kafka_broker.index(inventory_hostname) + 1)}}
 
-{% for key, value in kafka_broker.properties.items() %}
+{% for key, value in kafka_broker_final_properties|dictsort%}
 {{key}}={{value}}
 {% endfor %}
 
-{% if fips_enabled|bool %}
-enable.fips=true
-security.providers=io.confluent.kafka.security.fips.provider.BcFipsProviderCreator,io.confluent.kafka.security.fips.provider.BcFipsJsseProviderCreator
-{% endif %}
-
-listener.security.protocol.map={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}
-
-listeners={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://:{{ listener['value']['port'] }}{% endfor %}
-
-advertised.listeners={% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(inventory_hostname) }}:{{ listener['value']['port'] }}{% endfor %}
-
-
-## Inter Broker Listener Configuration
-inter.broker.listener.name={{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}
-{% if kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol != 'none' %}
-sasl.mechanism.inter.broker.protocol={{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol}}
-{% endif %}
-{% if kafka_broker_sasl_enabled_mechanisms|length > 0 %}
-sasl.enabled.mechanisms={% for mechanism in kafka_broker_sasl_enabled_mechanisms %}{% if loop.index > 1%},{% endif %}{{ mechanism|upper }}{% endfor %}
-
-{% endif %}
-{% if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms %}
-sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
-{% endif %}
 
 {% for listener in kafka_broker_listeners|dict2items %}
 {% include 'listener.j2' %}
 
 {% endfor %}
 
-# Zookeeper Configuration
-zookeeper.connect={% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{zookeeper_client_port}}{% endfor %}
 
-{% if zookeeper_ssl_enabled | bool %}
-zookeeper.ssl.client.enable=true
-zookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
-zookeeper.ssl.truststore.location={{kafka_broker_truststore_path}}
-zookeeper.ssl.truststore.password={{kafka_broker_truststore_storepass}}
-{% if zookeeper_ssl_mutual_auth_enabled | bool %}
-zookeeper.ssl.keystore.location={{kafka_broker_keystore_path}}
-zookeeper.ssl.keystore.password={{kafka_broker_keystore_storepass}}
-{% endif %}
-{% endif %}
-{% if zookeeper_sasl_protocol in ['kerberos', 'digest'] %}
-zookeeper.set.acl=true
-{% endif %}
-
-{% if kafka_broker_schema_validation_enabled|bool %}
-{% set schema_registries = groups.get('schema_registry', []) %}
-{% if schema_registries %}
-# Schema Registry Configuration
-confluent.schema.registry.url={% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}
-
-{% if schema_registry_ssl_enabled|bool %}
-confluent.schema.registry.ssl.truststore.location={{kafka_broker_truststore_path}}
-confluent.schema.registry.ssl.truststore.password={{kafka_broker_truststore_storepass}}
-confluent.schema.registry.ssl.keystore.location={{kafka_broker_keystore_path}}
-confluent.schema.registry.ssl.keystore.password={{kafka_broker_keystore_storepass}}
-confluent.schema.registry.ssl.key.password={{kafka_broker_keystore_keypass}}
-{% endif %}
-{% endif %}
-{% endif %}
 
 {% if kafka_broker_metrics_reporter_enabled|bool %}
 ######## Metrics Reporter #########
@@ -90,37 +34,4 @@ confluent.metrics.reporter.topic.replicas={{kafka_broker_default_interal_replica
 {% set kerberos_keytab_path = kafka_broker_kerberos_keytab_path %}
 {% set kerberos_principal = kafka_broker_kerberos_principal %}
 {% include 'kafka_client.j2' %}
-{% endif %}
-
-{% if rbac_enabled|bool %}
-# MDS Configuration
-confluent.metadata.server.listeners={{mds_http_protocol}}://0.0.0.0:{{mds_port}}
-confluent.metadata.server.advertised.listeners={{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(inventory_hostname) }}:{{mds_port}}
-confluent.metadata.server.token.auth.enable=true
-confluent.metadata.server.token.max.lifetime.ms=3600000
-confluent.metadata.server.token.key.path={{rbac_enabled_private_pem_path}}
-confluent.metadata.server.public.key.path={{rbac_enabled_public_pem_path}}
-confluent.metadata.server.token.signature.algorithm=RS256
-confluent.metadata.server.authentication.method=BEARER
-{% if mds_ssl_enabled|bool %}
-confluent.metadata.server.ssl.keystore.location={{kafka_broker_keystore_path}}
-confluent.metadata.server.ssl.keystore.password={{kafka_broker_keystore_storepass}}
-confluent.metadata.server.ssl.key.password={{kafka_broker_keystore_keypass}}
-{% if mds_ssl_mutual_auth_enabled|bool %}
-confluent.metadata.server.ssl.truststore.location={{kafka_broker_truststore_path}}
-confluent.metadata.server.ssl.truststore.password={{kafka_broker_truststore_storepass}}
-confluent.metadata.server.ssl.client.auth=true
-{% endif %}
-{% endif %}
-
-# Authorization Configuration
-authorizer.class.name=io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer
-confluent.authorizer.access.rule.providers=CONFLUENT{% if mds_acls_enabled|bool %},ZK_ACL{% endif %}
-
-confluent.authorizer.group.provider=CONFLUENT
-super.users={{super_users | join(';')}}
-
-# LDAP Configuration
-{{ldap_config}}
-
 {% endif %}
