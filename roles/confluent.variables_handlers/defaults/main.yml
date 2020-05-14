@@ -75,8 +75,8 @@ zookeeper_ca_cert_path: "/var/ssl/private/ca.crt"
 zookeeper_cert_path: "/var/ssl/private/zookeeper.crt"
 zookeeper_key_path: "/var/ssl/private/zookeeper.key"
 zookeeper:
-  properties:
-    clientPort: 2181
+  # properties:
+  #   clientPort: 2181
   log4j_file: /etc/kafka/zookeeper_log4j.properties
   jaas_file: /etc/kafka/zookeeper_jaas.conf
 
@@ -87,7 +87,52 @@ zookeeper_jmxexporter_enabled: "{{jmxexporter_enabled}}"
 zookeeper_jmxexporter_config_path: /opt/prometheus/zookeeper.yml
 zookeeper_jmxexporter_port: 8079
 
-zookeeper_health_check_command: "exec 42<>/dev/tcp/127.0.0.1/{{zookeeper.properties.clientPort}}; echo -e 'srvr' >&42; cat <&42"
+zookeeper_health_check_command: "exec 42<>/dev/tcp/127.0.0.1/{{zookeeper_final_properties.clientPort}}; echo -e 'srvr' >&42; cat <&42"
+
+zookeeper_custom_properties: {}
+
+zookeeper_properties:
+  defaults:
+    enabled: true
+    properties:
+      clientPort: 2181
+      maxClientCnxns: 0
+      initLimit: 5
+      syncLimit: 2
+      autopurge.snapRetainCount: 10
+      autopurge.purgeInterval: 1
+      dataDir: /var/lib/zookeeper
+      admin.enableServer: "false"
+  ssl:
+    enabled: "{{zookeeper_ssl_enabled}}"
+    properties:
+      secureClientPort: "{{zookeeper_client_port}}"
+      serverCnxnFactory: org.apache.zookeeper.server.NettyServerCnxnFactory
+      authProvider.x509: org.apache.zookeeper.server.auth.X509AuthenticationProvider
+      ssl.keyStore.location: "{{zookeeper_keystore_path}}"
+      ssl.keyStore.password: "{{zookeeper_keystore_storepass}}"
+      ssl.trustStore.location: "{{zookeeper_truststore_path}}"
+      ssl.trustStore.password: "{{zookeeper_truststore_storepass}}"
+      sslQuorum: "true"
+      ssl.quorum.keyStore.location: "{{zookeeper_keystore_path}}"
+      ssl.quorum.keyStore.password: "{{zookeeper_keystore_storepass}}"
+      ssl.quorum.trustStore.location: "{{zookeeper_truststore_path}}"
+      ssl.quorum.trustStore.password: "{{zookeeper_truststore_storepass}}"
+      ssl.clientAuth: "{{ 'need' if zookeeper_ssl_mutual_auth_enabled|bool else 'none' }}"
+  sasl:
+    enabled: "{{ true if zookeeper_sasl_protocol in ['kerberos', 'digest'] else false }}"
+    properties:
+      authProvider.sasl: org.apache.zookeeper.server.auth.SASLAuthenticationProvider
+  sasl_kerberos:
+    enabled: "{{ true if zookeeper_sasl_protocol == 'kerberos' else false }}"
+    properties:
+      kerberos.removeHostFromPrincipal: 'true'
+      kerberos.removeRealmFromPrincipal: 'true'
+
+zookeeper_combined_properties: "{{zookeeper_properties | combine_properties}}"
+
+zookeeper_final_properties: "{{ zookeeper_combined_properties | combine(zookeeper_custom_properties) }}"
+
 
 # Kafka Broker Variables
 kafka_broker_default_listeners:

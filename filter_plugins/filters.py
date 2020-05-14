@@ -9,7 +9,8 @@ class FilterModule(object):
             'get_hostnames': self.get_hostnames,
             'cert_extension': self.cert_extension,
             'ssl_required': self.ssl_required,
-            'java_arg_build_out': self.java_arg_build_out
+            'java_arg_build_out': self.java_arg_build_out,
+            'combine_properties': self.combine_properties
         }
 
     def normalize_sasl_protocol(self, protocol):
@@ -70,3 +71,10 @@ class FilterModule(object):
             if value != '':
                 java_args = java_args + ' ' + value
         return java_args[1:]
+
+    def combine_properties(self, properties_dict):
+        final_dict = {}
+        for prop in properties_dict:
+            if properties_dict[prop].get('enabled'):
+                final_dict.update(properties_dict[prop].get('properties'))
+        return final_dict
