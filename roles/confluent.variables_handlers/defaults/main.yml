@@ -132,14 +132,11 @@ zookeeper_properties:
     enabled: true
     properties: "{{ zookeeper_servers | split_to_dict }}"
 
-
 zookeeper_servers: "{% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}server.{{ hostvars[host]['zookeeper_id'] | default(groups.zookeeper.index(host) + 1)}}={{ zookeeper_current_node_hostname if host == inventory_hostname else host }}:{{zookeeper_peer_port}}:{{zookeeper_leader_port}}{% endfor %}"
-# zookeeper_only_properties: "{{ zookeeper_servers | split_to_dict }}"
-
-zookeeper_custom_properties: {}
 
 zookeeper_combined_properties: "{{ zookeeper_properties | combine_properties }}"
 
+zookeeper_custom_properties: {}
 zookeeper_final_properties: "{{ zookeeper_combined_properties | combine(zookeeper_custom_properties) }}"
 
 # Kafka Broker Variables
@@ -227,6 +224,11 @@ kafka_broker_properties:
       listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://:{{ listener['value']['port'] }}{% endfor %}"
       advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(inventory_hostname) }}:{{ listener['value']['port'] }}{% endfor %}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
+  broker_id:
+    enabled: "{{ inventory_hostname in groups.kafka_broker }}"
+    properties:
+      # broker.id logic depends on inventory hostname being in kafka_broker host list, defaulting to 0 if non kafka host
+      broker.id: "{{ broker_id | default( groups.kafka_broker.index(inventory_hostname) + 1 ) if inventory_hostname in groups.kafka_broker else 0 }}"
   fips:
     enabled: "{{fips_enabled}}"
     properties:
@@ -300,9 +302,6 @@ kafka_broker_properties:
       confluent.metadata.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
       confluent.metadata.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
       confluent.metadata.server.ssl.client.auth: "true"
-
-kafka_broker_only_properties:
-  broker.id: "{{ broker_id | default(groups.kafka_broker.index(inventory_hostname) + 1)}}"
 
 kafka_broker_custom_properties: {}
 
