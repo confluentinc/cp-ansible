@@ -1,0 +1,282 @@
+---
+- name: Add broker.id Property
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      { 'broker.id': broker_id | default(groups.kafka_broker.index(inventory_hostname) + 1) | string }
+    ) }}"
+
+
+- name: Add SSL Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+          'zookeeper.ssl.client.enable': 'true',
+          'zookeeper.clientCnxnSocket': 'org.apache.zookeeper.ClientCnxnSocketNetty',
+          'zookeeper.ssl.truststore.location': kafka_broker_truststore_path,
+          'zookeeper.ssl.truststore.password': kafka_broker_truststore_storepass
+      }
+    ) }}"
+  when: zookeeper_ssl_enabled|bool
+
+- name: Add MTLS Property
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'zookeeper.ssl.keystore.location': kafka_broker_keystore_path,
+        'zookeeper.ssl.keystore.password': kafka_broker_keystore_storepass
+      }
+    ) }}"
+  when: zookeeper_ssl_mutual_auth_enabled|bool
+
+- name: Add zookeeper.set.acl Property
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      { 'zookeeper.set.acl': 'true' }
+    ) }}"
+  when: zookeeper_sasl_protocol == 'kerberos'
+
+- name: Add Fips Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'enable.fips': 'true',
+        'security.providers': 'io.confluent.kafka.security.fips.provider.BcFipsProviderCreator,io.confluent.kafka.security.fips.provider.BcFipsJsseProviderCreator'
+      }
+    ) }}"
+  when: fips_enabled|bool
+
+- name: Add sasl.mechanism.inter.broker.protocol Property
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'sasl.mechanism.inter.broker.protocol': kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol
+      }
+    ) }}"
+  when: kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol != 'none'
+
+- name: Add sasl.enabled.mechanisms Property
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'sasl.enabled.mechanisms': kafka_broker_sasl_enabled_mechanisms | join(',')
+      }
+    ) }}"
+  when: kafka_broker_sasl_enabled_mechanisms|length > 0
+
+- name: Add sasl.kerberos.service.name Property
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'sasl.kerberos.service.name': kerberos_kafka_broker_primary
+      }
+    ) }}"
+  when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
+
+- name: Add confluent.schema.registry.url
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'confluent.schema.registry.url': schema_registry_http_protocol + '://' + groups['schema_registry'] | join(':' + schema_registry_listener_port|string + ',' + schema_registry_http_protocol + '://') + ':' + schema_registry_listener_port|string
+      }
+    ) }}"
+  when:
+    - "'schema_registry' in groups"
+    - kafka_broker_schema_validation_enabled|bool
+
+- name: Add SR SSL
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'confluent.schema.registry.ssl.truststore.location': kafka_broker_truststore_path,
+        'confluent.schema.registry.ssl.truststore.password': kafka_broker_truststore_storepass,
+        'confluent.schema.registry.ssl.keystore.location': kafka_broker_keystore_path,
+        'confluent.schema.registry.ssl.keystore.password': kafka_broker_keystore_storepass,
+        'confluent.schema.registry.ssl.key.password': kafka_broker_keystore_keypass
+      }
+    ) }}"
+  when:
+    - "'schema_registry' in groups"
+    - kafka_broker_schema_validation_enabled|bool
+    - schema_registry_ssl_enabled|bool
+
+- name: Add Listener Ssl Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'listener.name.' + item.value.name|lower + '.ssl.truststore.location': kafka_broker_truststore_path,
+        'listener.name.' + item.value.name|lower + '.ssl.truststore.password': kafka_broker_truststore_storepass,
+        'listener.name.' + item.value.name|lower + '.ssl.keystore.location': kafka_broker_keystore_path,
+        'listener.name.' + item.value.name|lower + '.ssl.keystore.password': kafka_broker_keystore_storepass,
+        'listener.name.' + item.value.name|lower + '.ssl.key.password': kafka_broker_keystore_keypass
+      }
+    ) }}"
+  with_dict: "{{ kafka_broker_listeners }}"
+  when: item.value.ssl_enabled | default(ssl_enabled) | bool
+
+- name: Add Listener pkcs12_enabled Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'listener.name.' + item.value.name|lower + '.ssl.keymanager.algorithm': 'PKIX',
+        'listener.name.' + item.value.name|lower + '.ssl.trustmanager.algorithm': 'PKIX',
+        'listener.name.' + item.value.name|lower + '.ssl.keystore.type': 'pkcs12',
+        'listener.name.' + item.value.name|lower + '.ssl.truststore.type': 'pkcs12',
+        'listener.name.' + item.value.name|lower + '.ssl.enabled.protocols': 'TLSv1.2'
+      }
+    ) }}"
+  with_dict: "{{ kafka_broker_listeners }}"
+  when: item.value.pkcs12_enabled | default(pkcs12_enabled) | bool
+
+- name: Add Listener MTLS Property
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'listener.name.' + item.value.name|lower + '.ssl.client.auth': 'required'
+      }
+    ) }}"
+  with_dict: "{{ kafka_broker_listeners }}"
+  when: item.value.ssl_mutual_auth_enabled | default(ssl_mutual_auth_enabled) | bool
+
+- set_fact:
+    plain_jaas_config: |-
+      org.apache.kafka.common.security.plain.PlainLoginModule required username="{{sasl_plain_users.admin.principal}}" password="{{sasl_plain_users.admin.password}}" {% for user in sasl_plain_users|dict2items %} user_{{ user['value']['principal'] }}="{{ user['value']['password'] }}"{% endfor %};
+  when: "item.value.sasl_protocol | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN'"
+
+- name: Add Listener SASL Plain Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'listener.name.' + item.value.name|lower + '.sasl.enabled.mechanisms': 'PLAIN',
+        'listener.name.' + item.value.name|lower + '.plain.sasl.jaas.config': plain_jaas_config
+      }
+    ) }}"
+  with_dict: "{{ kafka_broker_listeners }}"
+  when: "item.value.sasl_protocol | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN'"
+
+- name: Add Listener SASL GSSAPI Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'listener.name.' + item.value.name|lower + '.sasl.enabled.mechanisms': 'GSSAPI',
+        'listener.name.' + item.value.name|lower + '.gssapi.sasl.jaas.config': 'com.sun.security.auth.module.Krb5LoginModule
+          required useKeyTab=true
+          storeKey=true
+          keyTab=\"' + kerberos.keytab_dir + '/' + kafka_broker_kerberos_keytab_path | basename + '\"
+          principal=\"' + kafka_broker_kerberos_principal + '\";'
+      }
+    ) }}"
+  with_dict: "{{ kafka_broker_listeners }}"
+  when: "item.value.sasl_protocol | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'"
+
+- name: Add Listener SASL SCRAM Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'listener.name.' + item.value.name|lower + '.sasl.enabled.mechanisms': 'SCRAM-SHA-256',
+        'listener.name.' + item.value.name|lower + '.scram-sha-256.sasl.jaas.config': 'org.apache.kafka.common.security.scram.ScramLoginModule required
+          username=\"' + sasl_scram_users.admin.principal + '\"
+          password=\"' + sasl_scram_users.admin.password + '\";'
+      }
+    ) }}"
+  with_dict: "{{ kafka_broker_listeners }}"
+  when: "item.value.sasl_protocol | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256'"
+
+- name: Add Listener SASL OAUTH Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'listener.name.' + item.value.name|lower + '.sasl.enabled.mechanisms': 'OAUTHBEARER',
+        'listener.name.' + item.value.name|lower + '.oauthbearer.sasl.server.callback.handler.class': 'io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler',
+        'listener.name.' + item.value.name|lower + '.oauthbearer.sasl.login.callback.handler.class': 'io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler',
+        'listener.name.' + item.value.name|lower + '.oauthbearer.sasl.jaas.config': 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required
+            publicKeyPath=\"' + rbac_enabled_public_pem_path + '\";'
+      }
+    ) }}"
+  with_dict: "{{ kafka_broker_listeners }}"
+  when: "item.value.sasl_protocol | default(sasl_protocol) | normalize_sasl_protocol == 'OAUTHBEARER'"
+
+- name: Add Metrics Reporter Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'metric.reporters': 'io.confluent.metrics.reporter.ConfluentMetricsReporter',
+        'confluent.metrics.reporter.bootstrap.servers': groups['kafka_broker'] | join(':' + kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']|string + ',') + ':' + kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']|string,
+        'confluent.metrics.reporter.topic.replicas': kafka_broker_default_interal_replication_factor
+      }
+    ) }}"
+  when: kafka_broker_metrics_reporter_enabled|bool
+
+- name: Create Kafka Client Property Dict
+  include_tasks: client_config.yml
+  vars:
+    config_prefix: 'confluent.metrics.reporter.'
+    listener: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]}}"
+    truststore_path: "{{kafka_broker_truststore_path}}"
+    truststore_storepass: "{{kafka_broker_truststore_storepass}}"
+    keystore_path: "{{kafka_broker_keystore_path}}"
+    keystore_storepass: "{{kafka_broker_keystore_storepass}}"
+    keystore_keypass: "{{kafka_broker_keystore_keypass}}"
+    sasl_plain_username: "{{sasl_plain_users.admin.principal}}"
+    sasl_plain_password: "{{sasl_plain_users.admin.password}}"
+    sasl_scram_username: "{{sasl_scram_users.admin.principal}}"
+    sasl_scram_password: "{{sasl_scram_users.admin.password}}"
+    kerberos_keytab_path: "{{kafka_broker_kerberos_keytab_path}}"
+    kerberos_principal: "{{kafka_broker_kerberos_principal}}"
+
+- name: Add Metrics Reporter Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(client_properties) }}"
+  when: kafka_broker_metrics_reporter_enabled|bool
+
+- name: Add MDS Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'confluent.metadata.server.listeners': mds_http_protocol + '://0.0.0.0:' + mds_port|string,
+        'confluent.metadata.server.advertised.listeners': mds_http_protocol + '://' + mds_advertised_listener_hostname | default(inventory_hostname) + ':' + mds_port|string,
+        'confluent.metadata.server.token.auth.enable': 'true',
+        'confluent.metadata.server.token.max.lifetime.ms': 3600000,
+        'confluent.metadata.server.token.key.path': rbac_enabled_private_pem_path,
+        'confluent.metadata.server.public.key.path': rbac_enabled_public_pem_path,
+        'confluent.metadata.server.token.signature.algorithm': 'RS256',
+        'confluent.metadata.server.authentication.method': 'BEARER',
+        'authorizer.class.name': 'io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer',
+        'confluent.authorizer.access.rule.providers': 'CONFLUENT,ZK_ACL',
+        'confluent.authorizer.group.provider': 'CONFLUENT',
+        'super.users': super_users | join(';')
+      }
+    ) }}"
+  when: rbac_enabled|bool
+
+- name: Add MDS SSL Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'confluent.metadata.server.ssl.keystore.location': kafka_broker_keystore_path,
+        'confluent.metadata.server.ssl.keystore.password': kafka_broker_keystore_storepass,
+        'confluent.metadata.server.ssl.key.password': kafka_broker_keystore_keypass
+      }
+    ) }}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_enabled|bool
+
+- name: Add MDS MTLS Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(
+      {
+        'confluent.metadata.server.ssl.truststore.location': kafka_broker_truststore_path,
+        'confluent.metadata.server.ssl.truststore.password': kafka_broker_truststore_storepass,
+        'confluent.metadata.server.ssl.client.auth': 'true'
+      }
+    ) }}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_enabled|bool
+    - mds_ssl_mutual_auth_enabled|bool
+
+- debug: var=kafka_broker_properties
+
+- name: Add Custom Properties
+  set_fact:
+    kafka_broker_properties: "{{ kafka_broker_properties | combine(kafka_broker_custom_properties) }}"

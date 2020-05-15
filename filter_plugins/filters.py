@@ -11,7 +11,8 @@ class FilterModule(object):
             'ssl_required': self.ssl_required,
             'java_arg_build_out': self.java_arg_build_out,
             'combine_properties': self.combine_properties,
-            'split_to_dict': self.split_to_dict
+            'split_to_dict': self.split_to_dict,
+            'listener_properties': self.listener_properties
         }
 
     def normalize_sasl_protocol(self, protocol):
@@ -81,4 +82,60 @@ class FilterModule(object):
         return final_dict
 
     def split_to_dict(self, string):
+        # Splits a string like key=val,key=val into dict
         return dict(x.split('=') for x in string.split(','))
+
+    def listener_properties(self, listeners_dict, default_ssl_enabled, default_pkcs12_enabled, default_ssl_mutual_auth_enabled, default_sasl_protocol,
+                            kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
+                            plain_jaas_config, keytab_dir, keytab_filename, kerberos_principal,
+                            scram_user, scram_password, oauth_pem_path ):
+
+        final_dict = {}
+        for listener in listeners_dict:
+            if listeners_dict[listener].get('enabled', default_ssl_enabled):
+                final_dict.update({
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.truststore.location': kafka_broker_truststore_path,
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.truststore.password': kafka_broker_truststore_storepass,
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keystore.location': kafka_broker_keystore_path,
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keystore.password': kafka_broker_keystore_storepass,
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.key.password': kafka_broker_keystore_keypass
+                })
+            if listeners_dict[listener].get('pkcs12_enabled', default_pkcs12_enabled):
+                final_dict.update({
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keymanager.algorithm': 'PKIX',
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.trustmanager.algorithm': 'PKIX',
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keystore.type': 'pkcs12',
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.truststore.type': 'pkcs12',
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.enabled.protocols': 'TLSv1.2'
+                })
+            if listeners_dict[listener].get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
+                final_dict.update({
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.client.auth': 'required'
+                })
+            if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'PLAIN':
+                final_dict.update({
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms': 'PLAIN',
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.plain.sasl.jaas.config': plain_jaas_config
+                })
+            if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI':
+                final_dict.update({
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms': 'GSSAPI',
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.gssapi.sasl.jaas.config': 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' + keytab_dir + '/' + keytab_filename+ '\"principal=\"' + kerberos_principal + '\";'
+                })
+            if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'SCRAM-SHA-256':
+                final_dict.update({
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms': 'SCRAM-SHA-256',
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.scram-sha-256.sasl.jaas.config': 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' + scram_user + '\"password=\"' + scram_password + '\";'
+                })
+            if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER':
+                final_dict.update({
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms': 'OAUTHBEARER',
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.server.callback.handler.class': 'io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler',
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.login.callback.handler.class': 'io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler',
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.jaas.config': 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
+                })
+        return final_dict
+
+      # {
+      #   'listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.jaas.config': 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
+      # }
