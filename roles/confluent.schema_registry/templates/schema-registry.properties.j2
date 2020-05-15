@@ -1,23 +1,9 @@
 # Maintained by Ansible
-{% for key, value in schema_registry.properties.items() %}
+{% for key, value in schema_registry_final_properties|dictsort %}
 {{key}}={{value}}
 {% endfor %}
 
-# Schema Registry Configuration
-listeners={{schema_registry_http_protocol}}://0.0.0.0:{{schema_registry_listener_port}}
-host.name={{inventory_hostname}}
-inter.instance.protocol={{schema_registry_http_protocol}}
-{% if schema_registry_ssl_enabled|bool %}
-security.protocol=SSL
-ssl.keystore.location={{schema_registry_keystore_path}}
-ssl.keystore.password={{schema_registry_keystore_storepass}}
-ssl.key.password={{schema_registry_keystore_keypass}}
-{% if schema_registry_ssl_mutual_auth_enabled|bool or mds_ssl_enabled|bool %}
-ssl.truststore.location={{schema_registry_truststore_path}}
-ssl.truststore.password={{schema_registry_truststore_storepass}}
-ssl.client.auth=false
-{% endif %}
-{% endif %}
+
 
 # Kafka Broker Configuration
 kafkastore.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[schema_registry_kafka_listener_name]['port']}}{% endfor %}
@@ -38,22 +24,3 @@ kafkastore.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.
 {% set oauth_username = schema_registry_ldap_user %}
 {% set oauth_password = schema_registry_ldap_password %}
 {% include 'roles/confluent.kafka_broker/templates/kafka_client.j2' %}
-
-{% if rbac_enabled|bool %}
-# Zookeeper Configuration
-kafkastore.connection.url={% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{zookeeper_final_properties.clientPort}}{% endfor %}
-
-
-# RBAC Configuration
-schema.registry.resource.extension.class=io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension
-confluent.schema.registry.authorizer.class=io.confluent.kafka.schemaregistry.security.authorizer.rbac.RbacAuthorizer
-rest.servlet.initializor.classes=io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
-confluent.schema.registry.auth.mechanism=JETTY_AUTH
-public.key.path={{rbac_enabled_public_pem_path}}
-authentication.roles=**
-
-confluent.metadata.bootstrap.server.urls={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ mds_http_protocol }}://{{ host }}:{{mds_port}}{% endfor %}
-
-confluent.metadata.http.auth.credentials.provider=BASIC
-confluent.metadata.basic.auth.user.info={{ schema_registry_ldap_user }}:{{ schema_registry_ldap_password }}
-{% endif %}
