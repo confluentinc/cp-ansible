@@ -12,7 +12,8 @@ class FilterModule(object):
             'java_arg_build_out': self.java_arg_build_out,
             'combine_properties': self.combine_properties,
             'split_to_dict': self.split_to_dict,
-            'listener_properties': self.listener_properties
+            'listener_properties': self.listener_properties,
+            'client_properties': self.client_properties
         }
 
     def normalize_sasl_protocol(self, protocol):
@@ -136,6 +137,11 @@ class FilterModule(object):
                 })
         return final_dict
 
-      # {
-      #   'listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.jaas.config': 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
-      # }
+    def client_properties(self, listener_dict, prefix):
+        final_dict = {}
+        final_dict.update({prefix: 'that' })
+        # if listeners_dict[listener].get('enabled', default_ssl_enabled):
+        #     final_dict.update({
+        #         'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.truststore.location': kafka_broker_truststore_path,
+        #         'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl
+        return final_dict
