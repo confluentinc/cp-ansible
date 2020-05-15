@@ -10,7 +10,8 @@ class FilterModule(object):
             'cert_extension': self.cert_extension,
             'ssl_required': self.ssl_required,
             'java_arg_build_out': self.java_arg_build_out,
-            'combine_properties': self.combine_properties
+            'combine_properties': self.combine_properties,
+            'split_to_dict': self.split_to_dict
         }
 
     def normalize_sasl_protocol(self, protocol):
@@ -78,3 +79,6 @@ class FilterModule(object):
             if properties_dict[prop].get('enabled'):
                 final_dict.update(properties_dict[prop].get('properties'))
         return final_dict
+
+    def split_to_dict(self, string):
+        return dict(x.split('=') for x in string.split(','))

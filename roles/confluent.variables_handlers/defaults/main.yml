@@ -75,8 +75,6 @@ zookeeper_ca_cert_path: "/var/ssl/private/ca.crt"
 zookeeper_cert_path: "/var/ssl/private/zookeeper.crt"
 zookeeper_key_path: "/var/ssl/private/zookeeper.key"
 zookeeper:
-  # properties:
-  #   clientPort: 2181
   log4j_file: /etc/kafka/zookeeper_log4j.properties
   jaas_file: /etc/kafka/zookeeper_jaas.conf
 
@@ -88,6 +86,10 @@ zookeeper_jmxexporter_config_path: /opt/prometheus/zookeeper.yml
 zookeeper_jmxexporter_port: 8079
 
 zookeeper_health_check_command: "exec 42<>/dev/tcp/127.0.0.1/{{zookeeper_final_properties.clientPort}}; echo -e 'srvr' >&42; cat <&42"
+
+zookeeper_current_node_hostname: "{{ inventory_hostname }}"
+zookeeper_peer_port: 2888
+zookeeper_leader_port: 3888
 
 zookeeper_properties:
   defaults:
@@ -126,13 +128,19 @@ zookeeper_properties:
     properties:
       kerberos.removeHostFromPrincipal: 'true'
       kerberos.removeRealmFromPrincipal: 'true'
+  servers:
+    enabled: true
+    properties: "{{ zookeeper_servers | split_to_dict }}"
+
+
+zookeeper_servers: "{% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}server.{{ hostvars[host]['zookeeper_id'] | default(groups.zookeeper.index(host) + 1)}}={{ zookeeper_current_node_hostname if host == inventory_hostname else host }}:{{zookeeper_peer_port}}:{{zookeeper_leader_port}}{% endfor %}"
+# zookeeper_only_properties: "{{ zookeeper_servers | split_to_dict }}"
 
 zookeeper_custom_properties: {}
 
-zookeeper_combined_properties: "{{zookeeper_properties | combine_properties}}"
+zookeeper_combined_properties: "{{ zookeeper_properties | combine_properties }}"
 
 zookeeper_final_properties: "{{ zookeeper_combined_properties | combine(zookeeper_custom_properties) }}"
-
 
 # Kafka Broker Variables
 kafka_broker_default_listeners:
@@ -293,6 +301,9 @@ kafka_broker_properties:
       confluent.metadata.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
       confluent.metadata.server.ssl.client.auth: "true"
 
+kafka_broker_only_properties:
+  broker.id: "{{ broker_id | default(groups.kafka_broker.index(inventory_hostname) + 1)}}"
+
 kafka_broker_custom_properties: {}
 
 kafka_broker_combined_properties: "{{kafka_broker_properties | combine_properties}}"
@@ -424,6 +435,18 @@ kafka_connect_default_internal_replication_factor: "{{ [ groups['kafka_broker'] 
 kafka_connect_secret_registry_enabled: "{{rbac_enabled}}"
 kafka_connect_secret_registry_key: 39ff95832750c0090d84ddf5344583832efe91ef
 
+kafka_connect_plugins_path:
+  - /usr/share/java
+
+kafka_connect_confluent_hub_client:
+  file: "http://client.hub.confluent.io/confluent-hub-client-latest.tar.gz"
+  is_remote: true
+  install_dir: /etc/kafka/confluent-hub
+kafka_connect_confluent_hub_plugins: []
+kafka_connect_confluent_hub_plugins_dest: /usr/share/java
+kafka_connect_plugins: []
+kafka_connect_plugins_remote: []
+kafka_connect_plugins_dest: /usr/share/java
 
 kafka_connect_properties:
   defaults:
