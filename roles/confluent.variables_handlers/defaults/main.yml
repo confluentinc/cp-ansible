@@ -194,7 +194,6 @@ kafka_broker_default_interal_replication_factor: "{{ [ groups['kafka_broker'] | 
 
 kafka_broker_metrics_reporter_enabled: true
 
-
 kafka_broker_properties:
   defaults:
     enabled: true
@@ -437,6 +436,84 @@ kafka_rest:
 kafka_rest_jolokia_enabled: "{{jolokia_enabled}}"
 kafka_rest_jolokia_port: 7775
 kafka_rest_jolokia_ssl_enabled: "{{ kafka_rest_ssl_enabled }}"
+
+kafka_rest_properties:
+  defaults:
+    enabled: true
+    properties:
+      producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+      consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
+      listeners: "{{kafka_rest_http_protocol}}://0.0.0.0:{{kafka_rest_port}}"
+      host.name: "{{inventory_hostname}}"
+      zookeeper.connect: "{% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{zookeeper_final_properties.clientPort}}{% endfor %}"
+      bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}{% endfor %}"
+      confluent.monitoring.interceptor.bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}{% endfor %}"
+  id:
+    enabled: "{{ inventory_hostname in groups.kafka_rest }}"
+    properties:
+      # id logic depends on inventory hostname being in kafka_broker host list, defaulting to 0 if non rest proxy host
+      id: "{{ groups.kafka_rest.index(inventory_hostname) + 1 if inventory_hostname in groups.kafka_rest else 0 }}"
+  ssl:
+    enabled: "{{kafka_rest_ssl_enabled}}"
+    properties:
+      ssl.keystore.location: "{{kafka_rest_keystore_path}}"
+      ssl.keystore.password: "{{kafka_rest_keystore_storepass}}"
+      ssl.key.password: "{{kafka_rest_keystore_keypass}}"
+  truststore:
+    enabled: "{{kafka_rest_ssl_mutual_auth_enabled|bool or mds_ssl_enabled|bool}}"
+    properties:
+      ssl.truststore.location: "{{kafka_rest_truststore_path}}"
+      ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
+  mtls:
+    enabled: "{{ kafka_rest_ssl_mutual_auth_enabled }}"
+    properties:
+      ssl.client.auth: true
+  kafka_client:
+    enabled: true
+    properties: "{{ kafka_broker_listeners[kafka_rest_kafka_listener_name] | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+                            'client.', kafka_rest_truststore_path, kafka_rest_truststore_storepass, kafka_rest_keystore_path, kafka_rest_keystore_storepass, kafka_rest_keystore_keypass,
+                            false, sasl_plain_users.kafka_rest.principal, sasl_plain_users.kafka_rest.password, sasl_scram_users.kafka_rest.principal, sasl_scram_users.kafka_rest.password,
+                            kerberos_kafka_broker_primary|default('kafka'), kerberos.keytab_dir, kafka_rest_kerberos_keytab_path|default('rp.keytab')|basename, kafka_rest_kerberos_principal|default('rp'),
+                            kafka_rest_ldap_user, kafka_rest_ldap_password, mds_urls) }}"
+  sr:
+    enabled: "{{ 'schema_registry' in groups }}"
+    properties:
+      schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
+  sr_ssl:
+    enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool }}"
+    properties:
+      schema.registry.ssl.truststore.location: "{{kafka_rest_truststore_path}}"
+      schema.registry.ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
+      schema.registry.ssl.keystore.location: "{{kafka_rest_keystore_path}}"
+      schema.registry.ssl.keystore.password: "{{kafka_rest_keystore_storepass}}"
+      schema.registry.ssl.key.password: "{{kafka_rest_keystore_keypass}}"
+  monitoring_interceptor:
+    # TODO interceptors only if c3 on right?
+    enabled: true
+    properties: "{{ kafka_broker_listeners[kafka_rest_kafka_listener_name] | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+                            'confluent.monitoring.interceptor.', kafka_rest_truststore_path, kafka_rest_truststore_storepass, kafka_rest_keystore_path, kafka_rest_keystore_storepass, kafka_rest_keystore_keypass,
+                            false, sasl_plain_users.kafka_rest.principal, sasl_plain_users.kafka_rest.password, sasl_scram_users.kafka_rest.principal, sasl_scram_users.kafka_rest.password,
+                            kerberos_kafka_broker_primary|default('kafka'), kerberos.keytab_dir, kafka_rest_kerberos_keytab_path|default('rp.keytab')|basename, kafka_rest_kerberos_principal|default('rp'),
+                            kafka_rest_ldap_user, kafka_rest_ldap_password, mds_urls) }}"
+  rbac:
+    enabled: "{{rbac_enabled}}"
+    properties:
+      kafka.rest.resource.extension.class: io.confluent.kafkarest.security.KafkaRestSecurityResourceExtension
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+      public.key.path: "{{rbac_enabled_public_pem_path}}"
+      client.confluent.metadata.server.urls.max.age.ms: 60000
+      confluent.metadata.bootstrap.server.urls: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{mds_http_protocol}}://{{ host }}:{{mds_port}}{% endfor %}"
+      confluent.metadata.server.urls.max.age.ms: 60000
+      confluent.metadata.basic.auth.user.info: "{{kafka_rest_ldap_user | default('rest') }}:{{kafka_rest_ldap_password | default('pass')}}"
+      confluent.metadata.http.auth.credentials.provider: BASIC
+
+kafka_rest_combined_properties: "{{kafka_rest_properties | combine_properties}}"
+
+kafka_rest_custom_properties: {}
+
+kafka_rest_final_properties: "{{ kafka_rest_combined_properties | combine(kafka_rest_custom_properties) }}"
+
+
 
 # Kafka Connect Variables
 kafka_connect_user: "{{kafka_connect_default_user}}"
