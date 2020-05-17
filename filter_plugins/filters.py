@@ -206,7 +206,7 @@ class FilterModule(object):
     def client_properties(self, listener_dict, default_ssl_enabled, default_pkcs12_enabled, default_ssl_mutual_auth_enabled, default_sasl_protocol,
                             config_prefix, truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass,
                             omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
-                            kerberos_kafka_broker_primary, keytab_dir, keytab_filename, kerberos_principal,
+                            kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
                             oauth_username, oauth_password, mds_urls):
         final_dict = {
             config_prefix + 'security.protocol': self.kafka_protocol_defaults(listener_dict, default_ssl_enabled, default_sasl_protocol)
@@ -253,7 +253,7 @@ class FilterModule(object):
             })
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI' and not omit_jaas_configs:
             final_dict.update({
-                config_prefix + 'sasl.jaas.config': 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' + keytab_dir + '/' + keytab_filename + '\"principal=\"' + kerberos_principal + '\";'
+                config_prefix + 'sasl.jaas.config': 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' + keytab_path + '\" principal=\"' + kerberos_principal + '\";'
             })
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER':
             final_dict.update({
