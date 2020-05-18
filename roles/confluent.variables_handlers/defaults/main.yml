@@ -254,8 +254,8 @@ kafka_broker_properties:
     properties:
       zookeeper.ssl.client.enable: 'true'
       zookeeper.clientCnxnSocket: org.apache.zookeeper.ClientCnxnSocketNetty
-      zookeeper.ssl.truststore.location: '{{kafka_broker_truststore_path}}'
-      zookeeper.ssl.truststore.password: '{{kafka_broker_truststore_storepass}}'
+      zookeeper.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      zookeeper.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   zk_mtls:
     enabled: "{{ zookeeper_ssl_mutual_auth_enabled }}"
     properties:
@@ -268,7 +268,8 @@ kafka_broker_properties:
   sr:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
-      confluent.schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
+      confluent.schema.registry.url: "{{schema_registry_url}}"
+        # "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
   sr_ssl:
     enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool }}"
     properties:
@@ -361,12 +362,7 @@ schema_registry_jolokia_enabled: "{{jolokia_enabled}}"
 schema_registry_jolokia_port: 7772
 schema_registry_jolokia_ssl_enabled: "{{ schema_registry_ssl_enabled }}"
 
-# TODO finish this 
-schema_registry_url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
-
-# sr: "{{schema_registry_http_protocol}}://"
-#   =\"' + mds_http_protocol + '://' + groups['kafka_broker'] | join(':' + mds_port|string + ',' + mds_http_protocol + '://') + ':' + mds_port|string + '\";'
-
+schema_registry_url: "{{schema_registry_http_protocol}}://{{ groups['schema_registry'] | default(['sr']) | join(':' + schema_registry_listener_port|string + ',' + schema_registry_http_protocol + '://') }}:{{schema_registry_listener_port}}"
 
 schema_registry_properties:
   defaults:
@@ -487,7 +483,8 @@ kafka_rest_properties:
   sr:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
-      schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
+      schema.registry.url: "{{schema_registry_url}}"
+      # schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
   sr_ssl:
     enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool }}"
     properties:
@@ -613,8 +610,10 @@ kafka_connect_properties:
   sr:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
-      value.converter.schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
-      key.converter.schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
+      value.converter.schema.registry.url: "{{schema_registry_url}}"
+      key.converter.schema.registry.url: "{{schema_registry_url}}"
+      # value.converter.schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
+      # key.converter.schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
   sr_ssl:
     enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool }}"
     properties:
@@ -786,7 +785,8 @@ ksql_properties:
   sr:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
-      ksql.schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
+      ksql.schema.registry.url: "{{schema_registry_url}}"
+      # ksql.schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
   sr_ssl:
     enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool }}"
     properties:
@@ -887,7 +887,9 @@ control_center_properties:
   sr:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
-      confluent.controlcenter.schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
+      # schema.registry.url: "{{schema_registry_url}}"
+      confluent.controlcenter.schema.registry.url: "{{schema_registry_url}}"
+        # "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
   sr_ssl:
     enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool }}"
     properties:
@@ -904,7 +906,8 @@ control_center_properties:
   connect:
     enabled: "{{ 'kafka_connect' in groups and kafka_connect_cluster_ansible_group_names is not defined }}"
     properties:
-      confluent.controlcenter.connect.default.cluster: "{% for host in groups['kafka_connect'] %}{% if loop.index > 1%},{% endif %}{{ kafka_connect_http_protocol }}://{{ host }}:{{ kafka_connect_rest_port }}{% endfor %}"
+      confluent.controlcenter.connect.default.cluster: "{{kafka_connect_http_protocol}}://{{ groups['kafka_connect'] | default(['connect']) | join(':' + kafka_connect_rest_port|string + ',' + kafka_connect_http_protocol + '://') }}:{{kafka_connect_rest_port}}"
+        # "{% for host in groups['kafka_connect'] %}{% if loop.index > 1%},{% endif %}{{ kafka_connect_http_protocol }}://{{ host }}:{{ kafka_connect_rest_port }}{% endfor %}"
   connect_ssl:
     enabled: "{{ 'kafka_connect' in groups and kafka_connect_cluster_ansible_group_names is not defined and kafka_connect_ssl_enabled|bool }}"
     properties:
@@ -934,7 +937,8 @@ control_center_properties:
   ksql:
     enabled: "{{ 'ksql' in groups and kafka_connect_cluster_ansible_group_names is not defined }}"
     properties:
-      confluent.controlcenter.ksql.default.url: "{% for host in groups['ksql'] %}{% if loop.index > 1%},{% endif %}{{ ksql_http_protocol }}://{{ host }}:{{ ksql_listener_port }}{% endfor %}"
+      confluent.controlcenter.ksql.default.url: "{{ksql_http_protocol}}://{{ groups['ksql'] | default(['ksql']) | join(':' + ksql_listener_port|string + ',' + ksql_http_protocol + '://') }}:{{ksql_listener_port}}"
+        # "{% for host in groups['ksql'] %}{% if loop.index > 1%},{% endif %}{{ ksql_http_protocol }}://{{ host }}:{{ ksql_listener_port }}{% endfor %}"
   ksql_ssl:
     enabled: "{{ 'kafka_connect' in groups and kafka_connect_cluster_ansible_group_names is not defined and kafka_connect_ssl_enabled|bool }}"
     properties:
