@@ -90,10 +90,6 @@ class FilterModule(object):
                             kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                             plain_jaas_config, keytab_path, kerberos_principal,
                             scram_user, scram_password, oauth_pem_path ):
-    # def listener_properties(self, listeners_dict, default_ssl_enabled, default_pkcs12_enabled, default_ssl_mutual_auth_enabled, default_sasl_protocol,
-    #                         kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
-    #                         plain_jaas_config, keytab_dir, keytab_filename, kerberos_principal,
-    #                         scram_user, scram_password, oauth_pem_path ):
         final_dict = {}
         for listener in listeners_dict:
             if listeners_dict[listener].get('ssl_enabled', default_ssl_enabled):
