@@ -1,0 +1,37 @@
+---
+- name: Populate Service Facts
+  service_facts:
+
+- block:
+    # All kafka_broker hosts iterate over the list of kakfa_broker hosts, each seeing the list in the same order
+    # At one given loop entry, only one host will have its inventory_hostname match the entry in the loop
+    # restart.yml tasks will only run for that host ON that host
+    - name: Restart confluent-server Serially
+      include: restart.yml
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['kafka_broker'] }}"
+      when:
+        - "hostvars[item].inventory_hostname == inventory_hostname"
+        - ansible_facts.services['confluent-server.service'].state == 'running'
+
+    - name: Restart confluent-server in Parallel
+      include: restart.yml
+      when: ansible_facts.services['confluent-server.service'].state != 'running'
+  when: confluent_server_enabled|bool
+
+- block:
+    # All kafka_broker hosts iterate over the list of kakfa_broker hosts, each seeing the list in the same order
+    # At one given loop entry, only one host will have its inventory_hostname match the entry in the loop
+    # restart.yml tasks will only run for that host ON that host
+    - name: Restart confluent-server Serially
+      include: restart.yml
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['kafka_broker'] }}"
+      when:
+        - "hostvars[item].inventory_hostname == inventory_hostname"
+        - ansible_facts.services['confluent-kafka.service'].state == 'running'
+
+    - name: Restart confluent-server in Parallel
+      include: restart.yml
+      when: ansible_facts.services['confluent-kafka.service'].state != 'running'
+  when: not confluent_server_enabled|bool
