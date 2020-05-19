@@ -13,7 +13,9 @@ class FilterModule(object):
             'combine_properties': self.combine_properties,
             'split_to_dict': self.split_to_dict,
             'listener_properties': self.listener_properties,
-            'client_properties': self.client_properties
+            'client_properties': self.client_properties,
+            'c3_connect_properties': self.c3_connect_properties,
+            'c3_ksql_properties': self.c3_ksql_properties
         }
 
     def normalize_sasl_protocol(self, protocol):
@@ -197,3 +199,53 @@ class FilterModule(object):
                 config_prefix + 'sasl.jaas.config': 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"' + oauth_username + '\" password=\"' + oauth_password + '\" metadataServerUrls=\"' + mds_urls + '\";'
             })
         return final_dict
+
+    def c3_connect_properties(self, connect_group_list, groups, hostvars, ssl_enabled, http_protocol, port,
+            truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass ):
+        final_dict = {}
+        for ansible_group in connect_group_list:
+            delim = ':' + str(port) + ',' + http_protocol + '://'
+
+            final_dict.update({
+                'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]]['kafka_connect_group_id'] + '.cluster': http_protocol + '://' + delim.join(groups[ansible_group]) + ':' + str(port)
+            })
+
+            if ssl_enabled:
+                final_dict.update({
+                    'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]]['kafka_connect_group_id'] + '.ssl.truststore.location': truststore_path,
+                    'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]]['kafka_connect_group_id'] + '.ssl.truststore.password': truststore_storepass,
+                    'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]]['kafka_connect_group_id'] + '.ssl.keystore.location': keystore_path,
+                    'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]]['kafka_connect_group_id'] + '.ssl.keystore.password': keystore_storepass,
+                    'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]]['kafka_connect_group_id'] + '.ssl.key.password': keystore_keypass,
+                })
+        return final_dict
+
+    def c3_ksql_properties(self, ksql_group_list, groups, hostvars, ssl_enabled, http_protocol, port,
+            truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass ):
+        final_dict = {}
+        for ansible_group in ksql_group_list:
+            delim = ':' + str(port) + ',' + http_protocol + '://'
+
+            final_dict.update({
+                'confluent.controlcenter.ksql.' + ansible_group + '.url': http_protocol + '://' + delim.join(groups[ansible_group]) + ':' + str(port)
+            })
+
+            if ssl_enabled:
+                final_dict.update({
+                    'confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.location': truststore_path,
+                    'confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.password': truststore_storepass,
+                    'confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.location': keystore_path,
+                    'confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.password': keystore_storepass,
+                    'confluent.controlcenter.ksql.' + ansible_group + '.ssl.key.password': keystore_keypass,
+                })
+        return final_dict
+
+# {% for host in groups[ansible_group] %}{% if loop.index == 1%}confluent.controlcenter.ksql.{{ ansible_group }}.url={% endif %}{% if loop.index > 1%},{% endif %}{{ ksql_http_protocol }}://{{ host }}:{{ ksql_listener_port }}{% endfor %}
+#
+# {% if ksql_ssl_enabled|bool | bool %}
+# confluent.controlcenter.ksql.{{ ansible_group }}.ssl.truststore.location={{control_center_truststore_path}}
+# confluent.controlcenter.ksql.{{ ansible_group }}.ssl.truststore.password={{control_center_truststore_storepass}}
+# confluent.controlcenter.ksql.{{ ansible_group }}.ssl.keystore.location={{control_center_keystore_path}}
+# confluent.controlcenter.ksql.{{ ansible_group }}.ssl.keystore.password={{control_center_keystore_storepass}}
+# confluent.controlcenter.ksql.{{ ansible_group }}.ssl.key.password={{control_center_keystore_keypass}}
+# {% endif %}

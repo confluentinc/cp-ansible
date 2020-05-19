@@ -947,8 +947,10 @@ control_center_properties:
       confluent.controlcenter.connect.default.ssl.key.password: "{{control_center_keystore_keypass}}"
   connect_multi:
     enabled: "{{ 'kafka_connect' in groups and kafka_connect_cluster_ansible_group_names is defined }}"
-    # TODO create filter here
-    properties: {}
+    properties: "{{ kafka_connect_cluster_ansible_group_names | c3_connect_properties(groups, hostvars, kafka_connect_ssl_enabled,
+        kafka_connect_http_protocol, kafka_connect_rest_port, control_center_truststore_path, control_center_truststore_storepass,
+        control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass) }}"
+
 # {% if kafka_connect_cluster_ansible_group_names is defined %}
 # {% for ansible_group in kafka_connect_cluster_ansible_group_names %}
 # {% for host in groups[ansible_group] %}{% if loop.index == 1%}confluent.controlcenter.connect.{{ hostvars[host]['kafka_connect_group_id'] }}.cluster={% endif %}{% if loop.index > 1%},{% endif %}{{ kafka_connect_http_protocol }}://{{ host }}:{{ kafka_connect_rest_port }}{% endfor %}
@@ -964,12 +966,12 @@ control_center_properties:
 # {% endfor %}
 
   ksql:
-    enabled: "{{ 'ksql' in groups and kafka_connect_cluster_ansible_group_names is not defined }}"
+    enabled: "{{ 'ksql' in groups and ksql_cluster_ansible_group_names is not defined }}"
     properties:
       confluent.controlcenter.ksql.default.url: "{{ksql_http_protocol}}://{{ groups['ksql'] | default(['ksql']) | join(':' + ksql_listener_port|string + ',' + ksql_http_protocol + '://') }}:{{ksql_listener_port}}"
         # "{% for host in groups['ksql'] %}{% if loop.index > 1%},{% endif %}{{ ksql_http_protocol }}://{{ host }}:{{ ksql_listener_port }}{% endfor %}"
   ksql_ssl:
-    enabled: "{{ 'kafka_connect' in groups and kafka_connect_cluster_ansible_group_names is not defined and kafka_connect_ssl_enabled|bool }}"
+    enabled: "{{ 'kafka_connect' in groups and ksql_cluster_ansible_group_names is not defined and kafka_connect_ssl_enabled|bool }}"
     properties:
       confluent.controlcenter.ksql.default.ssl.truststore.location: "{{control_center_truststore_path}}"
       confluent.controlcenter.ksql.default.ssl.truststore.password: "{{control_center_truststore_storepass}}"
@@ -977,9 +979,12 @@ control_center_properties:
       confluent.controlcenter.ksql.default.ssl.keystore.password: "{{control_center_keystore_storepass}}"
       confluent.controlcenter.ksql.default.ssl.key.password: "{{control_center_keystore_keypass}}"
   ksql_multi:
-    enabled: "{{ 'kafka_connect' in groups and kafka_connect_cluster_ansible_group_names is defined }}"
+    enabled: "{{ 'kafka_connect' in groups and ksql_cluster_ansible_group_names is defined }}"
     # TODO create filter here
-    properties: {}
+    properties: "{{ ksql_cluster_ansible_group_names | c3_ksql_properties(groups, hostvars, ksql_ssl_enabled,
+        ksql_http_protocol, ksql_listener_port, control_center_truststore_path, control_center_truststore_storepass,
+        control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass) }}"
+
 # {% if ksql_cluster_ansible_group_names is defined %}
 # {% for ansible_group in ksql_cluster_ansible_group_names %}
 # {% for host in groups[ansible_group] %}{% if loop.index == 1%}confluent.controlcenter.ksql.{{ ansible_group }}.url={% endif %}{% if loop.index > 1%},{% endif %}{{ ksql_http_protocol }}://{{ host }}:{{ ksql_listener_port }}{% endfor %}
@@ -1010,6 +1015,10 @@ control_center_custom_properties: {}
 
 control_center_final_properties: "{{ control_center_combined_properties | combine(control_center_custom_properties) }}"
 
+# c3_prop: {}
+c3_prop: "{{ ksql_cluster_ansible_group_names | c3_ksql_properties(groups, hostvars, ksql_ssl_enabled,
+ksql_http_protocol, ksql_listener_port,
+control_center_truststore_path, control_center_truststore_storepass, control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass) }}"
 
 sasl_scram_users:
   admin:
