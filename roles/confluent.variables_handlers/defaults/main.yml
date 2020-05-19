@@ -8,11 +8,6 @@ confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
 confluent_package_debian_suffix: "{{ '=' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
 
-# confluent:
-#   support:
-#     # customer_id: anonymous
-#     metrics_enabled: true
-
 jolokia_enabled: true
 jolokia_jar_path: /opt/jolokia/jolokia.jar
 
@@ -220,12 +215,8 @@ kafka_broker_properties:
       confluent.metadata.topic.replication.factor: "{{kafka_broker_default_interal_replication_factor}}"
       confluent.support.metrics.enable: "true"
       confluent.support.customer.id: anonymous
-      # TODO see if join filter would work here
-      # zookeeper.connect: "{% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{zookeeper_client_port}}{% endfor %}"
       zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}"
-
       log.dirs: /var/lib/kafka/data
-      # broker.id: "{{ broker_id | default(groups.kafka_broker.index(inventory_hostname) + 1)}}"
       listener.security.protocol.map: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
       listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://:{{ listener['value']['port'] }}{% endfor %}"
       advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(inventory_hostname) }}:{{ listener['value']['port'] }}{% endfor %}"
@@ -272,7 +263,6 @@ kafka_broker_properties:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
       confluent.schema.registry.url: "{{schema_registry_url}}"
-        # "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
   sr_ssl:
     enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool }}"
     properties:
@@ -318,7 +308,6 @@ kafka_broker_properties:
     enabled: "{{kafka_broker_metrics_reporter_enabled}}"
     properties:
       metric.reporters: io.confluent.metrics.reporter.ConfluentMetricsReporter
-      # confluent.metrics.reporter.bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}}{% endfor %}"
       confluent.metrics.reporter.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}}"
       confluent.metrics.reporter.topic.replicas: "{{kafka_broker_default_interal_replication_factor}}"
   metrics_reporter_client:
@@ -378,9 +367,7 @@ schema_registry_properties:
       listeners: "{{schema_registry_http_protocol}}://0.0.0.0:{{schema_registry_listener_port}}"
       host.name: "{{inventory_hostname}}"
       inter.instance.protocol: "{{schema_registry_http_protocol}}"
-      # kafkastore.bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[schema_registry_kafka_listener_name]['port']}}{% endfor %}"
       kafkastore.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[schema_registry_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[schema_registry_kafka_listener_name]['port']}}"
-
   ssl:
     enabled: "{{schema_registry_ssl_enabled}}"
     properties:
@@ -407,7 +394,6 @@ schema_registry_properties:
   rbac:
     enabled: "{{rbac_enabled}}"
     properties:
-      # kafkastore.connection.url: "{% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{zookeeper_final_properties.clientPort}}{% endfor %}"
       kafkastore.connection.url: "{{ groups['zookeeper'] | default(['localhost']) | join(':' + zookeeper_final_properties.clientPort|string + ',') }}:{{zookeeper_final_properties.clientPort}}"
       schema.registry.resource.extension.class: io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension
       confluent.schema.registry.authorizer.class: io.confluent.kafka.schemaregistry.security.authorizer.rbac.RbacAuthorizer
@@ -415,7 +401,6 @@ schema_registry_properties:
       confluent.schema.registry.auth.mechanism: JETTY_AUTH
       public.key.path: "{{rbac_enabled_public_pem_path}}"
       authentication.roles: "**"
-      # confluent.metadata.bootstrap.server.urls: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ mds_http_protocol }}://{{ host }}:{{mds_port}}{% endfor %}"
       confluent.metadata.bootstrap.server.urls: "{{mds_urls}}"
       confluent.metadata.http.auth.credentials.provider: BASIC
       confluent.metadata.basic.auth.user.info: "{{ schema_registry_ldap_user | default('MISSING') }}:{{ schema_registry_ldap_password | default('MISSING')}}"
@@ -458,14 +443,9 @@ kafka_rest_properties:
       consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
       listeners: "{{kafka_rest_http_protocol}}://0.0.0.0:{{kafka_rest_port}}"
       host.name: "{{inventory_hostname}}"
-      # zookeeper.connect: "{% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{zookeeper_final_properties.clientPort}}{% endfor %}"
       zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | join(':' + zookeeper_final_properties.clientPort|string + ',') }}:{{zookeeper_final_properties.clientPort}}"
-
       bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}"
       confluent.monitoring.interceptor.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}"
-
-      # bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}{% endfor %}"
-      # confluent.monitoring.interceptor.bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}{% endfor %}"
   id:
     enabled: "{{ inventory_hostname in groups.kafka_rest }}"
     properties:
@@ -497,7 +477,6 @@ kafka_rest_properties:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
       schema.registry.url: "{{schema_registry_url}}"
-      # schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
   sr_ssl:
     enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool }}"
     properties:
@@ -522,7 +501,6 @@ kafka_rest_properties:
       public.key.path: "{{rbac_enabled_public_pem_path}}"
       client.confluent.metadata.server.urls.max.age.ms: 60000
       confluent.metadata.bootstrap.server.urls: "{{mds_urls}}"
-        # "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{mds_http_protocol}}://{{ host }}:{{mds_port}}{% endfor %}"
       confluent.metadata.server.urls.max.age.ms: 60000
       confluent.metadata.basic.auth.user.info: "{{kafka_rest_ldap_user | default('rest') }}:{{kafka_rest_ldap_password | default('pass')}}"
       confluent.metadata.http.auth.credentials.provider: BASIC
@@ -604,18 +582,11 @@ kafka_connect_properties:
       rest.advertised.listener: "{{kafka_connect_http_protocol}}"
       rest.advertised.host.name: "{{inventory_hostname}}"
       rest.advertised.port: "{{kafka_connect_rest_port}}"
-
       bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
       producer.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
       consumer.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
       producer.confluent.monitoring.interceptor.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
       consumer.confluent.monitoring.interceptor.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
-
-      # bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}"
-      # producer.bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}"
-      # consumer.bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}"
-      # producer.confluent.monitoring.interceptor.bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}"
-      # consumer.confluent.monitoring.interceptor.bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}"
   ssl:
     enabled: "{{kafka_connect_ssl_enabled}}"
     properties:
@@ -633,8 +604,6 @@ kafka_connect_properties:
     properties:
       value.converter.schema.registry.url: "{{schema_registry_url}}"
       key.converter.schema.registry.url: "{{schema_registry_url}}"
-      # value.converter.schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
-      # key.converter.schema.registry.url: "{% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}"
   sr_ssl:
     enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool }}"
     properties:
@@ -690,7 +659,6 @@ kafka_connect_properties:
       rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
       public.key.path: "{{rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{mds_urls}}"
-        # "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{mds_http_protocol}}://{{ host }}:{{mds_port}}{% endfor %}"
       confluent.metadata.basic.auth.user.info: "{{kafka_connect_ldap_user| default('MISSING')}}:{{kafka_connect_ldap_password| default('MISSING')}}"
       confluent.metadata.http.auth.credentials.provider: BASIC
   secret_registry:
@@ -702,7 +670,6 @@ kafka_connect_properties:
       config.providers.secret.param.kafkastore.topic: _confluent-secrets
       config.providers.secret.param.secret.registry.group.id: secret-registry
       config.providers.secret.param.kafkastore.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
-      # config.providers.secret.param.kafkastore.bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}"
   secret_registry_client:
     enabled: true
     properties: "{{ kafka_broker_listeners[kafka_connect_kafka_listener_name] | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
@@ -762,13 +729,9 @@ ksql_properties:
       producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
       consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
       listeners: "{{ksql_http_protocol}}://0.0.0.0:{{ksql_listener_port}}"
-
       bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[ksql_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[ksql_kafka_listener_name]['port']}}"
-      # bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[ksql_kafka_listener_name]['port']}}{% endfor %}"
       security.protocol: "{{kafka_broker_listeners[ksql_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}"
-      # confluent.monitoring.interceptor.bootstrap.servers: "{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[ksql_kafka_listener_name]['port']}}{% endfor %}"
       confluent.monitoring.interceptor.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[ksql_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[ksql_kafka_listener_name]['port']}}"
-
   ssl:
     # KSQL SSL properties shared with Kafka Broker
     # TODO look into this logic
