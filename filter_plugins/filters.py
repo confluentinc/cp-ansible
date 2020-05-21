@@ -9,7 +9,7 @@ class FilterModule(object):
             'get_hostnames': self.get_hostnames,
             'cert_extension': self.cert_extension,
             'ssl_required': self.ssl_required,
-            'java_arg_build_out': self.java_arg_build_out
+            'java_arg_build_out': self.java_arg_build_out,
         }
 
     def normalize_sasl_protocol(self, protocol):
