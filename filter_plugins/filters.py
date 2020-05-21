@@ -19,6 +19,7 @@ class FilterModule(object):
         }
 
     def normalize_sasl_protocol(self, protocol):
+        # Returns standardized value for sasl mechanism string
         normalized = 'GSSAPI' if protocol.lower() == 'kerberos' \
             else 'SCRAM-SHA-256' if protocol.upper() == 'SCRAM' \
             else 'PLAIN' if protocol.upper() == 'PLAIN' \
@@ -27,6 +28,7 @@ class FilterModule(object):
         return normalized
 
     def kafka_protocol_normalized(self, sasl_protocol_normalized, ssl_enabled):
+        # Joins a sasl mechanism and tls setting to return a kafka protocol
         kafka_protocol = 'SASL_SSL' if ssl_enabled == True and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-256', 'OAUTHBEARER'] \
             else 'SASL_PLAINTEXT' if ssl_enabled == False and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-256', 'OAUTHBEARER'] \
             else 'SSL' if ssl_enabled == True and sasl_protocol_normalized == 'none' \
@@ -34,11 +36,13 @@ class FilterModule(object):
         return kafka_protocol
 
     def kafka_protocol(self, sasl_protocol, ssl_enabled):
+        # Joins a sasl mechanism and tls setting to return a kafka protocol
         sasl_protocol_normalized = self.normalize_sasl_protocol(sasl_protocol)
         kafka_protocol = self.kafka_protocol_normalized(sasl_protocol_normalized, ssl_enabled)
         return kafka_protocol
 
     def kafka_protocol_defaults(self, listener, default_ssl_enabled, default_sasl_protocol):
+        # Joins a sasl mechanism and tls setting and their default values, to return a kafka protocol
         ssl_enabled = listener.get('ssl_enabled', default_ssl_enabled)
         sasl_protocol = listener.get('sasl_protocol', default_sasl_protocol)
         sasl_protocol_normalized = self.normalize_sasl_protocol(sasl_protocol)
@@ -46,6 +50,7 @@ class FilterModule(object):
         return kafka_protocol
 
     def get_sasl_mechanisms(self, listeners_dict, default_sasl_protocol):
+        # Loops over listeners dictionary and returns list of sasl mechanisms
         mechanisms = []
         for listener in listeners_dict:
             sasl_protocol = listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)
@@ -53,6 +58,7 @@ class FilterModule(object):
         return mechanisms
 
     def get_hostnames(self, listeners_dict, default_hostname):
+        # Loops over listeners dictionary and returns all hostnames attached to a listener
         hostnames = []
         for listener in listeners_dict:
             hostname = listeners_dict[listener].get('hostname', default_hostname)
@@ -60,10 +66,12 @@ class FilterModule(object):
         return hostnames
 
     def cert_extension(self, hostnames):
+        # Joins a list of hostnames to be added to SAN of certificate
         extension = 'dns:'+",dns:".join(hostnames)
         return extension
 
     def ssl_required(self, listeners_dict, default_ssl_enabled):
+        # Loops over listeners dictionary and returns True if any have TLS encryption enabled
         ssl_required = False
         for listener in listeners_dict:
             ssl_enabled = listeners_dict[listener].get('ssl_enabled', default_ssl_enabled)
@@ -71,6 +79,7 @@ class FilterModule(object):
         return ssl_required
 
     def java_arg_build_out(self, java_arg_list):
+        # Joins list of java args into string if arg is not the empty string
         java_args = ''
         for value in java_arg_list:
             if value != '':
@@ -78,6 +87,7 @@ class FilterModule(object):
         return java_args[1:]
 
     def combine_properties(self, properties_dict):
+        # Loops over master properties dictionary and combines subelements if enabled
         final_dict = {}
         for prop in properties_dict:
             if properties_dict[prop].get('enabled'):
@@ -92,6 +102,8 @@ class FilterModule(object):
                             kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                             plain_jaas_config, keytab_path, kerberos_principal,
                             scram_user, scram_password, oauth_pem_path ):
+        # For kafka broker properties: Takes listeners dictionary and outputs all properties based on the listeners' settings
+        # Other inputs help fill out the properties
         final_dict = {}
         for listener in listeners_dict:
             if listeners_dict[listener].get('ssl_enabled', default_ssl_enabled):
@@ -143,6 +155,8 @@ class FilterModule(object):
                             omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
                             kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
                             oauth_username, oauth_password, mds_urls):
+        # For any kafka client's properties: Takes in a single kafka listener and output properties to connect to that listener
+        # Other inputs help fill out the properties
         final_dict = {
             config_prefix + 'security.protocol': self.kafka_protocol_defaults(listener_dict, default_ssl_enabled, default_sasl_protocol)
         }
@@ -202,6 +216,9 @@ class FilterModule(object):
 
     def c3_connect_properties(self, connect_group_list, groups, hostvars, ssl_enabled, http_protocol, port, default_conned_group_id,
             truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass ):
+        # For c3's connect properties, inputs a list of ansible groups of connect hosts, as well as their ssl settings
+        # Outputs a properties dictionary with properties necessary to connect to each connect group
+        # Other inputs help fill out the properties
         final_dict = {}
         for ansible_group in connect_group_list:
             # connect_group_list defaults to ['kafka_connect'], but there may be scenario where no connect group
@@ -224,6 +241,9 @@ class FilterModule(object):
 
     def c3_ksql_properties(self, ksql_group_list, groups, hostvars, ssl_enabled, http_protocol, port,
             truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass ):
+        # For c3's ksql properties, inputs a list of ansible groups of ksql hosts, as well as their ssl settings
+        # Outputs a properties dictionary with properties necessary to connect to each ksql group
+        # Other inputs help fill out the properties
         final_dict = {}
         for ansible_group in ksql_group_list:
             # ksql_group_list defaults to ['ksql'], but there may be scenario where no connect group
