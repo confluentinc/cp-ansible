@@ -3,6 +3,16 @@
     name: confluent.common
   when: not common_role_completed|bool
 
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_fqdn
+
 - name: Install the Zookeeper Packages
   yum:
     name: "{{item}}{{confluent_package_redhat_suffix}}"
@@ -50,12 +60,13 @@
     kerberos_group: "{{zookeeper_group}}"
     kerberos_user: "{{zookeeper_user}}"
     kerberos_keytab_path: "{{zookeeper_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{zookeeper_keytab_path}}"
     kerberos_handler: "restart zookeeper"
   when: zookeeper_sasl_protocol == 'kerberos'
 
 - name: Set Zookeeper dataDir ownership
   file:
-    path: "{{zookeeper.properties.dataDir}}"
+    path: "{{zookeeper_final_properties.dataDir}}"
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
     state: directory
@@ -63,7 +74,7 @@
 
 - name: Set Ownership of Data Dir files
   file:
-    path: "{{zookeeper.properties.dataDir}}"
+    path: "{{zookeeper_final_properties.dataDir}}"
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
     recurse: true
@@ -71,7 +82,7 @@
 - name: Create Zookeeper myid File
   template:
     src: myid.j2
-    dest: "{{zookeeper.properties.dataDir}}/myid"
+    dest: "{{zookeeper_final_properties.dataDir}}/myid"
     mode: 0555
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"

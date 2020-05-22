@@ -2,23 +2,23 @@
 - name: Get Principal used on the Inter Broker Listener
   include_tasks: set_principal.yml
 
-# TODO customers might want to add to this list, so should put in defaults
+# Take whatever is in the super.users property, add in mds super user, and each kafka brokers' principal
 - name: Initialize Super Users List
   set_fact:
-    super_users: []
-
-- name: Add each Broker Principal to Super Users List
-  set_fact:
-    super_users: "{{ super_users }} + [ '{{ hostvars[item]['kafka_broker_principal'] }}' ]"
+    super_users: "{{ kafka_broker_final_properties['super.users'].split(',') }} + [ 'User:{{ mds_super_user }}' ] + [ '{{ hostvars[item]['kafka_broker_principal'] }}' ]"
   loop: "{{ groups['kafka_broker'] }}"
 
-- name: Add MDS Super User to Super Users List
+- name: Remove Duplicates and Convert to String
   set_fact:
-    super_users: "{{ super_users }} + [ 'User:{{ mds_super_user }}' ]"
+    super_users: "{{ super_users | unique | join(';') }}"
 
-- name: Remove Duplicates in Super Users List
+- name: Add SSL Properties
   set_fact:
-    super_users: "{{ super_users | unique }}"
+    kafka_broker_final_properties: "{{ kafka_broker_final_properties | combine(
+      {
+          'super.users': super_users
+      }
+    ) }}"
 
 - name: Create SSL Certificate Directory
   file:
