@@ -2,6 +2,15 @@
 - name: Populate Service Facts
   service_facts:
 
+- debug: var=ansible_facts.services
+
+# service_facts does not return "inactive" services
+# on ubuntu, kafka service will not be in dictionary on first install
+- name: Restart Kafka in Parallel - Service not Active
+  include: restart.yml
+  when: confluent_server_enabled|bool and ansible_facts.services['confluent-server.service'] is not defined
+        or not confluent_server_enabled|bool and ansible_facts.services['confluent-kafka.service'] is not defined
+
 - block:
     # All kafka_broker hosts iterate over the list of kakfa_broker hosts, each seeing the list in the same order
     # At one given loop entry, only one host will have its inventory_hostname match the entry in the loop
@@ -17,7 +26,7 @@
     - name: Restart confluent-server in Parallel
       include: restart.yml
       when: ansible_facts.services['confluent-server.service'].state != 'running'
-  when: confluent_server_enabled|bool
+  when: confluent_server_enabled|bool and ansible_facts.services['confluent-server.service'] is defined
 
 - block:
     # All kafka_broker hosts iterate over the list of kakfa_broker hosts, each seeing the list in the same order
@@ -34,4 +43,4 @@
     - name: Restart confluent-server in Parallel
       include: restart.yml
       when: ansible_facts.services['confluent-kafka.service'].state != 'running'
-  when: not confluent_server_enabled|bool
+  when: not confluent_server_enabled|bool and ansible_facts.services['confluent-kafka.service'] is defined

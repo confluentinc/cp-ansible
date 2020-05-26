@@ -2,17 +2,28 @@
 - name: Populate Service Facts
   service_facts:
 
-# All zookeeper hosts iterate over the list of zookeeper hosts, each seeing the list in the same order
-# At one given loop entry, only one host will have its inventory_hostname match  the entry in the loop
-# restart.yml tasks will only run for that host ON that host
-- name: Restart Zookeeper Serially
-  include: restart.yml
-  delegate_to: "{{ item }}"
-  loop: "{{ groups['zookeeper'] }}"
-  when:
-    - "hostvars[item].inventory_hostname == inventory_hostname"
-    - ansible_facts.services['confluent-zookeeper.service'].state == 'running'
+- debug: var=ansible_facts.services
 
-- name: Restart Zookeeper in Parallel
+# service_facts does not return "inactive" services
+# on ubuntu, zookeeper service will not be in dictionary on first install
+- name: Restart Zookeeper in Parallel - Service not Active
   include: restart.yml
-  when: ansible_facts.services['confluent-zookeeper.service'].state != 'running'
+  when: ansible_facts.services['confluent-zookeeper.service'] is not defined
+
+- block:
+    # All zookeeper hosts iterate over the list of zookeeper hosts, each seeing the list in the same order
+    # At one given loop entry, only one host will have its inventory_hostname match  the entry in the loop
+    # restart.yml tasks will only run for that host ON that host
+    - name: Restart Zookeeper Serially
+      include: restart.yml
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['zookeeper'] }}"
+      when:
+        - "hostvars[item].inventory_hostname == inventory_hostname"
+        - ansible_facts.services['confluent-zookeeper.service'].state == 'running'
+
+    - name: Restart Zookeeper in Parallel
+      include: restart.yml
+      when: ansible_facts.services['confluent-zookeeper.service'].state != 'running'
+
+  when: ansible_facts.services['confluent-zookeeper.service'] is defined
