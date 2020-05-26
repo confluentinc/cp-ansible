@@ -1,24 +1,9 @@
 ---
-# - name: Populate Service Facts
-#   service_facts:
-#
-# - debug: var=ansible_facts.services
-#
-# # service_facts does not return "inactive" services
-# # on ubuntu, kafka service will not be in dictionary on first install
-# - name: Restart Kafka in Parallel - Service not Active
-#   include: restart.yml
-#   when: confluent_server_enabled|bool and ansible_facts.services['confluent-server.service'] is not defined
-#         or not confluent_server_enabled|bool and ansible_facts.services['confluent-kafka.service'] is not defined
-
 - block:
     - name: Check if confluent-server Service Running
       shell: systemctl show -p SubState confluent-server
       changed_when: false
-      # failed_when: false
       register: substate
-
-    - debug: var=substate
 
     # All kafka_broker hosts iterate over the list of kakfa_broker hosts, each seeing the list in the same order
     # At one given loop entry, only one host will have its inventory_hostname match the entry in the loop
@@ -29,12 +14,10 @@
       loop: "{{ groups['kafka_broker'] }}"
       when:
         - "hostvars[item].inventory_hostname == inventory_hostname"
-        # - ansible_facts.services['confluent-server.service'].state == 'running'
         - substate.stdout == 'SubState=running'
 
     - name: Restart confluent-server in Parallel
       include: restart.yml
-      # when: ansible_facts.services['confluent-server.service'].state != 'running'
       when: substate.stdout != 'SubState=running'
 
   when: confluent_server_enabled|bool
@@ -44,10 +27,7 @@
     - name: Check if confluent-kafka Service Running
       shell: systemctl show -p SubState confluent-kafka
       changed_when: false
-      # failed_when: false
       register: substate
-
-    - debug: var=substate
 
     # All kafka_broker hosts iterate over the list of kakfa_broker hosts, each seeing the list in the same order
     # At one given loop entry, only one host will have its inventory_hostname match the entry in the loop
@@ -58,12 +38,10 @@
       loop: "{{ groups['kafka_broker'] }}"
       when:
         - "hostvars[item].inventory_hostname == inventory_hostname"
-        # - ansible_facts.services['confluent-kafka.service'].state == 'running'
         - substate.stdout == 'SubState=running'
 
     - name: Restart confluent-kafka in Parallel
       include: restart.yml
-      # when: ansible_facts.services['confluent-kafka.service'].state != 'running'
       when: substate.stdout != 'SubState=running'
 
   when: not confluent_server_enabled|bool
