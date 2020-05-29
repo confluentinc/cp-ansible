@@ -101,7 +101,7 @@ class FilterModule(object):
     def listener_properties(self, listeners_dict, default_ssl_enabled, default_pkcs12_enabled, default_ssl_mutual_auth_enabled, default_sasl_protocol,
                             kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                             plain_jaas_config, keytab_path, kerberos_principal,
-                            scram_user, scram_password, oauth_pem_path ):
+                            scram_user, scram_password, oauth_pem_path, ssl_cipher_suites ):
         # For kafka broker properties: Takes listeners dictionary and outputs all properties based on the listeners' settings
         # Other inputs help fill out the properties
         final_dict = {}
@@ -112,7 +112,8 @@ class FilterModule(object):
                     'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.truststore.password': kafka_broker_truststore_storepass,
                     'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keystore.location': kafka_broker_keystore_path,
                     'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keystore.password': kafka_broker_keystore_storepass,
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.key.password': kafka_broker_keystore_keypass
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.key.password': kafka_broker_keystore_keypass,
+                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.cipher.suites': ssl_cipher_suites
                 })
             if listeners_dict[listener].get('pkcs12_enabled', default_pkcs12_enabled):
                 final_dict.update({
@@ -154,7 +155,7 @@ class FilterModule(object):
                             config_prefix, truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass,
                             omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
                             kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
-                            oauth_username, oauth_password, mds_urls):
+                            oauth_username, oauth_password, mds_urls, ssl_cipher_suites):
         # For any kafka client's properties: Takes in a single kafka listener and output properties to connect to that listener
         # Other inputs help fill out the properties
         final_dict = {
@@ -163,7 +164,8 @@ class FilterModule(object):
         if listener_dict.get('ssl_enabled', default_ssl_enabled):
             final_dict.update({
                 config_prefix + 'ssl.truststore.location': truststore_path,
-                config_prefix + 'ssl.truststore.password': truststore_storepass
+                config_prefix + 'ssl.truststore.password': truststore_storepass,
+                config_prefix + 'ssl.cipher.suites': ssl_cipher_suites
             })
         if listener_dict.get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
             final_dict.update({
@@ -215,7 +217,7 @@ class FilterModule(object):
         return final_dict
 
     def c3_connect_properties(self, connect_group_list, groups, hostvars, ssl_enabled, http_protocol, port, default_conned_group_id,
-            truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass ):
+            truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass, ssl_cipher_suites ):
         # For c3's connect properties, inputs a list of ansible groups of connect hosts, as well as their ssl settings
         # Outputs a properties dictionary with properties necessary to connect to each connect group
         # Other inputs help fill out the properties
@@ -236,11 +238,12 @@ class FilterModule(object):
                         'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.keystore.location': keystore_path,
                         'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.keystore.password': keystore_storepass,
                         'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.key.password': keystore_keypass,
+                        'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.cipher.suites': ssl_cipher_suites
                     })
         return final_dict
 
     def c3_ksql_properties(self, ksql_group_list, groups, hostvars, ssl_enabled, http_protocol, port,
-            truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass ):
+            truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass, ssl_cipher_suites ):
         # For c3's ksql properties, inputs a list of ansible groups of ksql hosts, as well as their ssl settings
         # Outputs a properties dictionary with properties necessary to connect to each ksql group
         # Other inputs help fill out the properties
@@ -261,5 +264,6 @@ class FilterModule(object):
                         'confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.location': keystore_path,
                         'confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.password': keystore_storepass,
                         'confluent.controlcenter.ksql.' + ansible_group + '.ssl.key.password': keystore_keypass,
+                        'confluent.controlcenter.ksql.' + ansible_group + '.ssl.cipher.suites': ssl_cipher_suites
                     })
         return final_dict
