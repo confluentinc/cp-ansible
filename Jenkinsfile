@@ -16,12 +16,10 @@ def job = {
     }
 
     withDockerServer([uri: dockerHost()]) {
-        stage('Plaintext Test') {
+        stage('Plaintext') {
             sh '''
-                env
-
                 cd roles/confluent.test
-                molecule test -s rbac-scram-custom-rhel
+                molecule test -s plaintext-rhel
             '''
         }
     }
