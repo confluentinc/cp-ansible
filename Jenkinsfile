@@ -16,7 +16,7 @@ def job = {
     }
 
     withDockerServer([uri: dockerHost()]) {
-        stage('Plaintext - RHEL') {
+        stage('Plaintext') {
             sh '''
                 cd roles/confluent.test
                 molecule test -s plaintext-rhel
