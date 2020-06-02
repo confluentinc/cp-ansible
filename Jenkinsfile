@@ -10,8 +10,6 @@ def config = jobConfig {
 def job = {
     stage('Install Molecule and Latest Ansible') {
         sh '''
-            env
-
             sudo pip install --upgrade 'ansible==2.9.*'
             sudo pip install molecule docker
         '''
