@@ -38,14 +38,31 @@ bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%}
 {% set kerberos_principal = kafka_connect_kerberos_principal %}
 {% set oauth_username = kafka_connect_ldap_user %}
 {% set oauth_password = kafka_connect_ldap_password %}
-{% include 'kafka_client.j2' %}
+{% include 'roles/confluent.kafka_broker/templates/kafka_client.j2' %}
 
 {% set schema_registries = groups.get('schema_registry', []) %}
 {% if schema_registries %}
+
+# Schema Registry Configuration
 value.converter.schema.registry.url={% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}
+
+{% if schema_registry_ssl_enabled|bool %}
+value.converter.schema.registry.ssl.truststore.location={{kafka_connect_truststore_path}}
+value.converter.schema.registry.ssl.truststore.password={{kafka_connect_truststore_storepass}}
+value.converter.schema.registry.ssl.keystore.location={{kafka_connect_keystore_path}}
+value.converter.schema.registry.ssl.keystore.password={{kafka_connect_keystore_storepass}}
+value.converter.schema.registry.ssl.key.password={{kafka_connect_keystore_keypass}}
+{% endif %}
 
 key.converter.schema.registry.url={% for host in groups['schema_registry'] %}{% if loop.index > 1%},{% endif %}{{ schema_registry_http_protocol }}://{{ host }}:{{ schema_registry_listener_port }}{% endfor %}
 
+{% if schema_registry_ssl_enabled|bool %}
+key.converter.schema.registry.ssl.truststore.location={{kafka_connect_truststore_path}}
+key.converter.schema.registry.ssl.truststore.password={{kafka_connect_truststore_storepass}}
+key.converter.schema.registry.ssl.keystore.location={{kafka_connect_keystore_path}}
+key.converter.schema.registry.ssl.keystore.password={{kafka_connect_keystore_storepass}}
+key.converter.schema.registry.ssl.key.password={{kafka_connect_keystore_keypass}}
+{% endif %}
 {% endif %}
 
 # Connect Producer Configuration {# Producer should not have jaas config, set in worker properties #}
@@ -110,13 +127,13 @@ consumer.sasl.login.callback.handler.class=io.confluent.kafka.clients.plugins.au
 producer.confluent.monitoring.interceptor.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
 
 {% set config_prefix = 'producer.confluent.monitoring.interceptor.' %}
-{% include 'kafka_client.j2' %}
+{% include 'roles/confluent.kafka_broker/templates/kafka_client.j2' %}
 
 # Consumer Monitoring Configuration
 consumer.confluent.monitoring.interceptor.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
 
 {% set config_prefix = 'consumer.confluent.monitoring.interceptor.' %}
-{% include 'kafka_client.j2' %}
+{% include 'roles/confluent.kafka_broker/templates/kafka_client.j2' %}
 
 {% if rbac_enabled|bool %}
 # Secret Registry Configuration
@@ -128,7 +145,7 @@ config.providers.secret.param.master.encryption.key={{kafka_connect_secret_regis
 config.providers.secret.param.kafkastore.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
 
 {% set config_prefix = 'config.providers.secret.param.kafkastore.' %}
-{% include 'kafka_client.j2' %}
+{% include 'roles/confluent.kafka_broker/templates/kafka_client.j2' %}
 
 {% endif %}
 # RBAC Configuration
