@@ -17,57 +17,71 @@
     certificate_args: "--cacert {{kafka_connect_ca_cert_path}} --key {{kafka_connect_key_path}} --cert {{kafka_connect_cert_path}}"
   when: mds_ssl_enabled|bool and mds_ssl_mutual_auth_enabled|bool
 
+- set_fact:
+    mds_broker_host_name: "{{mds_rest_url.split(',')[0]| urlsplit('hostname')}}"
+  when: external_mds_enabled|bool
+
+- set_fact:
+    mds_port: "{{mds_rest_url.split(',')[0]| urlsplit('port')}}"
+  when: external_mds_enabled|bool
+
+
 - name: Grant role System Admin to Additional Connect Super Users
   shell: |
-    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{item}}/roles/SystemAdmin \
+    curl -X POST {{mds_http_protocol}}://{{mds_broker_host_name}}:{{mds_port}}/security/1.0/principals/User:{{item}}/roles/SystemAdmin \
       -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
       -d '{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}","connect-cluster":"{{kafka_connect.properties['group.id']}}"}}'
   loop: "{{kafka_connect_additional_system_admins}}"
 
 - name: Grant role Security Admin to Connect user
   shell: |
-    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/SecurityAdmin \
+    curl -X POST {{mds_http_protocol}}://{{mds_broker_host_name}}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/SecurityAdmin \
       -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
       -d '{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}","connect-cluster":"{{kafka_connect.properties['group.id']}}"}}'
+ 
 
 - name: Grant Connect user ResourceOwner on the group that Connect nodes use to coordinate across the cluster
   shell: |
-    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings \
+    curl -X POST {{mds_http_protocol}}://{{mds_broker_host_name}}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings \
       -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
       -d '{"scope":{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}"}},"resourcePatterns":[{"resourceType":"Group","name":"{{kafka_connect.properties['group.id']}}","patternType":"LITERAL"}]}'
 
+
 - name: Grant Connect ResourceOwner on the Config topic where Connect configs are stored
   shell: |
-    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings \
+    curl -X POST {{mds_http_protocol}}://{{mds_broker_host_name}}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings \
       -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
       -d '{"scope":{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}"}},"resourcePatterns":[{"resourceType":"Topic","name":"{{kafka_connect.properties['config.storage.topic']}}","patternType":"LITERAL"}]}'
+ 
 
 - name: Grant Connect ResourceOwner on the offset storage topic
   shell: |
-    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings \
+    curl -X POST {{mds_http_protocol}}://{{mds_broker_host_name}}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings \
       -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
       -d '{"scope":{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}"}},"resourcePatterns":[{"resourceType":"Topic","name":"{{kafka_connect.properties['offset.storage.topic']}}","patternType":"LITERAL"}]}'
+ 
 
 - name: Grant Connect ResourceOwner on the offset status topic
   shell: |
-    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings \
+    curl -X POST {{mds_http_protocol}}://{{mds_broker_host_name}}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings \
       -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
       -d '{"scope":{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}"}},"resourcePatterns":[{"resourceType":"Topic","name":"{{kafka_connect.properties['status.storage.topic']}}","patternType":"LITERAL"}]}'
+ 
 
 # TODO the move hardcoded vars into vars
 - name: Grant Connect user ResourceOwner on the secrets store group
   delegate_facts: true
   shell: |
-    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings \
+    curl -X POST {{mds_http_protocol}}://{{mds_broker_host_name}}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings \
       -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
       -d '{"scope":{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}"}},"resourcePatterns":[{"resourceType":"Group","name":"secret-registry","patternType":"LITERAL"}]}'
-  when: kafka_connect_secret_registry_enabled|bool
+  when: kafka_connect_secret_registry_enabled|bool 
 
 # TODO the move hardcoded vars into vars
 - name: Grant Connect ResourceOwner on the secrets topic
   delegate_facts: true
   shell: |
-    curl -X POST {{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings \
+    curl -X POST {{mds_http_protocol}}://{{mds_broker_host_name}}:{{mds_port}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings \
       -u "{{mds_super_user}}":"{{mds_super_user_password}}" -H "Content-Type: application/json" {{certificate_args}} \
       -d '{"scope":{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}"}},"resourcePatterns":[{"resourceType":"Topic","name":"_confluent-secrets","patternType":"LITERAL"}]}'
-  when: kafka_connect_secret_registry_enabled|bool
+  when: kafka_connect_secret_registry_enabled|bool 
