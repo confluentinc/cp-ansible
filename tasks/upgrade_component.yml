@@ -21,6 +21,42 @@
     name: "{{ service_name }}"
     state: stopped
 
+- block:
+    - name: Remove the Packages - Red Hat
+      yum:
+        name: "{{item}}"
+        state: absent
+      loop: "{{ packages }}"
+
+    - name: Remove Confluent Dist Yum Repo
+      yum_repository:
+        name: Confluent.dist
+        state: absent
+
+    - name: Remove Confluent Yum Repo
+      yum_repository:
+        name: Confluent
+        state: absent
+  when: ansible_os_family == "RedHat"
+
+- block:
+    - name: Install the Packages - Debian
+      apt:
+        name: "{{item}}{{confluent_package_debian_suffix}}"
+        state: absent
+      loop: "{{ packages }}"
+
+    - name: Add Confluent Apt Key
+      apt_key:
+        url: "{{confluent_common_repository_debian_key_url}}"
+        state: absent
+
+    - name: Add Confluent Apt Repo
+      apt_repository:
+        repo: "{{confluent_common_repository_debian_repository}}"
+        state: absent
+  when: ansible_os_family == "Debian"
+
 - name: Configure Repositories
   import_role:
     name: confluent.common
@@ -37,7 +73,6 @@
 - name: Install the Packages - Debian
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
-    update_cache: true
   loop: "{{ packages }}"
   when: ansible_os_family == "Debian"
 
