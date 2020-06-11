@@ -1,13 +1,14 @@
 ---
+# More control_center variables are defined in the confluent.variables_handlers role
+
 control_center_custom_log4j: "{{ custom_log4j }}"
 
 control_center_java_args:
-  - "{% if control_center_custom_log4j|bool %}-Dlog4j.configuration=file:{{control_center.log4j_file}}{% endif %}"
+  - "{% if control_center_ssl_enabled|bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
 
 control_center_custom_java_args: ""
 control_center_final_java_args: "{{ control_center_java_args + [ control_center_custom_java_args ] }}"
 
-control_center_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | length, 3 ] | min }}"
 control_center_rocksdb_path: ""
 
 # C3 already has LimitNOFILE value set in unit file, empty value will not get written to override.conf
@@ -19,6 +20,7 @@ control_center_service_environment_overrides:
   ROCKSDB_SHAREDLIB_DIR: "{{control_center_rocksdb_path}}"
   CONTROL_CENTER_HEAP_OPTS: "-Xmx6g"
   CONTROL_CENTER_OPTS: "{{ control_center_final_java_args | java_arg_build_out }}"
+  CONTROL_CENTER_LOG4J_OPTS: "{% if control_center_custom_log4j|bool %}-Dlog4j.configuration=file:{{control_center.log4j_file}}{% endif %}"
 
 control_center:
   appender_log_path: /var/log/confluent/control-center/
@@ -31,12 +33,3 @@ control_center:
   kafkaappender_log_name: control-center-kafka.log
   kafkaappender_max_log_files: 10
   kafkaappender_log_file_size: 100MB
-  properties:
-    confluent.controlcenter.streams.num.stream.threads: 8
-    confluent.controlcenter.data.dir: /var/lib/confluent/control-center
-    confluent.controlcenter.ksql.enable: 'true'
-    confluent.controlcenter.schema.registry.enable: 'true'
-    confluent.controlcenter.internal.topics.replication: "{{control_center_default_internal_replication_factor}}"
-    confluent.metrics.topic.replication: "{{control_center_default_internal_replication_factor}}"
-    confluent.monitoring.interceptor.topic.replication: "{{control_center_default_internal_replication_factor}}"
-    confluent.controlcenter.command.topic.replication: "{{control_center_default_internal_replication_factor}}"

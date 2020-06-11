@@ -1,7 +1,10 @@
 ---
+# More kafka_connect variables are defined in the confluent.variables_handlers role
+
 kafka_connect_custom_log4j: "{{ custom_log4j }}"
 
 kafka_connect_java_args:
+  - "{% if kafka_connect_ssl_enabled|bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
   - "{% if kafka_connect_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=port={{kafka_connect_jolokia_port}},host=0.0.0.0{% if kafka_connect_jolokia_ssl_enabled|bool %},keystore={{kafka_connect_keystore_path}},keystorePassword={{kafka_connect_keystore_storepass}},protocol=https{% endif %}{% endif %}"
   - "{% if kafka_connect_custom_log4j|bool %}-Dlog4j.configuration=file:{{kafka_connect.log4j_file}}{% endif %}"
 
@@ -17,49 +20,8 @@ kafka_connect_service_environment_overrides:
   KAFKA_HEAP_OPTS: "-Xms256M -Xmx2G"
   KAFKA_OPTS: "{{ kafka_connect_final_java_args | java_arg_build_out }}"
 
-kafka_connect_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | length, 3 ] | min }}"
-
-kafka_connect_secret_registry_enabled: "{{rbac_enabled}}"
-kafka_connect_secret_registry_key: 39ff95832750c0090d84ddf5344583832efe91ef
-
-kafka_connect_group_id: connect-cluster
-
-kafka_connect_plugins_path:
-  - /usr/share/java
-
-kafka_connect_confluent_hub_client:
-  file: "http://client.hub.confluent.io/confluent-hub-client-latest.tar.gz"
-  is_remote: true
-  install_dir: /etc/kafka/confluent-hub
-kafka_connect_confluent_hub_plugins: []
-kafka_connect_confluent_hub_plugins_dest: /usr/share/java
-kafka_connect_plugins: []
-kafka_connect_plugins_remote: []
-kafka_connect_plugins_dest: /usr/share/java
-
-
 kafka_connect:
   appender_log_path: /var/log/kafka/
   appender_log_name: connect-distributed.log
   appender_max_log_files: 10
   appender_log_file_size: 100MB
-  properties:
-    rest.port: "{{kafka_connect_rest_port}}"
-    consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
-    producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
-    config.storage.replication.factor: "{{ kafka_connect_default_internal_replication_factor }}"
-    config.storage.topic: "{{kafka_connect_group_id}}-configs"
-    group.id: "{{kafka_connect_group_id}}"
-    internal.key.converter: org.apache.kafka.connect.json.JsonConverter
-    internal.key.converter.schemas.enable: "false"
-    internal.value.converter: org.apache.kafka.connect.json.JsonConverter
-    internal.value.converter.schemas.enable: "false"
-    offset.flush.interval.ms: 10000
-    offset.storage.replication.factor: "{{ kafka_connect_default_internal_replication_factor }}"
-    offset.storage.topic: "{{kafka_connect_group_id}}-offsets"
-    status.storage.replication.factor: "{{ kafka_connect_default_internal_replication_factor }}"
-    status.storage.topic: "{{kafka_connect_group_id}}-status"
-    key.converter: io.confluent.connect.avro.AvroConverter
-    value.converter: io.confluent.connect.avro.AvroConverter
-    plugin.path: "{{(kafka_connect_plugins_path + [kafka_connect_confluent_hub_plugins_dest, kafka_connect_plugins_dest]) | unique | join(',')}}"
-    connector.client.config.override.policy: All

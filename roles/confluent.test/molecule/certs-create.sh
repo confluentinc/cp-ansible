@@ -49,6 +49,7 @@ for line in `sed '/^$/d' $filename`; do
       IFS=$OIFS
       service=${split_hostnames[0]}
       internal=${split_hostnames[1]}
+      fqdn=$internal.confluent
       # external=${split_hostnames[2]}
       # echo "Service: $service hostname: $internal"
 
@@ -58,8 +59,8 @@ for line in `sed '/^$/d' $filename`; do
       CSR_FILENAME=$internal.csr
       CRT_SIGNED_FILENAME=$internal-ca1-signed.crt
       KEY_FILENAME=$internal-key.pem
-      EXT="SAN=dns:$internal"
-      # EXT="SAN=dns:$external,dns:$internal"
+      # EXT="SAN=dns:$internal"
+      EXT="SAN=dns:$internal,dns:$fqdn"
 
       echo "  >>>  Create host keystore"
       keytool -genkey -noprompt \
@@ -113,6 +114,7 @@ CN = $service
 subjectAltName = @alt_names
 [alt_names]
 DNS.1 = $internal
+DNS.2 = $fqdn
 EOF
 )
 
