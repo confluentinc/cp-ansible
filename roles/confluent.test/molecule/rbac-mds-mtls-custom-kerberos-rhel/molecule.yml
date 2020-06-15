@@ -2,7 +2,6 @@
 driver:
   name: docker
 platforms:
-  # LDAP and Keberos on centos, rest on debian
   - name: mds-ldap1
     hostname: mds-ldap1.confluent
     groups:
@@ -31,8 +30,8 @@ platforms:
     hostname: mds-zookeeper1.confluent
     groups:
       - zookeeper
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -43,8 +42,8 @@ platforms:
     hostname: mds-kafka-broker1.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -55,14 +54,15 @@ platforms:
     hostname: mds-kafka-broker2.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
       - name: confluent
+
 provisioner:
   name: ansible
   config_options:
@@ -73,16 +73,23 @@ provisioner:
   inventory:
     group_vars:
       all:
-        scenario_name: rbac-mds-kerberos-debian
+        scenario_name: rbac-mds-mtls-custom-kerberos-rhel
 
-        ssl_enabled: false
-        sasl_protocol: kerberos
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
+
+        ssl_custom_certs: true
+        ssl_ca_cert_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
+        ssl_signed_cert_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        ssl_key_password: keypass
 
         rbac_enabled: true
         external_mds_enabled: false
+
         create_mds_certs: false
-        token_services_public_pem_file: "roles/confluent.test/molecule/rbac-mds-kerberos-debian/generated_ssl_files/public.pem"
-        token_services_private_pem_file: "roles/confluent.test/molecule/rbac-mds-kerberos-debian/generated_ssl_files/tokenKeypair.pem"
+        token_services_public_pem_file: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/public.pem"
+        token_services_private_pem_file: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/tokenKeypair.pem"
 
         kafka_broker_custom_listeners:
           client_listener:
@@ -116,54 +123,31 @@ provisioner:
           kdc_hostname: mds-kerberos1
           admin_hostname: mds-kerberos1
 
-      zookeeper:
-        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        zookeeper_kerberos_keytab_path: "roles/confluent.test/molecule/{{scenario_name}}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
-
-      kafka_broker:
-        kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        kafka_broker_kerberos_keytab_path: "roles/confluent.test/molecule/{{scenario_name}}/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
-
-        kafka_broker_custom_properties:
-          ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
-          ldap.com.sun.jndi.ldap.read.timeout: 3000
-          ldap.java.naming.provider.url: ldap://mds-ldap1:389
-          ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
-          ldap.java.naming.security.credentials: password
-          ldap.java.naming.security.authentication: simple
-          ldap.user.search.base: OU=rbac,DC=example,DC=com
-          ldap.group.search.base: OU=rbac,DC=example,DC=com
-          ldap.user.name.attribute: uid
-          ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
-          ldap.group.name.attribute: cn
-          ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
-          ldap.user.object.class: account
-
-      kerberos_server:
-        realm_name: "{{ kerberos.realm | upper }}"
-
-        keytab_output_directory: "{{scenario_name}}/keytabs"
-
-        kerberos_principals:
-          - principal: "zookeeper/mds-zookeeper1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/zookeeper-mds-zookeeper1.keytab"
-          - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/kafka_broker-mds-kafka-broker1.keytab"
-          - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker2.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/kafka_broker-mds-kafka-broker2.keytab"
-          - principal: "zookeeper/zookeeper1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
-          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
-          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker2.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/kafka_broker-kafka-broker2.keytab"
-          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker3.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/kafka_broker-kafka-broker3.keytab"
+      kafka_broker_custom_properties:
+        ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+        ldap.com.sun.jndi.ldap.read.timeout: 3000
+        ldap.java.naming.provider.url: ldaps://mds-ldap1:636
+        ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
+        ldap.java.naming.security.credentials: password
+        ldap.java.naming.security.authentication: simple
+        ldap.user.search.base: OU=rbac,DC=example,DC=com
+        ldap.group.search.base: OU=rbac,DC=example,DC=com
+        ldap.user.name.attribute: uid
+        ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+        ldap.group.name.attribute: cn
+        ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+        ldap.user.object.class: account
 
       ldap_server:
-        ldaps_enabled: false
-        ldaps_custom_certs: false
+        ldaps_enabled: true
+        ldaps_custom_certs: true
+        ssl_custom_certs: true
+        ssl_ca_cert_filepath: "{{scenario_name}}/generated_ssl_files/ca.crt"
+        ssl_signed_cert_filepath: "{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+
         ldap_admin_password: ldppassword
+
         ldap_rbac_group: rbac
         ldap_dc: example
         ldap_dc_extension: com
@@ -193,6 +177,26 @@ provisioner:
             password: "{{mds_super_user_password}}"
             uid: 9993
             guid: 93
+          - username: user1
+            password: user1p
+            uid: 9992
+            guid: 92
+
+      kerberos_server:
+        realm_name: "{{ kerberos.realm | upper }}"
+
+        keytab_output_directory: "{{scenario_name}}/keytabs"
+
+        kerberos_principals:
+          - principal: "zookeeper/zookeeper1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker2.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-kafka-broker2.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker3.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-kafka-broker3.keytab"
+
 verifier:
   name: ansible
 lint: |
