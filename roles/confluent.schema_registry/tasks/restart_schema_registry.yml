@@ -1,16 +1,7 @@
 ---
-- name: Check if Connect Service Running
-  shell: "systemctl show -p SubState {{schema_registry_service_name}}"
-  changed_when: false
-  register: substate
+# Restart/start SR hosts serially because there is a race condition on topic creation when multiple hosts start at the same time
 
-- name: Parallel Restart
-  include: restart.yml
-  when: substate.stdout != 'SubState=running'
-
-# TODO There was an issue with bringing them both up at the same time, topic creation problem. Probably want to do serial all the time
-
-# All connect hosts iterate over the list of connect hosts, each seeing the list in the same order
+# All schema registry hosts iterate over the list of schema registry hosts, each seeing the list in the same order
 # At one given loop entry, only one host will have its inventory_hostname match  the entry in the loop
 # restart.yml tasks will only run for that host ON that host
 - name: Serial Restart
@@ -19,4 +10,3 @@
   loop: "{{ groups['schema_registry'] }}"
   when:
     - "hostvars[item].inventory_hostname == inventory_hostname"
-    - substate.stdout == 'SubState=running'
