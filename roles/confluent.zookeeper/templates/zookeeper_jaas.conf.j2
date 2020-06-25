@@ -1,4 +1,4 @@
-// Specifies a unique keytab and principal name for each ZooKeeper node
+{% if zookeeper_sasl_protocol == 'kerberos' %}
 Server {
     com.sun.security.auth.module.Krb5LoginModule required
     useKeyTab=true
@@ -7,3 +7,27 @@ Server {
     useTicketCache=false
     principal="{{zookeeper_kerberos_principal}}";
 };
+{% endif %}
+{% if zookeeper_sasl_protocol == 'digest' %}
+Server {
+    org.apache.zookeeper.server.auth.DigestLoginModule required
+{% for user in zookeeper_digest_users|dict2items %}
+    user_{{ user['value']['principal'] }}="{{ user['value']['password'] }}"{% if loop.index == loop|length %};{% endif %}
+
+{% endfor %}
+};
+
+QuorumServer {
+    org.apache.zookeeper.server.auth.DigestLoginModule required
+{% for user in zookeeper_digest_users|dict2items %}
+    user_{{ user['value']['principal'] }}="{{ user['value']['password'] }}"{% if loop.index == loop|length %};{% endif %}
+
+{% endfor %}
+};
+
+QuorumLearner {
+    org.apache.zookeeper.server.auth.DigestLoginModule required
+    username="{{zookeeper_digest_users.admin.principal}}"
+    password="{{zookeeper_digest_users.admin.password}}";
+};
+{% endif %}

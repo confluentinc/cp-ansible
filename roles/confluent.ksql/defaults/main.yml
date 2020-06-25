@@ -1,17 +1,14 @@
+---
 ksql_streams_state_dir: /var/lib/kafka-streams
-
-ksql_jaas_java_arg_buildout: "-Djava.security.auth.login.config={{ksql.jaas_file}}"
-ksql_jolokia_java_arg_buildout: "-javaagent:{{jolokia_jar_path}}=port={{ksql_jolokia_port}},host=0.0.0.0"
-ksql_log4j_java_arg_buildout: "-Dlog4j.configuration=file:{{ksql.log4j_file}}"
 
 ksql_custom_log4j: "{{ custom_log4j }}"
 
-ksql_custom_java_args: ""
 ksql_java_args:
-  - "{{ ksql_jaas_java_arg_buildout if kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | normalize_sasl_protocol == 'GSSAPI' else '' }}"
-  - "{{ ksql_jolokia_java_arg_buildout if ksql_jolokia_enabled|bool else '' }}"
-  - "{{ ksql_log4j_java_arg_buildout if ksql_custom_log4j|bool else '' }}"
+  - "{% if kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | normalize_sasl_protocol == 'GSSAPI' %}-Djava.security.auth.login.config={{ksql.jaas_file}}{% endif %}"
+  - "{% if ksql_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=port={{ksql_jolokia_port}},host=0.0.0.0{% if ksql_jolokia_ssl_enabled|bool %},keystore={{ksql_keystore_path}},keystorePassword={{ksql_keystore_storepass}},protocol=https{% endif %}{% endif %}"
+  - "{% if ksql_custom_log4j|bool %}-Dlog4j.configuration=file:{{ksql.log4j_file}}{% endif %}"
 
+ksql_custom_java_args: ""
 ksql_final_java_args: "{{ ksql_java_args + [ ksql_custom_java_args ] }}"
 
 # Empty values will not be written into override.conf
@@ -28,8 +25,8 @@ ksql_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | length,
 ksql_service_id: default_
 
 
+ksql_confluent_metrics_enabled: true
 ksql_confluent_metrics:
-  enabled: true
   servers: "{{groups['kafka_broker']}}"
   listener: "{{kafka_broker_listeners[ksql_kafka_listener_name]}}"
 ksql_confluent_metrics_bootstrap_servers: "{% for host in ksql_confluent_metrics.servers %}{% if loop.index > 1%},{% endif %}{{ host }}:{{ksql_confluent_metrics.listener.port}}{% endfor %}"
@@ -61,3 +58,5 @@ ksql:
     ksql.streams.num.standby.replicas: 1
     ksql.streams.producer.delivery.timeout.ms: 2147483647
     ksql.streams.producer.max.block.ms: 9223372036854775807
+    producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+    consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor

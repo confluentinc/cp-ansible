@@ -26,7 +26,7 @@
   user:
     name: "{{control_center_user}}"
     comment: "Control Center User"
-    system: yes
+    system: true
     group: "{{control_center_group}}"
 
 - name: Set Control Center Data Dir permissions
@@ -53,7 +53,10 @@
     keystore_storepass: "{{control_center_keystore_storepass}}"
     keystore_keypass: "{{control_center_keystore_keypass}}"
     service_name: control_center
-    hostnames: "{{ [inventory_hostname] }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
+    ca_cert_path: "{{control_center_ca_cert_path}}"
+    cert_path: "{{control_center_cert_path}}"
+    key_path: "{{control_center_key_path}}"
   when: control_center_ssl_enabled|bool or kafka_broker_listeners[control_center_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
 - name: Configure Kerberos
@@ -66,6 +69,10 @@
     kerberos_handler: "restart control center"
   when: kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
+- name: Configure RBAC
+  include_tasks: rbac.yml
+  when: rbac_enabled|bool
+
 - name: Create Control Center Config
   template:
     src: control-center.properties.j2
@@ -73,8 +80,7 @@
     mode: 0640
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
-  notify:
-    - restart control center
+  notify: restart control center
 
 - name: Set Permissions on /var/log/confluent
   file:
@@ -104,7 +110,7 @@
     path: "{{control_center_rocksdb_path}}"
     group: "{{control_center_group}}"
     owner: "{{control_center_user}}"
-    recurse: yes
+    recurse: true
   when: control_center_rocksdb_path != ""
 
 - name: Create Control Center log4j Config
@@ -114,8 +120,7 @@
     mode: 0640
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
-  notify:
-    - restart control center
+  notify: restart control center
 
 - name: Create Service Override Directory
   file:
@@ -132,9 +137,7 @@
     mode: 0640
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
-  notify:
-    - reload systemd
-    - restart control center
+  notify: restart control center
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -146,7 +149,7 @@
 - name: Start Control Center Service
   systemd:
     name: "{{control_center_service_name}}"
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Health Check

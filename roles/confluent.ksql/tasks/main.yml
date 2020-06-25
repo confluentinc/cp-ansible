@@ -26,7 +26,7 @@
   user:
     name: "{{ksql_user}}"
     comment: "Connect Distributed User"
-    system: yes
+    system: true
     group: "{{ksql_group}}"
 
 - name: Set Ksql streams dir permissions
@@ -46,7 +46,10 @@
     keystore_storepass: "{{ksql_keystore_storepass}}"
     keystore_keypass: "{{ksql_keystore_keypass}}"
     service_name: ksql
-    hostnames: "{{ [inventory_hostname] }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
+    ca_cert_path: "{{ksql_ca_cert_path}}"
+    cert_path: "{{ksql_cert_path}}"
+    key_path: "{{ksql_key_path}}"
   when: ksql_ssl_enabled|bool or kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
 - name: Configure Kerberos
@@ -59,13 +62,9 @@
     kerberos_handler: "restart ksql"
   when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
-- name: Change streams directory ownership
-  file:
-    path: "{{ksql_streams_state_dir}}"
-    owner: "{{ksql_user}}"
-    group: "{{ksql_group}}"
-    state: directory
-    mode: 0750
+- name: Configure RBAC
+  include_tasks: rbac.yml
+  when: rbac_enabled|bool
 
 - name: Create Ksql Config
   template:
@@ -92,8 +91,7 @@
     mode: 0640
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
-  notify:
-    - restart ksql
+  notify: restart ksql
 
 - name: Ksql Jaas Config
   template:
@@ -103,8 +101,7 @@
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
   when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
-  notify:
-    - restart ksql
+  notify: restart ksql
 
 - name: Create Service Override Directory
   file:
@@ -121,9 +118,7 @@
     mode: 0640
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
-  notify:
-    - reload systemd
-    - restart ksql
+  notify: restart ksql
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -135,7 +130,7 @@
 - name: Start Ksql Service
   systemd:
     name: "{{ksql_service_name}}"
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Health Check

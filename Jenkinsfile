@@ -8,9 +8,22 @@ def config = jobConfig {
 }
 
 def job = {
-    stage("Hello world") {
-        echo "Running unit and integration tests"
-        sh "env"
+    stage('Install Molecule and Latest Ansible') {
+        sh '''
+            sudo pip install --upgrade 'ansible==2.9.*'
+            sudo pip install molecule docker
+        '''
+    }
+
+    withDockerServer([uri: dockerHost()]) {
+        stage('RBAC - Scram - Custom Certs - RHEL') {
+            sh '''
+                docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
+
+                cd roles/confluent.test
+                molecule test -s rbac-scram-custom-rhel
+            '''
+        }
     }
 }
 

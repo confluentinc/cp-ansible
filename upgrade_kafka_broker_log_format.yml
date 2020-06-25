@@ -1,9 +1,13 @@
+---
 - name: Kafka Broker - Host Ordering
   hosts: kafka_broker
   # Running serial=1 because add_host has problems
   # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
   serial: 1
   tasks:
+    - name: Set confluent_server_enabled and kafka_broker_jolokia_ssl_enabled Variables
+      include_tasks: tasks/set_kafka_broker_jolokia_ssl_enabled.yml
+
     - name: Create Ordered Kafka Broker Groups
       import_tasks: tasks/create_ordered_kafka_groups.yml
       vars:
@@ -12,25 +16,13 @@
 
 - name: Kafka Broker Upgrade - Set Log Message Format Version to Current Version
   hosts: non_controllers,controller
-  gather_facts: no
+  gather_facts: false
   serial: 1
   vars:
-    kafka_broker_upgrade_end_version: "5.4"
+    kafka_broker_upgrade_end_version: "5.5"
   tasks:
     - import_role:
         name: confluent.variables_handlers
-
-    - name: Get Package Facts
-      package_facts:
-        manager: auto
-
-    - set_fact:
-        confluent_server_enabled: true
-      when: ansible_facts.packages['confluent-server'] is defined
-
-    - set_fact:
-        confluent_server_enabled: false
-      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
 
     - set_fact:
         log_message_format_version: 2.3
@@ -39,6 +31,10 @@
     - set_fact:
         log_message_format_version: 2.4
       when: kafka_broker_upgrade_end_version is match('5.4.*')
+
+    - set_fact:
+        log_message_format_version: 2.5
+      when: kafka_broker_upgrade_end_version is match('5.5.*')
 
     - name: Set Log Message Format Version to Current Version
       lineinfile:

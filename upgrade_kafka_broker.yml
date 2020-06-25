@@ -1,9 +1,13 @@
+---
 - name: Kafka Broker - Host Ordering
   hosts: kafka_broker
   # Running serial=1 because add_host has problems
   # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
   serial: 1
   tasks:
+    - name: Set confluent_server_enabled and kafka_broker_jolokia_ssl_enabled Variables
+      include_tasks: tasks/set_kafka_broker_jolokia_ssl_enabled.yml
+
     - name: Create Ordered Kafka Broker Groups
       import_tasks: tasks/create_ordered_kafka_groups.yml
       vars:
@@ -12,25 +16,13 @@
 
 - name: Kafka Broker Upgrade - Config Prep
   hosts: non_controllers,controller
-  gather_facts: no
+  gather_facts: false
   serial: 1
   vars:
     kafka_broker_upgrade_start_version: "5.3"
   tasks:
     - import_role:
         name: confluent.variables_handlers
-
-    - name: Get Package Facts
-      package_facts:
-        manager: auto
-
-    - set_fact:
-        confluent_server_enabled: true
-      when: ansible_facts.packages['confluent-server'] is defined
-
-    - set_fact:
-        confluent_server_enabled: false
-      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
 
     - set_fact:
         inter_broker_protocol_version: 2.3
@@ -78,18 +70,6 @@
         controller_group: controller
         non_controller_group: non_controllers
 
-    - name: Get Package Facts
-      package_facts:
-        manager: auto
-
-    - set_fact:
-        confluent_server_enabled: true
-      when: ansible_facts.packages['confluent-server'] is defined
-
-    - set_fact:
-        confluent_server_enabled: false
-      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
-
     - name: Set Current Package Version
       set_fact:
         kafka_broker_current_version: "{{ ansible_facts.packages['confluent-server'][0]['version'] }}"
@@ -108,6 +88,7 @@
         name: "{{ inventory_hostname }}"
         group: upgrade_non_controllers
       delegate_to: localhost
+      changed_when: false
       when:
         - active_controller_count|int == 0
         - kafka_broker_current_version != confluent_full_package_version
@@ -118,6 +99,7 @@
         name: "{{ inventory_hostname }}"
         group: upgrade_controller
       delegate_to: localhost
+      changed_when: false
       when:
         - active_controller_count|int == 1
         - kafka_broker_current_version != confluent_full_package_version
@@ -163,12 +145,12 @@
 
 - name: Kafka Broker Upgrade - Set Inter-Broker Protocol to Current Version
   hosts: kafka_broker_non_controllers,kafka_broker_controller
-  gather_facts: no
+  gather_facts: false
   serial: 1
   tags:
     - inter_broker_protocol_version
   vars:
-    upgrade_to_version: "5.4"
+    upgrade_to_version: "5.5"
   tasks:
     - import_role:
         name: confluent.variables_handlers
@@ -180,6 +162,10 @@
     - set_fact:
         inter_broker_protocol_version: 2.4
       when: upgrade_to_version is match('5.4.*')
+
+    - set_fact:
+        inter_broker_protocol_version: 2.5
+      when: upgrade_to_version is match('5.5.*')
 
     - name: Set Inter-Broker Protocol Version to Current Version
       lineinfile:

@@ -16,6 +16,7 @@
   loop: "{{zookeeper_packages}}"
   when: ansible_os_family == "Debian"
 
+# Configure environment
 - name: Create Zookeeper Group
   group:
     name: "{{zookeeper_group}}"
@@ -24,8 +25,23 @@
   user:
     name: "{{zookeeper_user}}"
     comment: "Zookeeper User"
-    system: yes
+    system: true
     group: "{{zookeeper_group}}"
+
+- include_role:
+    name: confluent.ssl
+  vars:
+    truststore_storepass: "{{zookeeper_truststore_storepass}}"
+    truststore_path: "{{zookeeper_truststore_path}}"
+    keystore_path: "{{zookeeper_keystore_path}}"
+    keystore_storepass: "{{zookeeper_keystore_storepass}}"
+    keystore_keypass: "{{zookeeper_keystore_keypass}}"
+    service_name: zookeeper
+    hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
+    ca_cert_path: "{{zookeeper_ca_cert_path}}"
+    cert_path: "{{zookeeper_cert_path}}"
+    key_path: "{{zookeeper_key_path}}"
+  when: zookeeper_ssl_enabled|bool
 
 - name: Configure Kerberos
   include_role:
@@ -35,7 +51,7 @@
     kerberos_user: "{{zookeeper_user}}"
     kerberos_keytab_path: "{{zookeeper_kerberos_keytab_path}}"
     kerberos_handler: "restart zookeeper"
-  when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
+  when: zookeeper_sasl_protocol == 'kerberos'
 
 - name: Set Zookeeper dataDir ownership
   file:
@@ -68,8 +84,7 @@
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
   register: zookeeper_config
-  notify:
-    - restart zookeeper
+  notify: restart zookeeper
 
 - name: Create Log Directory
   file:
@@ -86,8 +101,7 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-  notify:
-    - restart zookeeper
+  notify: restart zookeeper
 
 - name: Create Zookeeper Jaas config
   template:
@@ -96,9 +110,8 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-  when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms"
-  notify:
-    - restart zookeeper
+  when: zookeeper_sasl_protocol in ['kerberos', 'digest']
+  notify: restart zookeeper
 
 - name: Deploy JMX Exporter Config File
   copy:
@@ -124,9 +137,7 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-  notify:
-    - reload systemd
-    - restart zookeeper
+  notify: restart zookeeper
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -135,14 +146,14 @@
 
 - meta: flush_handlers
 
-- name: Start Zookeeper Service
+- name: Zookeeper Service Started
   systemd:
     name: "{{zookeeper_service_name}}"
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Zookeeper Health Check
-  include_tasks: health_check.yml
+  include: health_check.yml
   when:
     - health_checks_enabled|bool
     - not ansible_check_mode

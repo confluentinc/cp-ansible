@@ -26,7 +26,7 @@
   user:
     name: "{{schema_registry_user}}"
     comment: "Schema Registry User"
-    system: yes
+    system: true
     group: "{{schema_registry_group}}"
 
 - include_role:
@@ -38,7 +38,10 @@
     keystore_storepass: "{{schema_registry_keystore_storepass}}"
     keystore_keypass: "{{schema_registry_keystore_keypass}}"
     service_name: schema_registry
-    hostnames: "{{ [inventory_hostname] }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
+    ca_cert_path: "{{schema_registry_ca_cert_path}}"
+    cert_path: "{{schema_registry_cert_path}}"
+    key_path: "{{schema_registry_key_path}}"
   when: schema_registry_ssl_enabled|bool or kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
 - name: Configure Kerberos
@@ -51,6 +54,10 @@
     kerberos_handler: "restart schema-registry"
   when: kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
+- name: Configure RBAC
+  include_tasks: rbac.yml
+  when: rbac_enabled|bool
+
 - name: Create Schema Registry Config
   template:
     src: schema-registry.properties.j2
@@ -58,8 +65,7 @@
     mode: 0640
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
-  notify:
-    - restart schema-registry
+  notify: restart schema-registry
 
 - name: Create Logs Directory
   file:
@@ -76,8 +82,7 @@
     mode: 0640
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
-  notify:
-    - restart schema-registry
+  notify: restart schema-registry
 
 - name: Create Service Override Directory
   file:
@@ -94,9 +99,7 @@
     mode: 0640
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
-  notify:
-    - reload systemd
-    - restart schema-registry
+  notify: restart schema-registry
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -108,7 +111,7 @@
 - name: Start Schema Registry Service
   systemd:
     name: "{{schema_registry_service_name}}"
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Health Check

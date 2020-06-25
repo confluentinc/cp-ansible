@@ -26,7 +26,7 @@
   user:
     name: "{{kafka_connect_user}}"
     comment: "Connect Distributed User"
-    system: yes
+    system: true
     group: "{{kafka_connect_group}}"
 
 - include_role:
@@ -38,7 +38,10 @@
     keystore_storepass: "{{kafka_connect_keystore_storepass}}"
     keystore_keypass: "{{kafka_connect_keystore_keypass}}"
     service_name: kafka_connect
-    hostnames: "{{ [inventory_hostname] }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
+    ca_cert_path: "{{kafka_connect_ca_cert_path}}"
+    cert_path: "{{kafka_connect_cert_path}}"
+    key_path: "{{kafka_connect_key_path}}"
   when: kafka_connect_ssl_enabled|bool or kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
 
 - name: Configure Kerberos
@@ -51,6 +54,10 @@
     kerberos_handler: "restart connect distributed"
   when: kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
+- name: Configure RBAC
+  include_tasks: rbac.yml
+  when: rbac_enabled|bool
+
 - name: Create Connect Distributed Config
   template:
     src: connect-distributed.properties.j2
@@ -58,8 +65,7 @@
     mode: 0640
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
-  notify:
-    - restart connect distributed
+  notify: restart connect distributed
 
 - name: Managing Connectors
   include_tasks: connectors.yml
@@ -79,8 +85,7 @@
     mode: 0640
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
-  notify:
-    - restart connect distributed
+  notify: restart connect distributed
 
 - name: Create Service Override Directory
   file:
@@ -97,9 +102,7 @@
     mode: 0640
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
-  notify:
-    - reload systemd
-    - restart connect distributed
+  notify: restart connect distributed
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -111,7 +114,7 @@
 - name: Start Connect Service
   systemd:
     name: "{{kafka_connect_service_name}}"
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Health Check
