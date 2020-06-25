@@ -1,28 +1,16 @@
 ---
-- name: Kafka Broker - Host Ordering
-  hosts: kafka_broker
-  # Running serial=1 because add_host has problems
-  # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
-  serial: 1
-  tasks:
-    - name: Set confluent_server_enabled and kafka_broker_jolokia_ssl_enabled Variables
-      include_tasks: tasks/set_kafka_broker_jolokia_ssl_enabled.yml
-
-    - name: Create Ordered Kafka Broker Groups
-      import_tasks: tasks/create_ordered_kafka_groups.yml
-      vars:
-        controller_group: controller
-        non_controller_group: non_controllers
-
 - name: Kafka Broker Upgrade - Set Log Message Format Version to Current Version
-  hosts: non_controllers,controller
-  gather_facts: false
-  serial: 1
+  hosts: kafka_broker
   vars:
     kafka_broker_upgrade_end_version: "5.5"
+  handlers:
+    - import_tasks: roles/confluent.kafka_broker/handlers/main.yml
   tasks:
     - import_role:
         name: confluent.variables
+
+    - name: Set confluent_server_enabled and kafka_broker_jolokia_ssl_enabled Variables
+      include_tasks: tasks/set_kafka_broker_jolokia_ssl_enabled.yml
 
     - set_fact:
         log_message_format_version: 2.3
@@ -42,6 +30,4 @@
         line: "log.message.format.version={{log_message_format_version}}"
         regexp: log.message.format.version.*
         state: present
-      notify:
-        - Restart Kafka
-        - Wait for URP
+      notify: restart kafka
