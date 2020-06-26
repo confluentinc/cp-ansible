@@ -1,0 +1,25 @@
+---
+- name: Get ActiveControllerCount
+  uri:
+    url: "{{ kafka_broker_jolokia_active_controller_url }}"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+  register: active_controller_count_query
+  check_mode: false
+
+# All kafka_broker hosts iterate over the list of kakfa_broker hosts, each seeing the list in the same order
+# At one given loop entry, only one host will have its inventory_hostname match the entry in the loop
+# restart.yml tasks will only run for that host ON that host
+- name: Restart Non Controller Kafka Brokers Serially
+  include: restart.yml
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['kafka_broker'] }}"
+  when:
+    - "hostvars[item].inventory_hostname == inventory_hostname"
+    - active_controller_count_query['json']['value']['Value']|int == 0
+
+- name: Restart Kafka Broker Controller
+  include: restart.yml
+  delegate_to: "{{ inventory_hostname }}"
+  when: active_controller_count_query['json']['value']['Value']|int == 1

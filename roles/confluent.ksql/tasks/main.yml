@@ -3,6 +3,16 @@
     name: confluent.common
   when: not common_role_completed|bool
 
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_fqdn
+
 # Install Packages
 - name: Install the KSQL Packages
   yum:
@@ -31,7 +41,7 @@
 
 - name: Set Ksql streams dir permissions
   file:
-    path: "{{ksql.properties['ksql.streams.state.dir']}}"
+    path: "{{ksql_final_properties['ksql.streams.state.dir']}}"
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
     state: directory
@@ -59,8 +69,17 @@
     kerberos_group: "{{ksql_group}}"
     kerberos_user: "{{ksql_user}}"
     kerberos_keytab_path: "{{ksql_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{ksql_keytab_path}}"
     kerberos_handler: "restart ksql"
   when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
+
+- name: Copy Custom KSQL Files
+  include_tasks: ../../tasks/copy_files.yml
+  vars:
+    copy_files: "{{ksql_copy_files}}"
+    user: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+  when: ksql_copy_files | length > 0
 
 - name: Configure RBAC
   include_tasks: rbac.yml
