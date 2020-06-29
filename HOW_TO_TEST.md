@@ -41,9 +41,9 @@ The naming conventions for these scenarios are as follows:
 
 ```rbac-mds-<functionality tested>-<security mechanism>-<OS>```
 
-Once Cluster1 has successfully started, you will then need to run a second scenario to setup cluster2, which will refer to cluster1 for it's Meta Data Server.
+Once Cluster1 has successfully started, you will then need to run a second scenario to setup cluster2.  Cluster2 will refer to cluster1 for it's Meta Data Server.
 
-The naming convetions for these scenarios are as follows:
+The naming conventions for these scenarios are as follows:
 
 ```rbac-centralized-mds-<functionality tested>-<security mechanism>-<OS>```
 
