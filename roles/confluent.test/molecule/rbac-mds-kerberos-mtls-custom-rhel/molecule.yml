@@ -62,7 +62,6 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-
 provisioner:
   name: ansible
   config_options:
@@ -73,23 +72,16 @@ provisioner:
   inventory:
     group_vars:
       all:
-        scenario_name: rbac-mds-mtls-custom-kerberos-rhel
-
-        ssl_enabled: true
-        ssl_mutual_auth_enabled: true
-
-        ssl_custom_certs: true
-        ssl_ca_cert_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
-        ssl_signed_cert_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
-        ssl_key_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
-        ssl_key_password: keypass
+        scenario_name: rbac-mds-kerberos-mtls-custom-rhel
+        ssl_enabled: false
+        ssl_mutual_auth_enabled: false
+        sasl_protocol: kerberos
 
         rbac_enabled: true
-        external_mds_enabled: false
-
+       
         create_mds_certs: false
-        token_services_public_pem_file: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/public.pem"
-        token_services_private_pem_file: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/tokenKeypair.pem"
+        token_services_public_pem_file: "roles/confluent.test/molecule/rbac-mds-kerberos-mtls-custom-rhel/generated_ssl_files/public.pem"
+        token_services_private_pem_file: "roles/confluent.test/molecule/rbac-mds-kerberos-mtls-custom-rhel/generated_ssl_files/tokenKeypair.pem"
 
         kafka_broker_custom_listeners:
           client_listener:
@@ -122,11 +114,12 @@ provisioner:
           realm: realm.example.com
           kdc_hostname: mds-kerberos1
           admin_hostname: mds-kerberos1
-
+        
+  
         kafka_broker_custom_properties:
           ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
           ldap.com.sun.jndi.ldap.read.timeout: 3000
-          ldap.java.naming.provider.url: ldaps://mds-ldap1:636
+          ldap.java.naming.provider.url: ldap://mds-ldap1:389
           ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
           ldap.java.naming.security.credentials: password
           ldap.java.naming.security.authentication: simple
@@ -137,14 +130,10 @@ provisioner:
           ldap.group.name.attribute: cn
           ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
           ldap.user.object.class: account
-
+  
       ldap_server:
-        ldaps_enabled: true
-        ldaps_custom_certs: true
-        ssl_custom_certs: true
-        ssl_ca_cert_filepath: "{{scenario_name}}/generated_ssl_files/ca.crt"
-        ssl_signed_cert_filepath: "{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
-        ssl_key_filepath: "{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        ldaps_enabled: false
+        ldaps_custom_certs: false
 
         ldap_admin_password: ldppassword
 
@@ -181,13 +170,19 @@ provisioner:
             password: user1p
             uid: 9992
             guid: 92
-
+  
       kerberos_server:
         realm_name: "{{ kerberos.realm | upper }}"
-
+  
         keytab_output_directory: "{{scenario_name}}/keytabs"
 
         kerberos_principals:
+          - principal: "zookeeper/mds-zookeeper1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/zookeeper-mds-zookeeper1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-mds-kafka-broker1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker2.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-mds-kafka-broker2.keytab"
           - principal: "zookeeper/zookeeper1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
@@ -197,11 +192,20 @@ provisioner:
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker3.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker3.keytab"
 
+  
+      zookeeper:
+        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        zookeeper_kerberos_keytab_path: "roles/confluent.test/molecule/rbac-mds-kerberos-mtls-custom-rhel/keytabs/zookeeper-{{inventory_hostname}}.keytab"
+
+      kafka_broker:
+        kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        kafka_broker_kerberos_keytab_path: "roles/confluent.test/molecule/rbac-mds-kerberos-mtls-custom-rhel/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
+
 verifier:
   name: ansible
 lint: |
-  set -e
-  yamllint -c ../../.yamllint ../..
+    set -e
+    yamllint -c ../../.yamllint ../..
 scenario:
   test_sequence:
     - lint
