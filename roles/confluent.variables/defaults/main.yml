@@ -2,7 +2,7 @@
 # Custom filters used in this file are defined in filter_plugins/filters.py
 
 confluent_repo_version: 5.5
-confluent_package_version: 5.5.0
+confluent_package_version: 5.5.1
 confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
 confluent_package_debian_suffix: "{{ '=' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
@@ -109,9 +109,12 @@ kafka_broker_custom_listeners:
     ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
     sasl_protocol: "{{ sasl_protocol }}"
 
+# Deprecated variable
 kafka_broker_configure_additional_brokers: true
-kafka_broker_listeners: "{{ kafka_broker_default_listeners | combine(kafka_broker_custom_listeners, recursive=True) if kafka_broker_configure_additional_brokers|bool else  kafka_broker_default_listeners}}"
-kafka_broker_inter_broker_listener_name: "{{ 'broker' if kafka_broker_configure_additional_brokers|bool else 'internal' }}"
+kafka_broker_configure_multiple_listeners: "{{kafka_broker_configure_additional_brokers}}"
+
+kafka_broker_listeners: "{{ kafka_broker_default_listeners | combine(kafka_broker_custom_listeners, recursive=True) if kafka_broker_configure_multiple_listeners|bool else  kafka_broker_default_listeners}}"
+kafka_broker_inter_broker_listener_name: "{{ 'broker' if kafka_broker_configure_multiple_listeners|bool else 'internal' }}"
 
 # Uses custom filter to create a list of all sasl_protocols, removes ['none'], and reduces to unique items
 kafka_broker_sasl_enabled_mechanisms: "{{ kafka_broker_listeners | get_sasl_mechanisms(sasl_protocol) | difference(['none']) | unique }}"
@@ -130,6 +133,8 @@ kafka_broker_keytab_path: /etc/security/keytabs/kafka_broker.keytab
 kafka_broker:
   log4j_file: /etc/kafka/kafka_server_log4j.properties
   jaas_file: /etc/kafka/kafka_server_jaas.conf
+  # Deprecated way of providing custom properties
+  properties: {}
 
 kafka_broker_schema_validation_enabled: false
 
@@ -151,7 +156,8 @@ kafka_broker_default_interal_replication_factor: "{{ [ groups['kafka_broker'] | 
 
 kafka_broker_metrics_reporter_enabled: true
 
-kafka_broker_custom_properties: {}
+# Passing old properties dict here for backwards compatibility
+kafka_broker_custom_properties: "{{ kafka_broker.properties }}"
 
 #### Schema Registry Variables ####
 schema_registry_user: "{{schema_registry_default_user}}"
@@ -172,6 +178,8 @@ schema_registry_keytab_path: /etc/security/keytabs/schema_registry.keytab
 schema_registry_kafka_listener_name: internal
 schema_registry:
   log4j_file: /etc/schema-registry/schema_registry_log4j.properties
+  # Deprecated way of providing custom properties
+  properties: {}
 
 schema_registry_jolokia_enabled: "{{jolokia_enabled}}"
 schema_registry_jolokia_port: 7772
@@ -179,7 +187,9 @@ schema_registry_jolokia_ssl_enabled: "{{ schema_registry_ssl_enabled }}"
 
 # User provided list of files to copy onto host
 schema_registry_copy_files: []
-schema_registry_custom_properties: {}
+
+# Passing old properties dict here for backwards compatibility
+schema_registry_custom_properties: "{{ schema_registry.properties }}"
 
 
 #### Kafka Rest Variables ####
@@ -201,6 +211,8 @@ kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
 kafka_rest_kafka_listener_name: internal
 kafka_rest:
   log4j_file: /etc/kafka-rest/kafka-rest_log4j.properties
+  # Deprecated way of providing custom properties
+  properties: {}
 
 kafka_rest_jolokia_enabled: "{{jolokia_enabled}}"
 kafka_rest_jolokia_port: 7775
@@ -209,7 +221,8 @@ kafka_rest_jolokia_ssl_enabled: "{{ kafka_rest_ssl_enabled }}"
 # User provided list of files to copy onto host
 kafka_rest_copy_files: []
 
-kafka_rest_custom_properties: {}
+# Passing old properties dict here for backwards compatibility
+kafka_rest_custom_properties: "{{ kafka_rest.properties }}"
 
 
 # Kafka Connect Variables
@@ -231,6 +244,8 @@ kafka_connect_keytab_path: /etc/security/keytabs/kafka_connect.keytab
 kafka_connect_kafka_listener_name: internal
 kafka_connect:
   log4j_file: /etc/kafka/connect_distributed_log4j.properties
+  # Deprecated way of providing custom properties
+  properties: {}
 
 kafka_connect_jolokia_enabled: "{{jolokia_enabled}}"
 kafka_connect_jolokia_port: 7773
@@ -258,7 +273,8 @@ kafka_connect_plugins: []
 kafka_connect_plugins_remote: []
 kafka_connect_plugins_dest: /usr/share/java
 
-kafka_connect_custom_properties: {}
+# Passing old properties dict here for backwards compatibility
+kafka_connect_custom_properties: "{{ kafka_connect.properties }}"
 
 #### KSQLDB Variables ####
 ksql_user: "{{ksql_default_user}}"
@@ -278,8 +294,9 @@ ksql_key_path: "/var/ssl/private/ksql.key"
 ksql_keytab_path: /etc/security/keytabs/ksql.keytab
 ksql_kafka_listener_name: internal
 ksql:
-  log4j_file: "/etc/ksqldb/ksql-server_log4j.properties"
-  jaas_file: "/etc/ksqldb/ksql-server_jaas.conf"
+  log4j_file: "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql-server_log4j.properties' , '/etc/ksql/ksql-server_log4j.properties')}}"
+  jaas_file: "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql-server_jaas.conf' , '/etc/ksql/ksql-server_jaas.conf')}}"
+  properties: {}
 
 ksql_jolokia_enabled: "{{jolokia_enabled}}"
 ksql_jolokia_port: 7774
@@ -292,7 +309,8 @@ ksql_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | default
 
 ksql_service_id: default_
 
-ksql_custom_properties: {}
+# Passing old properties dict here for backwards compatibility
+ksql_custom_properties: "{{ ksql.properties }}"
 
 # Control Center Variables
 control_center_user: "{{control_center_default_user}}"
@@ -314,13 +332,16 @@ control_center_keytab_path: /etc/security/keytabs/control_center.keytab
 control_center_kafka_listener_name: internal
 control_center:
   log4j_file: /etc/confluent-control-center/control-center_log4j.properties
+  # Deprecated way of providing custom properties
+  properties: {}
 
 # User provided list of files to copy onto host
 control_center_copy_files: []
 
 control_center_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
 
-control_center_custom_properties: {}
+# Passing old properties dict here for backwards compatibility
+control_center_custom_properties: "{{ control_center.properties }}"
 
 sasl_scram_users:
   admin:
