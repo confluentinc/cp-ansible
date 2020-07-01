@@ -86,3 +86,123 @@ Full path on hosts to install the Confluent CLI
 
 Default:  /usr/local/bin/confluent
 
+***
+
+### control_center_custom_log4j
+
+Boolean to enable cp-ansible's Custom Log4j Configuration
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### control_center_custom_java_args
+
+Custom Java Args to add to the Control Center Process
+
+Default:  ""
+
+***
+
+### control_center_rocksdb_path
+
+Full Path to the RocksDB Data Directory. If left as empty string, cp-ansible will not configure RocksDB
+
+Default:  ""
+
+***
+
+### kafka_broker_custom_log4j
+
+Boolean to enable cp-ansible's Custom Log4j Configuration
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_broker_custom_java_args
+
+Custom Java Args to add to the Kafka Process
+
+Default:  ""
+
+***
+
+### kafka_connect_custom_log4j
+
+Boolean to enable cp-ansible's Custom Log4j Configuration
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_connect_custom_java_args
+
+Custom Java Args to add to the Connect Process
+
+Default:  ""
+
+***
+
+### kafka_rest_custom_log4j
+
+Boolean to enable cp-ansible's Custom Log4j Configuration
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_rest_custom_java_args
+
+Custom Java Args to add to the Rest Proxy Process
+
+Default:  ""
+
+***
+
+### ksql_custom_log4j
+
+Boolean to enable cp-ansible's Custom Log4j Configuration
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### ksql_custom_java_args
+
+Custom Java Args to add to the ksqlDB Process
+
+Default:  ""
+
+***
+
+### schema_registry_custom_log4j
+
+Boolean to enable cp-ansible's Custom Log4j Configuration
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### schema_registry_custom_java_args
+
+Custom Java Args to add to the Schema Registry Process
+
+Default:  ""
+
+***
+
+### zookeeper_custom_log4j
+
+Boolean to enable cp-ansible's Custom Log4j Configuration
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### zookeeper_custom_java_args
+
+Custom Java Args to add to the Zookeeper Process
+
+Default:  ""
+
