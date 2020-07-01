@@ -3,13 +3,13 @@
 
 ***
 
-### ssl_enabled
+#### ssl_enabled
 
 Configure TLS encryption for all components
 
-Type: Boolean
+**Type:** Boolean
 
-Default: false
+**Default:** false
 
 ***
 
@@ -17,8 +17,8 @@ Default: false
 
 Configure mTLS authentication for all components
 
-Type: Boolean
+**Type:** Boolean
 
-Default: false
+**Default:** false
 
 ***
