@@ -87,7 +87,7 @@ class FilterModule(object):
         return java_args[1:]
 
     def combine_properties(self, properties_dict):
-        # Loops over master properties dictionary and combines subelements if enabled
+        # Loops over master properties dictionary and combines sub elements if enabled
         final_dict = {}
         for prop in properties_dict:
             if properties_dict[prop].get('enabled'):
@@ -154,7 +154,7 @@ class FilterModule(object):
                             config_prefix, truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass,
                             omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
                             kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
-                            oauth_username, oauth_password, mds_urls):
+                            oauth_username, oauth_password, mds_bootstrap_server_urls):
         # For any kafka client's properties: Takes in a single kafka listener and output properties to connect to that listener
         # Other inputs help fill out the properties
         final_dict = {
@@ -210,7 +210,7 @@ class FilterModule(object):
             })
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER' and not omit_jaas_configs:
             final_dict.update({
-                config_prefix + 'sasl.jaas.config': 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"' + oauth_username + '\" password=\"' + oauth_password + '\" metadataServerUrls=\"' + mds_urls + '\";'
+                config_prefix + 'sasl.jaas.config': 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"' + oauth_username + '\" password=\"' + oauth_password + '\" metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
             })
         return final_dict
 
