@@ -1,3 +1,7 @@
+# confluent.variables
+
+Below are the supported variables for the role confluent.variables
+
 ***
 
 ### jolokia_enabled
@@ -114,7 +118,7 @@ Default:  false
 
 ### ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on all Kafka Listeners. Configures all components to use mTLS for authentication.
+Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka
 
 Default:  false
 
@@ -248,6 +252,532 @@ Default:  false
 
 ***
 
+### zookeeper_user
+
+Only use to customize Linux User Zookeeper Service runs with. User must exist on host.
+
+Default:  "{{zookeeper_default_user}}"
+
+***
+
+### zookeeper_group
+
+Only use to customize Linux Group Zookeeper Service user belongs to. Group must exist on host.
+
+Default:  "{{zookeeper_default_group}}"
+
+***
+
+### zookeeper_ssl_enabled
+
+Boolean to configure zookeeper with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### zookeeper_ssl_mutual_auth_enabled
+
+Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+
+Default:  "{{ssl_mutual_auth_enabled}}"
+
+***
+
+### zookeeper_client_port
+
+Port for Kafka to Zookeeper connections. NOTE- 2181 will be configured for zk health checks
+
+Default:  "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
+
+***
+
+### zookeeper_sasl_protocol
+
+SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
+
+Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
+
+***
+
+### zookeeper_jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on zookeeper
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### zookeeper_jolokia_port
+
+Port to expose jolokia metrics. Beware of port collisions if colocating components on same host
+
+Default:  7770
+
+***
+
+### zookeeper_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### zookeeper_jmxexporter_port
+
+Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
+
+Default:  8079
+
+***
+
+### zookeeper_peer_port
+
+Zookeeper peer port
+
+Default:  2888
+
+***
+
+### zookeeper_leader_port
+
+Zookeeper leader port
+
+Default:  3888
+
+***
+
+### zookeeper_copy_files
+
+Use to copy files from control node to zookeeper hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+
+Default:  []
+
+***
+
+### zookeeper_custom_properties
+
+Use to set custom zookeeper properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- zookeeper.properties is deprecated.
+
+Default:  "{{ zookeeper.properties }}"
+
+***
+
+### kafka_broker_configure_multiple_listeners
+
+Boolean to configure more than one kafka listener. Defaults to true. NOTE- kafka_broker_configure_additional_brokers is deprecated
+
+Default:  "{{kafka_broker_configure_additional_brokers}}"
+
+***
+
+### kafka_broker_user
+
+Only use to customize Linux User Kafka Service runs with. User must exist on host.
+
+Default:  "{{kafka_broker_default_user}}"
+
+***
+
+### kafka_broker_group
+
+Only use to customize Linux Group Kafka Service user belongs to. Group must exist on host.
+
+Default:  "{{kafka_broker_default_group}}"
+
+***
+
+### kafka_broker_jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on kafka
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### kafka_broker_jolokia_port
+
+Port to expose kafka jolokia metrics. Beware of port collisions if colocating components on same host
+
+Default:  7771
+
+***
+
+### kafka_broker_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on kafka
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### kafka_broker_jmxexporter_port
+
+Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
+
+Default:  8080
+
+***
+
+### kafka_broker_copy_files
+
+Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+
+Default:  []
+
+***
+
+### kafka_broker_default_interal_replication_factor
+
+Replication Factor for internal topics. Defaults to the minimum of the number of brokers and 3
+
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
+
+***
+
+### kafka_broker_metrics_reporter_enabled
+
+Boolean to enable the metrics reporter
+
+Default:  true
+
+***
+
+### kafka_broker_custom_properties
+
+Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
+
+Default:  "{{ kafka_broker.properties }}"
+
+***
+
+### schema_registry_user
+
+Only use to customize Linux User Schema Registry Service runs with. User must exist on host.
+
+Default:  "{{schema_registry_default_user}}"
+
+***
+
+### schema_registry_group
+
+Only use to customize Linux Group Schema Registry Service user belongs to. Group must exist on host.
+
+Default:  "{{schema_registry_default_group}}"
+
+***
+
+### schema_registry_listener_port
+
+Port Schema Registry API exposed over
+
+Default:  8081
+
+***
+
+### schema_registry_ssl_enabled
+
+Boolean to configure schema registry with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### schema_registry_ssl_mutual_auth_enabled
+
+Boolean to enable mTLS Authentication on Schema Registry
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### schema_registry_jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on schema registry
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### schema_registry_jolokia_port
+
+Port to expose schema registry jolokia metrics. Beware of port collisions if colocating components on same host
+
+Default:  7772
+
+***
+
+### schema_registry_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on Schema Registry jolokia metrics
+
+Default:  "{{ schema_registry_ssl_enabled }}"
+
+***
+
+### schema_registry_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on schema registry
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### schema_registry_jmxexporter_port
+
+Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
+
+Default:  8078
+
+***
+
+### schema_registry_copy_files
+
+Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+
+Default:  []
+
+***
+
+### schema_registry_custom_properties
+
+Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
+
+Default:  "{{ schema_registry.properties }}"
+
+***
+
+### kafka_rest_user
+
+Only use to customize Linux User Rest Proxy Service runs with. User must exist on host.
+
+Default:  "{{kafka_rest_default_user}}"
+
+***
+
+### kafka_rest_group
+
+Only use to customize Linux Group Rest Proxy Service user belongs to. Group must exist on host.
+
+Default:  "{{kafka_rest_default_group}}"
+
+***
+
+### kafka_rest_port
+
+Port Rest Proxy API exposed over
+
+Default:  8082
+
+***
+
+### kafka_rest_ssl_enabled
+
+Boolean to configure Rest Proxy with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### kafka_rest_ssl_mutual_auth_enabled
+
+Boolean to enable mTLS Authentication on Rest Proxy
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### kafka_rest_jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on Rest Proxy
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### kafka_rest_jolokia_port
+
+Port to expose Rest Proxy jolokia metrics. Beware of port collisions if colocating components on same host
+
+Default:  7775
+
+***
+
+### kafka_rest_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on Rest Proxy jolokia metrics
+
+Default:  "{{ kafka_rest_ssl_enabled }}"
+
+***
+
+### kafka_rest_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on Rest Proxy
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### kafka_rest_jmxexporter_port
+
+Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
+
+Default:  8075
+
+***
+
+### kafka_rest_copy_files
+
+Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+
+Default:  []
+
+***
+
+### kafka_rest_custom_properties
+
+Use to set custom Rest Proxy properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_rest.properties is deprecated.
+
+Default:  "{{ kafka_rest.properties }}"
+
+***
+
+### kafka_connect_user
+
+Only use to customize Linux User Connect Service runs with. User must exist on host.
+
+Default:  "{{kafka_connect_default_user}}"
+
+***
+
+### kafka_connect_group
+
+Only use to customize Linux Group Connect Service user belongs to. Group must exist on host.
+
+Default:  "{{kafka_connect_default_group}}"
+
+***
+
+### kafka_connect_rest_port
+
+Port Connect API exposed over
+
+Default:  8083
+
+***
+
+### kafka_connect_ssl_enabled
+
+Boolean to configure Connect with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### kafka_connect_ssl_mutual_auth_enabled
+
+Boolean to enable mTLS Authentication on Rest Proxy
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### kafka_connect_jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on Connect
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### kafka_connect_jolokia_port
+
+Port to expose Connect jolokia metrics. Beware of port collisions if colocating components on same host
+
+Default:  7773
+
+***
+
+### kafka_connect_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on Rest Proxy jolokia metrics
+
+Default:  "{{ kafka_connect_ssl_enabled }}"
+
+***
+
+### kafka_connect_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on Connect
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### kafka_connect_jmxexporter_port
+
+Port to expose connect prometheus metrics. Beware of port collisions if colocating components on same host
+
+Default:  8077
+
+***
+
+### kafka_connect_copy_files
+
+Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+
+Default:  []
+
+***
+
+### kafka_connect_group_id
+
+Connect Service Group Id. Customize when configuring multiple connect clusters in same inventory
+
+Default:  connect-cluster
+
+***
+
+### kafka_connect_default_internal_replication_factor
+
+Replication Factor for connect internal topics. Defaults to the minimum of the number of brokers and 3
+
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
+
+***
+
+### kafka_connect_secret_registry_enabled
+
+Boolean to enable and configure Connect Secret Registry
+
+Default:  "{{rbac_enabled}}"
+
+***
+
+### kafka_connect_secret_registry_key
+
+Connect Secret Registry Key
+
+Default:  39ff95832750c0090d84ddf5344583832efe91ef
+
+***
+
+### kafka_connect_custom_properties
+
+Use to set custom Connect properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_connect.properties is deprecated.
+
+Default:  "{{ kafka_connect.properties }}"
+
+***
+
+# confluent.common
+
+Below are the supported variables for the role confluent.common
+
+***
+
 ### confluent_common_repository_baseurl
 
 Base URL for Confluent's RPM and Debian Package Repositories
@@ -336,6 +866,12 @@ Default:  /usr/local/bin/confluent
 
 ***
 
+# confluent.control_center
+
+Below are the supported variables for the role confluent.control_center
+
+***
+
 ### control_center_custom_log4j
 
 Boolean to enable cp-ansible's Custom Log4j Configuration
@@ -360,6 +896,12 @@ Default:  ""
 
 ***
 
+# confluent.kafka_broker
+
+Below are the supported variables for the role confluent.kafka_broker
+
+***
+
 ### kafka_broker_custom_log4j
 
 Boolean to enable cp-ansible's Custom Log4j Configuration
@@ -373,6 +915,12 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Kafka Process
 
 Default:  ""
+
+***
+
+# confluent.kafka_connect
+
+Below are the supported variables for the role confluent.kafka_connect
 
 ***
 
@@ -392,6 +940,12 @@ Default:  ""
 
 ***
 
+# confluent.kafka_rest
+
+Below are the supported variables for the role confluent.kafka_rest
+
+***
+
 ### kafka_rest_custom_log4j
 
 Boolean to enable cp-ansible's Custom Log4j Configuration
@@ -405,6 +959,12 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Rest Proxy Process
 
 Default:  ""
+
+***
+
+# confluent.ksql
+
+Below are the supported variables for the role confluent.ksql
 
 ***
 
@@ -424,6 +984,12 @@ Default:  ""
 
 ***
 
+# confluent.schema_registry
+
+Below are the supported variables for the role confluent.schema_registry
+
+***
+
 ### schema_registry_custom_log4j
 
 Boolean to enable cp-ansible's Custom Log4j Configuration
@@ -440,6 +1006,12 @@ Default:  ""
 
 ***
 
+# confluent.zookeeper
+
+Below are the supported variables for the role confluent.zookeeper
+
+***
+
 ### zookeeper_custom_log4j
 
 Boolean to enable cp-ansible's Custom Log4j Configuration
@@ -453,6 +1025,12 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Zookeeper Process
 
 Default:  ""
+
+***
+
+# confluent.kerberos
+
+Below are the supported variables for the role confluent.kerberos
 
 ***
 
@@ -485,4 +1063,6 @@ Default:  "{{ kerberos.kdc_hostname }}"
 KDC Admin Server Hostname
 
 Default:  "{{ kerberos.realm }}"
+
+***
 
