@@ -678,7 +678,7 @@ Default:  "{{ssl_enabled}}"
 
 ### kafka_connect_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on Rest Proxy
+Boolean to enable mTLS Authentication on Connect
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
 
@@ -702,7 +702,7 @@ Default:  7773
 
 ### kafka_connect_jolokia_ssl_enabled
 
-Boolean to enable TLS encryption on Rest Proxy jolokia metrics
+Boolean to enable TLS encryption on Connect jolokia metrics
 
 Default:  "{{ kafka_connect_ssl_enabled }}"
 
@@ -726,7 +726,7 @@ Default:  8077
 
 ### kafka_connect_copy_files
 
-Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to connect hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
 
 Default:  []
 
@@ -769,6 +769,286 @@ Default:  39ff95832750c0090d84ddf5344583832efe91ef
 Use to set custom Connect properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_connect.properties is deprecated.
 
 Default:  "{{ kafka_connect.properties }}"
+
+***
+
+### ksql_user
+
+Only use to customize Linux User ksqlDB Service runs with. User must exist on host.
+
+Default:  "{{ksql_default_user}}"
+
+***
+
+### ksql_group
+
+Only use to customize Linux Group ksqlDB Service user belongs to. Group must exist on host.
+
+Default:  "{{ksql_default_group}}"
+
+***
+
+### ksql_listener_port
+
+Port ksqlDB API exposed over
+
+Default:  8088
+
+***
+
+### ksql_ssl_enabled
+
+Boolean to configure ksqlDB with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### ksql_ssl_mutual_auth_enabled
+
+Boolean to enable mTLS Authentication on ksqlDB
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### ksql_jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on ksqlDB
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### ksql_jolokia_port
+
+Port to expose ksqlDB jolokia metrics. Beware of port collisions if colocating components on same host
+
+Default:  7774
+
+***
+
+### ksql_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on ksqlDB jolokia metrics
+
+Default:  "{{ ksql_ssl_enabled }}"
+
+***
+
+### ksql_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on ksqlDB
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### ksql_jmxexporter_port
+
+Port to expose ksqlDB prometheus metrics. Beware of port collisions if colocating components on same host
+
+Default:  8076
+
+***
+
+### ksql_copy_files
+
+Use to copy files from control node to ksqlDB hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+
+Default:  []
+
+***
+
+### ksql_default_internal_replication_factor
+
+Replication Factor for ksqlDB internal topics. Defaults to the minimum of the number of brokers and 3
+
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
+
+***
+
+### ksql_service_id
+
+ksqlDB Service ID. Use when configuring multiple ksqldb clusters in the same inventory file.
+
+Default:  default_
+
+***
+
+### ksql_custom_properties
+
+Use to set custom ksqlDB properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- ksql.properties is deprecated.
+
+Default:  "{{ ksql.properties }}"
+
+***
+
+### control_center_user
+
+Only use to customize Linux User Control Center Service runs with. User must exist on host.
+
+Default:  "{{control_center_default_user}}"
+
+***
+
+### control_center_group
+
+Only use to customize Linux Group Control Center Service user belongs to. Group must exist on host.
+
+Default:  "{{control_center_default_group}}"
+
+***
+
+### control_center_port
+
+Port Control Center exposed over
+
+Default:  9021
+
+***
+
+### control_center_listener_hostname
+
+Interface on host for Control Center to listen on
+
+Default:  "0.0.0.0"
+
+***
+
+### control_center_ssl_enabled
+
+Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### control_center_ssl_mutual_auth_enabled
+
+Boolean to enable mTLS Authentication on Control Center
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### control_center_copy_files
+
+Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+
+Default:  []
+
+***
+
+### control_center_default_internal_replication_factor
+
+Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and 3
+
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
+
+***
+
+### control_center_custom_properties
+
+Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
+
+Default:  "{{ control_center.properties }}"
+
+***
+
+### rbac_enabled
+
+Boolean to configure Confluent Platform with RBAC enabled. Creates Rolebindings for all components to function
+
+Default:  false
+
+***
+
+### mds_port
+
+Port to expose MDS Server API on
+
+Default:  8090
+
+***
+
+### mds_ssl_enabled
+
+Boolean to configure TLS encryption on the MDS Server. (Or if is confligured with TLS encyption when external_mds_enabled: true)
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### external_mds_enabled
+
+Boolean to describe if kafka group in inventory file should be configured as MDS Server. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, mds_ssl_enabled
+
+Default:  false
+
+***
+
+### mds_broker_bootstrap_servers
+
+Kafka hosts and listener ports on the Kafka Cluster acting as an external MDS Server. mds_broker_listener dictionary must describe its security settings. Must be configured if external_mds_enabled: true
+
+Default:  localhost:9092
+
+***
+
+### mds_broker_listener
+
+Listener Dictionary that describes how kafka clusters connect to MDS Kafka cluster. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
+
+***
+
+### mds_bootstrap_server_urls
+
+Comma separated urls for mds servers. Only set if external_mds_enabled: true
+
+Default:  "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
+
+***
+
+### rbac_component_additional_system_admins
+
+List of users to be granted system admin Role Bindings across all components
+
+Default:  []
+
+***
+
+### schema_registry_additional_system_admins
+
+List of users to be granted system admin Role Bindings on the Schema Registry Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
+
+***
+
+### ksql_additional_system_admins
+
+List of users to be granted system admin Role Bindings on the ksqlDB Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
+
+***
+
+### kafka_connect_additional_system_admins
+
+List of users to be granted system admin Role Bindings on the Connect Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
+
+***
+
+### control_center_additional_system_admins
+
+List of users to be granted system admin Role Bindings on the Control Center Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
 
 ***
 
