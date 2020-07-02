@@ -120,6 +120,134 @@ Default:  false
 
 ***
 
+### self_signed
+
+Boolean to create Keystores with Self Signed Certificates, defaults to true. Alternatively can use ssl_provided_keystore_and_truststore or ssl_custom_certs
+
+Default:  "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_certs|bool else true }}"
+
+***
+
+### regenerate_ca
+
+Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs
+
+Default:  true
+
+***
+
+### regenerate_keystore_and_truststore
+
+Boolean to have reruns of all.yml recreate Keystores
+
+Default:  true
+
+***
+
+### ssl_provided_keystore_and_truststore
+
+Boolean for TLS Encryption option to provide own Host Keystores.
+
+Default:  false
+
+***
+
+### ssl_keystore_filepath
+
+Full path to host specific keystore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-keystore.jks"
+
+Default:  ""
+
+***
+
+### ssl_keystore_key_password
+
+Keystore Key Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
+
+Default:  ""
+
+***
+
+### ssl_keystore_store_password
+
+Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
+
+Default:  ""
+
+***
+
+### ssl_truststore_filepath
+
+Full path to host specific truststore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. Can share same keystore for all components if it contains all ca certs used to sign host certificates
+
+Default:  ""
+
+***
+
+### ssl_truststore_password
+
+Keystore Password for host specific truststore. Used with ssl_provided_keystore_and_truststore: true
+
+Default:  ""
+
+***
+
+### ssl_truststore_ca_cert_alias
+
+Keystore alias for ca certificate
+
+Default:  ""
+
+***
+
+### ssl_custom_certs
+
+Boolean for TLS Encryption option to provide own Host Certificates. Must also set ssl_ca_cert_filepath, ssl_signed_cert_filepath, ssl_key_filepath, ssl_key_password
+
+Default:  false
+
+***
+
+### ssl_ca_cert_filepath
+
+Full path to CA Certificate Bundle on ansible control node. Used with ssl_custom_certs: true
+
+Default:  ""
+
+***
+
+### ssl_signed_cert_filepath
+
+Full path to host specific signed cert on ansible control node. Used with ssl_custom_certs: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-signed.crt"
+
+Default:  ""
+
+***
+
+### ssl_key_filepath
+
+Full path to host specific key on ansible control node. Used with ssl_custom_certs: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-key.pem"
+
+Default:  ""
+
+***
+
+### ssl_key_password
+
+Password to host specific key. Do not set if key does not require password. Used with ssl_custom_certs: true.
+
+Default:  ""
+
+***
+
+### ssl_custom_certs_remote_src
+
+Boolean stating certs and keys are already on hosts. Used with ssl_custom_certs: true.
+
+Default:  false
+
+***
+
 ### confluent_common_repository_baseurl
 
 Base URL for Confluent's RPM and Debian Package Repositories
