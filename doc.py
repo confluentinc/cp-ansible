@@ -31,7 +31,7 @@ def parse_variable_file(filepath, docs_file):
 
 docs_file = open("docs.md", "w")
 
-for role_name in ["common", "control_center", "kafka_broker", "kafka_connect", "kafka_rest", "ksql", "schema_registry", "zookeeper"]:
+for role_name in ["variables", "common", "control_center", "kafka_broker", "kafka_connect", "kafka_rest", "ksql", "schema_registry", "zookeeper", "kerberos"]:
     parse_variable_file("roles/confluent." + role_name + "/defaults/main.yml", docs_file)
 
 docs_file.close
