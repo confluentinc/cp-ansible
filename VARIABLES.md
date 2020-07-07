@@ -52,6 +52,14 @@ Default:  true
 
 ***
 
+### kerberos_configure
+
+Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, keberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary
+
+Default:  true
+
+***
+
 ### custom_yum_repofile
 
 Boolean to configure custom repo file on RHEL/Centos hosts, must also set custom_yum_repofile_filepath variable
@@ -1305,44 +1313,6 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Zookeeper Process
 
 Default:  ""
-
-***
-
-# confluent.kerberos
-
-Below are the supported variables for the role confluent.kerberos
-
-***
-
-### kerberos_configure
-
-Boolean to configure Kerberos krb5.conf file, must also set kerberos_realm, keberos_kdc_hostname, kerberos_admin_hostname
-
-Default:  true
-
-***
-
-### kerberos_realm
-
-KDC Server Realm
-
-Default:  "{{ kerberos.realm }}"
-
-***
-
-### keberos_kdc_hostname
-
-KDC Server Hostname
-
-Default:  "{{ kerberos.kdc_hostname }}"
-
-***
-
-### kerberos_admin_hostname
-
-KDC Admin Server Hostname
-
-Default:  "{{ kerberos.realm }}"
 
 ***
 
