@@ -18,13 +18,17 @@
     name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{zookeeper_packages}}"
-  when: ansible_os_family == "RedHat"
+  when:
+    - ansible_os_family == "RedHat"
+    - archive_file_enabled == false
 
 - name: Install the Zookeeper Packages
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{zookeeper_packages}}"
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - archive_file_enabled == false
 
 # Configure environment
 - name: Create Zookeeper Group
@@ -37,6 +41,19 @@
     comment: "Zookeeper User"
     system: true
     group: "{{zookeeper_group}}"
+
+# Archive File deployments need to create SystemD service units
+- name: Test for Zookeeper Service
+  stat:
+    path: "{{zookeeper.systemd_file}}"
+  register: zookeeper_service_systemd
+
+- name: Create Zookeeper Service
+  template:
+    src: confluent-zookeeper.service.j2
+    dest: "{{zookeeper.systemd_file}}"
+    mode: 0644
+  when: overwrite_systemd_services|bool or zookeeper_service_systemd.stat.exists == false
 
 - include_role:
     name: confluent.ssl
@@ -97,6 +114,14 @@
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
 
+- name: Create Zookeeper Config directory
+  file:
+    path: "{{ zookeeper.config_file | dirname }}"
+    state: directory
+    mode: 0755
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+
 - name: Create Zookeeper Config
   template:
     src: zookeeper.properties.j2
@@ -114,6 +139,14 @@
     group: "{{zookeeper_group}}"
     owner: "{{zookeeper_user}}"
     mode: 0750
+
+- name: Create log4j Directory
+  file:
+    path: "{{zookeeper.log4j_file | dirname}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+    state: directory
+    mode: 0755
 
 - name: Create Zookeeper log4j config
   template:

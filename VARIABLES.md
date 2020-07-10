@@ -1060,6 +1060,54 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ***
 
+### archive_file_enabled
+
+Whether to enable an Archive File deployment or not. If true then services will not be installed via the use of yum or apt, but will instead be installed via expanding the target .tar.gz file from the Confluent archive into the path defined by `archive_destination_path`. Configuration files are also kept in this directory structure instead of `/etc`. SystemD service units are created for each target service.
+
+Default: false
+
+***
+
+### confluent_archive_version
+
+The Confluent Platform version of the archive to download. Something like *5.5.0* or *5.5.1*.
+
+Default: "{{ confluent_package_version }}"
+
+***
+
+### confluent_archive_scala_version
+
+The Scala version of the Confluent Platform archive to download. Something like *2.11* or *2.12*. If you don't have a specific version requirement then use the default.
+
+Default: 2.12
+
+***
+
+### archive_destination_path
+
+The path the downloaded archive is expanded into. Using the default with a `confluent_archive_version` of *5.5.1* results in the following installation path `/opt/confluent/confluent-5.5.1/` that contains directories such as `bin` and `share`, but may be overridden usinf the `binary_base_path` property.
+
+Default: "/opt/confluent"
+
+***
+
+### config_base_path
+
+The base path for the configuration files. When in Archive File deployment mode this results in configuration files being based in `/opt/confluent/etc`, otherwise they are based in `/etc`.
+
+Default: "{{ archive_destination_path if archive_file_enabled|bool else '' }}"
+
+***
+
+### binary_base_path
+
+The base path for the binary files. When in Archive File deployment mode this results in binary files being based in something like `/opt/confluent/confluent-5.5.1/bin`, otherwise they are based in `/usr/bin`.
+
+Default: "{{ config_base_path+'/confluent-'+confluent_archive_version if archive_file_enabled|bool else '/usr' }}"
+
+***
+
 # confluent.common
 
 Below are the supported variables for the role confluent.common
@@ -1151,6 +1199,38 @@ Default:  "{{rbac_enabled}}"
 Full path on hosts to install the Confluent CLI
 
 Default:  /usr/local/bin/confluent
+
+***
+
+### confluent_common_repository_archive_baseurl
+
+Base URL for Confluent's Archive Repositories
+
+Default: "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}"
+
+***
+
+### confluent_archive_file_name
+
+Name of the file to download from the Archive base URL
+
+Default: "confluent-{{confluent_archive_version}}-{{confluent_archive_scala_version}}.tar.gz"
+
+***
+
+### confluent_common_repository_archive_url
+
+Full URL of the Archive file to download when in Archive File deployment mode
+
+Default: "{{confluent_common_repository_archive_baseurl}}/{{confluent_archive_file_name}}"
+
+***
+
+### confluent_archive_file_path
+
+A path reference to a locally accessible archive file. If this file is found locally (i.e. remote_src=true) then it will be used. If it is not found then the target file will be downloaded from Confluent. This is the default path ansible-pull uses, which means if an archive file is included in an ansible-pull repository it will be used assuming it's name conforms to what is expected.
+
+Default: "~/.ansible/pull/{{ inventory_hostname }}/{{confluent_archive_file_name}}"
 
 ***
 

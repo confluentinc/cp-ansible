@@ -19,13 +19,17 @@
     name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{schema_registry_packages}}"
-  when: ansible_os_family == "RedHat"
+  when:
+    - ansible_os_family == "RedHat"
+    - archive_file_enabled == false
 
 - name: Install the Schema Registry Packages
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{schema_registry_packages}}"
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - archive_file_enabled == false
 
 # Configure environment
 - name: Schema Registry Group
@@ -38,6 +42,19 @@
     comment: "Schema Registry User"
     system: true
     group: "{{schema_registry_group}}"
+
+# Archive File deployments need to create SystemD service units
+- name: Test for Schema Registry Service
+  stat:
+    path: "{{schema_registry.systemd_file}}"
+  register: schema_registry_service_systemd
+
+- name: Create Schema Registry Service
+  template:
+    src: confluent-schema-registry.service.j2
+    dest: "{{schema_registry.systemd_file}}"
+    mode: 0644
+  when: overwrite_systemd_services|bool or schema_registry_service_systemd.stat.exists == false
 
 - include_role:
     name: confluent.ssl
@@ -79,6 +96,14 @@
   include_tasks: rbac.yml
   when: rbac_enabled|bool
 
+- name: Create Schema Registry Config directory
+  file:
+    path: "{{ schema_registry.config_file | dirname }}"
+    state: directory
+    mode: 0755
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+
 - name: Create Schema Registry Config
   template:
     src: schema-registry.properties.j2
@@ -95,6 +120,14 @@
     group: "{{schema_registry_group}}"
     owner: "{{schema_registry_user}}"
     mode: '764'
+
+- name: Create log4j Directory
+  file:
+    path: "{{schema_registry.log4j_file | dirname}}"
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+    state: directory
+    mode: 0755
 
 - name: Create Schema Registry log4j Config
   template:

@@ -31,6 +31,49 @@
     state: absent
     regexp: '^Defaults\s+requiretty.*$'
 
+## Process Archive File deployments
+- name: Create Confluent Platform install directory
+  file:
+    path: "{{archive_destination_path}}"
+    state: directory
+    mode: 0755
+  when: archive_file_enabled|bool
+
+- name: Test for local Confluent Platform archive
+  stat:
+    path: "{{ confluent_archive_file_path }}"
+  register: local_confluent_archive
+
+- name: Create a temp directory to stage the Confluent Platform archive
+  tempfile:
+    state: directory
+    suffix: staging
+  register: archive_staging_tmp
+  when: archive_file_enabled|bool
+
+- name: Copy local Confluent Platform archive to a temporary directory
+  copy:
+    src: "{{ confluent_archive_file_path }}"
+    remote_src: yes
+    dest: "{{archive_staging_tmp.path}}"
+  when: local_confluent_archive.stat.exists == True
+
+- name: Download Confluent Platform archive
+  get_url:
+    url: "{{ confluent_common_repository_archive_url }}"
+    dest: "{{archive_staging_tmp.path}}"
+  when:
+    - archive_file_enabled|bool
+    - local_confluent_archive.stat.exists == False
+
+- name: Expand Confluent Platform archive
+  unarchive:
+    src: "{{archive_staging_tmp.path}}/{{confluent_archive_file_name}}"
+    remote_src: yes
+    dest: "{{archive_destination_path}}"
+    mode: 0755
+  when: archive_file_enabled|bool
+
 - name: Create Jolokia directory
   file:
     path: /opt/jolokia

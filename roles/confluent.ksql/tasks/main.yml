@@ -19,13 +19,17 @@
     name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{ksql_packages}}"
-  when: ansible_os_family == "RedHat"
+  when:
+    - ansible_os_family == "RedHat"
+    - archive_file_enabled == false
 
 - name: Install the KSQL Packages
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{ksql_packages}}"
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - archive_file_enabled == false
 
 # Configure environment
 - name: Create Ksql Group
@@ -46,6 +50,19 @@
     group: "{{ksql_group}}"
     state: directory
     mode: 0755
+
+# Archive File deployments need to create SystemD service units
+- name: Test for Ksql Service
+  stat:
+    path: "{{ksql.systemd_file}}"
+  register: ksql_service_systemd
+
+- name: Create Ksql Service
+  template:
+    src: confluent-ksqldb.service.j2
+    dest: "{{ksql.systemd_file}}"
+    mode: 0644
+  when: overwrite_systemd_services|bool or ksql_service_systemd.stat.exists == false
 
 - include_role:
     name: confluent.ssl
@@ -87,6 +104,14 @@
   include_tasks: rbac.yml
   when: rbac_enabled|bool
 
+- name: Create Ksql Config directory
+  file:
+    path: "{{ ksql.config_file | dirname }}"
+    state: directory
+    mode: 0755
+    owner: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+
 - name: Create Ksql Config
   template:
     src: ksql-server.properties.j2
@@ -104,6 +129,14 @@
     group: "{{ksql_group}}"
     owner: "{{ksql_user}}"
     mode: '764'
+
+- name: Create log4j Directory
+  file:
+    path: "{{ksql.log4j_file | dirname}}"
+    owner: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+    state: directory
+    mode: 0755
 
 - name: Create Ksql log4j Config
   template:
