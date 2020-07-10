@@ -324,6 +324,14 @@ Default:  7770
 
 ***
 
+### zookeeper_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on Zookeeper jolokia metrics
+
+Default:  "{{ zookeeper_ssl_enabled }}"
+
+***
+
 ### zookeeper_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
@@ -409,6 +417,14 @@ Default:  "{{jolokia_enabled}}"
 Port to expose kafka jolokia metrics. Beware of port collisions if colocating components on same host
 
 Default:  7771
+
+***
+
+### kafka_broker_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on Kafka jolokia metrics
+
+Default:  "{{ ssl_enabled }}"
 
 ***
 
@@ -985,6 +1001,102 @@ Default:  8090
 Boolean to configure TLS encryption on the MDS Server. (Or if is confligured with TLS encyption when external_mds_enabled: true)
 
 Default:  "{{ssl_enabled}}"
+
+***
+
+### mds_super_user
+
+LDAP User which will be granted super user permissions to create role bindings in the MDS
+
+Default:  mds
+
+***
+
+### mds_super_user_password
+
+Password to mds_super_user LDAP User
+
+Default:  password
+
+***
+
+### schema_registry_ldap_user
+
+LDAP User for Schema Registry to authenticate as
+
+Default:  schema-registry
+
+***
+
+### schema_registry_ldap_password
+
+Password to schema_registry_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### kafka_connect_ldap_user
+
+LDAP User for Connect to authenticate as
+
+Default:  connect
+
+***
+
+### kafka_connect_ldap_password
+
+Password to kafka_connect_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### ksql_ldap_user
+
+LDAP User for ksqlDB to authenticate as
+
+Default:  ksql
+
+***
+
+### ksql_ldap_password
+
+Password to ksql_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### kafka_rest_ldap_user
+
+LDAP User for Rest Proxy to authenticate as
+
+Default:  kafka-rest
+
+***
+
+### kafka_rest_ldap_password
+
+Password to kafka_rest_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### control_center_ldap_user
+
+LDAP User for Control Center to authenticate as
+
+Default:  control-center
+
+***
+
+### control_center_ldap_password
+
+Password to control_center_ldap_user LDAP User
+
+Default:  password
 
 ***
 
