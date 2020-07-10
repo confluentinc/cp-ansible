@@ -32,11 +32,6 @@
     regexp: '^Defaults\s+requiretty.*$'
 
 # Process Archive File deployments
-- name: Test for local Confluent Platform tarball already expanded into target
-  stat:
-    path: "{{archive_destination_path}}/confluent-{{confluent_archive_version}}"
-  register: local_confluent_target
-
 - name: Create Confluent Platform install directory
   file:
     path: "{{archive_destination_path}}"
@@ -50,37 +45,22 @@
     path: "{{ confluent_archive_file_path }}"
   register: local_confluent_archive
 
-- name: Create a temp directory to stage the Confluent Platform archive
-  tempfile:
-    state: directory
-    suffix: staging
-  register: archive_staging_tmp
-  when: archive_file_enabled|bool
-
-- name: Copy local Confluent Platform archive to a temporary directory
-  copy:
+# If the local archive exists and the target directory (i.e. creates) doesn't exist then expand the local into target
+- name: Expand local Confluent Platform archive
+  unarchive:
     src: "{{ confluent_archive_file_path }}"
     remote_src: yes
-    dest: "{{archive_staging_tmp.path}}"
+    dest: "{{archive_destination_path}}"
+    mode: 0755
+    creates: "{{archive_destination_path}}/confluent-{{confluent_archive_version}}"
   when:
     - archive_file_enabled|bool
     - local_confluent_archive.stat.exists|bool
-    - local_confluent_target.stat.exists == false
 
-# If the file exists in the staging/tmp directory then it won't be downloaded
-- name: Download Confluent Platform archive
-  get_url:
-    url: "{{ confluent_common_repository_archive_url }}"
-    dest: "{{archive_staging_tmp.path}}/{{confluent_archive_file_name}}"
-    force: no
-  when:
-    - archive_file_enabled|bool
-    - local_confluent_target.stat.exists == false
-
-# Test for the target directory (i.e. creates) already existing. If so then skip expanding
-- name: Expand Confluent Platform archive
+# If the target directory (i.e. creates) doesn't exist then download and expand the remote archive into target
+- name: Expand remote Confluent Platform archive
   unarchive:
-    src: "{{archive_staging_tmp.path}}/{{confluent_archive_file_name}}"
+    src: "{{ confluent_common_repository_archive_url }}"
     remote_src: yes
     dest: "{{archive_destination_path}}"
     mode: 0755
