@@ -21,7 +21,7 @@
   loop: "{{ksql_packages}}"
   when:
     - ansible_os_family == "RedHat"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 - name: Install the KSQL Packages
   apt:
@@ -29,7 +29,7 @@
   loop: "{{ksql_packages}}"
   when:
     - ansible_os_family == "Debian"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 # Configure environment
 - name: Create Ksql Group
@@ -52,17 +52,13 @@
     mode: 0755
 
 # Archive File deployments need to create SystemD service units
-- name: Test for Ksql Service
-  stat:
-    path: "{{ksql.systemd_file}}"
-  register: ksql_service_systemd
-
-- name: Create Ksql Service
+- name: Create Ksql Service for archive file deployments
   template:
     src: confluent-ksqldb.service.j2
     dest: "{{ksql.systemd_file}}"
     mode: 0644
-  when: overwrite_systemd_services|bool or ksql_service_systemd.stat.exists == false
+    force: "{{overwrite_systemd_services|bool}}"
+  when: archive_file_enabled|bool
 
 - include_role:
     name: confluent.ssl

@@ -21,7 +21,7 @@
   loop: "{{control_center_packages}}"
   when:
     - ansible_os_family == "RedHat"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 - name: Install the Control Center Packages
   apt:
@@ -29,7 +29,7 @@
   loop: "{{control_center_packages}}"
   when:
     - ansible_os_family == "Debian"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 # Configure environment
 - name: Create Control Center Group
@@ -59,17 +59,13 @@
     recurse: true
 
 # Archive File deployments need to create SystemD service units
-- name: Test for Control Center Service
-  stat:
-    path: "{{control_center.systemd_file}}"
-  register: control_center_service_systemd
-
-- name: Create Control Center Service
+- name: Create Control Center Service for archive file deployments
   template:
     src: confluent-control-center.service.j2
     dest: "{{control_center.systemd_file}}"
     mode: 0644
-  when: overwrite_systemd_services|bool or control_center_service_systemd.stat.exists == false
+    force: "{{overwrite_systemd_services|bool}}"
+  when: archive_file_enabled|bool
 
 - include_role:
     name: confluent.ssl

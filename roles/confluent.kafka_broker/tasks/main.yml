@@ -20,7 +20,7 @@
   loop: "{{kafka_broker_packages}}"
   when:
     - ansible_os_family == "RedHat"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 - name: Install the Kafka Broker Packages
   apt:
@@ -28,7 +28,7 @@
   loop: "{{kafka_broker_packages}}"
   when:
     - ansible_os_family == "Debian"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 - name: Kafka Broker group
   group:
@@ -42,17 +42,13 @@
     group: "{{kafka_broker_group}}"
 
 # Archive File deployments need to create SystemD service units
-- name: Test for Kafka Broker Service
-  stat:
-    path: "{{kafka_broker.systemd_file}}"
-  register: kafka_broker_service_systemd
-
-- name: Create Kafka Broker Service
+- name: Create Kafka Broker Service for archive file deployments
   template:
     src: confluent-server.service.j2
     dest: "{{kafka_broker.systemd_file}}"
     mode: 0644
-  when: overwrite_systemd_services|bool or kafka_broker_service_systemd.stat.exists == false
+    force: "{{overwrite_systemd_services|bool}}"
+  when: archive_file_enabled|bool
 
 - include_role:
     name: confluent.ssl

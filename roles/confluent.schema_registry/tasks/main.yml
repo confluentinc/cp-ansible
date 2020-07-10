@@ -21,7 +21,7 @@
   loop: "{{schema_registry_packages}}"
   when:
     - ansible_os_family == "RedHat"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 - name: Install the Schema Registry Packages
   apt:
@@ -29,7 +29,7 @@
   loop: "{{schema_registry_packages}}"
   when:
     - ansible_os_family == "Debian"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 # Configure environment
 - name: Schema Registry Group
@@ -44,17 +44,13 @@
     group: "{{schema_registry_group}}"
 
 # Archive File deployments need to create SystemD service units
-- name: Test for Schema Registry Service
-  stat:
-    path: "{{schema_registry.systemd_file}}"
-  register: schema_registry_service_systemd
-
-- name: Create Schema Registry Service
+- name: Create Schema Registry Service for archive file deployments
   template:
     src: confluent-schema-registry.service.j2
     dest: "{{schema_registry.systemd_file}}"
     mode: 0644
-  when: overwrite_systemd_services|bool or schema_registry_service_systemd.stat.exists == false
+    force: "{{overwrite_systemd_services|bool}}"
+  when: archive_file_enabled|bool
 
 - include_role:
     name: confluent.ssl

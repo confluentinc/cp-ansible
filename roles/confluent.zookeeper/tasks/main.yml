@@ -20,7 +20,7 @@
   loop: "{{zookeeper_packages}}"
   when:
     - ansible_os_family == "RedHat"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 - name: Install the Zookeeper Packages
   apt:
@@ -28,7 +28,7 @@
   loop: "{{zookeeper_packages}}"
   when:
     - ansible_os_family == "Debian"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 # Configure environment
 - name: Create Zookeeper Group
@@ -43,17 +43,13 @@
     group: "{{zookeeper_group}}"
 
 # Archive File deployments need to create SystemD service units
-- name: Test for Zookeeper Service
-  stat:
-    path: "{{zookeeper.systemd_file}}"
-  register: zookeeper_service_systemd
-
-- name: Create Zookeeper Service
+- name: Create Zookeeper Service for archive file deployments
   template:
     src: confluent-zookeeper.service.j2
     dest: "{{zookeeper.systemd_file}}"
     mode: 0644
-  when: overwrite_systemd_services|bool or zookeeper_service_systemd.stat.exists == false
+    force: "{{overwrite_systemd_services|bool}}"
+  when: archive_file_enabled|bool
 
 - include_role:
     name: confluent.ssl

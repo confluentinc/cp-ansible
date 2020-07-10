@@ -21,7 +21,7 @@
   loop: "{{kafka_rest_packages}}"
   when:
     - ansible_os_family == "RedHat"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 - name: Install the Kafka Rest Packages
   apt:
@@ -29,7 +29,7 @@
   loop: "{{kafka_rest_packages}}"
   when:
     - ansible_os_family == "Debian"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 # Configure environment
 - name: Create Kafka Rest Group
@@ -44,17 +44,13 @@
     group: "{{kafka_rest_group}}"
 
 # Archive File deployments need to create SystemD service units
-- name: Test for Kafka Rest Service
-  stat:
-    path: "{{kafka_rest.systemd_file}}"
-  register: kafka_rest_service_systemd
-
-- name: Create Kafka Rest Service
+- name: Create Kafka Rest Service for archive file deployments
   template:
     src: confluent-kafka-rest.service.j2
     dest: "{{kafka_rest.systemd_file}}"
     mode: 0644
-  when: overwrite_systemd_services|bool or kafka_rest_service_systemd.stat.exists == false
+    force: "{{overwrite_systemd_services|bool}}"
+  when: archive_file_enabled|bool
 
 - include_role:
     name: confluent.ssl

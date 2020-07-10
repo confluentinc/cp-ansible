@@ -21,7 +21,7 @@
   loop: "{{kafka_connect_packages}}"
   when:
     - ansible_os_family == "RedHat"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 - name: Install the Kafka Connect Packages
   apt:
@@ -29,7 +29,7 @@
   loop: "{{kafka_connect_packages}}"
   when:
     - ansible_os_family == "Debian"
-    - archive_file_enabled == false
+    - not archive_file_enabled|bool
 
 # Configure environment
 - name: Create Connect Distributed Group
@@ -44,17 +44,13 @@
     group: "{{kafka_connect_group}}"
 
 # Archive File deployments need to create SystemD service units
-- name: Test for Connect Distributed Service
-  stat:
-    path: "{{kafka_connect.systemd_file}}"
-  register: kafka_connect_service_systemd
-
-- name: Create Connect Distributed Service
+- name: Create Connect Distributed Service for archive file deployments
   template:
     src: confluent-kafka-connect.service.j2
     dest: "{{kafka_connect.systemd_file}}"
     mode: 0644
-  when: overwrite_systemd_services|bool or kafka_connect_service_systemd.stat.exists == false
+    force: "{{overwrite_systemd_services|bool}}"
+  when: archive_file_enabled|bool
 
 - include_role:
     name: confluent.ssl
