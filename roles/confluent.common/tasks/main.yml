@@ -31,7 +31,12 @@
     state: absent
     regexp: '^Defaults\s+requiretty.*$'
 
-## Process Archive File deployments
+# Process Archive File deployments
+- name: Test for local Confluent Platform tarball already expanded into target
+  stat:
+    path: "{{archive_destination_path}}/confluent-{{confluent_archive_version}}"
+  register: local_confluent_target
+
 - name: Create Confluent Platform install directory
   file:
     path: "{{archive_destination_path}}"
@@ -39,6 +44,7 @@
     mode: 0755
   when: archive_file_enabled|bool
 
+# This is needed to tell the future copy task to run or not because it will fail if this file doesn't exist
 - name: Test for local Confluent Platform archive
   stat:
     path: "{{ confluent_archive_file_path }}"
@@ -56,22 +62,29 @@
     src: "{{ confluent_archive_file_path }}"
     remote_src: yes
     dest: "{{archive_staging_tmp.path}}"
-  when: local_confluent_archive.stat.exists == True
+  when:
+    - archive_file_enabled|bool
+    - local_confluent_archive.stat.exists|bool
+    - local_confluent_target.stat.exists == false
 
+# If the file exists in the staging/tmp directory then it won't be downloaded
 - name: Download Confluent Platform archive
   get_url:
     url: "{{ confluent_common_repository_archive_url }}"
-    dest: "{{archive_staging_tmp.path}}"
+    dest: "{{archive_staging_tmp.path}}/{{confluent_archive_file_name}}"
+    force: no
   when:
     - archive_file_enabled|bool
-    - local_confluent_archive.stat.exists == False
+    - local_confluent_target.stat.exists == false
 
+# Test for the target directory (i.e. creates) already existing. If so then skip expanding
 - name: Expand Confluent Platform archive
   unarchive:
     src: "{{archive_staging_tmp.path}}/{{confluent_archive_file_name}}"
     remote_src: yes
     dest: "{{archive_destination_path}}"
     mode: 0755
+    creates: "{{archive_destination_path}}/confluent-{{confluent_archive_version}}"
   when: archive_file_enabled|bool
 
 - name: Create Jolokia directory
