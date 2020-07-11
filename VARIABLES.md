@@ -1242,19 +1242,11 @@ Default:  "confluent-{{confluent_archive_version}}-{{confluent_archive_scala_ver
 
 ***
 
-### confluent_common_repository_archive_url
-
-Full URL of the Archive file to download when in Archive File deployment mode
-
-Default:  "{{confluent_common_repository_archive_baseurl}}/{{confluent_archive_file_name}}"
-
-***
-
 ### confluent_archive_file_path
 
-A path reference to a locally accessible archive file. If this file is found locally (i.e. remote_src=true) then it will be used. If it is not found then the target file will be downloaded from Confluent. This is the default path ansible-pull uses, which means if an archive file is included in an ansible-pull repository it will be used assuming it's name conforms to what is expected.
+A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "~/.ansible/pull/{{ inventory_hostname }}/{{confluent_archive_file_name}}"
+Default:  "{{confluent_common_repository_archive_baseurl}}/{{confluent_archive_file_name}}"
 
 ***
 
