@@ -1,0 +1,48 @@
+---
+- name: Add Confluent CLI to path
+  shell: "export PATH=/usr/local/bin/bin:${PATH};"
+
+- name: Create Passphrase File
+  shell: "openssl rand -base64 14 > passphrase.txt"
+
+- name: Generate Master Encryption Key
+  shell: "confluent secret master-key generate --local-secrets-file security.properties \
+           --passphrase @passphrase.txt > masterkey.txt"
+
+- name: Get Master Key From File
+  shell: "awk '/Master/{print $5}' masterkey.txt"
+  register: masterkey
+
+# If no paramaters are specified, any property that contains
+# the string password is encrypted in the configuration key
+- name: Encrypt Properties - Standard
+  shell: "confluent secret file encrypt --config-file ./etc/kafka/server.properties \
+  --local-secrets-file ./security.properties \
+  --remote-secrets-file ./security.properties"
+  environment:
+    CONFLUENT_SECURITY_MASTER_KEY: "{{ masterkey.stdout }}"
+  when: not params
+
+- name: Encrypt Properties - Custom
+  shell: "confluent secret file encrypt --config-file ./etc/kafka/server.properties \
+           --local-secrets-file ./security.properties \
+           --remote-secrets-file ./security.properties \
+           --config {{item}}"
+  loop: "{{ params }}"
+  environment:
+    CONFLUENT_SECURITY_MASTER_KEY: "{{ masterkey.stdout }}"
+  when: params|length>0
+
+
+# Encrypts listeners and puts it in secrets file
+#- name: Encrypt Example Property (listeners)
+#  shell: "confluent secret file encrypt --config-file ./etc/kafka/server.properties \
+#           --local-secrets-file ./security.properties \
+#           --remote-secrets-file ./security.properties \
+#           --config listeners"
+#  environment:
+#    CONFLUENT_SECURITY_MASTER_KEY: "{{ masterkey.stdout }}"
+
+
+
+
