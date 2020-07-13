@@ -51,6 +51,7 @@ def job = {
 
     if(params.CONFLUENT_PACKAGE_VERSION) {
         override_config['confluent_package_version'] = params.CONFLUENT_PACKAGE_VERSION
+        override_config['confluent_repo_version'] = params.CONFLUENT_PACKAGE_VERSION.tokenize('.')[0..1].join('.')
 
         if(confluent_release_quality != 'prod') {
             // 'prod' case doesn't need anything overriden
