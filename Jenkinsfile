@@ -84,6 +84,10 @@ def job = {
         writeYaml file: "roles/confluent.test/base-config.yml", data: base_config
 
         molecule_args = "--base-config base-config.yml"
+
+        // Disable reporting when (possibly incorrect) parameters are defined
+        config.testbreakReporting = false
+        config.slackChannel = null
     }
 
     withDockerServer([uri: dockerHost()]) {
