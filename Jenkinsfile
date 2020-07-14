@@ -59,6 +59,10 @@ def job = {
                 case "snapshot":
                     override_config['confluent_package_redhat_suffix'] = "-${params.CONFLUENT_PACKAGE_VERSION}-0.1.SNAPSHOT"
                     override_config['confluent_package_debian_suffix'] = "=${params.CONFLUENT_PACKAGE_VERSION}~SNAPSHOT-1"
+
+                    // Disable reporting for nightly builds
+                    config.testbreakReporting = false
+                    config.slackChannel = null
                 break
                 default:
                     error("Unknown release quality ${params.CONFLUENT_RELEASE_QUALITY}")
@@ -84,10 +88,6 @@ def job = {
         writeYaml file: "roles/confluent.test/base-config.yml", data: base_config
 
         molecule_args = "--base-config base-config.yml"
-
-        // Disable reporting when (possibly incorrect) parameters are defined
-        config.testbreakReporting = false
-        config.slackChannel = null
     }
 
     withDockerServer([uri: dockerHost()]) {
