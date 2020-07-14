@@ -108,11 +108,11 @@ Default:  true
 
 ***
 
-### archive_file_enabled
+### installation_method
 
-Whether to enable an Archive File deployment or not. If true then services will not be installed via the use of yum or apt, but will instead be installed via expanding the target .tar.gz file from the Confluent archive into the path defined by `archive_destination_path`. Configuration files are also kept in this directory structure instead of `/etc`. SystemD service units are created for each target service.
+The method of installation. Valid values are "package" or "archive". If "archive" is selected then services will not be installed via the use of yum or apt, but will instead be installed via expanding the target .tar.gz file from the Confluent archive into the path defined by `archive_destination_path`. Configuration files are also kept in this directory structure instead of `/etc`. SystemD service units are copied from the ardhive for each target service and overrides are created pointing at the new paths. The "package" installation method is the default behavior that utilizes yum/apt.
 
-Default:  false
+Default:  "package"
 
 ***
 
@@ -144,7 +144,7 @@ Default:  "/opt/confluent"
 
 The base path for the configuration files. When in Archive File deployment mode this results in configuration files being based in `/opt/confluent/etc`, otherwise they are based in `/etc`.
 
-Default:  "{{ archive_destination_path if archive_file_enabled|bool else '' }}"
+Default:  "{{ archive_destination_path if installation_method == 'archive' else '' }}"
 
 ***
 
@@ -152,15 +152,15 @@ Default:  "{{ archive_destination_path if archive_file_enabled|bool else '' }}"
 
 The base path for the binary files. When in Archive File deployment mode this results in binary files being based in something like `/opt/confluent/confluent-5.5.1/bin`, otherwise they are based in `/usr/bin`.
 
-Default:  "{{ config_base_path+'/confluent-'+confluent_archive_version if archive_file_enabled|bool else '/usr' }}"
+Default:  "{{ config_base_path+'/confluent-'+confluent_archive_version if installation_method == 'archive' else '/usr' }}"
 
 ***
 
 ### overwrite_systemd_services
 
-If true then when performing an archive deployment the SystemD service files will be overwritten with the new paths and options
+If yes then when performing an archive deployment the SystemD service files will be overwritten with the new paths and options
 
-Default:  true
+Default:  yes
 
 ***
 
