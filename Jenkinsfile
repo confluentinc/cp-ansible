@@ -59,6 +59,10 @@ def job = {
                 case "snapshot":
                     override_config['confluent_package_redhat_suffix'] = "-${params.CONFLUENT_PACKAGE_VERSION}-0.1.SNAPSHOT"
                     override_config['confluent_package_debian_suffix'] = "=${params.CONFLUENT_PACKAGE_VERSION}~SNAPSHOT-1"
+
+                    // Disable reporting for nightly builds
+                    config.testbreakReporting = false
+                    config.slackChannel = null
                 break
                 default:
                     error("Unknown release quality ${params.CONFLUENT_RELEASE_QUALITY}")
