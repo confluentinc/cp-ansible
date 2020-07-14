@@ -118,7 +118,7 @@ Default:  "package"
 
 ### confluent_archive_version
 
-The Confluent Platform version of the archive to download. Something like *5.5.0* or *5.5.1*.
+The Confluent Platform version of the archive to download. Possible values: 5.5.0, 5.5.1, etc.
 
 Default:  "{{ confluent_package_version }}"
 
@@ -126,7 +126,7 @@ Default:  "{{ confluent_package_version }}"
 
 ### confluent_archive_scala_version
 
-The Scala version of the Confluent Platform archive to download. Something like *2.11* or *2.12*. If you don't have a specific version requirement then use the default.
+The Scala version of the Confluent Platform archive to download. Possible values: 2.11, 2.12, etc. If you don't have a specific version requirement then use the default.
 
 Default:  2.12
 
@@ -150,7 +150,7 @@ Default:  "{{ archive_destination_path if installation_method == 'archive' else 
 
 ### binary_base_path
 
-The base path for the binary files. When in Archive File deployment mode this results in binary files being based in something like `/opt/confluent/confluent-5.5.1/bin`, otherwise they are based in `/usr/bin`.
+The base path for the binary files. When in Archive File deployment mode this results in binary files being based in, for example `/opt/confluent/confluent-5.5.1/bin`, otherwise they are based in `/usr/bin`.
 
 Default:  "{{ config_base_path+'/confluent-'+confluent_archive_version if installation_method == 'archive' else '/usr' }}"
 
