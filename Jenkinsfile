@@ -96,4 +96,13 @@ molecule ${molecule_args} test -s plaintext-rhel
     }
 }
 
-runJob config, job
+def post = {
+    stage('Cleanup') {
+        sh """
+cd roles/confluent.test
+molecule destroy --all --parallel || true
+"""
+    }
+}
+
+runJob config, job, post
