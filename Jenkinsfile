@@ -97,11 +97,13 @@ molecule ${molecule_args} test -s plaintext-rhel
 }
 
 def post = {
-    stage('Cleanup') {
-        sh """
+    withDockerServer([uri: dockerHost()]) {
+        stage('Cleanup') {
+            sh """
 cd roles/confluent.test
 molecule destroy --all --parallel || true
 """
+        }
     }
 }
 
