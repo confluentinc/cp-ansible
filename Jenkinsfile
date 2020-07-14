@@ -27,12 +27,19 @@ def confluent_release_quality = choice(name: 'CONFLUENT_RELEASE_QUALITY',
     description: 'Determines the release extention (suffix) (ie: "prod" for public releases, "snapshot" for nightly builds)',
 )
 
+// Parameter for the molecule test scenario to run
+def molecule_scenario_name = choice(name: 'SCENARIO_NAME',
+    choices: ['plaintext-rhel', 'customcerts-rhel'],
+    defaultValue: 'plaintext-rhel',
+    description: 'The Ansible Molecule scenario name to run',
+)
+
 def config = jobConfig {
     nodeLabel = 'docker-oraclejdk8'
     slackChannel = '#ansible-eng'
     timeoutHours = 4
     runMergeCheck = false
-    properties = [parameters([confluent_package_version, confluent_common_repository_baseurl, confluent_release_quality])]
+    properties = [parameters([confluent_package_version, confluent_common_repository_baseurl, confluent_release_quality, molecule_scenario_name])]
 }
 
 def job = {
@@ -87,10 +94,10 @@ def job = {
     }
 
     withDockerServer([uri: dockerHost()]) {
-        stage('Plaintext') {
+        stage("Test Scenario: ${params.SCENARIO_NAME}") {
             sh """
 cd roles/confluent.test
-molecule ${molecule_args} test -s plaintext-rhel
+molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
             """
         }
     }
@@ -98,10 +105,10 @@ molecule ${molecule_args} test -s plaintext-rhel
 
 def post = {
     withDockerServer([uri: dockerHost()]) {
-        stage('Cleanup') {
+        stage("Destroy Scenario: ${params.SCENARIO_NAME}") {
             sh """
 cd roles/confluent.test
-molecule destroy --all --parallel || true
+molecule destroy -s ${params.SCENARIO_NAME} || true
 """
         }
     }
