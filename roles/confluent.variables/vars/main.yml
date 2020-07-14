@@ -110,8 +110,19 @@ kafka_broker_properties:
       listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://:{{ listener['value']['port'] }}{% endfor %}"
       advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(inventory_hostname) }}:{{ listener['value']['port'] }}{% endfor %}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
+  rest_endpoint:
+    enabled: "{{kafka_broker_rest_endpoint_enabled}}"
+    properties:
       confluent.metadata.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(inventory_hostname) }}:{{mds_port}}"
       confluent.metadata.server.listeners: "{{mds_http_protocol}}://0.0.0.0:{{mds_port}}"
+  rest_endpoint_ssl:
+    enabled: "{{ mds_ssl_enabled and rbac_enabled and not external_mds_enabled or kafka_broker_rest_endpoint_enabled and ssl_enabled }}"
+    properties:
+      confluent.metadata.server.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
+      confluent.metadata.server.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
+      confluent.metadata.server.ssl.key.password: "{{kafka_broker_keystore_keypass}}"
+      confluent.metadata.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      confluent.metadata.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   broker_id:
     enabled: "{{ inventory_hostname in groups.kafka_broker }}"
     properties:
@@ -198,14 +209,7 @@ kafka_broker_properties:
       confluent.metadata.server.public.key.path: "{{rbac_enabled_public_pem_path}}"
       confluent.metadata.server.token.signature.algorithm: RS256
       confluent.metadata.server.authentication.method: BEARER
-  rbac_internal_mds_ssl:
-    enabled: "{{ mds_ssl_enabled and rbac_enabled and not external_mds_enabled}}"
-    properties:
-      confluent.metadata.server.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
-      confluent.metadata.server.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
-      confluent.metadata.server.ssl.key.password: "{{kafka_broker_keystore_keypass}}"
-      confluent.metadata.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
-      confluent.metadata.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
+
   listeners:
     enabled: true
     properties: "{{ kafka_broker_listeners | listener_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
