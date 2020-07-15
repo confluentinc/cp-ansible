@@ -136,7 +136,7 @@ Default:  "/opt/confluent"
 
 If yes then when performing an archive deployment the SystemD service files will be overwritten with the new paths and options
 
-Default:  yes
+Default:  true
 
 ***
 
@@ -1210,19 +1210,11 @@ Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_vers
 
 ***
 
-### confluent_archive_file_name
-
-Name of the file to download from the Archive base URL
-
-Default:  "confluent-{{confluent_package_version}}-{{confluent_archive_scala_version}}.tar.gz"
-
-***
-
 ### confluent_archive_file_path
 
 A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_common_repository_archive_baseurl}}/{{confluent_archive_file_name}}"
+Default:  "{{confluent_common_repository_archive_baseurl}}/confluent-{{confluent_package_version}}-{{confluent_archive_scala_version}}.tar.gz"
 
 ***
 
