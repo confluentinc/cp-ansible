@@ -116,7 +116,7 @@ kafka_broker_properties:
       confluent.metadata.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(inventory_hostname) }}:{{mds_port}}"
       confluent.metadata.server.listeners: "{{mds_http_protocol}}://0.0.0.0:{{mds_port}}"
   rest_endpoint_ssl:
-    enabled: "{{ mds_ssl_enabled and rbac_enabled and not external_mds_enabled or kafka_broker_rest_endpoint_enabled and ssl_enabled }}"
+    enabled: "{{ (kafka_broker_rest_ssl_enabled and rbac_enabled and not external_mds_enabled) or (kafka_broker_rest_endpoint_enabled and kafka_broker_rest_ssl_enabled) }}"
     properties:
       confluent.metadata.server.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
       confluent.metadata.server.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
@@ -278,7 +278,7 @@ schema_registry_properties:
       ssl.keystore.password: "{{schema_registry_keystore_storepass}}"
       ssl.key.password: "{{schema_registry_keystore_keypass}}"
   truststore:
-    enabled: "{{schema_registry_ssl_mutual_auth_enabled|bool or mds_ssl_enabled|bool}}"
+    enabled: "{{schema_registry_ssl_mutual_auth_enabled|bool or kafka_broker_rest_ssl_enabled|bool}}"
     properties:
       ssl.truststore.location: "{{schema_registry_truststore_path}}"
       ssl.truststore.password: "{{schema_registry_truststore_storepass}}"
@@ -307,7 +307,7 @@ schema_registry_properties:
       confluent.metadata.http.auth.credentials.provider: BASIC
       confluent.metadata.basic.auth.user.info: "{{ schema_registry_ldap_user | default('MISSING') }}:{{ schema_registry_ldap_password | default('MISSING')}}"
   rbac_external_client:
-    enabled: "{{ rbac_enabled and external_mds_enabled and mds_ssl_enabled }}"
+    enabled: "{{ rbac_enabled and external_mds_enabled and kafka_broker_rest_ssl_enabled }}"
     properties:
       kafkastore.ssl.truststore.location: "{{schema_registry_truststore_path}}"
       kafkastore.ssl.truststore.password: "{{schema_registry_truststore_storepass}}"
@@ -446,7 +446,7 @@ kafka_connect_properties:
       confluent.metadata.basic.auth.user.info: "{{kafka_connect_ldap_user| default('MISSING')}}:{{kafka_connect_ldap_password| default('MISSING')}}"
       confluent.metadata.http.auth.credentials.provider: BASIC
   rbac_external_client:
-    enabled: "{{rbac_enabled and external_mds_enabled and mds_ssl_enabled  }}"
+    enabled: "{{rbac_enabled and external_mds_enabled and kafka_broker_rest_ssl_enabled  }}"
     properties:
       consumer.ssl.truststore.location: "{{kafka_connect_truststore_path}}"
       consumer.ssl.truststore.password: "{{kafka_connect_truststore_storepass}}"
@@ -595,7 +595,7 @@ ksql_properties:
       confluent.metadata.basic.auth.user.info: "{{ ksql_ldap_user | default('ksql') }}:{{ ksql_ldap_password | default('pass') }}"
       confluent.metadata.http.auth.credentials.provider: BASIC
   rbac_external_client:
-    enabled: "{{rbac_enabled and external_mds_enabled and mds_ssl_enabled }}"
+    enabled: "{{rbac_enabled and external_mds_enabled and kafka_broker_rest_ssl_enabled }}"
     properties:
       ssl.truststore.location: "{{ksql_truststore_path}}"
       ssl.truststore.password: "{{ksql_truststore_storepass}}"
@@ -649,7 +649,7 @@ kafka_rest_properties:
       ssl.keystore.password: "{{kafka_rest_keystore_storepass}}"
       ssl.key.password: "{{kafka_rest_keystore_keypass}}"
   truststore:
-    enabled: "{{kafka_rest_ssl_mutual_auth_enabled|bool or mds_ssl_enabled|bool}}"
+    enabled: "{{kafka_rest_ssl_mutual_auth_enabled|bool or kafka_broker_rest_ssl_enabled|bool}}"
     properties:
       ssl.truststore.location: "{{kafka_rest_truststore_path}}"
       ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
@@ -697,7 +697,7 @@ kafka_rest_properties:
       confluent.metadata.http.auth.credentials.provider: BASIC
 
   rbac_external_client:
-    enabled: "{{rbac_enabled and external_mds_enabled and mds_ssl_enabled }}"
+    enabled: "{{rbac_enabled and external_mds_enabled and kafka_broker_rest_ssl_enabled }}"
     properties:
       ssl.truststore.location: "{{kafka_rest_truststore_path}}"
       ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
@@ -795,7 +795,7 @@ control_center_properties:
       confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
       confluent.metadata.basic.auth.user.info: "{{ control_center_ldap_user | default('c3') }}:{{ control_center_ldap_password | default('pass') }}"
   rbac_external_client:
-    enabled: "{{rbac_enabled and external_mds_enabled and mds_ssl_enabled }}"
+    enabled: "{{rbac_enabled and external_mds_enabled and kafka_broker_rest_ssl_enabled }}"
     properties:
       confluent.controlcenter.streams.ssl.truststore.location: "{{control_center_truststore_path}}"
       confluent.controlcenter.streams.ssl.truststore.password: "{{control_center_truststore_storepass}}"
@@ -805,4 +805,4 @@ control_center_combined_properties: "{{control_center_properties | combine_prope
 control_center_final_properties: "{{ control_center_combined_properties | combine(control_center_custom_properties) }}"
 
 #### RBAC Variables ####
-mds_http_protocol: "{{ 'https' if mds_ssl_enabled|bool else 'http' }}"
+mds_http_protocol: "{{ 'https' if kafka_broker_rest_ssl_enabled|bool else 'http' }}"
