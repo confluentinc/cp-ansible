@@ -132,14 +132,6 @@ Default:  "/opt/confluent"
 
 ***
 
-### overwrite_systemd_services
-
-If yes then when performing an archive deployment the SystemD service files will be overwritten with the new paths and options
-
-Default:  true
-
-***
-
 ### sasl_protocol
 
 SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
