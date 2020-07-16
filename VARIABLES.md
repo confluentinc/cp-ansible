@@ -1218,6 +1218,14 @@ Default:  "{{confluent_common_repository_archive_baseurl}}/confluent-{{confluent
 
 ***
 
+### confluent_archive_file_remote
+
+Set to true to indicate the archive file is remote (i.e. already on the target node) or a URL. Set to false if the archive file is on the control node.
+
+Default:  true
+
+***
+
 # confluent.control_center
 
 Below are the supported variables for the role confluent.control_center
