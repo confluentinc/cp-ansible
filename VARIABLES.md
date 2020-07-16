@@ -980,7 +980,7 @@ Default:  8090
 
 ***
 
-### mds_ssl_enabled
+### kafka_broker_rest_ssl_enabled
 
 Boolean to configure TLS encryption on the MDS Server. (Or if is confligured with TLS encyption when external_mds_enabled: true)
 
@@ -990,7 +990,7 @@ Default:  "{{ssl_enabled}}"
 
 ### external_mds_enabled
 
-Boolean to describe if kafka group in inventory file should be configured as MDS Server. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, mds_ssl_enabled
+Boolean to describe if kafka group in inventory file should be configured as MDS Server. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, kafka_broker_rest_ssl_enabled
 
 Default:  false
 
