@@ -1148,9 +1148,9 @@ Below are the supported variables for the role confluent.common
 
 ### repository_configuration
 
-Configures package repositories on hosts. By default will configure confluent's deb/yum repositories. Possible options: none, confluent, custom. Must also set custom_yum_repofile_filepath or custom_apt_repo_filepath if using custom
+Configures package repositories on hosts. By default will configure confluent's deb/yum repositories. Possible options: none, confluent, custom. Must also set custom_yum_repofile_filepath or custom_apt_repo_filepath if using custom. Note- custom_apt_repo and custom_yum_repofile are deprecated
 
-Default:  confluent
+Default:  "{{'custom' if custom_apt_repo|bool or custom_yum_repofile else 'confluent'}}"
 
 ***
 
