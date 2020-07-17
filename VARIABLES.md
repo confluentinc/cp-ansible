@@ -132,7 +132,7 @@ Default:  "/opt/confluent"
 
 ***
 
-### config_base_path
+### archive_config_base_path
 
 If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
 
@@ -1202,19 +1202,11 @@ Default:  /usr/local/bin/confluent
 
 ***
 
-### confluent_common_repository_archive_baseurl
-
-Base URL for Confluent's Archive Repositories
-
-Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}"
-
-***
-
-### confluent_archive_file_path
+### confluent_archive_file_source
 
 A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_common_repository_archive_baseurl}}/confluent-{{confluent_package_version}}-{{confluent_archive_scala_version}}.tar.gz"
+Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent-{{confluent_package_version}}-{{confluent_archive_scala_version}}.tar.gz"
 
 ***
 
