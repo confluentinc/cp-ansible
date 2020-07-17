@@ -132,6 +132,14 @@ Default:  "/opt/confluent"
 
 ***
 
+### config_base_path
+
+If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
+
+Default:  "{{ archive_destination_path }}"
+
+***
+
 ### sasl_protocol
 
 SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
