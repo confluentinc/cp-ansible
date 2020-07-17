@@ -1156,7 +1156,7 @@ Default:  confluent
 
 ### custom_yum_repofile_filepath
 
-Full path on control node to custom yum repo file, must also set custom_yum_repofile to true
+Full path on control node to custom yum repo file, must also set repository_configuration to custom
 
 Default:  ""
 
@@ -1164,7 +1164,7 @@ Default:  ""
 
 ### custom_apt_repo_filepath
 
-Full path on control node to custom apt repo file, must also set custom_apt_repo to true
+Full path on control node to custom apt repo file, must also set repository_configuration to custom
 
 Default:  ""
 
