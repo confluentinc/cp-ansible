@@ -76,6 +76,38 @@ Default:  true
 
 ***
 
+### installation_method
+
+The method of installation. Valid values are "package" or "archive". If "archive" is selected then services will not be installed via the use of yum or apt, but will instead be installed via expanding the target .tar.gz file from the Confluent archive into the path defined by `archive_destination_path`. Configuration files are also kept in this directory structure instead of `/etc`. SystemD service units are copied from the ardhive for each target service and overrides are created pointing at the new paths. The "package" installation method is the default behavior that utilizes yum/apt.
+
+Default:  "package"
+
+***
+
+### confluent_archive_scala_version
+
+The Scala version of the Confluent Platform archive to download. Possible values: 2.11, 2.12, etc. If you don't have a specific version requirement then use the default.
+
+Default:  2.12
+
+***
+
+### archive_destination_path
+
+The path the downloaded archive is expanded into. Using the default with a `confluent_package_version` of *5.5.1* results in the following installation path `/opt/confluent/confluent-5.5.1/` that contains directories such as `bin` and `share`, but may be overridden usinf the `binary_base_path` property.
+
+Default:  "/opt/confluent"
+
+***
+
+### archive_config_base_path
+
+If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
+
+Default:  "{{ archive_destination_path }}"
+
+***
+
 ### sasl_protocol
 
 SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
@@ -1255,6 +1287,22 @@ Default:  "{{rbac_enabled}}"
 Full path on hosts to install the Confluent CLI
 
 Default:  /usr/local/bin/confluent
+
+***
+
+### confluent_archive_file_source
+
+A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
+
+Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent-{{confluent_package_version}}-{{confluent_archive_scala_version}}.tar.gz"
+
+***
+
+### confluent_archive_file_remote
+
+Set to true to indicate the archive file is remote (i.e. already on the target node) or a URL. Set to false if the archive file is on the control node.
+
+Default:  true
 
 ***
 
