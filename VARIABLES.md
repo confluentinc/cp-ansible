@@ -60,38 +60,6 @@ Default:  true
 
 ***
 
-### custom_yum_repofile
-
-Boolean to configure custom repo file on RHEL/Centos hosts, must also set custom_yum_repofile_filepath variable
-
-Default:  false
-
-***
-
-### custom_yum_repofile_filepath
-
-Full path on control node to custom yum repo file, must also set custom_yum_repofile to true
-
-Default:  ""
-
-***
-
-### custom_apt_repo
-
-Boolean to configure custom apt repo file on Debian hosts, must also set custom_apt_repo_filepath variable
-
-Default:  false
-
-***
-
-### custom_apt_repo_filepath
-
-Full path on control node to custom apt repo file, must also set custom_apt_repo to true
-
-Default:  ""
-
-***
-
 ### confluent_server_enabled
 
 Boolean to install commercially licensed confluent-server instead of community version: confluent-kafka
@@ -1207,6 +1175,30 @@ Default:  "{{rbac_component_additional_system_admins}}"
 # confluent.common
 
 Below are the supported variables for the role confluent.common
+
+***
+
+### repository_configuration
+
+Configures package repositories on hosts. By default will configure confluent's deb/yum repositories. Possible options: none, confluent, custom. Must also set custom_yum_repofile_filepath or custom_apt_repo_filepath if using custom. Note: vars custom_apt_repo and custom_yum_repofile are deprecated
+
+Default:  "{{'custom' if custom_apt_repo|bool or custom_yum_repofile else 'confluent'}}"
+
+***
+
+### custom_yum_repofile_filepath
+
+Full path on control node to custom yum repo file, must also set repository_configuration to custom
+
+Default:  ""
+
+***
+
+### custom_apt_repo_filepath
+
+Full path on control node to custom apt repo file, must also set repository_configuration to custom
+
+Default:  ""
 
 ***
 
