@@ -324,6 +324,14 @@ Default:  7770
 
 ***
 
+### zookeeper_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on Zookeeper jolokia metrics
+
+Default:  "{{ zookeeper_ssl_enabled }}"
+
+***
+
 ### zookeeper_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
@@ -412,6 +420,14 @@ Default:  7771
 
 ***
 
+### kafka_broker_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on Kafka jolokia metrics
+
+Default:  "{{ ssl_enabled }}"
+
+***
+
 ### kafka_broker_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on kafka
@@ -457,6 +473,14 @@ Default:  true
 Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 
 Default:  "{{ kafka_broker.properties }}"
+
+***
+
+### kafka_broker_rest_endpoint_enabled
+
+Boolean to enable rest end point for the embedded rest proxy and metadata server.  Note:  If RBAC is enabled the rest endpoint will also be enabled even if this is set to false.  The rest end point is a requirement for RBAC to function.
+
+Default:  true
 
 ***
 
@@ -982,9 +1006,9 @@ Default:  8090
 
 ### kafka_broker_rest_ssl_enabled
 
-Boolean to configure TLS encryption on the MDS Server. (Or if is confligured with TLS encyption when external_mds_enabled: true)
+Boolean to configure TLS encryption on the Broker Rest endpoint. (Or if is configured with TLS encryption when external_mds_enabled: true) NOTE- mds_ssl_enabled is now deprecated
 
-Default:  "{{ssl_enabled}}"
+Default:  "{{mds_ssl_enabled}}"
 
 ***
 
