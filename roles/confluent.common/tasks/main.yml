@@ -1,4 +1,20 @@
 ---
+- name: Confirm Hash Merging Enabled
+  assert:
+    that: lookup('config', 'DEFAULT_HASH_BEHAVIOUR') == 'merge'
+    fail_msg: "Hash Merging must be enabled in ansible.cfg: Confirm current directory is cp-ansible and permissions are set to 755 not 777"
+    quiet: true
+
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_distribution
+
 # JVM Installation and Repo Setup
 - include_tasks: redhat.yml
   when: ansible_os_family == "RedHat"
@@ -15,6 +31,24 @@
     state: absent
     regexp: '^Defaults\s+requiretty.*$'
 
+# Process Archive File deployments
+- name: Create Confluent Platform install directory
+  file:
+    path: "{{archive_destination_path}}"
+    state: directory
+    mode: 0755
+  when: installation_method == "archive"
+
+# If the target directory (i.e. creates) doesn't exist then download and expand the remote archive into target
+- name: Expand remote Confluent Platform archive
+  unarchive:
+    src: "{{ confluent_archive_file_source }}"
+    remote_src: "{{ confluent_archive_file_remote }}"
+    dest: "{{archive_destination_path}}"
+    mode: 0755
+    creates: "{{archive_destination_path}}/confluent-{{confluent_package_version}}"
+  when: installation_method == "archive"
+
 - name: Create Jolokia directory
   file:
     path: /opt/jolokia
@@ -27,6 +61,10 @@
     url: "{{ jolokia_jar_url }}"
     dest: "{{ jolokia_jar_path }}"
     mode: 0755
+  register: joklokia_download_result
+  until: joklokia_download_result is success
+  retries: 5
+  delay: 5
   when:
     - jolokia_enabled|bool
     - not ansible_check_mode
@@ -43,9 +81,38 @@
     url: "{{ jmxexporter_jar_url }}"
     dest: "{{ jmxexporter_jar_path }}"
     mode: 0755
+  register: prometheus_download_result
+  until: prometheus_download_result is success
+  retries: 5
+  delay: 5
   when:
     - jmxexporter_enabled|bool
     - not ansible_check_mode
+
+- name: Download Confluent CLI - Standard
+  shell: "curl -L https://cnfl.io/cli | sh -s -- -b {{ confluent_cli_path | dirname }}"
+  args:
+    creates: "{{ confluent_cli_path }}"
+  register: cli_download_result
+  until: cli_download_result is success
+  retries: 5
+  delay: 5
+  when:
+    - confluent_cli_download_enabled|bool
+    - confluent_cli_custom_download_url is not defined
+
+- name: Download Confluent CLI - Custom URL
+  get_url:
+    url: "{{ confluent_cli_custom_download_url }}"
+    dest: "{{ confluent_cli_path }}"
+    mode: 0755
+  register: cli_download_result
+  until: cli_download_result is success
+  retries: 5
+  delay: 5
+  when:
+    - confluent_cli_download_enabled|bool
+    - confluent_cli_custom_download_url is defined
 
 - set_fact:
     common_role_completed: true

@@ -1,3 +1,4 @@
+---
 - name: KSQL Upgrade
   hosts: ksql
   environment: "{{ proxy_env }}"
@@ -20,10 +21,17 @@
 
     - name: Set Current Package Version
       set_fact:
-        ksql_current_version: "{{ ansible_facts.packages['confluent-ksql'][0]['version'] }}"
+        ksql_current_version: "{{ ansible_facts.packages['confluent-ksqldb'][0]['version'] }}"
 
     - debug:
         msg: "Current version: {{ksql_current_version}}   Upgrade to version: {{confluent_package_version}}"
+
+    - name: Assert Upgrading from Valid Version
+      assert:
+        that:
+          - ksql_current_version is version('5.5.0', '>=')
+        fail_msg: "Current KSQL Version: {{ksql_current_version}} is lower than the minimal supported upgrade version: 5.5.0"
+        quiet: true
 
     - name: Upgrade Kafka Connect
       include_tasks: tasks/upgrade_component.yml
@@ -39,23 +47,8 @@
         - ksql_current_version != confluent_full_package_version
         - ksql_current_version != confluent_package_version
 
-    - name: Wait for API to return 200 - HTTP
-      uri:
-        url: "http://localhost:{{ksql_listener_port}}/info"
-        status_code: 200
-      register: result
-      until: result.status == 200
-      retries: 60
-      delay: 5
-      when: not ksql_ssl_enabled|bool
-
-    - name: Wait for API to return 200 - HTTPS
-      uri:
-        url: "https://localhost:{{ksql_listener_port}}/info"
-        status_code: 200
-        validate_certs: no
-      register: result
-      until: result.status == 200
-      retries: 60
-      delay: 5
-      when: ksql_ssl_enabled|bool
+    - name: KSQL Health Check
+      import_role:
+        name: confluent.ksql
+        tasks_from: health_check.yml
+      when: not ansible_check_mode

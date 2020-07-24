@@ -1,36 +1,16 @@
-- name: Kafka Broker - Host Ordering
+---
+- name: Kafka Broker - Prerequisites
   hosts: kafka_broker
-  # Running serial=1 because add_host has problems
-  # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
-  serial: 1
-  tasks:
-    - name: Create Ordered Kafka Broker Groups
-      import_tasks: tasks/create_ordered_kafka_groups.yml
-      vars:
-        controller_group: controller
-        non_controller_group: non_controllers
-
-- name: Kafka Broker Upgrade - Config Prep
-  hosts: non_controllers,controller
-  gather_facts: no
-  serial: 1
   vars:
     kafka_broker_upgrade_start_version: "5.3"
+  handlers:
+    - import_tasks: roles/confluent.kafka_broker/handlers/main.yml
   tasks:
     - import_role:
-        name: confluent.variables_handlers
+        name: confluent.variables
 
-    - name: Get Package Facts
-      package_facts:
-        manager: auto
-
-    - set_fact:
-        confluent_server_enabled: true
-      when: ansible_facts.packages['confluent-server'] is defined
-
-    - set_fact:
-        confluent_server_enabled: false
-      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
+    - name: Set confluent_server_enabled and kafka_broker_jolokia_ssl_enabled Variables
+      include_tasks: tasks/set_kafka_broker_jolokia_ssl_enabled.yml
 
     - set_fact:
         inter_broker_protocol_version: 2.3
@@ -63,9 +43,7 @@
         # Removing the line and restarting the service will set property to true
         line: controlled.shutdown.enable=false
         state: absent
-      notify:
-        - Restart Kafka
-        - Wait for URP
+      notify: restart kafka
 
 - name: Kafka Broker Upgrade - Host Ordering
   hosts: kafka_broker
@@ -77,18 +55,6 @@
       vars:
         controller_group: controller
         non_controller_group: non_controllers
-
-    - name: Get Package Facts
-      package_facts:
-        manager: auto
-
-    - set_fact:
-        confluent_server_enabled: true
-      when: ansible_facts.packages['confluent-server'] is defined
-
-    - set_fact:
-        confluent_server_enabled: false
-      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
 
     - name: Set Current Package Version
       set_fact:
@@ -108,6 +74,7 @@
         name: "{{ inventory_hostname }}"
         group: upgrade_non_controllers
       delegate_to: localhost
+      changed_when: false
       when:
         - active_controller_count|int == 0
         - kafka_broker_current_version != confluent_full_package_version
@@ -118,6 +85,7 @@
         name: "{{ inventory_hostname }}"
         group: upgrade_controller
       delegate_to: localhost
+      changed_when: false
       when:
         - active_controller_count|int == 1
         - kafka_broker_current_version != confluent_full_package_version
@@ -146,7 +114,7 @@
     - upgrade
   tasks:
     - import_role:
-        name: confluent.variables_handlers
+        name: confluent.variables
 
     - name: Upgrade Kafka Broker
       include_tasks: tasks/upgrade_component.yml
@@ -162,30 +130,20 @@
           - "{{ zookeeper.config_file }}"
 
     - name: Wait for Under Replicated Partitions on Broker
-      import_tasks: tasks/wait_for_urp.yml
-
-# Kafka Restarted, need to figure out the new controller
-- name: Kafka Broker - Host Ordering
-  hosts: kafka_broker
-  serial: 1
-  tasks:
-    - name: Create Ordered Kafka Broker Groups
-      import_tasks: tasks/create_ordered_kafka_groups.yml
-      vars:
-        controller_group: kafka_broker_controller
-        non_controller_group: kafka_broker_non_controllers
+      import_tasks: roles/confluent.kafka_broker/tasks/wait_for_urp.yml
 
 - name: Kafka Broker Upgrade - Set Inter-Broker Protocol to Current Version
-  hosts: kafka_broker_non_controllers,kafka_broker_controller
-  gather_facts: no
-  serial: 1
+  hosts: kafka_broker
+  gather_facts: false
   tags:
     - inter_broker_protocol_version
   vars:
-    upgrade_to_version: "5.4"
+    upgrade_to_version: "5.5"
+  handlers:
+    - import_tasks: roles/confluent.kafka_broker/handlers/main.yml
   tasks:
     - import_role:
-        name: confluent.variables_handlers
+        name: confluent.variables
 
     - set_fact:
         inter_broker_protocol_version: 2.3
@@ -195,12 +153,14 @@
         inter_broker_protocol_version: 2.4
       when: upgrade_to_version is match('5.4.*')
 
+    - set_fact:
+        inter_broker_protocol_version: 2.5
+      when: upgrade_to_version is match('5.5.*')
+
     - name: Set Inter-Broker Protocol Version to Current Version
       lineinfile:
         name: "{{kafka_broker.config_file}}"
         line: "inter.broker.protocol.version={{inter_broker_protocol_version}}"
         regexp: inter.broker.protocol.version.*
         state: present
-      notify:
-        - Restart Kafka
-        - Wait for URP
+      notify: restart kafka

@@ -3,19 +3,33 @@
     name: confluent.common
   when: not common_role_completed|bool
 
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_fqdn
+
 # Install Packages
 - name: Install the KSQL Packages
   yum:
     name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{ksql_packages}}"
-  when: ansible_os_family == "RedHat"
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
 
 - name: Install the KSQL Packages
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{ksql_packages}}"
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
 
 # Configure environment
 - name: Create Ksql Group
@@ -26,16 +40,27 @@
   user:
     name: "{{ksql_user}}"
     comment: "Connect Distributed User"
-    system: yes
+    system: true
     group: "{{ksql_group}}"
 
 - name: Set Ksql streams dir permissions
   file:
-    path: "{{ksql.properties['ksql.streams.state.dir']}}"
+    path: "{{ksql_final_properties['ksql.streams.state.dir']}}"
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
     state: directory
     mode: 0755
+
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Ksql Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{ksql.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{ksql.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method == "archive"
 
 - include_role:
     name: confluent.ssl
@@ -46,8 +71,13 @@
     keystore_storepass: "{{ksql_keystore_storepass}}"
     keystore_keypass: "{{ksql_keystore_keypass}}"
     service_name: ksql
-    hostnames: "{{ [inventory_hostname] }}"
-  when: ksql_ssl_enabled|bool or kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
+    user: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
+    ca_cert_path: "{{ksql_ca_cert_path}}"
+    cert_path: "{{ksql_cert_path}}"
+    key_path: "{{ksql_key_path}}"
+  when: ksql_ssl_enabled|bool or kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or mds_ssl_enabled | bool
 
 - name: Configure Kerberos
   include_role:
@@ -56,16 +86,29 @@
     kerberos_group: "{{ksql_group}}"
     kerberos_user: "{{ksql_user}}"
     kerberos_keytab_path: "{{ksql_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{ksql_keytab_path}}"
     kerberos_handler: "restart ksql"
   when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
-- name: Change streams directory ownership
+- name: Copy Custom KSQL Files
+  include_tasks: ../../tasks/copy_files.yml
+  vars:
+    copy_files: "{{ksql_copy_files}}"
+    user: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+  when: ksql_copy_files | length > 0
+
+- name: Configure RBAC
+  include_tasks: rbac.yml
+  when: rbac_enabled|bool
+
+- name: Create Ksql Config directory
   file:
-    path: "{{ksql_streams_state_dir}}"
+    path: "{{ ksql.config_file | dirname }}"
+    state: directory
+    mode: 0755
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
-    state: directory
-    mode: 0750
 
 - name: Create Ksql Config
   template:
@@ -85,6 +128,14 @@
     owner: "{{ksql_user}}"
     mode: '764'
 
+- name: Create log4j Directory
+  file:
+    path: "{{ksql.log4j_file | dirname}}"
+    owner: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+    state: directory
+    mode: 0755
+
 - name: Create Ksql log4j Config
   template:
     src: ksql-server_log4j.properties.j2
@@ -92,19 +143,16 @@
     mode: 0640
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
-  notify:
-    - restart ksql
+  notify: restart ksql
 
-- name: Ksql Jaas Config
-  template:
-    src: ksql-server_jaas.conf.j2
-    dest: "{{ksql.jaas_file}}"
+- name: Deploy JMX Exporter Config File
+  copy:
+    src: "ksql.yml"
+    dest: "{{ksql_jmxexporter_config_path}}"
     mode: 0640
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
-  when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
-  notify:
-    - restart ksql
+  when: ksql_jmxexporter_enabled|bool
 
 - name: Create Service Override Directory
   file:
@@ -121,9 +169,7 @@
     mode: 0640
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
-  notify:
-    - reload systemd
-    - restart ksql
+  notify: restart ksql
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -135,7 +181,7 @@
 - name: Start Ksql Service
   systemd:
     name: "{{ksql_service_name}}"
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Health Check

@@ -1,10 +1,11 @@
+---
 - name: Kafka Rest Upgrade
   hosts: kafka_rest
   environment: "{{ proxy_env }}"
   serial: 1
   tasks:
     - import_role:
-        name: confluent.variables_handlers
+        name: confluent.variables
 
     - name: Get Package Facts
       package_facts:
@@ -39,23 +40,8 @@
         - kafka_rest_current_version != confluent_full_package_version
         - kafka_rest_current_version != confluent_package_version
 
-    - name: Wait for API to return 200 - HTTP
-      uri:
-        url: "http://localhost:{{kafka_rest_port}}/topics"
-        status_code: 200
-      register: result
-      until: result.status == 200
-      retries: 60
-      delay: 5
-      when: not kafka_rest_ssl_enabled|bool
-
-    - name: Wait for API to return 200 - HTTPS
-      uri:
-        url: "https://localhost:{{kafka_rest_port}}/topics"
-        status_code: 200
-        validate_certs: no
-      register: result
-      until: result.status == 200
-      retries: 60
-      delay: 5
-      when: kafka_rest_ssl_enabled|bool
+    - name: Kafka Rest Health Check
+      import_role:
+        name: confluent.kafka_rest
+        tasks_from: health_check.yml
+      when: not ansible_check_mode

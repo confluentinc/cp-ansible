@@ -3,19 +3,33 @@
     name: confluent.common
   when: not common_role_completed|bool
 
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_fqdn
+
 # Install Packages
 - name: Install the Schema Registry Packages
   yum:
     name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{schema_registry_packages}}"
-  when: ansible_os_family == "RedHat"
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
 
 - name: Install the Schema Registry Packages
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{schema_registry_packages}}"
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
 
 # Configure environment
 - name: Schema Registry Group
@@ -26,8 +40,19 @@
   user:
     name: "{{schema_registry_user}}"
     comment: "Schema Registry User"
-    system: yes
+    system: true
     group: "{{schema_registry_group}}"
+
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Schema Registry Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{schema_registry.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{schema_registry.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method == "archive"
 
 - include_role:
     name: confluent.ssl
@@ -38,8 +63,13 @@
     keystore_storepass: "{{schema_registry_keystore_storepass}}"
     keystore_keypass: "{{schema_registry_keystore_keypass}}"
     service_name: schema_registry
-    hostnames: "{{ [inventory_hostname] }}"
-  when: schema_registry_ssl_enabled|bool or kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
+    user: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
+    ca_cert_path: "{{schema_registry_ca_cert_path}}"
+    cert_path: "{{schema_registry_cert_path}}"
+    key_path: "{{schema_registry_key_path}}"
+  when: schema_registry_ssl_enabled|bool or kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or mds_ssl_enabled | bool
 
 - name: Configure Kerberos
   include_role:
@@ -48,8 +78,29 @@
     kerberos_group: "{{schema_registry_group}}"
     kerberos_user: "{{schema_registry_user}}"
     kerberos_keytab_path: "{{schema_registry_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{schema_registry_keytab_path}}"
     kerberos_handler: "restart schema-registry"
   when: kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
+
+- name: Copy Custom Schema Registry Files
+  include_tasks: ../../tasks/copy_files.yml
+  vars:
+    copy_files: "{{schema_registry_copy_files}}"
+    user: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  when: schema_registry_copy_files | length > 0
+
+- name: Configure RBAC
+  include_tasks: rbac.yml
+  when: rbac_enabled|bool
+
+- name: Create Schema Registry Config directory
+  file:
+    path: "{{ schema_registry.config_file | dirname }}"
+    state: directory
+    mode: 0755
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
 
 - name: Create Schema Registry Config
   template:
@@ -58,8 +109,7 @@
     mode: 0640
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
-  notify:
-    - restart schema-registry
+  notify: restart schema-registry
 
 - name: Create Logs Directory
   file:
@@ -69,6 +119,14 @@
     owner: "{{schema_registry_user}}"
     mode: '764'
 
+- name: Create log4j Directory
+  file:
+    path: "{{schema_registry.log4j_file | dirname}}"
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+    state: directory
+    mode: 0755
+
 - name: Create Schema Registry log4j Config
   template:
     src: schema_registry_log4j.properties.j2
@@ -76,8 +134,16 @@
     mode: 0640
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
-  notify:
-    - restart schema-registry
+  notify: restart schema-registry
+
+- name: Deploy JMX Exporter Config File
+  copy:
+    src: "schema_registry.yml"
+    dest: "{{schema_registry_jmxexporter_config_path}}"
+    mode: 0640
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  when: schema_registry_jmxexporter_enabled|bool
 
 - name: Create Service Override Directory
   file:
@@ -94,9 +160,7 @@
     mode: 0640
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
-  notify:
-    - reload systemd
-    - restart schema-registry
+  notify: restart schema-registry
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -108,7 +172,7 @@
 - name: Start Schema Registry Service
   systemd:
     name: "{{schema_registry_service_name}}"
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Health Check

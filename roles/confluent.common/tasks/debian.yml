@@ -1,26 +1,41 @@
 ---
+- name: Gather OS Facts
+  setup:
+    # Only gathers ansible_distribution_release, filters out the rest
+    filter: ansible_distribution_release
+    gather_subset:
+      - '!all'
+
 - name: Install apt-transport-https
   shell: apt-get install apt-transport-https -y --force-yes
   args:
-    warn: no
+    warn: false
 
 - name: Add Confluent Apt Key
   apt_key:
     url: "{{confluent_common_repository_debian_key_url}}"
     state: present
-  when: not custom_apt_repo|bool
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
 
 - name: Add Confluent Apt Repo
   apt_repository:
     repo: "{{confluent_common_repository_debian_repository}}"
     state: present
-  when: not custom_apt_repo|bool
+  register: apt_add_result
+  until: apt_add_result is success
+  retries: 10
+  delay: 5
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
 
 - name: Add Custom Apt Repo
   copy:
     src: "{{custom_apt_repo_filepath}}"
     dest: /etc/apt/sources.list.d/custom_confluent.list
-  when: custom_apt_repo|bool
+  when: repository_configuration == 'custom'
   notify:
     - apt-get update
 
@@ -34,7 +49,7 @@
     - debian apt-get update
   when:
     - install_java|bool
-    - not custom_apt_repo|bool
+    - repository_configuration == 'confluent'
 
 - name: Add jessie-backports Repo
   lineinfile:
@@ -45,7 +60,7 @@
     - debian apt-get update
   when:
     - install_java|bool
-    - not custom_apt_repo|bool
+    - repository_configuration == 'confluent'
     - ansible_distribution_release == "jessie"
 
 - name: Add stretch-backports Repo
@@ -57,7 +72,7 @@
     - debian apt-get update
   when:
     - install_java|bool
-    - not custom_apt_repo|bool
+    - repository_configuration == 'confluent'
     - ansible_distribution_release == "stretch"
 
 - meta: flush_handlers
@@ -67,9 +82,13 @@
     name: "{{ debian_java_package_name }}"
     state: present
     default_release: jessie-backports
+  register: java_install_result
+  until: java_install_result is success
+  retries: 10
+  delay: 5
   when:
     - install_java|bool
-    - not custom_apt_repo|bool
+    - repository_configuration == 'confluent'
     - ansible_distribution_release == "jessie"
 
 - name: Install Java - stretch
@@ -77,23 +96,33 @@
     name: "{{ debian_java_package_name }}"
     state: present
     default_release: stretch-backports
+  register: java_install_result
+  until: java_install_result is success
+  retries: 10
+  delay: 5
   when:
     - install_java|bool
-    - not custom_apt_repo|bool
+    - repository_configuration == 'confluent'
     - ansible_distribution_release == "stretch"
 
 - name: Install Java (Custom Repo)
   apt:
     name: "{{ debian_java_package_name }}"
     state: present
+  register: java_install_result
+  until: java_install_result is success
+  retries: 10
+  delay: 5
   when:
     - install_java|bool
-    - custom_apt_repo|bool
+    - repository_configuration in ['custom', 'none']
 
-- name: Install rsync & CA Certs
+- name: Install rsync, ca-certificates, openssl, unzip
   apt:
     name: "{{ item }}"
-    state: present
   loop:
     - rsync
     - ca-certificates
+    - openssl
+    - unzip
+    - curl

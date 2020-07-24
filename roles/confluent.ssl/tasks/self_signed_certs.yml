@@ -2,12 +2,12 @@
 - name: Copy CA Cert to Host
   copy:
     src: "generated_ssl_files/{{ssl_self_signed_ca_cert_filename}}"
-    dest: "/var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}}"
+    dest: "{{ca_cert_path}}"
 
 - name: Copy CA Key to Host
   copy:
     src: "generated_ssl_files/{{ssl_self_signed_ca_key_filename}}"
-    dest: "/var/ssl/private/generation/{{ssl_self_signed_ca_key_filename}}"
+    dest: "{{ca_key_path}}"
 
 - set_fact:
     extra_args: ""
@@ -22,7 +22,7 @@
     keytool -noprompt -keystore {{truststore_path}} \
       -storetype pkcs12 \
       -alias CARoot \
-      -import -file /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
+      -import -file {{ca_cert_path}} \
       -storepass {{truststore_storepass}} \
       -keypass {{truststore_storepass}} {{extra_args}}
 
@@ -37,6 +37,14 @@
       -keystore {{keystore_path}} \
       -storepass {{keystore_storepass}} \
       -keypass {{keystore_storepass}} {{extra_args}}
+
+- name: Export Key from Keystore
+  shell: |
+    openssl pkcs12 \
+        -in {{keystore_path}} \
+        -passin pass:{{keystore_storepass}} \
+        -nodes -nocerts \
+        -out {{key_path}}
 
 - name: Create Certificate Signing Request
   shell: |
@@ -55,10 +63,10 @@
 
 - name: Sign CSR with the Certificate Authority
   shell: |
-    openssl x509 -req -CA /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
-      -CAkey /var/ssl/private/generation/{{ssl_self_signed_ca_key_filename}} \
+    openssl x509 -req -CA {{ca_cert_path}} \
+      -CAkey {{ca_key_path}} \
       -in /var/ssl/private/generation/client.csr \
-      -out /var/ssl/private/generation/client-signed.crt \
+      -out {{cert_path}} \
       -days {{keystore_expiration_days}} -CAcreateserial \
       -passin pass:{{ssl_self_signed_ca_password}} \
       -extfile /var/ssl/private/generation/openssl-san.cnf \
@@ -69,7 +77,7 @@
     keytool -noprompt -keystore {{keystore_path}} \
       -storetype pkcs12 \
       -alias CARoot \
-      -import -file /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
+      -import -file {{ca_cert_path}} \
       -storepass {{keystore_storepass}} \
       -keypass {{keystore_storepass}} {{extra_args}}
 
@@ -78,7 +86,7 @@
     keytool -noprompt -keystore {{keystore_path}} \
       -storetype pkcs12 \
       -alias {{inventory_hostname}} \
-      -import -file /var/ssl/private/generation/client-signed.crt \
+      -import -file {{cert_path}} \
       -ext "SAN={{hostnames | cert_extension}}" \
       -storepass {{keystore_storepass}} \
       -keypass {{keystore_storepass}} {{extra_args}}

@@ -1,31 +1,31 @@
-ksql_streams_state_dir: /var/lib/kafka-streams
+---
+# More ksql variables are defined in the confluent.variables role
 
-ksql_jaas_java_arg_buildout: "-Djava.security.auth.login.config={{ksql.jaas_file}}"
-ksql_jolokia_java_arg_buildout: "-javaagent:{{jolokia_jar_path}}=port={{ksql_jolokia_port}},host=0.0.0.0"
-ksql_log4j_java_arg_buildout: "-Dlog4j.configuration=file:{{ksql.log4j_file}}"
-
+### Boolean to enable cp-ansible's Custom Log4j Configuration
 ksql_custom_log4j: "{{ custom_log4j }}"
 
-ksql_custom_java_args: ""
 ksql_java_args:
-  - "{{ ksql_jaas_java_arg_buildout if kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | normalize_sasl_protocol == 'GSSAPI' else '' }}"
-  - "{{ ksql_jolokia_java_arg_buildout if ksql_jolokia_enabled|bool else '' }}"
-  - "{{ ksql_log4j_java_arg_buildout if ksql_custom_log4j|bool else '' }}"
+  - "{% if ksql_ssl_enabled|bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
+  - "{% if ksql_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=port={{ksql_jolokia_port}},host=0.0.0.0{% if ksql_jolokia_ssl_enabled|bool %},keystore={{ksql_keystore_path}},keystorePassword={{ksql_keystore_storepass}},protocol=https{% endif %}{% endif %}"
+  - "{% if ksql_custom_log4j|bool %}-Dlog4j.configuration=file:{{ksql.log4j_file}}{% endif %}"
+  - "{% if ksql_jmxexporter_enabled|bool %}-javaagent:{{jmxexporter_jar_path}}={{ksql_jmxexporter_port}}:{{ksql_jmxexporter_config_path}}{% endif %}"
+
+### Custom Java Args to add to the ksqlDB Process
+ksql_custom_java_args: ""
 
 ksql_final_java_args: "{{ ksql_java_args + [ ksql_custom_java_args ] }}"
 
-# Empty values will not be written into override.conf
+# Key/Value Pairs with empty values will not be written into override.conf
 ksql_service_overrides:
   LimitNOFILE: 100000
   User: "{{ ksql_user if ksql_user != ksql_default_user else '' }}"
   Group: "{{ ksql_group if ksql_group != ksql_default_group else '' }}"
+  ExecStart: "{% if installation_method == 'archive' %}{{ ksql.server_start_file }} {{ ksql.config_file }}{% endif %}"
+
 ksql_service_environment_overrides:
   KSQL_HEAP_OPTS: "-Xmx3g"
   KSQL_OPTS: "{{ ksql_final_java_args | java_arg_build_out }}"
-
-ksql_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | length, 3 ] | min }}"
-
-ksql_service_id: default_
+  LOG_DIR: "{{ksql.appender_log_path}}"
 
 ksql:
   appender_log_path: /var/log/confluent/ksql/
@@ -38,13 +38,3 @@ ksql:
   kafka_appender_log_name: ksql-kafka.log
   kafka_appender_max_log_files: 10
   kafka_appender_log_file_size: 100MB
-  streamsDataDir: "{{ksql_streams_state_dir}}"
-  properties:
-    application.id: ksql-server
-    ksql.service.id: "{{ ksql_service_id }}"
-    ksql.internal.topic.replicas: "{{ ksql_default_internal_replication_factor }}"
-    ksql.streams.replication.factor: "{{ ksql_default_internal_replication_factor }}"
-    ksql.streams.state.dir: "{{ksql_streams_state_dir}}"
-    ksql.streams.num.standby.replicas: 1
-    ksql.streams.producer.delivery.timeout.ms: 2147483647
-    ksql.streams.producer.max.block.ms: 9223372036854775807

@@ -1,3 +1,4 @@
+---
 - name: Zookeeper Upgrade - Prep
   hosts: zookeeper
   # Running serial=1 because add_host has problems
@@ -7,7 +8,7 @@
     - prep
   tasks:
     - import_role:
-        name: confluent.variables_handlers
+        name: confluent.variables
 
     - name: Zookeeper is Running
       systemd:
@@ -18,6 +19,7 @@
       import_role:
         name: confluent.zookeeper
         tasks_from: health_check.yml
+      when: not ansible_check_mode
 
     - name: Get Package Facts
       package_facts:
@@ -49,6 +51,8 @@
       args:
         executable: /bin/bash
       register: leader_query
+      changed_when: false
+      check_mode: false
 
     - name: Add host to Follower Group
       add_host:
@@ -83,7 +87,7 @@
     - upgrade
   tasks:
     - import_role:
-        name: confluent.variables_handlers
+        name: confluent.variables
 
     - name: Create Backup Directory
       file:
@@ -97,12 +101,14 @@
     - name: Backup Configuration files
       copy:
         src: "{{ item }}"
-        remote_src: yes
+        remote_src: true
         dest: "/tmp/upgrade/{{ zookeeper_service_name }}/{{ item | basename }}-{{timestamp}}"
       loop:
         - "{{ zookeeper.config_file }}"
         - "{{ zookeeper.systemd_override }}"
         - "{{ kafka_broker.config_file }}"
+      # Files cannot be copied because directory is not created in check mode
+      ignore_errors: "{{ ansible_check_mode }}"
 
     - name: Stop Service
       systemd:
@@ -114,6 +120,7 @@
         name: confluent.zookeeper
         tasks_from: health_check.yml
       delegate_to: "{{ groups['zookeeper'] | difference([inventory_hostname]) | first }}"
+      when: not ansible_check_mode
 
     - name: Configure Repositories
       import_role:
@@ -127,22 +134,28 @@
         state: latest
       loop: "{{ zookeeper_packages }}"
       when: ansible_os_family == "RedHat"
+      # Packages will not be found in check mode because repos not changed
+      ignore_errors: "{{ ansible_check_mode }}"
 
     - name: Install the Packages - Debian
       apt:
         name: "{{item}}{{confluent_package_debian_suffix}}"
-        update_cache: yes
+        update_cache: true
       loop: "{{ zookeeper_packages }}"
       when: ansible_os_family == "Debian"
+      # Packages will not be found in check mode because repos not changed
+      ignore_errors: "{{ ansible_check_mode }}"
 
     - name: Put back configuration
       copy:
         dest: "{{ item }}"
-        remote_src: yes
+        remote_src: true
         src: "/tmp/upgrade/{{ zookeeper_service_name }}/{{ item | basename }}-{{timestamp}}"
       loop:
         - "{{ zookeeper.config_file }}"
         - "{{ kafka_broker.config_file }}"
+      # Files cannot be copied because directory is not created in check mode
+      ignore_errors: "{{ ansible_check_mode }}"
 
     - name: Add Disable Admin Server Property
       lineinfile:
@@ -150,11 +163,9 @@
         line: admin.enableServer=false
         regexp: admin.enableServer=.*
 
-    - name: reload systemd
-      command: systemctl daemon-reload
-
     - name: Restart Service
       systemd:
+        daemon_reload: true
         name: "{{ zookeeper_service_name }}"
         state: restarted
 
@@ -162,3 +173,4 @@
       import_role:
         name: confluent.zookeeper
         tasks_from: health_check.yml
+      when: not ansible_check_mode
