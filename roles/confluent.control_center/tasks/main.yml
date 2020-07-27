@@ -19,13 +19,17 @@
     name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{control_center_packages}}"
-  when: ansible_os_family == "RedHat"
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
 
 - name: Install the Control Center Packages
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{control_center_packages}}"
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
 
 # Configure environment
 - name: Create Control Center Group
@@ -45,7 +49,7 @@
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
     state: directory
-    mode: 0755
+    mode: 0750
 
 - name: Set Control Center Data Dir file permissions
   file:
@@ -53,6 +57,17 @@
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
     recurse: true
+
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Control Center Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{control_center.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{control_center.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method == "archive"
 
 - include_role:
     name: confluent.ssl
@@ -94,6 +109,14 @@
   include_tasks: rbac.yml
   when: rbac_enabled|bool
 
+- name: Create Control Center Config directory
+  file:
+    path: "{{ control_center.config_file | dirname }}"
+    state: directory
+    mode: 0750
+    owner: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+
 - name: Create Control Center Config
   template:
     src: control-center.properties.j2
@@ -108,6 +131,7 @@
     path: /var/log/confluent/
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
+    state: directory
 
 - name: Create Logs Directory
   file:
@@ -115,14 +139,14 @@
     state: directory
     group: "{{control_center_group}}"
     owner: "{{control_center_user}}"
-    mode: '764'
+    mode: 0750
 
 - name: Create RocksDB Directory
   file:
     path: "{{control_center_rocksdb_path}}"
     group: "{{control_center_group}}"
     owner: "{{control_center_user}}"
-    mode: '764'
+    mode: 0750
     state: directory
   when: control_center_rocksdb_path != ""
 
@@ -133,6 +157,14 @@
     owner: "{{control_center_user}}"
     recurse: true
   when: control_center_rocksdb_path != ""
+
+- name: Create log4j Directory
+  file:
+    path: "{{control_center.log4j_file | dirname}}"
+    owner: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+    state: directory
+    mode: 0750
 
 - name: Create Control Center log4j Config
   template:
