@@ -19,13 +19,17 @@
     name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{kafka_rest_packages}}"
-  when: ansible_os_family == "RedHat"
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
 
 - name: Install the Kafka Rest Packages
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{kafka_rest_packages}}"
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
 
 # Configure environment
 - name: Create Kafka Rest Group
@@ -38,6 +42,17 @@
     comment: "Kafka REST User"
     system: true
     group: "{{kafka_rest_group}}"
+
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Kafka REST Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{kafka_rest.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{kafka_rest.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method == "archive"
 
 - include_role:
     name: confluent.ssl
@@ -95,6 +110,14 @@
     group: "{{kafka_rest_group}}"
   when: rbac_enabled|bool
 
+- name: Create Kafka Rest Config directory
+  file:
+    path: "{{ kafka_rest.config_file | dirname }}"
+    state: directory
+    mode: 0750
+    owner: "{{kafka_rest_user}}"
+    group: "{{kafka_rest_group}}"
+
 - name: Create Kafka Rest Config
   template:
     src: kafka-rest.properties.j2
@@ -110,7 +133,15 @@
     state: directory
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
-    mode: '764'
+    mode: 0750
+
+- name: Create log4j Directory
+  file:
+    path: "{{kafka_rest.log4j_file | dirname}}"
+    owner: "{{kafka_rest_user}}"
+    group: "{{kafka_rest_group}}"
+    state: directory
+    mode: 0750
 
 - name: Create Kafka Rest log4j Config
   template:
