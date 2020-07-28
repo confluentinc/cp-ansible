@@ -4,17 +4,10 @@
   changed_when: false
   register: substate
 
-# All zookeeper hosts iterate over the list of zookeeper hosts, each seeing the list in the same order
-# At one given loop entry, only one host will have its inventory_hostname match  the entry in the loop
-# restart.yml tasks will only run for that host ON that host
-- name: Restart Zookeeper Serially
+- name: Parallel Restart
   include: restart.yml
-  delegate_to: "{{ item }}"
-  loop: "{{ groups['zookeeper'] }}"
-  when:
-    - "hostvars[item].inventory_hostname == inventory_hostname"
-    - substate.stdout == 'SubState=running'
+  when: substate.stdout != 'SubState=running' or certs_updated|bool
 
-- name: Restart Zookeeper in Parallel
-  include: restart.yml
-  when: substate.stdout != 'SubState=running'
+- name: Ordered Restart
+  include: ordered_restart.yml
+  when: substate.stdout == 'SubState=running' and not certs_updated|bool

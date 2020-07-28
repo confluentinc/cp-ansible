@@ -1,21 +1,26 @@
 ---
-# More kafka_connect variables are defined in the confluent.variables_handlers role
+# More kafka_connect variables are defined in the confluent.variables role
 
+### Boolean to enable cp-ansible's Custom Log4j Configuration
 kafka_connect_custom_log4j: "{{ custom_log4j }}"
 
 kafka_connect_java_args:
   - "{% if kafka_connect_ssl_enabled|bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
   - "{% if kafka_connect_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=port={{kafka_connect_jolokia_port}},host=0.0.0.0{% if kafka_connect_jolokia_ssl_enabled|bool %},keystore={{kafka_connect_keystore_path}},keystorePassword={{kafka_connect_keystore_storepass}},protocol=https{% endif %}{% endif %}"
   - "{% if kafka_connect_custom_log4j|bool %}-Dlog4j.configuration=file:{{kafka_connect.log4j_file}}{% endif %}"
+  - "{% if kafka_connect_jmxexporter_enabled|bool %}-javaagent:{{jmxexporter_jar_path}}={{kafka_connect_jmxexporter_port}}:{{kafka_connect_jmxexporter_config_path}}{% endif %}"
 
+### Custom Java Args to add to the Connect Process
 kafka_connect_custom_java_args: ""
+
 kafka_connect_final_java_args: "{{ kafka_connect_java_args + [ kafka_connect_custom_java_args ] }}"
 
-# Empty values will not be written into override.conf
+# Key/Value Pairs with empty values will not be written into override.conf
 kafka_connect_service_overrides:
   LimitNOFILE: 100000
   User: "{{ kafka_connect_user if kafka_connect_user != kafka_connect_default_user else '' }}"
   Group: "{{ kafka_connect_group if kafka_connect_group != kafka_connect_default_group else '' }}"
+
 kafka_connect_service_environment_overrides:
   KAFKA_HEAP_OPTS: "-Xms256M -Xmx2G"
   KAFKA_OPTS: "{{ kafka_connect_final_java_args | java_arg_build_out }}"
