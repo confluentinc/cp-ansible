@@ -65,7 +65,7 @@ for line in `sed '/^$/d' $filename`; do
       keytool -genkey -noprompt \
           -keystore $KEYSTORE_FILENAME \
           -alias $alias \
-          -dname "CN=$service,OU=QE,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US" \
+          -dname "CN=$service,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US" \
           -ext $EXT \
           -keyalg RSA \
           -storetype pkcs12 \
