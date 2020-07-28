@@ -2,7 +2,7 @@
   hosts: zookeeper:kafka_broker
   serial: 1
   vars_prompt:
-    - name: reinstall_zk_kafka
+    - name: zk_kafka
       prompt: "Reinstall ZK and Kafka? [yes(default)/no]"
       private: no
       default: true
@@ -37,25 +37,27 @@
         import_tasks: tasks/restart_zookeeper.yml
       - name: Restart Kafka Brokers
         import_tasks: tasks/restart_kafka.yml  
-      when: reinstall_zk_kafka|bool  
+      when: zk_kafka|bool  
     - debug:
         msg: "Skip reinstalling Zookeeper and Kafka"
-      when: not reinstall_zk_kafka|bool
+      when: not zk_kafka|bool
 
 - name: Reinstall Schema Registry
   hosts: schema_registry
   serial: 1
   vars_prompt:
-    - name: reinstall_sr
+    - name: sr
       prompt: "Reinstall Schema Registry? [yes(default)/no]"
       private: no
       default: true
   tasks:
     - block:
       - import_role:
-          name: confluent.variables_handlers
+          name: confluent.variables
       - import_role:
           name: confluent.common
+        vars:
+          install_java: false
       - name: Reinstall Schema Registry
         include_tasks: tasks/reinstall_and_restart_components.yml
         vars:
@@ -71,25 +73,28 @@
         import_role:
           name: confluent.schema_registry
           tasks_from: health_check.yml
-      when: reinstall_sr|bool
+        when: health_checks_enabled|bool
+      when: sr|bool
     - debug:
         msg: "Skip reinstalling Schema Registry"
-      when: not reinstall_sr|bool
+      when: not sr|bool
 
 - name: Reinstall Connect and KSQL
   hosts: kafka_connect:ksql
   serial: 1
   vars_prompt:
-    - name: reinstall_connect_ksql
+    - name: connect_ksql
       prompt: "Reinstall Connect and KSQL? [yes(default)/no]"
       private: no
       default: true
   tasks:
     - block:
       - import_role:
-          name: confluent.variables_handlers
+          name: confluent.variables
       - import_role:
           name: confluent.common
+        vars:
+          install_java: false
       - name: Reinstall Connect and KSQL
         include_tasks: tasks/reinstall_and_restart_components.yml
         vars:
@@ -110,29 +115,33 @@
         import_role:
           name: confluent.ksql
           tasks_from: health_check.yml
+        when: health_checks_enabled|bool
       - name: Kafka Connect Health Check
         import_role:
           name: confluent.kafka_connect
           tasks_from: health_check.yml
-      when: reinstall_connect_ksql|bool
+        when: health_checks_enabled|bool
+      when: connect_ksql|bool
     - debug:
         msg: "Skip reinstalling KSQL and Connect"
-      when: not reinstall_connect_ksql|bool
+      when: not connect_ksql|bool
 
 - name: Reinstall REST Proxy and C3
   hosts: kafka_rest:control_center
   serial: 1
   vars_prompt:
-    - name: reinstall_rest_c3
+    - name: rest_c3
       prompt: "Reinstall REST Proxy and C3? [yes(default)/no]"
       private: no
       default: true
   tasks:
     - block:
       - import_role:
-          name: confluent.variables_handlers
+          name: confluent.variables
       - import_role:
           name: confluent.common
+        vars:
+          install_java: false
       - name: Reinstall REST Proxy and C3
         include_tasks: tasks/reinstall_and_restart_components.yml
         vars:
@@ -152,14 +161,16 @@
         import_role:
           name: confluent.kafka_rest
           tasks_from: health_check.yml
+        when: health_checks_enabled|bool
       - name: Control Center Health Check
         import_role:
           name: confluent.control_center
           tasks_from: health_check.yml
-      when: reinstall_rest_c3|bool
+        when: health_checks_enabled|bool
+      when: rest_c3|bool
     - debug:
         msg: "Skip reinstalling REST Proxy and C3"
-      when: not reinstall_rest_c3|bool
+      when: not rest_c3|bool
       
     
 
