@@ -1172,6 +1172,142 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ***
 
+### secrets_protection_enabled
+
+Boolean to enable secrets protection on all components.
+
+Default:  false
+
+***
+
+### broker_config_path
+
+Full path to configuration file in Kafka broker that contains properties to encrypt. If empty, then secrets protection does not run.
+
+Default:  ""
+
+***
+
+### broker_config_params
+
+Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
+
+Default:  []
+
+***
+
+### control_center_config_path
+
+Full path to configuration file in control center that contains properties to encrypt. If empty, then secrets protection does not run.
+
+Default:  ""
+
+***
+
+### control_center_config_params
+
+Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
+
+Default:  []
+
+***
+
+### connect_config_path
+
+Full path to configuration file in Kafka connect that contains properties to encrypt. If empty, then secrets protection does not run.
+
+Default:  ""
+
+***
+
+### connect_config_params
+
+Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
+
+Default:  []
+
+***
+
+### rest_config_path
+
+Full path to configuration file in Kafka rest that contains properties to encrypt. If empty, then secrets protection does not run.
+
+Default:  ""
+
+***
+
+### rest_config_params
+
+Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
+
+Default:  []
+
+***
+
+### kerberos_config_path
+
+Full path to configuration file in Kerberos that contains properties to encrypt. If empty, then secrets protection does not run.
+
+Default:  ""
+
+***
+
+### kerberos_config_params
+
+Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
+
+Default:  []
+
+***
+
+### ksql_config_path
+
+Full path to configuration file in KSQL that contains properties to encrypt. If empty, then secrets protection does not run.
+
+Default:  ""
+
+***
+
+### ksql_config_params
+
+Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
+
+Default:  []
+
+***
+
+### schema_config_path
+
+Full path to configuration file in schema registry that contains properties to encrypt. If empty, then secrets protection does not run.
+
+Default:  ""
+
+***
+
+### schema_config_params
+
+Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
+
+Default:  []
+
+***
+
+### zookeeper_config_path
+
+Full path to configuration file in Zookeeper that contains properties to encrypt. If empty, then secrets protection does not run.
+
+Default:  ""
+
+***
+
+### zookeeper_config_params
+
+Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
+
+Default:  []
+
+***
+
 # confluent.common
 
 Below are the supported variables for the role confluent.common
