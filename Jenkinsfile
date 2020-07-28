@@ -54,8 +54,8 @@ def job = {
 
     if(params.CONFLUENT_PACKAGE_BASEURL) {
         override_config['confluent_common_repository_baseurl'] = params.CONFLUENT_PACKAGE_BASEURL
-    } else if (targetBranch().toString().matches('\\d+\\.\\d+\\.(x|\\d+)')) {
-        /* This condition imples we're in a dev (.x) branch and therefore the release in confluent_package_version
+    } else if (targetBranch().toString().matches('\\d+\\.\\d+\\.(x|\\d+)') || targetBranch().toString().equals('master')) {
+        /* This condition imples we're in a dev (.x) or master branch and therefore the release in confluent_package_version
            does not yet exist on https://packages.confluent.io so we have to query the packaging job for the last
            successful build location (what utilities.getLastNightlyPackagingBaseURL returns). We also override the
            confluent_package_*_suffix to an empty string so it will install the (expected) latest version */
