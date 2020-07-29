@@ -1180,7 +1180,7 @@ Default:  false
 
 ***
 
-### broker_config_path
+### kafka_broker_secrets_protection_config_path
 
 Full path to configuration file in Kafka broker that contains properties to encrypt. If empty, then secrets protection does not run.
 
@@ -1188,7 +1188,7 @@ Default:  ""
 
 ***
 
-### broker_config_params
+### kafka_broker_secrets_protection_config_params
 
 Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
 
@@ -1196,7 +1196,7 @@ Default:  []
 
 ***
 
-### control_center_config_path
+### control_center_secrets_protection_config_path
 
 Full path to configuration file in control center that contains properties to encrypt. If empty, then secrets protection does not run.
 
@@ -1204,7 +1204,7 @@ Default:  ""
 
 ***
 
-### control_center_config_params
+### control_center_secrets_protection_config_params
 
 Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
 
@@ -1212,7 +1212,7 @@ Default:  []
 
 ***
 
-### connect_config_path
+### kafka_connect_secrets_protection_config_path
 
 Full path to configuration file in Kafka connect that contains properties to encrypt. If empty, then secrets protection does not run.
 
@@ -1220,7 +1220,7 @@ Default:  ""
 
 ***
 
-### connect_config_params
+### kafka_connect_secrets_protection_config_params
 
 Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
 
@@ -1228,7 +1228,7 @@ Default:  []
 
 ***
 
-### rest_config_path
+### kafka_rest_secrets_protection_config_path
 
 Full path to configuration file in Kafka rest that contains properties to encrypt. If empty, then secrets protection does not run.
 
@@ -1236,7 +1236,7 @@ Default:  ""
 
 ***
 
-### rest_config_params
+### kafka_rest_secrets_protection_config_params
 
 Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
 
@@ -1244,7 +1244,7 @@ Default:  []
 
 ***
 
-### kerberos_config_path
+### kerberos_secrets_protection_config_path
 
 Full path to configuration file in Kerberos that contains properties to encrypt. If empty, then secrets protection does not run.
 
@@ -1252,7 +1252,7 @@ Default:  ""
 
 ***
 
-### kerberos_config_params
+### kerberos_secrets_protection_config_params
 
 Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
 
@@ -1260,7 +1260,7 @@ Default:  []
 
 ***
 
-### ksql_config_path
+### ksql_secrets_protection_config_path
 
 Full path to configuration file in KSQL that contains properties to encrypt. If empty, then secrets protection does not run.
 
@@ -1268,7 +1268,7 @@ Default:  ""
 
 ***
 
-### ksql_config_params
+### ksql_secrets_protection_config_params
 
 Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
 
@@ -1276,7 +1276,7 @@ Default:  []
 
 ***
 
-### schema_config_path
+### schema_registry_secrets_protection_config_path
 
 Full path to configuration file in schema registry that contains properties to encrypt. If empty, then secrets protection does not run.
 
@@ -1284,7 +1284,7 @@ Default:  ""
 
 ***
 
-### schema_config_params
+### schema_registry_secrets_protection_config_params
 
 Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
 
@@ -1292,7 +1292,7 @@ Default:  []
 
 ***
 
-### zookeeper_config_path
+### zookeeper_secrets_protection_config_path
 
 Full path to configuration file in Zookeeper that contains properties to encrypt. If empty, then secrets protection does not run.
 
@@ -1300,7 +1300,7 @@ Default:  ""
 
 ***
 
-### zookeeper_config_params
+### zookeeper_secrets_protection_config_params
 
 Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
 
