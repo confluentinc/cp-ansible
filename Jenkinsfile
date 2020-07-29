@@ -52,14 +52,17 @@ def job = {
 
     def override_config = [:]
 
+    def branch_name = targetBranch().toString()
+
     if(params.CONFLUENT_PACKAGE_BASEURL) {
         override_config['confluent_common_repository_baseurl'] = params.CONFLUENT_PACKAGE_BASEURL
-    } else if (targetBranch().toString().matches('\\d+\\.\\d+\\.(x|\\d+)')) {
+    } else if (branch_name.matches('\\d+\\.\\d+\\.(x|\\d+)')) {
         /* This condition imples we're in a dev (.x) branch and therefore the release in confluent_package_version
            does not yet exist on https://packages.confluent.io so we have to query the packaging job for the last
            successful build location (what utilities.getLastNightlyPackagingBaseURL returns). We also override the
            confluent_package_*_suffix to an empty string so it will install the (expected) latest version */
-        override_config['confluent_common_repository_baseurl'] = utilities.getLastNightlyPackagingBaseURL(targetBranch().toString())
+        override_config['confluent_common_repository_baseurl'] = utilities.getLastNightlyPackagingBaseURL(branch_name)
+        override_config['confluent_repo_version'] = branch_name.tokenize('.')[0..1].join('.')
         override_config['confluent_package_redhat_suffix'] = ""
         override_config['confluent_package_debian_suffix'] = ""
     }
