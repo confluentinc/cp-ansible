@@ -452,7 +452,7 @@ Default:  []
 
 ***
 
-### kafka_broker_default_interal_replication_factor
+### kafka_broker_default_internal_replication_factor
 
 Replication Factor for internal topics. Defaults to the minimum of the number of brokers and 3
 
