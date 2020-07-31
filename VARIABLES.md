@@ -1004,6 +1004,102 @@ Default:  "{{mds_ssl_enabled}}"
 
 ***
 
+### mds_super_user
+
+LDAP User which will be granted super user permissions to create role bindings in the MDS
+
+Default:  mds
+
+***
+
+### mds_super_user_password
+
+Password to mds_super_user LDAP User
+
+Default:  password
+
+***
+
+### schema_registry_ldap_user
+
+LDAP User for Schema Registry to authenticate as
+
+Default:  schema-registry
+
+***
+
+### schema_registry_ldap_password
+
+Password to schema_registry_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### kafka_connect_ldap_user
+
+LDAP User for Connect to authenticate as
+
+Default:  connect
+
+***
+
+### kafka_connect_ldap_password
+
+Password to kafka_connect_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### ksql_ldap_user
+
+LDAP User for ksqlDB to authenticate as
+
+Default:  ksql
+
+***
+
+### ksql_ldap_password
+
+Password to ksql_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### kafka_rest_ldap_user
+
+LDAP User for Rest Proxy to authenticate as
+
+Default:  kafka-rest
+
+***
+
+### kafka_rest_ldap_password
+
+Password to kafka_rest_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### control_center_ldap_user
+
+LDAP User for Control Center to authenticate as
+
+Default:  control-center
+
+***
+
+### control_center_ldap_password
+
+Password to control_center_ldap_user LDAP User
+
+Default:  password
+
+***
+
 ### external_mds_enabled
 
 Boolean to describe if kafka group in inventory file should be configured as MDS Server. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, kafka_broker_rest_ssl_enabled
