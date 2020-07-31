@@ -956,14 +956,6 @@ Default:  "{{ssl_enabled}}"
 
 ***
 
-### control_center_ssl_mutual_auth_enabled
-
-Boolean to enable mTLS Authentication on Control Center
-
-Default:  "{{ ssl_mutual_auth_enabled }}"
-
-***
-
 ### control_center_copy_files
 
 Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
@@ -1009,102 +1001,6 @@ Default:  8090
 Boolean to configure TLS encryption on the Broker Rest endpoint. (Or if is configured with TLS encryption when external_mds_enabled: true) NOTE- mds_ssl_enabled is now deprecated
 
 Default:  "{{mds_ssl_enabled}}"
-
-***
-
-### mds_super_user
-
-LDAP User which will be granted super user permissions to create role bindings in the MDS
-
-Default:  mds
-
-***
-
-### mds_super_user_password
-
-Password to mds_super_user LDAP User
-
-Default:  password
-
-***
-
-### schema_registry_ldap_user
-
-LDAP User for Schema Registry to authenticate as
-
-Default:  schema-registry
-
-***
-
-### schema_registry_ldap_password
-
-Password to schema_registry_ldap_user LDAP User
-
-Default:  password
-
-***
-
-### kafka_connect_ldap_user
-
-LDAP User for Connect to authenticate as
-
-Default:  connect
-
-***
-
-### kafka_connect_ldap_password
-
-Password to kafka_connect_ldap_user LDAP User
-
-Default:  password
-
-***
-
-### ksql_ldap_user
-
-LDAP User for ksqlDB to authenticate as
-
-Default:  ksql
-
-***
-
-### ksql_ldap_password
-
-Password to ksql_ldap_user LDAP User
-
-Default:  password
-
-***
-
-### kafka_rest_ldap_user
-
-LDAP User for Rest Proxy to authenticate as
-
-Default:  kafka-rest
-
-***
-
-### kafka_rest_ldap_password
-
-Password to kafka_rest_ldap_user LDAP User
-
-Default:  password
-
-***
-
-### control_center_ldap_user
-
-LDAP User for Control Center to authenticate as
-
-Default:  control-center
-
-***
-
-### control_center_ldap_password
-
-Password to control_center_ldap_user LDAP User
-
-Default:  password
 
 ***
 
