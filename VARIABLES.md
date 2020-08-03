@@ -956,14 +956,6 @@ Default:  "{{ssl_enabled}}"
 
 ***
 
-### control_center_ssl_mutual_auth_enabled
-
-Boolean to enable mTLS Authentication on Control Center
-
-Default:  "{{ ssl_mutual_auth_enabled }}"
-
-***
-
 ### control_center_copy_files
 
 Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
