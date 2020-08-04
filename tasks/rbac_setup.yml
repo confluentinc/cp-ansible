@@ -1,15 +1,17 @@
 ---
-- name: Get Kafka Cluster ID from Zookeeper
-  shell: /usr/bin/zookeeper-shell localhost:2181 get /cluster/id | grep version
-  delegate_to: "{{ groups['zookeeper'][0] }}"
+- name: Get Kafka Cluster ID from Embedded Rest Proxy
+  uri:
+    url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/kafka/v3/clusters"
+    method: GET
+    validate_certs: false
+    body_format: json
+    return_content: true
+    status_code: 200
   register: cluster_id_query
 
-- set_fact:
-    cluster_id_json: "{{ cluster_id_query.stdout }}"
-
-- name: Set kafka_cluster_id Variable
+- name: Parse Kafka Cluster ID from json query
   set_fact:
-    kafka_cluster_id: "{{ cluster_id_json.id }}"
+    kafka_cluster_id: "{{ cluster_id_query.json.data[0].cluster_id }}"
 
 - name: Create SSL Certificate Directory
   file:
@@ -21,6 +23,6 @@
   copy:
     src: "{{token_services_public_pem_file}}"
     dest: "{{rbac_enabled_public_pem_path}}"
-    mode: '755'
+    mode: 0755
     owner: "{{user}}"
     group: "{{group}}"

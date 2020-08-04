@@ -94,16 +94,17 @@ kafka_broker_properties:
       num.network.threads: 8
       num.partitions: 1
       num.recovery.threads.per.data.dir: 2
-      offsets.topic.replication.factor: "{{kafka_broker_default_interal_replication_factor}}"
+      offsets.topic.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
       socket.receive.buffer.bytes: 102400
       socket.request.max.bytes: 104857600
       socket.send.buffer.bytes: 102400
       transaction.state.log.min.isr: "{{ [ 2, kafka_broker_default_interal_replication_factor|int ] | min }}"
       transaction.state.log.replication.factor: "{{kafka_broker_default_interal_replication_factor}}"
       zookeeper.connection.timeout.ms: 18000
-      confluent.license.topic.replication.factor: "{{kafka_broker_default_interal_replication_factor}}"
-      confluent.metadata.topic.replication.factor: "{{kafka_broker_default_interal_replication_factor}}"
-      confluent.security.event.logger.exporter.kafka.topic.replicas: "{{kafka_broker_default_interal_replication_factor}}"
+      confluent.license.topic: _confluent-license
+      confluent.license.topic.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
+      confluent.metadata.topic.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
+      confluent.security.event.logger.exporter.kafka.topic.replicas: "{{kafka_broker_default_internal_replication_factor}}"
       confluent.support.metrics.enable: "true"
       confluent.support.customer.id: anonymous
       zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}"
@@ -155,7 +156,7 @@ kafka_broker_properties:
       zookeeper.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
       zookeeper.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   zk_ssl_fips:
-    enabled: "{{ zookeeper_ssl_enabled and fips_enabled }}"
+    enabled: "{{ zookeeper_ssl_enabled and pkcs12_enabled }}"
     properties:
       zookeeper.ssl.trustmanager.algorithm: PKIX
       zookeeper.ssl.truststore.type: pkcs12
@@ -165,7 +166,7 @@ kafka_broker_properties:
       zookeeper.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
       zookeeper.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
   zk_mtls_fips:
-    enabled: "{{ zookeeper_ssl_mutual_auth_enabled and fips_enabled}}"
+    enabled: "{{ zookeeper_ssl_mutual_auth_enabled and pkcs12_enabled}}"
     properties:
       zookeeper.ssl.keymanager.algorithm: PKIX
       zookeeper.ssl.keystore.type: pkcs12
@@ -185,6 +186,13 @@ kafka_broker_properties:
       confluent.schema.registry.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
       confluent.schema.registry.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
       confluent.schema.registry.ssl.key.password: "{{kafka_broker_keystore_keypass}}"
+  sr_ssl_fips:
+    enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool and pkcs12_enabled}}"
+    properties:
+      confluent.schema.registry.ssl.keymanager.algorithm: PKIX
+      confluent.schema.registry.ssl.trustmanager.algorithm: PKIX
+      confluent.schema.registry.ssl.keystore.type: pkcs12
+      confluent.schema.registry.ssl.truststore.type: pkcs12
   rbac:
     enabled: "{{ rbac_enabled }}"
     properties:
@@ -223,7 +231,7 @@ kafka_broker_properties:
     properties:
       metric.reporters: io.confluent.metrics.reporter.ConfluentMetricsReporter
       confluent.metrics.reporter.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}}"
-      confluent.metrics.reporter.topic.replicas: "{{kafka_broker_default_interal_replication_factor}}"
+      confluent.metrics.reporter.topic.replicas: "{{kafka_broker_default_internal_replication_factor}}"
   metrics_reporter_client:
     enabled: "{{ 'control_center' in groups and kafka_broker_metrics_reporter_enabled|bool }}"
     properties: "{{ kafka_broker_listeners[kafka_broker_inter_broker_listener_name] | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
@@ -273,6 +281,7 @@ schema_registry_properties:
       host.name: "{{inventory_hostname}}"
       inter.instance.protocol: "{{schema_registry_http_protocol}}"
       kafkastore.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[schema_registry_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[schema_registry_kafka_listener_name]['port']}}"
+      confluent.license.topic: _confluent-license
   ssl:
     enabled: "{{schema_registry_ssl_enabled}}"
     properties:
@@ -299,7 +308,6 @@ schema_registry_properties:
   rbac:
     enabled: "{{rbac_enabled}}"
     properties:
-      kafkastore.connection.url: "{{ groups['zookeeper'] | default(['localhost']) | join(':' + zookeeper_final_properties.clientPort|string + ',') }}:{{zookeeper_final_properties.clientPort}}"
       schema.registry.resource.extension.class: io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension
       confluent.schema.registry.authorizer.class: io.confluent.kafka.schemaregistry.security.authorizer.rbac.RbacAuthorizer
       rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
@@ -377,12 +385,12 @@ kafka_connect_properties:
       listeners.https.ssl.keystore.location: "{{kafka_connect_keystore_path}}"
       listeners.https.ssl.keystore.password: "{{kafka_connect_keystore_storepass}}"
       listeners.https.ssl.key.password: "{{kafka_connect_keystore_keypass}}"
+      listeners.https.ssl.truststore.location: "{{kafka_connect_truststore_path}}"
+      listeners.https.ssl.truststore.password: "{{kafka_connect_truststore_storepass}}"
   mtls:
     enabled: "{{ kafka_connect_ssl_mutual_auth_enabled }}"
     properties:
       listeners.https.ssl.client.auth: "true"
-      listeners.https.ssl.truststore.location: "{{kafka_connect_truststore_path}}"
-      listeners.https.ssl.truststore.password: "{{kafka_connect_truststore_storepass}}"
   sr:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
@@ -640,9 +648,8 @@ kafka_rest_properties:
     properties:
       listeners: "{{kafka_rest_http_protocol}}://0.0.0.0:{{kafka_rest_port}}"
       host.name: "{{inventory_hostname}}"
-      # TODO remove this prop for 600 release, hardcoding port for time being
-      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | join(':2181,') }}:2181"
       bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}"
+      confluent.license.topic: _confluent-license
   id:
     enabled: "{{ inventory_hostname in groups.kafka_rest }}"
     properties:
@@ -753,17 +760,13 @@ control_center_properties:
       confluent.controlcenter.rest.listeners: "{{control_center_http_protocol}}://{{control_center_listener_hostname}}:{{control_center_port}}"
       bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[control_center_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[control_center_kafka_listener_name]['port']}}"
   ssl:
-    enabled: "{{control_center_ssl_enabled}}"
+    enabled: "{{control_center_ssl_enabled or (kafka_broker_rest_endpoint_enabled and kafka_broker_rest_ssl_enabled) }}"
     properties:
       confluent.controlcenter.rest.ssl.keystore.location: "{{control_center_keystore_path}}"
       confluent.controlcenter.rest.ssl.keystore.password: "{{control_center_keystore_storepass}}"
       confluent.controlcenter.rest.ssl.key.password: "{{control_center_keystore_keypass}}"
-  mtls:
-    enabled: "{{ control_center_ssl_mutual_auth_enabled }}"
-    properties:
       confluent.controlcenter.rest.ssl.truststore.location: "{{control_center_truststore_path}}"
       confluent.controlcenter.rest.ssl.truststore.password: "{{control_center_truststore_storepass}}"
-      confluent.controlcenter.rest.ssl.client.auth: 'true'
   broker_embedded_rest_endpoint:
     enabled: "{{kafka_broker_rest_endpoint_enabled or rbac_enabled }}"
     properties:

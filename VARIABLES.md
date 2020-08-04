@@ -460,7 +460,7 @@ Default:  []
 
 ***
 
-### kafka_broker_default_interal_replication_factor
+### kafka_broker_default_internal_replication_factor
 
 Replication Factor for internal topics. Defaults to the minimum of the number of brokers and 3
 
@@ -985,14 +985,6 @@ Default:  "0.0.0.0"
 Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
 
 Default:  "{{ssl_enabled}}"
-
-***
-
-### control_center_ssl_mutual_auth_enabled
-
-Boolean to enable mTLS Authentication on Control Center
-
-Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ***
 
