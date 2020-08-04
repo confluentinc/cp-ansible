@@ -246,12 +246,17 @@ class FilterModule(object):
         # Other inputs help fill out the properties
         final_dict = {}
         for ansible_group in ksql_group_list:
-            # ksql_group_list defaults to ['ksql'], but there may be scenario where no connect group
+            # ksql_group_list defaults to ['ksql'], but there may be scenario where no ksql group
             if ansible_group in groups.keys():
                 delim = ':' + str(port) + ',' + http_protocol + '://'
 
+                advertised_hostnames = []
+                for host in groups[ansible_group]:
+                    advertised_hostnames = advertised_hostnames + [hostvars[host].get('ksql_advertised_listener_hostname', host)]
+
                 final_dict.update({
-                    'confluent.controlcenter.ksql.' + ansible_group + '.url': http_protocol + '://' + delim.join( groups[ansible_group] ) + ':' + str(port)
+                    'confluent.controlcenter.ksql.' + ansible_group + '.url': http_protocol + '://' + delim.join( groups[ansible_group] ) + ':' + str(port),
+                    'confluent.controlcenter.ksql.' + ansible_group + '.advertised.url': http_protocol + '://' + delim.join( advertised_hostnames ) + ':' + str(port)
                 })
 
                 if ssl_enabled:
