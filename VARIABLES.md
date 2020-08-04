@@ -76,6 +76,14 @@ Default:  true
 
 ***
 
+### monitoring_interceptors_enabled
+
+Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Only honored if inventory also has Control Center Group
+
+Default:  true
+
+***
+
 ### installation_method
 
 The method of installation. Valid values are "package" or "archive". If "archive" is selected then services will not be installed via the use of yum or apt, but will instead be installed via expanding the target .tar.gz file from the Confluent archive into the path defined by `archive_destination_path`. Configuration files are also kept in this directory structure instead of `/etc`. SystemD service units are copied from the ardhive for each target service and overrides are created pointing at the new paths. The "package" installation method is the default behavior that utilizes yum/apt.
@@ -668,6 +676,14 @@ Default:  "{{ kafka_rest.properties }}"
 
 ***
 
+### kafka_rest_monitoring_interceptors_enabled
+
+Boolean to configure Monitoring Interceptors on Rest Proxy. Only honored if inventory also has Control Center Group
+
+Default:  "{{ monitoring_interceptors_enabled }}"
+
+***
+
 ### kafka_connect_user
 
 Only use to customize Linux User Connect Service runs with. User must exist on host.
@@ -796,6 +812,14 @@ Default:  "{{ kafka_connect.properties }}"
 
 ***
 
+### kafka_connect_monitoring_interceptors_enabled
+
+Boolean to configure Monitoring Interceptors on Connect. Only honored if inventory also has Control Center Group
+
+Default:  "{{ monitoring_interceptors_enabled }}"
+
+***
+
 ### ksql_user
 
 Only use to customize Linux User ksqlDB Service runs with. User must exist on host.
@@ -905,6 +929,14 @@ Default:  default_
 Use to set custom ksqlDB properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- ksql.properties is deprecated.
 
 Default:  "{{ ksql.properties }}"
+
+***
+
+### ksql_monitoring_interceptors_enabled
+
+Boolean to configure Monitoring Interceptors on ksqlDB. Only honored if inventory also has Control Center Group
+
+Default:  "{{ monitoring_interceptors_enabled }}"
 
 ***
 
