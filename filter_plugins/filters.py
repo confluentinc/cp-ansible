@@ -136,7 +136,7 @@ class FilterModule(object):
                 final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.scram-sha-512.sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' + scram_user + '\" password=\"' + scram_password + '\";'
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER':
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms'] = 'OAUTHBEARER',
+                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms'] = 'OAUTHBEARER'
                 final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.server.callback.handler.class'] = 'io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler'
                 final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.login.callback.handler.class'] = 'io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler'
                 final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
