@@ -484,6 +484,14 @@ Default:  "{{ kafka_broker.properties }}"
 
 ***
 
+### kafka_broker_rest_endpoint_enabled
+
+Boolean to enable rest end point for the embedded rest proxy and metadata server.  Note:  If RBAC is enabled the rest endpoint will also be enabled even if this is set to false.  The rest end point is a requirement for RBAC to function.
+
+Default:  true
+
+***
+
 ### schema_registry_user
 
 Only use to customize Linux User Schema Registry Service runs with. User must exist on host.
@@ -1028,11 +1036,11 @@ Default:  8090
 
 ***
 
-### mds_ssl_enabled
+### kafka_broker_rest_ssl_enabled
 
-Boolean to configure TLS encryption on the MDS Server. (Or if is confligured with TLS encyption when external_mds_enabled: true)
+Boolean to configure TLS encryption on the Broker Rest endpoint. (Or if is configured with TLS encryption when external_mds_enabled: true) NOTE- mds_ssl_enabled is now deprecated
 
-Default:  "{{ssl_enabled}}"
+Default:  "{{mds_ssl_enabled}}"
 
 ***
 
@@ -1134,7 +1142,7 @@ Default:  password
 
 ### external_mds_enabled
 
-Boolean to describe if kafka group in inventory file should be configured as MDS Server. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, mds_ssl_enabled
+Boolean to describe if kafka group in inventory file should be configured as MDS Server. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, kafka_broker_rest_ssl_enabled
 
 Default:  false
 
