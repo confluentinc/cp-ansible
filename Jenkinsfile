@@ -52,6 +52,8 @@ def job = {
 
     def override_config = [:]
 
+    def branch_name = targetBranch().toString()
+
     if(params.CONFLUENT_PACKAGE_BASEURL) {
         override_config['confluent_common_repository_baseurl'] = params.CONFLUENT_PACKAGE_BASEURL
     }
