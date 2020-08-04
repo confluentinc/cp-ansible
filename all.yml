@@ -1,24 +1,28 @@
 ---
-- name: Generate CA for Self Signed Certs
-  hosts: zookeeper[0]
-  gather_facts: false
-  tags: certificate_authority
-  tasks:
-  - import_role:
-      name: confluent.variables
-
-  - name: Create Certificate Authority and Copy to Ansible Host
-    include_tasks: tasks/certificate_authority.yml
-    when: (self_signed|bool and regenerate_ca|bool and kafka_broker_listeners | ssl_required(ssl_enabled)) or create_mds_certs|bool
-
 - name: Host Prerequisites
   hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest
   gather_facts: false
-  tags: common
   environment: "{{ proxy_env }}"
   tasks:
-  - import_role:
-      name: confluent.common
+    - name: Create Certificate Authority and Copy to Ansible Host
+      include_tasks: tasks/certificate_authority.yml
+      tags: certificate_authority
+      run_once: true
+      when: >
+        create_mds_certs|bool or
+        (self_signed|bool and regenerate_ca|bool and
+        zookeeper_ssl_enabled|bool or
+        kafka_broker_listeners | ssl_required(ssl_enabled) or
+        kafka_broker_rest_ssl_enabled|bool or
+        schema_registry_ssl_enabled|bool or
+        kafka_rest_ssl_enabled|bool or
+        kafka_connect_ssl_enabled|bool or
+        ksql_ssl_enabled|bool or
+        control_center_ssl_enabled|bool)
+
+    - import_role:
+        name: confluent.common
+      tags: common
 
 - name: Zookeeper Provisioning
   hosts: zookeeper
@@ -26,8 +30,8 @@
   tags: zookeeper
   environment: "{{ proxy_env }}"
   tasks:
-  - import_role:
-      name: confluent.zookeeper
+    - import_role:
+        name: confluent.zookeeper
 
 - name: Kafka Broker Provisioning
   hosts: kafka_broker
@@ -35,8 +39,8 @@
   tags: kafka_broker
   environment: "{{ proxy_env }}"
   tasks:
-  - import_role:
-      name: confluent.kafka_broker
+    - import_role:
+        name: confluent.kafka_broker
 
 - name: Schema Registry Provisioning
   hosts: schema_registry
@@ -44,8 +48,8 @@
   tags: schema_registry
   environment: "{{ proxy_env }}"
   tasks:
-  - import_role:
-      name: confluent.schema_registry
+    - import_role:
+        name: confluent.schema_registry
 
 - name: Kafta Connect Provisioning
   hosts: kafka_connect
@@ -53,8 +57,8 @@
   tags: kafka_connect
   environment: "{{ proxy_env }}"
   tasks:
-  - import_role:
-      name: confluent.kafka_connect
+    - import_role:
+        name: confluent.kafka_connect
 
 - name: KSQL Provisioning
   hosts: ksql
@@ -62,8 +66,8 @@
   tags: ksql
   environment: "{{ proxy_env }}"
   tasks:
-  - import_role:
-      name: confluent.ksql
+    - import_role:
+        name: confluent.ksql
 
 - name: Kafka Rest Provisioning
   hosts: kafka_rest
@@ -71,8 +75,8 @@
   tags: kafka_rest
   environment: "{{ proxy_env }}"
   tasks:
-  - import_role:
-      name: confluent.kafka_rest
+    - import_role:
+        name: confluent.kafka_rest
 
 - name: Control Center Provisioning
   hosts: control_center
@@ -80,5 +84,5 @@
   tags: control_center
   environment: "{{ proxy_env }}"
   tasks:
-  - import_role:
-      name: confluent.control_center
+    - import_role:
+        name: confluent.control_center
