@@ -106,40 +106,42 @@ class FilterModule(object):
         # Other inputs help fill out the properties
         final_dict = {}
         for listener in listeners_dict:
+            listener_name = listeners_dict[listener].get('name').lower()
+
             if listeners_dict[listener].get('ssl_enabled', default_ssl_enabled):
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.truststore.location'] = kafka_broker_truststore_path
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.truststore.password'] = kafka_broker_truststore_storepass
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keystore.location'] = kafka_broker_keystore_path
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keystore.password'] = kafka_broker_keystore_storepass
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.key.password'] = kafka_broker_keystore_keypass
+                final_dict['listener.name.' + listener_name + '.ssl.truststore.location'] = kafka_broker_truststore_path
+                final_dict['listener.name.' + listener_name + '.ssl.truststore.password'] = kafka_broker_truststore_storepass
+                final_dict['listener.name.' + listener_name + '.ssl.keystore.location'] = kafka_broker_keystore_path
+                final_dict['listener.name.' + listener_name + '.ssl.keystore.password'] = kafka_broker_keystore_storepass
+                final_dict['listener.name.' + listener_name + '.ssl.key.password'] = kafka_broker_keystore_keypass
 
             if listeners_dict[listener].get('pkcs12_enabled', default_pkcs12_enabled):
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keymanager.algorithm'] = 'PKIX'
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.trustmanager.algorithm'] = 'PKIX'
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keystore.type'] = 'pkcs12'
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.truststore.type'] = 'pkcs12'
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.enabled.protocols'] = 'TLSv1.2'
+                final_dict['listener.name.' + listener_name + '.ssl.keymanager.algorithm'] = 'PKIX'
+                final_dict['listener.name.' + listener_name + '.ssl.trustmanager.algorithm'] = 'PKIX'
+                final_dict['listener.name.' + listener_name + '.ssl.keystore.type'] = 'pkcs12'
+                final_dict['listener.name.' + listener_name + '.ssl.truststore.type'] = 'pkcs12'
+                final_dict['listener.name.' + listener_name + '.ssl.enabled.protocols'] = 'TLSv1.2'
 
             if listeners_dict[listener].get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.client.auth'] = 'required'
+                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = 'required'
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'PLAIN':
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms'] = 'PLAIN'
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.plain.sasl.jaas.config'] = plain_jaas_config
+                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'PLAIN'
+                final_dict['listener.name.' + listener_name + '.plain.sasl.jaas.config'] = plain_jaas_config
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI':
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms'] = 'GSSAPI'
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.gssapi.sasl.jaas.config'] = 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' + keytab_path + '\" principal=\"' + kerberos_principal + '\";'
+                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'GSSAPI'
+                final_dict['listener.name.' + listener_name + '.gssapi.sasl.jaas.config'] = 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' + keytab_path + '\" principal=\"' + kerberos_principal + '\";'
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'SCRAM-SHA-512':
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms'] = 'SCRAM-SHA-512'
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.scram-sha-512.sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' + scram_user + '\" password=\"' + scram_password + '\";'
+                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'SCRAM-SHA-512'
+                final_dict['listener.name.' + listener_name + '.scram-sha-512.sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' + scram_user + '\" password=\"' + scram_password + '\";'
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER':
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms'] = 'OAUTHBEARER'
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.server.callback.handler.class'] = 'io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler'
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.login.callback.handler.class'] = 'io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler'
-                final_dict['listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
+                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'OAUTHBEARER'
+                final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.server.callback.handler.class'] = 'io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler'
+                final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.login.callback.handler.class'] = 'io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler'
+                final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
 
         return final_dict
 
