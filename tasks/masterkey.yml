@@ -1,26 +1,29 @@
 ---
-- name: Download Confluent CLI - Standard
-  shell: "curl -L https://cnfl.io/cli | sh -s -- -b /usr/local/bin"
-  register: cli_download_result
-  until: cli_download_result is success
-  retries: 5
-  delay: 5
+
+- name: Save Security File
+  set_fact: secrets_protection_security_file={{ lookup('file', secrets_protection_security_file) }}
+  when: (secrets_protection_masterkey|length>0) and (secrets_protection_security_file|length>0)
 
 - name: Create Passphrase File
   shell: "openssl rand -base64 14 > passphrase.txt"
+  when: not secrets_protection_masterkey
 
 - name: Generate Master Encryption Key
   shell: "/usr/local/bin/confluent secret master-key generate --local-secrets-file security.properties \
            --passphrase @passphrase.txt | awk '/Master/{print $5}'"
   register: masterkey
+  when: not secrets_protection_masterkey
 
 - name: Save Master Encryption Key
   set_fact: secrets_protection_masterkey={{masterkey.stdout}}
+  when: not secrets_protection_masterkey
 
 - name: Get security.properties File
   slurp:
     src: security.properties
   register: sec
+  when: not secrets_protection_security_file
 
 - name: Save security.properties File to Ansible
   set_fact: secrets_protection_security_file={{ sec['content'] | b64decode }}
+  when: not secrets_protection_security_file
