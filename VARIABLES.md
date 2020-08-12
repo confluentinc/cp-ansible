@@ -1204,6 +1204,78 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ***
 
+### telemetry_enabled
+
+Boolean to configure Telemetry. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  false
+
+***
+
+### telemetry_api_key
+
+API Key used by Telemetry. Mandatory variable for Telemetry
+
+Default:  ""
+
+***
+
+### telemetry_api_secret
+
+API Secret used by Telemetry. Mandatory variable for Telemetry
+
+Default:  ""
+
+***
+
+### kafka_broker_telemetry_enabled
+
+Boolean to configure Telemetry on Kafka. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### schema_registry_telemetry_enabled
+
+Boolean to configure Telemetry on Schema Registry. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### kafka_connect_telemetry_enabled
+
+Boolean to configure Telemetry on Connect. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### kafka_rest_telemetry_enabled
+
+Boolean to configure Telemetry on Rest Proxy. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### ksql_telemetry_enabled
+
+Boolean to configure Telemetry on ksqlDB. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### control_center_telemetry_enabled
+
+Boolean to configure Telemetry on Control Center. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
 # confluent.common
 
 Below are the supported variables for the role confluent.common
@@ -1238,7 +1310,7 @@ Default:  ""
 
 Base URL for Confluent's RPM and Debian Package Repositories
 
-Default:  "https://packages.confluent.io"
+Default:  "https://s3-us-west-2.amazonaws.com/jenkins-confluent-packages/6.0.x/147"
 
 ***
 
