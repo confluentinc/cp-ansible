@@ -87,7 +87,7 @@ class FilterModule(object):
         return java_args[1:]
 
     def combine_properties(self, properties_dict):
-        # Loops over master properties dictionary and combines subelements if enabled
+        # Loops over master properties dictionary and combines sub elements if enabled
         final_dict = {}
         for prop in properties_dict:
             if properties_dict[prop].get('enabled'):
@@ -106,112 +106,96 @@ class FilterModule(object):
         # Other inputs help fill out the properties
         final_dict = {}
         for listener in listeners_dict:
+            listener_name = listeners_dict[listener].get('name').lower()
+
             if listeners_dict[listener].get('ssl_enabled', default_ssl_enabled):
-                final_dict.update({
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.truststore.location': kafka_broker_truststore_path,
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.truststore.password': kafka_broker_truststore_storepass,
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keystore.location': kafka_broker_keystore_path,
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keystore.password': kafka_broker_keystore_storepass,
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.key.password': kafka_broker_keystore_keypass
-                })
+                final_dict['listener.name.' + listener_name + '.ssl.truststore.location'] = kafka_broker_truststore_path
+                final_dict['listener.name.' + listener_name + '.ssl.truststore.password'] = kafka_broker_truststore_storepass
+                final_dict['listener.name.' + listener_name + '.ssl.keystore.location'] = kafka_broker_keystore_path
+                final_dict['listener.name.' + listener_name + '.ssl.keystore.password'] = kafka_broker_keystore_storepass
+                final_dict['listener.name.' + listener_name + '.ssl.key.password'] = kafka_broker_keystore_keypass
+
             if listeners_dict[listener].get('pkcs12_enabled', default_pkcs12_enabled):
-                final_dict.update({
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keymanager.algorithm': 'PKIX',
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.trustmanager.algorithm': 'PKIX',
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.keystore.type': 'pkcs12',
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.truststore.type': 'pkcs12',
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.enabled.protocols': 'TLSv1.2'
-                })
+                final_dict['listener.name.' + listener_name + '.ssl.keymanager.algorithm'] = 'PKIX'
+                final_dict['listener.name.' + listener_name + '.ssl.trustmanager.algorithm'] = 'PKIX'
+                final_dict['listener.name.' + listener_name + '.ssl.keystore.type'] = 'pkcs12'
+                final_dict['listener.name.' + listener_name + '.ssl.truststore.type'] = 'pkcs12'
+                final_dict['listener.name.' + listener_name + '.ssl.enabled.protocols'] = 'TLSv1.2'
+
             if listeners_dict[listener].get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
-                final_dict.update({
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.ssl.client.auth': 'required'
-                })
+                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = 'required'
+
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'PLAIN':
-                final_dict.update({
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms': 'PLAIN',
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.plain.sasl.jaas.config': plain_jaas_config
-                })
+                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'PLAIN'
+                final_dict['listener.name.' + listener_name + '.plain.sasl.jaas.config'] = plain_jaas_config
+
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI':
-                final_dict.update({
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms': 'GSSAPI',
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.gssapi.sasl.jaas.config': 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' + keytab_path + '\" principal=\"' + kerberos_principal + '\";'
-                })
+                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'GSSAPI'
+                final_dict['listener.name.' + listener_name + '.gssapi.sasl.jaas.config'] = 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' + keytab_path + '\" principal=\"' + kerberos_principal + '\";'
+
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'SCRAM-SHA-512':
-                final_dict.update({
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms': 'SCRAM-SHA-512',
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.scram-sha-512.sasl.jaas.config': 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' + scram_user + '\" password=\"' + scram_password + '\";'
-                })
+                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'SCRAM-SHA-512'
+                final_dict['listener.name.' + listener_name + '.scram-sha-512.sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' + scram_user + '\" password=\"' + scram_password + '\";'
+
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER':
-                final_dict.update({
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.sasl.enabled.mechanisms': 'OAUTHBEARER',
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.server.callback.handler.class': 'io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler',
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.login.callback.handler.class': 'io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler',
-                    'listener.name.' + listeners_dict[listener].get('name').lower() + '.oauthbearer.sasl.jaas.config': 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
-                })
+                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'OAUTHBEARER'
+                final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.server.callback.handler.class'] = 'io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler'
+                final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.login.callback.handler.class'] = 'io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler'
+                final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
+
         return final_dict
 
     def client_properties(self, listener_dict, default_ssl_enabled, default_pkcs12_enabled, default_ssl_mutual_auth_enabled, default_sasl_protocol,
                             config_prefix, truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass,
                             omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
                             kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
-                            oauth_username, oauth_password, mds_urls):
+                            oauth_username, oauth_password, mds_bootstrap_server_urls):
         # For any kafka client's properties: Takes in a single kafka listener and output properties to connect to that listener
         # Other inputs help fill out the properties
         final_dict = {
             config_prefix + 'security.protocol': self.kafka_protocol_defaults(listener_dict, default_ssl_enabled, default_sasl_protocol)
         }
         if listener_dict.get('ssl_enabled', default_ssl_enabled):
-            final_dict.update({
-                config_prefix + 'ssl.truststore.location': truststore_path,
-                config_prefix + 'ssl.truststore.password': truststore_storepass
-            })
+            final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
+            final_dict[config_prefix + 'ssl.truststore.password'] = truststore_storepass
+
         if listener_dict.get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
-            final_dict.update({
-                config_prefix + 'ssl.keystore.location': keystore_path,
-                config_prefix + 'ssl.keystore.password': keystore_storepass,
-                config_prefix + 'ssl.key.password': keystore_keypass
-            })
+            final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
+            final_dict[config_prefix + 'ssl.keystore.password'] = keystore_storepass
+            final_dict[config_prefix + 'ssl.key.password'] = keystore_keypass
+
         if listener_dict.get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
-            final_dict.update({
-                config_prefix + 'ssl.keystore.location': keystore_path,
-                config_prefix + 'ssl.keystore.password': keystore_storepass,
-                config_prefix + 'ssl.key.password': keystore_keypass
-            })
+            final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
+            final_dict[config_prefix + 'ssl.keystore.password'] = keystore_storepass
+            final_dict[config_prefix + 'ssl.key.password'] = keystore_keypass
+
         if listener_dict.get('pkcs12_enabled', default_pkcs12_enabled):
-            final_dict.update({
-                config_prefix + 'ssl.keymanager.algorithm': 'PKIX',
-                config_prefix + 'ssl.trustmanager.algorithm': 'PKIX',
-                config_prefix + 'ssl.keystore.type': 'pkcs12',
-                config_prefix + 'ssl.truststore.type': 'pkcs12'
-            })
+            final_dict[config_prefix + 'ssl.keymanager.algorithm'] = 'PKIX'
+            final_dict[config_prefix + 'ssl.trustmanager.algorithm'] = 'PKIX'
+            final_dict[config_prefix + 'ssl.keystore.type'] = 'pkcs12'
+            final_dict[config_prefix + 'ssl.truststore.type'] = 'pkcs12'
+
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) != 'none':
-            final_dict.update({
-                config_prefix + 'sasl.mechanism': self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol))
-            })
+            final_dict[config_prefix + 'sasl.mechanism'] = self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol))
+
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'PLAIN' and not omit_jaas_configs:
-            final_dict.update({
-                config_prefix + 'sasl.jaas.config': 'org.apache.kafka.common.security.plain.PlainLoginModule required username=\"' + sasl_plain_username + '\" password=\"' + sasl_plain_password + '\";'
-            })
+            final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.plain.PlainLoginModule required username=\"' + sasl_plain_username + '\" password=\"' + sasl_plain_password + '\";'
+
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'SCRAM-SHA-512' and not omit_jaas_configs:
-            final_dict.update({
-                config_prefix + 'sasl.jaas.config': 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' + sasl_scram_username + '\" password=\"' + sasl_scram_password + '\";'
-            })
+            final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' + sasl_scram_username + '\" password=\"' + sasl_scram_password + '\";'
+
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI':
-            final_dict.update({
-                config_prefix + 'sasl.kerberos.service.name': kerberos_kafka_broker_primary
-            })
+            final_dict[config_prefix + 'sasl.kerberos.service.name'] = kerberos_kafka_broker_primary
+
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI' and not omit_jaas_configs:
-            final_dict.update({
-                config_prefix + 'sasl.jaas.config': 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' + keytab_path + '\" principal=\"' + kerberos_principal + '\";'
-            })
+            final_dict[config_prefix + 'sasl.jaas.config'] = 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' + keytab_path + '\" principal=\"' + kerberos_principal + '\";'
+
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER':
-            final_dict.update({
-                config_prefix + 'sasl.login.callback.handler.class': 'io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler'
-            })
+            final_dict[config_prefix + 'sasl.login.callback.handler.class'] = 'io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler'
+
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER' and not omit_jaas_configs:
-            final_dict.update({
-                config_prefix + 'sasl.jaas.config': 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"' + oauth_username + '\" password=\"' + oauth_password + '\" metadataServerUrls=\"' + mds_urls + '\";'
-            })
+            final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"' + oauth_username + '\" password=\"' + oauth_password + '\" metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
+
         return final_dict
 
     def c3_connect_properties(self, connect_group_list, groups, hostvars, ssl_enabled, http_protocol, port, default_conned_group_id,
@@ -221,22 +205,21 @@ class FilterModule(object):
         # Other inputs help fill out the properties
         final_dict = {}
         for ansible_group in connect_group_list:
-            # connect_group_list defaults to ['kafka_connect'], but there may be scenario where no connect group
+            # connect_group_list defaults to ['kafka_connect'], but there may be scenario where no connect group exists
             if ansible_group in groups.keys():
-                delim = ':' + str(port) + ',' + http_protocol + '://'
+                urls = []
+                for host in groups[ansible_group]:
+                    urls.append(http_protocol + '://' + host + ':' + str(port))
 
-                final_dict.update({
-                    'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.cluster': http_protocol + '://' + delim.join( groups[ansible_group] ) + ':' + str(port)
-                })
+                final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.cluster'] = ','.join(urls)
 
                 if ssl_enabled:
-                    final_dict.update({
-                        'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.truststore.location': truststore_path,
-                        'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.truststore.password': truststore_storepass,
-                        'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.keystore.location': keystore_path,
-                        'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.keystore.password': keystore_storepass,
-                        'confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.key.password': keystore_keypass
-                    })
+                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.truststore.location'] = truststore_path
+                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.truststore.password'] = truststore_storepass
+                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.keystore.location'] = keystore_path
+                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.keystore.password'] = keystore_storepass
+                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.key.password'] = keystore_keypass
+
         return final_dict
 
     def c3_ksql_properties(self, ksql_group_list, groups, hostvars, ssl_enabled, http_protocol, port,
@@ -246,20 +229,22 @@ class FilterModule(object):
         # Other inputs help fill out the properties
         final_dict = {}
         for ansible_group in ksql_group_list:
-            # ksql_group_list defaults to ['ksql'], but there may be scenario where no connect group
+            # ksql_group_list defaults to ['ksql'], but there may be scenario where no ksql group exists
             if ansible_group in groups.keys():
-                delim = ':' + str(port) + ',' + http_protocol + '://'
+                urls = []
+                advertised_urls = []
+                for host in groups[ansible_group]:
+                    urls.append(http_protocol + '://' + host + ':' + str(port))
+                    advertised_urls.append(http_protocol + '://' + hostvars[host].get('ksql_advertised_listener_hostname', host) + ':' + str(port))
 
-                final_dict.update({
-                    'confluent.controlcenter.ksql.' + ansible_group + '.url': http_protocol + '://' + delim.join( groups[ansible_group] ) + ':' + str(port)
-                })
+                final_dict['confluent.controlcenter.ksql.' + ansible_group + '.url'] = ','.join(urls)
+                final_dict['confluent.controlcenter.ksql.' + ansible_group + '.advertised.url'] = ','.join(advertised_urls)
 
                 if ssl_enabled:
-                    final_dict.update({
-                        'confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.location': truststore_path,
-                        'confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.password': truststore_storepass,
-                        'confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.location': keystore_path,
-                        'confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.password': keystore_storepass,
-                        'confluent.controlcenter.ksql.' + ansible_group + '.ssl.key.password': keystore_keypass,
-                    })
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.location'] = truststore_path
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.password'] = truststore_storepass
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.location'] = keystore_path
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.password'] = keystore_storepass
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.key.password'] = keystore_keypass
+
         return final_dict

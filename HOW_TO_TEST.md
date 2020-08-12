@@ -31,6 +31,23 @@ To the run scenarios:
 ```cd roles/confluent.test```
 ```molecule converge -s <scenario name>```
 
+#### RBAC Roles
+
+With CP-Ansible 6.0, we have introduced scenarios for RBAC with a remote MDS installation.  For these scenarios to work, you will need to run two individual scenarios which work in tandem.  Order of operations for running the scenarios is import.
+
+You will first need to start a scenario which setups up cluster1 with the minimum configuration for the Meta Data Server to be running on the Brokers.
+
+The naming conventions for these scenarios are as follows:
+
+```rbac-mds-<functionality tested>-<security mechanism>-<OS>```
+
+Once Cluster1 has successfully started, you will then need to run a second scenario to setup cluster2.  Cluster2 will refer to cluster1 for it's Meta Data Server.
+
+The naming conventions for these scenarios are as follows:
+
+```rbac-centralized-mds-<functionality tested>-<security mechanism>-<OS>```
+
+Note: The scenarios for cluster1 only setup the minimum viable configuration for MDS to run, the do not setup additional components, such as Schema Registry or Kafka Connect.  Scenarios for cluster2, setup all components.
 
 ### SSHing into a container
 

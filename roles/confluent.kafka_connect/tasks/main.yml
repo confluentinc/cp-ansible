@@ -19,13 +19,17 @@
     name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{kafka_connect_packages}}"
-  when: ansible_os_family == "RedHat"
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
 
 - name: Install the Kafka Connect Packages
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{kafka_connect_packages}}"
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
 
 # Configure environment
 - name: Create Connect Distributed Group
@@ -39,6 +43,17 @@
     system: true
     group: "{{kafka_connect_group}}"
 
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Kafka Connect Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{kafka_connect.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{kafka_connect.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method == "archive"
+
 - include_role:
     name: confluent.ssl
   vars:
@@ -48,11 +63,13 @@
     keystore_storepass: "{{kafka_connect_keystore_storepass}}"
     keystore_keypass: "{{kafka_connect_keystore_keypass}}"
     service_name: kafka_connect
+    user: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
     hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
     ca_cert_path: "{{kafka_connect_ca_cert_path}}"
     cert_path: "{{kafka_connect_cert_path}}"
     key_path: "{{kafka_connect_key_path}}"
-  when: kafka_connect_ssl_enabled|bool or kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
+  when: kafka_connect_ssl_enabled|bool or kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or kafka_broker_rest_ssl_enabled | bool
 
 - name: Configure Kerberos
   include_role:
@@ -77,6 +94,14 @@
   include_tasks: rbac.yml
   when: rbac_enabled|bool
 
+- name: Create Connect Distributed Config directory
+  file:
+    path: "{{ kafka_connect.config_file | dirname }}"
+    state: directory
+    mode: 0750
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+
 - name: Create Connect Distributed Config
   template:
     src: connect-distributed.properties.j2
@@ -95,7 +120,15 @@
     state: directory
     group: "{{kafka_connect_group}}"
     owner: "{{kafka_connect_user}}"
-    mode: '764'
+    mode: 0750
+
+- name: Create log4j Directory
+  file:
+    path: "{{kafka_connect.log4j_file | dirname}}"
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+    state: directory
+    mode: 0750
 
 - name: Create Connect Distributed log4j Config
   template:
@@ -105,6 +138,15 @@
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
   notify: restart connect distributed
+
+- name: Deploy JMX Exporter Config File
+  copy:
+    src: "kafka_connect.yml"
+    dest: "{{kafka_connect_jmxexporter_config_path}}"
+    mode: 0640
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+  when: kafka_connect_jmxexporter_enabled|bool
 
 - name: Create Service Override Directory
   file:
