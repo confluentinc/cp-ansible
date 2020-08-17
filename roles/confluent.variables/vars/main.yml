@@ -595,7 +595,7 @@ ksql_properties:
       ksql.streams.producer.max.block.ms: 9223372036854775807
       listeners: "{{ksql_http_protocol}}://0.0.0.0:{{ksql_listener_port}}"
       bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[ksql_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[ksql_kafka_listener_name]['port']}}"
-      security.protocol: "{{kafka_broker_listeners[ksql_kafka_listener_name] | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}"
+      security.protocol: "{{kafka_broker_listeners[ksql_kafka_listener_name] | kafka_protocol_defaults(ssl_enabled, sasl_protocol) }}"
   ssl:
     # KSQL SSL properties shared with Kafka Broker
     enabled: "{{ kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled']|default(ssl_enabled)|bool or ksql_ssl_enabled|bool }}"
@@ -609,6 +609,13 @@ ksql_properties:
     enabled: "{{ ksql_ssl_mutual_auth_enabled }}"
     properties:
       ssl.client.auth: 'true'
+  pkcs12:
+    enabled: "{{ pkcs12_enabled|bool }}"
+    properties:
+      ssl.keymanager.algorithm: PKIX
+      ssl.trustmanager.algorithm: PKIX
+      ssl.keystore.type: pkcs12
+      ssl.truststore.type: pkcs12
   kafka_sasl_plain:
     enabled: "{{ kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' }}"
     properties:
@@ -848,6 +855,7 @@ control_center_properties:
       confluent.controlcenter.command.topic.replication: "{{control_center_default_internal_replication_factor}}"
       confluent.controlcenter.rest.listeners: "{{control_center_http_protocol}}://{{control_center_listener_hostname}}:{{control_center_port}}"
       bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[control_center_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[control_center_kafka_listener_name]['port']}}"
+      confluent.controlcenter.streams.security.protocol: "{{kafka_broker_listeners[control_center_kafka_listener_name] | kafka_protocol_defaults(ssl_enabled, sasl_protocol) }}"
   ssl:
     enabled: "{{control_center_ssl_enabled or (kafka_broker_rest_endpoint_enabled and kafka_broker_rest_ssl_enabled) }}"
     properties:
@@ -860,13 +868,44 @@ control_center_properties:
     enabled: "{{kafka_broker_rest_endpoint_enabled or rbac_enabled }}"
     properties:
       confluent.controlcenter.streams.cprest.url: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
-  kafka_client:
-    enabled: true
-    properties: "{{ kafka_broker_listeners[control_center_kafka_listener_name] | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
-                            'confluent.controlcenter.streams.', control_center_truststore_path, control_center_truststore_storepass, control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass,
-                            false, sasl_plain_users.control_center.principal, sasl_plain_users.control_center.password, sasl_scram_users.control_center.principal, sasl_scram_users.control_center.password,
-                            kerberos_kafka_broker_primary|default('kafka'), control_center_keytab_path, control_center_kerberos_principal|default('c3'),
-                            control_center_ldap_user, control_center_ldap_password, mds_bootstrap_server_urls) }}"
+  # Not using client_properties filter because C3 does not need oauthbearer properties, relies on mds connection
+  kafka_ssl:
+    enabled: "{{ kafka_broker_listeners[control_center_kafka_listener_name]['ssl_enabled']|default(ssl_enabled)|bool }}"
+    properties:
+      confluent.controlcenter.streams.ssl.truststore.location: "{{control_center_truststore_path}}"
+      confluent.controlcenter.streams.ssl.truststore.password: "{{control_center_truststore_storepass}}"
+  kafka_mtls:
+    enabled: "{{ kafka_broker_listeners[control_center_kafka_listener_name]['ssl_mutual_auth_enabled']|default(ssl_mutual_auth_enabled)|bool  }}"
+    properties:
+      confluent.controlcenter.streams.ssl.keystore.location: "{{control_center_keystore_path}}"
+      confluent.controlcenter.streams.ssl.keystore.password: "{{control_center_keystore_storepass}}"
+      confluent.controlcenter.streams.ssl.key.password: "{{control_center_keystore_keypass}}"
+  kafka_pkcs12:
+    enabled: "{{ kafka_broker_listeners[control_center_kafka_listener_name]['pkcs12_enabled']|default(pkcs12_enabled)|bool }}"
+    properties:
+      confluent.controlcenter.streams.ssl.keymanager.algorithm: PKIX
+      confluent.controlcenter.streams.ssl.trustmanager.algorithm: PKIX
+      confluent.controlcenter.streams.ssl.keystore.type: pkcs12
+      confluent.controlcenter.streams.ssl.truststore.type: pkcs12
+  kafka_sasl_plain:
+    enabled: "{{ kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' }}"
+    properties:
+      confluent.controlcenter.streams.sasl.mechanism: PLAIN
+      confluent.controlcenter.streams.sasl.jaas.config: |-
+        org.apache.kafka.common.security.plain.PlainLoginModule required username="{{sasl_plain_users.control_center.principal}}" password="{{sasl_plain_users.control_center.password}}";
+  kafka_sasl_scram:
+    enabled: "{{ kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-512' }}"
+    properties:
+      confluent.controlcenter.streams.sasl.mechanism: SCRAM-SHA-512
+      confluent.controlcenter.streams.sasl.jaas.config: |-
+        org.apache.kafka.common.security.scram.ScramLoginModule required username="{{sasl_scram_users.control_center.principal}}" password="{{sasl_scram_users.control_center.password}}";
+  kafka_sasl_gssapi:
+    enabled: "{{ kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' }}"
+    properties:
+      confluent.controlcenter.streams.sasl.mechanism: GSSAPI
+      confluent.controlcenter.streams.sasl.kerberos.service.name: "{{kerberos_kafka_broker_primary | default('kafka')}}"
+      confluent.controlcenter.streams.sasl.jaas.config: |-
+        com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab="{{control_center_keytab_path}}" principal="{{control_center_kerberos_principal | default('c3')}}";
   sr:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
