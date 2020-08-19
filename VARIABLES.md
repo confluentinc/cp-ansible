@@ -1310,7 +1310,7 @@ Default:  ""
 
 Base URL for Confluent's RPM and Debian Package Repositories
 
-Default:  "https://s3-us-west-2.amazonaws.com/jenkins-confluent-packages/6.0.x/147"
+Default:  "https://s3-us-west-2.amazonaws.com/jenkins-confluent-packages/6.0.x/156"
 
 ***
 
