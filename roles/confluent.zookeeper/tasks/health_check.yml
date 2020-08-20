@@ -1,20 +1,45 @@
 ---
+# Cannot use Block/Rescue in Ansible Handlers: https://github.com/ansible/ansible/issues/14270
+# Hacking try/catch logic with ignore_errors and conditionals
 - name: Wait for Zookeeper Status
   shell: "{{zookeeper_health_check_command}}"
   args:
     executable: /bin/bash
-  register: srvr
-  until: srvr.rc == 0
-  retries: 30
+  register: status
+  until: status.rc == 0
+  retries: 25
   delay: 5
   changed_when: false
+  ignore_errors: true
 
 - name: Wait for Zookeeper Quorum
   shell: "{{zookeeper_health_check_command}}"
   args:
     executable: /bin/bash
-  register: srvr
-  until: '"Latency min/avg/max:" in srvr.stdout'
-  retries: 30
+  register: quorum
+  until: '"Latency min/avg/max:" in quorum.stdout'
+  retries: 25
   delay: 5
   changed_when: false
+  when: not status.failed
+  ignore_errors: true
+
+- name: Export Zookeeper Error Logs
+  shell: "journalctl -u {{zookeeper_service_name}} --since -10m > /tmp/{{zookeeper_service_name}}.log"
+  when: status.failed or quorum.failed
+
+- name: Fetch Files for Investigation
+  fetch:
+    src: "{{item}}"
+    dest: "error_files/{{inventory_hostname}}-{{item|basename}}"
+    flat: true
+    fail_on_missing: false
+  loop:
+    - "{{zookeeper.config_file}}"
+    - "/tmp/{{zookeeper_service_name}}.log"
+  when: status.failed or quorum.failed
+
+- name: Fail Zookeeper Installation
+  fail:
+    msg: Zookeeper health check failed. Review log and property files in error_files/ directory
+  when: status.failed or quorum.failed
