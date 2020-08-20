@@ -1,40 +1,53 @@
 ---
-- block:
-    - name: Wait for Under Replicated Partitions Metric to return 200
-      uri:
-        url: "{{ kafka_broker_jolokia_urp_url }}"
-        validate_certs: false
-        return_content: true
-        status_code: 200
-      register: result
-      until: result.status == 200
-      retries: 40
-      delay: 5
+# Cannot use Block/Rescue in Ansible Handlers: https://github.com/ansible/ansible/issues/14270
+# Implementing try/catch logic with ignore_errors and conditionals
+- name: Wait for Under Replicated Partitions Metric to return 200
+  uri:
+    url: "{{ kafka_broker_jolokia_urp_url }}"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+  register: urp_response1
+  until: urp_response1.status == 200
+  retries: 4 #0
+  delay: 5
+  when: kafka_broker_jolokia_enabled|bool
+  ignore_errors: true
 
-    - name: Wait for Under Replicated Partitions Metric to return Data
-      uri:
-        url: "{{ kafka_broker_jolokia_urp_url }}"
-        validate_certs: false
-        return_content: true
-        status_code: 200
-      register: result
-      until: result['json']['value'] is defined
-      retries: 40
-      delay: 5
+- name: Wait for Under Replicated Partitions Metric to return Data
+  uri:
+    url: "{{ kafka_broker_jolokia_urp_url }}"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+  register: urp_response2
+  until: urp_response2['json']['value'] is defined
+  retries: 40
+  delay: 5
+  # Skip if first URP check failed
+  when:
+    - not urp_response1.failed
+    - kafka_broker_jolokia_enabled|bool
+  ignore_errors: true
 
-    # curl localhost:7771/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions
-    # {"request":{"mbean":"kafka.server:name=UnderReplicatedPartitions,type=ReplicaManager","type":"read"},"value":{"Value":0},"timestamp":1565819946,"status":200}
-    - name: Wait for Under Replicated Partitions Metric to equal Zero
-      uri:
-        url: "{{ kafka_broker_jolokia_urp_url }}"
-        validate_certs: false
-        return_content: true
-        status_code: 200
-      register: result
-      until: result['json']['value']['Value'] == 0
-      retries: 40
-      delay: 5
-  when: not ansible_check_mode and jolokia_enabled|bool
+# curl localhost:7771/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions
+# {"request":{"mbean":"kafka.server:name=UnderReplicatedPartitions,type=ReplicaManager","type":"read"},"value":{"Value":0},"timestamp":1565819946,"status":200}
+- name: Wait for Under Replicated Partitions Metric to equal Zero
+  uri:
+    url: "{{ kafka_broker_jolokia_urp_url }}"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+  register: urp_response3
+  until: urp_response3['json']['value']['Value'] == 0
+  retries: 40
+  delay: 5
+  # Skip if second URP check failed
+  # If second check was skipped due to previous failure, it will not have a 'failed' field, so defaulting 'failed' to True
+  when:
+    - not urp_response2.failed|default(True)
+    - kafka_broker_jolokia_enabled|bool
+  ignore_errors: true
 
 - name: Wait for Embedded Rest Proxy to start
   uri:
@@ -42,8 +55,19 @@
     validate_certs: false
     return_content: true
     status_code: 200
-  register: result
-  until: result['json']['kind'] is defined
+  register: erp_response
+  until: erp_response['json']['kind'] is defined
   retries: 40
   delay: 5
-  when: not ansible_check_mode and kafka_broker_rest_endpoint_enabled | bool
+  ignore_errors: true
+  when:
+    - kafka_broker_rest_endpoint_enabled|bool
+    # Run if no URP checks failed OR they were skipped bc jolokia is disabled. (Skipped shows as failed with the defaults)
+    - not (urp_response1.failed|default(True) or urp_response2.failed|default(True) or urp_response3.failed|default(True) ) or not kafka_broker_jolokia_enabled|bool
+
+- name: Fetch Files for Debugging Failure
+  include: failure_handling.yml
+  # Fail if jolokia is enabled and any URP checks failed OR if ERP is enabled and ERP checks failed
+  when: >
+    ( kafka_broker_jolokia_enabled|bool and (urp_response1.failed|default(True) or urp_response2.failed|default(True) or urp_response3.failed|default(True)) )
+    or ( kafka_broker_rest_endpoint_enabled|bool and erp_response.failed|default(True) )
