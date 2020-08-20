@@ -1236,11 +1236,27 @@ Default:  "{{telemetry_enabled}}"
 
 ***
 
+### kafka_broker_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Kafka. Currently only sends cp-ansible version data
+
+Default:  "{{kafka_broker_telemetry_enabled}}"
+
+***
+
 ### schema_registry_telemetry_enabled
 
 Boolean to configure Telemetry on Schema Registry. Must also set telemetry_api_key and telemetry_api_secret
 
 Default:  "{{telemetry_enabled}}"
+
+***
+
+### schema_registry_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Schema Registry. Currently only sends cp-ansible version data
+
+Default:  "{{schema_registry_telemetry_enabled}}"
 
 ***
 
@@ -1252,11 +1268,27 @@ Default:  "{{telemetry_enabled}}"
 
 ***
 
+### kafka_connect_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Connect. Currently only sends cp-ansible version data
+
+Default:  "{{kafka_connect_telemetry_enabled}}"
+
+***
+
 ### kafka_rest_telemetry_enabled
 
 Boolean to configure Telemetry on Rest Proxy. Must also set telemetry_api_key and telemetry_api_secret
 
 Default:  "{{telemetry_enabled}}"
+
+***
+
+### kafka_rest_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Rest Proxy. Currently only sends cp-ansible version data
+
+Default:  "{{kafka_rest_telemetry_enabled}}"
 
 ***
 
@@ -1268,11 +1300,27 @@ Default:  "{{telemetry_enabled}}"
 
 ***
 
+### ksql_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from ksqlDB. Currently only sends cp-ansible version data
+
+Default:  "{{ksql_telemetry_enabled}}"
+
+***
+
 ### control_center_telemetry_enabled
 
 Boolean to configure Telemetry on Control Center. Must also set telemetry_api_key and telemetry_api_secret
 
 Default:  "{{telemetry_enabled}}"
+
+***
+
+### control_center_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
+
+Default:  "{{control_center_telemetry_enabled}}"
 
 ***
 
