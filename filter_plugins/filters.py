@@ -175,9 +175,6 @@ class FilterModule(object):
             final_dict[config_prefix + 'ssl.keystore.type'] = 'pkcs12'
             final_dict[config_prefix + 'ssl.truststore.type'] = 'pkcs12'
 
-        # if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) != 'none':
-        #     final_dict[config_prefix + 'sasl.mechanism'] = self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol))
-
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'PLAIN' and not omit_jaas_configs:
             final_dict[config_prefix + 'sasl.mechanism'] = 'PLAIN'
             final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.plain.PlainLoginModule required username=\"' + sasl_plain_username + '\" password=\"' + sasl_plain_password + '\";'
