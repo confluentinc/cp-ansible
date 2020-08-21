@@ -149,7 +149,7 @@ class FilterModule(object):
                             config_prefix, truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass,
                             omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
                             kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
-                            oauth_username, oauth_password, mds_bootstrap_server_urls):
+                            omit_oauth_configs, oauth_username, oauth_password, mds_bootstrap_server_urls):
         # For any kafka client's properties: Takes in a single kafka listener and output properties to connect to that listener
         # Other inputs help fill out the properties
         final_dict = {
@@ -175,26 +175,31 @@ class FilterModule(object):
             final_dict[config_prefix + 'ssl.keystore.type'] = 'pkcs12'
             final_dict[config_prefix + 'ssl.truststore.type'] = 'pkcs12'
 
-        if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) != 'none':
-            final_dict[config_prefix + 'sasl.mechanism'] = self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol))
+        # if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) != 'none':
+        #     final_dict[config_prefix + 'sasl.mechanism'] = self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol))
 
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'PLAIN' and not omit_jaas_configs:
+            final_dict[config_prefix + 'sasl.mechanism'] = 'PLAIN'
             final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.plain.PlainLoginModule required username=\"' + sasl_plain_username + '\" password=\"' + sasl_plain_password + '\";'
 
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'SCRAM-SHA-512' and not omit_jaas_configs:
+            final_dict[config_prefix + 'sasl.mechanism'] = 'SCRAM-SHA-512'
             final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' + sasl_scram_username + '\" password=\"' + sasl_scram_password + '\";'
 
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI':
+            final_dict[config_prefix + 'sasl.mechanism'] = 'GSSAPI'
             final_dict[config_prefix + 'sasl.kerberos.service.name'] = kerberos_kafka_broker_primary
 
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI' and not omit_jaas_configs:
             final_dict[config_prefix + 'sasl.jaas.config'] = 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' + keytab_path + '\" principal=\"' + kerberos_principal + '\";'
 
-        if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER':
-            final_dict[config_prefix + 'sasl.login.callback.handler.class'] = 'io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler'
+        if not omit_oauth_configs:
+            if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER':
+                final_dict[config_prefix + 'sasl.mechanism'] = 'OAUTHBEARER'
+                final_dict[config_prefix + 'sasl.login.callback.handler.class'] = 'io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler'
 
-        if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER' and not omit_jaas_configs:
-            final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"' + oauth_username + '\" password=\"' + oauth_password + '\" metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
+            if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER' and not omit_jaas_configs:
+                final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"' + oauth_username + '\" password=\"' + oauth_password + '\" metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
 
         return final_dict
 
