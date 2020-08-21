@@ -1,195 +1,195 @@
 ---
-- include_role:
-    name: confluent.common
-  when: not common_role_completed|bool
+# - include_role:
+#     name: confluent.common
+#   when: not common_role_completed|bool
+#
+# - name: Gather OS Facts
+#   setup:
+#     # Only gathers items in list, filters out the rest
+#     filter: "{{item}}"
+#     gather_subset:
+#       - '!all'
+#   loop:
+#     - ansible_os_family
+#     - ansible_fqdn
+#
+# # Install Packages
+# - name: Install the Kafka Rest Packages
+#   yum:
+#     name: "{{item}}{{confluent_package_redhat_suffix}}"
+#     state: latest
+#   loop: "{{kafka_rest_packages}}"
+#   when:
+#     - ansible_os_family == "RedHat"
+#     - installation_method == "package"
+#
+# - name: Install the Kafka Rest Packages
+#   apt:
+#     name: "{{item}}{{confluent_package_debian_suffix}}"
+#   loop: "{{kafka_rest_packages}}"
+#   when:
+#     - ansible_os_family == "Debian"
+#     - installation_method == "package"
+#
+# # Configure environment
+# - name: Create Kafka Rest Group
+#   group:
+#     name: "{{kafka_rest_group}}"
+#
+# - name: Create Kafka Rest User
+#   user:
+#     name: "{{kafka_rest_user}}"
+#     comment: "Kafka REST User"
+#     system: true
+#     group: "{{kafka_rest_group}}"
+#
+# # Archive File deployments need to create SystemD service units
+# # Copy the tarball's systemd service to the system
+# - name: Copy Kafka REST Service from archive file to system
+#   copy:
+#     src: "{{binary_base_path}}/lib/systemd/system/{{kafka_rest.systemd_file|basename}}"
+#     remote_src: true
+#     dest: "{{kafka_rest.systemd_file}}"
+#     mode: 0644
+#     force: true
+#   when: installation_method == "archive"
+#
+# - include_role:
+#     name: confluent.ssl
+#   vars:
+#     truststore_storepass: "{{kafka_rest_truststore_storepass}}"
+#     truststore_path: "{{kafka_rest_truststore_path}}"
+#     keystore_path: "{{kafka_rest_keystore_path}}"
+#     keystore_storepass: "{{kafka_rest_keystore_storepass}}"
+#     keystore_keypass: "{{kafka_rest_keystore_keypass}}"
+#     service_name: kafka_rest
+#     user: "{{kafka_rest_user}}"
+#     group: "{{kafka_rest_group}}"
+#     hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
+#     ca_cert_path: "{{kafka_rest_ca_cert_path}}"
+#     cert_path: "{{kafka_rest_cert_path}}"
+#     key_path: "{{kafka_rest_key_path}}"
+#   when: kafka_rest_ssl_enabled|bool or kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or kafka_broker_rest_ssl_enabled | bool
+#
+# - name: Configure Kerberos
+#   include_role:
+#     name: confluent.kerberos
+#   vars:
+#     kerberos_group: "{{kafka_rest_group}}"
+#     kerberos_user: "{{kafka_rest_user}}"
+#     kerberos_keytab_path: "{{kafka_rest_kerberos_keytab_path}}"
+#     kerberos_keytab_destination_path: "{{kafka_rest_keytab_path}}"
+#     kerberos_handler: "restart kafka-rest"
+#   when: kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
+#
+# - name: Copy Custom Kafka Rest Files
+#   include_tasks: ../../tasks/copy_files.yml
+#   vars:
+#     copy_files: "{{kafka_rest_copy_files}}"
+#     user: "{{kafka_rest_user}}"
+#     group: "{{kafka_rest_group}}"
+#   when: kafka_rest_copy_files | length > 0
+#
+# - name: Configure RBAC
+#   include_tasks: rbac.yml
+#   when: rbac_enabled|bool
+#
+# - name: Create SSL Certificate Directory
+#   file:
+#     path: /var/ssl/private
+#     state: directory
+#     mode: 0755
+#   when: rbac_enabled|bool
+#
+# - name: Copy in MDS Public Pem File
+#   copy:
+#     src: "{{token_services_public_pem_file}}"
+#     dest: "{{rbac_enabled_public_pem_path}}"
+#     mode: '755'
+#     owner: "{{kafka_rest_user}}"
+#     group: "{{kafka_rest_group}}"
+#   when: rbac_enabled|bool
+#
+# - name: Create Kafka Rest Config directory
+#   file:
+#     path: "{{ kafka_rest.config_file | dirname }}"
+#     state: directory
+#     mode: 0750
+#     owner: "{{kafka_rest_user}}"
+#     group: "{{kafka_rest_group}}"
 
-- name: Gather OS Facts
-  setup:
-    # Only gathers items in list, filters out the rest
-    filter: "{{item}}"
-    gather_subset:
-      - '!all'
-  loop:
-    - ansible_os_family
-    - ansible_fqdn
-
-# Install Packages
-- name: Install the Kafka Rest Packages
-  yum:
-    name: "{{item}}{{confluent_package_redhat_suffix}}"
-    state: latest
-  loop: "{{kafka_rest_packages}}"
-  when:
-    - ansible_os_family == "RedHat"
-    - installation_method == "package"
-
-- name: Install the Kafka Rest Packages
-  apt:
-    name: "{{item}}{{confluent_package_debian_suffix}}"
-  loop: "{{kafka_rest_packages}}"
-  when:
-    - ansible_os_family == "Debian"
-    - installation_method == "package"
-
-# Configure environment
-- name: Create Kafka Rest Group
-  group:
-    name: "{{kafka_rest_group}}"
-
-- name: Create Kafka Rest User
-  user:
-    name: "{{kafka_rest_user}}"
-    comment: "Kafka REST User"
-    system: true
-    group: "{{kafka_rest_group}}"
-
-# Archive File deployments need to create SystemD service units
-# Copy the tarball's systemd service to the system
-- name: Copy Kafka REST Service from archive file to system
-  copy:
-    src: "{{binary_base_path}}/lib/systemd/system/{{kafka_rest.systemd_file|basename}}"
-    remote_src: true
-    dest: "{{kafka_rest.systemd_file}}"
-    mode: 0644
-    force: true
-  when: installation_method == "archive"
-
-- include_role:
-    name: confluent.ssl
-  vars:
-    truststore_storepass: "{{kafka_rest_truststore_storepass}}"
-    truststore_path: "{{kafka_rest_truststore_path}}"
-    keystore_path: "{{kafka_rest_keystore_path}}"
-    keystore_storepass: "{{kafka_rest_keystore_storepass}}"
-    keystore_keypass: "{{kafka_rest_keystore_keypass}}"
-    service_name: kafka_rest
-    user: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
-    ca_cert_path: "{{kafka_rest_ca_cert_path}}"
-    cert_path: "{{kafka_rest_cert_path}}"
-    key_path: "{{kafka_rest_key_path}}"
-  when: kafka_rest_ssl_enabled|bool or kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or kafka_broker_rest_ssl_enabled | bool
-
-- name: Configure Kerberos
-  include_role:
-    name: confluent.kerberos
-  vars:
-    kerberos_group: "{{kafka_rest_group}}"
-    kerberos_user: "{{kafka_rest_user}}"
-    kerberos_keytab_path: "{{kafka_rest_kerberos_keytab_path}}"
-    kerberos_keytab_destination_path: "{{kafka_rest_keytab_path}}"
-    kerberos_handler: "restart kafka-rest"
-  when: kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
-
-- name: Copy Custom Kafka Rest Files
-  include_tasks: ../../tasks/copy_files.yml
-  vars:
-    copy_files: "{{kafka_rest_copy_files}}"
-    user: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-  when: kafka_rest_copy_files | length > 0
-
-- name: Configure RBAC
-  include_tasks: rbac.yml
-  when: rbac_enabled|bool
-
-- name: Create SSL Certificate Directory
-  file:
-    path: /var/ssl/private
-    state: directory
-    mode: 0755
-  when: rbac_enabled|bool
-
-- name: Copy in MDS Public Pem File
-  copy:
-    src: "{{token_services_public_pem_file}}"
-    dest: "{{rbac_enabled_public_pem_path}}"
-    mode: '755'
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-  when: rbac_enabled|bool
-
-- name: Create Kafka Rest Config directory
-  file:
-    path: "{{ kafka_rest.config_file | dirname }}"
-    state: directory
-    mode: 0750
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-
-- name: Create Kafka Rest Config
-  template:
-    src: kafka-rest.properties.j2
-    dest: "{{kafka_rest.config_file}}"
-    mode: 0640
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-  notify: restart kafka-rest
-
-- name: Create Logs Directory
-  file:
-    path: "{{kafka_rest.appender_log_path}}"
-    state: directory
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-    mode: 0750
-
-- name: Create log4j Directory
-  file:
-    path: "{{kafka_rest.log4j_file | dirname}}"
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-    state: directory
-    mode: 0750
-
-- name: Create Kafka Rest log4j Config
-  template:
-    src: kafka-rest_log4j.properties.j2
-    dest: "{{kafka_rest.log4j_file}}"
-    mode: 0640
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-  notify: restart kafka-rest
-
-- name: Deploy JMX Exporter Config File
-  copy:
-    src: "kafka_rest.yml"
-    dest: "{{kafka_rest_jmxexporter_config_path}}"
-    mode: 0640
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-  when: kafka_rest_jmxexporter_enabled|bool
-
-- name: Create Service Override Directory
-  file:
-    path: "{{kafka_rest.systemd_override | dirname }}"
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-    state: directory
-    mode: 0640
-
-- name: Write Service Overrides
-  template:
-    src: override.conf.j2
-    dest: "{{kafka_rest.systemd_override}}"
-    mode: 0640
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-  notify: restart kafka-rest
-
-- name: Certs were Updated - Trigger Restart
-  command: /bin/true
-  notify: restart kafka-rest
-  when: certs_updated|bool
-
-- meta: flush_handlers
-
-- name: Start Kafka Rest Service
-  systemd:
-    name: "{{kafka_rest_service_name}}"
-    enabled: true
-    state: started
+# - name: Create Kafka Rest Config
+#   template:
+#     src: kafka-rest.properties.j2
+#     dest: "{{kafka_rest.config_file}}"
+#     mode: 0640
+#     owner: "{{kafka_rest_user}}"
+#     group: "{{kafka_rest_group}}"
+#   notify: restart kafka-rest
+#
+# - name: Create Logs Directory
+#   file:
+#     path: "{{kafka_rest.appender_log_path}}"
+#     state: directory
+#     owner: "{{kafka_rest_user}}"
+#     group: "{{kafka_rest_group}}"
+#     mode: 0750
+#
+# - name: Create log4j Directory
+#   file:
+#     path: "{{kafka_rest.log4j_file | dirname}}"
+#     owner: "{{kafka_rest_user}}"
+#     group: "{{kafka_rest_group}}"
+#     state: directory
+#     mode: 0750
+#
+# - name: Create Kafka Rest log4j Config
+#   template:
+#     src: kafka-rest_log4j.properties.j2
+#     dest: "{{kafka_rest.log4j_file}}"
+#     mode: 0640
+#     owner: "{{kafka_rest_user}}"
+#     group: "{{kafka_rest_group}}"
+#   notify: restart kafka-rest
+#
+# - name: Deploy JMX Exporter Config File
+#   copy:
+#     src: "kafka_rest.yml"
+#     dest: "{{kafka_rest_jmxexporter_config_path}}"
+#     mode: 0640
+#     owner: "{{kafka_rest_user}}"
+#     group: "{{kafka_rest_group}}"
+#   when: kafka_rest_jmxexporter_enabled|bool
+#
+# - name: Create Service Override Directory
+#   file:
+#     path: "{{kafka_rest.systemd_override | dirname }}"
+#     owner: "{{kafka_rest_user}}"
+#     group: "{{kafka_rest_group}}"
+#     state: directory
+#     mode: 0640
+#
+# - name: Write Service Overrides
+#   template:
+#     src: override.conf.j2
+#     dest: "{{kafka_rest.systemd_override}}"
+#     mode: 0640
+#     owner: "{{kafka_rest_user}}"
+#     group: "{{kafka_rest_group}}"
+#   notify: restart kafka-rest
+#
+# - name: Certs were Updated - Trigger Restart
+#   command: /bin/true
+#   notify: restart kafka-rest
+#   when: certs_updated|bool
+#
+# - meta: flush_handlers
+#
+# - name: Start Kafka Rest Service
+#   systemd:
+#     name: "{{kafka_rest_service_name}}"
+#     enabled: true
+#     state: started
 
 - name: Health Check
   include_tasks: health_check.yml
