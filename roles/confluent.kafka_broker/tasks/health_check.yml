@@ -7,9 +7,9 @@
     validate_certs: false
     return_content: true
     status_code: 200
-  register: urp_response1
-  until: urp_response1.status == 200
-  retries: 4 #0
+  register: urp_result1
+  until: urp_result1.status == 200
+  retries: 40
   delay: 5
   when: kafka_broker_jolokia_enabled|bool
   ignore_errors: true
@@ -20,13 +20,12 @@
     validate_certs: false
     return_content: true
     status_code: 200
-  register: urp_response2
-  until: urp_response2['json']['value'] is defined
+  register: urp_result2
+  until: urp_result2['json']['value'] is defined
   retries: 40
   delay: 5
-  # Skip if first URP check failed
   when:
-    - not urp_response1.failed
+    - not urp_result1.failed
     - kafka_broker_jolokia_enabled|bool
   ignore_errors: true
 
@@ -38,14 +37,13 @@
     validate_certs: false
     return_content: true
     status_code: 200
-  register: urp_response3
-  until: urp_response3['json']['value']['Value'] == 0
+  register: urp_result3
+  until: urp_result3['json']['value']['Value'] == 0
   retries: 40
   delay: 5
-  # Skip if second URP check failed
-  # If second check was skipped due to previous failure, it will not have a 'failed' field, so defaulting 'failed' to True
+  # Run if no previous checks failed
   when:
-    - not urp_response2.failed|default(True)
+    - not urp_result1.failed and not urp_result2.failed|default(False)
     - kafka_broker_jolokia_enabled|bool
   ignore_errors: true
 
@@ -62,12 +60,9 @@
   ignore_errors: true
   when:
     - kafka_broker_rest_endpoint_enabled|bool
-    # Run if no URP checks failed OR they were skipped bc jolokia is disabled. (Skipped shows as failed with the defaults)
-    - not (urp_response1.failed|default(True) or urp_response2.failed|default(True) or urp_response3.failed|default(True) ) or not kafka_broker_jolokia_enabled|bool
+    # Run if no URP checks failed (Skipped shows as non failed with the defaults)
+    - not urp_result1.failed|default(False) and not urp_result2.failed|default(False) and not urp_result3.failed|default(False)
 
 - name: Fetch Files for Debugging Failure
   include: failure_handling.yml
-  # Fail if jolokia is enabled and any URP checks failed OR if ERP is enabled and ERP checks failed
-  when: >
-    ( kafka_broker_jolokia_enabled|bool and (urp_response1.failed|default(True) or urp_response2.failed|default(True) or urp_response3.failed|default(True)) )
-    or ( kafka_broker_rest_endpoint_enabled|bool and erp_response.failed|default(True) )
+  when: urp_result1.failed|default(False) or urp_result2.failed|default(False) or urp_result3.failed|default(False)
