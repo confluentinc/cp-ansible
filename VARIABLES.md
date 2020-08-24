@@ -1052,6 +1052,22 @@ Default:  password
 
 ***
 
+### kafka_broker_ldap_user
+
+LDAP User for Kafkas Embedded Rest Service to authenticate as
+
+Default:  kafka
+
+***
+
+### kafka_broker_ldap_password
+
+Password to kafka_broker_ldap_user LDAP User
+
+Default:  password
+
+***
+
 ### schema_registry_ldap_user
 
 LDAP User for Schema Registry to authenticate as
@@ -1358,7 +1374,7 @@ Default:  ""
 
 Base URL for Confluent's RPM and Debian Package Repositories
 
-Default:  "https://s3-us-west-2.amazonaws.com/jenkins-confluent-packages/6.0.x/156"
+Default:  "https://s3-us-west-2.amazonaws.com/staging-confluent-packages-6.0.0"
 
 ***
 
