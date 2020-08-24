@@ -6,11 +6,15 @@
     url: "{{schema_registry_http_protocol}}://{{inventory_hostname}}:{{schema_registry_listener_port}}/subjects"
     status_code: 200
     validate_certs: false
+    # Basic auth header is redundant for non rbac install
+    url_username: "{{schema_registry_ldap_user}}"
+    url_password: "{{schema_registry_ldap_password}}"
+    force_basic_auth: true
   register: result1
   until: result1.status == 200
   retries: 30
   delay: 5
-  when: not rbac_enabled|bool and not schema_registry_ssl_mutual_auth_enabled|bool
+  when: not schema_registry_ssl_mutual_auth_enabled|bool
   ignore_errors: true
 
 - name: Wait for API to return 200 - mTLS
@@ -20,43 +24,15 @@
     validate_certs: false
     client_cert: "{{schema_registry_cert_path}}"
     client_key: "{{schema_registry_key_path}}"
+    # Basic auth header is redundant for non rbac install
+    url_username: "{{schema_registry_ldap_user}}"
+    url_password: "{{schema_registry_ldap_password}}"
+    force_basic_auth: true
   register: result2
   until: result2.status == 200
   retries: 30
   delay: 5
-  when: not rbac_enabled|bool and schema_registry_ssl_mutual_auth_enabled|bool
-  ignore_errors: true
-
-- name: Wait for API to return 200 - RBAC
-  uri:
-    url: "{{schema_registry_http_protocol}}://{{inventory_hostname}}:{{schema_registry_listener_port}}/subjects"
-    status_code: 200
-    validate_certs: false
-    url_username: "{{schema_registry_ldap_user}}"
-    url_password: "{{schema_registry_ldap_password}}"
-    force_basic_auth: true
-  register: result3
-  until: result3.status == 200
-  retries: 30
-  delay: 5
-  when: rbac_enabled|bool and not schema_registry_ssl_mutual_auth_enabled|bool
-  ignore_errors: true
-
-- name: Wait for API to return 200 - mTLS - RBAC
-  uri:
-    url: "{{schema_registry_http_protocol}}://{{inventory_hostname}}:{{schema_registry_listener_port}}/subjects"
-    status_code: 200
-    validate_certs: false
-    client_cert: "{{schema_registry_cert_path}}"
-    client_key: "{{schema_registry_key_path}}"
-    url_username: "{{schema_registry_ldap_user}}"
-    url_password: "{{schema_registry_ldap_password}}"
-    force_basic_auth: true
-  register: result4
-  until: result4.status == 200
-  retries: 30
-  delay: 5
-  when: rbac_enabled|bool and schema_registry_ssl_mutual_auth_enabled|bool
+  when: schema_registry_ssl_mutual_auth_enabled|bool
   ignore_errors: true
 
 - name: Fetch Files for Debugging Failure
@@ -65,4 +41,4 @@
     service_name: "{{schema_registry_service_name}}"
     config_file: "{{schema_registry.config_file}}"
   # Only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
-  when: result1.failed|default(False) or result2.failed|default(False) or result3.failed|default(False) or result4.failed|default(False)
+  when: result1.failed|default(False) or result2.failed|default(False) #or result3.failed|default(False) or result4.failed|default(False)
