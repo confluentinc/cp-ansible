@@ -1,14 +1,17 @@
 ---
+# Cannot use Block/Rescue in Ansible Handlers: https://github.com/ansible/ansible/issues/14270
+# Implementing try/catch logic with ignore_errors and conditionals
 - name: Wait for API to return 200
   uri:
     url: "{{ksql_http_protocol}}://{{inventory_hostname}}:{{ksql_listener_port}}/info"
     status_code: 200
     validate_certs: false
-  register: result
-  until: result.status == 200
+  register: result1
+  until: result1.status == 200
   retries: 40
   delay: 5
   when: not rbac_enabled|bool and not ksql_ssl_mutual_auth_enabled|bool
+  ignore_errors: true
 
 - name: Wait for API to return 200 - mTLS
   uri:
@@ -17,11 +20,12 @@
     validate_certs: false
     client_cert: "{{ksql_cert_path}}"
     client_key: "{{ksql_key_path}}"
-  register: result
-  until: result.status == 200
+  register: result2
+  until: result2.status == 200
   retries: 40
   delay: 5
   when: not rbac_enabled|bool and ksql_ssl_mutual_auth_enabled|bool
+  ignore_errors: true
 
 - name: Wait for API to return 200 - RBAC
   uri:
@@ -31,11 +35,12 @@
     url_username: "{{ksql_ldap_user}}"
     url_password: "{{ksql_ldap_password}}"
     force_basic_auth: true
-  register: result
-  until: result.status == 200
+  register: result3
+  until: result3.status == 200
   retries: 40
   delay: 5
   when: rbac_enabled|bool and not ksql_ssl_mutual_auth_enabled|bool
+  ignore_errors: true
 
 - name: Wait for API to return 200 - RBAC - mTLS
   uri:
@@ -47,8 +52,17 @@
     url_username: "{{ksql_ldap_user}}"
     url_password: "{{ksql_ldap_password}}"
     force_basic_auth: true
-  register: result
-  until: result.status == 200
+  register: result4
+  until: result4.status == 200
   retries: 40
   delay: 5
   when: rbac_enabled|bool and not ksql_ssl_mutual_auth_enabled|bool
+  ignore_errors: true
+
+- name: Fetch Files for Debugging Failure
+  include: failure_handling.yml
+  vars:
+    service_name: "{{ksql_service_name}}"
+    config_file: "{{ksql.config_file}}"
+  # Only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
+  when: result1.failed|default(False) or result2.failed|default(False) or result3.failed|default(False) or result4.failed|default(False)
