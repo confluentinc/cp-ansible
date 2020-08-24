@@ -118,8 +118,8 @@ class FilterModule(object):
             if listeners_dict[listener].get('pkcs12_enabled', default_pkcs12_enabled):
                 final_dict['listener.name.' + listener_name + '.ssl.keymanager.algorithm'] = 'PKIX'
                 final_dict['listener.name.' + listener_name + '.ssl.trustmanager.algorithm'] = 'PKIX'
-                final_dict['listener.name.' + listener_name + '.ssl.keystore.type'] = 'pkcs12'
-                final_dict['listener.name.' + listener_name + '.ssl.truststore.type'] = 'pkcs12'
+                final_dict['listener.name.' + listener_name + '.ssl.keystore.type'] = 'PKCS12'
+                final_dict['listener.name.' + listener_name + '.ssl.truststore.type'] = 'PKCS12'
                 final_dict['listener.name.' + listener_name + '.ssl.enabled.protocols'] = 'TLSv1.2'
 
             if listeners_dict[listener].get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
@@ -172,8 +172,8 @@ class FilterModule(object):
         if listener_dict.get('pkcs12_enabled', default_pkcs12_enabled):
             final_dict[config_prefix + 'ssl.keymanager.algorithm'] = 'PKIX'
             final_dict[config_prefix + 'ssl.trustmanager.algorithm'] = 'PKIX'
-            final_dict[config_prefix + 'ssl.keystore.type'] = 'pkcs12'
-            final_dict[config_prefix + 'ssl.truststore.type'] = 'pkcs12'
+            final_dict[config_prefix + 'ssl.keystore.type'] = 'PKCS12'
+            final_dict[config_prefix + 'ssl.truststore.type'] = 'PKCS12'
 
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) != 'none':
             final_dict[config_prefix + 'sasl.mechanism'] = self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol))
