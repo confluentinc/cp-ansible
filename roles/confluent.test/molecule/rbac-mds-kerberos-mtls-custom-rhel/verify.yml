@@ -11,6 +11,63 @@
         property: listener.name.internal.ssl.keystore.location
         expected_value: /var/ssl/private/kafka_broker.keystore.jks
 
+    - name: Get Kafka Cluster ID from Embedded Rest Proxy
+      uri:
+        url: "https://{{ inventory_hostname }}:8090/kafka/v3/clusters"
+        method: GET
+        validate_certs: false
+        body_format: json
+        return_content: true
+        status_code: 200
+        url_username: mds
+        url_password: password
+        force_basic_auth: true
+      register: cluster_id_query
+
+    - name: Parse Kafka Cluster ID from json query
+      set_fact:
+        kafka_cluster_id: "{{ cluster_id_query.json.data[0].cluster_id }}"
+
+    - name: Get Topics as Regular LDAP User
+      uri:
+        url: "https://{{ inventory_hostname }}:8090/kafka/v3/clusters/{{kafka_cluster_id}}/topics"
+        method: GET
+        validate_certs: false
+        body_format: json
+        return_content: true
+        status_code: 200
+        url_username: kafka_broker
+        url_password: password
+        force_basic_auth: true
+      register: topics_request
+
+    - name: Assert property set as expected
+      assert:
+        that:
+          - topics_request.json.data | length == 0
+        fail_msg: "Regular user should not be able to see any topics"
+        quiet: true
+
+    - name: Get Topics as MDS Super User
+      uri:
+        url: "https://{{ inventory_hostname }}:8090/kafka/v3/clusters/{{kafka_cluster_id}}/topics"
+        method: GET
+        validate_certs: false
+        body_format: json
+        return_content: true
+        status_code: 200
+        url_username: mds
+        url_password: password
+        force_basic_auth: true
+      register: topics_request
+
+    - name: Assert property set as expected
+      assert:
+        that:
+          - topics_request.json.data | length > 0
+        fail_msg: "MDS Super User should be able to view many topics"
+        quiet: true
+
 - name: Verify - schema_registry
   hosts: schema_registry2
   gather_facts: false
