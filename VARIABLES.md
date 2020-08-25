@@ -1030,9 +1030,9 @@ Default:  8090
 
 ### kafka_broker_rest_ssl_enabled
 
-Boolean to configure TLS encryption on the Broker Rest endpoint. (Or if is configured with TLS encryption when external_mds_enabled: true) NOTE- mds_ssl_enabled is now deprecated
+Boolean to configure TLS encryption on the Broker Rest endpoint. NOTE- mds_ssl_enabled is now deprecated
 
-Default:  "{{mds_ssl_enabled}}"
+Default:  "{{ssl_enabled}}"
 
 ***
 
@@ -1150,7 +1150,7 @@ Default:  password
 
 ### external_mds_enabled
 
-Boolean to describe if kafka group in inventory file should be configured as MDS Server. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, kafka_broker_rest_ssl_enabled
+Boolean to describe if kafka group should be configured with an External MDS Kafka Cluster. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, kafka_broker_rest_ssl_enabled
 
 Default:  false
 
