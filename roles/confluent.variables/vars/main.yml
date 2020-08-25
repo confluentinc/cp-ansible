@@ -92,6 +92,9 @@ kafka_broker:
   systemd_file: /usr/lib/systemd/system/{{kafka_broker_service_name}}.service
   systemd_override: /etc/systemd/system/{{kafka_broker_service_name}}.service.d/override.conf
 
+mds_http_protocol: "{{ 'https' if kafka_broker_rest_ssl_enabled|bool else 'http' }}"
+mds_ssl_enabled: "{{true if 'https' in mds_bootstrap_server_urls else false}}"
+
 kafka_broker_properties:
   defaults:
     enabled: true
@@ -124,6 +127,9 @@ kafka_broker_properties:
       listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://:{{ listener['value']['port'] }}{% endfor %}"
       advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(inventory_hostname) }}:{{ listener['value']['port'] }}{% endfor %}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
+      # ERP only enabled with RBAC, which defaults to false. Want to ensure there will always be authentication on ERP
+      # Can still be configured with custom properties
+      kafka.rest.enable: "{{ rbac_enabled|string|lower }}"
   broker_id:
     enabled: "{{ inventory_hostname in groups.kafka_broker }}"
     properties:
@@ -234,13 +240,15 @@ kafka_broker_properties:
                             false, sasl_plain_users.admin.principal, sasl_plain_users.admin.password, sasl_scram_users.admin.principal, sasl_scram_users.admin.password,
                             kerberos_kafka_broker_primary|default('kafka'), kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'),
                             false, 'user', 'pass', mds_bootstrap_server_urls) }}"
+  # Not allowing for ERP configuration without RBAC being on
   embedded_rest_proxy:
     enabled: "{{ rbac_enabled and external_mds_enabled }}"
+    # If we were to support erp without rbac, should be
+    # enabled: "{{ not rbac_enabled or (rbac_enabled and external_mds_enabled) }}"
     properties:
       confluent.http.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(inventory_hostname) }}:{{mds_port}}"
       confluent.http.server.listeners: "{{mds_http_protocol}}://0.0.0.0:{{mds_port}}"
   embedded_rest_proxy_ssl:
-    # enabled: "{{ kafka_broker_rest_endpoint_enabled and kafka_broker_rest_ssl_enabled and not (rbac_enabled and not external_mds_enabled) }}"
     enabled: "{{ rbac_enabled and external_mds_enabled and kafka_broker_rest_ssl_enabled}}"
     properties:
       confluent.http.server.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
@@ -249,7 +257,6 @@ kafka_broker_properties:
       confluent.http.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
       confluent.http.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   embedded_rest_proxy_ssl_fips:
-    # enabled: "{{ kafka_broker_rest_endpoint_enabled and kafka_broker_rest_ssl_enabled and pkcs12_enabled and not (rbac_enabled and not external_mds_enabled) }}"
     enabled: "{{ rbac_enabled and external_mds_enabled and kafka_broker_rest_ssl_enabled and pkcs12_enabled}}"
     properties:
       confluent.http.server.ssl.keymanager.algorithm: PKIX
@@ -257,12 +264,10 @@ kafka_broker_properties:
       confluent.http.server.ssl.keystore.type: PKCS12
       confluent.http.server.ssl.truststore.type: PKCS12
   embedded_rest_proxy_client_bootstrap:
-    # enabled: true
     enabled: "{{ rbac_enabled }}"
     properties:
       kafka.rest.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners['internal']['port']|string + ',') }}:{{kafka_broker_listeners['internal']['port']}}"
   embedded_rest_proxy_client:
-    # enabled: true
     enabled: "{{ rbac_enabled }}"
     properties: "{{ kafka_broker_listeners['internal'] | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
                             'kafka.rest.client.', kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
@@ -977,9 +982,3 @@ control_center_final_properties: "{{ control_center_combined_properties | combin
 
 ### The base path for the binary files. When in Archive File deployment mode this results in binary files being based in, for example `/opt/confluent/confluent-5.5.1/bin`, otherwise they are based in `/usr/bin`.
 binary_base_path: "{{ archive_config_base_path+'/confluent-'+confluent_package_version if installation_method == 'archive' else '/usr' }}"
-
-#### RBAC Variables ####
-mds_http_protocol: "{{ 'https' if kafka_broker_rest_ssl_enabled|bool else 'http' }}"
-
-# Logic built for external mds set up
-mds_ssl_enabled: "{{true if 'https' in mds_bootstrap_server_urls else false}}"
