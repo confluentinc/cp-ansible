@@ -1032,7 +1032,7 @@ Default:  8090
 
 Boolean to configure TLS encryption on the Broker Rest endpoint. NOTE- mds_ssl_enabled is now deprecated
 
-Default:  "{{ssl_enabled}}"
+Default:  "{{mds_ssl_enabled}}"
 
 ***
 
