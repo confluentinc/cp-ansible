@@ -127,7 +127,8 @@ kafka_broker_properties:
       listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://:{{ listener['value']['port'] }}{% endfor %}"
       advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(inventory_hostname) }}:{{ listener['value']['port'] }}{% endfor %}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
-      kafka.rest.enable: "true"
+      # kafka.rest.enable: "true"
+      kafka.rest.enable: "{{kafka_broker_rest_proxy_enabled|string|lower}}"
   broker_id:
     enabled: "{{ inventory_hostname in groups.kafka_broker }}"
     properties:
@@ -240,12 +241,12 @@ kafka_broker_properties:
                             false, 'user', 'pass', mds_bootstrap_server_urls) }}"
   embedded_rest_proxy:
     # Do not need duplicating confluent.metadata.server and confluent.http.server config, rely on mds configs when kafka is the mds
-    enabled: "{{ not rbac_enabled or (rbac_enabled and external_mds_enabled) }}"
+    enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) }}"
     properties:
       confluent.http.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(inventory_hostname) }}:{{mds_port}}"
       confluent.http.server.listeners: "{{mds_http_protocol}}://0.0.0.0:{{mds_port}}"
   embedded_rest_proxy_ssl:
-    enabled: "{{ (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_ssl_enabled }}"
+    enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_ssl_enabled }}"
     properties:
       confluent.http.server.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
       confluent.http.server.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
@@ -253,26 +254,26 @@ kafka_broker_properties:
       confluent.http.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
       confluent.http.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   embedded_rest_proxy_ssl_fips:
-    enabled: "{{ (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_ssl_enabled and pkcs12_enabled}}"
+    enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_ssl_enabled and pkcs12_enabled}}"
     properties:
       confluent.http.server.ssl.keymanager.algorithm: PKIX
       confluent.http.server.ssl.trustmanager.algorithm: PKIX
       confluent.http.server.ssl.keystore.type: PKCS12
       confluent.http.server.ssl.truststore.type: PKCS12
   embedded_rest_proxy_client_bootstrap:
-    enabled: true
+    enabled: "{{ kafka_broker_rest_proxy_enabled }}"
     properties:
       # Internal listener will be the token listener when rbac is enabled
       kafka.rest.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners['internal']['port']|string + ',') }}:{{kafka_broker_listeners['internal']['port']}}"
   embedded_rest_proxy_client:
-    enabled: true
+    enabled: "{{ kafka_broker_rest_proxy_enabled }}"
     properties: "{{ kafka_broker_listeners['internal'] | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
                             'kafka.rest.client.', kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                             false, sasl_plain_users.admin.principal, sasl_plain_users.admin.password, sasl_scram_users.admin.principal, sasl_scram_users.admin.password,
                             kerberos_kafka_broker_primary|default('kafka'), kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'),
                             true, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls) }}"
   embedded_rest_proxy_rbac:
-    enabled: "{{rbac_enabled}}"
+    enabled: "{{ kafka_broker_rest_proxy_enabled and rbac_enabled }}"
     properties:
       kafka.rest.kafka.rest.resource.extension.class: io.confluent.kafkarest.security.KafkaRestSecurityResourceExtension
       kafka.rest.rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
@@ -909,7 +910,7 @@ control_center_properties:
       bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[control_center_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[control_center_kafka_listener_name]['port']}}"
       confluent.controlcenter.streams.security.protocol: "{{kafka_broker_listeners[control_center_kafka_listener_name] | kafka_protocol_defaults(ssl_enabled, sasl_protocol) }}"
   ssl:
-    enabled: "{{control_center_ssl_enabled or (kafka_broker_rest_endpoint_enabled and mds_tls_enabled) }}"
+    enabled: "{{control_center_ssl_enabled or (kafka_broker_rest_proxy_enabled and mds_tls_enabled) }}"
     properties:
       confluent.controlcenter.rest.ssl.keystore.location: "{{control_center_keystore_path}}"
       confluent.controlcenter.rest.ssl.keystore.password: "{{control_center_keystore_storepass}}"
@@ -917,7 +918,7 @@ control_center_properties:
       confluent.controlcenter.rest.ssl.truststore.location: "{{control_center_truststore_path}}"
       confluent.controlcenter.rest.ssl.truststore.password: "{{control_center_truststore_storepass}}"
   broker_embedded_rest_endpoint:
-    enabled: "{{kafka_broker_rest_endpoint_enabled or rbac_enabled }}"
+    enabled: "{{kafka_broker_rest_proxy_enabled or rbac_enabled }}"
     properties:
       confluent.controlcenter.streams.cprest.url: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
   kafka_client:

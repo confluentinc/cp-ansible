@@ -484,9 +484,9 @@ Default:  "{{ kafka_broker.properties }}"
 
 ***
 
-### kafka_broker_rest_endpoint_enabled
+### kafka_broker_rest_proxy_enabled
 
-Boolean to enable rest end point for the embedded rest proxy and metadata server.  Note:  If RBAC is enabled the rest endpoint will also be enabled even if this is set to false.  The rest end point is a requirement for RBAC to function.
+Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled
 
 Default:  true
 
