@@ -18,13 +18,17 @@
     name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{zookeeper_packages}}"
-  when: ansible_os_family == "RedHat"
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
 
 - name: Install the Zookeeper Packages
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{zookeeper_packages}}"
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
 
 # Configure environment
 - name: Create Zookeeper Group
@@ -37,6 +41,17 @@
     comment: "Zookeeper User"
     system: true
     group: "{{zookeeper_group}}"
+
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Zookeeper Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{zookeeper.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{zookeeper.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method == "archive"
 
 - include_role:
     name: confluent.ssl
@@ -93,7 +108,15 @@
   template:
     src: myid.j2
     dest: "{{zookeeper_final_properties.dataDir}}/myid"
-    mode: 0555
+    mode: 0640
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+
+- name: Create Zookeeper Config directory
+  file:
+    path: "{{ zookeeper.config_file | dirname }}"
+    state: directory
+    mode: 0750
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
 
@@ -101,7 +124,7 @@
   template:
     src: zookeeper.properties.j2
     dest: "{{zookeeper.config_file}}"
-    mode: 0400
+    mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
   register: zookeeper_config
@@ -113,6 +136,14 @@
     state: directory
     group: "{{zookeeper_group}}"
     owner: "{{zookeeper_user}}"
+    mode: 0750
+
+- name: Create log4j Directory
+  file:
+    path: "{{zookeeper.log4j_file | dirname}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+    state: directory
     mode: 0750
 
 - name: Create Zookeeper log4j config

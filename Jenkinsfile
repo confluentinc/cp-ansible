@@ -27,12 +27,19 @@ def confluent_release_quality = choice(name: 'CONFLUENT_RELEASE_QUALITY',
     description: 'Determines the release extention (suffix) (ie: "prod" for public releases, "snapshot" for nightly builds)',
 )
 
+// Parameter for the molecule test scenario to run
+def molecule_scenario_name = choice(name: 'SCENARIO_NAME',
+    choices: ['rbac-scram-custom-rhel', 'plaintext-rhel'],
+    defaultValue: 'rbac-scram-custom-rhel',
+    description: 'The Ansible Molecule scenario name to run',
+)
+
 def config = jobConfig {
     nodeLabel = 'docker-oraclejdk8'
     slackChannel = '#ansible-eng'
     timeoutHours = 4
     runMergeCheck = false
-    properties = [parameters([confluent_package_version, confluent_common_repository_baseurl, confluent_release_quality])]
+    properties = [parameters([confluent_package_version, confluent_common_repository_baseurl, confluent_release_quality, molecule_scenario_name])]
 }
 
 def job = {
@@ -45,12 +52,15 @@ def job = {
 
     def override_config = [:]
 
+    def branch_name = targetBranch().toString()
+
     if(params.CONFLUENT_PACKAGE_BASEURL) {
         override_config['confluent_common_repository_baseurl'] = params.CONFLUENT_PACKAGE_BASEURL
     }
 
     if(params.CONFLUENT_PACKAGE_VERSION) {
         override_config['confluent_package_version'] = params.CONFLUENT_PACKAGE_VERSION
+        override_config['confluent_repo_version'] = params.CONFLUENT_PACKAGE_VERSION.tokenize('.')[0..1].join('.')
 
         if(confluent_release_quality != 'prod') {
             // 'prod' case doesn't need anything overriden
@@ -58,6 +68,10 @@ def job = {
                 case "snapshot":
                     override_config['confluent_package_redhat_suffix'] = "-${params.CONFLUENT_PACKAGE_VERSION}-0.1.SNAPSHOT"
                     override_config['confluent_package_debian_suffix'] = "=${params.CONFLUENT_PACKAGE_VERSION}~SNAPSHOT-1"
+
+                    // Disable reporting for nightly builds
+                    config.testbreakReporting = false
+                    config.slackChannel = null
                 break
                 default:
                     error("Unknown release quality ${params.CONFLUENT_RELEASE_QUALITY}")
@@ -86,15 +100,26 @@ def job = {
     }
 
     withDockerServer([uri: dockerHost()]) {
-        stage('RBAC - Scram - Custom Certs - RHEL') {
+        stage("Test Scenario: ${params.SCENARIO_NAME}") {
             sh """
 docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
 
 cd roles/confluent.test
-molecule ${molecule_args} test -s rbac-scram-custom-rhel
+molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
             """
         }
     }
 }
 
-runJob config, job
+def post = {
+    withDockerServer([uri: dockerHost()]) {
+        stage("Destroy Scenario: ${params.SCENARIO_NAME}") {
+            sh """
+cd roles/confluent.test
+molecule destroy -s ${params.SCENARIO_NAME} || true
+"""
+        }
+    }
+}
+
+runJob config, job, post
