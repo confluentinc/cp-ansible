@@ -484,9 +484,9 @@ Default:  "{{ kafka_broker.properties }}"
 
 ***
 
-### kafka_broker_rest_endpoint_enabled
+### kafka_broker_rest_proxy_enabled
 
-Boolean to enable rest end point for the embedded rest proxy and metadata server.  Note:  If RBAC is enabled the rest endpoint will also be enabled even if this is set to false.  The rest end point is a requirement for RBAC to function.
+Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled
 
 Default:  true
 
@@ -1030,7 +1030,7 @@ Default:  8090
 
 ### kafka_broker_rest_ssl_enabled
 
-Boolean to configure TLS encryption on the Broker Rest endpoint. (Or if is configured with TLS encryption when external_mds_enabled: true) NOTE- mds_ssl_enabled is now deprecated
+Boolean to configure TLS encryption on the Broker Rest endpoint. NOTE- mds_ssl_enabled is now deprecated
 
 Default:  "{{mds_ssl_enabled}}"
 
@@ -1047,6 +1047,22 @@ Default:  mds
 ### mds_super_user_password
 
 Password to mds_super_user LDAP User
+
+Default:  password
+
+***
+
+### kafka_broker_ldap_user
+
+LDAP User for Kafkas Embedded Rest Service to authenticate as
+
+Default:  kafka
+
+***
+
+### kafka_broker_ldap_password
+
+Password to kafka_broker_ldap_user LDAP User
 
 Default:  password
 
@@ -1134,7 +1150,7 @@ Default:  password
 
 ### external_mds_enabled
 
-Boolean to describe if kafka group in inventory file should be configured as MDS Server. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, kafka_broker_rest_ssl_enabled
+Boolean to describe if kafka group should be configured with an External MDS Kafka Cluster. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, kafka_broker_rest_ssl_enabled
 
 Default:  false
 
@@ -1358,7 +1374,7 @@ Default:  ""
 
 Base URL for Confluent's RPM and Debian Package Repositories
 
-Default:  "https://s3-us-west-2.amazonaws.com/jenkins-confluent-packages/6.0.x/156"
+Default:  "https://s3-us-west-2.amazonaws.com/staging-confluent-packages-6.0.0"
 
 ***
 

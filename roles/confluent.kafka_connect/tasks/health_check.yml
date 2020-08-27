@@ -6,11 +6,15 @@
     url: "{{kafka_connect_http_protocol}}://{{inventory_hostname}}:{{kafka_connect_rest_port}}/connectors"
     status_code: 200
     validate_certs: false
+    # Basic auth header is redundant for non rbac install
+    url_username: "{{kafka_connect_ldap_user}}"
+    url_password: "{{kafka_connect_ldap_password}}"
+    force_basic_auth: true
   register: result1
   until: result1.status == 200
   retries: 40
   delay: 10
-  when: not rbac_enabled|bool and not kafka_connect_ssl_mutual_auth_enabled|bool
+  when: not kafka_connect_ssl_mutual_auth_enabled|bool
   ignore_errors: true
 
 - name: Wait for API to return 200 - mTLS
@@ -20,43 +24,15 @@
     validate_certs: false
     client_cert: "{{kafka_connect_cert_path}}"
     client_key: "{{kafka_connect_key_path}}"
+    # Basic auth header is redundant for non rbac install
+    url_username: "{{kafka_connect_ldap_user}}"
+    url_password: "{{kafka_connect_ldap_password}}"
+    force_basic_auth: true
   register: result2
   until: result2.status == 200
   retries: 40
   delay: 10
-  when: not rbac_enabled|bool and kafka_connect_ssl_mutual_auth_enabled|bool
-  ignore_errors: true
-
-- name: Wait for API to return 200 - RBAC
-  uri:
-    url: "{{kafka_connect_http_protocol}}://{{inventory_hostname}}:{{kafka_connect_rest_port}}/connectors"
-    status_code: 200
-    validate_certs: false
-    url_username: "{{kafka_connect_ldap_user}}"
-    url_password: "{{kafka_connect_ldap_password}}"
-    force_basic_auth: true
-  register: result3
-  until: result3.status == 200
-  retries: 40
-  delay: 10
-  when: rbac_enabled|bool and not kafka_connect_ssl_mutual_auth_enabled|bool
-  ignore_errors: true
-
-- name: Wait for API to return 200 - RBAC - mTLS
-  uri:
-    url: "{{kafka_connect_http_protocol}}://{{inventory_hostname}}:{{kafka_connect_rest_port}}/connectors"
-    status_code: 200
-    validate_certs: false
-    client_cert: "{{kafka_connect_cert_path}}"
-    client_key: "{{kafka_connect_key_path}}"
-    url_username: "{{kafka_connect_ldap_user}}"
-    url_password: "{{kafka_connect_ldap_password}}"
-    force_basic_auth: true
-  register: result4
-  until: result4.status == 200
-  retries: 40
-  delay: 10
-  when: rbac_enabled|bool and kafka_connect_ssl_mutual_auth_enabled|bool
+  when: kafka_connect_ssl_mutual_auth_enabled|bool
   ignore_errors: true
 
 - name: Fetch Files for Debugging Failure
@@ -65,4 +41,4 @@
     service_name: "{{kafka_connect_service_name}}"
     config_file: "{{kafka_connect.config_file}}"
   # Only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
-  when: result1.failed|default(False) or result2.failed|default(False) or result3.failed|default(False) or result4.failed|default(False)
+  when: result1.failed|default(False) or result2.failed|default(False)

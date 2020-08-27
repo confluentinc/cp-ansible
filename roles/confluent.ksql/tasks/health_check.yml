@@ -6,11 +6,15 @@
     url: "{{ksql_http_protocol}}://{{inventory_hostname}}:{{ksql_listener_port}}/info"
     status_code: 200
     validate_certs: false
+    # Basic auth header is redundant for non rbac install
+    url_username: "{{ksql_ldap_user}}"
+    url_password: "{{ksql_ldap_password}}"
+    force_basic_auth: true
   register: result1
   until: result1.status == 200
   retries: 40
   delay: 5
-  when: not rbac_enabled|bool and not ksql_ssl_mutual_auth_enabled|bool
+  when: not ksql_ssl_mutual_auth_enabled|bool
   ignore_errors: true
 
 - name: Wait for API to return 200 - mTLS
@@ -20,43 +24,15 @@
     validate_certs: false
     client_cert: "{{ksql_cert_path}}"
     client_key: "{{ksql_key_path}}"
+    # Basic auth header is redundant for non rbac install
+    url_username: "{{ksql_ldap_user}}"
+    url_password: "{{ksql_ldap_password}}"
+    force_basic_auth: true
   register: result2
   until: result2.status == 200
   retries: 40
   delay: 5
-  when: not rbac_enabled|bool and ksql_ssl_mutual_auth_enabled|bool
-  ignore_errors: true
-
-- name: Wait for API to return 200 - RBAC
-  uri:
-    url: "{{ksql_http_protocol}}://{{inventory_hostname}}:{{ksql_listener_port}}/info"
-    status_code: 200
-    validate_certs: false
-    url_username: "{{ksql_ldap_user}}"
-    url_password: "{{ksql_ldap_password}}"
-    force_basic_auth: true
-  register: result3
-  until: result3.status == 200
-  retries: 40
-  delay: 5
-  when: rbac_enabled|bool and not ksql_ssl_mutual_auth_enabled|bool
-  ignore_errors: true
-
-- name: Wait for API to return 200 - RBAC - mTLS
-  uri:
-    url: "{{ksql_http_protocol}}://{{inventory_hostname}}:{{ksql_listener_port}}/info"
-    status_code: 200
-    validate_certs: false
-    client_cert: "{{ksql_cert_path}}"
-    client_key: "{{ksql_key_path}}"
-    url_username: "{{ksql_ldap_user}}"
-    url_password: "{{ksql_ldap_password}}"
-    force_basic_auth: true
-  register: result4
-  until: result4.status == 200
-  retries: 40
-  delay: 5
-  when: rbac_enabled|bool and not ksql_ssl_mutual_auth_enabled|bool
+  when: ksql_ssl_mutual_auth_enabled|bool
   ignore_errors: true
 
 - name: Fetch Files for Debugging Failure
@@ -65,4 +41,4 @@
     service_name: "{{ksql_service_name}}"
     config_file: "{{ksql.config_file}}"
   # Only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
-  when: result1.failed|default(False) or result2.failed|default(False) or result3.failed|default(False) or result4.failed|default(False)
+  when: result1.failed|default(False) or result2.failed|default(False)
