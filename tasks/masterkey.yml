@@ -1,12 +1,7 @@
 ---
-# - name: Save Security File
-#   set_fact: secrets_protection_security_file={{ lookup('file', secrets_protection_security_file) }}
-#   when: (secrets_protection_masterkey|length>0) and (secrets_protection_security_file|length>0)
-
 - name: Create Passphrase File
   shell: "openssl rand -base64 14 > /tmp/passphrase.txt"
   run_once: true
-  # when: not secrets_protection_masterkey
 
 - name: Generate Master Encryption Key and File
   shell: |
@@ -15,11 +10,10 @@
       --passphrase @/tmp/passphrase.txt | awk '/Master/{print $5}'
   register: masterkey
   run_once: true
-  # when: not secrets_protection_masterkey
 
 - name: Save Master Encryption Key
-  set_fact: secrets_protection_masterkey={{masterkey.stdout}}
-  # when: not secrets_protection_masterkey
+  set_fact:
+    secrets_protection_masterkey: "{{ masterkey.stdout }}"
 
 - name: "Copy Security File Back to Ansible Host"
   fetch:
@@ -28,7 +22,7 @@
     flat: true
   run_once: true
 
-- name: Remove Passphrase File
+- name: Remove Set Up Files
   file:
     path: "/tmp/{{item}}"
     state: absent
@@ -36,15 +30,3 @@
   loop:
     - passphrase.txt
     - security.properties
-  # when: not secrets_protection_masterkey
-
-# - name: Get security.properties File
-#   slurp:
-#     src: security.properties
-#   register: sec
-#   run_once: true
-  # when: not secrets_protection_security_file
-
-# - name: Save security.properties File to Ansible
-#   set_fact: secrets_protection_security_file={{ sec['content'] | b64decode }}
-#   when: not secrets_protection_security_file
