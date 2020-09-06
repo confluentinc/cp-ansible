@@ -2,9 +2,11 @@
 all:
   vars:
     ansible_connection: ssh
-    ansible_user: ec2-user
+    ansible_user: RM624713
     ansible_become: true
-    ansible_ssh_private_key_file: /tmp/certs/ssh_priv.pem
+    no_yum_repofile: true
+    custom_yum_repofile: false
+    #ansible_ssh_private_key_file: /tmp/certs/ssh_priv.pem
 
     #### Setting Proxy Environment variables ####
     ## To set proxy env vars for the duration of playbook run, uncomment below block and set as necessary
@@ -40,7 +42,7 @@ all:
 
     #### TLS Configuration ####
     ## By default, data will NOT be encrypted. To turn on TLS encryption, uncomment this line
-    # ssl_enabled: true
+     ssl_enabled: true
     ## By default, the components will be configured with One-Way TLS, to turn on TLS mutual auth, uncomment this line:
     # ssl_mutual_auth_enabled: true
     ## By default, the certs for this configuration will be self signed, to deploy custom certificates there are two options.
@@ -63,6 +65,15 @@ all:
     # ssl_truststore_filepath: "/tmp/certs/truststore.jks"
     # ssl_truststore_password: truststorepass
     # ssl_truststore_ca_cert_alias: <alias to the ca certificate in the truststore eg. CARoot>
+    
+    
+    ssl_keystore_filepath: "/var/ssl/private/client.keystore.jks"
+    ssl_keystore_key_password: "ITDCPCKAFKAKEY2020"
+    ssl_keystore_store_password: "ITDCPCKAFKAKEY2020"
+    ssl_truststore_filepath: "/var/ssl/private/client.truststore.jks"
+    ssl_truststore_password: "ITDCPCKAFKATRUST2020"
+
+    
 
     #### Zookeeper TLS Configuration ####
     ## Zookeeper can also have TLS Encryption and mTLS Authentication
@@ -82,12 +93,12 @@ all:
     ## Jolokia is enabled by default. The Jolokia jar gets pulled from the internet and enabled on all the components
     ## If you plan to use the upgrade playbooks, it is recommended to leave jolokia enabled because kafka broker health checks depend on jolokias metrics
     ## To disable, uncomment this line:
-    # jolokia_enabled: false
+    #  jolokia_enabled: false
     ## During setup, the hosts will download the jolokia agent jar from Maven. To update that jar download set this var
     # jolokia_jar_url: http://<inteneral-server>/jolokia-jvm-1.6.2-agent.jar
     ## JMX Exporter is disabled by default. When enabled, JMX Exporter jar will be pulled from the Internet and enabled on the broker and zookeeper *only*.
     ## To enable, uncomment this line:
-    # jmxexporter_enabled: true
+     jmxexporter_enabled: true
     ## To update that jar download set this var
     # jmxexporter_jar_url: http://<internal-server>/jmx_prometheus_javaagent-0.12.0.jar
 
@@ -138,6 +149,22 @@ all:
     #     ssl_enabled: true
     #     ssl_mutual_auth_enabled: false
     #     sasl_protocol: scram
+    
+    kafka_broker_custom_listeners:
+      internal:
+        name: INTERNAL
+        port: 9091
+        ssl_enabled: false
+        ssl_mutual_auth_enabled: false
+        sasl_protocol: none
+      external:
+        name: EXTERNAL
+        port: 9092
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: false
+        sasl_protocol: none
+
+    
     ## You can even add additional listeners, make sure name and port are unique
     #   client_listener:
     #     name: CLIENT
@@ -222,22 +249,14 @@ all:
     #     key: val
 
 zookeeper:
-  ## To configure Zookeeper to run as a custom user, uncomment below
-  # vars:
-  #   zookeeper_user: custom-user
-  #   zookeeper_group: custom-group
-  hosts:
-    ip-172-31-34-246.us-east-2.compute.internal:
-      ## By default the first host will get zookeeper id=1, second gets id=2. Set zookeeper_id to customize
-      # zookeeper_id: 2
+ hosts:
+    drnpuateceph01:               #10.144.16.237
+      zookeeper_id: 1
+    drnpuateceph02:               #10.144.16.238
+      zookeeper_id: 2
+    drnpuateceph03:               #10.144.16.239
+      zookeeper_id: 3
 
-      ## For kerberos sasl protocol, EACH host will need these two variables:
-      # zookeeper_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/zookeeper-ip-172-31-34-246.us-east-2.compute.internal.keytab>
-      # zookeeper_kerberos_principal: <The principal configured in kdc server, eg. zookeeper/ip-172-31-34-246.us-east-2.compute.internal@REALM.EXAMPLE.COM>
-    ip-172-31-37-15.us-east-2.compute.internal:
-      # zookeeper_id: 3
-    ip-172-31-34-231.us-east-2.compute.internal:
-      # zookeeper_id: 1
 
 kafka_broker:
   ## To apply variables specifically to the hosts within kafka_broker group, you can add a vars block like below
@@ -269,90 +288,15 @@ kafka_broker:
   #     ldap.group.member.attribute.pattern=CN=(.*),OU=rbac,DC=example,DC=com
   #     ldap.user.object.class=account
   ##
-  hosts:
-    ip-172-31-34-246.us-east-2.compute.internal:
-      ## By default the first host will get broker id=1, second gets id=2. Set broker_id to customize
-      # broker_id: 3
+ hosts:
+    drnpuateceph01:               #10.144.16.237
+      broker_id: 1
+    drnpuateceph02:               #10.144.16.238
+      broker_id: 2
+    drnpuateceph03:               #10.144.16.239
+      broker_id: 3
 
-      ## Properties can also be applied on a host by host basis.
-      ## In the below example we configure a Multi-Region Clusters by setting the following properties on each host:
-      # kafka_broker:
-      #   properties:
-      #     broker.rack: us-east-1d
-      #     replica.selector.class: org.apache.kafka.common.replica.RackAwareReplicaSelector
 
-      ## For kerberos sasl protocol, EACH host will need these two variables:
-      # kafka_broker_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/ip-172-31-34-246.us-east-2.compute.internal>
-      # kafka_broker_kerberos_principal: <The principal configured in kdc server, eg. kafka/ip-172-31-34-246.us-east-2.compute.internal@REALM.EXAMPLE.COM>
-    ip-172-31-37-15.us-east-2.compute.internal:
-      # broker_id: 2
-      # kafka_broker:
-      #   properties:
-      #     broker.rack: us-east-1a
-      #     replica.selector.class: org.apache.kafka.common.replica.RackAwareReplicaSelector
-    ip-172-31-34-231.us-east-2.compute.internal:
-      # broker_id: 1
-      # kafka_broker:
-      #   properties:
-      #     broker.rack: us-east-1b
-      #     replica.selector.class: org.apache.kafka.common.replica.RackAwareReplicaSelector
-
-schema_registry:
-  ## To configure Schema Registry to run as a custom user, uncomment below
-  # vars:
-  #   schema_registry_user: custom-user
-  #   schema_registry_group: custom-group
-  hosts:
-    ip-172-31-34-246.us-east-2.compute.internal:
-      ## For kerberos sasl protocol, EACH host will need these two variables:
-      # schema_registry_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/schemaregistry-ip-172-31-34-246.us-east-2.compute.internal
-      # schema_registry_kerberos_principal: The principal configured in kdc server ex: schemaregistry/ip-172-31-34-246.us-east-2.compute.internal@REALM.EXAMPLE.COM>
-
-kafka_rest:
-  ## To configure Rest Proxy to run as a custom user, uncomment below
-  # vars:
-  #   kafka_rest_user: custom-user
-  #   kafka_rest_group: custom-group
-  hosts:
-    ip-172-31-34-246.us-east-2.compute.internal:
-      ## For kerberos sasl protocol, EACH host will need these two variables:
-      # kafka_rest_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/restproxy-ip-172-31-34-246.us-east-2.compute.internal
-      # kafka_rest_kerberos_principal: The principal configured in kdc server ex: restproxy/ip-172-31-34-246.us-east-2.compute.internal@REALM.EXAMPLE.COM>
-
-ksql:
-  ## To configure KSQL to run as a custom user, uncomment below
-  # vars:
-  #   ksql_user: custom-user
-  #   ksql_group: custom-group
-  hosts:
-    ip-172-31-37-15.us-east-2.compute.internal:
-      ## For kerberos sasl protocol, EACH host will need these two variables:
-      # ksql_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/ksql-ip-172-31-37-15.us-east-2.compute.internal
-      # ksql_kerberos_principal: The principal configured in kdc server ex: ksql/ip-172-31-37-15.us-east-2.compute.internal@REALM.EXAMPLE.COM>
-
-#### To configure multiple ksql clusters, make use of child groups and follow the example below
-## Note: There can only be one ksql group, so comment out above section, if configuring multiple ksql clusters
-## Decide on a name each ksql cluster (that is not 'ksql') and use that as ansible group name, this is how the cluster will be named in c3
-# ksql1:
-#   vars:
-#     # The below is a mandatory variable that must be unique for each ksql cluster.
-#     # The service id should end in an underscore by convention
-#     ksql_service_id: ksql1_
-#   hosts:
-#     ip-172-31-34-15.us-east-2.compute.internal:
-#     ip-172-31-37-16.us-east-2.compute.internal:
-#
-# ksql2:
-#   vars:
-#     ksql_service_id: ksql2_
-#   hosts:
-#     ip-172-31-34-17.us-east-2.compute.internal:
-#     ip-172-31-37-18.us-east-2.compute.internal:
-#
-# ksql:
-#   children:
-#     ksql1:
-#     ksql2:
 
 kafka_connect:
   ## To configure Connect to run as a custom user, uncomment below
@@ -386,10 +330,8 @@ kafka_connect:
   # kafka_connect_secret_registry_enabled: false
   #
   hosts:
-    ip-172-31-34-246.us-east-2.compute.internal:
-      ## For kerberos sasl protocol, EACH host will need these two variables:
-      # kafka_connect_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/connect-ip-172-31-34-246.us-east-2.compute.internal
-      # kafka_connect_kerberos_principal: The principal configured in kdc server ex: connect/ip-172-31-34-246.us-east-2.compute.internal@REALM.EXAMPLE.COM>
+    drnpuateceph01:              #10.144.16.237
+    drnpuateceph02:              #10.144.16.238
 
 
 #### To configure multiple connect clusters, make use of child groups and follow the example below
@@ -420,7 +362,7 @@ control_center:
   #   control_center_user: custom-user
   #   control_center_group: custom-group
   hosts:
-    ip-172-31-37-15.us-east-2.compute.internal:
+     drnpuateceph03:              #10.144.16.239
       ## For kerberos sasl protocol, EACH host will need these two variables:
       # control_center_kerberos_keytab_path: <The path on ansible host to keytab file, eg. /tmp/keytabs/controlcenter-ip-172-31-37-15.us-east-2.compute.internal
       # control_center_kerberos_principal: The principal configured in kdc server ex: controlcenter/ip-172-31-37-15.us-east-2.compute.internal@REALM.EXAMPLE.COM>
