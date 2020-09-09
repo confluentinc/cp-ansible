@@ -1592,6 +1592,14 @@ Default:  ""
 
 ***
 
+### ksql_rocksdb_path
+
+Full Path to the RocksDB Data Directory. If set as empty string, cp-ansible will not configure RocksDB
+
+Default:  /tmp/ksqldb
+
+***
+
 # confluent.schema_registry
 
 Below are the supported variables for the role confluent.schema_registry
