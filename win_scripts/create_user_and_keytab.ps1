@@ -30,30 +30,28 @@ New-ADUser `
     -UserPrincipalName:$initialUpn    
 
 # Generate KeyTab
-# $keytabFile = $keytab_dir + "\" + $user_name + ".keytab"
+$keytabFile = $keytab_dir + "\" + $user_name + ".keytab"
 
-# Write-Host "Generating keytab $keytabFile with $upn"
-# ktpass `
-#     /out $keytabFile `
-#     /princ $upn `
-#     /mapuser $user_name `
-#     /crypto AES256-SHA1 `
-#     /ptype KRB5_NT_PRINCIPAL `
-#     /pass "Confluent1!" `
-#     /target $ad_domain
+Write-Host "Generating keytab $keytabFile with $upn"
+ktpass `
+    /out $keytabFile `
+    /princ $upn `
+    /mapuser $user_name `
+    /crypto AES256-SHA1 `
+    /ptype KRB5_NT_PRINCIPAL `
+    /pass "Confluent1!" `
+    /target $ad_domain
 
 # Enable user account
 $identity = "CN=" + $user_name + "," + $ldap_root
 Write-Host "Enabling user account for $identity"
 Enable-ADAccount -Identity:$identity
 
-# Write-Host "Adding extra spn"
-# if (![string]::IsNullOrEmpty($extra_spn)) {
-#     # Add extraSPN
-#     Write-Host "Adding extra spn $extra_spn"
-#     setspn -S $extra_spn $user_name
-# } else {
-#     Write-Host "Not adding extra spn because it is null or empty: $extra_spn"
-# }
-
-
+Write-Host "Adding extra spn"
+if (![string]::IsNullOrEmpty($extra_spn)) {
+    # Add extraSPN
+    Write-Host "Adding extra spn $extra_spn"
+    setspn -S $extra_spn $user_name
+} else {
+    Write-Host "Not adding extra spn because it is null or empty: $extra_spn"
+}

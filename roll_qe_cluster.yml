@@ -1,9 +1,10 @@
-- name: Roll ZK and Kafka
-  hosts: zookeeper:kafka_broker
+# Rolling restart of Zookeeper nodes
+- name: Roll Zookeeper
+  hosts: zookeeper
   serial: 1
   vars_prompt:
-    - name: zk_kafka
-      prompt: "Roll ZK and Kafka? [yes(default)/no]"
+    - name: roll_zk
+      prompt: "Roll Zookeeper? [yes(default)/no]"
       private: no
       default: true
   tasks:
@@ -16,18 +17,41 @@
           install_java: false
       - name: Restart Zookeeper
         import_tasks: tasks/restart_zookeeper.yml
+      when: roll_zk|bool
+    - debug:
+        msg: "Skip rolling Zookeeper"
+      when: not roll_zk|bool
+
+# Rolling restart of Kafka broker nodes
+- name: Roll Kafka
+  hosts: kafka_broker
+  serial: 1
+  vars_prompt:
+    - name: roll_kafka
+      prompt: "Roll Kafka? [yes(default)/no]"
+      private: no
+      default: true
+  tasks:
+    - block:
+      - import_role:
+          name: confluent.variables
+      - import_role:
+          name: confluent.common
+        vars:
+          install_java: false
       - name: Restart Kafka Brokers
         import_tasks: tasks/restart_kafka.yml  
-      when: zk_kafka|bool
+      when: roll_kafka|bool
     - debug:
-        msg: "Skip rolling Zookeeper and Kafka"
-      when: not zk_kafka|bool
+        msg: "Skip rolling Kafka"
+      when: not roll_kafka|bool
 
+# Rolling restart of Schema Registry nodes
 - name: Roll Schema Registry
   hosts: schema_registry
   serial: 1
   vars_prompt:
-    - name: sr
+    - name: roll_sr
       prompt: "Roll Schema Registry? [yes(default)/no]"
       private: no
       default: true
@@ -48,17 +72,18 @@
           name: confluent.schema_registry
           tasks_from: health_check.yml
         when: health_checks_enabled|bool
-      when: sr|bool
+      when: roll_sr|bool
     - debug:
         msg: "Skip rolling Schema Registry"
-      when: not sr|bool
+      when: not roll_sr|bool
 
-- name: Roll Connect and KSQL
-  hosts: kafka_connect:ksql
+# Rolling restart of Kafka Connect nodes
+- name: Roll Connect
+  hosts: kafka_connect
   serial: 1
   vars_prompt:
-    - name: connect_ksql
-      prompt: "Roll Connect and KSQL? [yes(default)/no]"
+    - name: roll_connect
+      prompt: "Roll Kafka Connect? [yes(default)/no]"
       private: no
       default: true
   tasks:
@@ -69,10 +94,37 @@
           name: confluent.common
         vars:
           install_java: false
-      - name: Restart Connect
+      - name: Restart Kafka Connect
         systemd:
           name: "{{ kafka_connect_service_name }}"
           state: restarted
+      - name: Kafka Connect Health Check
+        import_role:
+          name: confluent.kafka_connect
+          tasks_from: health_check.yml
+        when: health_checks_enabled|bool
+      when: roll_connect|bool
+    - debug:
+        msg: "Skip rolling Kafka Connect"
+      when: not roll_connect|bool
+
+# Rolling restart of KSQL nodes
+- name: Roll KSQL
+  hosts: ksql
+  serial: 1
+  vars_prompt:
+    - name: roll_ksql
+      prompt: "Roll KSQL? [yes(default)/no]"
+      private: no
+      default: true
+  tasks:
+    - block:
+      - import_role:
+          name: confluent.variables
+      - import_role:
+          name: confluent.common
+        vars:
+          install_java: false
       - name: Restart KSQL
         systemd:
           name: "{{ ksql_service_name }}"
@@ -82,22 +134,18 @@
           name: confluent.ksql
           tasks_from: health_check.yml
         when: health_checks_enabled|bool
-      - name: Kafka Connect Health Check
-        import_role:
-          name: confluent.kafka_connect
-          tasks_from: health_check.yml
-        when: health_checks_enabled|bool
-      when: connect_ksql|bool
+      when: roll_ksql|bool
     - debug:
-        msg: "Skip rolling KSQL and Connect"
-      when: not connect_ksql|bool
+        msg: "Skip rolling KSQL"
+      when: not roll_ksql|bool
 
-- name: Roll REST Proxy and C3
-  hosts: kafka_rest:control_center
+# Rolling restart of REST Proxy (standalone) nodes
+- name: Roll Kafka REST Proxy
+  hosts: kafka_rest
   serial: 1
   vars_prompt:
-    - name: rest_c3
-      prompt: "Roll REST Proxy and C3? [yes(default)/no]"
+    - name: roll_kafka_rest
+      prompt: "Roll Kafka REST Proxy? [yes(default)/no]"
       private: no
       default: true
   tasks:
@@ -112,24 +160,46 @@
         systemd:
           name: "{{ kafka_rest_service_name }}"
           state: restarted
-      - name: Restart C3
-        systemd:
-          name: "{{ control_center_service_name }}"
-          state: restarted
       - name: Kafka Rest Health Check
         import_role:
           name: confluent.kafka_rest
           tasks_from: health_check.yml
-        when: health_checks_enabled|bool      
+        when: health_checks_enabled|bool
+      when: roll_kafka_rest|bool
+    - debug:
+        msg: "Skip rolling Kafka REST Proxy"
+      when: not roll_kafka_rest|bool
+
+# Rolling restart of Control Center nodes
+- name: Roll Control Center
+  hosts: control_center
+  serial: 1
+  vars_prompt:
+    - name: roll_c3
+      prompt: "Roll Control Center? [yes(default)/no]"
+      private: no
+      default: true
+  tasks:
+    - block:
+      - import_role:
+          name: confluent.variables
+      - import_role:
+          name: confluent.common
+        vars:
+          install_java: false
+      - name: Restart Control Center
+        systemd:
+          name: "{{ control_center_service_name }}"
+          state: restarted
       - name: Control Center Health Check
         import_role:
           name: confluent.control_center
           tasks_from: health_check.yml
         when: health_checks_enabled|bool
-      when: rest_c3|bool
+      when: roll_c3|bool
     - debug:
-        msg: "Skip rolling REST Proxy and C3"
-      when: not rest_c3|bool
+        msg: "Skip rolling Control Center"
+      when: not roll_c3|bool
       
     
 
