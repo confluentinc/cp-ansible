@@ -116,6 +116,22 @@ Default:  "{{ archive_destination_path }}"
 
 ***
 
+### confluent_cli_download_enabled
+
+Boolean to have cp-ansible download the Confluent CLI
+
+Default:  "{{rbac_enabled or secrets_protection_enabled}}"
+
+***
+
+### confluent_cli_path
+
+Full path on hosts to install the Confluent CLI
+
+Default:  /usr/local/bin/confluent
+
+***
+
 ### sasl_protocol
 
 SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
@@ -1222,7 +1238,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### secrets_protection_enabled
 
-Boolean to enable secrets protection on all components.
+Boolean to enable secrets protection on all components except Rest Proxy
 
 Default:  false
 
@@ -1309,30 +1325,6 @@ Default:  "{{kafka_connect.config_file}}"
 ***
 
 ### kafka_connect_secrets_protection_config_params
-
-Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
-
-Default:  []
-
-***
-
-### kafka_rest_secrets_protection_enabled
-
-Boolean to enable secrets protection in Kafka rest.
-
-Default:  "{{secrets_protection_enabled}}"
-
-***
-
-### kafka_rest_secrets_protection_config_path
-
-Full path to configuration file in Kafka rest that contains properties to encrypt. Default is configuration file.
-
-Default:  "{{kafka_rest.config_file}}"
-
-***
-
-### kafka_rest_secrets_protection_config_params
 
 Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
 
@@ -1655,22 +1647,6 @@ Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jv
 Full URL used for Prometheus Exporter Jar Download
 
 Default:  https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.12.0/jmx_prometheus_javaagent-0.12.0.jar
-
-***
-
-### confluent_cli_download_enabled
-
-Boolean to have cp-ansible download the Confluent CLI
-
-Default:  "{{rbac_enabled or secrets_protection_enabled}}"
-
-***
-
-### confluent_cli_path
-
-Full path on hosts to install the Confluent CLI
-
-Default:  /usr/local/bin/confluent
 
 ***
 
