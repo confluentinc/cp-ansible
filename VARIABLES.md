@@ -1332,6 +1332,30 @@ Default:  []
 
 ***
 
+### kafka_rest_secrets_protection_enabled
+
+Boolean to enable secrets protection in Rest Proxy.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### kafka_rest_secrets_protection_config_path
+
+Full path to configuration file in Rest Proxy that contains properties to encrypt. Default is configuration file.
+
+Default:  "{{kafka_connect.config_file}}"
+
+***
+
+### kafka_rest_secrets_protection_config_params
+
+Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
+
+Default:  []
+
+***
+
 ### ksql_secrets_protection_enabled
 
 Boolean to enable secrets protection in KSQL.
