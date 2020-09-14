@@ -203,7 +203,7 @@ kafka_broker_properties:
       confluent.authorizer.access.rule.providers: CONFLUENT,ZK_ACL
       super.users: "User:{{ mds_super_user|default('mds') }}"
   rbac_mds:
-    enabled: "{{rbac_enabled and not external_mds_enabled}}"
+    enabled: "{{ rbac_enabled and not external_mds_enabled }}"
     properties:
       confluent.metadata.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(inventory_hostname) }}:{{mds_port}}"
       confluent.metadata.server.listeners: "{{mds_http_protocol}}://0.0.0.0:{{mds_port}}"
@@ -213,6 +213,10 @@ kafka_broker_properties:
       confluent.metadata.server.public.key.path: "{{rbac_enabled_public_pem_path}}"
       confluent.metadata.server.token.signature.algorithm: RS256
       confluent.metadata.server.authentication.method: BEARER
+  rbac_mds_ldap:
+    enabled: "{{ rbac_enabled and not external_mds_enabled }}"
+    # For backwards compatibility, need to make sure ldap_config var is honored
+    properties: "{{ ldap_config | default('') | split_newline_to_dict }}"
   rbac_mds_ssl:
     enabled: "{{ rbac_enabled and not external_mds_enabled and kafka_broker_rest_ssl_enabled }}"
     properties:
@@ -311,6 +315,15 @@ kafka_broker_properties:
       confluent.telemetry.enabled: 'true'
       confluent.telemetry.api.key: "{{telemetry_api_key}}"
       confluent.telemetry.api.secret: "{{telemetry_api_secret}}"
+  telemetry_proxy:
+    enabled: "{{kafka_broker_telemetry_enabled and telemetry_proxy_url != ''}}"
+    properties:
+      confluent.telemetry.proxy.url: "{{telemetry_proxy_url}}"
+  telemetry_proxy_auth:
+    enabled: "{{kafka_broker_telemetry_enabled and telemetry_proxy_username != ''}}"
+    properties:
+      confluent.telemetry.proxy.username: "{{telemetry_proxy_username}}"
+      confluent.telemetry.proxy.password: "{{telemetry_proxy_password}}"
   telemetry_labels:
     enabled: "{{kafka_broker_telemetry_ansible_labels_enabled}}"
     properties:
@@ -409,6 +422,15 @@ schema_registry_properties:
       confluent.telemetry.api.key: "{{telemetry_api_key}}"
       confluent.telemetry.api.secret: "{{telemetry_api_secret}}"
       metric.reporters: io.confluent.telemetry.reporter.TelemetryReporter
+  telemetry_proxy:
+    enabled: "{{schema_registry_telemetry_enabled and telemetry_proxy_url != ''}}"
+    properties:
+      confluent.telemetry.proxy.url: "{{telemetry_proxy_url}}"
+  telemetry_proxy_auth:
+    enabled: "{{schema_registry_telemetry_enabled and telemetry_proxy_username != ''}}"
+    properties:
+      confluent.telemetry.proxy.username: "{{telemetry_proxy_username}}"
+      confluent.telemetry.proxy.password: "{{telemetry_proxy_password}}"
   telemetry_labels:
     enabled: "{{schema_registry_telemetry_ansible_labels_enabled}}"
     properties:
@@ -591,6 +613,15 @@ kafka_connect_properties:
       confluent.telemetry.api.key: "{{telemetry_api_key}}"
       confluent.telemetry.api.secret: "{{telemetry_api_secret}}"
       metric.reporters: io.confluent.telemetry.reporter.TelemetryReporter
+  telemetry_proxy:
+    enabled: "{{kafka_connect_telemetry_enabled and telemetry_proxy_url != ''}}"
+    properties:
+      confluent.telemetry.proxy.url: "{{telemetry_proxy_url}}"
+  telemetry_proxy_auth:
+    enabled: "{{kafka_connect_telemetry_enabled and telemetry_proxy_username != ''}}"
+    properties:
+      confluent.telemetry.proxy.username: "{{telemetry_proxy_username}}"
+      confluent.telemetry.proxy.password: "{{telemetry_proxy_password}}"
   telemetry_labels:
     enabled: "{{kafka_connect_telemetry_ansible_labels_enabled}}"
     properties:
@@ -741,6 +772,15 @@ ksql_properties:
       confluent.telemetry.api.key: "{{telemetry_api_key}}"
       confluent.telemetry.api.secret: "{{telemetry_api_secret}}"
       metric.reporters: io.confluent.telemetry.reporter.TelemetryReporter
+  telemetry_proxy:
+    enabled: "{{ksql_telemetry_enabled and telemetry_proxy_url != ''}}"
+    properties:
+      confluent.telemetry.proxy.url: "{{telemetry_proxy_url}}"
+  telemetry_proxy_auth:
+    enabled: "{{ksql_telemetry_enabled and telemetry_proxy_username != ''}}"
+    properties:
+      confluent.telemetry.proxy.username: "{{telemetry_proxy_username}}"
+      confluent.telemetry.proxy.password: "{{telemetry_proxy_password}}"
   telemetry_labels:
     enabled: "{{ksql_telemetry_ansible_labels_enabled}}"
     properties:
@@ -812,6 +852,12 @@ kafka_rest_properties:
                             false, sasl_plain_users.kafka_rest.principal, sasl_plain_users.kafka_rest.password, sasl_scram_users.kafka_rest.principal, sasl_scram_users.kafka_rest.password,
                             kerberos_kafka_broker_primary|default('kafka'), kafka_rest_keytab_path, kafka_rest_kerberos_principal|default('rp'),
                             false, kafka_rest_ldap_user, kafka_rest_ldap_password, mds_bootstrap_server_urls) }}"
+  kafka_client_password_protection:
+    # Edge case for RP only- 'client' prefix not honored by secrets protection
+    enabled: "{{ kafka_rest_secrets_protection_enabled }}"
+    properties:
+      client.config.providers: securepass
+      client.config.providers.securepass.class: io.confluent.kafka.security.config.provider.SecurePassConfigProvider
   sr:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
@@ -861,6 +907,15 @@ kafka_rest_properties:
       confluent.telemetry.api.key: "{{telemetry_api_key}}"
       confluent.telemetry.api.secret: "{{telemetry_api_secret}}"
       metric.reporters: io.confluent.telemetry.reporter.TelemetryReporter
+  telemetry_proxy:
+    enabled: "{{kafka_rest_telemetry_enabled and telemetry_proxy_url != ''}}"
+    properties:
+      confluent.telemetry.proxy.url: "{{telemetry_proxy_url}}"
+  telemetry_proxy_auth:
+    enabled: "{{kafka_rest_telemetry_enabled and telemetry_proxy_username != ''}}"
+    properties:
+      confluent.telemetry.proxy.username: "{{telemetry_proxy_username}}"
+      confluent.telemetry.proxy.password: "{{telemetry_proxy_password}}"
   telemetry_labels:
     enabled: "{{kafka_rest_telemetry_ansible_labels_enabled}}"
     properties:
@@ -969,6 +1024,15 @@ control_center_properties:
       confluent.telemetry.api.key: "{{telemetry_api_key}}"
       confluent.telemetry.api.secret: "{{telemetry_api_secret}}"
       metric.reporters: io.confluent.telemetry.reporter.TelemetryReporter
+  telemetry_proxy:
+    enabled: "{{control_center_telemetry_enabled and telemetry_proxy_url != ''}}"
+    properties:
+      confluent.telemetry.proxy.url: "{{telemetry_proxy_url}}"
+  telemetry_proxy_auth:
+    enabled: "{{control_center_telemetry_enabled and telemetry_proxy_username != ''}}"
+    properties:
+      confluent.telemetry.proxy.username: "{{telemetry_proxy_username}}"
+      confluent.telemetry.proxy.password: "{{telemetry_proxy_password}}"
   telemetry_labels:
     enabled: "{{control_center_telemetry_ansible_labels_enabled}}"
     properties:

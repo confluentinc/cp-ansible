@@ -12,6 +12,7 @@ class FilterModule(object):
             'java_arg_build_out': self.java_arg_build_out,
             'combine_properties': self.combine_properties,
             'split_to_dict': self.split_to_dict,
+            'split_newline_to_dict': self.split_newline_to_dict,
             'listener_properties': self.listener_properties,
             'client_properties': self.client_properties,
             'c3_connect_properties': self.c3_connect_properties,
@@ -97,6 +98,15 @@ class FilterModule(object):
     def split_to_dict(self, string):
         # Splits a string like key=val,key=val into dict
         return dict(x.split('=') for x in string.split(','))
+
+    def split_newline_to_dict(self, string):
+        # Splits a string like key=val\nkey=val=with=equals\nkey=val into dict
+        final_dict = {}
+        for x in string.split('\n'):
+            prop_list = x.split('=',1)
+            if (len(prop_list)==2):
+                final_dict[prop_list[0]] = prop_list[1]
+        return final_dict
 
     def listener_properties(self, listeners_dict, default_ssl_enabled, default_pkcs12_enabled, default_ssl_mutual_auth_enabled, default_sasl_protocol,
                             kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
