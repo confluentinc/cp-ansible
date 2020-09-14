@@ -116,6 +116,22 @@ Default:  "{{ archive_destination_path }}"
 
 ***
 
+### confluent_cli_download_enabled
+
+Boolean to have cp-ansible download the Confluent CLI
+
+Default:  "{{rbac_enabled or secrets_protection_enabled}}"
+
+***
+
+### confluent_cli_path
+
+Full path on hosts to install the Confluent CLI
+
+Default:  /usr/local/bin/confluent
+
+***
+
 ### sasl_protocol
 
 SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
@@ -1222,7 +1238,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### secrets_protection_enabled
 
-Boolean to enable secrets protection on all components.
+Boolean to enable secrets protection on all components except Rest Proxy
 
 Default:  false
 
@@ -1244,6 +1260,30 @@ Default:  generated_ssl_files/security.properties
 
 ***
 
+### zookeeper_secrets_protection_enabled
+
+Boolean to enable secrets protection in Zookeeper.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### zookeeper_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for Zookeeper.
+
+Default:  "{{zookeeper_secrets_protection_enabled}}"
+
+***
+
+### zookeeper_secrets_protection_encrypt_properties
+
+List of Zookeeper properties to encrypt. Can be used in addition to zookeeper_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
 ### kafka_broker_secrets_protection_enabled
 
 Boolean to enable secrets protection in Kafka broker.
@@ -1252,113 +1292,17 @@ Default:  "{{secrets_protection_enabled}}"
 
 ***
 
-### kafka_broker_secrets_protection_config_path
+### kafka_broker_secrets_protection_encrypt_passwords
 
-Full path to configuration file in Kafka broker that contains properties to encrypt. Default is configuration file.
+Boolean to encrypt all properties containing 'password' for Kafka.
 
-Default:  "{{kafka_broker.config_file}}"
-
-***
-
-### kafka_broker_secrets_protection_config_params
-
-Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
-
-Default:  []
+Default:  "{{kafka_broker_secrets_protection_enabled}}"
 
 ***
 
-### control_center_secrets_protection_enabled
+### kafka_broker_secrets_protection_encrypt_properties
 
-Boolean to enable secrets protection in control center.
-
-Default:  "{{secrets_protection_enabled}}"
-
-***
-
-### control_center_secrets_protection_config_path
-
-Full path to configuration file in control center that contains properties to encrypt. Default is configuration file.
-
-Default:  "{{control_center.config_file}}"
-
-***
-
-### control_center_secrets_protection_config_params
-
-Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
-
-Default:  []
-
-***
-
-### kafka_connect_secrets_protection_enabled
-
-Boolean to enable secrets protection in Kafka connect.
-
-Default:  "{{secrets_protection_enabled}}"
-
-***
-
-### kafka_connect_secrets_protection_config_path
-
-Full path to configuration file in Kafka connect that contains properties to encrypt. Default is configuration file.
-
-Default:  "{{kafka_connect.config_file}}"
-
-***
-
-### kafka_connect_secrets_protection_config_params
-
-Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
-
-Default:  []
-
-***
-
-### kafka_rest_secrets_protection_enabled
-
-Boolean to enable secrets protection in Kafka rest.
-
-Default:  "{{secrets_protection_enabled}}"
-
-***
-
-### kafka_rest_secrets_protection_config_path
-
-Full path to configuration file in Kafka rest that contains properties to encrypt. Default is configuration file.
-
-Default:  "{{kafka_rest.config_file}}"
-
-***
-
-### kafka_rest_secrets_protection_config_params
-
-Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
-
-Default:  []
-
-***
-
-### ksql_secrets_protection_enabled
-
-Boolean to enable secrets protection in KSQL.
-
-Default:  "{{secrets_protection_enabled}}"
-
-***
-
-### ksql_secrets_protection_config_path
-
-Full path to configuration file in KSQL that contains properties to encrypt. Default is configuration file.
-
-Default:  "{{ksql.config_file}}"
-
-***
-
-### ksql_secrets_protection_config_params
-
-Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
+List of Kafka properties to encrypt. Can be used in addition to kafka_broker_secrets_protection_encrypt_passwords.
 
 Default:  []
 
@@ -1372,41 +1316,113 @@ Default:  "{{secrets_protection_enabled}}"
 
 ***
 
-### schema_registry_secrets_protection_config_path
+### schema_registry_secrets_protection_encrypt_passwords
 
-Full path to configuration file in schema registry that contains properties to encrypt. Default is configuration file.
+Boolean to encrypt all properties containing 'password' for Schema Registry.
 
-Default:  "{{schema_registry.config_file}}"
+Default:  "{{schema_registry_secrets_protection_enabled}}"
 
 ***
 
-### schema_registry_secrets_protection_config_params
+### schema_registry_secrets_protection_encrypt_properties
 
-Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
+List of Schema Registry properties to encrypt. Can be used in addition to schema_registry_secrets_protection_encrypt_passwords.
 
 Default:  []
 
 ***
 
-### zookeeper_secrets_protection_enabled
+### kafka_connect_secrets_protection_enabled
 
-Boolean to enable secrets protection in Zookeeper.
+Boolean to enable secrets protection in Connect.
 
 Default:  "{{secrets_protection_enabled}}"
 
 ***
 
-### zookeeper_secrets_protection_config_path
+### kafka_connect_secrets_protection_encrypt_passwords
 
-Full path to configuration file in Zookeeper that contains properties to encrypt. Default is configuration file.
+Boolean to encrypt all properties containing 'password' for Connect.
 
-Default:  "{{zookeeper.config_file}}"
+Default:  "{{kafka_connect_secrets_protection_enabled}}"
 
 ***
 
-### zookeeper_secrets_protection_config_params
+### kafka_connect_secrets_protection_encrypt_properties
 
-Specified configuration parameters to encrypt using secrets protection. If empty, then secrets protection encrypts any property that contains in the string “password”.
+List of Connect properties to encrypt. Can be used in addition to kafka_connect_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### kafka_rest_secrets_protection_enabled
+
+Boolean to enable secrets protection in Rest Proxy.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### kafka_rest_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for Rest Proxy.
+
+Default:  "{{kafka_rest_secrets_protection_enabled}}"
+
+***
+
+### kafka_rest_secrets_protection_encrypt_properties
+
+List of Rest Proxy properties to encrypt. Can be used in addition to kafka_rest_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### ksql_secrets_protection_enabled
+
+Boolean to enable secrets protection in KSQL.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### ksql_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for KSQL.
+
+Default:  "{{ksql_secrets_protection_enabled}}"
+
+***
+
+### ksql_secrets_protection_encrypt_properties
+
+List of KSQL properties to encrypt. Can be used in addition to ksql_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### control_center_secrets_protection_enabled
+
+Boolean to enable secrets protection in Control Center.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### control_center_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for Control Center.
+
+Default:  "{{control_center_secrets_protection_enabled}}"
+
+***
+
+### control_center_secrets_protection_encrypt_properties
+
+List of Control Center properties to encrypt. Can be used in addition to control_center_secrets_protection_encrypt_passwords.
 
 Default:  []
 
@@ -1658,22 +1674,6 @@ Default:  https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaag
 
 ***
 
-### confluent_cli_download_enabled
-
-Boolean to have cp-ansible download the Confluent CLI
-
-Default:  "{{rbac_enabled or secrets_protection_enabled}}"
-
-***
-
-### confluent_cli_path
-
-Full path on hosts to install the Confluent CLI
-
-Default:  /usr/local/bin/confluent
-
-***
-
 ### confluent_archive_file_source
 
 A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
@@ -1857,6 +1857,28 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Zookeeper Process
 
 Default:  ""
+
+***
+
+# confluent.ssl
+
+Below are the supported variables for the role confluent.ssl
+
+***
+
+### ssl_key_algorithm
+
+Key Algorithm used by keytool -genkey command when creating Keystores. Only used with self-signed certs
+
+Default:  RSA
+
+***
+
+### ssl_key_size
+
+Key Size used by keytool -genkey command when creating Keystores. Only used with self-signed certs
+
+Default:  2048
 
 ***
 
