@@ -44,9 +44,9 @@ Default:  false
 
 ***
 
-### custom_log4j
+### log4j_rolling_enabled
 
-Boolean to enable cp-ansible's Custom Log4j Configuration across all components
+Boolean to configure ZK, Kafka, Connect, and ksqlDBs logging with RollingFileAppender and log cleanup. Not necessary for other components
 
 Default:  true
 
@@ -1674,7 +1674,7 @@ Default:  https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaag
 
 ***
 
-### confluent_archive_file_source
+### # confluent_archive_file_source
 
 A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
@@ -1693,14 +1693,6 @@ Default:  true
 # confluent.control_center
 
 Below are the supported variables for the role confluent.control_center
-
-***
-
-### control_center_custom_log4j
-
-Boolean to enable cp-ansible's Custom Log4j Configuration
-
-Default:  "{{ custom_log4j }}"
 
 ***
 
@@ -1726,11 +1718,11 @@ Below are the supported variables for the role confluent.kafka_broker
 
 ***
 
-### kafka_broker_custom_log4j
+### kafka_broker_log4j_rolling_enabled
 
-Boolean to enable cp-ansible's Custom Log4j Configuration
+Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ custom_log4j }}"
+Default:  "{{ log4j_rolling_enabled }}"
 
 ***
 
@@ -1748,11 +1740,11 @@ Below are the supported variables for the role confluent.kafka_connect
 
 ***
 
-### kafka_connect_custom_log4j
+### kafka_connect_log4j_rolling_enabled
 
-Boolean to enable cp-ansible's Custom Log4j Configuration
+Boolean to reconfigure Connect's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ custom_log4j }}"
+Default:  "{{ log4j_rolling_enabled }}"
 
 ***
 
@@ -1770,14 +1762,6 @@ Below are the supported variables for the role confluent.kafka_rest
 
 ***
 
-### kafka_rest_custom_log4j
-
-Boolean to enable cp-ansible's Custom Log4j Configuration
-
-Default:  "{{ custom_log4j }}"
-
-***
-
 ### kafka_rest_custom_java_args
 
 Custom Java Args to add to the Rest Proxy Process
@@ -1792,11 +1776,11 @@ Below are the supported variables for the role confluent.ksql
 
 ***
 
-### ksql_custom_log4j
+### ksql_log4j_rolling_enabled
 
-Boolean to enable cp-ansible's Custom Log4j Configuration
+Boolean to reconfigure ksqlDB's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ custom_log4j }}"
+Default:  "{{ log4j_rolling_enabled }}"
 
 ***
 
@@ -1822,14 +1806,6 @@ Below are the supported variables for the role confluent.schema_registry
 
 ***
 
-### schema_registry_custom_log4j
-
-Boolean to enable cp-ansible's Custom Log4j Configuration
-
-Default:  "{{ custom_log4j }}"
-
-***
-
 ### schema_registry_custom_java_args
 
 Custom Java Args to add to the Schema Registry Process
@@ -1844,11 +1820,11 @@ Below are the supported variables for the role confluent.zookeeper
 
 ***
 
-### zookeeper_custom_log4j
+### zookeeper_log4j_rolling_enabled
 
-Boolean to enable cp-ansible's Custom Log4j Configuration
+Boolean to reconfigure Zookeeper's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ custom_log4j }}"
+Default:  "{{ log4j_rolling_enabled }}"
 
 ***
 
