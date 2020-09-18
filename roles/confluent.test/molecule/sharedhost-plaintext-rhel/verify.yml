@@ -84,3 +84,49 @@
         file_path: /etc/confluent-control-center/control-center-production.properties
         property: confluent.controlcenter.streams.security.protocol
         expected_value: PLAINTEXT
+
+- name: Verify - Zookeeper User Change
+  hosts: zookeeper1-kafka-broker1
+  gather_facts: false
+  tasks:
+    - name: Set Zookeeper user to new user
+      set_fact:
+        zookeeper_user: zk-test
+
+    - name: Set Zookeeper Group
+      set_fact:
+        zookeeper_group: confluent
+
+    - name: Create Zookeeper User
+      user:
+        name: "{{zookeeper_user}}"
+        comment: "Zookeeper User"
+        system: true
+        group: "{{zookeeper_group}}"
+
+    - name: Create Log Directory
+      file:
+        path: "{{zookeeper.log_path}}"
+        state: directory
+        group: "{{zookeeper_group}}"
+        owner: "{{zookeeper_user}}"
+        mode: 0770
+
+    - name: Restart Service
+      systemd:
+        daemon_reload: true
+        name: "{{zookeeper_service_name}}"
+        state: restarted
+
+    - import_role:
+        name: confluent.zookeeper
+        tasks_from: health_check.yml
+
+    - name: Restart Service
+      systemd:
+        daemon_reload: true
+        name: "{{kafka_broker_service_name}}"
+        state: restarted
+
+    - name: Wait for Under Replicated Partitions on Broker
+      include_tasks: ../../../../tasks/wait_for_urp.yml
