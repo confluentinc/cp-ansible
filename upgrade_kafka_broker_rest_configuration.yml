@@ -2,6 +2,7 @@
 - name: Kafka Broker Upgrade - Configure Rest API
   hosts: kafka_broker
   gather_facts: false
+  serial: 1
   vars:
     erp_properties:
       kafka.rest.enable: 'true'
@@ -13,32 +14,6 @@
 
     - name: Set confluent_server_enabled and kafka_broker_jolokia_ssl_enabled Variables
       include_tasks: tasks/set_kafka_broker_jolokia_ssl_enabled.yml
-
-    # - set_fact:
-    #     erp_properties: "{{ kafka_broker_properties}}.{{item}}.properties  | combine({{erp_properties}}) "
-    # # - debug:
-    # #     var: "kafka_broker_properties.{{item}}.properties"
-    #   when: kafka_broker_properties[item].enabled|bool
-    #   loop:
-    #     - embedded_rest_proxy
-    #     - embedded_rest_proxy_ssl
-    #     - embedded_rest_proxy_ssl_fips
-    #     - embedded_rest_proxy_client_bootstrap
-    #     - embedded_rest_proxy_client
-    #     - embedded_rest_proxy_rbac
-    #     - embedded_rest_proxy_rbac_ssl
-
-    # - set_fact:
-    #     erp_properties: "{{ erp_properties }} | combine({{kafka_broker_properties}}[{{item}}]['properties']) "
-    #   when: kafka_broker_properties[item].enabled|bool
-    #   loop:
-    #     - embedded_rest_proxy
-    #     - embedded_rest_proxy_ssl
-    #     - embedded_rest_proxy_ssl_fips
-    #     - embedded_rest_proxy_client_bootstrap
-    #     - embedded_rest_proxy_client
-    #     - embedded_rest_proxy_rbac
-    #     - embedded_rest_proxy_rbac_ssl
 
     - set_fact:
         erp_properties: "{{ erp_properties | combine(kafka_broker_properties.embedded_rest_proxy.properties) }}"
@@ -68,65 +43,11 @@
         erp_properties: "{{ erp_properties | combine(kafka_broker_properties.embedded_rest_proxy_rbac_ssl.properties) }}"
       when: kafka_broker_properties.embedded_rest_proxy_rbac_ssl.enabled|bool
 
-    # - debug:
-    #     msg: "{{item.key}}={{item.value}}"
-    #   loop: "{{ erp_properties|dict2items }}"
-
     - name: Add Kafka Rest Configuration
       lineinfile:
         name: "{{kafka_broker.config_file}}"
-        # line: "log.message.format.version={{log_message_format_version}}"
         line: "{{item.key}}={{item.value}}"
         regexp: "{{item.key}}=.*"
-        # regexp: log.message.format.version.*
         state: present
       loop: "{{ erp_properties|dict2items }}"
       notify: restart kafka
-
-  # embedded_rest_proxy:
-  #   # Do not need duplicating confluent.metadata.server and confluent.http.server config, rely on mds configs when kafka is the mds
-  #   enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) }}"
-  #   properties:
-  #     confluent.http.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(inventory_hostname) }}:{{mds_port}}"
-  #     confluent.http.server.listeners: "{{mds_http_protocol}}://0.0.0.0:{{mds_port}}"
-  # embedded_rest_proxy_ssl:
-  #   enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_ssl_enabled }}"
-  #   properties:
-  #     confluent.http.server.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
-  #     confluent.http.server.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
-  #     confluent.http.server.ssl.key.password: "{{kafka_broker_keystore_keypass}}"
-  #     confluent.http.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
-  #     confluent.http.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
-  # embedded_rest_proxy_ssl_fips:
-  #   enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_ssl_enabled and pkcs12_enabled}}"
-  #   properties:
-  #     confluent.http.server.ssl.keymanager.algorithm: PKIX
-  #     confluent.http.server.ssl.trustmanager.algorithm: PKIX
-  #     confluent.http.server.ssl.keystore.type: PKCS12
-  #     confluent.http.server.ssl.truststore.type: PKCS12
-  # embedded_rest_proxy_client_bootstrap:
-  #   enabled: "{{ kafka_broker_rest_proxy_enabled }}"
-  #   properties:
-  #     # Internal listener will be the token listener when rbac is enabled
-  #     kafka.rest.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners['internal']['port']|string + ',') }}:{{kafka_broker_listeners['internal']['port']}}"
-  # embedded_rest_proxy_client:
-  #   enabled: "{{ kafka_broker_rest_proxy_enabled }}"
-  #   properties: "{{ kafka_broker_listeners['internal'] | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
-  #                           'kafka.rest.client.', kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
-  #                           false, sasl_plain_users.admin.principal, sasl_plain_users.admin.password, sasl_scram_users.admin.principal, sasl_scram_users.admin.password,
-  #                           kerberos_kafka_broker_primary|default('kafka'), kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'),
-  #                           true, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls) }}"
-  # embedded_rest_proxy_rbac:
-  #   enabled: "{{ kafka_broker_rest_proxy_enabled and rbac_enabled }}"
-  #   properties:
-  #     kafka.rest.kafka.rest.resource.extension.class: io.confluent.kafkarest.security.KafkaRestSecurityResourceExtension
-  #     kafka.rest.rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
-  #     kafka.rest.public.key.path: "{{rbac_enabled_public_pem_path}}"
-  #     kafka.rest.confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
-  #     kafka.rest.confluent.metadata.basic.auth.user.info: "{{kafka_broker_ldap_user | default('kafka') }}:{{kafka_broker_ldap_password | default('pass')}}"
-  #     kafka.rest.confluent.metadata.http.auth.credentials.provider: BASIC
-  # embedded_rest_proxy_rbac_ssl:
-  #   enabled: "{{rbac_enabled and mds_tls_enabled}}"
-  #   properties:
-  #     kafka.rest.confluent.metadata.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
-  #     kafka.rest.confluent.metadata.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
