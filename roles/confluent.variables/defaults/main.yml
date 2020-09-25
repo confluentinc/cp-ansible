@@ -1,8 +1,8 @@
 ---
 # Custom filters used in this file are defined in filter_plugins/filters.py
 
-confluent_repo_version: 5.5
-confluent_package_version: 5.5.1
+confluent_repo_version: 6.0
+confluent_package_version: 6.0.0
 confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
 confluent_package_debian_suffix: "{{ '=' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
@@ -22,7 +22,7 @@ jmxexporter_jar_path: /opt/prometheus/jmx_prometheus_javaagent.jar
 ### Boolean to have cp-ansible configure components with FIPS security settings
 fips_enabled: false
 
-fips_jar_path: /usr/share/java/kafka/bc-fips-1.0.1.jar
+fips_jar_path: /usr/share/java/kafka/bc-fips-*.jar
 fips_provider_class: org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider
 pkcs12_enabled: "{{ true if fips_enabled|bool else false }}"
 
@@ -52,7 +52,7 @@ monitoring_interceptors_enabled: true
 ### The method of installation. Valid values are "package" or "archive". If "archive" is selected then services will not be installed via the use of yum or apt, but will instead be installed via expanding the target .tar.gz file from the Confluent archive into the path defined by `archive_destination_path`. Configuration files are also kept in this directory structure instead of `/etc`. SystemD service units are copied from the ardhive for each target service and overrides are created pointing at the new paths. The "package" installation method is the default behavior that utilizes yum/apt.
 installation_method: "package"
 
-### The Scala version of the Confluent Platform archive to download. Possible values: 2.11, 2.12, etc. If you don't have a specific version requirement then use the default.
+## <deprecated, should be removed> The Scala version of the Confluent Platform archive to download. Possible values: 2.11, 2.12, etc. If you don't have a specific version requirement then use the default.
 confluent_archive_scala_version: 2.12
 
 ### The path the downloaded archive is expanded into. Using the default with a `confluent_package_version` of *5.5.1* results in the following installation path `/opt/confluent/confluent-5.5.1/` that contains directories such as `bin` and `share`, but may be overridden usinf the `binary_base_path` property.
@@ -60,6 +60,12 @@ archive_destination_path: "/opt/confluent"
 
 ### If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
 archive_config_base_path: "{{ archive_destination_path }}"
+
+### Boolean to have cp-ansible download the Confluent CLI
+confluent_cli_download_enabled: "{{rbac_enabled or secrets_protection_enabled}}"
+
+### Full path on hosts to install the Confluent CLI
+confluent_cli_path: /usr/local/bin/confluent
 
 ### SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
 sasl_protocol: none
@@ -249,6 +255,9 @@ kafka_broker:
   jaas_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_server_jaas.conf"
   # Deprecated way of providing custom properties
   properties: {}
+  # Deprecated way of setting kafkas log.dirs property
+  datadir:
+    - /var/lib/kafka/data
 
 # TODO investigate this var, not actually being used
 kafka_broker_schema_validation_enabled: false
@@ -266,6 +275,7 @@ kafka_broker_jolokia_ssl_enabled: "{{ ssl_enabled }}"
 kafka_broker_jolokia_java_arg_ssl_addon: ",keystore={{kafka_broker_keystore_path}},keystorePassword={{kafka_broker_keystore_storepass}},protocol=https"
 kafka_broker_jolokia_urp_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{inventory_hostname}}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
 kafka_broker_jolokia_active_controller_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{inventory_hostname}}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ActiveControllerCount"
+kafka_broker_erp_clusters_url: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(inventory_hostname) }}:{{mds_port}}/kafka/v3/clusters"
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on kafka
 kafka_broker_jmxexporter_enabled: "{{jmxexporter_enabled}}"
@@ -279,7 +289,7 @@ kafka_broker_jmxexporter_config_path: /opt/prometheus/kafka.yml
 kafka_broker_copy_files: []
 
 ### Replication Factor for internal topics. Defaults to the minimum of the number of brokers and 3
-kafka_broker_default_interal_replication_factor: "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
+kafka_broker_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
 
 ### Boolean to enable the metrics reporter
 kafka_broker_metrics_reporter_enabled: true
@@ -287,6 +297,8 @@ kafka_broker_metrics_reporter_enabled: true
 ### Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 kafka_broker_custom_properties: "{{ kafka_broker.properties }}"
 
+### Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
+kafka_broker_rest_proxy_enabled: "{{confluent_server_enabled}}"
 
 #### Schema Registry Variables ####
 
@@ -467,12 +479,6 @@ kafka_connect_secret_registry_key: 39ff95832750c0090d84ddf5344583832efe91ef
 kafka_connect_plugins_path:
   - /usr/share/java
 
-kafka_connect_confluent_hub_client:
-  file: "http://client.hub.confluent.io/confluent-hub-client-latest.tar.gz"
-  is_remote: true
-  install_dir: /etc/kafka/confluent-hub
-  timeout: 90
-
 kafka_connect_confluent_hub_plugins: []
 kafka_connect_confluent_hub_plugins_dest: /usr/share/java
 kafka_connect_plugins: []
@@ -567,9 +573,6 @@ control_center_listener_hostname: "0.0.0.0"
 ### Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
 control_center_ssl_enabled: "{{ssl_enabled}}"
 
-### Boolean to enable mTLS Authentication on Control Center
-control_center_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
-
 control_center_truststore_path: "/var/ssl/private/control_center.truststore.jks"
 control_center_keystore_path: "/var/ssl/private/control_center.keystore.jks"
 control_center_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
@@ -655,8 +658,11 @@ rbac_enabled: false
 ### Port to expose MDS Server API on
 mds_port: 8090
 
-### Boolean to configure TLS encryption on the MDS Server. (Or if is confligured with TLS encyption when external_mds_enabled: true)
+# Deprecated
 mds_ssl_enabled: "{{ssl_enabled}}"
+
+### Boolean to configure TLS encryption on the Broker Rest endpoint. NOTE- mds_ssl_enabled is now deprecated
+kafka_broker_rest_ssl_enabled: "{{mds_ssl_enabled}}"
 
 mds_acls_enabled: "{{rbac_enabled}}"
 rbac_enabled_public_pem_path: /var/ssl/private/public.pem
@@ -667,6 +673,12 @@ mds_super_user: mds
 
 ### Password to mds_super_user LDAP User
 mds_super_user_password: password
+
+### LDAP User for Kafkas Embedded Rest Service to authenticate as
+kafka_broker_ldap_user: kafka
+
+### Password to kafka_broker_ldap_user LDAP User
+kafka_broker_ldap_password: password
 
 ### LDAP User for Schema Registry to authenticate as
 schema_registry_ldap_user: schema-registry
@@ -698,7 +710,7 @@ control_center_ldap_user: control-center
 ### Password to control_center_ldap_user LDAP User
 control_center_ldap_password: password
 
-### Boolean to describe if kafka group in inventory file should be configured as MDS Server. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, mds_ssl_enabled
+### Boolean to describe if kafka group should be configured with an External MDS Kafka Cluster. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, kafka_broker_rest_ssl_enabled
 external_mds_enabled: false
 
 ### Kafka hosts and listener ports on the Kafka Cluster acting as an external MDS Server. mds_broker_listener dictionary must describe its security settings. Must be configured if external_mds_enabled: true
@@ -729,6 +741,136 @@ ksql_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 ### List of users to be granted system admin Role Bindings on the Connect Cluster
 kafka_connect_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
-# TODO this one honestly does not make sense. You get rolebindings to otherthings and then c3 allows you to view them. Talk to product
+# TODO Investigate proper rolebinding for c3 system admins
 ### List of users to be granted system admin Role Bindings on the Control Center Cluster
 control_center_additional_system_admins: "{{rbac_component_additional_system_admins}}"
+
+# Secrets Protection Variables
+
+### Boolean to enable secrets protection on all components except Rest Proxy
+secrets_protection_enabled: false
+
+### Masterkey generated by the Confluent Secret CLI. If empty and secrets protection is enabled, then a master key will be randomly generated.
+secrets_protection_masterkey: ""
+
+### Security file generated by the Confluent Secret CLI. If empty and secrets protection is enabled, then a security file will be randomly generated.
+secrets_protection_security_file: generated_ssl_files/security.properties
+
+### Boolean to enable secrets protection in Zookeeper.
+zookeeper_secrets_protection_enabled: "{{secrets_protection_enabled}}"
+
+### Boolean to encrypt all properties containing 'password' for Zookeeper.
+zookeeper_secrets_protection_encrypt_passwords: "{{zookeeper_secrets_protection_enabled}}"
+
+### List of Zookeeper properties to encrypt. Can be used in addition to zookeeper_secrets_protection_encrypt_passwords.
+zookeeper_secrets_protection_encrypt_properties: []
+
+### Boolean to enable secrets protection in Kafka broker.
+kafka_broker_secrets_protection_enabled: "{{secrets_protection_enabled}}"
+
+### Boolean to encrypt all properties containing 'password' for Kafka.
+kafka_broker_secrets_protection_encrypt_passwords: "{{kafka_broker_secrets_protection_enabled}}"
+
+### List of Kafka properties to encrypt. Can be used in addition to kafka_broker_secrets_protection_encrypt_passwords.
+kafka_broker_secrets_protection_encrypt_properties: []
+
+### Boolean to enable secrets protection in schema registry.
+schema_registry_secrets_protection_enabled: "{{secrets_protection_enabled}}"
+
+### Boolean to encrypt all properties containing 'password' for Schema Registry.
+schema_registry_secrets_protection_encrypt_passwords: "{{schema_registry_secrets_protection_enabled}}"
+
+### List of Schema Registry properties to encrypt. Can be used in addition to schema_registry_secrets_protection_encrypt_passwords.
+schema_registry_secrets_protection_encrypt_properties: []
+
+### Boolean to enable secrets protection in Connect.
+kafka_connect_secrets_protection_enabled: "{{secrets_protection_enabled}}"
+
+### Boolean to encrypt all properties containing 'password' for Connect.
+kafka_connect_secrets_protection_encrypt_passwords: "{{kafka_connect_secrets_protection_enabled}}"
+
+### List of Connect properties to encrypt. Can be used in addition to kafka_connect_secrets_protection_encrypt_passwords.
+kafka_connect_secrets_protection_encrypt_properties: []
+
+### Boolean to enable secrets protection in Rest Proxy.
+kafka_rest_secrets_protection_enabled: "{{secrets_protection_enabled}}"
+
+### Boolean to encrypt all properties containing 'password' for Rest Proxy.
+kafka_rest_secrets_protection_encrypt_passwords: "{{kafka_rest_secrets_protection_enabled}}"
+
+### List of Rest Proxy properties to encrypt. Can be used in addition to kafka_rest_secrets_protection_encrypt_passwords.
+kafka_rest_secrets_protection_encrypt_properties: []
+
+### Boolean to enable secrets protection in KSQL.
+ksql_secrets_protection_enabled: "{{secrets_protection_enabled}}"
+
+### Boolean to encrypt all properties containing 'password' for KSQL.
+ksql_secrets_protection_encrypt_passwords: "{{ksql_secrets_protection_enabled}}"
+
+### List of KSQL properties to encrypt. Can be used in addition to ksql_secrets_protection_encrypt_passwords.
+ksql_secrets_protection_encrypt_properties: []
+
+### Boolean to enable secrets protection in Control Center.
+control_center_secrets_protection_enabled: "{{secrets_protection_enabled}}"
+
+### Boolean to encrypt all properties containing 'password' for Control Center.
+control_center_secrets_protection_encrypt_passwords: "{{control_center_secrets_protection_enabled}}"
+
+### List of Control Center properties to encrypt. Can be used in addition to control_center_secrets_protection_encrypt_passwords.
+control_center_secrets_protection_encrypt_properties: []
+
+# Telemetry Variables
+
+### Boolean to configure Telemetry. Must also set telemetry_api_key and telemetry_api_secret
+telemetry_enabled: false
+
+### API Key used by Telemetry. Mandatory variable for Telemetry
+telemetry_api_key: ""
+
+### API Secret used by Telemetry. Mandatory variable for Telemetry
+telemetry_api_secret: ""
+
+### Proxy URL used by Telemetry. Only set if using a Proxy Server
+telemetry_proxy_url: ""
+
+### Username for Proxy Server used by Telemetry. Only set if Proxy Server requires authentication
+telemetry_proxy_username: ""
+
+### Password for Proxy Server used by Telemetry. Only set if Proxy Server requires authentication
+telemetry_proxy_password: ""
+
+### Boolean to configure Telemetry on Kafka. Must also set telemetry_api_key and telemetry_api_secret
+kafka_broker_telemetry_enabled: "{{telemetry_enabled}}"
+
+### Boolean to send cp-ansible Telemetry Metrics from Kafka. Currently only sends cp-ansible version data
+kafka_broker_telemetry_ansible_labels_enabled: "{{kafka_broker_telemetry_enabled}}"
+
+### Boolean to configure Telemetry on Schema Registry. Must also set telemetry_api_key and telemetry_api_secret
+schema_registry_telemetry_enabled: "{{telemetry_enabled}}"
+
+### Boolean to send cp-ansible Telemetry Metrics from Schema Registry. Currently only sends cp-ansible version data
+schema_registry_telemetry_ansible_labels_enabled: "{{schema_registry_telemetry_enabled}}"
+
+### Boolean to configure Telemetry on Connect. Must also set telemetry_api_key and telemetry_api_secret
+kafka_connect_telemetry_enabled: "{{telemetry_enabled}}"
+
+### Boolean to send cp-ansible Telemetry Metrics from Connect. Currently only sends cp-ansible version data
+kafka_connect_telemetry_ansible_labels_enabled: "{{kafka_connect_telemetry_enabled}}"
+
+### Boolean to configure Telemetry on Rest Proxy. Must also set telemetry_api_key and telemetry_api_secret
+kafka_rest_telemetry_enabled: "{{telemetry_enabled}}"
+
+### Boolean to send cp-ansible Telemetry Metrics from Rest Proxy. Currently only sends cp-ansible version data
+kafka_rest_telemetry_ansible_labels_enabled: "{{kafka_rest_telemetry_enabled}}"
+
+### Boolean to configure Telemetry on ksqlDB. Must also set telemetry_api_key and telemetry_api_secret
+ksql_telemetry_enabled: "{{telemetry_enabled}}"
+
+### Boolean to send cp-ansible Telemetry Metrics from ksqlDB. Currently only sends cp-ansible version data
+ksql_telemetry_ansible_labels_enabled: "{{ksql_telemetry_enabled}}"
+
+### Boolean to configure Telemetry on Control Center. Must also set telemetry_api_key and telemetry_api_secret
+control_center_telemetry_enabled: "{{telemetry_enabled}}"
+
+### Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
+control_center_telemetry_ansible_labels_enabled: "{{control_center_telemetry_enabled}}"

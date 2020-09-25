@@ -143,3 +143,30 @@
       }
     status_code: 204
   when: "'schema_registry' in groups"
+
+- name: Grant ksql user the DeveloperWrite role on Monitoring Interceptor Topic
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/DeveloperWrite/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster":"{{kafka_cluster_id}}"
+          }
+        },
+        "resourcePatterns": [{
+          "resourceType": "Topic",
+          "name": "{{ksql_final_properties['confluent.monitoring.interceptor.topic']}}",
+          "patternType":"LITERAL"
+        }]
+      }
+    status_code: 204
+  when: "'control_center' in groups and ksql_monitoring_interceptors_enabled|bool"

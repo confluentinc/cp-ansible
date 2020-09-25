@@ -38,7 +38,7 @@ def parse_variable_file(role_name, docs_file):
 
 docs_file = open("VARIABLES.md", "w")
 
-for role_name in ["variables", "common", "control_center", "kafka_broker", "kafka_connect", "kafka_rest", "ksql", "schema_registry", "zookeeper"]:
+for role_name in ["variables", "common", "control_center", "kafka_broker", "kafka_connect", "kafka_rest", "ksql", "schema_registry", "zookeeper", "ssl"]:
     parse_variable_file(role_name, docs_file)
 
 docs_file.close
