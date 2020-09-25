@@ -1606,7 +1606,7 @@ Default:  ""
 
 Base URL for Confluent's RPM and Debian Package Repositories
 
-Default:  "https://s3-us-west-2.amazonaws.com/staging-confluent-packages-6.0.0"
+Default:  "https://packages.confluent.io"
 
 ***
 
