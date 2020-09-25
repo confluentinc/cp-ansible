@@ -1,0 +1,32 @@
+---
+- name: Create Passphrase File
+  shell: "openssl rand -base64 14 > /tmp/passphrase.txt"
+  run_once: true
+
+- name: Generate Master Encryption Key and File
+  shell: |
+    {{ confluent_cli_path }} secret master-key generate \
+      --local-secrets-file /tmp/security.properties \
+      --passphrase @/tmp/passphrase.txt | awk '/Master/{print $5}'
+  register: masterkey
+  run_once: true
+
+- name: Save Master Encryption Key
+  set_fact:
+    secrets_protection_masterkey: "{{ masterkey.stdout }}"
+
+- name: "Copy Security File Back to Ansible Host"
+  fetch:
+    src: "/tmp/security.properties"
+    dest: "{{secrets_protection_security_file}}"
+    flat: true
+  run_once: true
+
+- name: Remove Set Up Files
+  file:
+    path: "/tmp/{{item}}"
+    state: absent
+  run_once: true
+  loop:
+    - passphrase.txt
+    - security.properties

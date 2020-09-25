@@ -1,0 +1,94 @@
+---
+# Cannot use Block/Rescue in Ansible Handlers: https://github.com/ansible/ansible/issues/14270
+# Implementing try/catch logic with ignore_errors and conditionals
+- name: Wait for Under Replicated Partitions Metric to return 200
+  uri:
+    url: "{{ kafka_broker_jolokia_urp_url }}"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+  register: urp_result1
+  until: urp_result1.status == 200
+  retries: 40
+  delay: 5
+  when: kafka_broker_jolokia_enabled|bool
+  ignore_errors: true
+
+- name: Wait for Under Replicated Partitions Metric to return Data
+  uri:
+    url: "{{ kafka_broker_jolokia_urp_url }}"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+  register: urp_result2
+  until: urp_result2['json']['value'] is defined
+  retries: 40
+  delay: 5
+  when:
+    # Skip if previous check failed. If URP check was skipped, defaulting failed to False
+    - not urp_result1.failed|default(False)
+    - kafka_broker_jolokia_enabled|bool
+  ignore_errors: true
+
+# curl localhost:7771/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions
+# {"request":{"mbean":"kafka.server:name=UnderReplicatedPartitions,type=ReplicaManager","type":"read"},"value":{"Value":0},"timestamp":1565819946,"status":200}
+- name: Wait for Under Replicated Partitions Metric to equal Zero
+  uri:
+    url: "{{ kafka_broker_jolokia_urp_url }}"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+  register: urp_result3
+  until: urp_result3['json']['value']['Value'] == 0
+  retries: 40
+  delay: 5
+  when:
+    # Skip if either previous checks failed. If URP check was skipped, defaulting failed to False
+    - not urp_result1.failed|default(False) and not urp_result2.failed|default(False)
+    - kafka_broker_jolokia_enabled|bool
+  ignore_errors: true
+
+- name: Wait for Metadata Service to start
+  uri:
+    url: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(inventory_hostname) }}:{{mds_port}}/security/1.0/authenticate"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    force_basic_auth: true
+  register: mds_result
+  until: mds_result.status == 200
+  retries: 40
+  delay: 5
+  ignore_errors: true
+  when:
+    - rbac_enabled|bool and not external_mds_enabled|bool
+    # Skip if any previous checks failed. If URP check was skipped, defaulting failed to False
+    - not urp_result1.failed|default(False) and not urp_result2.failed|default(False) and not urp_result3.failed|default(False)
+
+- name: Wait for Embedded Rest Proxy to start
+  uri:
+    url: "{{kafka_broker_erp_clusters_url}}"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    force_basic_auth: true
+  register: erp_result
+  until: erp_result.status == 200
+  retries: 40
+  delay: 5
+  ignore_errors: true
+  when:
+    - kafka_broker_rest_proxy_enabled|bool
+    # Skip if any previous checks failed. If URP check was skipped, defaulting failed to False
+    - not urp_result1.failed|default(False) and not urp_result2.failed|default(False) and not urp_result3.failed|default(False) and not mds_result.failed|default(False)
+
+- name: Fetch Files for Debugging Failure
+  include: tasks/failure_handling.yml
+  vars:
+    service_name: "{{kafka_broker_service_name}}"
+    config_file: "{{kafka_broker.config_file}}"
+  when: urp_result1.failed|default(False) or urp_result2.failed|default(False) or urp_result3.failed|default(False) or mds_result.failed|default(False) or erp_result.failed|default(False)
