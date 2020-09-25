@@ -92,14 +92,6 @@ Default:  "package"
 
 ***
 
-### confluent_archive_scala_version
-
-The Scala version of the Confluent Platform archive to download. Possible values: 2.11, 2.12, etc. If you don't have a specific version requirement then use the default.
-
-Default:  2.12
-
-***
-
 ### archive_destination_path
 
 The path the downloaded archive is expanded into. Using the default with a `confluent_package_version` of *5.5.1* results in the following installation path `/opt/confluent/confluent-5.5.1/` that contains directories such as `bin` and `share`, but may be overridden usinf the `binary_base_path` property.
