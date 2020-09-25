@@ -494,9 +494,9 @@ Default:  "{{ kafka_broker.properties }}"
 
 ### kafka_broker_rest_proxy_enabled
 
-Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled
+Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
 
-Default:  true
+Default:  "{{confluent_server_enabled}}"
 
 ***
 
