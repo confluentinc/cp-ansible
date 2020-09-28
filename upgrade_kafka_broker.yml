@@ -1,8 +1,10 @@
 ---
 - name: Kafka Broker - Prerequisites
   hosts: kafka_broker
+  serial: 1
   vars:
     kafka_broker_upgrade_start_version: "5.3"
+    kafka_broker_rest_proxy_enabled: false
   handlers:
     - import_tasks: roles/confluent.kafka_broker/handlers/main.yml
   tasks:
@@ -29,21 +31,21 @@
 
     - name: Set Inter-Broker Protocol Version to Current Version
       lineinfile:
-        name: "{{kafka_broker.config_file}}"
+        path: "{{kafka_broker.config_file}}"
         line: "inter.broker.protocol.version={{inter_broker_protocol_version}}"
         regexp: inter.broker.protocol.version.*
         state: present
 
     - name: Set Log Message Format Version to Current Version
       lineinfile:
-        name: "{{kafka_broker.config_file}}"
+        path: "{{kafka_broker.config_file}}"
         line: "log.message.format.version={{log_message_format_version}}"
         regexp: log.message.format.version.*
         state: present
 
     - name: Make sure Controlled Shutdown Property is not set to False
       lineinfile:
-        name: "{{kafka_broker.config_file}}"
+        path: "{{kafka_broker.config_file}}"
         # Default value for controlled.shutdown.enable is true
         # Removing the line and restarting the service will set property to true
         line: controlled.shutdown.enable=false
@@ -107,30 +109,95 @@
     - import_role:
         name: confluent.variables
 
-    - name: Upgrade Kafka Broker
-      include_tasks: tasks/upgrade_component.yml
-      vars:
-        service_name: "{{ kafka_broker_service_name }}"
-        packages: "{{ kafka_broker_packages }}"
-        backup_files:
-          - "{{ kafka_broker.config_file }}"
-          - "{{ kafka_broker.systemd_override }}"
-          - "{{ zookeeper.config_file }}"
-        restore_files:
-          - "{{ kafka_broker.config_file }}"
-          - "{{ zookeeper.config_file }}"
+    - name: Create Backup Directory
+      file:
+        path: "/tmp/upgrade/{{ kafka_broker_service_name }}"
+        state: directory
+        mode: 0640
 
-    - name: Wait for Under Replicated Partitions on Broker
+    - set_fact:
+        timestamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+
+    - name: Backup Configuration files
+      copy:
+        src: "{{ item }}"
+        remote_src: true
+        dest: "/tmp/upgrade/{{ kafka_broker_service_name }}/{{ item | basename }}-{{timestamp}}"
+      loop:
+        - "{{ kafka_broker.config_file }}"
+        - "{{ kafka_broker.systemd_override }}"
+        - "{{ zookeeper.config_file }}"
+      # Files cannot be copied because directory is not created in check mode
+      ignore_errors: "{{ ansible_check_mode }}"
+
+    - name: Stop Service
+      systemd:
+        name: "{{ kafka_broker_service_name }}"
+        state: stopped
+
+    - name: Configure Repositories
+      import_role:
+        name: confluent.common
+      vars:
+        install_java: false
+
+    - name: Install the Packages - Red Hat
+      yum:
+        name: "{{item}}{{confluent_package_redhat_suffix}}"
+        state: latest
+      loop: "{{ kafka_broker_packages }}"
+      when: ansible_os_family == "RedHat"
+      # Packages will not be found in check mode because repos not changed
+      ignore_errors: "{{ ansible_check_mode }}"
+
+    - name: Install the Packages - Debian
+      apt:
+        name: "{{item}}{{confluent_package_debian_suffix}}"
+        update_cache: true
+      loop: "{{ kafka_broker_packages }}"
+      when: ansible_os_family == "Debian"
+      # Packages will not be found in check mode because repos not changed
+      ignore_errors: "{{ ansible_check_mode }}"
+
+    - name: Put back configuration
+      copy:
+        dest: "{{ item }}"
+        remote_src: true
+        src: "/tmp/upgrade/{{ kafka_broker_service_name }}/{{ item | basename }}-{{timestamp}}"
+      loop:
+        - "{{ kafka_broker.config_file }}"
+        - "{{ zookeeper.config_file }}"
+      # Files cannot be copied because directory is not created in check mode
+      ignore_errors: "{{ ansible_check_mode }}"
+
+    - name: Disabling Embedded Rest Proxy
+      # Existing server.properties is missing configuration
+      lineinfile:
+        path: "{{ kafka_broker.config_file }}"
+        regexp: 'kafka.rest.enable=*'
+        line: 'kafka.rest.enable=false'
+
+    - name: Restart Service
+      systemd:
+        daemon_reload: true
+        name: "{{ kafka_broker_service_name }}"
+        state: restarted
+
+    - name: Kafka Broker Health Check
       include_tasks: roles/confluent.kafka_broker/tasks/health_check.yml
+      vars:
+        kafka_broker_rest_proxy_enabled: false
       when: not ansible_check_mode
 
 - name: Kafka Broker Upgrade - Set Inter-Broker Protocol to Current Version
   hosts: kafka_broker
   gather_facts: false
+  serial: 1
   tags:
     - inter_broker_protocol_version
   vars:
-    upgrade_to_version: "5.5"
+    upgrade_to_version: "6.0"
+    kafka_broker_rest_proxy_enabled: false
   handlers:
     - import_tasks: roles/confluent.kafka_broker/handlers/main.yml
   tasks:
@@ -148,6 +215,10 @@
     - set_fact:
         inter_broker_protocol_version: 2.5
       when: upgrade_to_version is match('5.5.*')
+
+    - set_fact:
+        inter_broker_protocol_version: 2.6
+      when: upgrade_to_version is match('6.0.*')
 
     - name: Set Inter-Broker Protocol Version to Current Version
       lineinfile:

@@ -3,7 +3,7 @@ confluent_ansible_branch: 6.0.x
 
 #### Zookeeper Variables ####
 zookeeper_service_name: confluent-zookeeper
-zookeeper_main_package: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka-2.12'}}"
+zookeeper_main_package: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
 zookeeper_packages:
   - confluent-common
   - confluent-rest-utils
@@ -73,7 +73,7 @@ zookeeper_final_properties: "{{ zookeeper_combined_properties | combine(zookeepe
 
 #### Kafka Broker Variables ####
 kafka_broker_service_name: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
-kafka_broker_main_package: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka-2.12'}}"
+kafka_broker_main_package: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
 kafka_broker_packages:
   - confluent-common
   - confluent-rest-utils
@@ -124,12 +124,11 @@ kafka_broker_properties:
       confluent.support.metrics.enable: "true"
       confluent.support.customer.id: anonymous
       zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}"
-      log.dirs: /var/lib/kafka/data
+      log.dirs: "{{ kafka_broker.datadir | join(',') }}"
       listener.security.protocol.map: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
       listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://:{{ listener['value']['port'] }}{% endfor %}"
       advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(inventory_hostname) }}:{{ listener['value']['port'] }}{% endfor %}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
-      # kafka.rest.enable: "true"
       kafka.rest.enable: "{{kafka_broker_rest_proxy_enabled|string|lower}}"
   broker_id:
     enabled: "{{ inventory_hostname in groups.kafka_broker }}"
@@ -806,7 +805,6 @@ kafka_rest_packages:
   - confluent-server-rest
   - confluent-telemetry
   - "{{ kafka_broker_main_package }}"
-  - confluent-kafka-rest
   - confluent-security
   - confluent-rebalancer
   - confluent-control-center-fe
