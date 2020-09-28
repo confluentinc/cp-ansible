@@ -92,14 +92,6 @@ Default:  "package"
 
 ***
 
-### confluent_archive_scala_version
-
-The Scala version of the Confluent Platform archive to download. Possible values: 2.11, 2.12, etc. If you don't have a specific version requirement then use the default.
-
-Default:  2.12
-
-***
-
 ### archive_destination_path
 
 The path the downloaded archive is expanded into. Using the default with a `confluent_package_version` of *5.5.1* results in the following installation path `/opt/confluent/confluent-5.5.1/` that contains directories such as `bin` and `share`, but may be overridden usinf the `binary_base_path` property.
@@ -502,9 +494,9 @@ Default:  "{{ kafka_broker.properties }}"
 
 ### kafka_broker_rest_proxy_enabled
 
-Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled
+Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
 
-Default:  true
+Default:  "{{confluent_server_enabled}}"
 
 ***
 
@@ -1606,7 +1598,7 @@ Default:  ""
 
 Base URL for Confluent's RPM and Debian Package Repositories
 
-Default:  "https://s3-us-west-2.amazonaws.com/staging-confluent-packages-6.0.0"
+Default:  "https://packages.confluent.io"
 
 ***
 
@@ -1678,7 +1670,7 @@ Default:  https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaag
 
 A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent-{{confluent_package_version}}-{{confluent_archive_scala_version}}.tar.gz"
+Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent-{{confluent_package_version}}.tar.gz"
 
 ***
 
