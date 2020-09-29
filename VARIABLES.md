@@ -326,9 +326,9 @@ Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
 
 ### zookeeper_log_dir
 
-Only use to customize directory Zookeeper writes log files to. Default location is /var/log/kafka
+Only use to customize directory Zookeeper writes log files to. Default location is /var/log/kafka. NOTE- zookeeper.log_path is deprecated.
 
-Default:  "{{zookeeper_default_log_dir}}"
+Default:  "{{zookeeper.log_path}}"
 
 ***
 
@@ -430,9 +430,9 @@ Default:  "{{kafka_broker_default_group}}"
 
 ### kafka_broker_log_dir
 
-Only use to customize directory Kafka writes log files to. Default location is /var/log/kafka
+Only use to customize directory Kafka writes log files to. Default location is /var/log/kafka. NOTE- kafka_broker.appender_log_path is deprecated
 
-Default:  "{{kafka_broker_default_log_dir}}"
+Default:  "{{kafka_broker.appender_log_path}}"
 
 ***
 
@@ -558,9 +558,9 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ### schema_registry_log_dir
 
-Only use to customize directory Schema Registry writes log files to. Default location is /var/log/confluent/schema-registry
+Only use to customize directory Schema Registry writes log files to. Default location is /var/log/confluent/schema-registry. NOTE- schema_registry.appender_log_path is deprecated
 
-Default:  "{{schema_registry_default_log_dir}}"
+Default:  "{{schema_registry.appender_log_path}}"
 
 ***
 
@@ -662,9 +662,9 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ### kafka_rest_log_dir
 
-Only use to customize directory Rest Proxy writes log files to. Default location is /var/log/confluent/kafka-rest
+Only use to customize directory Rest Proxy writes log files to. Default location is /var/log/confluent/kafka-rest. NOTE- kafka_rest.appender_log_path is deprecated
 
-Default:  "{{kafka_rest_default_log_dir}}"
+Default:  "{{kafka_rest.appender_log_path}}"
 
 ***
 
@@ -774,9 +774,9 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ### kafka_connect_log_dir
 
-Only use to customize directory Connect writes log files to. Default location is /var/log/kafka
+Only use to customize directory Connect writes log files to. Default location is /var/log/kafka. NOTE- kafka_connect.appender_log_path is deprecated
 
-Default:  "{{kafka_connect_default_log_dir}}"
+Default:  "{{kafka_connect.appender_log_path}}"
 
 ***
 
@@ -918,9 +918,9 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ### ksql_log_dir
 
-Only use to customize directory ksqlDB writes log files to. Default location is /var/log/confluent/ksql
+Only use to customize directory ksqlDB writes log files to. Default location is /var/log/confluent/ksql. NOTE- ksql.appender_log_path is deprecated
 
-Default:  "{{ksql_default_log_dir}}"
+Default:  "{{ksql.appender_log_path}}"
 
 ***
 
@@ -1046,9 +1046,9 @@ Default:  "{{ssl_enabled}}"
 
 ### control_center_log_dir
 
-Only use to customize directory Control Center writes log files to. Default location is /var/log/confluent/control-center
+Only use to customize directory Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated
 
-Default:  "{{control_center_default_log_dir}}"
+Default:  "{{control_center.appender_log_path}}"
 
 ***
 
