@@ -1,12 +1,10 @@
 ---
 - name: Verify - Zookeeper User Change and custom logging path
-  hosts: zookeeper1-kafka-broker1
+  hosts: zookeeper,kafka_broker
   gather_facts: false
+  vars:
+    zookeeper_user: zk-test-user
   tasks:
-    - name: Set Zookeeper user to new user
-      set_fact:
-        zookeeper_user: zk-test-user
-
     - name: Create Zookeeper User
       user:
         name: "{{zookeeper_user}}"
@@ -18,7 +16,7 @@
       file:
         path: /kafka/logs/
         state: directory
-        recurse: true
+        # recurse: true
         group: cp-test-group
         owner: "{{zookeeper_user}}"
         mode: 0770
@@ -39,8 +37,9 @@
         name: "{{kafka_broker_service_name}}"
         state: restarted
 
-    - name: Wait for Under Replicated Partitions on Broker
-      include_tasks: ../../../../tasks/wait_for_urp.yml
+    - import_role:
+        name: confluent.kafka_broker
+        tasks_from: health_check.yml
 
     - import_role:
         name: confluent.test
@@ -98,7 +97,7 @@
         name: confluent.test
         tasks_from: check_ownership.yml
       vars:
-        file_name: connect-distributed.log
+        file_name: connect.log
         custom_path: /kafka/logs/kafkaconnect/
         group: connect-custom-group
         user: connect-custom
@@ -124,7 +123,7 @@
         name: confluent.test
         tasks_from: check_ownership.yml
       vars:
-        file_name: rest-proxy.log
+        file_name: kafka-rest.log
         custom_path: /kafka/logs/kafkarest/
         group: rest-custom-group
         user: rest-custom
