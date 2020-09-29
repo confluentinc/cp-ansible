@@ -44,7 +44,7 @@ Default:  false
 
 ***
 
-### log4j_rolling_enabled
+### custom_log4j
 
 Boolean to configure ZK, Kafka, Connect, and ksqlDBs logging with RollingFileAppender and log cleanup. Not necessary for other components
 
@@ -1766,11 +1766,11 @@ Below are the supported variables for the role confluent.kafka_broker
 
 ***
 
-### kafka_broker_log4j_rolling_enabled
+### kafka_broker_custom_log4j
 
 Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ log4j_rolling_enabled }}"
+Default:  "{{ custom_log4j }}"
 
 ***
 
@@ -1788,11 +1788,11 @@ Below are the supported variables for the role confluent.kafka_connect
 
 ***
 
-### kafka_connect_log4j_rolling_enabled
+### kafka_connect_custom_log4j
 
 Boolean to reconfigure Connect's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ log4j_rolling_enabled }}"
+Default:  "{{ custom_log4j }}"
 
 ***
 
@@ -1824,11 +1824,11 @@ Below are the supported variables for the role confluent.ksql
 
 ***
 
-### ksql_log4j_rolling_enabled
+### ksql_custom_log4j
 
 Boolean to reconfigure ksqlDB's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ log4j_rolling_enabled }}"
+Default:  "{{ custom_log4j }}"
 
 ***
 
@@ -1868,11 +1868,11 @@ Below are the supported variables for the role confluent.zookeeper
 
 ***
 
-### zookeeper_log4j_rolling_enabled
+### zookeeper_custom_log4j
 
 Boolean to reconfigure Zookeeper's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ log4j_rolling_enabled }}"
+Default:  "{{ custom_log4j }}"
 
 ***
 
