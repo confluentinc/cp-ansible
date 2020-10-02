@@ -46,7 +46,7 @@ Default:  false
 
 ### custom_log4j
 
-Boolean to enable cp-ansible's Custom Log4j Configuration across all components
+Boolean to configure ZK, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 
 Default:  true
 
@@ -278,7 +278,7 @@ Default:  false
 
 ### zookeeper_user
 
-Only use to customize Linux User Zookeeper Service runs with. User must exist on host.
+Set this variable to customize the Linux User that the Zookeeper Service runs with. Default user is cp-kafka.
 
 Default:  "{{zookeeper_default_user}}"
 
@@ -286,7 +286,7 @@ Default:  "{{zookeeper_default_user}}"
 
 ### zookeeper_group
 
-Only use to customize Linux Group Zookeeper Service user belongs to. Group must exist on host.
+Set this variable to customize the Linux Group that the Zookeeper Service user belongs to. Default group is confluent.
 
 Default:  "{{zookeeper_default_group}}"
 
@@ -321,6 +321,14 @@ Default:  "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
 SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
 
 Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
+
+***
+
+### zookeeper_log_dir
+
+Set this variable to customize the directory that Zookeeper writes log files to. Default location is /var/log/kafka. NOTE- zookeeper.log_path is deprecated.
+
+Default:  "{{zookeeper.log_path}}"
 
 ***
 
@@ -406,7 +414,7 @@ Default:  "{{kafka_broker_configure_additional_brokers}}"
 
 ### kafka_broker_user
 
-Only use to customize Linux User Kafka Service runs with. User must exist on host.
+Set this variable to customize the Linux User that the Kafka Broker Service runs with. Default user is cp-kafka.
 
 Default:  "{{kafka_broker_default_user}}"
 
@@ -414,9 +422,17 @@ Default:  "{{kafka_broker_default_user}}"
 
 ### kafka_broker_group
 
-Only use to customize Linux Group Kafka Service user belongs to. Group must exist on host.
+Set this variable to customize the Linux Group that the Kafka Broker Service user belongs to. Default group is confluent.
 
 Default:  "{{kafka_broker_default_group}}"
+
+***
+
+### kafka_broker_log_dir
+
+Set this variable to customize the directory that the Kafka Broker writes log files to. Default location is /var/log/kafka. NOTE- kafka_broker.appender_log_path is deprecated.
+
+Default:  "{{kafka_broker.appender_log_path}}"
 
 ***
 
@@ -502,7 +518,7 @@ Default:  "{{confluent_server_enabled}}"
 
 ### schema_registry_user
 
-Only use to customize Linux User Schema Registry Service runs with. User must exist on host.
+Set this variable to customize the Linux User that the Schema Registry Service runs with. Default user is cp-schema-registry.
 
 Default:  "{{schema_registry_default_user}}"
 
@@ -510,7 +526,7 @@ Default:  "{{schema_registry_default_user}}"
 
 ### schema_registry_group
 
-Only use to customize Linux Group Schema Registry Service user belongs to. Group must exist on host.
+Set this variable to customize the Linux Group that the Schema Registry Service user belongs to. Default group is confluent.
 
 Default:  "{{schema_registry_default_group}}"
 
@@ -537,6 +553,14 @@ Default:  "{{ssl_enabled}}"
 Boolean to enable mTLS Authentication on Schema Registry
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### schema_registry_log_dir
+
+Set this variable to customize the directory that the Schema Registry writes log files to. Default location is /var/log/confluent/schema-registry. NOTE- schema_registry.appender_log_path is deprecated.
+
+Default:  "{{schema_registry.appender_log_path}}"
 
 ***
 
@@ -598,7 +622,7 @@ Default:  "{{ schema_registry.properties }}"
 
 ### kafka_rest_user
 
-Only use to customize Linux User Rest Proxy Service runs with. User must exist on host.
+Set this variable to customize the Linux User that the Rest Proxy Service runs with. Default user is cp-kafka-rest.
 
 Default:  "{{kafka_rest_default_user}}"
 
@@ -606,7 +630,7 @@ Default:  "{{kafka_rest_default_user}}"
 
 ### kafka_rest_group
 
-Only use to customize Linux Group Rest Proxy Service user belongs to. Group must exist on host.
+Set this variable to customize the Linux Group that the Rest Proxy Service user belongs to. Default group is confluent.
 
 Default:  "{{kafka_rest_default_group}}"
 
@@ -633,6 +657,14 @@ Default:  "{{ssl_enabled}}"
 Boolean to enable mTLS Authentication on Rest Proxy
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### kafka_rest_log_dir
+
+Set this variable to customize the directory that the Rest Proxy writes log files to. Default location is /var/log/confluent/kafka-rest. NOTE- kafka_rest.appender_log_path is deprecated.
+
+Default:  "{{kafka_rest.appender_log_path}}"
 
 ***
 
@@ -702,7 +734,7 @@ Default:  "{{ monitoring_interceptors_enabled }}"
 
 ### kafka_connect_user
 
-Only use to customize Linux User Connect Service runs with. User must exist on host.
+Set this variable to customize the Linux User that the Kafka Connect Service runs with. Default user is cp-kafka-connect.
 
 Default:  "{{kafka_connect_default_user}}"
 
@@ -710,7 +742,7 @@ Default:  "{{kafka_connect_default_user}}"
 
 ### kafka_connect_group
 
-Only use to customize Linux Group Connect Service user belongs to. Group must exist on host.
+Set this variable to customize the Linux Group that the Kafka Connect Service user belongs to. Default group is confluent.
 
 Default:  "{{kafka_connect_default_group}}"
 
@@ -737,6 +769,14 @@ Default:  "{{ssl_enabled}}"
 Boolean to enable mTLS Authentication on Connect
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### kafka_connect_log_dir
+
+Set this variable to customize the directory that Kafka Connect writes log files to. Default location is /var/log/kafka. NOTE- kafka_connect.appender_log_path is deprecated.
+
+Default:  "{{kafka_connect.appender_log_path}}"
 
 ***
 
@@ -838,7 +878,7 @@ Default:  "{{ monitoring_interceptors_enabled }}"
 
 ### ksql_user
 
-Only use to customize Linux User ksqlDB Service runs with. User must exist on host.
+Set this variable to customize the Linux User that the ksqlDB Service runs with. Default user is cp-ksql.
 
 Default:  "{{ksql_default_user}}"
 
@@ -846,7 +886,7 @@ Default:  "{{ksql_default_user}}"
 
 ### ksql_group
 
-Only use to customize Linux Group ksqlDB Service user belongs to. Group must exist on host.
+Set this variable to customize the Linux Group that the ksqlDB Service user belongs to. Default group is confluent.
 
 Default:  "{{ksql_default_group}}"
 
@@ -873,6 +913,14 @@ Default:  "{{ssl_enabled}}"
 Boolean to enable mTLS Authentication on ksqlDB
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### ksql_log_dir
+
+Set this variable to customize the directory that ksqlDB writes log files to. Default location is /var/log/confluent/ksql. NOTE- ksql.appender_log_path is deprecated.
+
+Default:  "{{ksql.appender_log_path}}"
 
 ***
 
@@ -958,7 +1006,7 @@ Default:  "{{ monitoring_interceptors_enabled }}"
 
 ### control_center_user
 
-Only use to customize Linux User Control Center Service runs with. User must exist on host.
+Set this variable to customize the Linux User that the Control Center Service runs with. Default user is cp-control-center.
 
 Default:  "{{control_center_default_user}}"
 
@@ -966,7 +1014,7 @@ Default:  "{{control_center_default_user}}"
 
 ### control_center_group
 
-Only use to customize Linux Group Control Center Service user belongs to. Group must exist on host.
+Set this variable to customize the Linux Group that the Control Center Service user belongs to. Default group is confluent.
 
 Default:  "{{control_center_default_group}}"
 
@@ -993,6 +1041,14 @@ Default:  "0.0.0.0"
 Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
 
 Default:  "{{ssl_enabled}}"
+
+***
+
+### control_center_log_dir
+
+Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
+
+Default:  "{{control_center.appender_log_path}}"
 
 ***
 
@@ -1688,14 +1744,6 @@ Below are the supported variables for the role confluent.control_center
 
 ***
 
-### control_center_custom_log4j
-
-Boolean to enable cp-ansible's Custom Log4j Configuration
-
-Default:  "{{ custom_log4j }}"
-
-***
-
 ### control_center_custom_java_args
 
 Custom Java Args to add to the Control Center Process
@@ -1720,7 +1768,7 @@ Below are the supported variables for the role confluent.kafka_broker
 
 ### kafka_broker_custom_log4j
 
-Boolean to enable cp-ansible's Custom Log4j Configuration
+Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
 
 Default:  "{{ custom_log4j }}"
 
@@ -1742,7 +1790,7 @@ Below are the supported variables for the role confluent.kafka_connect
 
 ### kafka_connect_custom_log4j
 
-Boolean to enable cp-ansible's Custom Log4j Configuration
+Boolean to reconfigure Kafka Connect's logging with the RollingFileAppender and log cleanup functionality.
 
 Default:  "{{ custom_log4j }}"
 
@@ -1762,14 +1810,6 @@ Below are the supported variables for the role confluent.kafka_rest
 
 ***
 
-### kafka_rest_custom_log4j
-
-Boolean to enable cp-ansible's Custom Log4j Configuration
-
-Default:  "{{ custom_log4j }}"
-
-***
-
 ### kafka_rest_custom_java_args
 
 Custom Java Args to add to the Rest Proxy Process
@@ -1786,7 +1826,7 @@ Below are the supported variables for the role confluent.ksql
 
 ### ksql_custom_log4j
 
-Boolean to enable cp-ansible's Custom Log4j Configuration
+Boolean to reconfigure ksqlDB's logging with the RollingFileAppender and log cleanup functionality.
 
 Default:  "{{ custom_log4j }}"
 
@@ -1814,14 +1854,6 @@ Below are the supported variables for the role confluent.schema_registry
 
 ***
 
-### schema_registry_custom_log4j
-
-Boolean to enable cp-ansible's Custom Log4j Configuration
-
-Default:  "{{ custom_log4j }}"
-
-***
-
 ### schema_registry_custom_java_args
 
 Custom Java Args to add to the Schema Registry Process
@@ -1838,7 +1870,7 @@ Below are the supported variables for the role confluent.zookeeper
 
 ### zookeeper_custom_log4j
 
-Boolean to enable cp-ansible's Custom Log4j Configuration
+Boolean to reconfigure Zookeeper's logging with RollingFileAppender and log cleanup
 
 Default:  "{{ custom_log4j }}"
 
