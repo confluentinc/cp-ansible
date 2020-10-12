@@ -59,6 +59,7 @@ platforms:
     networks:
       - name: confluent
   # Cluster 2 goups, groupnames will be changed during converge phase
+  # Cluster 2 - audit logs destination cluster
   - name: zookeeper1
     hostname: zookeeper1.confluent
     groups:
@@ -111,6 +112,48 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+
+  # Cluster 3 - managed kafka cluster
+  - name: mgd-zookeeper1
+    hostname: mgd-zookeeper1.confluent
+    groups:
+      - zookeeper3
+      - cluster3
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mgd-kafka-broker1
+    hostname: mgd-kafka-broker1.confluent
+    groups:
+      - kafka_broker3
+      - cluster3
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mgd-kafka-broker2
+    hostname: mgd-kafka-broker2.confluent
+    groups:
+      - kafka_broker3
+      - cluster3
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
   # - name: schema-registry1
   #   hostname: schema-registry1.confluent
   #   groups:
@@ -183,8 +226,8 @@ provisioner:
   config_options:
     defaults:
       hash_behaviour: merge
-  playbooks:
-    converge: ../multi_rbac_converge.yml
+  # playbooks:
+  #   converge: ../multi_rbac_converge.yml
   inventory:
     group_vars:
       all:
@@ -245,18 +288,33 @@ provisioner:
           ldap.group.name.attribute: cn
           ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
           ldap.user.object.class: account
-          # Audit logs
-          # confluent.security.event.logger.destination.admin.bootstrap.servers: kafka-broker1:9091,kafka-broker2:9091,kafka-broker3:9091
-          # confluent.security.event.logger.destination.admin.security.protocol: SASL_PLAINTEXT
-          # confluent.security.event.logger.destination.admin.sasl.mechanism: PLAIN
-          # confluent.security.event.logger.destination.admin.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username='admin' password='admin-secret';
-          # confluent.security.event.logger.exporter.kafka.topic.create: 'false'
-          # confluent.security.event.logger.exporter.kafka.bootstrap.servers: kafka-broker1:9091,kafka-broker2:9091,kafka-broker3:9091
-          # confluent.security.event.logger.exporter.kafka.security.protocol: SASL_PLAINTEXT
-          # confluent.security.event.logger.exporter.kafka.sasl.mechanism: PLAIN
-          # confluent.security.event.logger.exporter.kafka.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
+
+      cluster3:
+        # Managed kafka cluster
+        create_mds_certs: false
+        token_services_public_pem_file: "generated_ssl_files/public.pem"
+        token_services_private_pem_file: "generated_ssl_files/tokenKeypair.pem"
+
+        external_mds_enabled: true
+        kafka_broker_rest_ssl_enabled: false
+        mds_broker_bootstrap_servers: mds-kafka-broker1:9091,mds-kafka-broker2:9091
+        mds_bootstrap_server_urls: http://mds-kafka-broker1:8090,http://mds-kafka-broker2:8090
+        mds_broker_listener:
+          ssl_enabled: false
+          ssl_mutual_auth_enabled: false
+          sasl_protocol: plain
+
+        cluster_registry_cluster_name: cluster3
+        
+        audit_logs_destination_enabled: true
+        audit_logs_destination_bootstrap_servers: kafka-broker1:9091,kafka-broker2:9091,kafka-broker3:9091
+        audit_logs_destination_listener:
+          ssl_enabled: false
+          ssl_mutual_auth_enabled: false
+          sasl_protocol: plain
 
       cluster2:
+        # Audit logs destination cluster
         create_mds_certs: false
         token_services_public_pem_file: "generated_ssl_files/public.pem"
         token_services_private_pem_file: "generated_ssl_files/tokenKeypair.pem"
