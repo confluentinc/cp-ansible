@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 ## variables
 
@@ -17,7 +18,7 @@ echo "Running molecule converge"
 ## Checkout 6.0.0-post branch
 
 echo "Checkout 6.0.0-post branch"
-git checkout 6.0.0-post
+git checkout upgrade_testing
 
 ## Upgrade Zookeeper
 
