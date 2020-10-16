@@ -3,7 +3,7 @@ set -e
 
 ## variables
 
-SCENARIO_NAME=rbac-scram-custom-rhel
+SCENARIO_NAME=confluent-kafka-kerberos-customcerts-rhel
 
 ## Checkout 5.5.0-post branch
 
@@ -13,12 +13,12 @@ git checkout 5.5.0-post
 ## Run Molecule Converge on 5.5.0-post
 
 echo "Running molecule converge"
-(cd ../ && molecule converge -s rbac-scram-custom-rhel)
+(cd ../ && molecule converge -s confluent-kafka-kerberos-customcerts-rhel)
 
 ## Checkout 6.0.0-post branch
 
 echo "Checkout 6.0.0-post branch"
-git checkout 6.0.0-post
+git checkout upgrade_testing
 
 ## Upgrade Zookeeper
 

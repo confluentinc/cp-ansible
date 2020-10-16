@@ -3,17 +3,17 @@ set -e
 
 ## variables
 
-SCENARIO_NAME=rbac-scram-custom-rhel
+SCENARIO_NAME=mtls-debian
 
-## Checkout 5.5.0-post branch
+## Checkout 5.4.0-post branch
 
-echo "Checking out 5.5.0-post branch"
-git checkout 5.5.0-post
+echo "Checking out 5.4.0-post branch"
+git checkout 5.4.0-post
 
-## Run Molecule Converge on 5.5.0-post
+## Run Molecule Converge on 5.4.0-post
 
 echo "Running molecule converge"
-(cd ../ && molecule converge -s rbac-scram-custom-rhel)
+(cd ../ && molecule converge -s mtls-debian)
 
 ## Checkout 6.0.0-post branch
 
@@ -23,14 +23,14 @@ git checkout 6.0.0-post
 ## Upgrade Zookeeper
 
 # echo "Upgrade Zookeeper"
-(cd ../../../ && ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_zookeeper.yml -e kafka_broker_upgrade_start_version=5.5)
+(cd ../../../ && ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_zookeeper.yml -e kafka_broker_upgrade_start_version=5.4)
 
-## Upgrade kafka Brokers from 5.5.0 to 6.0.0
+## Upgrade kafka Brokers from 5.4.0 to 6.0.0
 
 echo "Upgrade Kafka Brokers"
-(cd ../../../ && ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_kafka_broker.yml -e kafka_broker_upgrade_start_version=5.5)
+(cd ../../../ && ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_kafka_broker.yml -e kafka_broker_upgrade_start_version=5.4)
 
-## Upgrade Schema Restiry from 5.5.0 to 6.0.0
+## Upgrade Schema Registry from 5.4.0 to 6.0.0
 
 echo "Upgrade Schema Registry"
 (cd ../../../ && ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_schema_registry.yml)

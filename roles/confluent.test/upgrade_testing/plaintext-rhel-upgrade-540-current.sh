@@ -23,7 +23,7 @@ git checkout 6.0.0-post
 ## Upgrade Zookeeper
 
 # echo "Upgrade Zookeeper"
-# (cd ../../../ && ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_zookeeper.yml -e kafka_broker_upgrade_start_version=5.4)
+(cd ../../../ && ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_zookeeper.yml -e kafka_broker_upgrade_start_version=5.4)
 
 ## Upgrade kafka Brokers from 5.4.0 to 6.0.0
 
