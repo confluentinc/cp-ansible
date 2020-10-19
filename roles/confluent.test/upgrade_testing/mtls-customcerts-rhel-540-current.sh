@@ -19,7 +19,7 @@ echo "Running molecule converge"
 ## Checkout 6.0.0-post branch
 
 echo "Checkout 6.0.0-post branch"
-git checkout upgrade_testing
+(cd ../ && git checkout upgrade_testing)
 
 ## Upgrade Zookeeper
 
