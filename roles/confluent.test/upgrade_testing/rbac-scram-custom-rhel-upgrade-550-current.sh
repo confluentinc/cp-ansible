@@ -19,11 +19,11 @@ echo "Running molecule converge"
 ## Checkout 6.0.0-post branch
 
 echo "Checkout 6.0.0-post branch"
-git checkout 6.0.0-post
+(cd ../ && git checkout 6.0.0-post)
 
 ## Upgrade Zookeeper
 
-# echo "Upgrade Zookeeper"
+echo "Upgrade Zookeeper"
 (cd ../../../ && ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_zookeeper.yml -e kafka_broker_upgrade_start_version=5.5)
 
 ## Upgrade kafka Brokers from 5.5.0 to 6.0.0
