@@ -61,3 +61,7 @@ ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory up
 ## Configure Kafka Admin API
 echo "Configure Kafka Admin API"
 ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_kafka_broker_rest_configuration.yml
+
+## Destroy Infrastructure
+cd roles/confluent.test
+molecule destroy -s $SCENARIO_NAME
