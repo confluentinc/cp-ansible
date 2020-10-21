@@ -7,7 +7,6 @@ set -e
 export SCENARIO_NAME=mtls-debian
 export START_BRANCH=5.4.0-post
 export START_UPGRADE_VERSION=5.4
-export END_UPGRADE_VERSION=5.0
 
 echo "Call upgrade script"
 sh ./upgrade.sh
