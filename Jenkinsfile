@@ -4,7 +4,7 @@ import static groovy.json.JsonOutput.*
 
 /* These are variables that can be used to test an un-released version of the Confluent Platform that resides at
  * a different HTTPS Endpoint other than `https://packages.confluent.io`. You do not need to specify *any* of them
- * for normal testing purposes, and are purely here for Confluent Inc's usage only. 
+ * for normal testing purposes, and are purely here for Confluent Inc's usage only.
  */
 
 // The version to install, set to the "next" version to test the "next" version.
@@ -51,6 +51,9 @@ def job = {
     }
 
     def override_config = [:]
+
+    // ansible_fqdn within certs does not match the FQDN that zookeeper verifies
+    override_config['zookeeper_custom_java_args'] = '-Dzookeeper.ssl.hostnameVerification=false -Dzookeeper.ssl.quorum.hostnameVerification=false'
 
     def branch_name = targetBranch().toString()
 

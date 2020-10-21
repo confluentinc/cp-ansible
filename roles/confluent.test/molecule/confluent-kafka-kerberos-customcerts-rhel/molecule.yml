@@ -19,7 +19,31 @@ platforms:
     groups:
       - zookeeper
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    # dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: zookeeper2
+    hostname: zookeeper2.confluent
+    groups:
+      - zookeeper
+    image: geerlingguy/docker-centos7-ansible
+    # dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: zookeeper3
+    hostname: zookeeper3.confluent
+    groups:
+      - zookeeper
+    image: geerlingguy/docker-centos7-ansible
+    # dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -31,7 +55,7 @@ platforms:
     groups:
       - kafka_broker
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    # dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -43,7 +67,7 @@ platforms:
     groups:
       - kafka_broker
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    # dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -55,7 +79,7 @@ platforms:
     groups:
       - kafka_broker
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    # dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -67,7 +91,7 @@ platforms:
     groups:
       - schema_registry
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    # dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -79,7 +103,7 @@ platforms:
     groups:
       - kafka_rest
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    # dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -91,7 +115,7 @@ platforms:
     groups:
       - kafka_connect
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    # dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -103,7 +127,7 @@ platforms:
     groups:
       - ksql
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    # dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -115,7 +139,7 @@ platforms:
     groups:
       - control_center
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    # dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -130,17 +154,25 @@ provisioner:
     defaults:
       hash_behaviour: merge
   playbooks:
-    prepare: ../kerberos.yml
     converge: ../../../../all.yml
   inventory:
     group_vars:
       all:
-        scenario_name: kerberos-rhel
+        scenario_name: confluent-kafka-kerberos-customcerts-rhel
+
+        confluent_server_enabled: false
+
+        ssl_enabled: true
+
+        ssl_custom_certs: true
+        ssl_ca_cert_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
+        ssl_signed_cert_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        ssl_key_password: keypass
 
         sasl_protocol: kerberos
 
         kerberos_kafka_broker_primary: kafka
-
         kerberos:
           realm: realm.example.com
           kdc_hostname: kerberos1
@@ -148,7 +180,7 @@ provisioner:
 
       zookeeper:
         # Paths are relative to all.yml
-        zookeeper_kerberos_principal: "zk/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         zookeeper_kerberos_keytab_path: "roles/confluent.test/molecule/{{scenario_name}}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
       kafka_broker:
         kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
@@ -176,8 +208,14 @@ provisioner:
 
         kerberos_principals:
           # Wish there was a better way to create this list, this will do for now
-          - principal: "zk/zookeeper1.confluent@{{kerberos.realm | upper}}"
+          - principal: "zookeeper/zookeeper1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
+
+          - principal: "zookeeper/zookeeper2.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/zookeeper-zookeeper2.keytab"
+
+          - principal: "zookeeper/zookeeper3.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/zookeeper-zookeeper3.keytab"
 
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"

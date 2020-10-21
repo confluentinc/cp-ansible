@@ -11,6 +11,58 @@
         property: listener.security.protocol.map
         expected_value: INTERNAL:SSL,BROKER:SSL
 
+    - name: Create Schema
+      uri:
+        url: https://schema-registry1:8081/subjects/users-value/versions
+        method: POST
+        validate_certs: false
+        client_cert: /var/ssl/private/kafka_broker.crt
+        client_key: /var/ssl/private/kafka_broker.key
+        headers:
+          Content-Type: application/vnd.schemaregistry.v1+json
+        body_format: json
+        body: '{ "schema": "[ { \"type\":\"record\", \"name\":\"user\", \"fields\": [ {\"name\":\"userid\",\"type\":\"long\"}, {\"name\":\"username\",\"type\":\"string\"} ]} ]" }'
+        status_code: 200
+      run_once: true
+
+    - name: Create kafka client properties file
+      shell: |
+        echo "security.protocol=SSL
+        ssl.truststore.location=/var/ssl/private/kafka_broker.truststore.jks
+        ssl.truststore.password=confluenttruststorepass
+        ssl.keystore.location=/var/ssl/private/kafka_broker.keystore.jks
+        ssl.keystore.password=confluentkeystorestorepass
+        ssl.key.password=confluentkeystorestorepass" > /tmp/config.props
+      run_once: true
+
+    - name: Create topic with schema validation enabled
+      shell: |
+        kafka-topics --create --topic users \
+          --bootstrap-server kafka-broker1:9092 \
+          --replication-factor 2 --partitions 2  \
+          --config confluent.value.schema.validation=true \
+          --command-config /tmp/config.props
+      run_once: true
+      register: output
+      failed_when:
+        - "'Topic users already exists' not in output.stdout"
+        - "'Created topic users' not in output.stdout"
+
+    - name: Write to topic
+      uri:
+        url: https://kafka-rest1:8082/topics/users
+        method: POST
+        validate_certs: false
+        client_cert: /var/ssl/private/kafka_broker.crt
+        client_key: /var/ssl/private/kafka_broker.key
+        headers:
+          Content-Type: application/vnd.kafka.avro.v2+json
+          Accept: application/vnd.kafka.v2+json
+        body_format: json
+        body: '{"value_schema_id": 1, "records": [{"value": {"user":{"userid": 1, "username": "Bunny Smith"}}}]}'
+        status_code: 200
+      run_once: true
+
 - name: Verify - schema_registry
   hosts: schema_registry
   gather_facts: false
