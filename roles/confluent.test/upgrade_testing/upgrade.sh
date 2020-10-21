@@ -29,7 +29,7 @@ git checkout $END_BRANCH
 ## Upgrade Zookeeper
 
 echo "Upgrade Zookeeper"
-(cd ../../ && ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_zookeeper.yml -e kafka_broker_upgrade_start_version=$START_UPGRADE_VERSION)
+(cd ../../ && ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_zookeeper.yml)
 
 ## Upgrade kafka Brokers
 
