@@ -43,7 +43,7 @@ ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory up
 ## Upgrade KSQL
 if (( ${KSQL_INVALID_VERSION%%.*} < ${START_UPGRADE_VERSION%%.*} || ( ${KSQL_INVALID_VERSION%%.*} == ${START_UPGRADE_VERSION%%.*} && ${KSQL_INVALID_VERSION##*.} < ${START_UPGRADE_VERSION##*.} ) )) ; then
     echo "Upgrade KSQL"
-    && ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_ksql.yml
+    ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_ksql.yml
 fi
 
 ## Upgrade Kafka Rest
