@@ -1,4 +1,3 @@
-
 # Need to get the destination cluster id.... which wont exist when mds is getting stood up...
 
 # - shell: |
@@ -24,9 +23,12 @@
 # confluent iam rolebinding create --principal User:<audit-log-admin> --role ResourceOwner --resource Topic:confluent-audit-log-events --prefix --kafka-cluster-id <kafka-destination-cluster-id>
 
 
-- name: Grant ResourceOwner of KSQL Cluster on KSQL User
+
+
+# confluent iam rolebinding create --principal User:<audit-log-admin> --role ResourceOwner --resource Topic:confluent-audit-log-events --prefix --kafka-cluster-id <kafka-destination-cluster-id>
+- name: Grant Audit Logs Principal ResourceOwner on confluent-audit-log-events Prefixed Topics
   uri:
-    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/ResourceOwner/bindings"
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{ sasl_plain_users.admin.principal }}/roles/ResourceOwner/bindings"
     method: POST
     validate_certs: false
     force_basic_auth: true
@@ -39,45 +41,45 @@
       {
         "scope": {
           "clusters": {
-            "kafka-cluster":"{{kafka_cluster_id}}",
-            "ksql-cluster":"{{ksql_final_properties['ksql.service.id']}}"
-          }
-        },
-        "resourcePatterns": [{
-          "resourceType": "KsqlCluster",
-          "name": "ksql-cluster"
-        }]
-      }
-    status_code: 204
-
-
-- name: Grant ksql user the DeveloperWrite role on Monitoring Interceptor Topic
-  uri:
-    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/DeveloperWrite/bindings"
-    method: POST
-    validate_certs: false
-    force_basic_auth: true
-    url_username: "{{mds_super_user}}"
-    url_password: "{{mds_super_user_password}}"
-    headers:
-      Content-Type: application/json
-    body_format: json
-    body: >
-      {
-        "scope": {
-          "clusters": {
-            "kafka-cluster":"{{kafka_cluster_id}}"
+            "kafka-cluster":"{{destination_cluster_id.json.id}}"
           }
         },
         "resourcePatterns": [{
           "resourceType": "Topic",
-          "name": "{{ksql_final_properties['confluent.monitoring.interceptor.topic']}}",
-          "patternType":"LITERAL"
+          "name": "confluent-audit-log-events",
+          "patternType":"PREFIXED"
         }]
       }
     status_code: 204
-  when: "'control_center' in groups and ksql_monitoring_interceptors_enabled|bool"
 
+# confluent iam rolebinding create --principal User:<audit-log-writer> --role DeveloperWrite --resource Topic:confluent-audit-log-events --prefix --kafka-cluster-id <kafka-destination-cluster-id>
+- name: Grant Audit Logs Principal DeveloperWrite on confluent-audit-log-events Prefixed Topics
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{ sasl_plain_users.admin.principal }}/roles/DeveloperWrite/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster":"{{destination_cluster_id.json.id}}"
+          }
+        },
+        "resourcePatterns": [{
+          "resourceType": "Topic",
+          "name": "confluent-audit-log-events",
+          "patternType":"PREFIXED"
+        }]
+      }
+    status_code: 204
+
+- fail:
 
         # audit_logs_destination_enabled: true
         # audit_logs_destination_bootstrap_servers: kafka-broker1:9091,kafka-broker2:9091,kafka-broker3:9091
