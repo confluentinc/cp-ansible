@@ -1892,7 +1892,7 @@ Below are the supported variables for the role confluent.ssl
 
 ### ssl_key_algorithm
 
-Key Algorithm used by keytool -genkey command when creating Keystores. Only used with self-signed certs
+Key Algorithm used by keytool -genkeypair command when creating Keystores. Only used with self-signed certs
 
 Default:  RSA
 
@@ -1900,7 +1900,7 @@ Default:  RSA
 
 ### ssl_key_size
 
-Key Size used by keytool -genkey command when creating Keystores. Only used with self-signed certs
+Key Size used by keytool -genkeypair command when creating Keystores. Only used with self-signed certs
 
 Default:  2048
 

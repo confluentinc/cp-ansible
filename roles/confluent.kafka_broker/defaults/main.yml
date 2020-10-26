@@ -7,9 +7,12 @@ kafka_broker_custom_log4j: "{{ custom_log4j }}"
 kafka_broker_java_args:
   - "{% if kafka_broker_listeners | ssl_required(ssl_enabled) | bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
   - "{% if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms or zookeeper_sasl_protocol in ['kerberos', 'digest'] %}-Djava.security.auth.login.config={{kafka_broker.jaas_file}}{% endif %}"
-  - "{% if kafka_broker_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=port={{kafka_broker_jolokia_port}},host=0.0.0.0{% if kafka_broker_jolokia_ssl_enabled|bool %}{{kafka_broker_jolokia_java_arg_ssl_addon}}{% endif %}{% endif %}"
+  - "{% if kafka_broker_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=config={{kafka_broker_jolokia_config}}{% endif %}"
   - "{% if kafka_broker_jmxexporter_enabled|bool %}-javaagent:{{jmxexporter_jar_path}}={{kafka_broker_jmxexporter_port}}:{{kafka_broker_jmxexporter_config_path}}{% endif %}"
-  - "{% if schema_registry_ssl_enabled|bool %}-Djavax.net.ssl.keyStore={{kafka_broker_keystore_path}} -Djavax.net.ssl.trustStore={{kafka_broker_truststore_path}} -Djavax.net.ssl.keyStorePassword={{kafka_broker_keystore_storepass}} -Djavax.net.ssl.trustStorePassword={{kafka_broker_truststore_storepass}}{% endif %}"
+  - "{% if zookeeper_sasl_protocol == 'kerberos' and zookeeper_kerberos_primary != 'zookeeper' %}-Dzookeeper.sasl.client.username={{zookeeper_kerberos_primary}}{% endif %}"
+
+# Strip primary from the zookeeper principal on first zk host. Adds defaults for if there is not even a zookeeper group
+zookeeper_kerberos_primary: "{{ (hostvars[ groups['zookeeper'][0] | default('zookeeper') ] | default({})) ['zookeeper_kerberos_principal'] | default('zookeeper/host@EXAMPLE>COM') | regex_replace('/.*') }}"
 
 ### Custom Java Args to add to the Kafka Process
 kafka_broker_custom_java_args: ""
