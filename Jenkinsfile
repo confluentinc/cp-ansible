@@ -69,8 +69,8 @@ def job = {
             // 'prod' case doesn't need anything overriden
             switch(params.CONFLUENT_RELEASE_QUALITY) {
                 case "snapshot":
-                    override_config['confluent_package_redhat_suffix'] = "-${params.CONFLUENT_PACKAGE_VERSION}-0.1.SNAPSHOT"
-                    override_config['confluent_package_debian_suffix'] = "=${params.CONFLUENT_PACKAGE_VERSION}~SNAPSHOT-1"
+                    override_config['confluent_package_redhat_suffix'] = "-${params.CONFLUENT_PACKAGE_VERSION}-0.1.0"
+                    override_config['confluent_package_debian_suffix'] = "=${params.CONFLUENT_PACKAGE_VERSION}~0-1"
 
                     // Disable reporting for nightly builds
                     config.testbreakReporting = false
