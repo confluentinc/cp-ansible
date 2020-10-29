@@ -20,6 +20,30 @@ Default:  /opt/jolokia/jolokia.jar
 
 ***
 
+### jolokia_auth_mode
+
+Authentication Mode for Jolokia Agent. Possible values: none, basic. If selecting basic, you must set jolokia_user and jolokia_password
+
+Default:  none
+
+***
+
+### jolokia_user
+
+Username for Jolokia Agent when using Basic Auth
+
+Default:  admin
+
+***
+
+### jolokia_password
+
+Password for Jolokia Agent when using Basic Auth
+
+Default:  password
+
+***
+
 ### jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on all components
@@ -348,6 +372,38 @@ Default:  "{{ zookeeper_ssl_enabled }}"
 
 ***
 
+### zookeeper_jolokia_config
+
+Path on Zookeeper host for Jolokia Configuration file
+
+Default:  /etc/kafka/zookeeper_jolokia.properties
+
+***
+
+### zookeeper_jolokia_auth_mode
+
+Authentication Mode for Zookeeper's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set zookeeper_jolokia_user and zookeeper_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### zookeeper_jolokia_user
+
+Username for Zookeeper's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### zookeeper_jolokia_password
+
+Password for Zookeeper's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### zookeeper_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
@@ -441,6 +497,38 @@ Default:  7771
 Boolean to enable TLS encryption on Kafka jolokia metrics
 
 Default:  "{{ ssl_enabled }}"
+
+***
+
+### kafka_broker_jolokia_config
+
+Path on Kafka host for Jolokia Configuration file
+
+Default:  /etc/kafka/kafka_jolokia.properties
+
+***
+
+### kafka_broker_jolokia_auth_mode
+
+Authentication Mode for Kafka's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set kafka_broker_jolokia_user and kafka_broker_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_broker_jolokia_user
+
+Username for Kafka's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_broker_jolokia_password
+
+Password for Kafka's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
 
 ***
 
@@ -564,6 +652,38 @@ Default:  "{{ schema_registry_ssl_enabled }}"
 
 ***
 
+### schema_registry_jolokia_config
+
+Path on Schema Registry host for Jolokia Configuration file
+
+Default:  /etc/schema-registry/schema_registry_jolokia.properties
+
+***
+
+### schema_registry_jolokia_auth_mode
+
+Authentication Mode for Schema Registry's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### schema_registry_jolokia_user
+
+Username for Schema Registry's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### schema_registry_jolokia_password
+
+Password for Schema Registry's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### schema_registry_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on schema registry
@@ -657,6 +777,38 @@ Default:  7775
 Boolean to enable TLS encryption on Rest Proxy jolokia metrics
 
 Default:  "{{ kafka_rest_ssl_enabled }}"
+
+***
+
+### kafka_rest_jolokia_config
+
+Path on Rest Proxy host for Jolokia Configuration file
+
+Default:  /etc/kafka-rest/kafka_rest_jolokia.properties
+
+***
+
+### kafka_rest_jolokia_auth_mode
+
+Authentication Mode for Rest Proxy's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_rest_jolokia_user
+
+Username for Rest Proxy's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_rest_jolokia_password
+
+Password for Rest Proxy's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
 
 ***
 
@@ -761,6 +913,38 @@ Default:  7773
 Boolean to enable TLS encryption on Connect jolokia metrics
 
 Default:  "{{ kafka_connect_ssl_enabled }}"
+
+***
+
+### kafka_connect_jolokia_config
+
+Path on Connect host for Jolokia Configuration file
+
+Default:  /etc/kafka/kafka_connect_jolokia.properties
+
+***
+
+### kafka_connect_jolokia_auth_mode
+
+Authentication Mode for Connect's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_connect_jolokia_user
+
+Username for Connect's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_connect_jolokia_password
+
+Password for Connect's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
 
 ***
 
@@ -897,6 +1081,38 @@ Default:  7774
 Boolean to enable TLS encryption on ksqlDB jolokia metrics
 
 Default:  "{{ ksql_ssl_enabled }}"
+
+***
+
+### ksql_jolokia_config
+
+Path on ksqlDB host for Jolokia Configuration file
+
+Default:  "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
+
+***
+
+### ksql_jolokia_auth_mode
+
+Authentication Mode for ksqlDB's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### ksql_jolokia_user
+
+Username for ksqlDB's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### ksql_jolokia_password
+
+Password for ksqlDB's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
 
 ***
 
@@ -1064,7 +1280,7 @@ Default:  password
 
 LDAP User for Kafkas Embedded Rest Service to authenticate as
 
-Default:  kafka
+Default:  "{{mds_super_user}}"
 
 ***
 
@@ -1072,7 +1288,7 @@ Default:  kafka
 
 Password to kafka_broker_ldap_user LDAP User
 
-Default:  password
+Default:  "{{mds_super_user_password}}"
 
 ***
 
@@ -1249,30 +1465,6 @@ Default:  ""
 Security file generated by the Confluent Secret CLI. If empty and secrets protection is enabled, then a security file will be randomly generated.
 
 Default:  generated_ssl_files/security.properties
-
-***
-
-### zookeeper_secrets_protection_enabled
-
-Boolean to enable secrets protection in Zookeeper.
-
-Default:  "{{secrets_protection_enabled}}"
-
-***
-
-### zookeeper_secrets_protection_encrypt_passwords
-
-Boolean to encrypt all properties containing 'password' for Zookeeper.
-
-Default:  "{{zookeeper_secrets_protection_enabled}}"
-
-***
-
-### zookeeper_secrets_protection_encrypt_properties
-
-List of Zookeeper properties to encrypt. Can be used in addition to zookeeper_secrets_protection_encrypt_passwords.
-
-Default:  []
 
 ***
 
