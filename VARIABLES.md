@@ -230,7 +230,7 @@ Default:  ""
 
 ### ssl_keystore_alias
 
-Keystore source alias for host specific certificate if keystore contains more than one certificate. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "{{inventory_hostname}}"
+Keystore source alias for host specific certificate. Only required if keystore contains more than one certificate. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "{{inventory_hostname}}"
 
 Default:  ""
 
