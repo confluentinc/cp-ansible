@@ -102,7 +102,7 @@ Default:  true
 
 ### monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. May still want to enable.
+Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring inceptors to report to a centralized monitoring cluster.
 
 Default:  "{{ 'control_center' in groups }}"
 
@@ -566,7 +566,7 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | 
 
 ### kafka_broker_metrics_reporter_enabled
 
-Boolean to enable the metrics reporter. Defaults to true if Control Center in inventory. May still want to enable.
+Boolean to enable the metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring inceptors to report to a centralized monitoring cluster.
 
 Default:  "{{ 'control_center' in groups }}"
 
