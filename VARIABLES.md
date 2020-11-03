@@ -566,7 +566,7 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | 
 
 ### kafka_broker_metrics_reporter_enabled
 
-Boolean to enable the metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring inceptors to report to a centralized monitoring cluster.
+Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
 Default:  "{{ 'control_center' in groups }}"
 
