@@ -102,9 +102,9 @@ Default:  true
 
 ### monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. May still want to enable.
 
-Default:  true
+Default:  "{{ 'control_center' in groups }}"
 
 ***
 
@@ -566,9 +566,9 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | 
 
 ### kafka_broker_metrics_reporter_enabled
 
-Boolean to enable the metrics reporter
+Boolean to enable the metrics reporter. Defaults to true if Control Center in inventory. May still want to enable.
 
-Default:  true
+Default:  "{{ 'control_center' in groups }}"
 
 ***
 
@@ -846,7 +846,7 @@ Default:  "{{ kafka_rest.properties }}"
 
 ### kafka_rest_monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on Rest Proxy. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on Rest Proxy.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
 
@@ -1014,7 +1014,7 @@ Default:  "{{ kafka_connect.properties }}"
 
 ### kafka_connect_monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on Connect. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on Connect.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
 
@@ -1166,7 +1166,7 @@ Default:  "{{ ksql.properties }}"
 
 ### ksql_monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on ksqlDB. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on ksqlDB.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
 
