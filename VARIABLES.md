@@ -102,7 +102,7 @@ Default:  true
 
 ### monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring inceptors to report to a centralized monitoring cluster.
+Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
 
 Default:  "{{ 'control_center' in groups }}"
 
@@ -2073,4 +2073,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-
