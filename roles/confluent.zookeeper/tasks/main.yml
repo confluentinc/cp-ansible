@@ -64,7 +64,7 @@
     service_name: zookeeper
     user: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
     ca_cert_path: "{{zookeeper_ca_cert_path}}"
     cert_path: "{{zookeeper_cert_path}}"
     key_path: "{{zookeeper_key_path}}"
@@ -89,7 +89,7 @@
     group: "{{zookeeper_group}}"
   when: zookeeper_copy_files | length > 0
 
-- name: Set Zookeeper dataDir ownership
+- name: Set Zookeeper Data Dir Ownership
   file:
     path: "{{zookeeper_final_properties.dataDir}}"
     owner: "{{zookeeper_user}}"
@@ -97,12 +97,29 @@
     state: directory
     mode: 0750
 
-- name: Set Ownership of Data Dir files
+- name: Set Ownership of Data Dir Files
   file:
     path: "{{zookeeper_final_properties.dataDir}}"
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
     recurse: true
+
+- name: Set Zookeeper Transaction Log Data Dir Ownership
+  file:
+    path: "{{zookeeper_final_properties.dataLogDir}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+    state: directory
+    mode: 0750
+  when: zookeeper_final_properties.dataLogDir is defined
+
+- name: Set Ownership of Transaction Log Data Dir Files
+  file:
+    path: "{{zookeeper_final_properties.dataLogDir}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+    recurse: true
+  when: zookeeper_final_properties.dataLogDir is defined
 
 - name: Create Zookeeper myid File
   template:
@@ -153,6 +170,17 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
+  when: zookeeper_custom_log4j|bool
+  notify: restart zookeeper
+
+- name: Create Zookeeper Jolokia Config
+  template:
+    src: zookeeper_jolokia.properties.j2
+    dest: "{{zookeeper_jolokia_config}}"
+    mode: 0640
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+  when: zookeeper_jolokia_enabled|bool
   notify: restart zookeeper
 
 - name: Create Zookeeper Jaas config
@@ -173,14 +201,6 @@
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
   when: zookeeper_jmxexporter_enabled|bool
-
-- name: Enable Secrets Protection
-  include_tasks: ../../tasks/secrets_protection.yml
-  vars:
-    encrypt_passwords: "{{ zookeeper_secrets_protection_encrypt_passwords }}"
-    properties: "{{ zookeeper_secrets_protection_encrypt_properties }}"
-    config_path: "{{ zookeeper.config_file }}"
-  when: zookeeper_secrets_protection_enabled|bool
 
 - name: Create Service Override Directory
   file:

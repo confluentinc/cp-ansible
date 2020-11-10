@@ -31,17 +31,30 @@
 
     - set_fact:
         confluent_server_enabled: false
-      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
+      when: ansible_facts.packages['confluent-kafka-2.12'] is defined or ansible_facts.packages['confluent-kafka'] is defined
 
-    - name: Set Current Package Version
+    - set_fact:
+        confluent_kafka_upgraded: true
+      when: ansible_facts.packages['confluent-kafka'] is defined
+
+    - set_fact:
+        confluent_kafka_upgraded: false
+      when: ansible_facts.packages['confluent-kafka'] is not defined
+
+    - name: Set Current Package Version of confluent-server
       set_fact:
         zookeeper_current_version: "{{ ansible_facts.packages['confluent-server'][0]['version'] }}"
       when: confluent_server_enabled|bool
 
-    - name: Set Current Package Version
+    - name: Set Current Package Version of confluent-kafka-2.12
       set_fact:
         zookeeper_current_version: "{{ ansible_facts.packages['confluent-kafka-2.12'][0]['version'] }}"
-      when: not confluent_server_enabled|bool
+      when: not confluent_server_enabled|bool and not confluent_kafka_upgraded|bool
+
+    - name: Set Current Package Version of confluent-kafka
+      set_fact:
+        zookeeper_current_version: "{{ ansible_facts.packages['confluent-kafka'][0]['version'] }}"
+      when: not confluent_server_enabled|bool and confluent_kafka_upgraded|bool
 
     - debug:
         msg: "Current version: {{zookeeper_current_version}}   Upgrade to version: {{confluent_package_version}}"
@@ -144,7 +157,7 @@
         state: absent
       when:
         - ansible_os_family == "Debian"
-        - not confluent-server_enabled|bool
+        - not confluent_server_enabled|bool
       # Packages will not be found in check mode because repos not changed
       ignore_errors: "{{ ansible_check_mode }}"
 

@@ -63,7 +63,7 @@ for line in `sed '/^$/d' $filename`; do
       EXT="SAN=dns:$internal,dns:$fqdn"
 
       echo "  >>>  Create host keystore"
-      keytool -genkey -noprompt \
+      keytool -genkeypair -noprompt \
           -keystore $KEYSTORE_FILENAME \
           -alias $alias \
           -dname "CN=$service,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US" \

@@ -4,7 +4,7 @@ import static groovy.json.JsonOutput.*
 
 /* These are variables that can be used to test an un-released version of the Confluent Platform that resides at
  * a different HTTPS Endpoint other than `https://packages.confluent.io`. You do not need to specify *any* of them
- * for normal testing purposes, and are purely here for Confluent Inc's usage only. 
+ * for normal testing purposes, and are purely here for Confluent Inc's usage only.
  */
 
 // The version to install, set to the "next" version to test the "next" version.
@@ -52,6 +52,9 @@ def job = {
 
     def override_config = [:]
 
+    // ansible_fqdn within certs does not match the FQDN that zookeeper verifies
+    override_config['zookeeper_custom_java_args'] = '-Dzookeeper.ssl.hostnameVerification=false -Dzookeeper.ssl.quorum.hostnameVerification=false'
+
     def branch_name = targetBranch().toString()
 
     if(params.CONFLUENT_PACKAGE_BASEURL) {
@@ -66,8 +69,8 @@ def job = {
             // 'prod' case doesn't need anything overriden
             switch(params.CONFLUENT_RELEASE_QUALITY) {
                 case "snapshot":
-                    override_config['confluent_package_redhat_suffix'] = "-${params.CONFLUENT_PACKAGE_VERSION}-0.1.SNAPSHOT"
-                    override_config['confluent_package_debian_suffix'] = "=${params.CONFLUENT_PACKAGE_VERSION}~SNAPSHOT-1"
+                    override_config['confluent_package_redhat_suffix'] = "-${params.CONFLUENT_PACKAGE_VERSION}-0.1.0"
+                    override_config['confluent_package_debian_suffix'] = "=${params.CONFLUENT_PACKAGE_VERSION}~0-1"
 
                     // Disable reporting for nightly builds
                     config.testbreakReporting = false

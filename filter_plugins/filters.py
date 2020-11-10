@@ -110,7 +110,7 @@ class FilterModule(object):
 
     def listener_properties(self, listeners_dict, default_ssl_enabled, default_pkcs12_enabled, default_ssl_mutual_auth_enabled, default_sasl_protocol,
                             kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
-                            plain_jaas_config, keytab_path, kerberos_principal,
+                            plain_jaas_config, keytab_path, kerberos_principal, kerberos_primary,
                             scram_user, scram_password, oauth_pem_path ):
         # For kafka broker properties: Takes listeners dictionary and outputs all properties based on the listeners' settings
         # Other inputs help fill out the properties
@@ -141,6 +141,7 @@ class FilterModule(object):
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI':
                 final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'GSSAPI'
+                final_dict['listener.name.' + listener_name + '.sasl.kerberos.service.name'] = kerberos_primary
                 final_dict['listener.name.' + listener_name + '.gssapi.sasl.jaas.config'] = 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' + keytab_path + '\" principal=\"' + kerberos_principal + '\";'
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'SCRAM-SHA-512':
@@ -210,7 +211,7 @@ class FilterModule(object):
 
         return final_dict
 
-    def c3_connect_properties(self, connect_group_list, groups, hostvars, ssl_enabled, http_protocol, port, default_conned_group_id,
+    def c3_connect_properties(self, connect_group_list, groups, hostvars, ssl_enabled, http_protocol, port, default_connect_group_id,
             truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass ):
         # For c3's connect properties, inputs a list of ansible groups of connect hosts, as well as their ssl settings
         # Outputs a properties dictionary with properties necessary to connect to each connect group
@@ -221,16 +222,20 @@ class FilterModule(object):
             if ansible_group in groups.keys():
                 urls = []
                 for host in groups[ansible_group]:
-                    urls.append(http_protocol + '://' + host + ':' + str(port))
+                    if hostvars[host].get('kafka_connect_ssl_enabled', ssl_enabled):
+                        protocol = 'https'
+                    else:
+                        protocol = 'http'
+                    urls.append(protocol + '://' + host + ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
 
-                final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.cluster'] = ','.join(urls)
+                final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.cluster'] = ','.join(urls)
 
-                if ssl_enabled:
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.truststore.location'] = truststore_path
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.truststore.password'] = truststore_storepass
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.keystore.location'] = keystore_path
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.keystore.password'] = keystore_storepass
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_conned_group_id) + '.ssl.key.password'] = keystore_keypass
+                if hostvars[groups[ansible_group][0]].get('kafka_connect_ssl_enabled', ssl_enabled):
+                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.truststore.location'] = truststore_path
+                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.truststore.password'] = truststore_storepass
+                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.keystore.location'] = keystore_path
+                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.keystore.password'] = keystore_storepass
+                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.key.password'] = keystore_keypass
 
         return final_dict
 
@@ -246,13 +251,17 @@ class FilterModule(object):
                 urls = []
                 advertised_urls = []
                 for host in groups[ansible_group]:
-                    urls.append(http_protocol + '://' + host + ':' + str(port))
-                    advertised_urls.append(http_protocol + '://' + hostvars[host].get('ksql_advertised_listener_hostname', host) + ':' + str(port))
+                    if hostvars[host].get('ksql_ssl_enabled', ssl_enabled):
+                        protocol = 'https'
+                    else:
+                        protocol = 'http'
+                    urls.append(protocol + '://' + host + ':' + str(hostvars[host].get('ksql_listener_port', port)))
+                    advertised_urls.append(protocol + '://' + hostvars[host].get('ksql_advertised_listener_hostname', host) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
 
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.url'] = ','.join(urls)
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.advertised.url'] = ','.join(advertised_urls)
 
-                if ssl_enabled:
+                if hostvars[groups[ansible_group][0]].get('ksql_ssl_enabled', ssl_enabled):
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.location'] = truststore_path
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.password'] = truststore_storepass
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.location'] = keystore_path

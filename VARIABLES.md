@@ -20,6 +20,30 @@ Default:  /opt/jolokia/jolokia.jar
 
 ***
 
+### jolokia_auth_mode
+
+Authentication Mode for Jolokia Agent. Possible values: none, basic. If selecting basic, you must set jolokia_user and jolokia_password
+
+Default:  none
+
+***
+
+### jolokia_user
+
+Username for Jolokia Agent when using Basic Auth
+
+Default:  admin
+
+***
+
+### jolokia_password
+
+Password for Jolokia Agent when using Basic Auth
+
+Default:  password
+
+***
+
 ### jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on all components
@@ -78,9 +102,9 @@ Default:  true
 
 ### monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
 
-Default:  true
+Default:  "{{ 'control_center' in groups }}"
 
 ***
 
@@ -356,6 +380,38 @@ Default:  "{{ zookeeper_ssl_enabled }}"
 
 ***
 
+### zookeeper_jolokia_config
+
+Path on Zookeeper host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/zookeeper_jolokia.properties"
+
+***
+
+### zookeeper_jolokia_auth_mode
+
+Authentication Mode for Zookeeper's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set zookeeper_jolokia_user and zookeeper_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### zookeeper_jolokia_user
+
+Username for Zookeeper's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### zookeeper_jolokia_password
+
+Password for Zookeeper's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### zookeeper_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
@@ -460,6 +516,38 @@ Default:  "{{ ssl_enabled }}"
 
 ***
 
+### kafka_broker_jolokia_config
+
+Path on Kafka host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_jolokia.properties"
+
+***
+
+### kafka_broker_jolokia_auth_mode
+
+Authentication Mode for Kafka's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set kafka_broker_jolokia_user and kafka_broker_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_broker_jolokia_user
+
+Username for Kafka's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_broker_jolokia_password
+
+Password for Kafka's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### kafka_broker_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on kafka
@@ -494,9 +582,9 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | 
 
 ### kafka_broker_metrics_reporter_enabled
 
-Boolean to enable the metrics reporter
+Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
-Default:  true
+Default:  "{{ 'control_center' in groups }}"
 
 ***
 
@@ -585,6 +673,38 @@ Default:  7772
 Boolean to enable TLS encryption on Schema Registry jolokia metrics
 
 Default:  "{{ schema_registry_ssl_enabled }}"
+
+***
+
+### schema_registry_jolokia_config
+
+Path on Schema Registry host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/schema-registry/schema_registry_jolokia.properties"
+
+***
+
+### schema_registry_jolokia_auth_mode
+
+Authentication Mode for Schema Registry's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### schema_registry_jolokia_user
+
+Username for Schema Registry's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### schema_registry_jolokia_password
+
+Password for Schema Registry's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
 
 ***
 
@@ -692,6 +812,38 @@ Default:  "{{ kafka_rest_ssl_enabled }}"
 
 ***
 
+### kafka_rest_jolokia_config
+
+Path on Rest Proxy host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-rest/kafka_rest_jolokia.properties"
+
+***
+
+### kafka_rest_jolokia_auth_mode
+
+Authentication Mode for Rest Proxy's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_rest_jolokia_user
+
+Username for Rest Proxy's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_rest_jolokia_password
+
+Password for Rest Proxy's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### kafka_rest_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on Rest Proxy
@@ -726,7 +878,7 @@ Default:  "{{ kafka_rest.properties }}"
 
 ### kafka_rest_monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on Rest Proxy. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on Rest Proxy.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
 
@@ -804,6 +956,38 @@ Default:  "{{ kafka_connect_ssl_enabled }}"
 
 ***
 
+### kafka_connect_jolokia_config
+
+Path on Connect host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_connect_jolokia.properties"
+
+***
+
+### kafka_connect_jolokia_auth_mode
+
+Authentication Mode for Connect's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_connect_jolokia_user
+
+Username for Connect's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_connect_jolokia_password
+
+Password for Connect's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### kafka_connect_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on Connect
@@ -870,7 +1054,7 @@ Default:  "{{ kafka_connect.properties }}"
 
 ### kafka_connect_monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on Connect. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on Connect.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
 
@@ -948,6 +1132,38 @@ Default:  "{{ ksql_ssl_enabled }}"
 
 ***
 
+### ksql_jolokia_config
+
+Path on ksqlDB host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
+
+***
+
+### ksql_jolokia_auth_mode
+
+Authentication Mode for ksqlDB's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### ksql_jolokia_user
+
+Username for ksqlDB's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### ksql_jolokia_password
+
+Password for ksqlDB's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### ksql_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on ksqlDB
@@ -998,7 +1214,7 @@ Default:  "{{ ksql.properties }}"
 
 ### ksql_monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on ksqlDB. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on ksqlDB.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
 
@@ -1120,7 +1336,7 @@ Default:  password
 
 LDAP User for Kafkas Embedded Rest Service to authenticate as
 
-Default:  kafka
+Default:  "{{mds_super_user}}"
 
 ***
 
@@ -1128,7 +1344,7 @@ Default:  kafka
 
 Password to kafka_broker_ldap_user LDAP User
 
-Default:  password
+Default:  "{{mds_super_user_password}}"
 
 ***
 
@@ -1252,6 +1468,14 @@ Default:  []
 
 ***
 
+### kafka_broker_additional_system_admins
+
+List of users to be granted system admin Role Bindings on the Kafka Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
+
+***
+
 ### schema_registry_additional_system_admins
 
 List of users to be granted system admin Role Bindings on the Schema Registry Cluster
@@ -1305,30 +1529,6 @@ Default:  ""
 Security file generated by the Confluent Secret CLI. If empty and secrets protection is enabled, then a security file will be randomly generated.
 
 Default:  generated_ssl_files/security.properties
-
-***
-
-### zookeeper_secrets_protection_enabled
-
-Boolean to enable secrets protection in Zookeeper.
-
-Default:  "{{secrets_protection_enabled}}"
-
-***
-
-### zookeeper_secrets_protection_encrypt_passwords
-
-Boolean to encrypt all properties containing 'password' for Zookeeper.
-
-Default:  "{{zookeeper_secrets_protection_enabled}}"
-
-***
-
-### zookeeper_secrets_protection_encrypt_properties
-
-List of Zookeeper properties to encrypt. Can be used in addition to zookeeper_secrets_protection_encrypt_passwords.
-
-Default:  []
 
 ***
 
@@ -1892,7 +2092,7 @@ Below are the supported variables for the role confluent.ssl
 
 ### ssl_key_algorithm
 
-Key Algorithm used by keytool -genkey command when creating Keystores. Only used with self-signed certs
+Key Algorithm used by keytool -genkeypair command when creating Keystores. Only used with self-signed certs
 
 Default:  RSA
 
@@ -1900,7 +2100,7 @@ Default:  RSA
 
 ### ssl_key_size
 
-Key Size used by keytool -genkey command when creating Keystores. Only used with self-signed certs
+Key Size used by keytool -genkeypair command when creating Keystores. Only used with self-signed certs
 
 Default:  2048
 
