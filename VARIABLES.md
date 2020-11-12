@@ -384,11 +384,7 @@ Default:  "{{ zookeeper_ssl_enabled }}"
 
 Path on Zookeeper host for Jolokia Configuration file
 
-<<<<<<< HEAD
-Default:  /etc/kafka/zookeeper_jolokia.properties
-=======
 Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/zookeeper_jolokia.properties"
->>>>>>> f27398085fde4b04460a1a1c76bd44c70f06b10b
 
 ***
 
@@ -524,11 +520,7 @@ Default:  "{{ ssl_enabled }}"
 
 Path on Kafka host for Jolokia Configuration file
 
-<<<<<<< HEAD
-Default:  /etc/kafka/kafka_jolokia.properties
-=======
 Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_jolokia.properties"
->>>>>>> f27398085fde4b04460a1a1c76bd44c70f06b10b
 
 ***
 
@@ -696,11 +688,7 @@ Default:  "{{ schema_registry_ssl_enabled }}"
 
 Path on Schema Registry host for Jolokia Configuration file
 
-<<<<<<< HEAD
-Default:  /etc/schema-registry/schema_registry_jolokia.properties
-=======
 Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/schema-registry/schema_registry_jolokia.properties"
->>>>>>> f27398085fde4b04460a1a1c76bd44c70f06b10b
 
 ***
 
@@ -844,11 +832,7 @@ Default:  "{{ kafka_rest_ssl_enabled }}"
 
 Path on Rest Proxy host for Jolokia Configuration file
 
-<<<<<<< HEAD
-Default:  /etc/kafka-rest/kafka_rest_jolokia.properties
-=======
 Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-rest/kafka_rest_jolokia.properties"
->>>>>>> f27398085fde4b04460a1a1c76bd44c70f06b10b
 
 ***
 
@@ -992,11 +976,7 @@ Default:  "{{ kafka_connect_ssl_enabled }}"
 
 Path on Connect host for Jolokia Configuration file
 
-<<<<<<< HEAD
-Default:  /etc/kafka/kafka_connect_jolokia.properties
-=======
 Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_connect_jolokia.properties"
->>>>>>> f27398085fde4b04460a1a1c76bd44c70f06b10b
 
 ***
 
@@ -1180,11 +1160,7 @@ Default:  "{{ ksql_ssl_enabled }}"
 
 Path on ksqlDB host for Jolokia Configuration file
 
-<<<<<<< HEAD
-Default:  "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
-=======
 Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
->>>>>>> f27398085fde4b04460a1a1c76bd44c70f06b10b
 
 ***
 
