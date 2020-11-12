@@ -102,9 +102,9 @@ Default:  true
 
 ### monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
 
-Default:  true
+Default:  "{{ 'control_center' in groups }}"
 
 ***
 
@@ -384,7 +384,11 @@ Default:  "{{ zookeeper_ssl_enabled }}"
 
 Path on Zookeeper host for Jolokia Configuration file
 
+<<<<<<< HEAD
 Default:  /etc/kafka/zookeeper_jolokia.properties
+=======
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/zookeeper_jolokia.properties"
+>>>>>>> f27398085fde4b04460a1a1c76bd44c70f06b10b
 
 ***
 
@@ -520,7 +524,11 @@ Default:  "{{ ssl_enabled }}"
 
 Path on Kafka host for Jolokia Configuration file
 
+<<<<<<< HEAD
 Default:  /etc/kafka/kafka_jolokia.properties
+=======
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_jolokia.properties"
+>>>>>>> f27398085fde4b04460a1a1c76bd44c70f06b10b
 
 ***
 
@@ -582,9 +590,9 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | 
 
 ### kafka_broker_metrics_reporter_enabled
 
-Boolean to enable the metrics reporter
+Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
-Default:  true
+Default:  "{{ 'control_center' in groups }}"
 
 ***
 
@@ -688,7 +696,11 @@ Default:  "{{ schema_registry_ssl_enabled }}"
 
 Path on Schema Registry host for Jolokia Configuration file
 
+<<<<<<< HEAD
 Default:  /etc/schema-registry/schema_registry_jolokia.properties
+=======
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/schema-registry/schema_registry_jolokia.properties"
+>>>>>>> f27398085fde4b04460a1a1c76bd44c70f06b10b
 
 ***
 
@@ -832,7 +844,11 @@ Default:  "{{ kafka_rest_ssl_enabled }}"
 
 Path on Rest Proxy host for Jolokia Configuration file
 
+<<<<<<< HEAD
 Default:  /etc/kafka-rest/kafka_rest_jolokia.properties
+=======
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-rest/kafka_rest_jolokia.properties"
+>>>>>>> f27398085fde4b04460a1a1c76bd44c70f06b10b
 
 ***
 
@@ -894,7 +910,7 @@ Default:  "{{ kafka_rest.properties }}"
 
 ### kafka_rest_monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on Rest Proxy. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on Rest Proxy.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
 
@@ -976,7 +992,11 @@ Default:  "{{ kafka_connect_ssl_enabled }}"
 
 Path on Connect host for Jolokia Configuration file
 
+<<<<<<< HEAD
 Default:  /etc/kafka/kafka_connect_jolokia.properties
+=======
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_connect_jolokia.properties"
+>>>>>>> f27398085fde4b04460a1a1c76bd44c70f06b10b
 
 ***
 
@@ -1070,7 +1090,7 @@ Default:  "{{ kafka_connect.properties }}"
 
 ### kafka_connect_monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on Connect. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on Connect.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
 
@@ -1160,7 +1180,11 @@ Default:  "{{ ksql_ssl_enabled }}"
 
 Path on ksqlDB host for Jolokia Configuration file
 
+<<<<<<< HEAD
 Default:  "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
+=======
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
+>>>>>>> f27398085fde4b04460a1a1c76bd44c70f06b10b
 
 ***
 
@@ -1238,7 +1262,7 @@ Default:  "{{ ksql.properties }}"
 
 ### ksql_monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on ksqlDB. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on ksqlDB.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
 
@@ -1497,6 +1521,14 @@ Default:  "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localho
 List of users to be granted system admin Role Bindings across all components
 
 Default:  []
+
+***
+
+### kafka_broker_additional_system_admins
+
+List of users to be granted system admin Role Bindings on the Kafka Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
 
 ***
 
