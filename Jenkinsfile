@@ -4,7 +4,7 @@ import static groovy.json.JsonOutput.*
 
 /* These are variables that can be used to test an un-released version of the Confluent Platform that resides at
  * a different HTTPS Endpoint other than `https://packages.confluent.io`. You do not need to specify *any* of them
- * for normal testing purposes, and are purely here for Confluent Inc's usage only. 
+ * for normal testing purposes, and are purely here for Confluent Inc's usage only.
  */
 
 // The version to install, set to the "next" version to test the "next" version.
@@ -43,13 +43,6 @@ def config = jobConfig {
 }
 
 def job = {
-    stage('Install Molecule and Latest Ansible') {
-        sh '''
-            sudo pip install --upgrade 'ansible==2.9.*'
-            sudo pip install molecule docker
-        '''
-    }
-
     def override_config = [:]
 
     def branch_name = targetBranch().toString()
