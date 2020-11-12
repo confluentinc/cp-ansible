@@ -41,6 +41,10 @@ custom_log4j: true
 ### Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, keberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary
 kerberos_configure: true
 
+# Deprecated variable now that primary can be pulled from kafka_broker_kerberos_principal
+kerberos_kafka_broker_primary: "{{ (hostvars[ groups['kafka_broker'][0] | default('kafka') ] | default({})) ['kafka_broker_kerberos_principal'] | default('kafka/host@EXAMPLE>COM') | regex_replace('/.*') }}"
+
+
 # TODO document the rest of the kerberos variables, also admin_hostname should default to kdc_hostname
 
 open_file_limit: 500000
@@ -55,8 +59,8 @@ common_role_completed: false
 
 proxy_env: {}
 
-### Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Only honored if inventory also has Control Center Group
-monitoring_interceptors_enabled: true
+### Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
+monitoring_interceptors_enabled: "{{ 'control_center' in groups }}"
 
 ### The method of installation. Valid values are "package" or "archive". If "archive" is selected then services will not be installed via the use of yum or apt, but will instead be installed via expanding the target .tar.gz file from the Confluent archive into the path defined by `archive_destination_path`. Configuration files are also kept in this directory structure instead of `/etc`. SystemD service units are copied from the ardhive for each target service and overrides are created pointing at the new paths. The "package" installation method is the default behavior that utilizes yum/apt.
 installation_method: "package"
@@ -190,7 +194,7 @@ zookeeper_jolokia_port: 7770
 zookeeper_jolokia_ssl_enabled: "{{ zookeeper_ssl_enabled }}"
 
 ### Path on Zookeeper host for Jolokia Configuration file
-zookeeper_jolokia_config: /etc/kafka/zookeeper_jolokia.properties
+zookeeper_jolokia_config: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/zookeeper_jolokia.properties"
 
 ### Authentication Mode for Zookeeper's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set zookeeper_jolokia_user and zookeeper_jolokia_password
 zookeeper_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -311,7 +315,7 @@ kafka_broker_jolokia_port: 7771
 kafka_broker_jolokia_ssl_enabled: "{{ ssl_enabled }}"
 
 ### Path on Kafka host for Jolokia Configuration file
-kafka_broker_jolokia_config: /etc/kafka/kafka_jolokia.properties
+kafka_broker_jolokia_config: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_jolokia.properties"
 
 ### Authentication Mode for Kafka's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set kafka_broker_jolokia_user and kafka_broker_jolokia_password
 kafka_broker_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -342,8 +346,8 @@ kafka_broker_copy_files: []
 ### Replication Factor for internal topics. Defaults to the minimum of the number of brokers and 3
 kafka_broker_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
 
-### Boolean to enable the metrics reporter
-kafka_broker_metrics_reporter_enabled: true
+### Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
+kafka_broker_metrics_reporter_enabled: "{{ 'control_center' in groups }}"
 
 ### Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 kafka_broker_custom_properties: "{{ kafka_broker.properties }}"
@@ -396,7 +400,7 @@ schema_registry_jolokia_port: 7772
 schema_registry_jolokia_ssl_enabled: "{{ schema_registry_ssl_enabled }}"
 
 ### Path on Schema Registry host for Jolokia Configuration file
-schema_registry_jolokia_config: /etc/schema-registry/schema_registry_jolokia.properties
+schema_registry_jolokia_config: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/schema-registry/schema_registry_jolokia.properties"
 
 ### Authentication Mode for Schema Registry's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 schema_registry_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -467,7 +471,7 @@ kafka_rest_jolokia_port: 7775
 kafka_rest_jolokia_ssl_enabled: "{{ kafka_rest_ssl_enabled }}"
 
 ### Path on Rest Proxy host for Jolokia Configuration file
-kafka_rest_jolokia_config: /etc/kafka-rest/kafka_rest_jolokia.properties
+kafka_rest_jolokia_config: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-rest/kafka_rest_jolokia.properties"
 
 ### Authentication Mode for Rest Proxy's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 kafka_rest_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -491,7 +495,7 @@ kafka_rest_copy_files: []
 ### Use to set custom Rest Proxy properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_rest.properties is deprecated.
 kafka_rest_custom_properties: "{{ kafka_rest.properties }}"
 
-### Boolean to configure Monitoring Interceptors on Rest Proxy. Only honored if inventory also has Control Center Group
+### Boolean to configure Monitoring Interceptors on Rest Proxy.
 kafka_rest_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled }}"
 
 
@@ -540,7 +544,7 @@ kafka_connect_jolokia_port: 7773
 kafka_connect_jolokia_ssl_enabled: "{{ kafka_connect_ssl_enabled }}"
 
 ### Path on Connect host for Jolokia Configuration file
-kafka_connect_jolokia_config: /etc/kafka/kafka_connect_jolokia.properties
+kafka_connect_jolokia_config: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_connect_jolokia.properties"
 
 ### Authentication Mode for Connect's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 kafka_connect_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -585,7 +589,7 @@ kafka_connect_plugins_dest: /usr/share/java
 ### Use to set custom Connect properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_connect.properties is deprecated.
 kafka_connect_custom_properties: "{{ kafka_connect.properties }}"
 
-### Boolean to configure Monitoring Interceptors on Connect. Only honored if inventory also has Control Center Group
+### Boolean to configure Monitoring Interceptors on Connect.
 kafka_connect_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled }}"
 
 
@@ -634,7 +638,7 @@ ksql_jolokia_port: 7774
 ksql_jolokia_ssl_enabled: "{{ ksql_ssl_enabled }}"
 
 ### Path on ksqlDB host for Jolokia Configuration file
-ksql_jolokia_config: "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
+ksql_jolokia_config: "{{ archive_config_base_path if installation_method == 'archive' else '' }}{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
 
 ### Authentication Mode for ksqlDB's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 ksql_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -664,7 +668,7 @@ ksql_service_id: default_
 ### Use to set custom ksqlDB properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- ksql.properties is deprecated.
 ksql_custom_properties: "{{ ksql.properties }}"
 
-### Boolean to configure Monitoring Interceptors on ksqlDB. Only honored if inventory also has Control Center Group
+### Boolean to configure Monitoring Interceptors on ksqlDB.
 ksql_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled }}"
 
 
@@ -846,6 +850,9 @@ token_services_private_pem_file: generated_ssl_files/tokenKeypair.pem
 
 ### List of users to be granted system admin Role Bindings across all components
 rbac_component_additional_system_admins: []
+
+### List of users to be granted system admin Role Bindings on the Kafka Cluster
+kafka_broker_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
 ### List of users to be granted system admin Role Bindings on the Schema Registry Cluster
 schema_registry_additional_system_admins: "{{rbac_component_additional_system_admins}}"
