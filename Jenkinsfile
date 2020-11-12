@@ -43,13 +43,6 @@ def config = jobConfig {
 }
 
 def job = {
-    stage('Install Molecule and Latest Ansible') {
-        sh '''
-            sudo pip install --upgrade 'ansible==2.9.*'
-            sudo pip install molecule docker
-        '''
-    }
-
     def override_config = [:]
 
     // ansible_fqdn within certs does not match the FQDN that zookeeper verifies
