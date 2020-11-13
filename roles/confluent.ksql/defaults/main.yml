@@ -6,14 +6,16 @@ ksql_custom_log4j: "{{ custom_log4j }}"
 
 ksql_java_args:
   - "{% if ksql_ssl_enabled|bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
-  - "{% if ksql_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=port={{ksql_jolokia_port}},host=0.0.0.0{% if ksql_jolokia_ssl_enabled|bool %},keystore={{ksql_keystore_path}},keystorePassword={{ksql_keystore_storepass}},protocol=https{% endif %}{% endif %}"
-  - "{% if ksql_custom_log4j|bool %}-Dlog4j.configuration=file:{{ksql.log4j_file}}{% endif %}"
+  - "{% if ksql_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=config={{ksql_jolokia_config}}{% endif %}"
   - "{% if ksql_jmxexporter_enabled|bool %}-javaagent:{{jmxexporter_jar_path}}={{ksql_jmxexporter_port}}:{{ksql_jmxexporter_config_path}}{% endif %}"
 
 ### Custom Java Args to add to the ksqlDB Process
 ksql_custom_java_args: ""
 
 ksql_final_java_args: "{{ ksql_java_args + [ ksql_custom_java_args ] }}"
+
+### Full Path to the RocksDB Data Directory. If set as empty string, cp-ansible will not configure RocksDB
+ksql_rocksdb_path: /tmp/ksqldb
 
 # Key/Value Pairs with empty values will not be written into override.conf
 ksql_service_overrides:
@@ -25,7 +27,10 @@ ksql_service_overrides:
 ksql_service_environment_overrides:
   KSQL_HEAP_OPTS: "-Xmx3g"
   KSQL_OPTS: "{{ ksql_final_java_args | java_arg_build_out }}"
-  LOG_DIR: "{{ksql.appender_log_path}}"
+  CONFLUENT_SECURITY_MASTER_KEY: "{% if ksql_secrets_protection_enabled|bool %}{{secrets_protection_masterkey}}{% endif %}"
+  KSQL_LOG4J_OPTS: "{% if ksql_custom_log4j|bool %}-Dlog4j.configuration=file:{{ksql.log4j_file}}{% endif %}"
+  LOG_DIR: "{% if ksql_custom_log4j|bool %}{{ksql.appender_log_path}}{% endif %}"
+  ROCKSDB_SHAREDLIB_DIR: "{{ksql_rocksdb_path}}"
 
 ksql:
   appender_log_path: /var/log/confluent/ksql/

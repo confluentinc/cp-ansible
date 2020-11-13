@@ -33,10 +33,26 @@
           restore_files:
             - "{{ kafka_broker.config_file }}"
             - "{{ zookeeper.config_file }}"
-      - name: Restart Zookeeper
-        import_tasks: tasks/restart_zookeeper.yml
-      - name: Restart Kafka Brokers
-        import_tasks: tasks/restart_kafka.yml  
+      - name: Start ZK
+        systemd:
+          name: "{{ zookeeper_service_name }}"
+          state: restarted
+          daemon_reload: yes
+      - name: Zookeeper Health Check
+        import_role:
+          name: confluent.zookeeper
+          tasks_from: health_check.yml
+        when: health_checks_enabled|bool
+      - name: Start Kafka
+        systemd:
+          name: "{{ kafka_broker_service_name }}"
+          state: restarted
+          daemon_reload: yes
+      - name: Kafka Health Check
+        import_role:
+          name: confluent.kafka_broker
+          tasks_from: health_check.yml
+        when: health_checks_enabled|bool
       when: zk_kafka|bool  
     - debug:
         msg: "Skip reinstalling Zookeeper and Kafka"

@@ -73,11 +73,14 @@
     service_name: ksql
     user: "{{ksql_user}}"
     group: "{{ksql_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
     ca_cert_path: "{{ksql_ca_cert_path}}"
     cert_path: "{{ksql_cert_path}}"
     key_path: "{{ksql_key_path}}"
-  when: ksql_ssl_enabled|bool or kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or mds_ssl_enabled | bool
+  when: >
+    ksql_ssl_enabled|bool or
+    kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
+    mds_tls_enabled | bool
 
 - name: Configure Kerberos
   include_role:
@@ -126,7 +129,7 @@
     state: directory
     group: "{{ksql_group}}"
     owner: "{{ksql_user}}"
-    mode: 0750
+    mode: 0770
 
 - name: Create log4j Directory
   file:
@@ -143,7 +146,43 @@
     mode: 0640
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
+  when: ksql_custom_log4j|bool
   notify: restart ksql
+
+- name: Create Ksql Jolokia Config
+  template:
+    src: ksql_jolokia.properties.j2
+    dest: "{{ksql_jolokia_config}}"
+    mode: 0640
+    owner: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+  when: ksql_jolokia_enabled|bool
+  notify: restart ksql
+
+- name: Enable Secrets Protection
+  include_tasks: ../../tasks/secrets_protection.yml
+  vars:
+    encrypt_passwords: "{{ ksql_secrets_protection_encrypt_passwords }}"
+    properties: "{{ ksql_secrets_protection_encrypt_properties }}"
+    config_path: "{{ ksql.config_file }}"
+  when: ksql_secrets_protection_enabled|bool
+
+- name: Create RocksDB Directory
+  file:
+    path: "{{ksql_rocksdb_path}}"
+    group: "{{ksql_group}}"
+    owner: "{{ksql_user}}"
+    mode: 0750
+    state: directory
+  when: ksql_rocksdb_path != ""
+
+- name: Set Permission to RocksDB Files
+  file:
+    path: "{{ksql_rocksdb_path}}"
+    group: "{{ksql_group}}"
+    owner: "{{ksql_user}}"
+    recurse: true
+  when: ksql_rocksdb_path != ""
 
 - name: Deploy JMX Exporter Config File
   copy:

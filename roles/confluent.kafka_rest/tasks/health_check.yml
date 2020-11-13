@@ -1,14 +1,21 @@
 ---
+# Cannot use Block/Rescue in Ansible Handlers: https://github.com/ansible/ansible/issues/14270
+# Implementing try/catch logic with ignore_errors and conditionals
 - name: Wait for API to return 200
   uri:
     url: "{{kafka_rest_http_protocol}}://{{inventory_hostname}}:{{kafka_rest_port}}/topics"
     status_code: 200
     validate_certs: false
-  register: result
-  until: result.status == 200
+    # Basic auth header is redundant for non rbac install
+    url_username: "{{kafka_rest_ldap_user}}"
+    url_password: "{{kafka_rest_ldap_password}}"
+    force_basic_auth: true
+  register: result1
+  until: result1.status == 200
   retries: 30
   delay: 5
-  when: not rbac_enabled|bool and not kafka_rest_ssl_mutual_auth_enabled|bool
+  when: not kafka_rest_ssl_mutual_auth_enabled|bool
+  ignore_errors: true
 
 - name: Wait for API to return 200 - mTLS
   uri:
@@ -17,38 +24,21 @@
     validate_certs: false
     client_cert: "{{kafka_rest_cert_path}}"
     client_key: "{{kafka_rest_key_path}}"
-  register: result
-  until: result.status == 200
-  retries: 30
-  delay: 5
-  when: not rbac_enabled|bool and kafka_rest_ssl_mutual_auth_enabled|bool
-
-- name: Wait for API to return 200 - RBAC
-  uri:
-    url: "{{kafka_rest_http_protocol}}://{{inventory_hostname}}:{{kafka_rest_port}}/topics"
-    status_code: 200
-    validate_certs: false
+    # Basic auth header is redundant for non rbac install
     url_username: "{{kafka_rest_ldap_user}}"
     url_password: "{{kafka_rest_ldap_password}}"
     force_basic_auth: true
-  register: result
-  until: result.status == 200
+  register: result2
+  until: result2.status == 200
   retries: 30
   delay: 5
-  when: rbac_enabled|bool and not kafka_rest_ssl_mutual_auth_enabled|bool
+  when: kafka_rest_ssl_mutual_auth_enabled|bool
+  ignore_errors: true
 
-- name: Wait for API to return 200 - RBAC - mTLS
-  uri:
-    url: "{{kafka_rest_http_protocol}}://{{inventory_hostname}}:{{kafka_rest_port}}/topics"
-    status_code: 200
-    validate_certs: false
-    client_cert: "{{kafka_rest_cert_path}}"
-    client_key: "{{kafka_rest_key_path}}"
-    url_username: "{{kafka_rest_ldap_user}}"
-    url_password: "{{kafka_rest_ldap_password}}"
-    force_basic_auth: true
-  register: result
-  until: result.status == 200
-  retries: 30
-  delay: 5
-  when: rbac_enabled|bool and kafka_rest_ssl_mutual_auth_enabled|bool
+- name: Fetch Files for Debugging Failure
+  include: tasks/failure_handling.yml
+  vars:
+    service_name: "{{kafka_rest_service_name}}"
+    config_file: "{{kafka_rest.config_file}}"
+  # Only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
+  when: result1.failed|default(False) or result2.failed|default(False)

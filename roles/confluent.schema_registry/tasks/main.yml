@@ -65,11 +65,14 @@
     service_name: schema_registry
     user: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
     ca_cert_path: "{{schema_registry_ca_cert_path}}"
     cert_path: "{{schema_registry_cert_path}}"
     key_path: "{{schema_registry_key_path}}"
-  when: schema_registry_ssl_enabled|bool or kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or mds_ssl_enabled | bool
+  when: >
+    schema_registry_ssl_enabled | bool or
+    kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
+    mds_tls_enabled | bool
 
 - name: Configure Kerberos
   include_role:
@@ -117,7 +120,7 @@
     state: directory
     group: "{{schema_registry_group}}"
     owner: "{{schema_registry_user}}"
-    mode: 0750
+    mode: 0770
 
 - name: Create log4j Directory
   file:
@@ -134,7 +137,26 @@
     mode: 0640
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
+  when: schema_registry_custom_log4j|bool
   notify: restart schema-registry
+
+- name: Create Schema Registry Jolokia Config
+  template:
+    src: schema_registry_jolokia.properties.j2
+    dest: "{{schema_registry_jolokia_config}}"
+    mode: 0640
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  when: schema_registry_jolokia_enabled|bool
+  notify: restart schema-registry
+
+- name: Enable Secrets Protection
+  include_tasks: ../../tasks/secrets_protection.yml
+  vars:
+    encrypt_passwords: "{{ schema_registry_secrets_protection_encrypt_passwords }}"
+    properties: "{{ schema_registry_secrets_protection_encrypt_properties }}"
+    config_path: "{{ schema_registry.config_file }}"
+  when: schema_registry_secrets_protection_enabled|bool
 
 - name: Deploy JMX Exporter Config File
   copy:

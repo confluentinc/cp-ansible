@@ -20,6 +20,30 @@ Default:  /opt/jolokia/jolokia.jar
 
 ***
 
+### jolokia_auth_mode
+
+Authentication Mode for Jolokia Agent. Possible values: none, basic. If selecting basic, you must set jolokia_user and jolokia_password
+
+Default:  none
+
+***
+
+### jolokia_user
+
+Username for Jolokia Agent when using Basic Auth
+
+Default:  admin
+
+***
+
+### jolokia_password
+
+Password for Jolokia Agent when using Basic Auth
+
+Default:  password
+
+***
+
 ### jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on all components
@@ -76,19 +100,19 @@ Default:  true
 
 ***
 
+### monitoring_interceptors_enabled
+
+Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
+
+Default:  "{{ 'control_center' in groups }}"
+
+***
+
 ### installation_method
 
 The method of installation. Valid values are "package" or "archive". If "archive" is selected then services will not be installed via the use of yum or apt, but will instead be installed via expanding the target .tar.gz file from the Confluent archive into the path defined by `archive_destination_path`. Configuration files are also kept in this directory structure instead of `/etc`. SystemD service units are copied from the ardhive for each target service and overrides are created pointing at the new paths. The "package" installation method is the default behavior that utilizes yum/apt.
 
 Default:  "package"
-
-***
-
-### confluent_archive_scala_version
-
-The Scala version of the Confluent Platform archive to download. Possible values: 2.11, 2.12, etc. If you don't have a specific version requirement then use the default.
-
-Default:  2.12
 
 ***
 
@@ -105,6 +129,22 @@ Default:  "/opt/confluent"
 If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
 
 Default:  "{{ archive_destination_path }}"
+
+***
+
+### confluent_cli_download_enabled
+
+Boolean to have cp-ansible download the Confluent CLI
+
+Default:  "{{rbac_enabled or secrets_protection_enabled}}"
+
+***
+
+### confluent_cli_path
+
+Full path on hosts to install the Confluent CLI
+
+Default:  /usr/local/bin/confluent
 
 ***
 
@@ -332,6 +372,38 @@ Default:  "{{ zookeeper_ssl_enabled }}"
 
 ***
 
+### zookeeper_jolokia_config
+
+Path on Zookeeper host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/zookeeper_jolokia.properties"
+
+***
+
+### zookeeper_jolokia_auth_mode
+
+Authentication Mode for Zookeeper's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set zookeeper_jolokia_user and zookeeper_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### zookeeper_jolokia_user
+
+Username for Zookeeper's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### zookeeper_jolokia_password
+
+Password for Zookeeper's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### zookeeper_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
@@ -428,6 +500,38 @@ Default:  "{{ ssl_enabled }}"
 
 ***
 
+### kafka_broker_jolokia_config
+
+Path on Kafka host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_jolokia.properties"
+
+***
+
+### kafka_broker_jolokia_auth_mode
+
+Authentication Mode for Kafka's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set kafka_broker_jolokia_user and kafka_broker_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_broker_jolokia_user
+
+Username for Kafka's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_broker_jolokia_password
+
+Password for Kafka's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### kafka_broker_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on kafka
@@ -452,7 +556,7 @@ Default:  []
 
 ***
 
-### kafka_broker_default_interal_replication_factor
+### kafka_broker_default_internal_replication_factor
 
 Replication Factor for internal topics. Defaults to the minimum of the number of brokers and 3
 
@@ -462,9 +566,9 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | 
 
 ### kafka_broker_metrics_reporter_enabled
 
-Boolean to enable the metrics reporter
+Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
-Default:  true
+Default:  "{{ 'control_center' in groups }}"
 
 ***
 
@@ -473,6 +577,14 @@ Default:  true
 Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 
 Default:  "{{ kafka_broker.properties }}"
+
+***
+
+### kafka_broker_rest_proxy_enabled
+
+Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
+
+Default:  "{{confluent_server_enabled}}"
 
 ***
 
@@ -537,6 +649,38 @@ Default:  7772
 Boolean to enable TLS encryption on Schema Registry jolokia metrics
 
 Default:  "{{ schema_registry_ssl_enabled }}"
+
+***
+
+### schema_registry_jolokia_config
+
+Path on Schema Registry host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/schema-registry/schema_registry_jolokia.properties"
+
+***
+
+### schema_registry_jolokia_auth_mode
+
+Authentication Mode for Schema Registry's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### schema_registry_jolokia_user
+
+Username for Schema Registry's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### schema_registry_jolokia_password
+
+Password for Schema Registry's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
 
 ***
 
@@ -636,6 +780,38 @@ Default:  "{{ kafka_rest_ssl_enabled }}"
 
 ***
 
+### kafka_rest_jolokia_config
+
+Path on Rest Proxy host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-rest/kafka_rest_jolokia.properties"
+
+***
+
+### kafka_rest_jolokia_auth_mode
+
+Authentication Mode for Rest Proxy's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_rest_jolokia_user
+
+Username for Rest Proxy's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_rest_jolokia_password
+
+Password for Rest Proxy's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### kafka_rest_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on Rest Proxy
@@ -665,6 +841,14 @@ Default:  []
 Use to set custom Rest Proxy properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_rest.properties is deprecated.
 
 Default:  "{{ kafka_rest.properties }}"
+
+***
+
+### kafka_rest_monitoring_interceptors_enabled
+
+Boolean to configure Monitoring Interceptors on Rest Proxy.
+
+Default:  "{{ monitoring_interceptors_enabled }}"
 
 ***
 
@@ -732,6 +916,38 @@ Default:  "{{ kafka_connect_ssl_enabled }}"
 
 ***
 
+### kafka_connect_jolokia_config
+
+Path on Connect host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_connect_jolokia.properties"
+
+***
+
+### kafka_connect_jolokia_auth_mode
+
+Authentication Mode for Connect's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_connect_jolokia_user
+
+Username for Connect's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_connect_jolokia_password
+
+Password for Connect's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### kafka_connect_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on Connect
@@ -793,6 +1009,14 @@ Default:  39ff95832750c0090d84ddf5344583832efe91ef
 Use to set custom Connect properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_connect.properties is deprecated.
 
 Default:  "{{ kafka_connect.properties }}"
+
+***
+
+### kafka_connect_monitoring_interceptors_enabled
+
+Boolean to configure Monitoring Interceptors on Connect.
+
+Default:  "{{ monitoring_interceptors_enabled }}"
 
 ***
 
@@ -860,6 +1084,38 @@ Default:  "{{ ksql_ssl_enabled }}"
 
 ***
 
+### ksql_jolokia_config
+
+Path on ksqlDB host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
+
+***
+
+### ksql_jolokia_auth_mode
+
+Authentication Mode for ksqlDB's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### ksql_jolokia_user
+
+Username for ksqlDB's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### ksql_jolokia_password
+
+Password for ksqlDB's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### ksql_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on ksqlDB
@@ -908,6 +1164,14 @@ Default:  "{{ ksql.properties }}"
 
 ***
 
+### ksql_monitoring_interceptors_enabled
+
+Boolean to configure Monitoring Interceptors on ksqlDB.
+
+Default:  "{{ monitoring_interceptors_enabled }}"
+
+***
+
 ### control_center_user
 
 Only use to customize Linux User Control Center Service runs with. User must exist on host.
@@ -945,14 +1209,6 @@ Default:  "0.0.0.0"
 Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
 
 Default:  "{{ssl_enabled}}"
-
-***
-
-### control_center_ssl_mutual_auth_enabled
-
-Boolean to enable mTLS Authentication on Control Center
-
-Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ***
 
@@ -996,11 +1252,11 @@ Default:  8090
 
 ***
 
-### mds_ssl_enabled
+### kafka_broker_rest_ssl_enabled
 
-Boolean to configure TLS encryption on the MDS Server. (Or if is confligured with TLS encyption when external_mds_enabled: true)
+Boolean to configure TLS encryption on the Broker Rest endpoint. NOTE- mds_ssl_enabled is now deprecated
 
-Default:  "{{ssl_enabled}}"
+Default:  "{{mds_ssl_enabled}}"
 
 ***
 
@@ -1017,6 +1273,22 @@ Default:  mds
 Password to mds_super_user LDAP User
 
 Default:  password
+
+***
+
+### kafka_broker_ldap_user
+
+LDAP User for Kafkas Embedded Rest Service to authenticate as
+
+Default:  "{{mds_super_user}}"
+
+***
+
+### kafka_broker_ldap_password
+
+Password to kafka_broker_ldap_user LDAP User
+
+Default:  "{{mds_super_user_password}}"
 
 ***
 
@@ -1102,7 +1374,7 @@ Default:  password
 
 ### external_mds_enabled
 
-Boolean to describe if kafka group in inventory file should be configured as MDS Server. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, mds_ssl_enabled
+Boolean to describe if kafka group should be configured with an External MDS Kafka Cluster. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, kafka_broker_rest_ssl_enabled
 
 Default:  false
 
@@ -1140,6 +1412,14 @@ Default:  []
 
 ***
 
+### kafka_broker_additional_system_admins
+
+List of users to be granted system admin Role Bindings on the Kafka Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
+
+***
+
 ### schema_registry_additional_system_admins
 
 List of users to be granted system admin Role Bindings on the Schema Registry Cluster
@@ -1169,6 +1449,318 @@ Default:  "{{rbac_component_additional_system_admins}}"
 List of users to be granted system admin Role Bindings on the Control Center Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
+
+***
+
+### secrets_protection_enabled
+
+Boolean to enable secrets protection on all components except Rest Proxy
+
+Default:  false
+
+***
+
+### secrets_protection_masterkey
+
+Masterkey generated by the Confluent Secret CLI. If empty and secrets protection is enabled, then a master key will be randomly generated.
+
+Default:  ""
+
+***
+
+### secrets_protection_security_file
+
+Security file generated by the Confluent Secret CLI. If empty and secrets protection is enabled, then a security file will be randomly generated.
+
+Default:  generated_ssl_files/security.properties
+
+***
+
+### kafka_broker_secrets_protection_enabled
+
+Boolean to enable secrets protection in Kafka broker.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### kafka_broker_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for Kafka.
+
+Default:  "{{kafka_broker_secrets_protection_enabled}}"
+
+***
+
+### kafka_broker_secrets_protection_encrypt_properties
+
+List of Kafka properties to encrypt. Can be used in addition to kafka_broker_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### schema_registry_secrets_protection_enabled
+
+Boolean to enable secrets protection in schema registry.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### schema_registry_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for Schema Registry.
+
+Default:  "{{schema_registry_secrets_protection_enabled}}"
+
+***
+
+### schema_registry_secrets_protection_encrypt_properties
+
+List of Schema Registry properties to encrypt. Can be used in addition to schema_registry_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### kafka_connect_secrets_protection_enabled
+
+Boolean to enable secrets protection in Connect.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### kafka_connect_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for Connect.
+
+Default:  "{{kafka_connect_secrets_protection_enabled}}"
+
+***
+
+### kafka_connect_secrets_protection_encrypt_properties
+
+List of Connect properties to encrypt. Can be used in addition to kafka_connect_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### kafka_rest_secrets_protection_enabled
+
+Boolean to enable secrets protection in Rest Proxy.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### kafka_rest_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for Rest Proxy.
+
+Default:  "{{kafka_rest_secrets_protection_enabled}}"
+
+***
+
+### kafka_rest_secrets_protection_encrypt_properties
+
+List of Rest Proxy properties to encrypt. Can be used in addition to kafka_rest_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### ksql_secrets_protection_enabled
+
+Boolean to enable secrets protection in KSQL.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### ksql_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for KSQL.
+
+Default:  "{{ksql_secrets_protection_enabled}}"
+
+***
+
+### ksql_secrets_protection_encrypt_properties
+
+List of KSQL properties to encrypt. Can be used in addition to ksql_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### control_center_secrets_protection_enabled
+
+Boolean to enable secrets protection in Control Center.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### control_center_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for Control Center.
+
+Default:  "{{control_center_secrets_protection_enabled}}"
+
+***
+
+### control_center_secrets_protection_encrypt_properties
+
+List of Control Center properties to encrypt. Can be used in addition to control_center_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### telemetry_enabled
+
+Boolean to configure Telemetry. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  false
+
+***
+
+### telemetry_api_key
+
+API Key used by Telemetry. Mandatory variable for Telemetry
+
+Default:  ""
+
+***
+
+### telemetry_api_secret
+
+API Secret used by Telemetry. Mandatory variable for Telemetry
+
+Default:  ""
+
+***
+
+### telemetry_proxy_url
+
+Proxy URL used by Telemetry. Only set if using a Proxy Server
+
+Default:  ""
+
+***
+
+### telemetry_proxy_username
+
+Username for Proxy Server used by Telemetry. Only set if Proxy Server requires authentication
+
+Default:  ""
+
+***
+
+### telemetry_proxy_password
+
+Password for Proxy Server used by Telemetry. Only set if Proxy Server requires authentication
+
+Default:  ""
+
+***
+
+### kafka_broker_telemetry_enabled
+
+Boolean to configure Telemetry on Kafka. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### kafka_broker_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Kafka. Currently only sends cp-ansible version data
+
+Default:  "{{kafka_broker_telemetry_enabled}}"
+
+***
+
+### schema_registry_telemetry_enabled
+
+Boolean to configure Telemetry on Schema Registry. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### schema_registry_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Schema Registry. Currently only sends cp-ansible version data
+
+Default:  "{{schema_registry_telemetry_enabled}}"
+
+***
+
+### kafka_connect_telemetry_enabled
+
+Boolean to configure Telemetry on Connect. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### kafka_connect_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Connect. Currently only sends cp-ansible version data
+
+Default:  "{{kafka_connect_telemetry_enabled}}"
+
+***
+
+### kafka_rest_telemetry_enabled
+
+Boolean to configure Telemetry on Rest Proxy. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### kafka_rest_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Rest Proxy. Currently only sends cp-ansible version data
+
+Default:  "{{kafka_rest_telemetry_enabled}}"
+
+***
+
+### ksql_telemetry_enabled
+
+Boolean to configure Telemetry on ksqlDB. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### ksql_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from ksqlDB. Currently only sends cp-ansible version data
+
+Default:  "{{ksql_telemetry_enabled}}"
+
+***
+
+### control_center_telemetry_enabled
+
+Boolean to configure Telemetry on Control Center. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### control_center_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
+
+Default:  "{{control_center_telemetry_enabled}}"
 
 ***
 
@@ -1274,27 +1866,11 @@ Default:  https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaag
 
 ***
 
-### confluent_cli_download_enabled
-
-Boolean to have cp-ansible download the Confluent CLI
-
-Default:  "{{rbac_enabled}}"
-
-***
-
-### confluent_cli_path
-
-Full path on hosts to install the Confluent CLI
-
-Default:  /usr/local/bin/confluent
-
-***
-
 ### confluent_archive_file_source
 
 A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent-{{confluent_package_version}}-{{confluent_archive_scala_version}}.tar.gz"
+Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent-{{confluent_package_version}}.tar.gz"
 
 ***
 
@@ -1424,6 +2000,14 @@ Default:  ""
 
 ***
 
+### ksql_rocksdb_path
+
+Full Path to the RocksDB Data Directory. If set as empty string, cp-ansible will not configure RocksDB
+
+Default:  /tmp/ksqldb
+
+***
+
 # confluent.schema_registry
 
 Below are the supported variables for the role confluent.schema_registry
@@ -1465,6 +2049,28 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Zookeeper Process
 
 Default:  ""
+
+***
+
+# confluent.ssl
+
+Below are the supported variables for the role confluent.ssl
+
+***
+
+### ssl_key_algorithm
+
+Key Algorithm used by keytool -genkeypair command when creating Keystores. Only used with self-signed certs
+
+Default:  RSA
+
+***
+
+### ssl_key_size
+
+Key Size used by keytool -genkeypair command when creating Keystores. Only used with self-signed certs
+
+Default:  2048
 
 ***
 

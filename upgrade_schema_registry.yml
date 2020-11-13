@@ -1,4 +1,19 @@
 ---
+- name: Schema Registry Role Bindings
+  hosts: schema_registry
+  gather_facts: false
+  environment: "{{ proxy_env }}"
+  tasks:
+    - name: Schema Registry Role Bindings
+      import_role:
+        name: confluent.schema_registry
+        tasks_from: rbac.yml
+      vars:
+        cluster_id_source: zookeeper
+        copy_certs: false
+      run_once: true
+      when: rbac_enabled|bool
+
 - name: Schema Registry Upgrade
   hosts: schema_registry
   environment: "{{ proxy_env }}"
@@ -8,6 +23,14 @@
   tasks:
     - import_role:
         name: confluent.variables
+
+    - shell: "egrep 'ssl.client.auth ?= ?true' {{ schema_registry.config_file }}"
+      register: mtls_check
+      failed_when: false
+
+    - name: Set MTLS Variable
+      set_fact:
+        schema_registry_ssl_mutual_auth_enabled: "{{ true if mtls_check.rc == 0 else false}}"
 
     - name: Get Package Facts
       package_facts:

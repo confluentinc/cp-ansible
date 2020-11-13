@@ -6,8 +6,7 @@ schema_registry_custom_log4j: "{{ custom_log4j }}"
 
 schema_registry_java_args:
   - "{% if schema_registry_ssl_enabled|bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
-  - "{% if schema_registry_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=port={{schema_registry_jolokia_port}},host=0.0.0.0{% if schema_registry_jolokia_ssl_enabled|bool %},keystore={{schema_registry_keystore_path}},keystorePassword={{schema_registry_keystore_storepass}},protocol=https{% endif %}{% endif %}"
-  - "{% if schema_registry_custom_log4j|bool %}-Dlog4j.configuration=file:{{schema_registry.log4j_file}}{% endif %}"
+  - "{% if schema_registry_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=config={{schema_registry_jolokia_config}}{% endif %}"
   - "{% if schema_registry_jmxexporter_enabled|bool %}-javaagent:{{jmxexporter_jar_path}}={{schema_registry_jmxexporter_port}}:{{schema_registry_jmxexporter_config_path}}{% endif %}"
 
 ### Custom Java Args to add to the Schema Registry Process
@@ -23,9 +22,11 @@ schema_registry_service_overrides:
   ExecStart: "{% if installation_method == 'archive' %}{{ schema_registry.server_start_file }} {{ schema_registry.config_file }}{% endif %}"
 
 schema_registry_service_environment_overrides:
-  SCHEMA_REGISTRY_HEAP_OPTS: "-Xmx1000M"
+  SCHEMA_REGISTRY_HEAP_OPTS: "-Xms1g -Xmx1g -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80"
   SCHEMA_REGISTRY_OPTS: "{{ schema_registry_final_java_args | java_arg_build_out }}"
-  LOG_DIR: "{{schema_registry.appender_log_path}}"
+  CONFLUENT_SECURITY_MASTER_KEY: "{% if schema_registry_secrets_protection_enabled|bool %}{{secrets_protection_masterkey}}{% endif %}"
+  SCHEMA_REGISTRY_LOG4J_OPTS: "{% if schema_registry_custom_log4j|bool %}-Dlog4j.configuration=file:{{schema_registry.log4j_file}}{% endif %}"
+  LOG_DIR: "{% if schema_registry_custom_log4j|bool %}{{schema_registry.appender_log_path}}{% endif %}"
 
 schema_registry:
   appender_log_path: /var/log/confluent/schema-registry/
