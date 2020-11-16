@@ -1,0 +1,238 @@
+---
+driver:
+  name: docker
+platforms:
+  - name: ldap1
+    hostname: ldap1.confluent
+    groups:
+      - ldap_server
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: zookeeper1
+    hostname: zookeeper1.confluent
+    groups:
+      - zookeeper
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9021:9021"
+    networks:
+      - name: confluent
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      hash_behaviour: merge
+  playbooks:
+    prepare: ../ldap.yml
+    converge: ../../../../all.yml
+  inventory:
+    group_vars:
+      all:
+        sasl_protocol: plain
+
+        kafka_broker_metrics_reporter_enabled: false
+        kafka_broker_rest_proxy_enabled: false
+
+        kafka_broker_custom_properties:
+          ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+          ldap.java.naming.provider.url: ldap://ldap1:389
+          # Authenticate to LDAP
+          ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
+          ldap.java.naming.security.credentials: password
+          ldap.java.naming.security.authentication: simple
+          # Locate users
+          ldap.user.search.base: OU=rbac,DC=example,DC=com
+          ldap.user.name.attribute: uid
+          ldap.user.object.class: user
+          ldap.user.password.attribute: userPassword
+
+
+          # Overwrite the sasl plain properties
+          # listener.name.broker.plain.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required;
+          # listener.name.broker.plain.sasl.server.callback.handler.class: io.confluent.security.auth.provider.ldap.LdapAuthenticateCallbackHandler
+          listener.name.internal.plain.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required;
+          listener.name.internal.plain.sasl.server.callback.handler.class: io.confluent.security.auth.provider.ldap.LdapAuthenticateCallbackHandler
+
+        sasl_plain_users:
+          admin:
+            principal: mds
+            password: password
+          kafka_connect:
+            principal: connect
+            password: password
+          control_center:
+            principal: c3
+            password: password
+          kafka_rest:
+            principal: rp
+            password: password
+          ksql:
+            principal: ksql
+            password: password
+          schema_registry:
+            principal: sr
+            password: password
+
+      ldap_server:
+        ldaps_enabled: false
+        ldaps_custom_certs: false
+
+        ldap_admin_password: ldppassword
+
+        ldap_rbac_group: rbac
+        ldap_dc: example
+        ldap_dc_extension: com
+
+        ldap_users:
+          - username: sr
+            password: password
+            uid: 9998
+            guid: 98
+          - username: connect
+            password: password
+            uid: 9997
+            guid: 97
+          - username: ksql
+            password: password
+            uid: 9996
+            guid: 96
+          - username: c3
+            password: password
+            uid: 9995
+            guid: 95
+          - username: rp
+            password: password
+            uid: 9994
+            guid: 94
+          - username: mds
+            password: password
+            uid: 9993
+            guid: 93
+
+verifier:
+  name: ansible
+lint: |
+  set -e
+  yamllint -c ../../.yamllint ../..
+scenario:
+  test_sequence:
+    - lint
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    # - idempotence
+    - side_effect
+    - verify
+    - cleanup
+    - destroy
