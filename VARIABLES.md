@@ -604,6 +604,14 @@ Default:  "{{confluent_server_enabled}}"
 
 ***
 
+### kafka_broker_cluster_name
+
+Use to register and identify your Kafka clusters in the MDS using a name of your choosing.
+
+Default:  ""
+
+***
+
 ### schema_registry_user
 
 Set this variable to customize the Linux User that the Schema Registry Service runs with. Default user is cp-schema-registry.
@@ -737,6 +745,14 @@ Default:  []
 Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 
 Default:  "{{ schema_registry.properties }}"
+
+***
+
+### schema_registry_cluster_name
+
+Use to register and identify your Schema Registry clusters in the MDS using a name of your choosing.
+
+Default:  ""
 
 ***
 
@@ -1060,6 +1076,14 @@ Default:  "{{ monitoring_interceptors_enabled }}"
 
 ***
 
+### kafka_connect_cluster_name
+
+Use to register and identify your Kafka Connect cluster in the MDS using a name of your choosing.
+
+Default:  ""
+
+***
+
 ### ksql_user
 
 Set this variable to customize the Linux User that the ksqlDB Service runs with. Default user is cp-ksql.
@@ -1217,6 +1241,14 @@ Default:  "{{ ksql.properties }}"
 Boolean to configure Monitoring Interceptors on ksqlDB.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
+
+***
+
+### ksql_cluster_name
+
+Use to register and identify your KSQL clusters in the MDS using a name of your choosing.
+
+Default:  ""
 
 ***
 

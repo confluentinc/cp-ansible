@@ -86,7 +86,9 @@
   when: kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
 - name: Copy Kafka Connect Files
-  include_tasks: ../../tasks/copy_files.yml
+  include_role:
+    name: confluent.common
+    tasks_from: copy_files.yml
   vars:
     copy_files: "{{kafka_connect_copy_files}}"
     user: "{{kafka_connect_user}}"
@@ -126,7 +128,9 @@
     mode: 0770
 
 - name: Update Connect log4j Config for Log Cleanup
-  include_tasks: ../../tasks/update_log4j.yml
+  include_role:
+    name: confluent.common
+    tasks_from: update_log4j.yml
   vars:
     log4j_file: "{{kafka_connect.log4j_file}}"
     handler: "restart connect distributed"
@@ -150,7 +154,9 @@
   notify: restart connect distributed
 
 - name: Enable Secrets Protection
-  include_tasks: ../../tasks/secrets_protection.yml
+  include_role:
+    name: confluent.common
+    tasks_from: secrets_protection.yml
   vars:
     encrypt_passwords: "{{ kafka_connect_secrets_protection_encrypt_passwords }}"
     properties: "{{ kafka_connect_secrets_protection_encrypt_properties }}"
@@ -201,6 +207,10 @@
   when:
     - health_checks_enabled|bool
     - not ansible_check_mode
+
+- name: Register Cluster
+  include_tasks: register_cluster.yml
+  when: kafka_connect_cluster_name | length >0
 
 - name: Register Kafka Connect Subgroups
   set_fact: subgroups="{{ ((subgroups | default([])) + hostvars[item].group_names) | difference('kafka_connect') }}"

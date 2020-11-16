@@ -267,3 +267,65 @@
         service_ca: /var/ssl/private/ca.crt
         service_cert: /var/ssl/private/kafka_connect.crt
         service_key: /var/ssl/private/kafka_connect.key
+
+- name: Validate Cluster Registry
+  hosts: schema_registry
+  gather_facts: false
+  vars:
+    mds_http_protocol: https
+    mds_port: 8090
+    mds_super_user: mds
+    mds_super_user_password: password
+    broker_name: Test-Broker
+    connect_name: Test-Connect
+    ksql_name: Test-Ksql
+    schema_registry_name: Test-Schema
+  tasks:
+    - name: Get Kafka Cluster Id
+      import_role:
+        name: confluent.common
+        tasks_from: rbac_setup.yml
+      vars:
+        copy_certs: false
+
+    - name: Retrieve Cluster Registry details
+      uri:
+        url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/registry/clusters"
+        method: GET
+        validate_certs: false
+        force_basic_auth: true
+        url_username: "{{mds_super_user}}"
+        url_password: "{{mds_super_user_password}}"
+        status_code: 200
+      register: cluster_name_query
+
+    - set_fact:
+        cluster_name_query_json: "{{ cluster_name_query.json }}"
+
+    - name: Assert Broker Cluster ID as expected
+      assert:
+        that:
+          - broker_name == "{{cluster_name_query_json[0]['clusterName']}}"
+        fail_msg: "Broker ID set to {{cluster_name_query_json[0]['clusterName']}} not {{broker_name}}"
+        quiet: true
+
+    - name: Assert Kafka Connect Cluster ID as expected
+      assert:
+        that:
+          - connect_name == "{{cluster_name_query_json[1]['clusterName']}}"
+        fail_msg: "Connect Cluster ID set to {{cluster_name_query_json[1]['clusterName']}} not {{connect_name}}"
+        quiet: true
+
+    - name: Assert KSQL Cluster ID as expected
+      assert:
+        that:
+          - ksql_name == "{{cluster_name_query_json[2]['clusterName']}}"
+        fail_msg: "KSQL Cluster ID set to {{cluster_name_query_json[2]['clusterName']}} not {{ksql_name}}"
+        quiet: true
+
+    - name: Assert Schema Registry Cluster ID as expected
+      assert:
+        that:
+          - schema_registry_name == "{{cluster_name_query_json[3]['clusterName']}}"
+        fail_msg: "Schema Registry Cluster ID set to {{cluster_name_query_json[3]['clusterName']}} not {{schema_registry_name}}"
+        quiet: true
