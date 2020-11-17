@@ -64,14 +64,6 @@ for line in `sed '/^$/d' $filename`; do
 
       FORMAT=$1
 
-      source=""
-      samples=("")
-      if [ $1 = "country" ]; then
-         source="country"
-         samples="US Canada Mexico..."
-      else
-        echo "try again"
-      fi
 
 
       echo "  >>>  Create host keystore"
