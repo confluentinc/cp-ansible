@@ -5,21 +5,32 @@
 - import_role:
     name: confluent.variables
 
-- name: Get ActiveControllerCount
-  uri:
-    url: "{{ kafka_broker_jolokia_active_controller_url }}"
-    validate_certs: false
-    return_content: true
-    status_code: 200
-  register: active_controller_count_query
+- name: Search for Zookeeper SSL Property
+  shell: "grep 'zookeeper.ssl.client.enable' {{kafka_broker.config_file}}"
+  register: zk_ssl_grep
+  failed_when: false
+
+- name: Get Controller Broker ID
+  shell: |
+    {{ binary_base_path }}/bin/zookeeper-shell {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} \
+      {% if zk_ssl_grep.rc == 0 %}--zk-tls-config-file {{kafka_broker.config_file}}{% endif %} \
+      get /controller | grep brokerid
+  register: controller_query
+  run_once: true
+  changed_when: false
   check_mode: false
 
+- name: Search for Kafka Broker ID
+  shell: "grep '^broker.id' {{kafka_broker.config_file}}"
+  register: broker_id_grep
+  changed_when: false
+
 - set_fact:
-    active_controller_count: "{{ active_controller_count_query['json']['value']['Value'] }}"
+    controller_json: "{{controller_query.stdout}}"
+    broker_id: "{{broker_id_grep.stdout | regex_replace('^[-a-zA-Z0-9.]*[ ]?=[ ]?(.*)$', '\\1')}}"
 
 - debug:
-    msg: "Active Controller: {{inventory_hostname}}"
-  when: active_controller_count|int == 1
+    msg: "Broker ID: {{broker_id}} and Controller ID: {{controller_json.brokerid}}"
 
 - name: Add host to Non Controller Group
   add_host:
@@ -27,7 +38,7 @@
     group: "{{ non_controller_group }}"
   delegate_to: localhost
   changed_when: false
-  when: active_controller_count|int == 0
+  when: broker_id|int != controller_json.brokerid|int
 
 - name: Add host to Controller Group
   add_host:
@@ -35,4 +46,4 @@
     group: "{{ controller_group }}"
   delegate_to: localhost
   changed_when: false
-  when: active_controller_count|int == 1
+  when: broker_id|int == controller_json.brokerid|int
