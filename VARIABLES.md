@@ -228,6 +228,14 @@ Default:  ""
 
 ***
 
+### ssl_keystore_alias
+
+Keystore source alias for host specific certificate. Only required if keystore contains more than one certificate. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "{{inventory_hostname}}"
+
+Default:  ""
+
+***
+
 ### ssl_truststore_filepath
 
 Full path to host specific truststore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. Can share same keystore for all components if it contains all ca certs used to sign host certificates
