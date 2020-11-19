@@ -6,11 +6,16 @@ platforms:
     hostname: ldap1.confluent
     groups:
       - ldap_server
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
-    command: ""
+    # image: geerlingguy/docker-centos7-ansible
+    image: osixia/openldap:1.3.0
+    environment:
+      LDAP_ORGANISATION: "ConfluentDemo"
+      LDAP_DOMAIN: "confluentdemo.io"
+      LDAP_BASE_DN: "dc=confluentdemo,dc=io"
+    command: "--copy-service --loglevel debug"
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - $MOLECULE_SCENARIO_DIRECTORY/ldap_users:/container/service/slapd/assets/config/bootstrap/ldif/custom
     privileged: true
     networks:
       - name: confluent
@@ -130,55 +135,58 @@ provisioner:
     defaults:
       hash_behaviour: merge
   playbooks:
-    prepare: ../ldap.yml
+    # prepare: ../ldap.yml
     converge: ../../../../all.yml
   inventory:
     group_vars:
       all:
         sasl_protocol: plain
 
-        kafka_broker_metrics_reporter_enabled: false
-        kafka_broker_rest_proxy_enabled: false
+        # These also not working
+        # kafka_broker_metrics_reporter_enabled: false
+        # kafka_broker_rest_proxy_enabled: false
 
         kafka_broker_custom_properties:
           ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
           ldap.java.naming.provider.url: ldap://ldap1:389
-          # Authenticate to LDAP
-          ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
-          ldap.java.naming.security.credentials: password
+          ldap.java.naming.security.principal: cn=admin,dc=confluentdemo,dc=io
+          ldap.java.naming.security.credentials: admin
           ldap.java.naming.security.authentication: simple
-          # Locate users
-          ldap.user.search.base: OU=rbac,DC=example,DC=com
+          ldap.search.mode: GROUPS
+          ldap.group.search.base: ou=groups,dc=confluentdemo,dc=io
+          ldap.group.name.attribute: cn
+          ldap.group.member.attribute: memberUid
+          ldap.group.object.class: posixGroup
+          ldap.group.member.attribute.pattern: cn=(.*),ou=users,dc=confluentdemo,dc=io
+          ldap.user.search.base: ou=users,dc=confluentdemo,dc=io
           ldap.user.name.attribute: uid
-          ldap.user.object.class: user
-          ldap.user.password.attribute: userPassword
-
+          ldap.user.object.class: inetOrgPerson
 
           # Overwrite the sasl plain properties
-          # listener.name.broker.plain.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required;
-          # listener.name.broker.plain.sasl.server.callback.handler.class: io.confluent.security.auth.provider.ldap.LdapAuthenticateCallbackHandler
+          listener.name.broker.plain.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required;
+          listener.name.broker.plain.sasl.server.callback.handler.class: io.confluent.security.auth.provider.ldap.LdapAuthenticateCallbackHandler
           listener.name.internal.plain.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required;
           listener.name.internal.plain.sasl.server.callback.handler.class: io.confluent.security.auth.provider.ldap.LdapAuthenticateCallbackHandler
 
         sasl_plain_users:
           admin:
             principal: mds
-            password: password
+            password: mds
           kafka_connect:
-            principal: connect
-            password: password
+            principal: connectAdmin
+            password: connectAdmin
           control_center:
-            principal: c3
-            password: password
+            principal: controlcenterAdmin
+            password: controlcenterAdmin
           kafka_rest:
-            principal: rp
-            password: password
+            principal: restAdmin
+            password: restAdmin
           ksql:
-            principal: ksql
-            password: password
+            principal: ksqlDBUser
+            password: ksqlDBUser
           schema_registry:
-            principal: sr
-            password: password
+            principal: schemaregistryUser
+            password: schemaregistryUser
 
       ldap_server:
         ldaps_enabled: false
