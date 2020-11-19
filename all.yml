@@ -1,35 +1,106 @@
 ---
-- name: Host Prerequisites
-  hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest
+# - name: Host Prerequisites
+#   hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest
+#   gather_facts: false
+#   environment: "{{ proxy_env }}"
+#   tasks:
+#     - name: Create Certificate Authority and Copy to Ansible Host
+#       include_tasks: tasks/certificate_authority.yml
+#       tags: certificate_authority
+#       run_once: true
+#       when: >
+#         create_mds_certs|bool or
+#         (self_signed|bool and regenerate_ca|bool and
+#         (zookeeper_ssl_enabled|bool or
+#         kafka_broker_listeners | ssl_required(ssl_enabled) or
+#         kafka_broker_rest_ssl_enabled|bool or
+#         schema_registry_ssl_enabled|bool or
+#         kafka_rest_ssl_enabled|bool or
+#         kafka_connect_ssl_enabled|bool or
+#         ksql_ssl_enabled|bool or
+#         control_center_ssl_enabled|bool))
+#
+#     - import_role:
+#         name: confluent.common
+#       tags: common
+#
+#     - name: Set Up Secrets Protection
+#       include_tasks: tasks/masterkey.yml
+#       when: secrets_protection_enabled|bool and not secrets_protection_masterkey
+
+- name: Zookeeper Status Finding
+  hosts: zookeeper
   gather_facts: false
+  tags: zookeeper
   environment: "{{ proxy_env }}"
   tasks:
-    - name: Create Certificate Authority and Copy to Ansible Host
-      include_tasks: tasks/certificate_authority.yml
-      tags: certificate_authority
-      run_once: true
-      when: >
-        create_mds_certs|bool or
-        (self_signed|bool and regenerate_ca|bool and
-        (zookeeper_ssl_enabled|bool or
-        kafka_broker_listeners | ssl_required(ssl_enabled) or
-        kafka_broker_rest_ssl_enabled|bool or
-        schema_registry_ssl_enabled|bool or
-        kafka_rest_ssl_enabled|bool or
-        kafka_connect_ssl_enabled|bool or
-        ksql_ssl_enabled|bool or
-        control_center_ssl_enabled|bool))
-
     - import_role:
-        name: confluent.common
-      tags: common
+        name: confluent.variables
 
-    - name: Set Up Secrets Protection
-      include_tasks: tasks/masterkey.yml
-      when: secrets_protection_enabled|bool and not secrets_protection_masterkey
+    - name: Check if Zookeeper Service Running
+      shell: "systemctl show -p SubState {{zookeeper_service_name}}"
+      changed_when: false
+      check_mode: false
+      register: substate
 
-- name: Zookeeper Provisioning
-  hosts: zookeeper
+    - set_fact:
+        # TODO need a way to force parallel
+        install_pattern: "{{ 'serial' if substate.stdout == 'SubState=running' else 'parallel' }}"
+
+    - name: "Group Hosts by Installation Pattern: Parallel or Serial"
+      group_by:
+        key: zookeeper_{{install_pattern}}
+
+- name: Zookeeper Parallel Provisioning
+  hosts: zookeeper_parallel
+  gather_facts: false
+  tags: zookeeper
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.zookeeper
+
+- name: Zookeeper Serial Ordering
+  hosts: zookeeper_serial
+  gather_facts: false
+  tags: zookeeper
+  environment: "{{ proxy_env }}"
+  vars_files:
+    - roles/confluent.zookeeper/defaults/main.yml
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - name: Get Leader/Follower
+      shell: "{{zookeeper_health_check_command}} | grep Mode"
+      args:
+        executable: /bin/bash
+      register: leader_query
+      changed_when: false
+      check_mode: false
+
+    - debug: var=leader_query
+
+    - set_fact:
+        # TODO what if only one host
+        mode: "{{ 'follower' if 'follower' in leader_query.stdout else 'leader' }}"
+
+    - name: "Group Hosts by Zookeeper Mode: Follower or Leader"
+      group_by:
+        key: zookeeper_{{mode}}
+
+- name: Zookeeper Followers Provisioning
+  hosts: zookeeper_follower
+  serial: 1
+  gather_facts: false
+  tags: zookeeper
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.zookeeper
+
+- name: Zookeeper Leader Provisioning
+  hosts: zookeeper_leader
   gather_facts: false
   tags: zookeeper
   environment: "{{ proxy_env }}"
