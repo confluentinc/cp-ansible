@@ -1832,7 +1832,7 @@ Default:  "{{mds_super_user}}"
 
 Password for authenticated MDS Health Check. Only relevant if rbac_enabled: true. Likely leave as is
 
-Default:  "{{mds_super_user}}"
+Default:  "{{mds_super_user_password}}"
 
 ***
 
@@ -1848,7 +1848,7 @@ Default:  "{{mds_super_user}}"
 
 Password for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth
 
-Default:  "{{mds_super_user}}"
+Default:  "{{mds_super_user_password}}"
 
 ***
 
