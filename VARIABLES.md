@@ -100,6 +100,62 @@ Default:  true
 
 ***
 
+### zookeeper_health_checks_enabled
+
+Boolean to enable health checks on Zookeeper
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### kafka_broker_health_checks_enabled
+
+Boolean to enable health checks on Kafka
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### schema_registry_health_checks_enabled
+
+Boolean to enable health checks on Schema Registry
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### kafka_connect_health_checks_enabled
+
+Boolean to enable health checks on Kafka Connect
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### kafka_rest_health_checks_enabled
+
+Boolean to enable health checks on Rest Proxy
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### ksql_health_checks_enabled
+
+Boolean to enable health checks on ksqlDB
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### control_center_health_checks_enabled
+
+Boolean to enable health checks on Control Center
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
 ### monitoring_interceptors_enabled
 
 Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
@@ -1761,6 +1817,118 @@ Default:  "{{telemetry_enabled}}"
 Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
 
 Default:  "{{control_center_telemetry_enabled}}"
+
+***
+
+### mds_health_check_user
+
+User for authenticated MDS Health Check. Only relevant if rbac_enabled: true. Likely leave as is
+
+Default:  "{{mds_super_user}}"
+
+***
+
+### mds_health_check_password
+
+Password for authenticated MDS Health Check. Only relevant if rbac_enabled: true. Likely leave as is
+
+Default:  "{{mds_super_user}}"
+
+***
+
+### kafka_broker_rest_health_check_user
+
+User for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth
+
+Default:  "{{mds_super_user}}"
+
+***
+
+### kafka_broker_rest_health_check_password
+
+Password for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth
+
+Default:  "{{mds_super_user}}"
+
+***
+
+### schema_registry_health_check_user
+
+User for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth
+
+Default:  "{{schema_registry_ldap_user}}"
+
+***
+
+### schema_registry_health_check_password
+
+Password for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth
+
+Default:  "{{schema_registry_ldap_password}}"
+
+***
+
+### kafka_connect_health_check_user
+
+User for authenticated Connect Health Check. Set if using customized security like Basic Auth
+
+Default:  "{{kafka_connect_ldap_user}}"
+
+***
+
+### kafka_connect_health_check_password
+
+Password for authenticated Connect Health Check. Set if using customized security like Basic Auth
+
+Default:  "{{kafka_connect_ldap_password}}"
+
+***
+
+### ksql_health_check_user
+
+User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth
+
+Default:  "{{ksql_ldap_user}}"
+
+***
+
+### ksql_health_check_password
+
+Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth
+
+Default:  "{{ksql_ldap_password}}"
+
+***
+
+### kafka_rest_health_check_user
+
+User for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth
+
+Default:  "{{kafka_rest_ldap_user}}"
+
+***
+
+### kafka_rest_health_check_password
+
+Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth
+
+Default:  "{{kafka_rest_ldap_password}}"
+
+***
+
+### control_center_health_check_user
+
+User for authenticated Control Center Health Check. Set if using customized security like Basic Auth
+
+Default:  "{{control_center_ldap_user}}"
+
+***
+
+### control_center_health_check_password
+
+Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth
+
+Default:  "{{control_center_ldap_password}}"
 
 ***
 
