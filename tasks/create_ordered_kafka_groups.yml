@@ -5,32 +5,24 @@
 - import_role:
     name: confluent.variables
 
-- name: Search for Zookeeper SSL Property
-  shell: "grep 'zookeeper.ssl.client.enable' {{kafka_broker.config_file}}"
-  register: zk_ssl_grep
-  failed_when: false
-  changed_when: false
-  check_mode: false
+- name: Load server.properties
+  slurp:
+    src: "{{ kafka_broker.config_file }}"
+  register: slurped_properties
 
 - name: Get Controller Broker ID
   shell: |
     {{ binary_base_path }}/bin/zookeeper-shell {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} \
-      {% if zk_ssl_grep.rc == 0 %}--zk-tls-config-file {{kafka_broker.config_file}}{% endif %} \
+      {% if 'zookeeper.ssl.client.enable=true' in slurped_properties.content|b64decode %}--zk-tls-config-file {{kafka_broker.config_file}}{% endif %} \
       get /controller | grep brokerid
   register: controller_query
   run_once: true
   changed_when: false
   check_mode: false
 
-- name: Search for Kafka Broker ID
-  shell: "grep '^broker.id' {{kafka_broker.config_file}}"
-  register: broker_id_grep
-  changed_when: false
-  check_mode: false
-
 - set_fact:
     controller_json: "{{controller_query.stdout}}"
-    broker_id: "{{broker_id_grep.stdout | regex_replace('^[-a-zA-Z0-9.]*[ ]?=[ ]?(.*)$', '\\1')}}"
+    broker_id: "{{ (slurped_properties.content|b64decode).split('\n') | select('match', '^broker.id.*') | list | first | regex_replace('^[-a-zA-Z0-9.]*[ ]?=[ ]?(.*)$', '\\1') }}"
 
 - debug:
     msg: "Broker ID: {{broker_id}} and Controller ID: {{controller_json.brokerid}}"
