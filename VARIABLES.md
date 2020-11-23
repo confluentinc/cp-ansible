@@ -1868,7 +1868,7 @@ Default:  1.6.2
 
 ### jolokia_jar_url
 
-Full URL used for Jolokia Agent Jar Download
+Full URL used for Jolokia Agent Jar Download. When `jolokia_url_remote=false` this represents the path on Ansible control host.
 
 Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jvm/{{jolokia_version}}/jolokia-jvm-{{jolokia_version}}-agent.jar"
 
@@ -1884,7 +1884,7 @@ Default:  0.12.0
 
 ### jmxexporter_jar_url
 
-Full URL used for Prometheus Exporter Jar Download
+Full URL used for Prometheus Exporter Jar Download. When `jolokia_url_remote=false` this represents the path on Ansible control host. 
 
 Default:  https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/{{jmxexporter_version}}/jmx_prometheus_javaagent-{{jmxexporter_version}}.jar
 
