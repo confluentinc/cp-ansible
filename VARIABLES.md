@@ -4,6 +4,14 @@ Below are the supported variables for the role confluent.variables
 
 ***
 
+### jolokia_url_remote
+
+To copy from Ansible control host or download
+
+Default:  true
+
+***
+
 ### jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on all components
@@ -41,6 +49,14 @@ Default:  admin
 Password for Jolokia Agent when using Basic Auth
 
 Default:  password
+
+***
+
+### jmxexporter_url_remote
+
+To copy from Ansible control host or download
+
+Default:  true
 
 ***
 
@@ -1858,11 +1874,19 @@ Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jv
 
 ***
 
+### jmxexporter_version
+
+Version of JmxExporter Agent Jar to Donwload
+
+Default:  0.12.0
+
+***
+
 ### jmxexporter_jar_url
 
 Full URL used for Prometheus Exporter Jar Download
 
-Default:  https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.12.0/jmx_prometheus_javaagent-0.12.0.jar
+Default:  https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/{{jmxexporter_version}}/jmx_prometheus_javaagent-{{jmxexporter_version}}.jar
 
 ***
 
