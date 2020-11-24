@@ -1830,7 +1830,7 @@ Default:  "{{mds_super_user}}"
 
 ### mds_health_check_password
 
-Password for authenticated MDS Health Check. Only relevant if rbac_enabled: true. 
+Password for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
 
 Default:  "{{mds_super_user_password}}"
 
