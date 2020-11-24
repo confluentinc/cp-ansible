@@ -41,20 +41,25 @@
     - import_role:
         name: confluent.variables
 
-    - name: Get ActiveControllerCount
-      uri:
-        url: "{{ kafka_broker_jolokia_active_controller_url }}"
-        validate_certs: false
-        return_content: true
-        status_code: 200
-        force_basic_auth: true
-        url_username: "{{jolokia_user}}"
-        url_password: "{{jolokia_password}}"
-      register: active_controller_count_query
+    - name: Get Controller Broker ID
+      shell: |
+        {{ binary_base_path }}/bin/zookeeper-shell {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} \
+          {% if zookeeper_ssl_enabled|bool %}-zk-tls-config-file {{kafka_broker.zookeeper_tls_client_config_file}}{% endif %} \
+          get /controller | grep brokerid
+      register: controller_query
+      run_once: true
+      changed_when: false
       check_mode: false
 
     - set_fact:
-        mode: "{{ 'non_controller' if active_controller_count_query['json']['value']['Value']|int == 0 else 'controller' }}"
+        controller_json: "{{controller_query.stdout}}"
+        broker_id: "{{kafka_broker_final_properties['broker.id']}}"
+
+    - debug:
+        msg: "Broker ID: {{broker_id}} and Controller ID: {{controller_json.brokerid}}"
+
+    - set_fact:
+        mode: "{{ 'non_controller' if broker_id != controller_json.brokerid else 'controller' }}"
 
     - name: "Group Hosts by kafka_broker Mode: Controller or Non Controller"
       group_by:
