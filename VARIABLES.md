@@ -1822,7 +1822,7 @@ Default:  "{{control_center_telemetry_enabled}}"
 
 ### mds_health_check_user
 
-User for authenticated MDS Health Check. Only relevant if rbac_enabled: true. Likely leave as is
+User for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
 
 Default:  "{{mds_super_user}}"
 
@@ -1830,7 +1830,7 @@ Default:  "{{mds_super_user}}"
 
 ### mds_health_check_password
 
-Password for authenticated MDS Health Check. Only relevant if rbac_enabled: true. Likely leave as is
+Password for authenticated MDS Health Check. Only relevant if rbac_enabled: true. 
 
 Default:  "{{mds_super_user_password}}"
 
@@ -1838,7 +1838,7 @@ Default:  "{{mds_super_user_password}}"
 
 ### kafka_broker_rest_health_check_user
 
-User for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth
+User for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{mds_super_user}}"
 
@@ -1846,7 +1846,7 @@ Default:  "{{mds_super_user}}"
 
 ### kafka_broker_rest_health_check_password
 
-Password for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth
+Password for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{mds_super_user_password}}"
 
@@ -1854,7 +1854,7 @@ Default:  "{{mds_super_user_password}}"
 
 ### schema_registry_health_check_user
 
-User for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth
+User for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{schema_registry_ldap_user}}"
 
@@ -1862,7 +1862,7 @@ Default:  "{{schema_registry_ldap_user}}"
 
 ### schema_registry_health_check_password
 
-Password for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth
+Password for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{schema_registry_ldap_password}}"
 
@@ -1870,7 +1870,7 @@ Default:  "{{schema_registry_ldap_password}}"
 
 ### kafka_connect_health_check_user
 
-User for authenticated Connect Health Check. Set if using customized security like Basic Auth
+User for authenticated Connect Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{kafka_connect_ldap_user}}"
 
@@ -1878,7 +1878,7 @@ Default:  "{{kafka_connect_ldap_user}}"
 
 ### kafka_connect_health_check_password
 
-Password for authenticated Connect Health Check. Set if using customized security like Basic Auth
+Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{kafka_connect_ldap_password}}"
 
@@ -1886,7 +1886,7 @@ Default:  "{{kafka_connect_ldap_password}}"
 
 ### ksql_health_check_user
 
-User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth
+User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{ksql_ldap_user}}"
 
@@ -1894,7 +1894,7 @@ Default:  "{{ksql_ldap_user}}"
 
 ### ksql_health_check_password
 
-Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth
+Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{ksql_ldap_password}}"
 
@@ -1902,7 +1902,7 @@ Default:  "{{ksql_ldap_password}}"
 
 ### kafka_rest_health_check_user
 
-User for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth
+User for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{kafka_rest_ldap_user}}"
 
@@ -1910,7 +1910,7 @@ Default:  "{{kafka_rest_ldap_user}}"
 
 ### kafka_rest_health_check_password
 
-Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth
+Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{kafka_rest_ldap_password}}"
 
@@ -1918,7 +1918,7 @@ Default:  "{{kafka_rest_ldap_password}}"
 
 ### control_center_health_check_user
 
-User for authenticated Control Center Health Check. Set if using customized security like Basic Auth
+User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{control_center_ldap_user}}"
 
@@ -1926,7 +1926,7 @@ Default:  "{{control_center_ldap_user}}"
 
 ### control_center_health_check_password
 
-Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth
+Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{control_center_ldap_password}}"
 
