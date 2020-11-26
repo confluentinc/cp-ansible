@@ -119,7 +119,7 @@ molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
     }
 }
 
-def post = {
+post {
     withDockerServer([uri: dockerHost()]) {
         stage("Destroy Scenario: ${params.SCENARIO_NAME}") {
             sh """
@@ -131,9 +131,9 @@ molecule destroy -s ${params.SCENARIO_NAME} || true
 }
 
 
-            }
         }
     }
+}
 
 //     def molecule_args = ""
 //     if(override_config) {
