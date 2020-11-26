@@ -29,7 +29,7 @@ def confluent_release_quality = choice(name: 'CONFLUENT_RELEASE_QUALITY',
 
 // Parameter for the molecule test scenario to run
 def molecule_scenario_name = choice(name: 'SCENARIO_NAME',
-    choices: ['rbac-scram-custom-rhel', 'plaintext-rhel'],
+    choices: ['rbac-scram-custom-rhel', 'rbac-mtls-provided-ubuntu', 'archive-plain-rhel'],
     defaultValue: 'rbac-scram-custom-rhel',
     description: 'The Ansible Molecule scenario name to run',
 )
@@ -103,12 +103,12 @@ def job = {
     }
 
     withDockerServer([uri: dockerHost()]) {
-        stage("Test Scenario: ${params.SCENARIO_NAME}") {
+        stage("Test Scenario: ${params.SCENARIO_NAME[2]}") {
             sh """
 docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
 
 cd roles/confluent.test
-molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
+molecule ${molecule_args} test -s ${params.SCENARIO_NAME[2]}
             """
         }
     }
@@ -116,10 +116,10 @@ molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
 
 def post = {
     withDockerServer([uri: dockerHost()]) {
-        stage("Destroy Scenario: ${params.SCENARIO_NAME}") {
+        stage("Destroy Scenario: ${params.SCENARIO_NAME[2]}") {
             sh """
 cd roles/confluent.test
-molecule destroy -s ${params.SCENARIO_NAME} || true
+molecule destroy -s ${params.SCENARIO_NAME[2]} || true
 """
         }
     }
