@@ -83,6 +83,9 @@ def job = {
         }
     }
 
+    stage('Run Scenarios') {
+        parallel{
+            stage ('rbac-scram-custom-rhel'){
     def molecule_args = ""
     if(override_config) {
         override_config['bootstrap'] = false
@@ -103,12 +106,12 @@ def job = {
     }
 
     withDockerServer([uri: dockerHost()]) {
-        stage("Test Scenario: ${params.SCENARIO_NAME[2]}") {
+        stage("Test Scenario: ${params.SCENARIO_NAME}") {
             sh """
 docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
 
 cd roles/confluent.test
-molecule ${molecule_args} test -s ${params.SCENARIO_NAME[2]}
+molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
             """
         }
     }
@@ -116,13 +119,60 @@ molecule ${molecule_args} test -s ${params.SCENARIO_NAME[2]}
 
 def post = {
     withDockerServer([uri: dockerHost()]) {
-        stage("Destroy Scenario: ${params.SCENARIO_NAME[2]}") {
+        stage("Destroy Scenario: ${params.SCENARIO_NAME}") {
             sh """
 cd roles/confluent.test
-molecule destroy -s ${params.SCENARIO_NAME[2]} || true
+molecule destroy -s ${params.SCENARIO_NAME} || true
 """
         }
     }
 }
+
+
+            }
+        }
+    }
+
+//     def molecule_args = ""
+//     if(override_config) {
+//         override_config['bootstrap'] = false
+//         def base_config = [
+//             'provisioner': [
+//                 'inventory': [
+//                     'group_vars': [
+//                         'all': override_config
+//                     ]
+//                 ]
+//             ]
+//         ]
+//         echo "Overriding Ansible vars for testing with base-config:\n" + prettyPrint(toJson(override_config))
+
+//         writeYaml file: "roles/confluent.test/base-config.yml", data: base_config
+
+//         molecule_args = "--base-config base-config.yml"
+//     }
+
+//     withDockerServer([uri: dockerHost()]) {
+//         stage("Test Scenario: ${params.SCENARIO_NAME}") {
+//             sh """
+// docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
+
+// cd roles/confluent.test
+// molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
+//             """
+//         }
+//     }
+// }
+
+// def post = {
+//     withDockerServer([uri: dockerHost()]) {
+//         stage("Destroy Scenario: ${params.SCENARIO_NAME}") {
+//             sh """
+// cd roles/confluent.test
+// molecule destroy -s ${params.SCENARIO_NAME} || true
+// """
+//         }
+//     }
+// }
 
 runJob config, job, post
