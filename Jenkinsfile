@@ -1,8 +1,8 @@
 #!/usr/bin/env groovy
 
 import static groovy.json.JsonOutput.*
-import jenkins.model.*
-jenkins = Jenkins.instance
+
+
 
 /* These are variables that can be used to test an un-released version of the Confluent Platform that resides at
  * a different HTTPS Endpoint other than `https://packages.confluent.io`. You do not need to specify *any* of them
@@ -52,129 +52,61 @@ def job = {
         '''
     }
 
-    def override_config = [:]
+        def override_config = [:]
 
-    // ansible_fqdn within certs does not match the FQDN that zookeeper verifies
-    override_config['zookeeper_custom_java_args'] = '-Dzookeeper.ssl.hostnameVerification=false -Dzookeeper.ssl.quorum.hostnameVerification=false'
+        // ansible_fqdn within certs does not match the FQDN that zookeeper verifies
+        override_config['zookeeper_custom_java_args'] = '-Dzookeeper.ssl.hostnameVerification=false -Dzookeeper.ssl.quorum.hostnameVerification=false'
 
-    def branch_name = targetBranch().toString()
+        def branch_name = targetBranch().toString()
 
-    if(params.CONFLUENT_PACKAGE_BASEURL) {
-        override_config['confluent_common_repository_baseurl'] = params.CONFLUENT_PACKAGE_BASEURL
-    }
+        if(params.CONFLUENT_PACKAGE_BASEURL) {
+            override_config['confluent_common_repository_baseurl'] = params.CONFLUENT_PACKAGE_BASEURL
+        }
 
-    if(params.CONFLUENT_PACKAGE_VERSION) {
-        override_config['confluent_package_version'] = params.CONFLUENT_PACKAGE_VERSION
-        override_config['confluent_repo_version'] = params.CONFLUENT_PACKAGE_VERSION.tokenize('.')[0..1].join('.')
+        if(params.CONFLUENT_PACKAGE_VERSION) {
+            override_config['confluent_package_version'] = params.CONFLUENT_PACKAGE_VERSION
+            override_config['confluent_repo_version'] = params.CONFLUENT_PACKAGE_VERSION.tokenize('.')[0..1].join('.')
 
-        if(params.CONFLUENT_RELEASE_QUALITY != 'prod') {
-            // 'prod' case doesn't need anything overriden
-            switch(params.CONFLUENT_RELEASE_QUALITY) {
-                case "snapshot":
-                    override_config['confluent_package_redhat_suffix'] = "-${params.CONFLUENT_PACKAGE_VERSION}-0.1.SNAPSHOT"
-                    override_config['confluent_package_debian_suffix'] = "=${params.CONFLUENT_PACKAGE_VERSION}~SNAPSHOT-1"
+            if(params.CONFLUENT_RELEASE_QUALITY != 'prod') {
+                // 'prod' case doesn't need anything overriden
+                switch(params.CONFLUENT_RELEASE_QUALITY) {
+                    case "snapshot":
+                        override_config['confluent_package_redhat_suffix'] = "-${params.CONFLUENT_PACKAGE_VERSION}-0.1.SNAPSHOT"
+                        override_config['confluent_package_debian_suffix'] = "=${params.CONFLUENT_PACKAGE_VERSION}~SNAPSHOT-1"
 
-                    // Disable reporting for nightly builds
-                    config.testbreakReporting = false
-                    config.slackChannel = null
-                break
-                default:
-                    error("Unknown release quality ${params.CONFLUENT_RELEASE_QUALITY}")
-                break
+                        // Disable reporting for nightly builds
+                        config.testbreakReporting = false
+                        config.slackChannel = null
+                    break
+                    default:
+                        error("Unknown release quality ${params.CONFLUENT_RELEASE_QUALITY}")
+                    break
+                }
+            }
+
+    
+    stage("Test Scenario: rbac-scram-custom-rhel"){
+       withDockerServer([uri: dockerHost()]) {
+   
+        sh """
+        docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
+
+        cd roles/confluent.test
+        molecule ${molecule_args} test -s rbac-scram-custom-rhel
+                """
             }
         }
-    }
-
-    stage('Run Scenarios') {
-        parallel{
-            stage ('rbac-scram-custom-rhel'){
-    def molecule_args = ""
-    if(override_config) {
-        override_config['bootstrap'] = false
-        def base_config = [
-            'provisioner': [
-                'inventory': [
-                    'group_vars': [
-                        'all': override_config
-                    ]
-                ]
-            ]
-        ]
-        echo "Overriding Ansible vars for testing with base-config:\n" + prettyPrint(toJson(override_config))
-
-        writeYaml file: "roles/confluent.test/base-config.yml", data: base_config
-
-        molecule_args = "--base-config base-config.yml"
-    }
-
-    withDockerServer([uri: dockerHost()]) {
-        stage("Test Scenario: ${params.SCENARIO_NAME}") {
-            sh """
-docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
-
-cd roles/confluent.test
-molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
-            """
-        }
-    }
 }
 
-post {
+def post = {
     withDockerServer([uri: dockerHost()]) {
-        stage("Destroy Scenario: ${params.SCENARIO_NAME}") {
+        stage("Destroy Scenario: rbac-scram-custom-rhel") {
             sh """
 cd roles/confluent.test
-molecule destroy -s ${params.SCENARIO_NAME} || true
+molecule destroy -s rbac-scram-custom-rhel || true
 """
         }
     }
 }
-
-
-        }
-    }
-}
-
-//     def molecule_args = ""
-//     if(override_config) {
-//         override_config['bootstrap'] = false
-//         def base_config = [
-//             'provisioner': [
-//                 'inventory': [
-//                     'group_vars': [
-//                         'all': override_config
-//                     ]
-//                 ]
-//             ]
-//         ]
-//         echo "Overriding Ansible vars for testing with base-config:\n" + prettyPrint(toJson(override_config))
-
-//         writeYaml file: "roles/confluent.test/base-config.yml", data: base_config
-
-//         molecule_args = "--base-config base-config.yml"
-//     }
-
-//     withDockerServer([uri: dockerHost()]) {
-//         stage("Test Scenario: ${params.SCENARIO_NAME}") {
-//             sh """
-// docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
-
-// cd roles/confluent.test
-// molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
-//             """
-//         }
-//     }
-// }
-
-// def post = {
-//     withDockerServer([uri: dockerHost()]) {
-//         stage("Destroy Scenario: ${params.SCENARIO_NAME}") {
-//             sh """
-// cd roles/confluent.test
-// molecule destroy -s ${params.SCENARIO_NAME} || true
-// """
-//         }
-//     }
-// }
 
 runJob config, job, post
