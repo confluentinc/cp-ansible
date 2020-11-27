@@ -54,6 +54,7 @@ def job = {
 
         def override_config = [:]
 
+
         // ansible_fqdn within certs does not match the FQDN that zookeeper verifies
         override_config['zookeeper_custom_java_args'] = '-Dzookeeper.ssl.hostnameVerification=false -Dzookeeper.ssl.quorum.hostnameVerification=false'
 
