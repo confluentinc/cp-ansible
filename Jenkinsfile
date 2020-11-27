@@ -96,7 +96,7 @@ def job = {
                 """
             }
         }
-}
+    }
 
 def post = {
     withDockerServer([uri: dockerHost()]) {
@@ -107,6 +107,7 @@ molecule destroy -s rbac-scram-custom-rhel || true
 """
         }
     }
+ }
 }
 
 runJob config, job, post
