@@ -45,45 +45,58 @@ def config = jobConfig {
 }
 
 def job = {
-    stage('Install Molecule and Latest Ansible') {
-        sh '''
-            sudo pip install --upgrade 'ansible==2.9.*'
-            sudo pip install molecule docker
-        '''
+
+    def override_config = [:]
+
+    // ansible_fqdn within certs does not match the FQDN that zookeeper verifies
+    override_config['zookeeper_custom_java_args'] = '-Dzookeeper.ssl.hostnameVerification=false -Dzookeeper.ssl.quorum.hostnameVerification=false'
+
+    def branch_name = targetBranch().toString()
+
+    if(params.CONFLUENT_PACKAGE_BASEURL) {
+        override_config['confluent_common_repository_baseurl'] = params.CONFLUENT_PACKAGE_BASEURL
     }
 
-        def override_config = [:]
+    if(params.CONFLUENT_PACKAGE_VERSION) {
+        override_config['confluent_package_version'] = params.CONFLUENT_PACKAGE_VERSION
+        override_config['confluent_repo_version'] = params.CONFLUENT_PACKAGE_VERSION.tokenize('.')[0..1].join('.')
 
+        if(params.CONFLUENT_RELEASE_QUALITY != 'prod') {
+            // 'prod' case doesn't need anything overriden
+            switch(params.CONFLUENT_RELEASE_QUALITY) {
+                case "snapshot":
+                    override_config['confluent_package_redhat_suffix'] = "-${params.CONFLUENT_PACKAGE_VERSION}-0.1.SNAPSHOT"
+                    override_config['confluent_package_debian_suffix'] = "=${params.CONFLUENT_PACKAGE_VERSION}~SNAPSHOT-1"
 
-        // ansible_fqdn within certs does not match the FQDN that zookeeper verifies
-        override_config['zookeeper_custom_java_args'] = '-Dzookeeper.ssl.hostnameVerification=false -Dzookeeper.ssl.quorum.hostnameVerification=false'
-
-        def branch_name = targetBranch().toString()
-
-        if(params.CONFLUENT_PACKAGE_BASEURL) {
-            override_config['confluent_common_repository_baseurl'] = params.CONFLUENT_PACKAGE_BASEURL
-        }
-
-        if(params.CONFLUENT_PACKAGE_VERSION) {
-            override_config['confluent_package_version'] = params.CONFLUENT_PACKAGE_VERSION
-            override_config['confluent_repo_version'] = params.CONFLUENT_PACKAGE_VERSION.tokenize('.')[0..1].join('.')
-
-            if(params.CONFLUENT_RELEASE_QUALITY != 'prod') {
-                // 'prod' case doesn't need anything overriden
-                switch(params.CONFLUENT_RELEASE_QUALITY) {
-                    case "snapshot":
-                        override_config['confluent_package_redhat_suffix'] = "-${params.CONFLUENT_PACKAGE_VERSION}-0.1.SNAPSHOT"
-                        override_config['confluent_package_debian_suffix'] = "=${params.CONFLUENT_PACKAGE_VERSION}~SNAPSHOT-1"
-
-                        // Disable reporting for nightly builds
-                        config.testbreakReporting = false
-                        config.slackChannel = null
-                    break
-                    default:
-                        error("Unknown release quality ${params.CONFLUENT_RELEASE_QUALITY}")
-                    break
-                }
+                    // Disable reporting for nightly builds
+                    config.testbreakReporting = false
+                    config.slackChannel = null
+                break
+                default:
+                    error("Unknown release quality ${params.CONFLUENT_RELEASE_QUALITY}")
+                break
             }
+          }
+       }
+
+       def molecule_args = ""
+        if(override_config) {
+            override_config['bootstrap'] = false
+            def base_config = [
+                'provisioner': [
+                    'inventory': [
+                        'group_vars': [
+                            'all': override_config
+                        ]
+                    ]
+                ]
+            ]
+            echo "Overriding Ansible vars for testing with base-config:\n" + prettyPrint(toJson(override_config))
+
+            writeYaml file: "roles/confluent.test/base-config.yml", data: base_config
+
+            molecule_args = "--base-config base-config.yml"
+        }
 
     
     stage("Test Scenario: rbac-scram-custom-rhel"){
