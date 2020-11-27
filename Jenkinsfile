@@ -122,7 +122,7 @@ def job = {
             }
         }
     }
-}
+
 
 def post = {
     withDockerServer([uri: dockerHost()]) {
