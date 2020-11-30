@@ -98,52 +98,47 @@ def job = {
             molecule_args = "--base-config base-config.yml"
         }
 
-    stages {
-        stage stage("Run Scenarios"){
-            parallel{
-                stage("Test Scenario: rbac-scram-custom-rhel"){
-                    step{
-                        withDockerServer([uri: dockerHost()]) {
-                
-                        sh """
-                        docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
+    parallel{
+    stage("Test Scenario: rbac-scram-custom-rhel"){
+       withDockerServer([uri: dockerHost()]) {
+   
+        sh """
+        docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
 
-                        cd roles/confluent.test
-                        molecule ${molecule_args} test -s rbac-scram-custom-rhel
-                                """
-                        }
-                    }
-                    post{
-                        sh """
-                        cd roles/confluent.test
-                        molecule destroy -s rbac-scram-custom-rhel || true
-                        """
-                        
-                    }
-                    }
-                stage("Test Scenario: archive-plain-rhel"){
-                    step{
-                        withDockerServer([uri: dockerHost()]) {
-                        sh """
-                        docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
+        cd roles/confluent.test
+        molecule ${molecule_args} test -s rbac-scram-custom-rhel
+                """
+            }
+        }
+    stage("Test Scenario: archive-plain-rhel"){
+       withDockerServer([uri: dockerHost()]) {
+   
+        sh """
+        docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
 
-                        cd roles/confluent.test
-                        molecule ${molecule_args} test -s archive-plain-rhel
-                                """
-
-                        }
-                    }
-                    post{
-                        sh """
-                        cd roles/confluent.test
-                        molecule destroy -s archive-plain-rhel || true
-                        """
-                    }
-                }
+        cd roles/confluent.test
+        molecule ${molecule_args} test -s archive-plain-rhel
+                """
+            }
+        }
     }
 }
-}
-}
 
+def post = {
+    withDockerServer([uri: dockerHost()]) {
+    stage("Destroy Scenario: rbac-scram-custom-rhel") {
+            sh """
+            cd roles/confluent.test
+            molecule destroy -s rbac-scram-custom-rhel || true
+            """
+        }
+    stage("Destroy Scenario: archive-plain-rhel") {
+            sh """
+            cd roles/confluent.test
+            molecule destroy -s archive-plain-rhel || true
+            """
+        }
+    }
+ }
 
-runJob config, job
+runJob config, job, post
