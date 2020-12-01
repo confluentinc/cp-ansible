@@ -48,14 +48,14 @@ log4j.appender.kafkaAppender.append=true
 # Log Streaming Configuration
 log4j.appender.kafka_appender=org.apache.kafka.log4jappender.KafkaLog4jAppender
 log4j.appender.kafka_appender.layout=io.confluent.common.logging.log4j.StructuredJsonLayout
-log4j.appender.kafka_appender.BrokerList={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}{% endfor %}
+log4j.appender.kafka_appender.BrokerList={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}}{% endfor %}
 
 log4j.appender.kafka_appender.Topic={{ksql_processing_log}}
 log4j.logger.processing=ERROR, kafka_appender
 
 # Security Configuration for Log Streaming
 {% set config_prefix = '' %}
-{% set listener = kafka_broker_listeners[ksql_kafka_listener_name] %}
+{% set listener = kafka_broker_listeners[kafka_broker_inter_broker_listener_name] %}
 {% set truststore_path = ksql_truststore_path %}
 {% set truststore_storepass = ksql_truststore_storepass %}
 {% set keystore_path = ksql_keystore_path %}
@@ -86,6 +86,7 @@ log4j.logger.processing=ERROR, kafka_appender
 {% endif %}
 {% endif %}
 {% endif %}
+
 {% if listener['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
 {{config_prefix}}log4j.appender.kafka_appender.SaslMechanism=PLAIN
 {{config_prefix}}log4j.appender.kafka_appender.ClientJaasConf=org.apache.kafka.common.security.plain.PlainLoginModule required \
@@ -99,17 +100,10 @@ log4j.logger.processing=ERROR, kafka_appender
 {% if listener['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
 {{config_prefix}}log4j.appender.kafka_appender.SaslMechanism=GSSAPI
 {{config_prefix}}log4j.appender.kafka_appender.SaslKerberosServiceName={{kerberos_kafka_broker_primary}}
-{{config_prefix}}log4j.appender.kafka_appender.clientJaasConf='com.sun.security.auth.module.Krb5LoginModule required \
+{{config_prefix}}log4j.appender.kafka_appender.clientJaasConf=com.sun.security.auth.module.Krb5LoginModule required \
    useKeyTab=true storeKey=true keyTab="{{kerberos.keytab_dir}}/{{kerberos_keytab_path | basename}}" \
-   principal="{{kerberos_principal}}";'
+   principal="{{kerberos_principal}}" serviceName="{{kerberos_kafka_broker_primary}}";
 {% endif %}
-# {% if listener['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'OAUTHBEARER' %}
-# {{config_prefix}}log4j.appender.kafka_appender.saslMechanism=OAUTHBEARER
-# {{config_prefix}}log4j.appender.kafka_appender.saslLoginCallbackHandlerClass=io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler
-# {{config_prefix}}log4j.appender.kafka_appender.clientJaasConf=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
-#    username="{{oauth_username}}" password="{{oauth_password}}" \
-#    metadataServerUrls="{% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{mds_http_protocol}}://{{ host }}:{{mds_port}}{% endfor %}";
-# {% endif %}
 
 # loggers
 log4j.logger.org.apache.kafka.streams=INFO, streamsAppender
