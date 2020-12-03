@@ -69,6 +69,7 @@
     ca_cert_path: "{{kafka_rest_ca_cert_path}}"
     cert_path: "{{kafka_rest_cert_path}}"
     key_path: "{{kafka_rest_key_path}}"
+    export_certs: "{{kafka_rest_export_certs}}"
   when: >
     kafka_rest_ssl_enabled|bool or
     kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
@@ -86,7 +87,9 @@
   when: kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
 - name: Copy Custom Kafka Rest Files
-  include_tasks: ../../tasks/copy_files.yml
+  include_role:
+    name: confluent.common
+    tasks_from: copy_files.yml
   vars:
     copy_files: "{{kafka_rest_copy_files}}"
     user: "{{kafka_rest_user}}"
@@ -132,29 +135,18 @@
 
 - name: Create Logs Directory
   file:
-    path: "{{kafka_rest.appender_log_path}}"
+    path: "{{kafka_rest_log_dir}}"
     state: directory
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
     mode: 0770
 
-- name: Create log4j Directory
+- name: Set Permissions on Log4j Conf
   file:
-    path: "{{kafka_rest.log4j_file | dirname}}"
-    owner: "{{kafka_rest_user}}"
+    path: "{{kafka_rest.log4j_file}}"
     group: "{{kafka_rest_group}}"
-    state: directory
-    mode: 0750
-
-- name: Create Kafka Rest log4j Config
-  template:
-    src: kafka-rest_log4j.properties.j2
-    dest: "{{kafka_rest.log4j_file}}"
+    owner: "{{kafka_rest_user}}"
     mode: 0640
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-  when: kafka_rest_custom_log4j|bool
-  notify: restart kafka-rest
 
 - name: Create Kafka Rest Jolokia Config
   template:
@@ -167,7 +159,9 @@
   notify: restart kafka-rest
 
 - name: Enable Secrets Protection
-  include_tasks: ../../tasks/secrets_protection.yml
+  include_role:
+    name: confluent.common
+    tasks_from: secrets_protection.yml
   vars:
     encrypt_passwords: "{{ kafka_rest_secrets_protection_encrypt_passwords }}"
     properties: "{{ kafka_rest_secrets_protection_encrypt_properties }}"
@@ -216,5 +210,5 @@
 - name: Health Check
   include_tasks: health_check.yml
   when:
-    - health_checks_enabled|bool
+    - kafka_rest_health_checks_enabled|bool
     - not ansible_check_mode

@@ -2,13 +2,13 @@
 # Custom filters used in this file are defined in filter_plugins/filters.py
 
 confluent_repo_version: 6.0
-confluent_package_version: 6.0.0
+confluent_package_version: 6.0.1
 confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
 confluent_package_debian_suffix: "{{ '=' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
 
 ### Boolean to enable Jolokia Agent installation and configuration on all components
-jolokia_enabled: true
+jolokia_enabled: false
 
 ### Full path to download the Jolokia Agent Jar
 jolokia_jar_path: /opt/jolokia/jolokia.jar
@@ -35,11 +35,15 @@ fips_jar_path: /usr/share/java/kafka/bc-fips-*.jar
 fips_provider_class: org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider
 pkcs12_enabled: "{{ true if fips_enabled|bool else false }}"
 
-### Boolean to enable cp-ansible's Custom Log4j Configuration across all components
+### Boolean to configure ZK, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 custom_log4j: true
 
 ### Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, keberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary
 kerberos_configure: true
+
+# Deprecated variable now that primary can be pulled from kafka_broker_kerberos_principal
+kerberos_kafka_broker_primary: "{{ (hostvars[ groups['kafka_broker'][0] | default('kafka') ] | default({})) ['kafka_broker_kerberos_principal'] | default('kafka/host@EXAMPLE>COM') | regex_replace('/.*') }}"
+
 
 # TODO document the rest of the kerberos variables, also admin_hostname should default to kdc_hostname
 
@@ -50,6 +54,27 @@ confluent_server_enabled: true
 
 ### Boolean to enable health checks on all components
 health_checks_enabled: true
+
+### Boolean to enable health checks on Zookeeper
+zookeeper_health_checks_enabled: "{{health_checks_enabled}}"
+
+### Boolean to enable health checks on Kafka
+kafka_broker_health_checks_enabled: "{{health_checks_enabled}}"
+
+### Boolean to enable health checks on Schema Registry
+schema_registry_health_checks_enabled: "{{health_checks_enabled}}"
+
+### Boolean to enable health checks on Kafka Connect
+kafka_connect_health_checks_enabled: "{{health_checks_enabled}}"
+
+### Boolean to enable health checks on Rest Proxy
+kafka_rest_health_checks_enabled: "{{health_checks_enabled}}"
+
+### Boolean to enable health checks on ksqlDB
+ksql_health_checks_enabled: "{{health_checks_enabled}}"
+
+### Boolean to enable health checks on Control Center
+control_center_health_checks_enabled: "{{health_checks_enabled}}"
 
 common_role_completed: false
 
@@ -112,6 +137,9 @@ ssl_keystore_key_password: ""
 ### Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
 ssl_keystore_store_password: ""
 
+### Keystore source alias for host specific certificate. Only required if keystore contains more than one certificate. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "{{inventory_hostname}}"
+ssl_keystore_alias: ""
+
 ### Full path to host specific truststore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. Can share same keystore for all components if it contains all ca certs used to sign host certificates
 ssl_truststore_filepath: ""
 
@@ -142,10 +170,10 @@ ssl_custom_certs_remote_src: false
 
 # Zookeeper Variables
 
-### Only use to customize Linux User Zookeeper Service runs with. User must exist on host.
+### Set this variable to customize the Linux User that the Zookeeper Service runs with. Default user is cp-kafka.
 zookeeper_user: "{{zookeeper_default_user}}"
 
-### Only use to customize Linux Group Zookeeper Service user belongs to. Group must exist on host.
+### Set this variable to customize the Linux Group that the Zookeeper Service user belongs to. Default group is confluent.
 zookeeper_group: "{{zookeeper_default_group}}"
 
 ### Boolean to configure zookeeper with TLS Encryption. Also manages Java Keystore creation
@@ -160,6 +188,9 @@ zookeeper_client_port: "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
 ### SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
 zookeeper_sasl_protocol: "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
 
+### Set this variable to customize the directory that Zookeeper writes log files to. Default location is /var/log/kafka. NOTE- zookeeper.log_path is deprecated.
+zookeeper_log_dir: "{{zookeeper.log_path}}"
+
 zookeeper_truststore_path: "/var/ssl/private/zookeeper.truststore.jks"
 zookeeper_keystore_path: "/var/ssl/private/zookeeper.keystore.jks"
 zookeeper_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
@@ -168,12 +199,13 @@ zookeeper_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keysto
 zookeeper_ca_cert_path: "/var/ssl/private/ca.crt"
 zookeeper_cert_path: "/var/ssl/private/zookeeper.crt"
 zookeeper_key_path: "/var/ssl/private/zookeeper.key"
+zookeeper_export_certs: "{{zookeeper_ssl_mutual_auth_enabled}}"
 zookeeper_keytab_path: /etc/security/keytabs/zookeeper.keytab
 
 zookeeper:
   # TODO deprecate these
-  log4j_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/zookeeper_log4j.properties"
   jaas_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/zookeeper_jaas.conf"
+  log_path: "{{zookeeper_default_log_dir}}"
   # Deprecated way of providing custom properties
   properties: {}
 
@@ -206,7 +238,18 @@ zookeeper_jmxexporter_port: 8079
 
 zookeeper_jmxexporter_config_path: /opt/prometheus/zookeeper.yml
 
-zookeeper_health_check_command: "exec 42<>/dev/tcp/127.0.0.1/{{zookeeper_final_properties.clientPort}}; echo -e 'srvr' >&42; cat <&42"
+zookeeper_health_check_command: "KAFKA_OPTS='{{ zookeeper_service_environment_overrides.KAFKA_OPTS }}'
+{{ binary_base_path }}/bin/kafka-run-class
+{% if zookeeper_ssl_enabled|bool %}
+-Dzookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+-Dzookeeper.ssl.trustStore.location={{zookeeper_truststore_path}}
+-Dzookeeper.ssl.trustStore.password={{zookeeper_truststore_storepass}}
+-Dzookeeper.ssl.keyStore.location={{zookeeper_keystore_path}}
+-Dzookeeper.ssl.keyStore.password={{zookeeper_keystore_storepass}}
+-Dzookeeper.client.secure=true
+{% endif %}
+org.apache.zookeeper.client.FourLetterWordMain {{inventory_hostname}} {{zookeeper_client_port}} srvr
+{% if zookeeper_ssl_enabled|bool %}true{% endif %}"
 
 zookeeper_current_node_hostname: "{{ inventory_hostname }}"
 
@@ -254,11 +297,15 @@ kafka_broker_inter_broker_listener_name: "{{ 'broker' if kafka_broker_configure_
 # Uses custom filter to create a list of all sasl_protocols, removes ['none'], and reduces to unique items
 kafka_broker_sasl_enabled_mechanisms: "{{ kafka_broker_listeners | get_sasl_mechanisms(sasl_protocol) | difference(['none']) | unique }}"
 
-### Only use to customize Linux User Kafka Service runs with. User must exist on host.
+### Set this variable to customize the Linux User that the Kafka Broker Service runs with. Default user is cp-kafka.
 kafka_broker_user: "{{kafka_broker_default_user}}"
 
-### Only use to customize Linux Group Kafka Service user belongs to. Group must exist on host.
+### Set this variable to customize the Linux Group that the Kafka Broker Service user belongs to. Default group is confluent.
 kafka_broker_group: "{{kafka_broker_default_group}}"
+
+### Set this variable to customize the directory that the Kafka Broker writes log files to. Default location is /var/log/kafka. NOTE- kafka_broker.appender_log_path is deprecated.
+kafka_broker_log_dir: "{{kafka_broker.appender_log_path}}"
+
 
 kafka_broker_truststore_path: "/var/ssl/private/kafka_broker.truststore.jks"
 kafka_broker_keystore_path: "/var/ssl/private/kafka_broker.keystore.jks"
@@ -268,12 +315,13 @@ kafka_broker_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_key
 kafka_broker_ca_cert_path: "/var/ssl/private/ca.crt"
 kafka_broker_cert_path: "/var/ssl/private/kafka_broker.crt"
 kafka_broker_key_path: "/var/ssl/private/kafka_broker.key"
+kafka_broker_export_certs: "{{ssl_mutual_auth_enabled}}"
 kafka_broker_keytab_path: /etc/security/keytabs/kafka_broker.keytab
 
 kafka_broker:
   # TODO deprecate these variables
-  log4j_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_server_log4j.properties"
   jaas_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_server_jaas.conf"
+  appender_log_path: "{{kafka_broker_default_log_dir}}"
   # Deprecated way of providing custom properties
   properties: {}
   # Deprecated way of setting kafkas log.dirs property
@@ -333,11 +381,15 @@ kafka_broker_custom_properties: "{{ kafka_broker.properties }}"
 ### Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
 kafka_broker_rest_proxy_enabled: "{{confluent_server_enabled}}"
 
+### Use to register and identify your Kafka cluster in the MDS.
+kafka_broker_cluster_name: ""
+
 #### Schema Registry Variables ####
 
-### Only use to customize Linux User Schema Registry Service runs with. User must exist on host.
+### Set this variable to customize the Linux User that the Schema Registry Service runs with. Default user is cp-schema-registry.
 schema_registry_user: "{{schema_registry_default_user}}"
-### Only use to customize Linux Group Schema Registry Service user belongs to. Group must exist on host.
+
+### Set this variable to customize the Linux Group that the Schema Registry Service user belongs to. Default group is confluent.
 schema_registry_group: "{{schema_registry_default_group}}"
 
 ### Port Schema Registry API exposed over
@@ -349,6 +401,9 @@ schema_registry_ssl_enabled: "{{ssl_enabled}}"
 ### Boolean to enable mTLS Authentication on Schema Registry
 schema_registry_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 
+### Set this variable to customize the directory that the Schema Registry writes log files to. Default location is /var/log/confluent/schema-registry. NOTE- schema_registry.appender_log_path is deprecated.
+schema_registry_log_dir: "{{schema_registry.appender_log_path}}"
+
 schema_registry_truststore_path: "/var/ssl/private/schema_registry.truststore.jks"
 schema_registry_keystore_path: "/var/ssl/private/schema_registry.keystore.jks"
 schema_registry_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
@@ -357,10 +412,11 @@ schema_registry_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_
 schema_registry_ca_cert_path: "/var/ssl/private/ca.crt"
 schema_registry_cert_path: "/var/ssl/private/schema_registry.crt"
 schema_registry_key_path: "/var/ssl/private/schema_registry.key"
+schema_registry_export_certs: "{{schema_registry_ssl_mutual_auth_enabled}}"
 schema_registry_keytab_path: /etc/security/keytabs/schema_registry.keytab
 schema_registry_kafka_listener_name: internal
 schema_registry:
-  log4j_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/schema-registry/schema_registry_log4j.properties"
+  appender_log_path: "{{schema_registry_default_log_dir}}"
   # Deprecated way of providing custom properties
   properties: {}
 
@@ -399,13 +455,15 @@ schema_registry_copy_files: []
 ### Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 schema_registry_custom_properties: "{{ schema_registry.properties }}"
 
+### Use to register and identify your Schema Registry cluster in the MDS.
+schema_registry_cluster_name: ""
 
 #### Kafka Rest Variables ####
 
-### Only use to customize Linux User Rest Proxy Service runs with. User must exist on host.
+### Set this variable to customize the Linux User that the Rest Proxy Service runs with. Default user is cp-kafka-rest.
 kafka_rest_user: "{{kafka_rest_default_user}}"
 
-### Only use to customize Linux Group Rest Proxy Service user belongs to. Group must exist on host.
+### Set this variable to customize the Linux Group that the Rest Proxy Service user belongs to. Default group is confluent.
 kafka_rest_group: "{{kafka_rest_default_group}}"
 
 ### Port Rest Proxy API exposed over
@@ -417,6 +475,9 @@ kafka_rest_ssl_enabled: "{{ssl_enabled}}"
 ### Boolean to enable mTLS Authentication on Rest Proxy
 kafka_rest_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 
+### Set this variable to customize the directory that the Rest Proxy writes log files to. Default location is /var/log/confluent/kafka-rest. NOTE- kafka_rest.appender_log_path is deprecated.
+kafka_rest_log_dir: "{{kafka_rest.appender_log_path}}"
+
 kafka_rest_truststore_path: "/var/ssl/private/kafka_rest.truststore.jks"
 kafka_rest_keystore_path: "/var/ssl/private/kafka_rest.keystore.jks"
 kafka_rest_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
@@ -425,10 +486,11 @@ kafka_rest_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keyst
 kafka_rest_ca_cert_path: "/var/ssl/private/ca.crt"
 kafka_rest_cert_path: "/var/ssl/private/kafka_rest.crt"
 kafka_rest_key_path: "/var/ssl/private/kafka_rest.key"
+kafka_rest_export_certs: "{{kafka_rest_ssl_mutual_auth_enabled}}"
 kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
 kafka_rest_kafka_listener_name: internal
 kafka_rest:
-  log4j_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-rest/kafka-rest_log4j.properties"
+  appender_log_path: "{{kafka_rest_default_log_dir}}"
   # Deprecated way of providing custom properties
   properties: {}
 
@@ -472,10 +534,10 @@ kafka_rest_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled 
 
 # Kafka Connect Variables
 
-### Only use to customize Linux User Connect Service runs with. User must exist on host.
+### Set this variable to customize the Linux User that the Kafka Connect Service runs with. Default user is cp-kafka-connect.
 kafka_connect_user: "{{kafka_connect_default_user}}"
 
-### Only use to customize Linux Group Connect Service user belongs to. Group must exist on host.
+### Set this variable to customize the Linux Group that the Kafka Connect Service user belongs to. Default group is confluent.
 kafka_connect_group: "{{kafka_connect_default_group}}"
 
 ### Port Connect API exposed over
@@ -487,6 +549,9 @@ kafka_connect_ssl_enabled: "{{ssl_enabled}}"
 ### Boolean to enable mTLS Authentication on Connect
 kafka_connect_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 
+### Set this variable to customize the directory that Kafka Connect writes log files to. Default location is /var/log/kafka. NOTE- kafka_connect.appender_log_path is deprecated.
+kafka_connect_log_dir: "{{kafka_connect.appender_log_path}}"
+
 kafka_connect_truststore_path: "/var/ssl/private/kafka_connect.truststore.jks"
 kafka_connect_keystore_path: "/var/ssl/private/kafka_connect.keystore.jks"
 kafka_connect_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
@@ -495,10 +560,11 @@ kafka_connect_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_ke
 kafka_connect_ca_cert_path: "/var/ssl/private/ca.crt"
 kafka_connect_cert_path: "/var/ssl/private/kafka_connect.crt"
 kafka_connect_key_path: "/var/ssl/private/kafka_connect.key"
+kafka_connect_export_certs: "{{kafka_connect_ssl_mutual_auth_enabled}}"
 kafka_connect_keytab_path: /etc/security/keytabs/kafka_connect.keytab
 kafka_connect_kafka_listener_name: internal
 kafka_connect:
-  log4j_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/connect_distributed_log4j.properties"
+  appender_log_path: "{{kafka_connect_default_log_dir}}"
   # Deprecated way of providing custom properties
   properties: {}
 
@@ -560,13 +626,15 @@ kafka_connect_custom_properties: "{{ kafka_connect.properties }}"
 ### Boolean to configure Monitoring Interceptors on Connect.
 kafka_connect_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled }}"
 
+### Use to register and identify your Kafka Connect cluster in the MDS.
+kafka_connect_cluster_name: ""
 
 #### KSQLDB Variables ####
 
-### Only use to customize Linux User ksqlDB Service runs with. User must exist on host.
+### Set this variable to customize the Linux User that the ksqlDB Service runs with. Default user is cp-ksql.
 ksql_user: "{{ksql_default_user}}"
 
-### Only use to customize Linux Group ksqlDB Service user belongs to. Group must exist on host.
+### Set this variable to customize the Linux Group that the ksqlDB Service user belongs to. Default group is confluent.
 ksql_group: "{{ksql_default_group}}"
 
 ### Port ksqlDB API exposed over
@@ -578,6 +646,9 @@ ksql_ssl_enabled: "{{ssl_enabled}}"
 ### Boolean to enable mTLS Authentication on ksqlDB
 ksql_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 
+### Set this variable to customize the directory that ksqlDB writes log files to. Default location is /var/log/confluent/ksql. NOTE- ksql.appender_log_path is deprecated.
+ksql_log_dir: "{{ksql.appender_log_path}}"
+
 ksql_truststore_path: "/var/ssl/private/ksql.truststore.jks"
 ksql_keystore_path: "/var/ssl/private/ksql.keystore.jks"
 ksql_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
@@ -586,11 +657,12 @@ ksql_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_an
 ksql_ca_cert_path: "/var/ssl/private/ca.crt"
 ksql_cert_path: "/var/ssl/private/ksql.crt"
 ksql_key_path: "/var/ssl/private/ksql.key"
+ksql_export_certs: "{{ksql_ssl_mutual_auth_enabled}}"
 ksql_keytab_path: /etc/security/keytabs/ksql.keytab
 ksql_kafka_listener_name: internal
 ksql:
-  log4j_file: "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql-server_log4j.properties' , '/etc/ksql/ksql-server_log4j.properties')}}"
   jaas_file: "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql-server_jaas.conf' , '/etc/ksql/ksql-server_jaas.conf')}}"
+  appender_log_path: "{{ksql_default_log_dir}}"
   properties: {}
 
 ### Boolean to enable Jolokia Agent installation and configuration on ksqlDB
@@ -636,13 +708,15 @@ ksql_custom_properties: "{{ ksql.properties }}"
 ### Boolean to configure Monitoring Interceptors on ksqlDB.
 ksql_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled }}"
 
+### Use to register and identify your KSQL cluster in the MDS.
+ksql_cluster_name: ""
 
 # Control Center Variables
 
-### Only use to customize Linux User Control Center Service runs with. User must exist on host.
+### Set this variable to customize the Linux User that the Control Center Service runs with. Default user is cp-control-center.
 control_center_user: "{{control_center_default_user}}"
 
-### Only use to customize Linux Group Control Center Service user belongs to. Group must exist on host.
+### Set this variable to customize the Linux Group that the Control Center Service user belongs to. Default group is confluent.
 control_center_group: "{{control_center_default_group}}"
 
 ### Port Control Center exposed over
@@ -654,6 +728,9 @@ control_center_listener_hostname: "0.0.0.0"
 ### Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
 control_center_ssl_enabled: "{{ssl_enabled}}"
 
+### Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
+control_center_log_dir: "{{control_center.appender_log_path}}"
+
 control_center_truststore_path: "/var/ssl/private/control_center.truststore.jks"
 control_center_keystore_path: "/var/ssl/private/control_center.keystore.jks"
 control_center_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
@@ -662,10 +739,11 @@ control_center_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_k
 control_center_ca_cert_path: "/var/ssl/private/ca.crt"
 control_center_cert_path: "/var/ssl/private/control_center.crt"
 control_center_key_path: "/var/ssl/private/control_center.key"
+control_center_export_certs: "{{ssl_mutual_auth_enabled}}"
 control_center_keytab_path: /etc/security/keytabs/control_center.keytab
 control_center_kafka_listener_name: internal
 control_center:
-  log4j_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/confluent-control-center/control-center_log4j.properties"
+  appender_log_path: "{{control_center_default_log_dir}}"
   # Deprecated way of providing custom properties
   properties: {}
 
@@ -949,3 +1027,45 @@ control_center_telemetry_enabled: "{{telemetry_enabled}}"
 
 ### Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
 control_center_telemetry_ansible_labels_enabled: "{{control_center_telemetry_enabled}}"
+
+### User for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
+mds_health_check_user: "{{mds_super_user}}"
+
+### Password for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
+mds_health_check_password: "{{mds_super_user_password}}"
+
+### User for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
+kafka_broker_rest_health_check_user: "{{mds_super_user}}"
+
+### Password for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
+kafka_broker_rest_health_check_password: "{{mds_super_user_password}}"
+
+### User for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
+schema_registry_health_check_user: "{{schema_registry_ldap_user}}"
+
+### Password for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
+schema_registry_health_check_password: "{{schema_registry_ldap_password}}"
+
+### User for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+kafka_connect_health_check_user: "{{kafka_connect_ldap_user}}"
+
+### Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+kafka_connect_health_check_password: "{{kafka_connect_ldap_password}}"
+
+### User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
+ksql_health_check_user: "{{ksql_ldap_user}}"
+
+### Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
+ksql_health_check_password: "{{ksql_ldap_password}}"
+
+### User for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
+kafka_rest_health_check_user: "{{kafka_rest_ldap_user}}"
+
+### Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
+kafka_rest_health_check_password: "{{kafka_rest_ldap_password}}"
+
+### User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
+control_center_health_check_user: "{{control_center_ldap_user}}"
+
+### Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
+control_center_health_check_password: "{{control_center_ldap_password}}"

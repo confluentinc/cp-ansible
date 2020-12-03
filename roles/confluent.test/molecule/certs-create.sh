@@ -62,6 +62,10 @@ for line in `sed '/^$/d' $filename`; do
       # EXT="SAN=dns:$internal"
       EXT="SAN=dns:$internal,dns:$fqdn"
 
+      FORMAT=$1
+
+
+
       echo "  >>>  Create host keystore"
       keytool -genkeypair -noprompt \
           -keystore $KEYSTORE_FILENAME \
@@ -69,19 +73,21 @@ for line in `sed '/^$/d' $filename`; do
           -dname "CN=$service,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US" \
           -ext $EXT \
           -keyalg RSA \
-          -storetype pkcs12 \
+          -storetype $FORMAT \
           -keysize 2048 \
           -storepass keystorepass \
           -keypass keystorepass
 
 
-      echo "  >>>  Get host key from Keystore"
-      openssl pkcs12 \
-          -in $KEYSTORE_FILENAME \
-          -passin pass:keystorepass \
-          -passout pass:keypass \
-          -nodes -nocerts \
-          -out $KEY_FILENAME
+      if [ $FORMAT = "pkcs12" ]; then
+         echo "  >>>  Get host key from Keystore"
+         openssl pkcs12 \
+             -in $KEYSTORE_FILENAME \
+             -passin pass:keystorepass \
+             -passout pass:keypass \
+             -nodes -nocerts \
+             -out $KEY_FILENAME
+      fi
 
       echo "  >>>  Create the certificate signing request (CSR)"
       keytool -certreq \
@@ -125,6 +131,18 @@ EOF
           -file $CA_CRT  \
           -storepass keystorepass \
           -keypass keystorepass
+
+
+      if (( $# == 2 ))
+      then
+        echo "  >>>  Import the CA cert twice into the keystore"
+        keytool -noprompt -import \
+            -keystore $KEYSTORE_FILENAME \
+            -alias dumbcert \
+            -file $CA_CRT  \
+            -storepass keystorepass \
+            -keypass keystorepass
+      fi
 
       echo "  >>> Import the host certificate into the keystore"
       keytool -noprompt -import \

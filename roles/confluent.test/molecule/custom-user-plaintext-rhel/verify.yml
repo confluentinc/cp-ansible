@@ -1,12 +1,10 @@
 ---
 - name: Verify - Zookeeper User Change and custom logging path
-  hosts: zookeeper1-kafka-broker1
+  hosts: zookeeper,kafka_broker
   gather_facts: false
+  vars:
+    zookeeper_user: zk-test-user
   tasks:
-    - name: Set Zookeeper user to new user
-      set_fact:
-        zookeeper_user: zk-test-user
-
     - name: Create Zookeeper User
       user:
         name: "{{zookeeper_user}}"
@@ -18,6 +16,7 @@
       file:
         path: /kafka/logs/
         state: directory
+        # TODO discuss this recurse here
         recurse: true
         group: cp-test-group
         owner: "{{zookeeper_user}}"
@@ -51,6 +50,18 @@
         custom_path: /kafka/logs/
         group: cp-test-group
         user: zk-test-user
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_log4j.yml
+      vars:
+        process_search_string: "kafka.Kafka"
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_log4j.yml
+      vars:
+        process_search_string: "org.apache.zookeeper.server.quorum.QuorumPeerMain"
 
 - name: Verify - Schema Registry custom user and custom group and custom logging directory and log file presence
   hosts: schema_registry
@@ -99,7 +110,7 @@
         name: confluent.test
         tasks_from: check_ownership.yml
       vars:
-        file_name: connect-distributed.log
+        file_name: connect.log
         custom_path: /kafka/logs/kafkaconnect/
         group: connect-custom-group
         user: connect-custom
@@ -125,7 +136,7 @@
         name: confluent.test
         tasks_from: check_ownership.yml
       vars:
-        file_name: rest-proxy.log
+        file_name: kafka-rest.log
         custom_path: /kafka/logs/kafkarest/
         group: rest-custom-group
         user: rest-custom
@@ -181,3 +192,11 @@
         custom_path: /kafka/logs/controlcenter/
         group: c3-custom-group
         user: c3-custom
+
+- name: Verify - log4j configuration
+  hosts: control_center:ksql:kafka_rest:kafka_connect:schema_registry
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_log4j.yml
