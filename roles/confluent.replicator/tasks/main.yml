@@ -23,10 +23,61 @@
     - ansible_os_family == "RedHat"
     - installation_method == "package"
 
-- name: Install the Schema Registry Packages
+- name: Install the Confluent Replicator Packages
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{confluent_replicator_packages}}"
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
+
+# Configure environment
+- name: Create Confluent Replicator Group
+  group:
+    name: "{{confluent_replicator_group}}"
+
+- name: Create Confluent Replicator User
+  user:
+    name: "{{confluent_replicator_user}}"
+    comment: "Confluent Replicator User"
+    system: true
+    group: "{{confluent_replicator_group}}"
+
+- name: Create Confluent Replicator Config directory
+  file:
+    path: "{{ confluent_replicator.config_file | dirname }}"
+    state: directory
+    mode: 0750
+    owner: "{{confluent_replicator_user}}"
+    group: "{{confluent_replicator_group}}"
+
+- name: Create Confluent Replicator Config
+  template:
+    src: confluent-replicator.properties.j2
+    dest: "{{confluent_replicator.replication_config_file}}"
+    mode: 0640
+    owner: "{{confluent_replicator_user}}"
+    group: "{{confluent_replicator_group}}"
+
+- name: Create Confluent Replicator Consumer Config
+  template:
+    src: confluent-replicator-consumer.properties.j2
+    dest: "{{confluent_replicator.consumer_config_file}}"
+    mode: 0640
+    owner: "{{confluent_replicator_user}}"
+    group: "{{confluent_replicator_group}}"
+
+- name: Create Confluent Replicator Producer Config
+  template:
+    src: confluent-replicator-producer.properties.j2
+    dest: "{{confluent_replicator.producer_config_file}}"
+    mode: 0640
+    owner: "{{confluent_replicator_user}}"
+    group: "{{confluent_replicator_group}}"
+  
+# - name: Start Confluent Replicator
+#   shell: replicator \
+#         --consumer.config ./consumer.properties \
+#         --producer.config ./producer.properties \
+#         --cluster.id replicator \
+#         --replication.config ./replication.properties
