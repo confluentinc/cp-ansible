@@ -12,6 +12,7 @@ Starting with CP-Ansible 5.5.0, we have included testing via the [Molecule](http
 ```pip install molecule docker```
 
 3.1 If using Molecule version > 3.1.0 install `molecule-docker`
+This is due to the removal of docker driver from [core](https://github.com/ansible-community/molecule/pull/2811).
 
 ```pip install molecule molecule-docker```
 
