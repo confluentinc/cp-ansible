@@ -1244,6 +1244,14 @@ Default:  "{{ monitoring_interceptors_enabled }}"
 
 ***
 
+### ksql_log_streaming_enabled
+
+Boolean to enable ksqlDB Log Streaming.
+
+Default:  false
+
+***
+
 ### control_center_user
 
 Only use to customize Linux User Control Center Service runs with. User must exist on host.
@@ -2052,9 +2060,9 @@ Default:  0.12.0
 
 ### jmxexporter_jar_url
 
-Full URL used for Prometheus Exporter Jar Download. When `jolokia_url_remote=false` this represents the path on Ansible control host. 
+Full URL used for Prometheus Exporter Jar Download. When `jolokia_url_remote=false` this represents the path on Ansible control host.
 
-Default:  https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/{{jmxexporter_version}}/jmx_prometheus_javaagent-{{jmxexporter_version}}.jar
+Default:  "https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/{{jmxexporter_version}}/jmx_prometheus_javaagent-{{jmxexporter_version}}.jar"
 
 ***
 
