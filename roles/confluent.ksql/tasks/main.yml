@@ -92,7 +92,7 @@
     kerberos_keytab_path: "{{ksql_kerberos_keytab_path}}"
     kerberos_keytab_destination_path: "{{ksql_keytab_path}}"
     kerberos_handler: "restart ksql"
-  when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
+  when: (kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI') or (kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' and ksql_log_streaming_enabled | bool)
 
 - name: Copy Custom KSQL Files
   include_role:
@@ -134,12 +134,31 @@
     owner: "{{ksql_user}}"
     mode: 0770
 
-- name: Set Permissions on Log4j Conf
+# TODO remove these ocmments
+# - name: Set Permissions on Log4j Conf
+#   file:
+#     path: "{{ksql.log4j_file}}"
+#     owner: "{{ksql_user}}"
+#     group: "{{ksql_group}}"
+#     mode: 0640
+
+- name: Create log4j Directory
   file:
-    path: "{{ksql.log4j_file}}"
+    path: "{{ksql.log4j_file | dirname}}"
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
+    state: directory
+    mode: 0750
+
+- name: Create Ksql log4j Config
+  template:
+    src: ksql-server_log4j.properties.j2
+    dest: "{{ksql.log4j_file}}"
     mode: 0640
+    owner: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+  when: ksql_custom_log4j|bool
+  notify: restart ksql
 
 - name: Create Ksql Jolokia Config
   template:
