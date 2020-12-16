@@ -2054,9 +2054,57 @@ Default:  "{{control_center_ldap_password}}"
 
 ### reconfiguration_pattern
 
-Reconfiguration pattern. Set to parallel to reconfigure all hosts at once. May cause downtime
+Reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
 
 Default:  serial
+
+***
+
+### zookeeper_reconfiguration_pattern
+
+Zookeeper reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{reconfiguration_pattern}}"
+
+***
+
+### kafka_broker_reconfiguration_pattern
+
+Kafka reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{reconfiguration_pattern}}"
+
+***
+
+### kafka_connect_reconfiguration_pattern
+
+Connect reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{reconfiguration_pattern}}"
+
+***
+
+### kafka_rest_reconfiguration_pattern
+
+Rest Proxy reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{reconfiguration_pattern}}"
+
+***
+
+### ksql_reconfiguration_pattern
+
+ksqlDB reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{reconfiguration_pattern}}"
+
+***
+
+### control_center_reconfiguration_pattern
+
+Control Center reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{reconfiguration_pattern}}"
 
 ***
 
