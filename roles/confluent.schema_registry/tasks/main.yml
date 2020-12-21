@@ -69,6 +69,7 @@
     ca_cert_path: "{{schema_registry_ca_cert_path}}"
     cert_path: "{{schema_registry_cert_path}}"
     key_path: "{{schema_registry_key_path}}"
+    export_certs: "{{schema_registry_export_certs}}"
   when: >
     schema_registry_ssl_enabled | bool or
     kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
@@ -86,7 +87,9 @@
   when: kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
 - name: Copy Custom Schema Registry Files
-  include_tasks: ../../tasks/copy_files.yml
+  include_role:
+    name: confluent.common
+    tasks_from: copy_files.yml
   vars:
     copy_files: "{{schema_registry_copy_files}}"
     user: "{{schema_registry_user}}"
@@ -140,7 +143,9 @@
   notify: restart schema-registry
 
 - name: Enable Secrets Protection
-  include_tasks: ../../tasks/secrets_protection.yml
+  include_role:
+    name: confluent.common
+    tasks_from: secrets_protection.yml
   vars:
     encrypt_passwords: "{{ schema_registry_secrets_protection_encrypt_passwords }}"
     properties: "{{ schema_registry_secrets_protection_encrypt_properties }}"
@@ -189,5 +194,9 @@
 - name: Health Check
   include_tasks: health_check.yml
   when:
-    - health_checks_enabled|bool
+    - schema_registry_health_checks_enabled|bool
     - not ansible_check_mode
+
+- name: Register Cluster
+  include_tasks: register_cluster.yml
+  when: schema_registry_cluster_name | length >0

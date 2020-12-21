@@ -4,11 +4,19 @@ Below are the supported variables for the role confluent.variables
 
 ***
 
+### jolokia_url_remote
+
+To copy from Ansible control host or download
+
+Default:  true
+
+***
+
 ### jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on all components
 
-Default:  true
+Default:  false
 
 ***
 
@@ -17,6 +25,38 @@ Default:  true
 Full path to download the Jolokia Agent Jar
 
 Default:  /opt/jolokia/jolokia.jar
+
+***
+
+### jolokia_auth_mode
+
+Authentication Mode for Jolokia Agent. Possible values: none, basic. If selecting basic, you must set jolokia_user and jolokia_password
+
+Default:  none
+
+***
+
+### jolokia_user
+
+Username for Jolokia Agent when using Basic Auth
+
+Default:  admin
+
+***
+
+### jolokia_password
+
+Password for Jolokia Agent when using Basic Auth
+
+Default:  password
+
+***
+
+### jmxexporter_url_remote
+
+To copy from Ansible control host or download
+
+Default:  true
 
 ***
 
@@ -76,11 +116,67 @@ Default:  true
 
 ***
 
+### zookeeper_health_checks_enabled
+
+Boolean to enable health checks on Zookeeper
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### kafka_broker_health_checks_enabled
+
+Boolean to enable health checks on Kafka
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### schema_registry_health_checks_enabled
+
+Boolean to enable health checks on Schema Registry
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### kafka_connect_health_checks_enabled
+
+Boolean to enable health checks on Kafka Connect
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### kafka_rest_health_checks_enabled
+
+Boolean to enable health checks on Rest Proxy
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### ksql_health_checks_enabled
+
+Boolean to enable health checks on ksqlDB
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### control_center_health_checks_enabled
+
+Boolean to enable health checks on Control Center
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
 ### monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
 
-Default:  true
+Default:  "{{ 'control_center' in groups }}"
 
 ***
 
@@ -166,7 +262,7 @@ Default:  true
 
 ### regenerate_keystore_and_truststore
 
-Boolean to have reruns of all.yml recreate Keystores
+Boolean to have reruns of all.yml recreate Keystores. Consider disabling this once installation is completed, as this triggers restarts.
 
 Default:  true
 
@@ -199,6 +295,14 @@ Default:  ""
 ### ssl_keystore_store_password
 
 Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
+
+Default:  ""
+
+***
+
+### ssl_keystore_alias
+
+Keystore source alias for host specific certificate. Only required if keystore contains more than one certificate. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "{{inventory_hostname}}"
 
 Default:  ""
 
@@ -356,6 +460,38 @@ Default:  "{{ zookeeper_ssl_enabled }}"
 
 ***
 
+### zookeeper_jolokia_config
+
+Path on Zookeeper host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/zookeeper_jolokia.properties"
+
+***
+
+### zookeeper_jolokia_auth_mode
+
+Authentication Mode for Zookeeper's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set zookeeper_jolokia_user and zookeeper_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### zookeeper_jolokia_user
+
+Username for Zookeeper's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### zookeeper_jolokia_password
+
+Password for Zookeeper's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### zookeeper_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
@@ -460,6 +596,38 @@ Default:  "{{ ssl_enabled }}"
 
 ***
 
+### kafka_broker_jolokia_config
+
+Path on Kafka host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_jolokia.properties"
+
+***
+
+### kafka_broker_jolokia_auth_mode
+
+Authentication Mode for Kafka's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set kafka_broker_jolokia_user and kafka_broker_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_broker_jolokia_user
+
+Username for Kafka's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_broker_jolokia_password
+
+Password for Kafka's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### kafka_broker_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on kafka
@@ -494,9 +662,9 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | 
 
 ### kafka_broker_metrics_reporter_enabled
 
-Boolean to enable the metrics reporter
+Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
-Default:  true
+Default:  "{{ 'control_center' in groups }}"
 
 ***
 
@@ -513,6 +681,14 @@ Default:  "{{ kafka_broker.properties }}"
 Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
 
 Default:  "{{confluent_server_enabled}}"
+
+***
+
+### kafka_broker_cluster_name
+
+Use to register and identify your Kafka cluster in the MDS.
+
+Default:  ""
 
 ***
 
@@ -588,6 +764,38 @@ Default:  "{{ schema_registry_ssl_enabled }}"
 
 ***
 
+### schema_registry_jolokia_config
+
+Path on Schema Registry host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/schema-registry/schema_registry_jolokia.properties"
+
+***
+
+### schema_registry_jolokia_auth_mode
+
+Authentication Mode for Schema Registry's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### schema_registry_jolokia_user
+
+Username for Schema Registry's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### schema_registry_jolokia_password
+
+Password for Schema Registry's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### schema_registry_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on schema registry
@@ -617,6 +825,14 @@ Default:  []
 Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 
 Default:  "{{ schema_registry.properties }}"
+
+***
+
+### schema_registry_cluster_name
+
+Use to register and identify your Schema Registry cluster in the MDS.
+
+Default:  ""
 
 ***
 
@@ -692,6 +908,38 @@ Default:  "{{ kafka_rest_ssl_enabled }}"
 
 ***
 
+### kafka_rest_jolokia_config
+
+Path on Rest Proxy host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-rest/kafka_rest_jolokia.properties"
+
+***
+
+### kafka_rest_jolokia_auth_mode
+
+Authentication Mode for Rest Proxy's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_rest_jolokia_user
+
+Username for Rest Proxy's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_rest_jolokia_password
+
+Password for Rest Proxy's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### kafka_rest_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on Rest Proxy
@@ -726,7 +974,7 @@ Default:  "{{ kafka_rest.properties }}"
 
 ### kafka_rest_monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on Rest Proxy. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on Rest Proxy.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
 
@@ -804,6 +1052,38 @@ Default:  "{{ kafka_connect_ssl_enabled }}"
 
 ***
 
+### kafka_connect_jolokia_config
+
+Path on Connect host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_connect_jolokia.properties"
+
+***
+
+### kafka_connect_jolokia_auth_mode
+
+Authentication Mode for Connect's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_connect_jolokia_user
+
+Username for Connect's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_connect_jolokia_password
+
+Password for Connect's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### kafka_connect_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on Connect
@@ -870,9 +1150,17 @@ Default:  "{{ kafka_connect.properties }}"
 
 ### kafka_connect_monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on Connect. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on Connect.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
+
+***
+
+### kafka_connect_cluster_name
+
+Use to register and identify your Kafka Connect cluster in the MDS.
+
+Default:  ""
 
 ***
 
@@ -948,6 +1236,38 @@ Default:  "{{ ksql_ssl_enabled }}"
 
 ***
 
+### ksql_jolokia_config
+
+Path on ksqlDB host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
+
+***
+
+### ksql_jolokia_auth_mode
+
+Authentication Mode for ksqlDB's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### ksql_jolokia_user
+
+Username for ksqlDB's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### ksql_jolokia_password
+
+Password for ksqlDB's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
 ### ksql_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on ksqlDB
@@ -998,9 +1318,25 @@ Default:  "{{ ksql.properties }}"
 
 ### ksql_monitoring_interceptors_enabled
 
-Boolean to configure Monitoring Interceptors on ksqlDB. Only honored if inventory also has Control Center Group
+Boolean to configure Monitoring Interceptors on ksqlDB.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
+
+***
+
+### ksql_cluster_name
+
+Use to register and identify your KSQL cluster in the MDS.
+
+Default:  ""
+
+***
+
+### ksql_log_streaming_enabled
+
+Boolean to enable ksqlDB Log Streaming.
+
+Default:  false
 
 ***
 
@@ -1120,7 +1456,7 @@ Default:  password
 
 LDAP User for Kafkas Embedded Rest Service to authenticate as
 
-Default:  kafka
+Default:  "{{mds_super_user}}"
 
 ***
 
@@ -1128,7 +1464,7 @@ Default:  kafka
 
 Password to kafka_broker_ldap_user LDAP User
 
-Default:  password
+Default:  "{{mds_super_user_password}}"
 
 ***
 
@@ -1252,6 +1588,14 @@ Default:  []
 
 ***
 
+### kafka_broker_additional_system_admins
+
+List of users to be granted system admin Role Bindings on the Kafka Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
+
+***
+
 ### schema_registry_additional_system_admins
 
 List of users to be granted system admin Role Bindings on the Schema Registry Cluster
@@ -1305,30 +1649,6 @@ Default:  ""
 Security file generated by the Confluent Secret CLI. If empty and secrets protection is enabled, then a security file will be randomly generated.
 
 Default:  generated_ssl_files/security.properties
-
-***
-
-### zookeeper_secrets_protection_enabled
-
-Boolean to enable secrets protection in Zookeeper.
-
-Default:  "{{secrets_protection_enabled}}"
-
-***
-
-### zookeeper_secrets_protection_encrypt_passwords
-
-Boolean to encrypt all properties containing 'password' for Zookeeper.
-
-Default:  "{{zookeeper_secrets_protection_enabled}}"
-
-***
-
-### zookeeper_secrets_protection_encrypt_properties
-
-List of Zookeeper properties to encrypt. Can be used in addition to zookeeper_secrets_protection_encrypt_passwords.
-
-Default:  []
 
 ***
 
@@ -1620,6 +1940,118 @@ Default:  "{{control_center_telemetry_enabled}}"
 
 ***
 
+### mds_health_check_user
+
+User for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
+
+Default:  "{{mds_super_user}}"
+
+***
+
+### mds_health_check_password
+
+Password for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
+
+Default:  "{{mds_super_user_password}}"
+
+***
+
+### kafka_broker_rest_health_check_user
+
+User for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{mds_super_user}}"
+
+***
+
+### kafka_broker_rest_health_check_password
+
+Password for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{mds_super_user_password}}"
+
+***
+
+### schema_registry_health_check_user
+
+User for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{schema_registry_ldap_user}}"
+
+***
+
+### schema_registry_health_check_password
+
+Password for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{schema_registry_ldap_password}}"
+
+***
+
+### kafka_connect_health_check_user
+
+User for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{kafka_connect_ldap_user}}"
+
+***
+
+### kafka_connect_health_check_password
+
+Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{kafka_connect_ldap_password}}"
+
+***
+
+### ksql_health_check_user
+
+User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{ksql_ldap_user}}"
+
+***
+
+### ksql_health_check_password
+
+Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{ksql_ldap_password}}"
+
+***
+
+### kafka_rest_health_check_user
+
+User for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{kafka_rest_ldap_user}}"
+
+***
+
+### kafka_rest_health_check_password
+
+Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{kafka_rest_ldap_password}}"
+
+***
+
+### control_center_health_check_user
+
+User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{control_center_ldap_user}}"
+
+***
+
+### control_center_health_check_password
+
+Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{control_center_ldap_password}}"
+
+***
+
 # confluent.common
 
 Below are the supported variables for the role confluent.common
@@ -1708,17 +2140,25 @@ Default:  1.6.2
 
 ### jolokia_jar_url
 
-Full URL used for Jolokia Agent Jar Download
+Full URL used for Jolokia Agent Jar Download. When `jolokia_url_remote=false` this represents the path on Ansible control host.
 
 Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jvm/{{jolokia_version}}/jolokia-jvm-{{jolokia_version}}-agent.jar"
 
 ***
 
+### jmxexporter_version
+
+Version of JmxExporter Agent Jar to Donwload
+
+Default:  0.12.0
+
+***
+
 ### jmxexporter_jar_url
 
-Full URL used for Prometheus Exporter Jar Download
+Full URL used for Prometheus Exporter Jar Download. When `jolokia_url_remote=false` this represents the path on Ansible control host.
 
-Default:  https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.12.0/jmx_prometheus_javaagent-0.12.0.jar
+Default:  "https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/{{jmxexporter_version}}/jmx_prometheus_javaagent-{{jmxexporter_version}}.jar"
 
 ***
 

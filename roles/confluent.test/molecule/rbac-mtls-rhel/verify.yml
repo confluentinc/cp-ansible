@@ -1,4 +1,17 @@
 ---
+- name: Verify - Zookeeper
+  hosts: zookeeper
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 2182
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/zookeeper.crt
+        service_key: /var/ssl/private/zookeeper.key
+
 - name: Verify - kafka_broker
   hosts: kafka_broker
   gather_facts: false
@@ -31,6 +44,42 @@
         fail_msg: "Super Users property: {{super_users_grep.stdout}} does not contain User:dom and User:jeff"
         quiet: true
 
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 8090
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/kafka_broker.crt
+        service_key: /var/ssl/private/kafka_broker.key
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 9091
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/kafka_broker.crt
+        service_key: /var/ssl/private/kafka_broker.key
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 9092
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/kafka_broker.crt
+        service_key: /var/ssl/private/kafka_broker.key
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 9093
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/kafka_broker.crt
+        service_key: /var/ssl/private/kafka_broker.key
+
 - name: Verify - schema_registry
   hosts: schema_registry
   gather_facts: false
@@ -43,6 +92,15 @@
         property: public.key.path
         expected_value: /var/ssl/private/public.pem
 
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 8081
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/schema_registry.crt
+        service_key: /var/ssl/private/schema_registry.key
+
 - name: Verify - kafka_rest
   hosts: kafka_rest
   gather_facts: false
@@ -54,6 +112,15 @@
         file_path: /etc/kafka-rest/kafka-rest.properties
         property: public.key.path
         expected_value: /var/ssl/private/public.pem
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 8082
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/kafka_rest.crt
+        service_key: /var/ssl/private/kafka_rest.key
 
 - name: Verify - kafka_connect
   hosts: kafka_connect
@@ -157,6 +224,15 @@
       retries: 10
       delay: 5
 
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 8083
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/kafka_connect.crt
+        service_key: /var/ssl/private/kafka_connect.key
+
 - name: Verify - ksql
   hosts: ksql
   gather_facts: false
@@ -168,6 +244,8 @@
         file_path: /etc/ksqldb/ksql-server.properties
         property: public.key.path
         expected_value: /var/ssl/private/public.pem
+    # TODO:  KSQL Currently still supports older TLS versions, and as of 6.0.0 does not have way to override to TLS 1.2 or later.
+    # Will have to update this in the future when this is corrected.
 
 - name: Verify - control_center
   hosts: control_center
@@ -180,3 +258,74 @@
         file_path: /etc/confluent-control-center/control-center-production.properties
         property: public.key.path
         expected_value: /var/ssl/private/public.pem
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 9021
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/kafka_connect.crt
+        service_key: /var/ssl/private/kafka_connect.key
+
+- name: Validate Cluster Registry
+  hosts: schema_registry
+  gather_facts: false
+  vars:
+    mds_http_protocol: https
+    mds_port: 8090
+    mds_super_user: mds
+    mds_super_user_password: password
+    broker_name: Test-Broker
+    connect_name: Test-Connect
+    ksql_name: Test-Ksql
+    schema_registry_name: Test-Schema
+  tasks:
+    - name: Get Kafka Cluster Id
+      import_role:
+        name: confluent.common
+        tasks_from: rbac_setup.yml
+      vars:
+        copy_certs: false
+
+    - name: Retrieve Cluster Registry details
+      uri:
+        url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/registry/clusters"
+        method: GET
+        validate_certs: false
+        force_basic_auth: true
+        url_username: "{{mds_super_user}}"
+        url_password: "{{mds_super_user_password}}"
+        status_code: 200
+      register: cluster_name_query
+
+    - set_fact:
+        cluster_name_query_json: "{{ cluster_name_query.json }}"
+
+    - name: Assert Broker Cluster ID as expected
+      assert:
+        that:
+          - broker_name == "{{cluster_name_query_json[0]['clusterName']}}"
+        fail_msg: "Broker ID set to {{cluster_name_query_json[0]['clusterName']}} not {{broker_name}}"
+        quiet: true
+
+    - name: Assert Kafka Connect Cluster ID as expected
+      assert:
+        that:
+          - connect_name == "{{cluster_name_query_json[1]['clusterName']}}"
+        fail_msg: "Connect Cluster ID set to {{cluster_name_query_json[1]['clusterName']}} not {{connect_name}}"
+        quiet: true
+
+    - name: Assert KSQL Cluster ID as expected
+      assert:
+        that:
+          - ksql_name == "{{cluster_name_query_json[2]['clusterName']}}"
+        fail_msg: "KSQL Cluster ID set to {{cluster_name_query_json[2]['clusterName']}} not {{ksql_name}}"
+        quiet: true
+
+    - name: Assert Schema Registry Cluster ID as expected
+      assert:
+        that:
+          - schema_registry_name == "{{cluster_name_query_json[3]['clusterName']}}"
+        fail_msg: "Schema Registry Cluster ID set to {{cluster_name_query_json[3]['clusterName']}} not {{schema_registry_name}}"
+        quiet: true

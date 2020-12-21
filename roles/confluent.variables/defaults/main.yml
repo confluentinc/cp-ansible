@@ -2,13 +2,16 @@
 # Custom filters used in this file are defined in filter_plugins/filters.py
 
 confluent_repo_version: 6.0
-confluent_package_version: 6.0.0
+confluent_package_version: 6.0.1
 confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
 confluent_package_debian_suffix: "{{ '=' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
 
+### To copy from Ansible control host or download
+jolokia_url_remote: true
+
 ### Boolean to enable Jolokia Agent installation and configuration on all components
-jolokia_enabled: true
+jolokia_enabled: false
 
 ### Full path to download the Jolokia Agent Jar
 jolokia_jar_path: /opt/jolokia/jolokia.jar
@@ -21,6 +24,9 @@ jolokia_user: admin
 
 ### Password for Jolokia Agent when using Basic Auth
 jolokia_password: password
+
+### To copy from Ansible control host or download
+jmxexporter_url_remote: true
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on all components
 jmxexporter_enabled: false
@@ -41,6 +47,10 @@ custom_log4j: true
 ### Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, keberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary
 kerberos_configure: true
 
+# Deprecated variable now that primary can be pulled from kafka_broker_kerberos_principal
+kerberos_kafka_broker_primary: "{{ (hostvars[ groups['kafka_broker'][0] | default('kafka') ] | default({})) ['kafka_broker_kerberos_principal'] | default('kafka/host@EXAMPLE>COM') | regex_replace('/.*') }}"
+
+
 # TODO document the rest of the kerberos variables, also admin_hostname should default to kdc_hostname
 
 open_file_limit: 500000
@@ -51,12 +61,33 @@ confluent_server_enabled: true
 ### Boolean to enable health checks on all components
 health_checks_enabled: true
 
+### Boolean to enable health checks on Zookeeper
+zookeeper_health_checks_enabled: "{{health_checks_enabled}}"
+
+### Boolean to enable health checks on Kafka
+kafka_broker_health_checks_enabled: "{{health_checks_enabled}}"
+
+### Boolean to enable health checks on Schema Registry
+schema_registry_health_checks_enabled: "{{health_checks_enabled}}"
+
+### Boolean to enable health checks on Kafka Connect
+kafka_connect_health_checks_enabled: "{{health_checks_enabled}}"
+
+### Boolean to enable health checks on Rest Proxy
+kafka_rest_health_checks_enabled: "{{health_checks_enabled}}"
+
+### Boolean to enable health checks on ksqlDB
+ksql_health_checks_enabled: "{{health_checks_enabled}}"
+
+### Boolean to enable health checks on Control Center
+control_center_health_checks_enabled: "{{health_checks_enabled}}"
+
 common_role_completed: false
 
 proxy_env: {}
 
-### Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Only honored if inventory also has Control Center Group
-monitoring_interceptors_enabled: true
+### Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
+monitoring_interceptors_enabled: "{{ 'control_center' in groups }}"
 
 ### The method of installation. Valid values are "package" or "archive". If "archive" is selected then services will not be installed via the use of yum or apt, but will instead be installed via expanding the target .tar.gz file from the Confluent archive into the path defined by `archive_destination_path`. Configuration files are also kept in this directory structure instead of `/etc`. SystemD service units are copied from the ardhive for each target service and overrides are created pointing at the new paths. The "package" installation method is the default behavior that utilizes yum/apt.
 installation_method: "package"
@@ -95,7 +126,7 @@ ssl_self_signed_ca_password: capassword123
 ### Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs
 regenerate_ca: true
 
-### Boolean to have reruns of all.yml recreate Keystores
+### Boolean to have reruns of all.yml recreate Keystores. Consider disabling this once installation is completed, as this triggers restarts.
 regenerate_keystore_and_truststore: true
 
 certs_updated: false
@@ -111,6 +142,9 @@ ssl_keystore_key_password: ""
 
 ### Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
 ssl_keystore_store_password: ""
+
+### Keystore source alias for host specific certificate. Only required if keystore contains more than one certificate. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "{{inventory_hostname}}"
+ssl_keystore_alias: ""
 
 ### Full path to host specific truststore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. Can share same keystore for all components if it contains all ca certs used to sign host certificates
 ssl_truststore_filepath: ""
@@ -171,6 +205,7 @@ zookeeper_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keysto
 zookeeper_ca_cert_path: "/var/ssl/private/ca.crt"
 zookeeper_cert_path: "/var/ssl/private/zookeeper.crt"
 zookeeper_key_path: "/var/ssl/private/zookeeper.key"
+zookeeper_export_certs: "{{zookeeper_ssl_mutual_auth_enabled}}"
 zookeeper_keytab_path: /etc/security/keytabs/zookeeper.keytab
 
 zookeeper:
@@ -190,7 +225,7 @@ zookeeper_jolokia_port: 7770
 zookeeper_jolokia_ssl_enabled: "{{ zookeeper_ssl_enabled }}"
 
 ### Path on Zookeeper host for Jolokia Configuration file
-zookeeper_jolokia_config: /etc/kafka/zookeeper_jolokia.properties
+zookeeper_jolokia_config: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/zookeeper_jolokia.properties"
 
 ### Authentication Mode for Zookeeper's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set zookeeper_jolokia_user and zookeeper_jolokia_password
 zookeeper_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -209,7 +244,7 @@ zookeeper_jmxexporter_port: 8079
 
 zookeeper_jmxexporter_config_path: /opt/prometheus/zookeeper.yml
 
-zookeeper_health_check_command: "KAFKA_OPTS='{{ zookeeper_service_environment_overrides.KAFKA_OPTS }}'
+zookeeper_health_check_command: "{% if zookeeper_sasl_protocol in ['kerberos', 'digest'] %}KAFKA_OPTS='-Djava.security.auth.login.config={{zookeeper.jaas_file}}'{% endif %}
 {{ binary_base_path }}/bin/kafka-run-class
 {% if zookeeper_ssl_enabled|bool %}
 -Dzookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
@@ -286,6 +321,7 @@ kafka_broker_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_key
 kafka_broker_ca_cert_path: "/var/ssl/private/ca.crt"
 kafka_broker_cert_path: "/var/ssl/private/kafka_broker.crt"
 kafka_broker_key_path: "/var/ssl/private/kafka_broker.key"
+kafka_broker_export_certs: "{{ssl_mutual_auth_enabled}}"
 kafka_broker_keytab_path: /etc/security/keytabs/kafka_broker.keytab
 
 kafka_broker:
@@ -311,7 +347,7 @@ kafka_broker_jolokia_port: 7771
 kafka_broker_jolokia_ssl_enabled: "{{ ssl_enabled }}"
 
 ### Path on Kafka host for Jolokia Configuration file
-kafka_broker_jolokia_config: /etc/kafka/kafka_jolokia.properties
+kafka_broker_jolokia_config: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_jolokia.properties"
 
 ### Authentication Mode for Kafka's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set kafka_broker_jolokia_user and kafka_broker_jolokia_password
 kafka_broker_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -342,14 +378,17 @@ kafka_broker_copy_files: []
 ### Replication Factor for internal topics. Defaults to the minimum of the number of brokers and 3
 kafka_broker_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
 
-### Boolean to enable the metrics reporter
-kafka_broker_metrics_reporter_enabled: true
+### Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
+kafka_broker_metrics_reporter_enabled: "{{ 'control_center' in groups }}"
 
 ### Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 kafka_broker_custom_properties: "{{ kafka_broker.properties }}"
 
 ### Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
 kafka_broker_rest_proxy_enabled: "{{confluent_server_enabled}}"
+
+### Use to register and identify your Kafka cluster in the MDS.
+kafka_broker_cluster_name: ""
 
 #### Schema Registry Variables ####
 
@@ -379,6 +418,7 @@ schema_registry_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_
 schema_registry_ca_cert_path: "/var/ssl/private/ca.crt"
 schema_registry_cert_path: "/var/ssl/private/schema_registry.crt"
 schema_registry_key_path: "/var/ssl/private/schema_registry.key"
+schema_registry_export_certs: "{{schema_registry_ssl_mutual_auth_enabled}}"
 schema_registry_keytab_path: /etc/security/keytabs/schema_registry.keytab
 schema_registry_kafka_listener_name: internal
 schema_registry:
@@ -396,7 +436,7 @@ schema_registry_jolokia_port: 7772
 schema_registry_jolokia_ssl_enabled: "{{ schema_registry_ssl_enabled }}"
 
 ### Path on Schema Registry host for Jolokia Configuration file
-schema_registry_jolokia_config: /etc/schema-registry/schema_registry_jolokia.properties
+schema_registry_jolokia_config: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/schema-registry/schema_registry_jolokia.properties"
 
 ### Authentication Mode for Schema Registry's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 schema_registry_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -421,6 +461,8 @@ schema_registry_copy_files: []
 ### Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 schema_registry_custom_properties: "{{ schema_registry.properties }}"
 
+### Use to register and identify your Schema Registry cluster in the MDS.
+schema_registry_cluster_name: ""
 
 #### Kafka Rest Variables ####
 
@@ -450,6 +492,7 @@ kafka_rest_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keyst
 kafka_rest_ca_cert_path: "/var/ssl/private/ca.crt"
 kafka_rest_cert_path: "/var/ssl/private/kafka_rest.crt"
 kafka_rest_key_path: "/var/ssl/private/kafka_rest.key"
+kafka_rest_export_certs: "{{kafka_rest_ssl_mutual_auth_enabled}}"
 kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
 kafka_rest_kafka_listener_name: internal
 kafka_rest:
@@ -467,7 +510,7 @@ kafka_rest_jolokia_port: 7775
 kafka_rest_jolokia_ssl_enabled: "{{ kafka_rest_ssl_enabled }}"
 
 ### Path on Rest Proxy host for Jolokia Configuration file
-kafka_rest_jolokia_config: /etc/kafka-rest/kafka_rest_jolokia.properties
+kafka_rest_jolokia_config: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-rest/kafka_rest_jolokia.properties"
 
 ### Authentication Mode for Rest Proxy's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 kafka_rest_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -491,7 +534,7 @@ kafka_rest_copy_files: []
 ### Use to set custom Rest Proxy properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_rest.properties is deprecated.
 kafka_rest_custom_properties: "{{ kafka_rest.properties }}"
 
-### Boolean to configure Monitoring Interceptors on Rest Proxy. Only honored if inventory also has Control Center Group
+### Boolean to configure Monitoring Interceptors on Rest Proxy.
 kafka_rest_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled }}"
 
 
@@ -523,6 +566,7 @@ kafka_connect_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_ke
 kafka_connect_ca_cert_path: "/var/ssl/private/ca.crt"
 kafka_connect_cert_path: "/var/ssl/private/kafka_connect.crt"
 kafka_connect_key_path: "/var/ssl/private/kafka_connect.key"
+kafka_connect_export_certs: "{{kafka_connect_ssl_mutual_auth_enabled}}"
 kafka_connect_keytab_path: /etc/security/keytabs/kafka_connect.keytab
 kafka_connect_kafka_listener_name: internal
 kafka_connect:
@@ -540,7 +584,7 @@ kafka_connect_jolokia_port: 7773
 kafka_connect_jolokia_ssl_enabled: "{{ kafka_connect_ssl_enabled }}"
 
 ### Path on Connect host for Jolokia Configuration file
-kafka_connect_jolokia_config: /etc/kafka/kafka_connect_jolokia.properties
+kafka_connect_jolokia_config: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_connect_jolokia.properties"
 
 ### Authentication Mode for Connect's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 kafka_connect_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -585,9 +629,11 @@ kafka_connect_plugins_dest: /usr/share/java
 ### Use to set custom Connect properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_connect.properties is deprecated.
 kafka_connect_custom_properties: "{{ kafka_connect.properties }}"
 
-### Boolean to configure Monitoring Interceptors on Connect. Only honored if inventory also has Control Center Group
+### Boolean to configure Monitoring Interceptors on Connect.
 kafka_connect_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled }}"
 
+### Use to register and identify your Kafka Connect cluster in the MDS.
+kafka_connect_cluster_name: ""
 
 #### KSQLDB Variables ####
 
@@ -617,8 +663,10 @@ ksql_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_an
 ksql_ca_cert_path: "/var/ssl/private/ca.crt"
 ksql_cert_path: "/var/ssl/private/ksql.crt"
 ksql_key_path: "/var/ssl/private/ksql.key"
+ksql_export_certs: "{{ksql_ssl_mutual_auth_enabled}}"
 ksql_keytab_path: /etc/security/keytabs/ksql.keytab
 ksql_kafka_listener_name: internal
+ksql_processing_log_kafka_listener_name: "{{kafka_broker_inter_broker_listener_name if rbac_enabled else ksql_kafka_listener_name}}"
 ksql:
   jaas_file: "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql-server_jaas.conf' , '/etc/ksql/ksql-server_jaas.conf')}}"
   appender_log_path: "{{ksql_default_log_dir}}"
@@ -634,7 +682,7 @@ ksql_jolokia_port: 7774
 ksql_jolokia_ssl_enabled: "{{ ksql_ssl_enabled }}"
 
 ### Path on ksqlDB host for Jolokia Configuration file
-ksql_jolokia_config: "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
+ksql_jolokia_config: "{{ archive_config_base_path if installation_method == 'archive' else '' }}{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
 
 ### Authentication Mode for ksqlDB's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 ksql_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -664,8 +712,16 @@ ksql_service_id: default_
 ### Use to set custom ksqlDB properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- ksql.properties is deprecated.
 ksql_custom_properties: "{{ ksql.properties }}"
 
-### Boolean to configure Monitoring Interceptors on ksqlDB. Only honored if inventory also has Control Center Group
+### Boolean to configure Monitoring Interceptors on ksqlDB.
 ksql_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled }}"
+
+### Use to register and identify your KSQL cluster in the MDS.
+ksql_cluster_name: ""
+
+ksql_processing_log: "processing_log"
+
+### Boolean to enable ksqlDB Log Streaming.
+ksql_log_streaming_enabled: false
 
 
 # Control Center Variables
@@ -696,6 +752,7 @@ control_center_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_k
 control_center_ca_cert_path: "/var/ssl/private/ca.crt"
 control_center_cert_path: "/var/ssl/private/control_center.crt"
 control_center_key_path: "/var/ssl/private/control_center.key"
+control_center_export_certs: "{{ssl_mutual_auth_enabled}}"
 control_center_keytab_path: /etc/security/keytabs/control_center.keytab
 control_center_kafka_listener_name: internal
 control_center:
@@ -847,6 +904,9 @@ token_services_private_pem_file: generated_ssl_files/tokenKeypair.pem
 ### List of users to be granted system admin Role Bindings across all components
 rbac_component_additional_system_admins: []
 
+### List of users to be granted system admin Role Bindings on the Kafka Cluster
+kafka_broker_additional_system_admins: "{{rbac_component_additional_system_admins}}"
+
 ### List of users to be granted system admin Role Bindings on the Schema Registry Cluster
 schema_registry_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
@@ -870,15 +930,6 @@ secrets_protection_masterkey: ""
 
 ### Security file generated by the Confluent Secret CLI. If empty and secrets protection is enabled, then a security file will be randomly generated.
 secrets_protection_security_file: generated_ssl_files/security.properties
-
-### Boolean to enable secrets protection in Zookeeper.
-zookeeper_secrets_protection_enabled: "{{secrets_protection_enabled}}"
-
-### Boolean to encrypt all properties containing 'password' for Zookeeper.
-zookeeper_secrets_protection_encrypt_passwords: "{{zookeeper_secrets_protection_enabled}}"
-
-### List of Zookeeper properties to encrypt. Can be used in addition to zookeeper_secrets_protection_encrypt_passwords.
-zookeeper_secrets_protection_encrypt_properties: []
 
 ### Boolean to enable secrets protection in Kafka broker.
 kafka_broker_secrets_protection_enabled: "{{secrets_protection_enabled}}"
@@ -990,6 +1041,7 @@ control_center_telemetry_enabled: "{{telemetry_enabled}}"
 ### Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
 control_center_telemetry_ansible_labels_enabled: "{{control_center_telemetry_enabled}}"
 
+
 ### Boolean to Audit Logs on an external Kafka Cluster. Must also include audit_logs_destination_bootstrap_servers and audit_logs_destination_listener
 audit_logs_destination_enabled: false
 
@@ -1001,3 +1053,46 @@ audit_logs_destination_listener:
   ssl_enabled: "{{ssl_enabled}}"
   ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
   sasl_protocol: "{{sasl_protocol}}"
+
+
+### User for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
+mds_health_check_user: "{{mds_super_user}}"
+
+### Password for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
+mds_health_check_password: "{{mds_super_user_password}}"
+
+### User for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
+kafka_broker_rest_health_check_user: "{{mds_super_user}}"
+
+### Password for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
+kafka_broker_rest_health_check_password: "{{mds_super_user_password}}"
+
+### User for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
+schema_registry_health_check_user: "{{schema_registry_ldap_user}}"
+
+### Password for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
+schema_registry_health_check_password: "{{schema_registry_ldap_password}}"
+
+### User for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+kafka_connect_health_check_user: "{{kafka_connect_ldap_user}}"
+
+### Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+kafka_connect_health_check_password: "{{kafka_connect_ldap_password}}"
+
+### User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
+ksql_health_check_user: "{{ksql_ldap_user}}"
+
+### Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
+ksql_health_check_password: "{{ksql_ldap_password}}"
+
+### User for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
+kafka_rest_health_check_user: "{{kafka_rest_ldap_user}}"
+
+### Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
+kafka_rest_health_check_password: "{{kafka_rest_ldap_password}}"
+
+### User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
+control_center_health_check_user: "{{control_center_ldap_user}}"
+
+### Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
+control_center_health_check_password: "{{control_center_ldap_password}}"
