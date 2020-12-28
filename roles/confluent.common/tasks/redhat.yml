@@ -8,8 +8,10 @@
     gpgcheck: "{{confluent_common_repository_redhat_dist_gpgcheck}}"
     gpgkey: "{{confluent_common_repository_redhat_dist_gpgkey}}"
     enabled: "{{confluent_common_repository_redhat_dist_enabled}}"
-  notify: yum-clean-all
-  when: not custom_yum_repofile|bool
+  register: confluent_dist_repo_result
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
 
 - name: Add Confluent Yum Repo
   yum_repository:
@@ -20,17 +22,24 @@
     gpgcheck: "{{confluent_common_repository_redhat_main_gpgcheck}}"
     gpgkey: "{{confluent_common_repository_redhat_main_gpgkey}}"
     enabled: "{{confluent_common_repository_redhat_main_enabled}}"
-  notify: yum-clean-all
-  when: not custom_yum_repofile|bool
+  register: confluent_repo_result
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
 
 - name: Add Custom Repo file
   copy:
     src: "{{custom_yum_repofile_filepath}}"
     dest: /etc/yum.repos.d/custom-confluent.repo
-  notify: yum-clean-all
-  when: custom_yum_repofile|bool
+  when: repository_configuration == 'custom'
+  register: custom_repo_result
 
-- meta: flush_handlers
+# Not using handler because of https://github.com/ansible/ansible/issues/41313
+- name: yum-clean-all
+  command: yum clean all
+  args:
+    warn: false
+  when: confluent_dist_repo_result.changed|default(False) or confluent_repo_result.changed|default(False) or custom_repo_result.changed|default(False)
 
 - name: Install Java
   yum:
