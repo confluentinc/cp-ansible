@@ -43,13 +43,76 @@
     system: true
     group: "{{confluent_replicator_group}}"
 
+# - include_role:
+#     name: confluent.ssl
+#   vars:
+#     truststore_storepass: "{{schema_registry_truststore_storepass}}"
+#     truststore_path: "{{schema_registry_truststore_path}}"
+#     keystore_path: "{{schema_registry_keystore_path}}"
+#     keystore_storepass: "{{schema_registry_keystore_storepass}}"
+#     keystore_keypass: "{{schema_registry_keystore_keypass}}"
+#     service_name: schema_registry
+#     user: "{{schema_registry_user}}"
+#     group: "{{schema_registry_group}}"
+#     hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
+#     ca_cert_path: "{{schema_registry_ca_cert_path}}"
+#     cert_path: "{{schema_registry_cert_path}}"
+#     key_path: "{{schema_registry_key_path}}"
+#     export_certs: "{{schema_registry_export_certs}}"
+#   when: >
+#     schema_registry_ssl_enabled | bool or
+#     kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
+#     mds_tls_enabled | bool
+
+- name: Configure Kerberos for Replicator Host
+  include_role:
+    name: confluent.kerberos
+  vars:
+    kerberos_group: "{{confluent_replicator_group}}"
+    kerberos_user: "{{confluent_replicator_user}}"
+    kerberos_keytab_path: "{{confluent_replicator_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{confluent_replicator_keytab_path}}"
+    # kerberos_handler: "restart confluent-replicator"
+  when: confluent_replicator_kerberos_principal is defined
+
+- name: Configure Kerberos for Replicator Consumer
+  include_role:
+    name: confluent.kerberos
+  vars:
+    kerberos_group: "{{confluent_replicator_group}}"
+    kerberos_user: "{{confluent_replicator_user}}"
+    kerberos_keytab_path: "{{confluent_replicator_consumer_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{confluent_replicator_consumer_keytab_path}}"
+    # kerberos_handler: "restart confluent-replicator"
+  when: confluent_replicator_consumer_kerberos_principal is defined
+
+- name: Configure Kerberos for Replicator Producer
+  include_role:
+    name: confluent.kerberos
+  vars:
+    kerberos_group: "{{confluent_replicator_group}}"
+    kerberos_user: "{{confluent_replicator_user}}"
+    kerberos_keytab_path: "{{confluent_replicator_producer_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{confluent_replicator_producer_keytab_path}}"
+    # kerberos_handler: "restart confluent-replicator"
+  when: confluent_replicator_producer_kerberos_principal is defined
+
 - name: Create Confluent Replicator Config directory
   file:
-    path: "{{ confluent_replicator.config_file | dirname }}"
+    path: "{{ confluent_replicator.replication_config_file | dirname }}"
     state: directory
     mode: 0750
     owner: "{{confluent_replicator_user}}"
     group: "{{confluent_replicator_group}}"
+
+- debug:
+    msg: "{{confluent_replicator_ssl_enabled}}"
+
+- debug:
+    msg: "{{confluent_replicator_kerberos_enabled}}"
+
+- debug:
+    msg: "{{confluent_replicator_security_protocol}}"
 
 - name: Create Confluent Replicator Config
   template:
@@ -74,7 +137,7 @@
     mode: 0640
     owner: "{{confluent_replicator_user}}"
     group: "{{confluent_replicator_group}}"
-  
+
 # - name: Start Confluent Replicator
 #   shell: replicator \
 #         --consumer.config ./consumer.properties \
