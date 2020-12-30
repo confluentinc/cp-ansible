@@ -23,6 +23,10 @@ The services that can be installed from this repository are:
 
 You can find the documentation for running CP-Ansible at https://docs.confluent.io/current/tutorials/cp-ansible/docs/index.html.
 
+## Version Bumps
+
+Use [bump2version](https://github.com/c4urself/bump2version) tool to bump versions in all the correct places.
+
 ## Contributing
 
 
