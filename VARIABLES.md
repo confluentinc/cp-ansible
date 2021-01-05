@@ -254,7 +254,7 @@ Default:  "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_c
 
 ### regenerate_ca
 
-Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs
+Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs.
 
 Default:  false
 
@@ -2401,4 +2401,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-
