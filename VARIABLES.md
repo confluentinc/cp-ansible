@@ -2108,6 +2108,70 @@ Default:  "{{reconfiguration_pattern}}"
 
 ***
 
+### pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Node starts up for all Components.
+
+Default:  false
+
+***
+
+### zookeeper_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Zookeeper Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_broker_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Kafka Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### schema_registry_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Schema Registry Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_connect_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Connect Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_rest_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Rest Proxy Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### ksql_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each ksqlDB Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### control_center_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Control Center Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
 # confluent.common
 
 Below are the supported variables for the role confluent.common
@@ -2256,6 +2320,14 @@ Default:  ""
 
 ***
 
+### control_center_health_check_delay
+
+Time in seconds to wait before starting Control Center Health Checks.
+
+Default:  30
+
+***
+
 # confluent.kafka_broker
 
 Below are the supported variables for the role confluent.kafka_broker
@@ -2275,6 +2347,14 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Kafka Process
 
 Default:  ""
+
+***
+
+### kafka_broker_health_check_delay
+
+Time in seconds to wait before starting Kafka Health Checks.
+
+Default:  30
 
 ***
 
@@ -2300,6 +2380,14 @@ Default:  ""
 
 ***
 
+### kafka_connect_health_check_delay
+
+Time in seconds to wait before starting Connect Health Checks.
+
+Default:  30
+
+***
+
 # confluent.kafka_rest
 
 Below are the supported variables for the role confluent.kafka_rest
@@ -2311,6 +2399,14 @@ Below are the supported variables for the role confluent.kafka_rest
 Custom Java Args to add to the Rest Proxy Process
 
 Default:  ""
+
+***
+
+### kafka_rest_health_check_delay
+
+Time in seconds to wait before starting Rest Proxy Health Checks.
+
+Default:  20
 
 ***
 
@@ -2344,6 +2440,14 @@ Default:  /tmp/ksqldb
 
 ***
 
+### ksql_health_check_delay
+
+Time in seconds to wait before starting ksqlDB Health Checks.
+
+Default:  20
+
+***
+
 # confluent.schema_registry
 
 Below are the supported variables for the role confluent.schema_registry
@@ -2355,6 +2459,14 @@ Below are the supported variables for the role confluent.schema_registry
 Custom Java Args to add to the Schema Registry Process
 
 Default:  ""
+
+***
+
+### schema_registry_health_check_delay
+
+Time in seconds to wait before starting Schema Registry Health Checks.
+
+Default:  20
 
 ***
 
@@ -2377,6 +2489,14 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Zookeeper Process
 
 Default:  ""
+
+***
+
+### zookeeper_health_check_delay
+
+Time in seconds to wait before starting Zookeeper Health Checks.
+
+Default:  5
 
 ***
 
