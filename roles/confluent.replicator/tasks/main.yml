@@ -43,26 +43,65 @@
     system: true
     group: "{{confluent_replicator_group}}"
 
-# - include_role:
+# - name: Configure TLS for Replicator Host
+#   include_role:
 #     name: confluent.ssl
 #   vars:
-#     truststore_storepass: "{{schema_registry_truststore_storepass}}"
-#     truststore_path: "{{schema_registry_truststore_path}}"
-#     keystore_path: "{{schema_registry_keystore_path}}"
-#     keystore_storepass: "{{schema_registry_keystore_storepass}}"
-#     keystore_keypass: "{{schema_registry_keystore_keypass}}"
-#     service_name: schema_registry
-#     user: "{{schema_registry_user}}"
-#     group: "{{schema_registry_group}}"
+#     truststore_storepass: "{{confluent_replicator_truststore_storepass}}"
+#     truststore_path: "{{confluent_replicator_truststore_path}}"
+#     keystore_path: "{{confluent_replicator_keystore_path}}"
+#     keystore_storepass: "{{confluent_replicator_keystore_storepass}}"
+#     keystore_keypass: "{{confluent_replicator_keystore_keypass}}"
+#     service_name: confluent-replicator
+#     user: "{{confluent_replicator_user}}"
+#     group: "{{confluent_replicator_group}}"
 #     hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
-#     ca_cert_path: "{{schema_registry_ca_cert_path}}"
-#     cert_path: "{{schema_registry_cert_path}}"
-#     key_path: "{{schema_registry_key_path}}"
-#     export_certs: "{{schema_registry_export_certs}}"
+#     ca_cert_path: "{{confluent_replicator_ca_cert_path}}"
+#     cert_path: "{{confluent_replicator_cert_path}}"
+#     key_path: "{{confluent_replicator_key_path}}"
+#     export_certs: "{{confluent_replicator_export_certs}}"
 #   when: >
-#     schema_registry_ssl_enabled | bool or
-#     kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
-#     mds_tls_enabled | bool
+#     confluent_replicator_ca_cert_path is defined
+
+# - name: Configure TLS for Replicator Consumer
+#   include_role:
+#     name: confluent.ssl
+#   vars:
+#     truststore_storepass: "{{confluent_replicator_consumer_truststore_storepass}}"
+#     truststore_path: "{{confluent_replicator_consumer_truststore_path}}"
+#     keystore_path: "{{confluent_replicator_consumer_keystore_path}}"
+#     keystore_storepass: "{{confluent_replicator_consumer_keystore_storepass}}"
+#     keystore_keypass: "{{confluent_replicator_consumer_keystore_keypass}}"
+#     service_name: confluent-replicator
+#     user: "{{confluent_replicator_user}}"
+#     group: "{{confluent_replicator_group}}"
+#     hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
+#     ca_cert_path: "{{confluent_replicator_consumer_ca_cert_path}}"
+#     cert_path: "{{confluent_replicator_consumer_cert_path}}"
+#     key_path: "{{confluent_replicator_consumer_key_path}}"
+#     export_certs: "{{confluent_replicator_consumer_export_certs}}"
+#   when: >
+#     confluent_replicator_consumer_ca_cert_path is defined
+
+# - name: Configure TLS for Replicator Producer
+#   include_role:
+#     name: confluent.ssl
+#   vars:
+#     truststore_storepass: "{{confluent_replicator_producer_truststore_storepass}}"
+#     truststore_path: "{{confluent_replicator_producer_truststore_path}}"
+#     keystore_path: "{{confluent_replicator_producer_keystore_path}}"
+#     keystore_storepass: "{{confluent_replicator_producer_keystore_storepass}}"
+#     keystore_keypass: "{{confluent_replicator_producer)keystore_keypass}}"
+#     service_name: confluent-replicator
+#     user: "{{confluent_replicator_user}}"
+#     group: "{{confluent_replicator_group}}"
+#     hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
+#     ca_cert_path: "{{confluent_replicator_producer_ca_cert_path}}"
+#     cert_path: "{{confluent_replicator_producer_cert_path}}"
+#     key_path: "{{confluent_replicator_producer_key_path}}"
+#     export_certs: "{{confluent_replicator_producer_export_certs}}"
+#   when: >
+#     confluent_replicator_producer_ca_cert_path is defined
 
 - name: Configure Kerberos for Replicator Host
   include_role:
@@ -105,14 +144,43 @@
     owner: "{{confluent_replicator_user}}"
     group: "{{confluent_replicator_group}}"
 
-- debug:
-    msg: "{{confluent_replicator_ssl_enabled}}"
+- name: Create Confluent Log4j Config
+  template:
+    src: replicator-log4j.properties.j2
+    dest: "{{confluent_replicator.log4j_file}}"
+    mode: 0640
+    owner: "{{confluent_replicator_user}}"
+    group: "{{confluent_replicator_group}}"
+  when: confluent_replicator_custom_log4j|bool
 
-- debug:
-    msg: "{{confluent_replicator_kerberos_enabled}}"
+- name: Create Confluent Replicator Jolokia Config
+  template:
+    src: confluent_replicator_jolokia.properties.j2
+    dest: "{{confluent_replicator_jolokia_config}}"
+    mode: 0640
+    owner: "{{confluent_replicator_user}}"
+    group: "{{confluent_replicator_group}}"
+  when: confluent_replicator_jolokia_enabled|bool
+  notify: restart confluent replicator
 
-- debug:
-    msg: "{{confluent_replicator_security_protocol}}"
+- name: Enable Secrets Protection
+  include_role:
+    name: confluent.common
+    tasks_from: secrets_protection.yml
+  vars:
+    encrypt_passwords: "{{ confluent_replicator_secrets_protection_encrypt_passwords }}"
+    properties: "{{ confluent_replicator_secrets_protection_encrypt_properties }}"
+    config_path: "{{ confluent_replicator.config_file }}"
+  when: confluent_replicator_secrets_protection_enabled|bool
+
+- name: Deploy JMX Exporter Config File
+  copy:
+    src: "confluent_replicator.yml"
+    dest: "{{confluent_replicator_jmxexporter_config_path}}"
+    mode: 0640
+    owner: "{{confluent_replicator_user}}"
+    group: "{{confluent_replicator_group}}"
+  when: confluent_replicator_jmxexporter_enabled|bool
 
 - name: Create Confluent Replicator Config
   template:
@@ -138,9 +206,61 @@
     owner: "{{confluent_replicator_user}}"
     group: "{{confluent_replicator_group}}"
 
-# - name: Start Confluent Replicator
-#   shell: replicator \
-#         --consumer.config ./consumer.properties \
-#         --producer.config ./producer.properties \
-#         --cluster.id replicator \
-#         --replication.config ./replication.properties
+- name: Create Confluent Replicator Monitoring Interceptor Config
+  template:
+    src: confluent-replicator-interceptors.properties.j2
+    dest: "{{confluent_replicator.interceptors_config_file}}"
+    mode: 0640
+    owner: "{{confluent_replicator_user}}"
+    group: "{{confluent_replicator_group}}"
+
+- name: Copy Confluent Replicator SystemD script
+  template:
+    src: kafka-connect-replicator.service.j2
+    dest:  "{{confluent_replicator.systemd_file}}"
+    mode: 0640
+    owner: root
+    group: root
+
+- name: Create SystemD override directory
+  file:
+    path: /etc/systemd/system/kafka-connect-replicator.service.d
+    state: directory
+    mode: '0755'
+  
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{ confluent_replicator.systemd_override }}"
+    mode: 0640
+    owner: "{{confluent_replicator_user}}"
+    group: "{{confluent_replicator_group}}"
+  notify: restart confluent replicator
+
+- name: Setup RBAC for Confluent Replicator Binary
+  include_tasks: rbac_replicator.yml
+  when: confluent_replicator_mds_enabled|bool
+
+- name: Setup RBAC for Confluent Replicator Binary Consumer
+  include_tasks: rbac_replicator_consumer.yml
+  when: confluent_replicator_consumer_mds_enabled|bool
+
+- name: Setup RBAC for Confluent Replicator Binary Producer
+  include_tasks: rbac_replicator_producer.yml
+  when: confluent_replicator_producer_mds_enabled|bool
+
+- name: Setup RBAC for Confluent Replicator Binary Monitoring Interceptor
+  include_tasks: rbac_replicator_monitoring.yml
+  when: confluent_replicator_monitoring_interceptor_mds_enabled|bool
+
+- name: Start Connect Service
+  systemd:
+    name: "{{confluent_replicator_service_name}}"
+    enabled: true
+    state: started
+
+- name: Health Check
+  include_tasks: health_check.yml
+  when:
+    - confluent_replicator_health_checks_enabled|bool
+    - not ansible_check_mode
