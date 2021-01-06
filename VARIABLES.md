@@ -964,6 +964,14 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ***
 
+### kafka_connect_extension_classes_custom
+
+Additional set of comma-separated extension classes
+
+Default:  ""
+
+***
+
 ### kafka_connect_jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on Connect
@@ -2070,7 +2078,7 @@ Default:  "https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaa
 
 A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent-{{confluent_package_version}}.tar.gz"
+Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent{{'' if confluent_server_enabled else '-community'}}-{{confluent_package_version}}.tar.gz"
 
 ***
 
