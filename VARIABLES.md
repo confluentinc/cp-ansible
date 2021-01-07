@@ -262,7 +262,7 @@ Default:  false
 
 ### regenerate_keystore_and_truststore
 
-Boolean to have reruns of all.yml recreate Keystores. On first install, keystores will get created.
+Boolean to have reruns of all.yml recreate Keystores. On first install, keystores will be created.
 
 Default:  "{{regenerate_ca}}"
 
