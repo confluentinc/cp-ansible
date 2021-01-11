@@ -1,0 +1,46 @@
+---
+- name: Control Center Status Finding
+  hosts: control_center
+  gather_facts: false
+  tags: control_center
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - name: Check if Kafka Service Running
+      shell: "systemctl show -p SubState {{control_center_service_name}}"
+      changed_when: false
+      check_mode: false
+      register: substate
+
+    - set_fact:
+        install_pattern: "{{ 'parallel' if substate.stdout != 'SubState=running' or control_center_reconfiguration_pattern == 'parallel' else 'serial' }}"
+
+    - name: "Group Hosts by Installation Pattern: Parallel or Serial"
+      group_by:
+        key: control_center_{{install_pattern}}
+
+- name: Control Center Parallel Provisioning
+  hosts: control_center_parallel
+  gather_facts: false
+  tags: control_center
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.control_center
+
+- name: Control Center Serial Provisioning
+  hosts: control_center_serial
+  serial: 1
+  gather_facts: false
+  tags: control_center
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.control_center
+
+    - name: Proceed Prompt
+      pause:
+        prompt: "Press Enter to Proceed to Next Node. Ctrl + C to Abort"
+      when: control_center_pause_rolling_deployment|bool

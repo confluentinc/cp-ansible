@@ -1,0 +1,46 @@
+---
+- name: Kafka Connect Status Finding
+  hosts: kafka_connect
+  gather_facts: false
+  tags: kafka_connect
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - name: Check if Kafka Service Running
+      shell: "systemctl show -p SubState {{kafka_connect_service_name}}"
+      changed_when: false
+      check_mode: false
+      register: substate
+
+    - set_fact:
+        install_pattern: "{{ 'parallel' if substate.stdout != 'SubState=running' or kafka_connect_reconfiguration_pattern == 'parallel' else 'serial' }}"
+
+    - name: "Group Hosts by Installation Pattern: Parallel or Serial"
+      group_by:
+        key: kafka_connect_{{install_pattern}}
+
+- name: Kafka Connect Parallel Provisioning
+  hosts: kafka_connect_parallel
+  gather_facts: false
+  tags: kafka_connect
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.kafka_connect
+
+- name: Kafka Connect Serial Provisioning
+  hosts: kafka_connect_serial
+  serial: 1
+  gather_facts: false
+  tags: kafka_connect
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.kafka_connect
+
+    - name: Proceed Prompt
+      pause:
+        prompt: "Press Enter to Proceed to Next Node. Ctrl + C to Abort"
+      when: kafka_connect_pause_rolling_deployment|bool

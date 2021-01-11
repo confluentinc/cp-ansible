@@ -254,17 +254,17 @@ Default:  "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_c
 
 ### regenerate_ca
 
-Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs
+Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs.
 
-Default:  true
+Default:  false
 
 ***
 
 ### regenerate_keystore_and_truststore
 
-Boolean to have reruns of all.yml recreate Keystores. Consider disabling this once installation is completed, as this triggers restarts.
+Boolean to have reruns of all.yml recreate Keystores. On first install, keystores will be created.
 
-Default:  true
+Default:  "{{regenerate_ca}}"
 
 ***
 
@@ -2052,6 +2052,126 @@ Default:  "{{control_center_ldap_password}}"
 
 ***
 
+### reconfiguration_pattern
+
+Reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  serial
+
+***
+
+### zookeeper_reconfiguration_pattern
+
+Zookeeper reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{reconfiguration_pattern}}"
+
+***
+
+### kafka_broker_reconfiguration_pattern
+
+Kafka reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{reconfiguration_pattern}}"
+
+***
+
+### kafka_connect_reconfiguration_pattern
+
+Connect reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{reconfiguration_pattern}}"
+
+***
+
+### kafka_rest_reconfiguration_pattern
+
+Rest Proxy reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{reconfiguration_pattern}}"
+
+***
+
+### ksql_reconfiguration_pattern
+
+ksqlDB reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{reconfiguration_pattern}}"
+
+***
+
+### control_center_reconfiguration_pattern
+
+Control Center reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{reconfiguration_pattern}}"
+
+***
+
+### pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Node starts up for all Components.
+
+Default:  false
+
+***
+
+### zookeeper_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Zookeeper Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_broker_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Kafka Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### schema_registry_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Schema Registry Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_connect_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Connect Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_rest_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Rest Proxy Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### ksql_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each ksqlDB Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### control_center_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Control Center Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
 # confluent.common
 
 Below are the supported variables for the role confluent.common
@@ -2166,7 +2286,7 @@ Default:  "https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaa
 
 A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent-{{confluent_package_version}}.tar.gz"
+Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent{{'' if confluent_server_enabled else '-community'}}-{{confluent_package_version}}.tar.gz"
 
 ***
 
@@ -2200,6 +2320,14 @@ Default:  ""
 
 ***
 
+### control_center_health_check_delay
+
+Time in seconds to wait before starting Control Center Health Checks.
+
+Default:  30
+
+***
+
 # confluent.kafka_broker
 
 Below are the supported variables for the role confluent.kafka_broker
@@ -2219,6 +2347,14 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Kafka Process
 
 Default:  ""
+
+***
+
+### kafka_broker_health_check_delay
+
+Time in seconds to wait before starting Kafka Health Checks.
+
+Default:  30
 
 ***
 
@@ -2244,6 +2380,14 @@ Default:  ""
 
 ***
 
+### kafka_connect_health_check_delay
+
+Time in seconds to wait before starting Connect Health Checks.
+
+Default:  30
+
+***
+
 # confluent.kafka_rest
 
 Below are the supported variables for the role confluent.kafka_rest
@@ -2255,6 +2399,14 @@ Below are the supported variables for the role confluent.kafka_rest
 Custom Java Args to add to the Rest Proxy Process
 
 Default:  ""
+
+***
+
+### kafka_rest_health_check_delay
+
+Time in seconds to wait before starting Rest Proxy Health Checks.
+
+Default:  20
 
 ***
 
@@ -2288,6 +2440,14 @@ Default:  /tmp/ksqldb
 
 ***
 
+### ksql_health_check_delay
+
+Time in seconds to wait before starting ksqlDB Health Checks.
+
+Default:  20
+
+***
+
 # confluent.schema_registry
 
 Below are the supported variables for the role confluent.schema_registry
@@ -2299,6 +2459,14 @@ Below are the supported variables for the role confluent.schema_registry
 Custom Java Args to add to the Schema Registry Process
 
 Default:  ""
+
+***
+
+### schema_registry_health_check_delay
+
+Time in seconds to wait before starting Schema Registry Health Checks.
+
+Default:  20
 
 ***
 
@@ -2321,6 +2489,14 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Zookeeper Process
 
 Default:  ""
+
+***
+
+### zookeeper_health_check_delay
+
+Time in seconds to wait before starting Zookeeper Health Checks.
+
+Default:  5
 
 ***
 
