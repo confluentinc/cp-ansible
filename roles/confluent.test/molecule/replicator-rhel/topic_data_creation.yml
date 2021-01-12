@@ -1,0 +1,33 @@
+---
+- name: Add Topics and Create data for Replication
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Create topic on Cluster1
+      shell: |
+        kafka-topics --create --topic test-replicator-source \
+          --bootstrap-server mds-kafka-broker1:9092 \
+          --replication-factor 2 --partitions 2  \
+          --config confluent.value.schema.validation=false \
+          --command-config /etc/kafka/client.properties
+      run_once: true
+      register: output
+
+    - debug:
+        msg: "{{output}}"
+
+    - name: Write to topic
+      uri:
+        url: http://mds-kafka-rest1:8082/topics/test-replicator-source
+        method: POST
+        headers:
+          Content-Type: application/vnd.kafka.json.v2+json
+          Accept: application/vnd.kafka.v2+json
+        body_format: json
+        body: '{"records":[{"value":{"foo":"bar"}}]}'
+        status_code: 200
+      run_once: true
+      register: output2
+
+    - debug:
+        msg: "{{output2}}"

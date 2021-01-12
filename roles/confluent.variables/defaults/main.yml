@@ -1076,7 +1076,7 @@ control_center_health_check_user: "{{control_center_ldap_user}}"
 ### Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
 control_center_health_check_password: "{{control_center_ldap_password}}"
 
-# Replicator Variables
+# Confluent Replicator Binary Variables
 
 ## Set this variable to customize the Linux User that the Confluent Replicator Service runs with. Default user is cp-control-center.
 confluent_replicator_user: "{{confluent_replicator_default_user}}"
@@ -1130,38 +1130,52 @@ confluent_replicator_health_check_user: "{{confluent_replicator_ldap_user}}"
 confluent_replicator_health_check_password: "{{confluent_replicator_ldap_password}}"
 
 ### Boolean that determines if TLS is enabled for the Replicator Binary configuration.
-confluent_replicator_ssl_enabled: "{{ true if confluent_replicator_ssl_ca_cert_filepath is defined else false}}"
+confluent_replicator_ssl_enabled: "{{ true if confluent_replicator_ssl_ca_cert_path is defined else false}}"
 
 confluent_replicator_http_protocol: "{% if confluent_replicator_ssl_enabled|bool%}https{%else%}http{%endif%}"
 
 confluent_replicator_jolokia_ssl_enabled: "{{confluent_replicator_ssl_enabled}}"
 
-### Boolean that determines of mTLS is enabled for the Replicator Binary configuration.
+### Boolean that determines if mTLS is enabled for the Replicator Binary configuration.
 confluent_replicator_ssl_mutual_auth_enabled: "{{ true if confluent_replicator_ssl_key_store_filepath is defined else false }}"
+
+### Boolean that determines if custom certs are being used for the Replicator Binary Producer configuration.
+confluent_replicator_ssl_custom_certs: false
+
+### Boolean that determines if a provided keystore and truststore are being used for the Replicator Binary configuration.
+confluent_replicator_ssl_provided_keystore_and_truststore: false
+
+confluent_replicator_ssl_ca_cert_path: ""
+
+confluent_replicator_ssl_cert_path: ""
+
+confluent_replicator_ssl_key_path: ""
+
+confluent_replicator_ssl_key_password: ""
+
+confluent_replicator_ssl_truststore_file_path: ""
+
+confluent_replicator_ssl_keystore_file_path: ""
+
+confluent_replicator_ssl_mutual_enabled: false
 
 ### Boolean that determines if Kerberos is enabled for the Replicator Binary configuration.
 confluent_replicator_kerberos_enabled: "{{ true if confluent_replicator_kerberos_principal is defined else false }}"
 
 ### Boolean that determines if SASL SCRAM is enabled for the Replicator Binary configuration.
-confluent_replicator_scram_enabled: "{{ true if confluent_replicator_scram_username is defined else false }}"
-
-### SCRAM user for the Replicator Binary to authenticate as.
-confluent_replicator_scram_user: "{{ sasl_scram_users.confluent_replicator.principal }}"
+confluent_replicator_sasl_scram_enabled: "{{ true if confluent_replicator_sasl_scram_username is defined else false }}"
 
 ### SCRAM password for the Replicator Binary to authenticate with.
-confluent_replicator_scram_password: "{{ sasl_scram_users.confluent_replicator.password }}"
+confluent_replicator_sasl_scram_password: "{{ sasl_scram_users.confluent_replicator.password }}"
 
 ### Boolean that determines if SASL PLAIN is enabled for the Replicator Binary configuration.
 confluent_replicator_sasl_plain_enabled: "{{ true if confluent_replicator_sasl_plain_username is defined else false }}"
-
-### SASL PLAIN user for the Replicator Binary to authenticate as.
-confluent_replicator_sasl_plain_user: "{{ sasl_plain_users.confluent_replicator.principal }}"
 
 ### SASL PLAIN password for the Replicator Binary to authenticate with.
 confluent_replicator_sasl_plain_password: "{{ sasl_plain_users.confluent_replicator.password }}"
 
 ### Defines the security protocol to be set for the Replicator Binary configuration.
-confluent_replicator_security_protocol: "{% if confluent_replicator_ssl_enabled==true and (confluent_replicator_kerberos_enabled==true or confluent_replicator_scram_enabled==true or confluent_replicator_sasl_plain_enabled==true) %} sasl_ssl {% elif confluent_replicator_ssl_enabled==false and (confluent_replicator_kerberos_enabled==true or confluent_replicator_scram_enabled==true or confluent_replicator_sasl_plain_enabled==true) %} sasl_plain {% else %} none {% endif %}"
+confluent_replicator_security_protocol: "{% if confluent_replicator_ssl_enabled==true and (confluent_replicator_kerberos_enabled==true or confluent_replicator_sasl_scram_enabled==true or confluent_replicator_sasl_plain_enabled==true) %}SASL_SSL{% elif confluent_replicator_ssl_enabled==false and (confluent_replicator_kerberos_enabled==true or confluent_replicator_sasl_scram_enabled==true or confluent_replicator_sasl_plain_enabled==true) %}SASL_PLAINTEXT{% elif confluent_replicator_ssl_enabled==true and (confluent_replicator_kerberos_enabled==false or confluent_replicator_sasl_scram_enabled==false or confluent_replicator_sasl_plain_enabled==false) %}SSL{% else %}NONE{% endif %}"
 
 ### Boolean that defines whether RBAC has been enabled on the cluster for Replicator Binary.
 confluent_replicator_mds_enabled: "{{ true if confluent_replicator_mds_url is defined else false }}"
@@ -1223,28 +1237,17 @@ confluent_replicator_secrets_protection_encrypt_passwords: "{{confluent_replicat
 ### List of Kafka properties to encrypt. Can be used in addition to confluent_replicator_secrets_protection_encrypt_passwords.
 confluent_replicator_secrets_protection_encrypt_properties: []
 
-confluent_replicator_truststore_path: "/var/ssl/private/replicator/confluent_replicator.truststore.jks"
-confluent_replicator_keystore_path: "/var/ssl/private/replicator/confluent_replicator.keystore.jks"
+confluent_replicator_truststore_path: "/var/ssl/private/confluent_replicator.truststore.jks"
+confluent_replicator_keystore_path: "/var/ssl/private/confluent_replicator.keystore.jks"
 confluent_replicator_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 confluent_replicator_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 confluent_replicator_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else confluent_replicator_keystore_storepass }}"
-confluent_replicator_ca_cert_path: "/var/ssl/replicator/private/ca.crt"
-confluent_replicator_cert_path: "/var/ssl/private/replicator/confluent_replicator.crt"
-confluent_replicator_key_path: "/var/ssl/private/replicator/confluent_replicator.key"
+confluent_replicator_ca_cert_path: "/var/ssl/private/confluent_replicator_ca.crt"
+confluent_replicator_cert_path: "/var/ssl/private/confluent_replicator.crt"
+confluent_replicator_key_path: "/var/ssl/private/confluent_replicator.key"
 confluent_replicator_export_certs: "{{confluent_replicator_ssl_mutual_auth_enabled}}"
 confluent_replicator_keytab_path: /etc/security/keytabs/confluent_replicator.keytab
 confluent_replicator_kerberos_keytab_path: /etc/security/keytabs/confluent_replicator.keytab
-
-confluent_replicator_mds_truststore_path: "/var/ssl/private/confluent_replicator_producer.truststore.jks"
-confluent_replicator_mds_keystore_path: "/var/ssl/private/confluent_replicator_producer.keystore.jks"
-confluent_replicator_mds_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
-confluent_replicator_mds_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
-confluent_replicator_mds_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else schema_registry_keystore_storepass }}"
-confluent_replicator_mds_ca_cert_path: "/var/ssl/private/ca.crt"
-confluent_replicator_mds_cert_path: "/var/ssl/private/confluent_replicator_producer.crt"
-confluent_replicator_mds_key_path: "/var/ssl/private/confluent_replicator_producer.key"
-confluent_replicator_mds_export_certs: "{{confluent_replicator_ssl_mutual_auth_enabled}}"
-
 confluent_replicator:
   appender_log_path: "{{confluent_replicator_default_log_dir}}"
   appender_log_name: "{{confluent_replicator_default_log_name}}"
@@ -1261,34 +1264,46 @@ confluent_replicator_consumer_bootstrap_servers: localhost:9092
 confluent_replicator_consumer_custom_properties: "{{ confluent_replicator_consumer.properties }}"
 
 ### Boolean that determines if TLS is enabled for the Replicator Binary Consumer configuration.
-confluent_replicator_consumer_ssl_enabled: "{{ true if confluent_replicator_consumer_ssl_ca_cert_filepath is defined else false }}"
+confluent_replicator_consumer_ssl_enabled: "{{ true if confluent_replicator_consumer_ssl_ca_cert_path is defined else false }}"
 
-### Boolean that determines of mTLS is enabled for the Replicator Binary Consumer configuration.
-confluent_replicator_consumer_ssl_mutual_auth_enabled: "{{ true if confluent_replicator_consumer_ssl_key_store_filepath is defined else false }}"
+### Boolean that determines if mTLS is enabled for the Replicator Binary Consumer configuration.
+confluent_replicator_consumer_ssl_mutual_auth_enabled: false
+
+### Boolean that determines if custom certs are being used for the Replicator Binary Producer configuration.
+confluent_replicator_consumer_ssl_custom_certs: false
+
+### Boolean that determines if a provided keystore and truststore are being used for the Replicator Binary consumer configuration.
+confluent_replicator_consumer_ssl_provided_keystore_and_truststore: false
+
+confluent_replicator_consumer_ssl_ca_cert_path: ""
+
+confluent_replicator_consumer_ssl_cert_path: ""
+
+confluent_replicator_consumer_ssl_key_path: ""
+
+confluent_replicator_consumer_ssl_key_password: ""
+
+confluent_replicator_consumer_ssl_truststore_file_path: ""
+
+confluent_replicator_consumer_ssl_keystore_file_path: ""
 
 ### Boolean that determines if Kerberos is enabled for the Replicator Binary Consumer configuration.
 confluent_replicator_consumer_kerberos_enabled: "{{ true if confluent_replicator_consumer_kerberos_principal is defined else false }}"
 
 ### Boolean that determines if SASL SCRAM is enabled for the Replicator Binary Consumer configuration.
-confluent_replicator_consumer_scram_enabled: "{{ true if confluent_replicator_consumer_scram_username is defined else false }}"
-
-### SCRAM user for the Consumer to authenticate as.
-confluent_replicator_consumer_scram_user: "{{ sasl_scram_users.confluent_replicator.principal }}"
+confluent_replicator_consumer_sasl_scram_enabled: "{{ true if confluent_replicator_consumer_sasl_scram_username is defined else false }}"
 
 ### SCRAM password for the Consumer to authenticate with.
-confluent_replicator_consumer_scram_password: "{{ sasl_scram_users.confluent_replicator.password }}"
+confluent_replicator_consumer_sasl_scram_password: "{{ sasl_scram_users.confluent_replicator.password }}"
 
 ### Boolean that determines if SASL PLAIN is enabled for the Replicator Binary Consumer configuration.
 confluent_replicator_consumer_sasl_plain_enabled: "{{ true if confluent_replicator_consumer_sasl_plain_username is defined else false }}"
-
-### SASL PLAIN user for the Consumer to authenticate as.
-confluent_replicator_consumer_sasl_plain_user: "{{ sasl_plain_users.confluent_replicator.principal }}"
 
 ### SASL PLAIN password for the Consumer to authenticate with.
 confluent_replicator_consumer_sasl_plain_password: "{{ sasl_plain_users.confluent_replicator.password }}"
 
 ### Defines the security protocol to be set for the Replicator Binary Consumer configuration.
-confluent_replicator_consumer_security_protocol: "{% if confluent_replicator_consumer_ssl_enabled==true and (confluent_replicator_consumer_kerberos_enabled==true or confluent_replicator_consumer_scram_enabled==true or confluent_replicator_consumer_sasl_plain_enabled==true) %} sasl_ssl {% elif confluent_replicator_consumer_ssl_enabled==false and (confluent_replicator_consumer_kerberos_enabled==true or confluent_replicator_consumer_scram_enabled==true or confluent_replicator_consumer_sasl_plain_enabled==true) %} sasl_plain {% else %} none {% endif %}"
+confluent_replicator_consumer_security_protocol: "{% if confluent_replicator_consumer_ssl_enabled==true and (confluent_replicator_consumer_kerberos_enabled==true or confluent_replicator_consumer_sasl_scram_enabled==true or confluent_replicator_consumer_sasl_plain_enabled==true) %}SASL_SSL{% elif confluent_replicator_consumer_ssl_enabled==false and (confluent_replicator_consumer_kerberos_enabled==true or confluent_replicator_consumer_sasl_scram_enabled==true or confluent_replicator_consumer_sasl_plain_enabled==true) %}SASL_PLAINTEXT{% elif confluent_replicator_consumer_ssl_enabled==true and (confluent_replicator_consumer_kerberos_enabled==false or confluent_replicator_consumer_sasl_scram_enabled==false or confluent_replicator_consumer_sasl_plain_enabled==false) %}SSL{% else %}NONE{% endif %}"
 
 ### Boolean that defines whether RBAC has been enabled on the cluster for Replicator Binary Consumer.
 confluent_replicator_consumer_mds_enabled: "{{ true if confluent_replicator_consumer_mds_url is defined else false }}"
@@ -1302,14 +1317,14 @@ confluent_replicator_consumer_mds_password: ""
 ### Defines the Cluster ID to set the appropraiate RBAC permissions against, for Replicator Binary Consumer.  This is a mandatory field when RBAC is enabled.
 confluent_replicator_consumer_rbac_cluster_id: ""
 
-confluent_replicator_consumer_truststore_path: "/var/ssl/private/replicator-consumer/confluent_replicator_consumer.truststore.jks"
-confluent_replicator_consumer_keystore_path: "/var/ssl/private/replicator-consumer/confluent_replicator_consumer.keystore.jks"
+confluent_replicator_consumer_truststore_path: "/var/ssl/private/confluent_replicator_consumer.truststore.jks"
+confluent_replicator_consumer_keystore_path: "/var/ssl/private/confluent_replicator_consumer.keystore.jks"
 confluent_replicator_consumer_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 confluent_replicator_consumer_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 confluent_replicator_consumer_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else confluent_replicator_consumer_keystore_storepass }}"
-confluent_replicator_consumer_ca_cert_path: "/var/ssl/private/ca.crt"
-confluent_replicator_consumer_cert_path: "/var/ssl/private/replicator-consumer/confluent_replicator_consumer.crt"
-confluent_replicator_consumer_key_path: "/var/ssl/private/replicator-consumer/confluent_replicator_consumer.key"
+confluent_replicator_consumer_ca_cert_path: "/var/ssl/private/confluent_replicator_consumer_ca.crt"
+confluent_replicator_consumer_cert_path: "/var/ssl/private/confluent_replicator_consumer.crt"
+confluent_replicator_consumer_key_path: "/var/ssl/private/confluent_replicator_consumer.key"
 confluent_replicator_consumer_export_certs: "{{confluent_replicator_ssl_mutual_auth_enabled}}"
 confluent_replicator_consumer_keytab_path: /etc/security/keytabs/confluent_replicator_consumer.keytab
 confluent_replicator_consumer_kerberos_keytab_path: /etc/security/keytabs/confluent_replicator_consumer.keytab
@@ -1323,34 +1338,46 @@ confluent_replicator_producer_bootstrap_servers: localhost:9092
 confluent_replicator_producer_custom_properties: "{{ confluent_replicator_producer.properties }}"
 
 ### Boolean that determines if TLS is enabled for the Replicator Binary Producer configuration.
-confluent_replicator_producer_ssl_enabled: "{{ true if confluent_replicator_producer_ssl_ca_cert_filepath is defined else false }}"
+confluent_replicator_producer_ssl_enabled: "{{ true if confluent_replicator_producer_ssl_ca_cert_path is defined else false }}"
 
-### Boolean that determines of mTLS is enabled for the Replicator Binary Producer configuration.
-confluent_replicator_producer_ssl_mutual_auth_enabled: "{{ true if confluent_replicator_consumer_ssl_key_store_filepath is defined else false }}"
+### Boolean that determines if mTLS is enabled for the Replicator Binary Producer configuration.
+confluent_replicator_producer_ssl_mutual_auth_enabled: false
+
+### Boolean that determines if custom certs are being used for the Replicator Binary Producer configuration.
+confluent_replicator_producer_ssl_custom_certs: false
+
+### Boolean that determines if a provided keystore and truststore are being used for the Replicator Binary producer configuration.
+confluent_replicator_producer_ssl_provided_keystore_and_truststore: false
+
+confluent_replicator_producer_ssl_ca_cert_path: ""
+
+confluent_replicator_producer_ssl_cert_path: ""
+
+confluent_replicator_producer_ssl_key_path: ""
+
+confluent_replicator_producer_ssl_key_password: ""
+
+confluent_replicator_producer_ssl_truststore_file_path: ""
+
+confluent_replicator_producer_ssl_keystore_file_path: ""
 
 ### Boolean that determines if Kerberos is enabled for the Replicator Binary Producer configuration.
 confluent_replicator_producer_kerberos_enabled: "{{ true if confluent_replicator_producer_kerberos_principal is defined else false }}"
 
 ### Boolean that determines if SASL SCRAM is enabled for the Replicator Binary Producer configuration.
-confluent_replicator_producer_scram_enabled: "{{ true if confluent_replicator_producer_scram_username is defined else false }}"
-
-### SCRAM user for the Producer to authenticate as.
-confluent_replicator_producer_scram_user: "{{ sasl_scram_users.confluent_replicator.principal }}"
+confluent_replicator_producer_sasl_scram_enabled: "{{ true if confluent_replicator_producer_sasl_scram_username is defined else false }}"
 
 ### SCRAM password for the Producer to authenticate with.
-confluent_replicator_producer_scram_password: "{{ sasl_scram_users.confluent_replicator.password }}"
+confluent_replicator_producer_sasl_scram_password: "{{ sasl_scram_users.confluent_replicator.password }}"
 
 ### Boolean that determines if SASL PLAIN is enabled for the Replicator Binary Producer configuration.
 confluent_replicator_producer_sasl_plain_enabled: "{{ true if confluent_replicator_producer_sasl_plain_username is defined else false }}"
-
-### SASL PLAIN user for the Producer to authenticate as.
-confluent_replicator_producer_sasl_plain_user: "{{ sasl_plain_users.confluent_replicator.principal }}"
 
 ### SASL PLAIN password for the Producer to authenticate with.
 confluent_replicator_producer_sasl_plain_password: "{{ sasl_plain_users.confluent_replicator.password }}"
 
 ### Defines the security protocol to be set for the Replicator Binary Producer configuration.
-confluent_replicator_producer_security_protocol: "{% if confluent_replicator_producer_ssl_enabled==true and (confluent_replicator_producer_kerberos_enabled==true or confluent_replicator_producer_scram_enabled==true or confluent_replicator_producer_sasl_plain_enabled==true) %} sasl_ssl {% elif confluent_replicator_producer_ssl_enabled==false and (confluent_replicator_producer_kerberos_enabled==true or confluent_replicator_producer_scram_enabled==true or confluent_replicator_producer_sasl_plain_enabled==true) %} sasl_plain {% else %} none {% endif %}"
+confluent_replicator_producer_security_protocol: "{% if confluent_replicator_producer_ssl_enabled==true and (confluent_replicator_producer_kerberos_enabled==true or confluent_replicator_producer_sasl_scram_enabled==true or confluent_replicator_producer_sasl_plain_enabled==true) %}SASL_SSL{% elif confluent_replicator_producer_ssl_enabled==false and (confluent_replicator_producer_kerberos_enabled==true or confluent_replicator_producer_sasl_scram_enabled==true or confluent_replicator_producer_sasl_plain_enabled==true) %}SASL_PLAINTEXT{% elif confluent_replicator_producer_ssl_enabled==true and (confluent_replicator_producer_kerberos_enabled==false or confluent_replicator_producer_sasl_scram_enabled==false or confluent_replicator_producer_sasl_plain_enabled==false) %}SSL{% else %}NONE{% endif %}"
 
 ### Boolean that defines whether RBAC has been enabled on the cluster for Replicator Binary Producer.
 confluent_replicator_producer_mds_enabled: "{{ true if confluent_replicator_consumer_mds_url is defined else false }}"
@@ -1364,14 +1391,14 @@ confluent_replicator_producer_mds_password: ""
 ### Defines the Cluster ID to set the appropraiate RBAC permissions against, for Replicator Binary Producer.  This is a mandatory field when RBAC is enabled.
 confluent_replicator_producer_rbac_cluster_id: ""
 
-confluent_replicator_producer_truststore_path: "/var/ssl/private/confluent/replicator-producer/confluent_replicator_producer.truststore.jks"
-confluent_replicator_producer_keystore_path: "/var/ssl/private/replicator-producer/confluent_replicator_producer.keystore.jks"
+confluent_replicator_producer_truststore_path: "/var/ssl/private/confluent_replicator_producer.truststore.jks"
+confluent_replicator_producer_keystore_path: "/var/ssl/private/confluent_replicator_producer.keystore.jks"
 confluent_replicator_producer_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 confluent_replicator_producer_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 confluent_replicator_producer_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else schema_registry_keystore_storepass }}"
-confluent_replicator_producer_ca_cert_path: "/var/ssl/private/replicator-producer/ca.crt"
-confluent_replicator_producer_cert_path: "/var/ssl/private/replicator-producer/confluent_replicator_producer.crt"
-confluent_replicator_producer_key_path: "/var/ssl/private/replicator-producer/confluent_replicator_producer.key"
+confluent_replicator_producer_ca_cert_path: "/var/ssl/private/confluent_replicator_producer_ca.crt"
+confluent_replicator_producer_cert_path: "/var/ssl/private/confluent_replicator_producer.crt"
+confluent_replicator_producer_key_path: "/var/ssl/private/confluent_replicator_producer.key"
 confluent_replicator_producer_export_certs: "{{confluent_replicator_ssl_mutual_auth_enabled}}"
 confluent_replicator_producer_keytab_path: /etc/security/keytabs/confluent_replicator_producer.keytab
 confluent_replicator_producer_kerberos_keytab_path: /etc/security/keytabs/confluent_replicator_producer.keytab
@@ -1388,40 +1415,52 @@ confluent_replicator_monitoring_interceptor_bootstrap_servers: "{{confluent_repl
 confluent_replicator_monitoring_interceptor_custom_properties: "{{ confluent_replicator_monitoring_interceptor.properties }}"
 
 ### Boolean that determines if TLS is enabled for the Replicator Binary Monitoring Interceptor configuration.
-confluent_replicator_monitoring_interceptor_ssl_enabled: "{{ confluent_replicator_ssl_enabled }}"
+confluent_replicator_monitoring_interceptor_ssl_enabled: "{{ true if confluent_replicator_monitoring_interceptor_ssl_ca_cert_path is defined else false }}"
 
 ### Boolean that determines of mTLS is enabled for the Replicator Binary Monitoring Interceptor configuration.
-confluent_replicator_monitoring_interceptor_ssl_mutual_auth_enabled: "{{ confluent_replicator_ssl_mutual_auth_enabled }}"
+confluent_replicator_monitoring_interceptor_ssl_mutual_auth_enabled: false
+
+### Boolean that determines if custom certs are being used for the Replicator Binary Monitoring Intercerpot configuration.
+confluent_replicator_monitoring_interceptor_ssl_custom_certs: false
+
+### Boolean that determines if a provided keystore and truststore are being used for the Replicator Binary Monitoring Interceptor configuration.
+confluent_replicator_monitoring_interceptor_ssl_provided_keystore_and_truststore: false
+
+confluent_replicator_monitoring_interceptor_ssl_ca_cert_path: ""
+
+confluent_replicator_monitoring_interceptor_ssl_cert_path: ""
+
+confluent_replicator_monitoring_interceptor_ssl_key_path: ""
+
+confluent_replicator_monitoring_interceptor_ssl_key_password: ""
+
+confluent_replicator_monitoring_interceptor_ssl_truststore_file_path: ""
+
+confluent_replicator_monitoring_interceptor_ssl_keystore_file_path: ""
 
 ### Boolean that determines if Kerberos is enabled for the Replicator Binary Monitoring Interceptor configuration.
-confluent_replicator_monitoring_interceptor_kerberos_enabled: "{{ confluent_replicator_kerberos_enabled }}"
+confluent_replicator_monitoring_interceptor_kerberos_enabled: "{{ true if confluent_replicator_monitoring_interceptor_kerberos_principal is defined else false }}"
 
 ### Defines the path to the keytab required for Kerberos Authentication of the monitoring Interceptors.
-confluent_replicator_monitoring_interceptor_kerberos_keytab_path: "{{ confluent_replicator_kerberos_keytab_path }}"
+confluent_replicator_monitoring_interceptor_kerberos_keytab_path: "{{ confluent_replicator_monitoring_interceptor_kerberos_keytab_path }}"
 
 ### Boolean that determines if SASL SCRAM is enabled for the Replicator Binary Monitoring Interceptor configuration.
-confluent_replicator_monitoring_interceptor_scram_enabled: "{{ confluent_replicator_scram_enabled }}"
-
-### SCRAM user for the Monitoring Interceptor to authenticate as.
-confluent_replicator_monitoring_interceptor_scram_user: "{{ confluent_replicator_scram_user }}"
+confluent_replicator_monitoring_interceptor_sasl_scram_enabled: "{{ true if confluent_replicator_monitoring_interceptor_sasl_scram_username is defined else false }}"
 
 ### SCRAM password for the Monitoring Interceptor to authenticate with.
-confluent_replicator_monitoring_interceptor_password: "{{ confluent_replicator_scram_password }}"
+confluent_replicator_monitoring_interceptor_sasl_scram_password: "{{ sasl_scram_users.confluent_replicator.password }}"
 
 ### Boolean that determines if SASL PLAIN is enabled for the Replicator Binary Monitoring Interceptor configuration.
-confluent_replicator_monitoring_interceptor_sasl_plain_enabled: "{{ confluent_replicator_sasl_plain_enabled }}"
+confluent_replicator_monitoring_interceptor_sasl_plain_enabled: "{{ true if confluent_replicator_monitoring_interceptor_sasl_plain_username is defined else false }}"
 
 ### Defines the security protocol to be set for the Replicator Binary Monitoring Interceptor configuration.
-confluent_replicator_monitoring_interceptor_security_protocol: "{% if confluent_replicator_monitoring_interceptor_ssl_enabled==true and (confluent_replicator_monitoring_interceptor_kerberos_enabled==true or confluent_replicator_monitoring_interceptor_scram_enabled==true or confluent_replicator_monitoring_interceptor_sasl_plain_enabled==true) %} sasl_ssl {% elif confluent_replicator_monitoring_interceptor_ssl_enabled==false and (confluent_replicator_monitoring_interceptor_kerberos_enabled==true or confluent_replicator_monitoring_interceptor_scram_enabled==true or confluent_replicator_monitoring_interceptor_sasl_plain_enabled==true) %} sasl_plain {% else %} none {% endif %}"
-
-### SASL PLAIN user for the Monitoring Interceptor to authenticate as.
-confluent_replicator_monitoring_interceptor_sasl_plain_user: "{{ confluent_replicator_sasl_plain_user }}"
+confluent_replicator_monitoring_interceptor_security_protocol: "{% if confluent_replicator_monitoring_interceptor_ssl_enabled==true and (confluent_replicator_monitoring_interceptor_kerberos_enabled==true or confluent_replicator_monitoring_interceptor_sasl_scram_enabled==true or confluent_replicator_monitoring_interceptor_sasl_plain_enabled==true) %}SASL_SSL{% elif confluent_replicator_monitoring_interceptor_ssl_enabled==false and (confluent_replicator_monitoring_interceptor_kerberos_enabled==true or confluent_replicator_monitoring_interceptor_sasl_scram_enabled==true or confluent_replicator_monitoring_interceptor_sasl_plain_enabled==true) %}SASL_PLAIN{% elif confluent_replicator_monitoring_interceptor_ssl_enabled==true and (confluent_replicator_monitoring_interceptor_kerberos_enabled==false or confluent_replicator_monitoring_interceptor_sasl_scram_enabled==false or confluent_replicator_monitoring_interceptor_sasl_plain_enabled==false) %}SSL{% else %}NONE{% endif %}"
 
 ### SASL PLAIN password for the Monitoring Interceptor to authenticate with.
-confluent_replicator_monitoring_interceptor_sasl_plain_password: "{{ confluent_replicator_sasl_plain_password }}"
+confluent_replicator_monitoring_interceptor_sasl_plain_password: "{{ sasl_plain_users.confluent_replicator.password }}"
 
 ### Boolean that defines whether RBAC has been enabled on the cluster for Replicator Binary Producer.
-confluent_replicator_monitoring_interceptor_mds_enabled: "{{ true if confluent_replicator_consumer_mds_url is defined else false }}"
+confluent_replicator_monitoring_interceptor_mds_enabled: "{{ true if confluent_replicator_monitoring_interceptor_mds_url is defined else false }}"
 
 ### Defines the Admin username for authenticating to the MDS end point for Replicator Binary Producer.  This is a mandatory field when RBAC is enabled.
 confluent_replicator_monitoring_interceptor_mds_username: ""
@@ -1432,15 +1471,15 @@ confluent_replicator_monitoring_interceptor_mds_password: ""
 ### Defines the Cluster ID to set the appropraiate RBAC permissions against, for Replicator Binary Producer.  This is a mandatory field when RBAC is enabled.
 confluent_replicator_monitoring_interceptor_rbac_cluster_id: ""
 
-confluent_replicator_monitoring_interceptor_truststore_path: "{{ confluent_replicator_truststore_path }}"
-confluent_replicator_monitoring_interceptor_keystore_path: "{{ confluent_replicator_keystore_path }}"
-confluent_replicator_monitoring_interceptor_truststore_storepass: "{{ confluent_replicator_truststore_storepass }}"
-confluent_replicator_monitoring_interceptor_keystore_storepass: "{{ confluent_replicator_keystore_storepass }}"
-confluent_replicator_monitoring_interceptor_keystore_keypass: "{{ confluent_replicator_keystore_keypass }}"
-confluent_replicator_monitoring_interceptor_ca_cert_path: "{{ confluent_replicator_ca_cert_path }}"
-confluent_replicator_monitoring_interceptor_cert_path: "{{ confluent_replicator_cert_path }}"
-confluent_replicator_monitoring_interceptor_key_path: "{{ confluent_replicator_key_path }}"
-confluent_replicator_monitoring_interceptor_export_certs: "{{ confluent_replicator_export_certs }}"
-confluent_replicator_monitoring_interceptor_keytab_path: "{{ confluent_replicator_keytab_path }}"
+confluent_replicator_monitoring_interceptor_truststore_path: "/var/ssl/private/confluent_replicator_monitoring_interceptor.truststore.jks"
+confluent_replicator_monitoring_interceptor_keystore_path: "/var/ssl/private/confluent_replicator_monitoring_interceptor.keystore.jks"
+confluent_replicator_monitoring_interceptor_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
+confluent_replicator_monitoring_interceptor_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
+confluent_replicator_monitoring_interceptor_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else schema_registry_keystore_storepass }}"
+confluent_replicator_monitoring_interceptor_ca_cert_path: "/var/ssl/private/confluent_replicator_monitoring_interceptor_ca.crt"
+confluent_replicator_monitoring_interceptor_cert_path: "/var/ssl/private/confluent_replicator_monitoring_interceptor.crt"
+confluent_replicator_monitoring_interceptor_key_path: "/var/ssl/private/confluent_replicator_monitoring_interceptor.key"
+confluent_replicator_monitoring_interceptor_export_certs: /etc/security/keytabs/confluent_replicator_monitoring_interceptor.keytab
+confluent_replicator_monitoring_interceptor_keytab_path: /etc/security/keytabs/confluent_replicator_monitoring_interceptor.keytab
 confluent_replicator_monitoring_interceptor:
   properties: {}

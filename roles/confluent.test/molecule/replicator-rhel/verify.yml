@@ -1,73 +1,100 @@
 ---
-- name: Verify - kafka_broker
-  hosts: kafka_broker2
+
+# create consumer 
+
+- name: Read Replicated Data from Cluster 2
+  hosts: kafka_broker
   gather_facts: false
   tasks:
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/kafka/server.properties
-        property: confluent.metadata.sasl.mechanism
-        expected_value: PLAIN
 
-- name: Verify - schema_registry
-  hosts: schema_registry2
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/schema-registry/schema-registry.properties
-        property: confluent.metadata.bootstrap.server.urls
-        expected_value: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
+    # - name: Create Consumer
+    #   uri:
+    #     url: http://kafka-rest1:8082/consumers/test-replicator-source-consumer
+    #     method: POST
+    #     headers:
+    #       Content-Type: application/vnd.kafka.v2+json
+    #       Accept: application/vnd.kafka.v2+json
+    #     body_format: json
+    #     body: '{"name": "my_consumer_instance", "format": "json", "auto.offset.reset": "earliest"}'
+    #     status_code: 200
+    #   run_once: true
+    #   register: consumer_output
 
-- name: Verify - kafka_rest
-  hosts: kafka_rest2
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/kafka-rest/kafka-rest.properties
-        property: confluent.metadata.bootstrap.server.urls
-        expected_value: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
+    - name: Subscribe to Consumer
+      uri:
+        url: http://kafka-rest1:8082/consumers/test-replicator-source-consumer/instances/my_consumer_instance/subscription
+        method: POST
+        headers:
+          Content-Type: application/vnd.kafka.v2+json
+        body_format: json
+        body: '{"topics":["test-replicator-source"]}'
+        status_code: 204
+      run_once: true
 
-- name: Verify - kafka_connect
-  hosts: kafka_connect2
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/kafka/connect-distributed.properties
-        property: confluent.metadata.bootstrap.server.urls
-        expected_value: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
+    - name: Retrieve replicated data via Consumer
+      uri:
+        url: http://kafka-rest1:8082/consumers/test-replicator-source-consumer/instances/my_consumer_instance/records
+        method: GET
+        headers:
+          Accept: application/vnd.kafka.json.v2+json
+        status_code: 200
+      run_once: true
+      register: data_output
 
-- name: Verify - ksql
-  hosts: ksql2
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/ksqldb/ksql-server.properties
-        property: confluent.metadata.bootstrap.server.urls
-        expected_value: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
+    # - name: Retrieve replicated data via Consumer
+    #   uri:
+    #     url: http://kafka-rest1:8082/consumers/test-replicator-source-consumer/instances/my_consumer_instance/records
+    #     method: GET
+    #     return_content: yes
+    #     headers:
+    #       Accept: application/vnd.kafka.json.v2+json
+    #     status_code: 200
+    #   register: data_output
 
 
-- name: Verify - control_center
-  hosts: control_center2
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
-        property: confluent.metadata.bootstrap.server.urls
-        expected_value: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
+    - debug:
+        msg: "{{data_output}}"
+
+# - name: Create Consumer
+#       uri:
+#         url: http://kafka-rest1:8082/consumers/test-replicator-source-consumer
+#         method: POST
+#         headers:
+#           Content-Type: application/vnd.kafka.v2+json
+#           Accept: application/vnd.kafka.v2+json
+#         body_format: json
+#         body: '{"name": "my_consumer_instance", "format": "avro", "auto.offset.reset": "earliest"}'
+#         status_code: 200
+#       run_once: true
+#       register: consumer_output
+
+#     - debug:
+#         msg: "{{consumer_output}}"
+
+
+#     - name: Subscribe to Consumer
+#       uri:
+#         url: http://kafka-rest1:8082/consumers/test-replicator-source-consumer/instances/my_consumer_instance/subscription
+#         method: POST
+#         headers:
+#           Content-Type: application/vnd.kafka.v2+json
+#           Accept: application/vnd.kafka.v2+json
+#         body_format: json
+#         body: '{"topics":["test-replicator-source"]}'
+#         status_code: 204
+#       run_once: true
+    
+#     - name: Retrieve replicated data via Consumer
+#       uri:
+#         url: http://kafka-rest1:8082/consumers/test-replicator-source-consumer/instances/my_consumer_instance/records
+#         method: GET
+#         headers:
+#           Content-Type: application/vnd.kafka.avro.v2+json
+#           Accept: application/vnd.kafka.avro.v2+json
+#         status_code: 200
+#       run_once: true
+#       register: data_output
+
+#     - debug:
+#         msg: "{{data_output}}"
+
