@@ -1940,6 +1940,30 @@ Default:  "{{control_center_telemetry_enabled}}"
 
 ***
 
+### audit_logs_destination_enabled
+
+Boolean to configure Kafka to set Audit Logs on an external Kafka Cluster. Must also include audit_logs_destination_bootstrap_servers and audit_logs_destination_listener.
+
+Default:  false
+
+***
+
+### audit_logs_destination_bootstrap_servers
+
+Kafka hosts and listener ports on the Audit Logs Destination Kafka Cluster. audit_logs_destination_listener dictionary must describe its security settings. Must be configured if audit_logs_destination_enabled: true
+
+Default:  localhost:9092
+
+***
+
+### audit_logs_destination_listener
+
+Listener Dictionary that describes how kafka clients connect to Audit Log Destination Kafka cluster. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol.
+
+Default: 
+
+***
+
 ### mds_health_check_user
 
 User for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
