@@ -1,0 +1,96 @@
+---
+- name: Kafka Broker Status Finding
+  hosts: kafka_broker
+  gather_facts: false
+  tags: kafka_broker
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - name: Check if Kafka Service Running
+      shell: "systemctl show -p SubState {{kafka_broker_service_name}}"
+      changed_when: false
+      check_mode: false
+      register: substate
+
+    - set_fact:
+        install_pattern: "{{ 'parallel' if substate.stdout != 'SubState=running' or kafka_broker_reconfiguration_pattern == 'parallel' else 'serial' }}"
+
+    - name: "Group Hosts by Installation Pattern: Parallel or Serial"
+      group_by:
+        key: kafka_broker_{{install_pattern}}
+
+- name: Kafka Broker Parallel Provisioning
+  hosts: kafka_broker_parallel
+  gather_facts: false
+  tags: kafka_broker
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.kafka_broker
+
+- name: Kafka Broker Serial Ordering
+  hosts: kafka_broker_serial
+  gather_facts: false
+  tags: kafka_broker
+  environment: "{{ proxy_env }}"
+  vars_files:
+    - roles/confluent.kafka_broker/defaults/main.yml
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    # TODO When Zookeeper is removed, use kafka-metadata-quorum script. See KIP-595
+    - name: Get Controller Broker ID
+      shell: |
+        {{ binary_base_path }}/bin/zookeeper-shell {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} \
+          {% if zookeeper_ssl_enabled|bool %}-zk-tls-config-file {{kafka_broker.zookeeper_tls_client_config_file}}{% endif %} \
+          get /controller | grep brokerid
+      register: controller_query
+      run_once: true
+      changed_when: false
+      check_mode: false
+
+    - set_fact:
+        controller_json: "{{controller_query.stdout}}"
+        broker_id: "{{kafka_broker_final_properties['broker.id']}}"
+
+    - debug:
+        msg: "Broker ID: {{broker_id}} and Controller ID: {{controller_json.brokerid}}"
+
+    - set_fact:
+        mode: "{{ 'non_controller' if broker_id|int != controller_json.brokerid|int else 'controller' }}"
+
+    - name: "Group Hosts by kafka_broker Mode: Controller or Non Controller"
+      group_by:
+        key: kafka_broker_{{mode}}
+
+- name: Kafka Broker Non Controllers Provisioning
+  hosts: kafka_broker_non_controller
+  serial: 1
+  gather_facts: false
+  tags: kafka_broker
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.kafka_broker
+
+    - name: Proceed Prompt
+      pause:
+        prompt: "Press Enter to Proceed to Next Node. Ctrl + C to Abort"
+      when: kafka_broker_pause_rolling_deployment|bool
+
+- name: Kafka Broker Controller Provisioning
+  hosts: kafka_broker_controller
+  gather_facts: false
+  tags: kafka_broker
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.kafka_broker
+
+    - name: Proceed Prompt
+      pause:
+        prompt: "Press Enter to Proceed to Next Node. Ctrl + C to Abort"
+      when: kafka_broker_pause_rolling_deployment|bool

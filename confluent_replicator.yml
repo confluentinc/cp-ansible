@@ -1,0 +1,46 @@
+---
+- name: Confluent Replicator Status Finding
+  hosts: confluent_replicator
+  gather_facts: false
+  tags: confluent_replicator
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - name: Check if Kafka Service Running
+      shell: "systemctl show -p SubState {{confluent_replicator_service_name}}"
+      changed_when: false
+      check_mode: false
+      register: substate
+
+    - set_fact:
+        install_pattern: "{{ 'parallel' if substate.stdout != 'SubState=running' or confluent_replicator_reconfiguration_pattern == 'parallel' else 'serial' }}"
+
+    - name: "Group Hosts by Installation Pattern: Parallel or Serial"
+      group_by:
+        key: confluent_replicator_{{install_pattern}}
+
+- name: Confluent Replicator Parallel Provisioning
+  hosts: confluent_replicator_parallel
+  gather_facts: false
+  tags: confluent_replicator
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.replicator
+
+- name: Confluent Replicator Serial Provisioning
+  hosts: confluent_replicator_serial
+  serial: 1
+  gather_facts: false
+  tags: confluent_replicator
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.replicator
+
+    - name: Proceed Prompt
+      pause:
+        prompt: "Press Enter to Proceed to Next Node. Ctrl + C to Abort"
+      when: confluent_replicator_pause_rolling_deployment|bool

@@ -7,6 +7,9 @@ confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
 confluent_package_debian_suffix: "{{ '=' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
 
+### To copy from Ansible control host or download
+jolokia_url_remote: true
+
 ### Boolean to enable Jolokia Agent installation and configuration on all components
 jolokia_enabled: false
 
@@ -21,6 +24,9 @@ jolokia_user: admin
 
 ### Password for Jolokia Agent when using Basic Auth
 jolokia_password: password
+
+### To copy from Ansible control host or download
+jmxexporter_url_remote: true
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on all components
 jmxexporter_enabled: false
@@ -117,11 +123,11 @@ ssl_self_signed_ca_cert_filename: snakeoil-ca-1.crt
 ssl_self_signed_ca_key_filename: snakeoil-ca-1.key
 ssl_self_signed_ca_password: capassword123
 
-### Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs
-regenerate_ca: true
+### Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs.
+regenerate_ca: false
 
-### Boolean to have reruns of all.yml recreate Keystores
-regenerate_keystore_and_truststore: true
+### Boolean to have reruns of all.yml recreate Keystores. On first install, keystores will be created.
+regenerate_keystore_and_truststore: "{{regenerate_ca}}"
 
 certs_updated: false
 
@@ -238,7 +244,7 @@ zookeeper_jmxexporter_port: 8079
 
 zookeeper_jmxexporter_config_path: /opt/prometheus/zookeeper.yml
 
-zookeeper_health_check_command: "KAFKA_OPTS='{{ zookeeper_service_environment_overrides.KAFKA_OPTS }}'
+zookeeper_health_check_command: "{% if zookeeper_sasl_protocol in ['kerberos', 'digest'] %}KAFKA_OPTS='-Djava.security.auth.login.config={{zookeeper.jaas_file}}'{% endif %}
 {{ binary_base_path }}/bin/kafka-run-class
 {% if zookeeper_ssl_enabled|bool %}
 -Dzookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
@@ -660,6 +666,7 @@ ksql_key_path: "/var/ssl/private/ksql.key"
 ksql_export_certs: "{{ksql_ssl_mutual_auth_enabled}}"
 ksql_keytab_path: /etc/security/keytabs/ksql.keytab
 ksql_kafka_listener_name: internal
+ksql_processing_log_kafka_listener_name: "{{kafka_broker_inter_broker_listener_name if rbac_enabled else ksql_kafka_listener_name}}"
 ksql:
   jaas_file: "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql-server_jaas.conf' , '/etc/ksql/ksql-server_jaas.conf')}}"
   appender_log_path: "{{ksql_default_log_dir}}"
@@ -710,6 +717,12 @@ ksql_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled }}"
 
 ### Use to register and identify your KSQL cluster in the MDS.
 ksql_cluster_name: ""
+
+ksql_processing_log: "processing_log"
+
+### Boolean to enable ksqlDB Log Streaming.
+ksql_log_streaming_enabled: false
+
 
 # Control Center Variables
 
@@ -1483,3 +1496,54 @@ confluent_replicator_monitoring_interceptor_export_certs: /etc/security/keytabs/
 confluent_replicator_monitoring_interceptor_keytab_path: /etc/security/keytabs/confluent_replicator_monitoring_interceptor.keytab
 confluent_replicator_monitoring_interceptor:
   properties: {}
+  
+### Reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+reconfiguration_pattern: serial
+
+### Zookeeper reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+zookeeper_reconfiguration_pattern: "{{reconfiguration_pattern}}"
+
+### Kafka reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+kafka_broker_reconfiguration_pattern: "{{reconfiguration_pattern}}"
+
+### Connect reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+kafka_connect_reconfiguration_pattern: "{{reconfiguration_pattern}}"
+
+### Rest Proxy reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+kafka_rest_reconfiguration_pattern: "{{reconfiguration_pattern}}"
+
+### ksqlDB reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+ksql_reconfiguration_pattern: "{{reconfiguration_pattern}}"
+
+### Control Center reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+control_center_reconfiguration_pattern: "{{reconfiguration_pattern}}"
+
+### Replicator Binary reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+confluent_replicator_reconfiguration_pattern: "{{reconfiguration_pattern}}"
+
+### Boolean to Pause Rolling Deployment after each Node starts up for all Components.
+pause_rolling_deployment: false
+
+### Boolean to Pause Rolling Deployment after each Zookeeper Node starts up.
+zookeeper_pause_rolling_deployment: "{{pause_rolling_deployment}}"
+
+### Boolean to Pause Rolling Deployment after each Kafka Node starts up.
+kafka_broker_pause_rolling_deployment: "{{pause_rolling_deployment}}"
+
+### Boolean to Pause Rolling Deployment after each Schema Registry Node starts up.
+schema_registry_pause_rolling_deployment: "{{pause_rolling_deployment}}"
+
+### Boolean to Pause Rolling Deployment after each Connect Node starts up.
+kafka_connect_pause_rolling_deployment: "{{pause_rolling_deployment}}"
+
+### Boolean to Pause Rolling Deployment after each Rest Proxy Node starts up.
+kafka_rest_pause_rolling_deployment: "{{pause_rolling_deployment}}"
+
+### Boolean to Pause Rolling Deployment after each ksqlDB Node starts up.
+ksql_pause_rolling_deployment: "{{pause_rolling_deployment}}"
+
+### Boolean to Pause Rolling Deployment after each Control Center Node starts up.
+control_center_pause_rolling_deployment: "{{pause_rolling_deployment}}"
+
+### Boolean to Pause Rolling Deployment after each Replicator Binary Node starts up.
+confluent_replicator_pause_rolling_deployment: "{{pause_rolling_deployment}}"
