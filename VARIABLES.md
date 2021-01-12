@@ -964,11 +964,11 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ***
 
-### kafka_connect_extension_classes_custom
+### kafka_connect_custom_rest_extension_classes
 
-Additional set of comma-separated extension classes
+Additional set of extension classes
 
-Default:  ""
+Default:  []
 
 ***
 
