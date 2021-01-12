@@ -966,7 +966,7 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ### kafka_connect_custom_rest_extension_classes
 
-Additional set of extension classes
+Additional set of Connect extension classes.
 
 Default:  []
 
@@ -2281,4 +2281,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-
