@@ -2076,59 +2076,59 @@ Default:  "{{control_center_ldap_password}}"
 
 ***
 
-### reconfiguration_pattern
+### deployment_strategy
 
-Reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+Deployment strategy for all components. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 
-Default:  serial
-
-***
-
-### zookeeper_reconfiguration_pattern
-
-Zookeeper reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
-
-Default:  "{{reconfiguration_pattern}}"
+Default:  rolling
 
 ***
 
-### kafka_broker_reconfiguration_pattern
+### zookeeper_deployment_strategy
 
-Kafka reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+Deployment strategy for Zookeeper. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 
-Default:  "{{reconfiguration_pattern}}"
-
-***
-
-### kafka_connect_reconfiguration_pattern
-
-Connect reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
-
-Default:  "{{reconfiguration_pattern}}"
+Default:  "{{deployment_strategy}}"
 
 ***
 
-### kafka_rest_reconfiguration_pattern
+### kafka_broker_deployment_strategy
 
-Rest Proxy reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+Deployment strategy for Kafka. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 
-Default:  "{{reconfiguration_pattern}}"
-
-***
-
-### ksql_reconfiguration_pattern
-
-ksqlDB reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
-
-Default:  "{{reconfiguration_pattern}}"
+Default:  "{{deployment_strategy}}"
 
 ***
 
-### control_center_reconfiguration_pattern
+### kafka_connect_deployment_strategy
 
-Control Center reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+Deployment strategy for Connect. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 
-Default:  "{{reconfiguration_pattern}}"
+Default:  "{{deployment_strategy}}"
+
+***
+
+### kafka_rest_deployment_strategy
+
+Deployment strategy for Rest Proxy. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### ksql_deployment_strategy
+
+Deployment strategy for ksqlDB. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### control_center_deployment_strategy
+
+Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
 
 ***
 
