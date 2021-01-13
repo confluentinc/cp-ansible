@@ -5,19 +5,7 @@
   tasks:
     # MDS -> Audit logs destination cluster with non super-user Principal, needs rolebindings
 
-    - name: Get Kafka Cluster Id of Destination Cluster
-      uri:
-        url: https://kafka-broker1:8090/v1/metadata/id
-        validate_certs: false
-        status_code: 200
-      register: destination_cluster_id
-      run_once: true
-
-    - debug:
-        msg: "{{destination_cluster_id.json.id}}"
-      run_once: true
-
-    # confluent iam rolebinding create --principal User:<audit-log-admin> --role ResourceOwner --resource Topic:confluent-audit-log-events --prefix --kafka-cluster-id <kafka-destination-cluster-id>
+    # confluent iam rolebinding create --principal User:<audit-log-admin> --role ResourceOwner --resource Topic:confluent-audit-log-events --prefix --cluster-name audit_logs
     - name: Grant Audit Logs Principal ResourceOwner on confluent-audit-log-events Prefixed Topics
       uri:
         url: "http://mds-kafka-broker1:8090/security/1.0/principals/User:kafka/roles/ResourceOwner/bindings"
@@ -32,9 +20,7 @@
         body: >
           {
             "scope": {
-              "clusters": {
-                "kafka-cluster":"{{destination_cluster_id.json.id}}"
-              }
+              "clusterName": "audit_logs"
             },
             "resourcePatterns": [{
               "resourceType": "Topic",
@@ -45,7 +31,7 @@
         status_code: 204
       run_once: true
 
-    # confluent iam rolebinding create --principal User:<audit-log-writer> --role DeveloperWrite --resource Topic:confluent-audit-log-events --prefix --kafka-cluster-id <kafka-destination-cluster-id>
+    # confluent iam rolebinding create --principal User:<audit-log-writer> --role DeveloperWrite --resource Topic:confluent-audit-log-events --prefix --cluster-name audit_logs
     - name: Grant Audit Logs Principal DeveloperWrite on confluent-audit-log-events Prefixed Topics
       uri:
         url: "http://mds-kafka-broker1:8090/security/1.0/principals/User:kafka/roles/DeveloperWrite/bindings"
@@ -60,9 +46,7 @@
         body: >
           {
             "scope": {
-              "clusters": {
-                "kafka-cluster":"{{destination_cluster_id.json.id}}"
-              }
+              "clusterName": "audit_logs"
             },
             "resourcePatterns": [{
               "resourceType": "Topic",
