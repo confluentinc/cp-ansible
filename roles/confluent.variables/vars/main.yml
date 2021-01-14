@@ -475,6 +475,12 @@ kafka_connect:
 
 kafka_connect_http_protocol: "{{ 'https' if kafka_connect_ssl_enabled|bool else 'http' }}"
 
+kafka_connect_rest_extension_classes:
+  - "{% if rbac_enabled|bool %}io.confluent.connect.security.ConnectSecurityExtension{% endif %}"
+  - "{% if kafka_connect_secret_registry_enabled|bool %}io.confluent.connect.secretregistry.ConnectSecretRegistryExtension{% endif %}"
+
+kafka_connect_final_rest_extension_classes: "{{(kafka_connect_rest_extension_classes|difference(['']) + kafka_connect_custom_rest_extension_classes) | unique}}"
+
 kafka_connect_properties:
   defaults:
     enabled: true
@@ -504,6 +510,10 @@ kafka_connect_properties:
       producer.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
       consumer.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
       confluent.license.topic: _confluent-command
+  rest_classes:
+    enabled: "{{ kafka_connect_final_rest_extension_classes|length > 0 }}"
+    properties:
+      rest.extension.classes: "{{ kafka_connect_final_rest_extension_classes | join(',') }}"
   ssl:
     enabled: "{{kafka_connect_ssl_enabled}}"
     properties:
@@ -580,7 +590,6 @@ kafka_connect_properties:
   rbac:
     enabled: "{{rbac_enabled}}"
     properties:
-      rest.extension.classes: "io.confluent.connect.security.ConnectSecurityExtension{% if kafka_connect_secret_registry_enabled|bool %},io.confluent.connect.secretregistry.ConnectSecretRegistryExtension{% endif %}"
       rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
       public.key.path: "{{rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
