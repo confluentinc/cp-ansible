@@ -27,14 +27,15 @@
         | grep Owner -m1 \
         | cut -d ":" -f2 \
         | cut -c2- \
-        | sed 's/\s*,\s*/,/g'
+        | sed 's/^.*CN=//' \
+        | cut -d "," -f1
   register: distinguished_name_from_keystore
-  when: confluent_replicator_consumer_security_protocol == 'none' and confluent_replicator_consumer_ssl_enabled == true
+  when: confluent_replicator_consumer_security_protocol == 'SSL' and confluent_replicator_consumer_ssl_enabled == true
 
 - name: Set Principal - SSL Mutual Auth
   set_fact:
     replicator_principal: "{{ distinguished_name_from_keystore.stdout }}"
-  when: confluent_replicator_consumer_security_protocol == 'none' and confluent_replicator_consumer_ssl_enabled == true
+  when: confluent_replicator_consumer_security_protocol == 'SSL' and confluent_replicator_consumer_ssl_enabled == true
 
 - name: Normalize User Name
   set_fact:
@@ -44,7 +45,7 @@
 # Take confluent_replicator_white_list property, split into list
 - name: Set Replicator Topic White List
   set_fact:
-    topic_white_list: "{{ confluent_replicator_white_list | default('')).split(',') | difference(['']) }} "
+    topic_white_list: "{{ confluent_replicator_white_list.split(',') | default('')| difference(['']) }} "
 
 - name: Grant Confluent Replicator User ResourceOwner on White List Topics
   uri:
@@ -73,4 +74,23 @@
         }
       }
     status_code: 204
-    with_items: "{{ topic_white_list }}"
+  with_items: "{{ topic_white_list }}"
+
+- name: Grant role System Admin to Replicator Consumer Principal
+  uri:
+    url: "{{confluent_replicator_consumer_mds_url.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/{{replicator_principal}}/roles/SystemAdmin"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{confluent_replicator_consumer_mds_username}}"
+    url_password: "{{confluent_replicator_consumer_mds_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "clusters": {
+          "kafka-cluster": "{{confluent_replicator_consumer_rbac_cluster_id}}"
+        }
+      }
+    status_code: 204
