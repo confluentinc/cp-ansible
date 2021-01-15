@@ -1028,6 +1028,14 @@ Default:  "{{kafka_connect.appender_log_path}}"
 
 ***
 
+### kafka_connect_custom_rest_extension_classes
+
+Additional set of Connect extension classes.
+
+Default:  []
+
+***
+
 ### kafka_connect_jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on Connect
