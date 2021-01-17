@@ -1,0 +1,47 @@
+---
+- name: Confluent Replicator Validate Consumption and Production between clusters
+  hosts: kafka-broker1
+  gather_facts: false
+  tasks:
+    - name: Consume Records from destination cluster
+      shell: kafka-console-consumer --topic test-replicator-source --bootstrap-server kafka-broker1:9092 --from-beginning --timeout-ms 10000 --consumer.config /etc/kafka/client.properties
+      run_once: true
+      register: consumer_output
+      failed_when:
+        - "'1\n2\n3\n4\n5\n6\n7\n8\n9\n10' not in consumer_output.stdout"
+
+- name: Verify - Replicator Configuration
+  hosts: confluent-replicator1
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-connect-replicator/confluent-replicator.properties
+        property: sasl.mechanism
+        expected_value: SCRAM-SHA-512
+
+- name: Verify - Replicator Consumer Configuration
+  hosts: confluent-replicator1
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-connect-replicator/confluent-replicator-consumer.properties
+        property: security.protocol
+        expected_value: SSL
+
+- name: Verify - Replicator Producer Configuration
+  hosts: confluent-replicator1
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-connect-replicator/confluent-replicator-producer.properties
+        property: sasl.mechanism
+        expected_value: SCRAM-SHA-512

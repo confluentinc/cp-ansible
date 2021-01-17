@@ -1,0 +1,229 @@
+### replicator-mtls-scram-rhel
+##
+##  Tests replicator over mtls and scram
+##
+---
+driver:
+  name: docker
+platforms:
+  - name: mds-kerberos1
+    hostname: mds-kerberos1.confluent
+    groups:
+      - kerberos_server
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mds-zookeeper1
+    hostname: mds-zookeeper1.confluent
+    groups:
+      - zookeeper
+      - mds
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mds-kafka-broker1
+    hostname: mds-kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - mds
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mds-kafka-broker2
+    hostname: mds-kafka-broker2.confluent
+    groups:
+      - kafka_broker
+      - mds
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mds-kafka-broker3
+    hostname: mds-kafka-broker3.confluent
+    groups:
+      - kafka_broker
+      - mds
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  # Cluster 2 goups, groupnames will be changed during converge phase
+  - name: zookeeper1
+    hostname: zookeeper1.confluent
+    groups:
+      - zookeeper2
+      - cluster2
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker2
+      - cluster2
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker2
+      - cluster2
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
+    groups:
+      - kafka_broker2
+      - cluster2
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: confluent-replicator1
+    hostname: confluent_replicator1.confluent
+    groups:
+      - confluent_replicator2
+      - cluster2
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      hash_behaviour: merge
+  playbooks:
+    converge: multi_rbac_converge.yml
+  inventory:
+    group_vars:
+      all:
+        scenario_name: replicator-mtls-scram-rhel
+
+
+      mds:
+        ssl_enabled: true
+        ssl_custom_certs: true
+        ssl_mutual_auth_enabled: true
+        # Paths relative to all.yml
+        ssl_ca_cert_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
+        ssl_signed_cert_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        ssl_key_password: keypass
+
+
+      cluster2:
+        sasl_protocol: scram
+        ssl_enabled: true
+        ssl_custom_certs: true
+        # Paths relative to all.yml
+        ssl_ca_cert_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
+        ssl_signed_cert_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        ssl_key_password: keypass
+
+
+      confluent_replicator:
+        confluent_replicator_white_list: test-replicator-source
+        confluent_replicator_bootstrap_servers: kafka-broker1:9092
+        confluent_replicator_sasl_scram_username: confluent_replicator
+        confluent_replicator_sasl_scram_password: confluent_replicator-secret
+        confluent_replicator_ssl_custom_certs: true
+        confluent_replicator_ssl_ca_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
+        confluent_replicator_ssl_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        confluent_replicator_ssl_key_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        confluent_replicator_ssl_key_password: keypass
+
+        confluent_replicator_consumer_bootstrap_servers: mds-kafka-broker1:9092
+        confluent_replicator_consumer_ssl_custom_certs: true
+        confluent_replicator_consumer_ssl_ca_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
+        confluent_replicator_consumer_ssl_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        confluent_replicator_consumer_ssl_key_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        confluent_replicator_consumer_ssl_key_password: keypass
+
+        confluent_replicator_producer_bootstrap_servers: kafka-broker1:9092
+        confluent_replicator_producer_sasl_scram_username: confluent_replicator
+        confluent_replicator_producer_sasl_scram_password: confluent_replicator-secret
+        confluent_replicator_producer_ssl_custom_certs: true
+        confluent_replicator_producer_ssl_ca_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
+        confluent_replicator_producer_ssl_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        confluent_replicator_producer_ssl_key_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        confluent_replicator_producer_ssl_key_password: keypass
+
+        confluent_replicator_monitoring_interceptor_bootstrap_servers: kafka-broker1:9092
+        confluent_replicator_monitoring_interceptor_sasl_scram_username: confluent_replicator
+        confluent_replicator_monitoring_interceptor_sasl_scram_password: confluent_replicator-secret
+        confluent_replicator_monitoring_interceptor_ssl_custom_certs: true
+        confluent_replicator_monitoring_interceptor_ssl_ca_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
+        confluent_replicator_monitoring_interceptor_ssl_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        confluent_replicator_monitoring_interceptor_ssl_key_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        confluent_replicator_monitoring_interceptor_ssl_key_password: keypass
+
+verifier:
+  name: ansible
+lint: |
+  set -e
+  yamllint -c ../../.yamllint ../..
+scenario:
+  test_sequence:
+    - lint
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    # - idempotence
+    - side_effect
+    - verify
+    - cleanup
+    - destroy
