@@ -2184,21 +2184,13 @@ Default:  "{{kafka_connect_replicator_ldap_password}}"
 
 Boolean that determines if TLS is enabled for Kafka Connect Replicator configuration.
 
-Default:  "{{ true if kafka_connect_replicator_ssl_ca_cert_path is defined else false}}"
+Default:  false
 
 ***
 
 ### kafka_connect_replicator_ssl_mutual_auth_enabled
 
 Boolean that determines if mTLS is enabled for Kafka Connect Replicator configuration.
-
-Default:  "{{ true if kafka_connect_replicator_ssl_key_store_filepath is defined else false }}"
-
-***
-
-### kafka_connect_replicator_ssl_custom_certs
-
-Boolean that determines if custom certs are being used for Kafka Connect Replicator configuration.
 
 Default:  false
 
@@ -2262,7 +2254,7 @@ Default:  ""
 
 ### kafka_connect_replicator_ssl_mutual_enabled
 
-Boolean that determines if mTLS is enabled when configuring Kafka Connect Replicator. 
+Boolean that determines if mTLS is enabled when configuring Kafka Connect Replicator.
 
 Default:  false
 
@@ -2424,21 +2416,13 @@ Default:  "{{ kafka_connect_replicator_consumer.properties }}"
 
 Boolean that determines if TLS is enabled for the Kafka Connect Replicator Consumer configuration.
 
-Default:  "{{ true if kafka_connect_replicator_consumer_ssl_ca_cert_path is defined else false }}"
+Default:  false
 
 ***
 
 ### kafka_connect_replicator_consumer_ssl_mutual_auth_enabled
 
 Boolean that determines if mTLS is enabled for the Kafka Connect Replicator Consumer configuration.
-
-Default:  false
-
-***
-
-### kafka_connect_replicator_consumer_ssl_custom_certs
-
-Boolean that determines if custom certs are being used for the Kafka Connect Replicator Producer configuration.
 
 Default:  false
 
@@ -2560,21 +2544,13 @@ Default:  "{{ kafka_connect_replicator_producer.properties }}"
 
 Boolean that determines if TLS is enabled for the Kafka Connect Replicator Producer configuration.
 
-Default:  "{{ true if kafka_connect_replicator_producer_ssl_ca_cert_path is defined else false }}"
+Default:  false
 
 ***
 
 ### kafka_connect_replicator_producer_ssl_mutual_auth_enabled
 
 Boolean that determines if mTLS is enabled for the Kafka Connect Replicator Producer configuration.
-
-Default:  false
-
-***
-
-### kafka_connect_replicator_producer_ssl_custom_certs
-
-Boolean that determines if custom certs are being used for the Kafka Connect Replicator Producer configuration.
 
 Default:  false
 
@@ -2704,21 +2680,13 @@ Default:  "{{ kafka_connect_replicator_monitoring_interceptor.properties }}"
 
 Boolean that determines if TLS is enabled for the Kafka Connect Replicator Monitoring Interceptor configuration.
 
-Default:  "{{ true if kafka_connect_replicator_monitoring_interceptor_ssl_ca_cert_path is defined else false }}"
+Default:  false
 
 ***
 
 ### kafka_connect_replicator_monitoring_interceptor_ssl_mutual_auth_enabled
 
 Boolean that determines of mTLS is enabled for the Kafka Connect Replicator Monitoring Interceptor configuration.
-
-Default:  false
-
-***
-
-### kafka_connect_replicator_monitoring_interceptor_ssl_custom_certs
-
-Boolean that determines if custom certs are being used for the Kafka Connect Replicator Monitoring Intercerpot configuration.
 
 Default:  false
 
@@ -2758,7 +2726,7 @@ Default:  ""
 
 ### kafka_connect_replicator_monitoring_interceptor_ssl_key_password
 
-Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Monitoring Interceptor. 
+Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
 
 Default:  ""
 
@@ -2894,7 +2862,7 @@ Default:  "{{reconfiguration_pattern}}"
 
 ### kafka_connect_replicator_reconfiguration_pattern
 
-Replicator Binary reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+Kafka Connect Replicator reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
 
 Default:  "{{reconfiguration_pattern}}"
 
@@ -2966,7 +2934,7 @@ Default:  "{{pause_rolling_deployment}}"
 
 ### kafka_connect_replicator_pause_rolling_deployment
 
-Boolean to Pause Rolling Deployment after each Replicator Binary Node starts up.
+Boolean to Pause Rolling Deployment after each Kafka Connect Replicator Node starts up.
 
 Default:  "{{pause_rolling_deployment}}"
 
