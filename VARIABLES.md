@@ -1028,6 +1028,14 @@ Default:  "{{kafka_connect.appender_log_path}}"
 
 ***
 
+### kafka_connect_custom_rest_extension_classes
+
+Additional set of Connect extension classes.
+
+Default:  []
+
+***
+
 ### kafka_connect_jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on Connect
@@ -1940,6 +1948,30 @@ Default:  "{{control_center_telemetry_enabled}}"
 
 ***
 
+### audit_logs_destination_enabled
+
+Boolean to configure Kafka to set Audit Logs on an external Kafka Cluster. Must also include audit_logs_destination_bootstrap_servers and audit_logs_destination_listener.
+
+Default:  false
+
+***
+
+### audit_logs_destination_bootstrap_servers
+
+Kafka hosts and listener ports on the Audit Logs Destination Kafka Cluster. audit_logs_destination_listener dictionary must describe its security settings. Must be configured if audit_logs_destination_enabled: true
+
+Default:  localhost:9092
+
+***
+
+### audit_logs_destination_listener
+
+Listener Dictionary that describes how kafka clients connect to Audit Log Destination Kafka cluster. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol.
+
+Default: 
+
+***
+
 ### mds_health_check_user
 
 User for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
@@ -2051,6 +2083,7 @@ Password for authenticated Control Center Health Check. Set if using customized 
 Default:  "{{control_center_ldap_password}}"
 
 ***
+
 
 ### kafka_connect_replicator_group
 
@@ -2804,59 +2837,61 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
 
 ***
 
-### reconfiguration_pattern
 
-Reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+### deployment_strategy
 
-Default:  serial
 
-***
+Deployment strategy for all components. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 
-### zookeeper_reconfiguration_pattern
-
-Zookeeper reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
-
-Default:  "{{reconfiguration_pattern}}"
+Default:  rolling
 
 ***
 
-### kafka_broker_reconfiguration_pattern
+### zookeeper_deployment_strategy
 
-Kafka reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+Deployment strategy for Zookeeper. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 
-Default:  "{{reconfiguration_pattern}}"
-
-***
-
-### kafka_connect_reconfiguration_pattern
-
-Connect reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
-
-Default:  "{{reconfiguration_pattern}}"
+Default:  "{{deployment_strategy}}"
 
 ***
 
-### kafka_rest_reconfiguration_pattern
+### kafka_broker_deployment_strategy
 
-Rest Proxy reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+Deployment strategy for Kafka. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 
-Default:  "{{reconfiguration_pattern}}"
-
-***
-
-### ksql_reconfiguration_pattern
-
-ksqlDB reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
-
-Default:  "{{reconfiguration_pattern}}"
+Default:  "{{deployment_strategy}}"
 
 ***
 
-### control_center_reconfiguration_pattern
+### kafka_connect_deployment_strategy
 
-Control Center reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+Deployment strategy for Connect. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 
-Default:  "{{reconfiguration_pattern}}"
+Default:  "{{deployment_strategy}}"
+
+***
+
+### kafka_rest_deployment_strategy
+
+Deployment strategy for Rest Proxy. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### ksql_deployment_strategy
+
+Deployment strategy for ksqlDB. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### control_center_deployment_strategy
+
+Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
 
 ***
 
