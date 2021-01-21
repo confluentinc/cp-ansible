@@ -662,7 +662,7 @@ Default:  []
 
 ### kafka_broker_default_internal_replication_factor
 
-Replication Factor for internal topics. Defaults to the minimum of the number of brokers and 3
+Replication Factor for internal topics. Defaults to the minimum of the number of brokers and default replication factor (see default_internal_replication_factor)
 
 Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
@@ -721,6 +721,14 @@ Default:  "{{schema_registry_default_group}}"
 Port Schema Registry API exposed over
 
 Default:  8081
+
+***
+
+### schema_registry_default_internal_replication_factor
+
+Replication Factor for schemas topic. Defaults to the minimum of the number of brokers and default replication factor (see default_internal_replication_factor)
+
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ***
 
@@ -1126,7 +1134,7 @@ Default:  connect-cluster
 
 ### kafka_connect_default_internal_replication_factor
 
-Replication Factor for connect internal topics. Defaults to the minimum of the number of brokers and 3
+Replication Factor for connect internal topics. Defaults to the minimum of the number of brokers and default replication factor (see default_internal_replication_factor)
 
 Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
@@ -1302,7 +1310,7 @@ Default:  []
 
 ### ksql_default_internal_replication_factor
 
-Replication Factor for ksqlDB internal topics. Defaults to the minimum of the number of brokers and 3
+Replication Factor for ksqlDB internal topics. Defaults to the minimum of the number of brokers and default replication factor (see default_internal_replication_factor)
 
 Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
@@ -1406,7 +1414,7 @@ Default:  []
 
 ### control_center_default_internal_replication_factor
 
-Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and 3
+Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and default replication factor (see default_internal_replication_factor)
 
 Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
