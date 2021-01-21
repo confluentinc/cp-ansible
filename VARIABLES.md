@@ -220,6 +220,14 @@ Default:  /usr/local/bin/confluent
 
 ***
 
+### default_internal_replication_factor
+
+Recommended replication factor. Usually 3. If running in 2DC and look for balanced replicad, consider increasing to 4. If number of brokers is less than this property, then minimun value is used.
+
+Default:  3
+
+***
+
 ### sasl_protocol
 
 SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
@@ -656,7 +664,7 @@ Default:  []
 
 Replication Factor for internal topics. Defaults to the minimum of the number of brokers and 3
 
-Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ***
 
@@ -1120,7 +1128,7 @@ Default:  connect-cluster
 
 Replication Factor for connect internal topics. Defaults to the minimum of the number of brokers and 3
 
-Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ***
 
@@ -1296,7 +1304,7 @@ Default:  []
 
 Replication Factor for ksqlDB internal topics. Defaults to the minimum of the number of brokers and 3
 
-Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ***
 
@@ -1400,7 +1408,7 @@ Default:  []
 
 Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and 3
 
-Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ***
 
@@ -2166,7 +2174,7 @@ Default:  "https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaa
 
 A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent-{{confluent_package_version}}.tar.gz"
+Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent{{'' if confluent_server_enabled else '-community'}}-{{confluent_package_version}}.tar.gz"
 
 ***
 
