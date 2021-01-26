@@ -1151,7 +1151,7 @@ kafka_connect_replicator:
   systemd_file: /lib/systemd/system/{{kafka_connect_replicator_service_name}}.service
   systemd_override: /etc/systemd/system/{{kafka_connect_replicator_service_name}}.service.d/override.conf
   log4j_file: "{% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}{% endif %}/etc/kafka-connect-replicator/replicator-log4j.properties"
-  cluster_id: replicator
+  cluster_id: "{{kafka_connect_replicator_cluster_id}}"
 
 kafka_connect_replicator_properties:
   defaults:
@@ -1170,49 +1170,20 @@ kafka_connect_replicator_properties:
       topic.auto.create: "{{kafka_connect_replicator_topic_auto_create}}"
       confluent.license.topic: _confluent-command
   ssl:
-    enabled: "{{kafka_connect_replicator_ssl_enabled}}"
+    enabled: kafka_connect_replicator_listener ['ssl_enabled'] | default(ssl_enabled) | bool
     properties:
       listeners.https.ssl.keystore.location: "{{kafka_connect_replicator_keystore_path}}"
       listeners.https.ssl.keystore.password: "{{kafka_connect_replicator_keystore_storepass}}"
       listeners.https.ssl.key.password: "{{kafka_connect_replicator_keystore_keypass}}"
       listeners.https.ssl.truststore.location: "{{kafka_connect_replicator_truststore_path}}"
       listeners.https.ssl.truststore.password: "{{kafka_connect_replicator_truststore_storepass}}"
-      security.protocol: "{{kafka_connect_replicator_security_protocol}}"
-      ssl.keystore.location: "{{kafka_connect_replicator_keystore_path}}"
-      ssl.keystore.password: "{{kafka_connect_replicator_keystore_storepass}}"
-      ssl.key.password: "{{kafka_connect_replicator_keystore_keypass}}"
-      ssl.truststore.location: "{{kafka_connect_replicator_truststore_path}}"
-      ssl.truststore.password: "{{kafka_connect_replicator_truststore_storepass}}"
-  mtls:
-    enabled: "{{kafka_connect_replicator_ssl_mutual_auth_enabled}}"
-    properties:
-      ssl.client.auth: "true"
-  kerberos:
-    enabled: "{{kafka_connect_replicator_kerberos_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_security_protocol}}"
-      sasl.mechanism: GSSAPI
-      sasl.kerberos.service.name: "{{kerberos_kafka_broker_primary}}"
-      sasl.jaas.config: |
-        com.sun.security.auth.module.Krb5LoginModule required \
-        useKeyTab=true storeKey=true keyTab="{{kafka_connect_replicator_keytab_path}}" \
-        principal="{{kafka_connect_replicator_kerberos_principal | default('kafka')}}";
-  sasl_scram:
-    enabled: "{{kafka_connect_replicator_sasl_scram_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_security_protocol}}"
-      sasl.mechanism: SCRAM-SHA-512
-      sasl.jaas.config: |
-        org.apache.kafka.common.security.scram.ScramLoginModule required \
-        username="{{kafka_connect_replicator_sasl_scram_username| default(sasl_scram_users.kafka_connect_replicator.principal)}}" password="{{kafka_connect_replicator_sasl_scram_password| default(sasl_scram_users.kafka_connect_replicator.password)}}";
-  sasl_plain:
-    enabled: "{{kafka_connect_replicator_sasl_plain_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_security_protocol}}"
-      sasl.mechanism: PLAIN
-      sasl.jaas.config: |
-        org.apache.kafka.common.security.plain.PlainLoginModule required \
-        username="{{kafka_connect_replicator_sasl_plain_username| default(sasl_plain_users.kafka_connect_replicator.principal) }}" password="{{ kafka_connect_replicator_sasl_plain_password| default(sasl_plain_users.kafka_connect_replicator.password)}}";
+  kafka_client:
+    enabled: true
+    properties: "{{ kafka_connect_replicator_listener | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+                '', kafka_connect_replicator_truststore_path, kafka_connect_replicator_truststore_storepass, kafka_connect_replicator_keystore_path,
+                kafka_connect_replicator_keystore_storepass, kafka_connect_replicator_keystore_keypass, false, kafka_connect_replicator_sasl_plain_principal, kafka_connect_replicator_sasl_plain_password,
+                kafka_connect_replicator_sasl_scram_principal, kafka_connect_replicator_sasl_scram_password, kerberos_kafka_broker_primary, kafka_connect_replicator_keytab_path,
+                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls) }}"
 kafka_connect_replicator_combined_properties: "{{kafka_connect_replicator_properties | combine_properties}}"
 kafka_connect_replicator_final_properties: "{{kafka_connect_replicator_combined_properties | combine(kafka_connect_replicator_custom_properties)}}"
 
@@ -1221,45 +1192,13 @@ kafka_connect_replicator_consumer_properties:
     enabled: true
     properties:
       bootstrap.servers: "{{kafka_connect_replicator_consumer_bootstrap_servers}}"
-  ssl:
-    enabled: "{{kafka_connect_replicator_consumer_ssl_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_consumer_security_protocol}}"
-      ssl.keystore.location: "{{kafka_connect_replicator_consumer_keystore_path}}"
-      ssl.keystore.password: "{{kafka_connect_replicator_consumer_keystore_storepass}}"
-      ssl.key.password: "{{kafka_connect_replicator_consumer_keystore_keypass}}"
-      ssl.truststore.location: "{{kafka_connect_replicator_consumer_truststore_path}}"
-      ssl.truststore.password: "{{kafka_connect_replicator_consumer_truststore_storepass}}"
-  mtls:
-    enabled: "{{kafka_connect_replicator_consumer_ssl_mutual_auth_enabled}}"
-    properties:
-      listeners.https.ssl.client.auth: "true"
-  kerberos:
-    enabled: "{{kafka_connect_replicator_consumer_kerberos_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_consumer_security_protocol}}"
-      sasl.mechanism: GSSAPI
-      sasl.kerberos.service.name: "{{kerberos_kafka_broker_primary}}"
-      sasl.jaas.config: |
-        com.sun.security.auth.module.Krb5LoginModule required \
-        useKeyTab=true storeKey=true keyTab="{{kafka_connect_replicator_consumer_keytab_path}}" \
-        principal="{{kafka_connect_replicator_consumer_kerberos_principal| default('kafka')}}";
-  sasl_scram:
-    enabled: "{{kafka_connect_replicator_consumer_sasl_scram_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_consumer_security_protocol}}"
-      sasl.mechanism: SCRAM-SHA-512
-      sasl.jaas.config: |
-        org.apache.kafka.common.security.scram.ScramLoginModule required \
-        username="{{kafka_connect_replicator_consumer_sasl_scram_username| default(sasl_scram_users.kafka_connect_replicator.principal)}}" password="{{kafka_connect_replicator_consumer_sasl_scram_password| default(sasl_scram_users.kafka_connect_replicator.password)}}";
-  sasl_plain:
-    enabled: "{{kafka_connect_replicator_consumer_sasl_plain_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_consumer_security_protocol}}"
-      sasl.mechanism: PLAIN
-      sasl.jaas.config: |
-        org.apache.kafka.common.security.plain.PlainLoginModule required \
-        username="{{kafka_connect_replicator_consumer_sasl_plain_username| default(sasl_plain_users.kafka_connect_replicator.principal)}}" password="{{kafka_connect_replicator_consumer_sasl_plain_password| default(sasl_plain_users.kafka_connect_replicator.password)}}";
+  kafka_client:
+    enabled: true
+    properties: "{{ kafka_connect_replicator_consumer_listener | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+                '', kafka_connect_replicator_truststore_path, kafka_connect_replicator_truststore_storepass, kafka_connect_replicator_keystore_path,
+                kafka_connect_replicator_keystore_storepass, kafka_connect_replicator_keystore_keypass, false, kafka_connect_replicator_consumer_sasl_plain_principal, kafka_connect_replicator_consumer_sasl_plain_password,
+                kafka_connect_replicator_consumer_sasl_scram_principal, kafka_connect_replicator_consumer_sasl_scram_password, kerberos_kafka_broker_primary, kafka_connect_replicator_keytab_path,
+                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls) }}"
 kafka_connect_replicator_consumer_combined_properties: "{{kafka_connect_replicator_consumer_properties | combine_properties}}"
 kafka_connect_replicator_consumer_final_properties: "{{kafka_connect_replicator_consumer_combined_properties | combine(kafka_connect_replicator_consumer_custom_properties)}}"
 
@@ -1268,45 +1207,13 @@ kafka_connect_replicator_producer_properties:
     enabled: true
     properties:
       bootstrap.servers: "{{kafka_connect_replicator_producer_bootstrap_servers}}"
-  ssl:
-    enabled: "{{kafka_connect_replicator_producer_ssl_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_producer_security_protocol}}"
-      ssl.keystore.location: "{{kafka_connect_replicator_producer_keystore_path}}"
-      ssl.keystore.password: "{{kafka_connect_replicator_producer_keystore_storepass}}"
-      ssl.key.password: "{{kafka_connect_replicator_producer_keystore_keypass}}"
-      ssl.truststore.location: "{{kafka_connect_replicator_producer_truststore_path}}"
-      ssl.truststore.password: "{{kafka_connect_replicator_producer_truststore_storepass}}"
-  mtls:
-    enabled: "{{kafka_connect_replicator_producer_ssl_mutual_auth_enabled}}"
-    properties:
-      ssl.client.auth: "true"
-  kerberos:
-    enabled: "{{kafka_connect_replicator_producer_kerberos_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_producer_security_protocol}}"
-      sasl.mechanism: GSSAPI
-      sasl.kerberos.service.name: "{{kerberos_kafka_broker_primary}}"
-      sasl.jaas.config: |
-        com.sun.security.auth.module.Krb5LoginModule required \
-        useKeyTab=true storeKey=true keyTab="{{kafka_connect_replicator_producer_keytab_path}}" \
-        principal="{{kafka_connect_replicator_producer_kerberos_principal| default('kafka')}}";
-  sasl_scram:
-    enabled: "{{kafka_connect_replicator_producer_sasl_scram_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_producer_security_protocol}}"
-      sasl.mechanism: SCRAM-SHA-512
-      sasl.jaas.config: |
-        org.apache.kafka.common.security.scram.ScramLoginModule required \
-        username="{{kafka_connect_replicator_producer_sasl_scram_username| default(sasl_scram_users.kafka_connect_replicator.principal)}}" password="{{kafka_connect_replicator_producer_sasl_scram_password| default(sasl_scram_users.kafka_connect_replicator.password)}}";
-  sasl_plain:
-    enabled: "{{kafka_connect_replicator_producer_sasl_plain_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_producer_security_protocol}}"
-      sasl.mechanism: PLAIN
-      sasl.jaas.config: |
-        org.apache.kafka.common.security.plain.PlainLoginModule required \
-        username="{{ kafka_connect_replicator_producer_sasl_plain_username| default(sasl_plain_users.kafka_connect_replicator.principal) }}" password="{{ kafka_connect_replicator_producer_sasl_plain_password| default(sasl_plain_users.kafka_connect_replicator.password) }}";
+  kafka_client:
+    enabled: true
+    properties: "{{ kafka_connect_replicator_producer_listener | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+                '', kafka_connect_replicator_truststore_path, kafka_connect_replicator_truststore_storepass, kafka_connect_replicator_keystore_path,
+                kafka_connect_replicator_keystore_storepass, kafka_connect_replicator_keystore_keypass, false, kafka_connect_replicator_producer_sasl_plain_principal, kafka_connect_replicator_producer_sasl_plain_password,
+                kafka_connect_replicator_producer_sasl_scram_principal, kafka_connect_replicator_producer_sasl_scram_password, kerberos_kafka_broker_primary, kafka_connect_replicator_keytab_path,
+                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls) }}"
 kafka_connect_replicator_producer_combined_properties: "{{kafka_connect_replicator_producer_properties | combine_properties}}"
 kafka_connect_replicator_producer_final_properties: "{{kafka_connect_replicator_producer_combined_properties | combine(kafka_connect_replicator_producer_custom_properties)}}"
 
@@ -1319,44 +1226,12 @@ kafka_connect_replicator_monitoring_interceptor_properties:
       consumer.confluent.monitoring.interceptor.bootstrap.servers: "{{kafka_connect_replicator_monitoring_interceptor_bootstrap_servers}}"
       consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
       producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
-  ssl:
-    enabled: "{{kafka_connect_replicator_monitoring_interceptor_ssl_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_monitoring_interceptor_security_protocol}}"
-      ssl.keystore.location: "{{kafka_connect_replicator_monitoring_interceptor_keystore_path}}"
-      ssl.keystore.password: "{{kafka_connect_replicator_monitoring_interceptor_keystore_storepass}}"
-      ssl.key.password: "{{kafka_connect_replicator_monitoring_interceptor_keystore_keypass}}"
-      ssl.truststore.location: "{{kafka_connect_replicator_monitoring_interceptor_truststore_path}}"
-      ssl.truststore.password: "{{kafka_connect_replicator_monitoring_interceptor_truststore_storepass}}"
-  mtls:
-    enabled: "{{kafka_connect_replicator_monitoring_interceptor_ssl_mutual_auth_enabled}}"
-    properties:
-      ssl.client.auth: "true"
-  kerberos:
-    enabled: "{{kafka_connect_replicator_monitoring_interceptor_kerberos_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_monitoring_interceptor_security_protocol}}"
-      sasl.mechanism: GSSAPI
-      sasl.kerberos.service.name: "{{kerberos_kafka_broker_primary}}"
-      sasl.jaas.config: |
-        com.sun.security.auth.module.Krb5LoginModule required
-        useKeyTab=true storeKey=true keyTab="{{kafka_connect_replicator_monitoring_interceptor_keytab_path}}"
-        principal="{{kafka_connect_replicator_monitoring_interceptor_kerberos_principal| default('kafka')}}";
-  sasl_scram:
-    enabled: "{{kafka_connect_replicator_monitoring_interceptor_sasl_scram_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_monitoring_interceptor_security_protocol}}"
-      sasl.mechanism: SCRAM-SHA-512
-      sasl.jaas.config: |
-        org.apache.kafka.common.security.scram.ScramLoginModule required
-        username="{{kafka_connect_replicator_monitoring_interceptor_sasl_scram_username| default(sasl_scram_users.kafka_connect_replicator.principal)}}" password="{{kafka_connect_replicator_monitoring_interceptor_sasl_scram_password| default(sasl_scram_users.kafka_connect_replicator.password)}}";
-  sasl_plain:
-    enabled: "{{kafka_connect_replicator_monitoring_interceptor_sasl_plain_enabled}}"
-    properties:
-      security.protocol: "{{kafka_connect_replicator_monitoring_interceptor_security_protocol}}"
-      sasl.mechanism: PLAIN
-      sasl.jaas.config: |
-        org.apache.kafka.common.security.plain.PlainLoginModule required \
-        username="{{kafka_connect_replicator_monitoring_interceptor_sasl_plain_username| default(sasl_plain_users.kafka_connect_replicator.principal)}}" password="{{kafka_connect_replicator_monitoring_interceptor_sasl_plain_password| default(sasl_plain_users.kafka_connect_replicator.password)}}";
+  kafka_client:
+    enabled: true
+    properties: "{{ kafka_connect_replicator_monitoring_interceptor_listener | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+                '', kafka_connect_replicator_truststore_path, kafka_connect_replicator_truststore_storepass, kafka_connect_replicator_keystore_path,
+                kafka_connect_replicator_keystore_storepass, kafka_connect_replicator_keystore_keypass, false, kafka_connect_replicator_monitoring_interceptor_sasl_plain_principal, kafka_connect_replicator_monitoring_interceptor_sasl_plain_password,
+                kafka_connect_replicator_monitoring_interceptor_sasl_scram_principal, kafka_connect_replicator_monitoring_interceptor_sasl_scram_password, kerberos_kafka_broker_primary, kafka_connect_replicator_keytab_path,
+                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls) }}"
 kafka_connect_replicator_monitoring_interceptor_combined_properties: "{{kafka_connect_replicator_monitoring_interceptor_properties | combine_properties}}"
 kafka_connect_replicator_monitoring_interceptor_final_properties: "{{kafka_connect_replicator_monitoring_interceptor_combined_properties | combine(kafka_connect_replicator_monitoring_interceptor_custom_properties)}}"
