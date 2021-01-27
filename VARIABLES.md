@@ -2244,11 +2244,19 @@ Default:  false
 
 ***
 
-### kafka_connectreplicator_ssl_mutual_auth_enabled
+### kafka_connect_replicator_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on Connect
+Boolean to enable mTLS Authentication on Kafka Connect Replicator.
 
 Default:  "{{kafka_connect_replicator_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool}}"
+
+***
+
+### kafka_connect_replicator_ssl_enabled
+
+Boolean to enable TLS on Kafka Connect Replicator
+
+Default:  "{{kafka_connect_replicator_listener ['ssl_enabled'] | default(ssl_enabled) | bool}}"
 
 ***
 
@@ -2788,7 +2796,7 @@ Default:  "{{deployment_strategy}}"
 
 ***
 
-### ksql_reconfiguration_deployment_strategy
+### ksql_deployment_strategy
 
 Deployment strategy for ksqlDB. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 
