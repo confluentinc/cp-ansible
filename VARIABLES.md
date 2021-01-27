@@ -2100,7 +2100,6 @@ Default:  "{{control_center_ldap_password}}"
 
 ***
 
-
 ### kafka_connect_replicator_group
 
 Set this variable to customize the Linux Group that the Kafka Connect Replicator Service user belongs to. Default group is confluent.
@@ -2121,7 +2120,15 @@ Default:  localhost:9092
 
 Use to set custom Kafka Connect Replicator properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
 
-Default:  "{{ kafka_connect_replicator.properties }}"
+Default:  {}
+
+***
+
+### kafka_connect_replicator_cluster_id
+
+Set this variable to customize the Cluster ID used by Kafka Connect Replicator.
+
+Default:  replicator
 
 ***
 
@@ -2229,27 +2236,19 @@ Default:  "{{kafka_connect_replicator_ldap_password}}"
 
 ***
 
-### kafka_connect_replicator_ssl_enabled
-
-Boolean that determines if TLS is enabled for Kafka Connect Replicator configuration.
-
-Default:  false
-
-***
-
-### kafka_connect_replicator_ssl_mutual_auth_enabled
-
-Boolean that determines if mTLS is enabled for Kafka Connect Replicator configuration.
-
-Default:  false
-
-***
-
 ### kafka_connect_replicator_ssl_provided_keystore_and_truststore
 
 Boolean that determines if a provided keystore and truststore are being used for Kafka Connect Replicator configuration.
 
 Default:  false
+
+***
+
+### kafka_connectreplicator_ssl_mutual_auth_enabled
+
+Boolean to enable mTLS Authentication on Connect
+
+Default:  "{{kafka_connect_replicator_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool}}"
 
 ***
 
@@ -2301,27 +2300,11 @@ Default:  ""
 
 ***
 
-### kafka_connect_replicator_ssl_mutual_enabled
+### kafka_connect_replicator_sasl_scram_principal
 
-Boolean that determines if mTLS is enabled when configuring Kafka Connect Replicator.
+SCRAM principal for Kafka Connect Replicator to authenticate with.
 
-Default:  false
-
-***
-
-### kafka_connect_replicator_kerberos_enabled
-
-Boolean that determines if Kerberos is enabled for Kafka Connect Replicator configuration.
-
-Default:  "{{ true if kafka_connect_replicator_kerberos_principal is defined else false }}"
-
-***
-
-### kafka_connect_replicator_sasl_scram_enabled
-
-Boolean that determines if SASL SCRAM is enabled for Kafka Connect Replicator configuration.
-
-Default:  "{{ true if kafka_connect_replicator_sasl_scram_username is defined else false }}"
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2333,11 +2316,11 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 ***
 
-### kafka_connect_replicator_sasl_plain_enabled
+### kafka_connect_replicator_sasl_plain_principal
 
-Boolean that determines if SASL PLAIN is enabled for Kafka Connect Replicator configuration.
+SASL PLAIN principal for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ true if kafka_connect_replicator_sasl_plain_username is defined else false }}"
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2457,23 +2440,7 @@ Default:  localhost:9092
 
 Use to set custom Kafka Connect Replicator Consumer properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
 
-Default:  "{{ kafka_connect_replicator_consumer.properties }}"
-
-***
-
-### kafka_connect_replicator_consumer_ssl_enabled
-
-Boolean that determines if TLS is enabled for the Kafka Connect Replicator Consumer configuration.
-
-Default:  false
-
-***
-
-### kafka_connect_replicator_consumer_ssl_mutual_auth_enabled
-
-Boolean that determines if mTLS is enabled for the Kafka Connect Replicator Consumer configuration.
-
-Default:  false
+Default:  {}
 
 ***
 
@@ -2489,7 +2456,7 @@ Default:  false
 
 Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator Consumer.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_ca_cert_path}}"
 
 ***
 
@@ -2497,7 +2464,7 @@ Default:  ""
 
 Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator Consumer.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_cert_path}}"
 
 ***
 
@@ -2505,7 +2472,7 @@ Default:  ""
 
 Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator Consumer.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_key_path}}"
 
 ***
 
@@ -2513,7 +2480,7 @@ Default:  ""
 
 Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Consumer.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_key_password}}"
 
 ***
 
@@ -2521,7 +2488,7 @@ Default:  ""
 
 Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Consumer.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_truststore_file_path}}"
 
 ***
 
@@ -2529,23 +2496,15 @@ Default:  ""
 
 Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Consumer.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_consumer_ssl_keystore_file_path}}"
 
 ***
 
-### kafka_connect_replicator_consumer_kerberos_enabled
+### kafka_connect_replicator_consumer_sasl_scram_principal
 
-Boolean that determines if Kerberos is enabled for the Kafka Connect Replicator Consumer configuration.
+SCRAM principal for the Consumer to authenticate with.
 
-Default:  "{{ true if kafka_connect_replicator_consumer_kerberos_principal is defined else false }}"
-
-***
-
-### kafka_connect_replicator_consumer_sasl_scram_enabled
-
-Boolean that determines if SASL SCRAM is enabled for the Kafka Connect Replicator Consumer configuration.
-
-Default:  "{{ true if kafka_connect_replicator_consumer_sasl_scram_username is defined else false }}"
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2557,11 +2516,11 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 ***
 
-### kafka_connect_replicator_consumer_sasl_plain_enabled
+### kafka_connect_replicator_consumer_sasl_plain_principal
 
-Boolean that determines if SASL PLAIN is enabled for the Kafka Connect Replicator Consumer configuration.
+SASL PLAIN principal for the Consumer to authenticate with.
 
-Default:  "{{ true if kafka_connect_replicator_consumer_sasl_plain_username is defined else false }}"
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2585,23 +2544,7 @@ Default:  localhost:9092
 
 Use to set custom Kafka Connect Replicator Producer properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
 
-Default:  "{{ kafka_connect_replicator_producer.properties }}"
-
-***
-
-### kafka_connect_replicator_producer_ssl_enabled
-
-Boolean that determines if TLS is enabled for the Kafka Connect Replicator Producer configuration.
-
-Default:  false
-
-***
-
-### kafka_connect_replicator_producer_ssl_mutual_auth_enabled
-
-Boolean that determines if mTLS is enabled for the Kafka Connect Replicator Producer configuration.
-
-Default:  false
+Default:  {}
 
 ***
 
@@ -2617,7 +2560,7 @@ Default:  false
 
 Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator Producer.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_ca_cert_path}}"
 
 ***
 
@@ -2625,7 +2568,7 @@ Default:  ""
 
 Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator Producer.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_cert_path}}"
 
 ***
 
@@ -2633,7 +2576,7 @@ Default:  ""
 
 Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator Producer.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_key_path}}"
 
 ***
 
@@ -2641,7 +2584,7 @@ Default:  ""
 
 Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Producer.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_key_password}}"
 
 ***
 
@@ -2649,7 +2592,7 @@ Default:  ""
 
 Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Producer.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_truststore_file_path}}"
 
 ***
 
@@ -2657,23 +2600,15 @@ Default:  ""
 
 Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Producer.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_keystore_file_path}}"
 
 ***
 
-### kafka_connect_replicator_producer_kerberos_enabled
+### kafka_connect_replicator_producer_sasl_scram_principal
 
-Boolean that determines if Kerberos is enabled for the Kafka Connect Replicator Producer configuration.
+SCRAM principal for the Producer to authenticate with.
 
-Default:  "{{ true if kafka_connect_replicator_producer_kerberos_principal is defined else false }}"
-
-***
-
-### kafka_connect_replicator_producer_sasl_scram_enabled
-
-Boolean that determines if SASL SCRAM is enabled for the Kafka Connect Replicator Producer configuration.
-
-Default:  "{{ true if kafka_connect_replicator_producer_sasl_scram_username is defined else false }}"
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2685,11 +2620,11 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 ***
 
-### kafka_connect_replicator_producer_sasl_plain_enabled
+### kafka_connect_replicator_producer_sasl_plain_principal
 
-Boolean that determines if SASL PLAIN is enabled for the Kafka Connect Replicator Producer configuration.
+SASL PLAIN principal for the Producer to authenticate with.
 
-Default:  "{{ true if kafka_connect_replicator_producer_sasl_plain_username is defined else false }}"
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2698,14 +2633,6 @@ Default:  "{{ true if kafka_connect_replicator_producer_sasl_plain_username is d
 SASL PLAIN password for the Producer to authenticate with.
 
 Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
-
-***
-
-### kafka_connect_replicator_producer_security_protocol
-
-Defines the security protocol to be set for the Kafka Connect Replicator Producer configuration.
-
-Default:  "{% if kafka_connect_replicator_producer_ssl_enabled==true and (kafka_connect_replicator_producer_kerberos_enabled==true or kafka_connect_replicator_producer_sasl_scram_enabled==true or kafka_connect_replicator_producer_sasl_plain_enabled==true) %}SASL_SSL{% elif kafka_connect_replicator_producer_ssl_enabled==false and (kafka_connect_replicator_producer_kerberos_enabled==true or kafka_connect_replicator_producer_sasl_scram_enabled==true or kafka_connect_replicator_producer_sasl_plain_enabled==true) %}SASL_PLAINTEXT{% elif kafka_connect_replicator_producer_ssl_enabled==true and (kafka_connect_replicator_producer_kerberos_enabled==false or kafka_connect_replicator_producer_sasl_scram_enabled==false or kafka_connect_replicator_producer_sasl_plain_enabled==false) %}SSL{% else %}NONE{% endif %}"
 
 ***
 
@@ -2721,23 +2648,7 @@ Default:  localhost:9092
 
 Use to set custom Kafka Connect Replicator Monitoring Interceptor properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
 
-Default:  "{{ kafka_connect_replicator_monitoring_interceptor.properties }}"
-
-***
-
-### kafka_connect_replicator_monitoring_interceptor_ssl_enabled
-
-Boolean that determines if TLS is enabled for the Kafka Connect Replicator Monitoring Interceptor configuration.
-
-Default:  false
-
-***
-
-### kafka_connect_replicator_monitoring_interceptor_ssl_mutual_auth_enabled
-
-Boolean that determines of mTLS is enabled for the Kafka Connect Replicator Monitoring Interceptor configuration.
-
-Default:  false
+Default:  {}
 
 ***
 
@@ -2753,7 +2664,7 @@ Default:  false
 
 Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_ca_cert_path}}"
 
 ***
 
@@ -2761,7 +2672,7 @@ Default:  ""
 
 Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_cert_path}}"
 
 ***
 
@@ -2769,7 +2680,7 @@ Default:  ""
 
 Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_key_path}}"
 
 ***
 
@@ -2777,7 +2688,7 @@ Default:  ""
 
 Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_key_password}}"
 
 ***
 
@@ -2785,7 +2696,7 @@ Default:  ""
 
 Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Monitoring Interceptor.
 
-Default:  ""
+Default:  "{{kafka_connect_replicator_ssl_truststore_file_path}}"
 
 ***
 
@@ -2793,15 +2704,7 @@ Default:  ""
 
 Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Monitoring Interceptor.
 
-Default:  ""
-
-***
-
-### kafka_connect_replicator_monitoring_interceptor_kerberos_enabled
-
-Boolean that determines if Kerberos is enabled for the Kafka Connect Replicator Monitoring Interceptor configuration.
-
-Default:  "{{ true if kafka_connect_replicator_monitoring_interceptor_kerberos_principal is defined else false }}"
+Default:  "{{kafka_connect_replicator_ssl_keystore_file_path}}"
 
 ***
 
@@ -2813,11 +2716,11 @@ Default:  "{{ kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_pa
 
 ***
 
-### kafka_connect_replicator_monitoring_interceptor_sasl_scram_enabled
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram_principal
 
-Boolean that determines if SASL SCRAM is enabled for the Kafka Connect Replicator Monitoring Interceptor configuration.
+SCRAM principal for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ true if kafka_connect_replicator_monitoring_interceptor_sasl_scram_username is defined else false }}"
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal}}"
 
 ***
 
@@ -2829,19 +2732,11 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 ***
 
-### kafka_connect_replicator_monitoring_interceptor_sasl_plain_enabled
+### kafka_connect_replicator_monitoring_interceptor_sasl_plain_principal
 
-Boolean that determines if SASL PLAIN is enabled for the Kafka Connect Replicator Monitoring Interceptor configuration.
+SASL PLAIN principal for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ true if kafka_connect_replicator_monitoring_interceptor_sasl_plain_username is defined else false }}"
-
-***
-
-### kafka_connect_replicator_monitoring_interceptor_security_protocol
-
-Defines the security protocol to be set for the Kafka Connect Replicator Monitoring Interceptor configuration.
-
-Default:  "{% if kafka_connect_replicator_monitoring_interceptor_ssl_enabled==true and (kafka_connect_replicator_monitoring_interceptor_kerberos_enabled==true or kafka_connect_replicator_monitoring_interceptor_sasl_scram_enabled==true or kafka_connect_replicator_monitoring_interceptor_sasl_plain_enabled==true) %}SASL_SSL{% elif kafka_connect_replicator_monitoring_interceptor_ssl_enabled==false and (kafka_connect_replicator_monitoring_interceptor_kerberos_enabled==true or kafka_connect_replicator_monitoring_interceptor_sasl_scram_enabled==true or kafka_connect_replicator_monitoring_interceptor_sasl_plain_enabled==true) %}SASL_PLAIN{% elif kafka_connect_replicator_monitoring_interceptor_ssl_enabled==true and (kafka_connect_replicator_monitoring_interceptor_kerberos_enabled==false or kafka_connect_replicator_monitoring_interceptor_sasl_scram_enabled==false or kafka_connect_replicator_monitoring_interceptor_sasl_plain_enabled==false) %}SSL{% else %}NONE{% endif %}"
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2853,9 +2748,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
 
 ***
 
-
 ### deployment_strategy
-
 
 Deployment strategy for all components. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 
@@ -2895,7 +2788,7 @@ Default:  "{{deployment_strategy}}"
 
 ***
 
-### ksql_deployment_strategy
+### ksql_reconfiguration_deployment_strategy
 
 Deployment strategy for ksqlDB. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 
@@ -2911,11 +2804,11 @@ Default:  "{{deployment_strategy}}"
 
 ***
 
-### kafka_connect_replicator_reconfiguration_pattern
+### kafka_connect_replicator_deployment_strategy
 
 Kafka Connect Replicator reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
 
-Default:  "{{reconfiguration_pattern}}"
+Default:  "{{deployment_strategy}}"
 
 ***
 
