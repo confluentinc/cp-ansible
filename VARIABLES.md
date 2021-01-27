@@ -196,6 +196,22 @@ Default:  "/opt/confluent"
 
 ***
 
+### archive_owner
+
+Owner of the downloaded archive. Not mandatory to set.
+
+Default:  ""
+
+***
+
+### archive_group
+
+Group Owner of the downloaded archive. Not mandatory to set.
+
+Default:  ""
+
+***
+
 ### archive_config_base_path
 
 If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
@@ -3123,6 +3139,30 @@ Default:  ""
 
 ***
 
+### control_center_service_overrides
+
+Overrides to the Service Section of Control Center Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_service_environment_overrides
+
+Environment Variables to be added to the Control Center Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_service_unit_overrides
+
+Overrides to the Unit Section of Control Center Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
 ### control_center_health_check_delay
 
 Time in seconds to wait before starting Control Center Health Checks.
@@ -3150,6 +3190,30 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Kafka Process
 
 Default:  ""
+
+***
+
+### kafka_broker_service_overrides
+
+Overrides to the Service Section of Kafka Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_broker_service_environment_overrides
+
+Environment Variables to be added to the Kafka Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_broker_service_unit_overrides
+
+Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
+
+Default: 
 
 ***
 
@@ -3183,6 +3247,30 @@ Default:  ""
 
 ***
 
+### kafka_connect_service_overrides
+
+Overrides to the Service Section of Connect Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_service_environment_overrides
+
+Environment Variables to be added to the Connect Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_service_unit_overrides
+
+Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
 ### kafka_connect_health_check_delay
 
 Time in seconds to wait before starting Connect Health Checks.
@@ -3202,6 +3290,30 @@ Below are the supported variables for the role confluent.kafka_rest
 Custom Java Args to add to the Rest Proxy Process
 
 Default:  ""
+
+***
+
+### kafka_rest_service_overrides
+
+Overrides to the Service Section of Rest Proxy Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_rest_service_environment_overrides
+
+Environment Variables to be added to the Rest Proxy Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_rest_service_unit_overrides
+
+Overrides to the Unit Section of Rest Proxy Systemd File. This variable is a dictionary.
+
+Default: 
 
 ***
 
@@ -3243,6 +3355,30 @@ Default:  /tmp/ksqldb
 
 ***
 
+### ksql_service_overrides
+
+Overrides to the Service Section of ksqlDB Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### ksql_service_environment_overrides
+
+Environment Variables to be added to the ksqlDB Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### ksql_service_unit_overrides
+
+Overrides to the Unit Section of ksqlDB Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
 ### ksql_health_check_delay
 
 Time in seconds to wait before starting ksqlDB Health Checks.
@@ -3262,6 +3398,30 @@ Below are the supported variables for the role confluent.schema_registry
 Custom Java Args to add to the Schema Registry Process
 
 Default:  ""
+
+***
+
+### schema_registry_service_overrides
+
+Overrides to the Service Section of Schema Registry Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### schema_registry_service_environment_overrides
+
+Environment Variables to be added to the Schema Registry Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### schema_registry_service_unit_overrides
+
+Overrides to the Unit Section of Schema Registry Systemd File. This variable is a dictionary.
+
+Default: 
 
 ***
 
@@ -3292,6 +3452,30 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Zookeeper Process
 
 Default:  ""
+
+***
+
+### zookeeper_service_overrides
+
+Overrides to the Service Section of Zookeeper Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### zookeeper_service_environment_overrides
+
+Environment Variables to be added to the Zookeeper Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### zookeeper_service_unit_overrides
+
+Overrides to the Unit Section of Zookeeper Systemd File. This variable is a dictionary.
+
+Default: 
 
 ***
 
