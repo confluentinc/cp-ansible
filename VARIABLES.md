@@ -3364,6 +3364,60 @@ Default:  5
 
 ***
 
+# confluent.kafka_connect_replicator
+
+Below are the supported variables for the role confluent.kafka_connect_replicator
+
+***
+
+### kafka_connect_replicator_custom_log4j
+
+Boolean to reconfigure Kafka Connect Replicator's logging with the RollingFileAppender and log cleanup functionality.
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_connect_replicator_custom_java_args
+
+Custom Java Args to add to the Kafka Connect Replicator Process
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_service_overrides
+
+Overrides to the Service Section of Kafka Connect Replicator Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_replicator_service_environment_overrides
+
+Environment Variables to be added to the Kafka Connect Replicator Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_replicator_service_unit_overrides
+
+Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_replicator_health_check_delay
+
+Time in seconds to wait before starting Kafka Connect Replicator Health Checks.
+
+Default:  30
+
+***
+
 # confluent.ssl
 
 Below are the supported variables for the role confluent.ssl
