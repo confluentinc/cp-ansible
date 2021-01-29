@@ -70,7 +70,9 @@
     ssl_keystore_file_path: "{{kafka_connect_replicator_ssl_keystore_file_path}}"
     ssl_custom_certs: "{{ true if kafka_connect_replicator_ssl_ca_cert_path|length > 1 else false }}"
     ssl_provided_keystore_and_truststore: "{{ true if kafka_connect_replicator_ssl_truststore_file_path|length > 1 else false }}"
-  when: kafka_connect_replicator_listener ['ssl_enabled'] | default(ssl_enabled) | bool
+  when: >
+    kafka_connect_replicator_listener['ssl_enabled'] | default(ssl_enabled) | bool or
+    kafka_connect_replicator_ssl_enabled|bool
 
 - name: Configure TLS for Kafka Connect Replicator Consumer
   include_role:
@@ -97,7 +99,7 @@
     ssl_keystore_file_path: "{{kafka_connect_replicator_consumer_ssl_keystore_file_path}}"
     ssl_custom_certs: "{{ true if kafka_connect_replicator_consumer_ssl_ca_cert_path|length > 1 else false }}"
     ssl_provided_keystore_and_truststore: "{{ true if kafka_connect_replicator_consumer_ssl_truststore_file_path|length > 1 else false }}"
-  when: kafka_connect_replicator_consumer_listener ['ssl_enabled'] | default(ssl_enabled) | bool
+  when: kafka_connect_replicator_consumer_listener['ssl_enabled'] | default(ssl_enabled) | bool
 
 - name: Configure TLS for Kafka Connect Replicator Producer
   include_role:
@@ -124,7 +126,7 @@
     ssl_keystore_file_path: "{{kafka_connect_replicator_producer_ssl_keystore_file_path}}"
     ssl_custom_certs: "{{ true if kafka_connect_replicator_producer_ssl_ca_cert_path|length > 1 else false }}"
     ssl_provided_keystore_and_truststore: "{{ true if kafka_connect_replicator_producer_ssl_truststore_file_path|length > 1 else false }}"
-  when: kafka_connect_replicator_producer_listener ['ssl_enabled'] | default(ssl_enabled) | bool
+  when: kafka_connect_replicator_producer_listener['ssl_enabled'] | default(ssl_enabled) | bool
 
 - name: Configure TLS for Kafka Connect Replicator Monitoring Interceptors
   include_role:
@@ -151,7 +153,7 @@
     ssl_keystore_file_path: "{{kafka_connect_replicator_monitoring_interceptor_ssl_keystore_file_path}}"
     ssl_custom_certs: "{{ true if kafka_connect_replicator_monitoring_interceptor_ssl_ca_cert_path|length > 1 else false }}"
     ssl_provided_keystore_and_truststore: "{{ true if kafka_connect_replicator_monitoring_interceptor_ssl_truststore_file_path|length > 1 else false }}"
-  when: kafka_connect_replicator_monitoring_interceptor_listener ['ssl_enabled'] | default(ssl_enabled) | bool
+  when: kafka_connect_replicator_monitoring_interceptor_listener['ssl_enabled'] | default(ssl_enabled) | bool
 
 - name: Configure Kerberos for Kafka Connect Replicator Host
   include_role:
@@ -197,6 +199,16 @@
     kerberos_handler: "Restart Kafka Connect Replicator"
   when: kafka_connect_replicator_monitoring_interceptor_kerberos_principal is defined
 
+- name: Copy Kafka Connect Replicator Files
+  include_role:
+    name: confluent.common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{kafka_connect_replicator_copy_files}}"
+    user: "{{kafka_connect_replicator_user}}"
+    group: "{{kafka_connect_replicator_group}}"
+  when: kafka_connect_replicator_copy_files | length > 0
+
 - name: Create Kafka Connect Replicator Config directory
   file:
     path: "{{ kafka_connect_replicator.replication_config_file | dirname }}"
@@ -204,6 +216,14 @@
     mode: 0750
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
+
+- name: Create Logs Directory
+  file:
+    path: "{{kafka_connect_replicator_log_dir}}"
+    state: directory
+    group: "{{kafka_connect_replicator_group}}"
+    owner: "{{kafka_connect_replicator_user}}"
+    mode: 0770
 
 - name: Create Kafka Connect Replicator Log4j Config
   template:
@@ -224,15 +244,6 @@
     group: "{{kafka_connect_replicator_group}}"
   when: kafka_connect_replicator_jolokia_enabled|bool
   notify: Restart Kafka Connect Replicator
-
-- name: Deploy Kafka Connect Replicator JMX Exporter Config File
-  copy:
-    src: "kafka_connect_replicator.yml"
-    dest: "{{kafka_connect_replicator_jmxexporter_config_path}}"
-    mode: 0640
-    owner: "{{kafka_connect_replicator_user}}"
-    group: "{{kafka_connect_replicator_group}}"
-  when: kafka_connect_replicator_jmxexporter_enabled|bool
 
 - name: Create Kafka Connect Replicator Config
   template:
@@ -281,9 +292,11 @@
 
 - name: Create Kafka Connect Replicator Systemd override directory
   file:
-    path: /etc/systemd/system/kafka-connect-replicator.service.d
+    path: "{{kafka_connect_replicator.systemd_override | dirname}}"
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
     state: directory
-    mode: '0755'
+    mode: 0640
 
 - name: Write Kafka Connect Replicator Service Overrides
   template:
