@@ -2100,6 +2100,662 @@ Default:  "{{control_center_ldap_password}}"
 
 ***
 
+### kafka_connect_replicator_group
+
+Set this variable to customize the Linux Group that the Kafka Connect Replicator Service user belongs to. Default group is confluent.
+
+Default:  "{{kafka_connect_replicator_default_group}}"
+
+***
+
+### kafka_connect_replicator_bootstrap_servers
+
+Variable to define bootstrap servers for Kafka Connect Replicator.  Mandatory for Kafka Connect Replicator setup.
+
+Default:  localhost:9092
+
+***
+
+### kafka_connect_replicator_custom_properties
+
+Use to set custom Kafka Connect Replicator properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_connect_replicator_cluster_id
+
+Set this variable to customize the Cluster ID used by Kafka Connect Replicator.
+
+Default:  replicator
+
+***
+
+### kafka_connect_replicator_offset_start
+
+Set this variable to customize the offset starting point for Kafka Connect Replicator.
+
+Default:  consumer
+
+***
+
+### kafka_connect_replicator_offsets_topic
+
+Set this variable to customize the topic that Kafka Connect Replicator stores it's offsets in.
+
+Default:  connect-offsets
+
+***
+
+### kafka_connect_replicator_status_topic
+
+Set this variable to customize the topic where Kafka Connect Replicator stores it's status.
+
+Default:  connect-status
+
+***
+
+### kafka_connect_replicator_storage_topic
+
+Set this variable to customize the topic where Kafka Connect Replicator stores it's configuration.
+
+Default:  connect-configs
+
+***
+
+### kafka_connect_replicator_white_list
+
+Set this variable with a comma seperated list of Topics for Kafka Connect Replicator to replicate from.  This is a mandatory variable.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_topic_auto_create
+
+Sets if Topics are auto created on the destintation cluster by Kafka Connect Replicator.
+
+Default:  true
+
+***
+
+### kafka_connect_replicator_health_checks_enabled
+
+Boolean to enable health checks on Kafka Connect Replicator.
+
+Default:  true
+
+***
+
+### kafka_connect_replicator_ldap_user
+
+User for authenticated Kafka Connect Replicator Health Check. Set if using customized security like Basic Auth.
+
+Default:  connect
+
+***
+
+### kafka_connect_replicator_ldap_password
+
+Password for authenticated Connect Replicator Health Check. Set if using customized security like Basic Auth.
+
+Default:  password
+
+***
+
+### kafka_connect_replicator_port
+
+Port Rest API exposed over.
+
+Default:  8083
+
+***
+
+### kafka_connect_replicator_monitoring_interceptors_enabled
+
+Sets Kafka Connect Replicator to enable monitoring intercepotors for monitoring in Control Center.
+
+Default:  true
+
+***
+
+### kafka_connect_replicator_health_check_user
+
+User for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{kafka_connect_replicator_ldap_user}}"
+
+***
+
+### kafka_connect_replicator_health_check_password
+
+Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{kafka_connect_replicator_ldap_password}}"
+
+***
+
+### kafka_connect_replicator_ssl_provided_keystore_and_truststore
+
+Boolean that determines if a provided keystore and truststore are being used for Kafka Connect Replicator configuration.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_ssl_mutual_auth_enabled
+
+Boolean to enable mTLS Authentication on Kafka Connect Replicator.
+
+Default:  "{{kafka_connect_replicator_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool}}"
+
+***
+
+### kafka_connect_replicator_ssl_enabled
+
+Boolean to enable TLS on Kafka Connect Replicator
+
+Default:  "{{kafka_connect_replicator_listener ['ssl_enabled'] | default(ssl_enabled) | bool}}"
+
+***
+
+### kafka_connect_replicator_ssl_ca_cert_path
+
+Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_cert_path
+
+Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_key_path
+
+Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_key_password
+
+Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_truststore_file_path
+
+Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_keystore_file_path
+
+Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_sasl_scram_principal
+
+SCRAM principal for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_sasl_scram_password
+
+SCRAM password for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_sasl_plain_principal
+
+SASL PLAIN principal for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_sasl_plain_password
+
+SASL PLAIN password for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_jolokia_enabled
+
+Boolean that defines if the Jolokia agent is enabled on Kafka Connect Replicator.
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### kafka_connect_replicator_jolokia_auth_mode
+
+Sets the auth mode for the Jolokia Agent on Kafka Connect Replicator.
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_connect_replicator_jolokia_user
+
+Username for Jolokia Agent when using Basic Auth.
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_connect_replicator_jolokia_password
+
+Password for Jolokia Agent when using Basic Auth.
+
+Default:  "{{jolokia_password}}"
+
+***
+
+### kafka_connect_replicator_jolokia_port
+
+Port for Jolokia agent for Kafka Connect Replicator.
+
+Default:  7777
+
+***
+
+### kafka_connect_replicator_jolokia_jar_path
+
+Full path to download the Jolokia Agent Jar.
+
+Default:  /opt/jolokia/jolokia.jar
+
+***
+
+### kafka_connect_replicator_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on Kafka Connect Replicator.
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### kafka_connect_replicator_jmxexporter_port
+
+Port to expose prometheus metrics. Beware of port collisions if colocating components on same host.
+
+Default:  8071
+
+***
+
+### kafka_connect_replicator_log_dir
+
+Set this variable to customize the directory that Kafka Connect Replicator writes log files to. Default location is /var/log/kafka.
+
+Default:  "{{kafka_connect_replicator.appender_log_path}}"
+
+***
+
+### kafka_connect_replicator_default_log_name
+
+Set this variable to customize the default log name that Kafka Connect Replicator writes logs to. Default name is kafka-connect-replicator.log.
+
+Default:  "{{kafka_connect_replicator.appender_log_name}}"
+
+***
+
+### kafka_connect_replicator_max_log_files
+
+Set this variable to customize the default max number of log files generated by Kafka Connect Replicator.  Default is 10.
+
+Default:  "{{kafka_connect_replicator.appender_max_log_files}}"
+
+***
+
+### kafka_connect_replicator_log_file_size
+
+Set this variable to customize the default max size of a log file generated by Kafka Connect Replicator.  Default is 100mb.
+
+Default:  "{{kafka_connect_replicator.appender_log_file_size}}"
+
+***
+
+### kafka_connect_replicator_consumer_bootstrap_servers
+
+Variable to define bootstrap servers for Kafka Connect Replicator Consumer.  Mandatory for Kafka Connect Replicator setup.
+
+Default:  localhost:9092
+
+***
+
+### kafka_connect_replicator_consumer_custom_properties
+
+Use to set custom Kafka Connect Replicator Consumer properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_connect_replicator_consumer_ssl_provided_keystore_and_truststore
+
+Boolean that determines if a provided keystore and truststore are being used for the Kafka Connect Replicator consumer configuration.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_consumer_ssl_ca_cert_path
+
+Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_ca_cert_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_cert_path
+
+Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_cert_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_key_path
+
+Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_key_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_key_password
+
+Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_key_password}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_truststore_file_path
+
+Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_truststore_file_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_keystore_file_path
+
+Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_consumer_ssl_keystore_file_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram_principal
+
+SCRAM principal for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram_password
+
+SCRAM password for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_plain_principal
+
+SASL PLAIN principal for the Consumer to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_plain_password
+
+SASL PLAIN password for the Consumer to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_producer_bootstrap_servers
+
+Variable to define bootstrap servers for Kafka Connect Replicator Producer.  Mandatory for Kafka Connect Replicator setup.
+
+Default:  localhost:9092
+
+***
+
+### kafka_connect_replicator_producer_custom_properties
+
+Use to set custom Kafka Connect Replicator Producer properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_connect_replicator_producer_ssl_provided_keystore_and_truststore
+
+Boolean that determines if a provided keystore and truststore are being used for the Kafka Connect Replicator producer configuration.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_producer_ssl_ca_cert_path
+
+Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_ca_cert_path}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_cert_path
+
+Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_cert_path}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_key_path
+
+Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_key_path}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_key_password
+
+Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_key_password}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_truststore_file_path
+
+Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_truststore_file_path}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_keystore_file_path
+
+Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_keystore_file_path}}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram_principal
+
+SCRAM principal for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram_password
+
+SCRAM password for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_plain_principal
+
+SASL PLAIN principal for the Producer to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_plain_password
+
+SASL PLAIN password for the Producer to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_bootstrap_servers
+
+Variable to define bootstrap servers for Kafka Connect Replicator Monitoring Interceptors.
+
+Default:  localhost:9092
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_custom_properties
+
+Use to set custom Kafka Connect Replicator Monitoring Interceptor properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_provided_keystore_and_truststore
+
+Boolean that determines if a provided keystore and truststore are being used for the Kafka Connect Replicator Monitoring Interceptor configuration.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_ca_cert_path
+
+Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_ca_cert_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_cert_path
+
+Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_cert_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_key_path
+
+Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_key_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_key_password
+
+Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_key_password}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_truststore_file_path
+
+Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_truststore_file_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_keystore_file_path
+
+Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_keystore_file_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_path
+
+Defines the path to the keytab required for Kerberos Authentication of the monitoring Interceptors.
+
+Default:  "{{ kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_path }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram_principal
+
+SCRAM principal for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram_password
+
+SCRAM password for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_plain_principal
+
+SASL PLAIN principal for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_plain_password
+
+SASL PLAIN password for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+
+***
+
 ### deployment_strategy
 
 Deployment strategy for all components. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
@@ -2151,6 +2807,14 @@ Default:  "{{deployment_strategy}}"
 ### control_center_deployment_strategy
 
 Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### kafka_connect_replicator_deployment_strategy
+
+Kafka Connect Replicator reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
 
 Default:  "{{deployment_strategy}}"
 
@@ -2215,6 +2879,14 @@ Default:  "{{pause_rolling_deployment}}"
 ### control_center_pause_rolling_deployment
 
 Boolean to Pause Rolling Deployment after each Control Center Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_connect_replicator_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Kafka Connect Replicator Node starts up.
 
 Default:  "{{pause_rolling_deployment}}"
 

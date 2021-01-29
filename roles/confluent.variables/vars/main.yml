@@ -1115,3 +1115,123 @@ control_center_final_properties: "{{ control_center_combined_properties | combin
 
 ### The base path for the binary files. When in Archive File deployment mode this results in binary files being based in, for example `/opt/confluent/confluent-5.5.1/bin`, otherwise they are based in `/usr/bin`.
 binary_base_path: "{{ archive_config_base_path+'/confluent-'+confluent_package_version if installation_method == 'archive' else '/usr' }}"
+
+#### Kafka Connect Replicator Variables ####
+kafka_connect_replicator_service_name: kafka-connect-replicator
+kafka_connect_replicator_packages:
+  - confluent-common
+  - confluent-rest-utils
+  - confluent-metadata-service
+  - confluent-ce-kafka-http-server
+  - confluent-kafka-rest
+  - confluent-server-rest
+  - confluent-telemetry
+  - "{{ kafka_broker_main_package }}"
+  - confluent-hub-client
+  - confluent-kafka-connect-replicator
+  - confluent-security
+  - confluent-rebalancer
+  - confluent-control-center-fe
+  - confluent-control-center
+  - confluent-schema-registry
+
+kafka_connect_replicator_default_user: cp-kafka-connect-replicator
+kafka_connect_replicator_default_group: confluent
+kafka_connect_replicator_default_log_dir: /var/log/confluent/
+kafka_connect_replicator_default_log_name: kafka-connect-replicator.log
+kafka_connect_replicator_max_log_files: 10
+kafka_connect_replicator_log_file_size: 100mb
+
+kafka_connect_replicator:
+  server_start_file: "{{ binary_base_path }}/bin/kafka-connect-replicator-start"
+  replication_config_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-connect-replicator/kafka-connect-replicator.properties"
+  consumer_config_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-connect-replicator/kafka-connect-replicator-consumer.properties"
+  producer_config_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-connect-replicator/kafka-connect-replicator-producer.properties"
+  interceptors_config_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-connect-replicator/kafka-connect-replicator-interceptors.properties"
+  systemd_file: /lib/systemd/system/{{kafka_connect_replicator_service_name}}.service
+  systemd_override: /etc/systemd/system/{{kafka_connect_replicator_service_name}}.service.d/override.conf
+  log4j_file: "{% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}{% endif %}/etc/kafka-connect-replicator/replicator-log4j.properties"
+  cluster_id: replicator
+
+kafka_connect_replicator_properties:
+  defaults:
+    enabled: true
+    properties:
+      listeners: "{{kafka_connect_replicator_http_protocol}}://0.0.0.0:{{kafka_connect_replicator_port}}"
+      rest.advertised.listener: "{{kafka_connect_replicator_http_protocol}}"
+      rest.advertised.host.name: "{{inventory_hostname}}"
+      rest.advertised.port: "{{kafka_connect_replicator_port}}"
+      confluent.topic.bootstrap.servers: "{{kafka_connect_replicator_bootstrap_servers}}"
+      offset.start: "{{kafka_connect_replicator_offset_start}}"
+      offset.storage.topic: "{{kafka_connect_replicator_offsets_topic}}"
+      status.storage.topic: "{{kafka_connect_replicator_status_topic}}"
+      config.storage.topic: "{{kafka_connect_replicator_storage_topic}}"
+      topic.whitelist: "{{kafka_connect_replicator_white_list}}"
+      topic.auto.create: "{{kafka_connect_replicator_topic_auto_create}}"
+      confluent.license.topic: _confluent-command
+  ssl:
+    enabled: "{{kafka_connect_replicator_ssl_enabled}}"
+    properties:
+      listeners.https.ssl.keystore.location: "{{kafka_connect_replicator_keystore_path}}"
+      listeners.https.ssl.keystore.password: "{{kafka_connect_replicator_keystore_storepass}}"
+      listeners.https.ssl.key.password: "{{kafka_connect_replicator_keystore_keypass}}"
+      listeners.https.ssl.truststore.location: "{{kafka_connect_replicator_truststore_path}}"
+      listeners.https.ssl.truststore.password: "{{kafka_connect_replicator_truststore_storepass}}"
+  kafka_client:
+    enabled: true
+    properties: "{{ kafka_connect_replicator_listener | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+                '', kafka_connect_replicator_truststore_path, kafka_connect_replicator_truststore_storepass, kafka_connect_replicator_keystore_path,
+                kafka_connect_replicator_keystore_storepass, kafka_connect_replicator_keystore_keypass, false, kafka_connect_replicator_sasl_plain_principal, kafka_connect_replicator_sasl_plain_password,
+                kafka_connect_replicator_sasl_scram_principal, kafka_connect_replicator_sasl_scram_password, kerberos_kafka_broker_primary, kafka_connect_replicator_keytab_path,
+                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls) }}"
+kafka_connect_replicator_combined_properties: "{{kafka_connect_replicator_properties | combine_properties}}"
+kafka_connect_replicator_final_properties: "{{kafka_connect_replicator_combined_properties | combine(kafka_connect_replicator_custom_properties)}}"
+
+kafka_connect_replicator_consumer_properties:
+  defaults:
+    enabled: true
+    properties:
+      bootstrap.servers: "{{kafka_connect_replicator_consumer_bootstrap_servers}}"
+  kafka_client:
+    enabled: true
+    properties: "{{ kafka_connect_replicator_consumer_listener | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+                '', kafka_connect_replicator_truststore_path, kafka_connect_replicator_truststore_storepass, kafka_connect_replicator_keystore_path,
+                kafka_connect_replicator_keystore_storepass, kafka_connect_replicator_keystore_keypass, false, kafka_connect_replicator_consumer_sasl_plain_principal, kafka_connect_replicator_consumer_sasl_plain_password,
+                kafka_connect_replicator_consumer_sasl_scram_principal, kafka_connect_replicator_consumer_sasl_scram_password, kerberos_kafka_broker_primary, kafka_connect_replicator_keytab_path,
+                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls) }}"
+kafka_connect_replicator_consumer_combined_properties: "{{kafka_connect_replicator_consumer_properties | combine_properties}}"
+kafka_connect_replicator_consumer_final_properties: "{{kafka_connect_replicator_consumer_combined_properties | combine(kafka_connect_replicator_consumer_custom_properties)}}"
+
+kafka_connect_replicator_producer_properties:
+  defaults:
+    enabled: true
+    properties:
+      bootstrap.servers: "{{kafka_connect_replicator_producer_bootstrap_servers}}"
+  kafka_client:
+    enabled: true
+    properties: "{{ kafka_connect_replicator_producer_listener | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+                '', kafka_connect_replicator_truststore_path, kafka_connect_replicator_truststore_storepass, kafka_connect_replicator_keystore_path,
+                kafka_connect_replicator_keystore_storepass, kafka_connect_replicator_keystore_keypass, false, kafka_connect_replicator_producer_sasl_plain_principal, kafka_connect_replicator_producer_sasl_plain_password,
+                kafka_connect_replicator_producer_sasl_scram_principal, kafka_connect_replicator_producer_sasl_scram_password, kerberos_kafka_broker_primary, kafka_connect_replicator_keytab_path,
+                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls) }}"
+kafka_connect_replicator_producer_combined_properties: "{{kafka_connect_replicator_producer_properties | combine_properties}}"
+kafka_connect_replicator_producer_final_properties: "{{kafka_connect_replicator_producer_combined_properties | combine(kafka_connect_replicator_producer_custom_properties)}}"
+
+kafka_connect_replicator_monitoring_interceptor_properties:
+  defaults:
+    enabled: "{{kafka_connect_replicator_monitoring_interceptors_enabled|bool}}"
+    properties:
+      confluent.monitoring.interceptor.topic: _confluent-monitoring
+      producer.confluent.monitoring.interceptor.bootstrap.servers: "{{kafka_connect_replicator_monitoring_interceptor_bootstrap_servers}}"
+      consumer.confluent.monitoring.interceptor.bootstrap.servers: "{{kafka_connect_replicator_monitoring_interceptor_bootstrap_servers}}"
+      consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
+      producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+  kafka_client:
+    enabled: true
+    properties: "{{ kafka_connect_replicator_monitoring_interceptor_listener | client_properties(ssl_enabled, pkcs12_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+                '', kafka_connect_replicator_truststore_path, kafka_connect_replicator_truststore_storepass, kafka_connect_replicator_keystore_path,
+                kafka_connect_replicator_keystore_storepass, kafka_connect_replicator_keystore_keypass, false, kafka_connect_replicator_monitoring_interceptor_sasl_plain_principal, kafka_connect_replicator_monitoring_interceptor_sasl_plain_password,
+                kafka_connect_replicator_monitoring_interceptor_sasl_scram_principal, kafka_connect_replicator_monitoring_interceptor_sasl_scram_password, kerberos_kafka_broker_primary, kafka_connect_replicator_keytab_path,
+                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls) }}"
+kafka_connect_replicator_monitoring_interceptor_combined_properties: "{{kafka_connect_replicator_monitoring_interceptor_properties | combine_properties}}"
+kafka_connect_replicator_monitoring_interceptor_final_properties: "{{kafka_connect_replicator_monitoring_interceptor_combined_properties | combine(kafka_connect_replicator_monitoring_interceptor_custom_properties)}}"
