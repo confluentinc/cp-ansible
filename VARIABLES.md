@@ -196,6 +196,22 @@ Default:  "/opt/confluent"
 
 ***
 
+### archive_owner
+
+Owner of the downloaded archive. Not mandatory to set.
+
+Default:  ""
+
+***
+
+### archive_group
+
+Group Owner of the downloaded archive. Not mandatory to set.
+
+Default:  ""
+
+***
+
 ### archive_config_base_path
 
 If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
@@ -262,17 +278,17 @@ Default:  "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_c
 
 ### regenerate_ca
 
-Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs
+Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs.
 
-Default:  true
+Default:  false
 
 ***
 
 ### regenerate_keystore_and_truststore
 
-Boolean to have reruns of all.yml recreate Keystores. Consider disabling this once installation is completed, as this triggers restarts.
+Boolean to have reruns of all.yml recreate Keystores. On first install, keystores will be created.
 
-Default:  true
+Default:  "{{regenerate_ca}}"
 
 ***
 
@@ -1041,6 +1057,14 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 Set this variable to customize the directory that Kafka Connect writes log files to. Default location is /var/log/kafka. NOTE- kafka_connect.appender_log_path is deprecated.
 
 Default:  "{{kafka_connect.appender_log_path}}"
+
+***
+
+### kafka_connect_custom_rest_extension_classes
+
+Additional set of Connect extension classes.
+
+Default:  []
 
 ***
 
@@ -1956,6 +1980,30 @@ Default:  "{{control_center_telemetry_enabled}}"
 
 ***
 
+### audit_logs_destination_enabled
+
+Boolean to configure Kafka to set Audit Logs on an external Kafka Cluster. Must also include audit_logs_destination_bootstrap_servers and audit_logs_destination_listener.
+
+Default:  false
+
+***
+
+### audit_logs_destination_bootstrap_servers
+
+Kafka hosts and listener ports on the Audit Logs Destination Kafka Cluster. audit_logs_destination_listener dictionary must describe its security settings. Must be configured if audit_logs_destination_enabled: true
+
+Default:  localhost:9092
+
+***
+
+### audit_logs_destination_listener
+
+Listener Dictionary that describes how kafka clients connect to Audit Log Destination Kafka cluster. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol.
+
+Default: 
+
+***
+
 ### mds_health_check_user
 
 User for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
@@ -2065,6 +2113,774 @@ Default:  "{{control_center_ldap_user}}"
 Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{control_center_ldap_password}}"
+
+***
+
+### kafka_connect_replicator_group
+
+Set this variable to customize the Linux Group that the Kafka Connect Replicator Service user belongs to. Default group is confluent.
+
+Default:  "{{kafka_connect_replicator_default_group}}"
+
+***
+
+### kafka_connect_replicator_bootstrap_servers
+
+Variable to define bootstrap servers for Kafka Connect Replicator.  Mandatory for Kafka Connect Replicator setup.
+
+Default:  localhost:9092
+
+***
+
+### kafka_connect_replicator_custom_properties
+
+Use to set custom Kafka Connect Replicator properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_connect_replicator_cluster_id
+
+Set this variable to customize the Cluster ID used by Kafka Connect Replicator.
+
+Default:  replicator
+
+***
+
+### kafka_connect_replicator_offset_start
+
+Set this variable to customize the offset starting point for Kafka Connect Replicator.
+
+Default:  consumer
+
+***
+
+### kafka_connect_replicator_offsets_topic
+
+Set this variable to customize the topic that Kafka Connect Replicator stores it's offsets in.
+
+Default:  connect-offsets
+
+***
+
+### kafka_connect_replicator_status_topic
+
+Set this variable to customize the topic where Kafka Connect Replicator stores it's status.
+
+Default:  connect-status
+
+***
+
+### kafka_connect_replicator_storage_topic
+
+Set this variable to customize the topic where Kafka Connect Replicator stores it's configuration.
+
+Default:  connect-configs
+
+***
+
+### kafka_connect_replicator_white_list
+
+Set this variable with a comma seperated list of Topics for Kafka Connect Replicator to replicate from.  This is a mandatory variable.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_topic_auto_create
+
+Sets if Topics are auto created on the destintation cluster by Kafka Connect Replicator.
+
+Default:  true
+
+***
+
+### kafka_connect_replicator_health_checks_enabled
+
+Boolean to enable health checks on Kafka Connect Replicator.
+
+Default:  true
+
+***
+
+### kafka_connect_replicator_copy_files
+
+Use to copy files from control node to replicator hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+
+Default:  []
+
+***
+
+### kafka_connect_replicator_port
+
+Port Rest API exposed over.
+
+Default:  8083
+
+***
+
+### kafka_connect_replicator_monitoring_interceptors_enabled
+
+Sets Kafka Connect Replicator to enable monitoring intercepotors for monitoring in Control Center.
+
+Default:  true
+
+***
+
+### kafka_connect_replicator_health_check_user
+
+User for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+
+Default:  connect
+
+***
+
+### kafka_connect_replicator_health_check_password
+
+Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+
+Default:  password
+
+***
+
+### kafka_connect_replicator_ssl_provided_keystore_and_truststore
+
+Boolean that determines if a provided keystore and truststore are being used for Kafka Connect Replicator configuration.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_ssl_mutual_auth_enabled
+
+Boolean to enable mTLS Authentication on Kafka Connect Replicator.
+
+Default:  "{{ssl_mutual_auth_enabled}}"
+
+***
+
+### kafka_connect_replicator_ssl_enabled
+
+Boolean to enable TLS on Kafka Connect Replicator
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### kafka_connect_replicator_ssl_ca_cert_path
+
+Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator.
+
+Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent{{'' if confluent_server_enabled else '-community'}}-{{confluent_package_version}}.tar.gz"
+
+***
+
+### kafka_connect_replicator_ssl_cert_path
+
+Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_key_path
+
+Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_key_password
+
+Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_truststore_file_path
+
+Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_keystore_file_path
+
+Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_sasl_scram_principal
+
+SCRAM principal for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_sasl_scram_password
+
+SCRAM password for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_sasl_plain_principal
+
+SASL PLAIN principal for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_sasl_plain_password
+
+SASL PLAIN password for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_jolokia_enabled
+
+Boolean that defines if the Jolokia agent is enabled on Kafka Connect Replicator.
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### kafka_connect_replicator_jolokia_auth_mode
+
+Sets the auth mode for the Jolokia Agent on Kafka Connect Replicator.
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_connect_replicator_jolokia_user
+
+Username for Jolokia Agent when using Basic Auth.
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_connect_replicator_jolokia_password
+
+Password for Jolokia Agent when using Basic Auth.
+
+Default:  "{{jolokia_password}}"
+
+***
+
+### kafka_connect_replicator_jolokia_port
+
+Port for Jolokia agent for Kafka Connect Replicator.
+
+Default:  7777
+
+***
+
+### kafka_connect_replicator_jolokia_jar_path
+
+Full path to download the Jolokia Agent Jar.
+
+Default:  /opt/jolokia/jolokia.jar
+
+***
+
+### kafka_connect_replicator_log_dir
+
+Set this variable to customize the directory that Kafka Connect Replicator writes log files to.
+
+Default:  /var/log/confluent/kafka-connect-replicator
+
+***
+
+### kafka_connect_replicator_log_name
+
+Set this variable to customize the default log name that Kafka Connect Replicator writes logs to.
+
+Default:  kafka-connect-replicator.log
+
+***
+
+### kafka_connect_replicator_max_log_files
+
+Set this variable to customize the default max number of log files generated by Kafka Connect Replicator.
+
+Default:  10
+
+***
+
+### kafka_connect_replicator_log_file_size
+
+Set this variable to customize the default max size of a log file generated by Kafka Connect Replicator.
+
+Default:  100mb
+
+***
+
+### kafka_connect_replicator_consumer_bootstrap_servers
+
+Variable to define bootstrap servers for Kafka Connect Replicator Consumer.  Mandatory for Kafka Connect Replicator setup.
+
+Default:  localhost:9092
+
+***
+
+### kafka_connect_replicator_consumer_custom_properties
+
+Use to set custom Kafka Connect Replicator Consumer properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_connect_replicator_consumer_ssl_provided_keystore_and_truststore
+
+Boolean that determines if a provided keystore and truststore are being used for the Kafka Connect Replicator consumer configuration.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_consumer_ssl_ca_cert_path
+
+Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_ca_cert_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_cert_path
+
+Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_cert_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_key_path
+
+Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_key_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_key_password
+
+Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_key_password}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_truststore_file_path
+
+Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_truststore_file_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_keystore_file_path
+
+Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_consumer_ssl_keystore_file_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram_principal
+
+SCRAM principal for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram_password
+
+SCRAM password for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_plain_principal
+
+SASL PLAIN principal for the Consumer to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_plain_password
+
+SASL PLAIN password for the Consumer to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_producer_bootstrap_servers
+
+Variable to define bootstrap servers for Kafka Connect Replicator Producer.  Mandatory for Kafka Connect Replicator setup.
+
+Default:  localhost:9092
+
+***
+
+### kafka_connect_replicator_producer_custom_properties
+
+Use to set custom Kafka Connect Replicator Producer properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_connect_replicator_producer_ssl_provided_keystore_and_truststore
+
+Boolean that determines if a provided keystore and truststore are being used for the Kafka Connect Replicator producer configuration.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_producer_ssl_ca_cert_path
+
+Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_ca_cert_path}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_cert_path
+
+Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_cert_path}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_key_path
+
+Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_key_path}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_key_password
+
+Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_key_password}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_truststore_file_path
+
+Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_truststore_file_path}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_keystore_file_path
+
+Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_keystore_file_path}}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram_principal
+
+SCRAM principal for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram_password
+
+SCRAM password for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_plain_principal
+
+SASL PLAIN principal for the Producer to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_plain_password
+
+SASL PLAIN password for the Producer to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_bootstrap_servers
+
+Variable to define bootstrap servers for Kafka Connect Replicator Monitoring Interceptors.
+
+Default:  localhost:9092
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_custom_properties
+
+Use to set custom Kafka Connect Replicator Monitoring Interceptor properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_provided_keystore_and_truststore
+
+Boolean that determines if a provided keystore and truststore are being used for the Kafka Connect Replicator Monitoring Interceptor configuration.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_ca_cert_path
+
+Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_ca_cert_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_cert_path
+
+Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_cert_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_key_path
+
+Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_key_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_key_password
+
+Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_key_password}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_truststore_file_path
+
+Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_truststore_file_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_keystore_file_path
+
+Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_keystore_file_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_path
+
+Defines the path to the keytab required for Kerberos Authentication of the monitoring Interceptors.
+
+Default:  "{{ kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_path }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram_principal
+
+SCRAM principal for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram_password
+
+SCRAM password for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_plain_principal
+
+SASL PLAIN principal for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_plain_password
+
+SASL PLAIN password for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+
+***
+
+### deployment_strategy
+
+Deployment strategy for all components. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  rolling
+
+***
+
+### zookeeper_deployment_strategy
+
+Deployment strategy for Zookeeper. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### kafka_broker_deployment_strategy
+
+Deployment strategy for Kafka. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### kafka_connect_deployment_strategy
+
+Deployment strategy for Connect. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### kafka_rest_deployment_strategy
+
+Deployment strategy for Rest Proxy. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### ksql_deployment_strategy
+
+Deployment strategy for ksqlDB. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### control_center_deployment_strategy
+
+Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### kafka_connect_replicator_deployment_strategy
+
+Kafka Connect Replicator reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Node starts up for all Components.
+
+Default:  false
+
+***
+
+### zookeeper_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Zookeeper Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_broker_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Kafka Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### schema_registry_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Schema Registry Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_connect_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Connect Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_rest_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Rest Proxy Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### ksql_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each ksqlDB Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### control_center_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Control Center Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_connect_replicator_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Kafka Connect Replicator Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
 
 ***
 
@@ -2216,6 +3032,38 @@ Default:  ""
 
 ***
 
+### control_center_service_overrides
+
+Overrides to the Service Section of Control Center Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_service_environment_overrides
+
+Environment Variables to be added to the Control Center Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_service_unit_overrides
+
+Overrides to the Unit Section of Control Center Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_health_check_delay
+
+Time in seconds to wait before starting Control Center Health Checks.
+
+Default:  30
+
+***
+
 # confluent.kafka_broker
 
 Below are the supported variables for the role confluent.kafka_broker
@@ -2235,6 +3083,38 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Kafka Process
 
 Default:  ""
+
+***
+
+### kafka_broker_service_overrides
+
+Overrides to the Service Section of Kafka Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_broker_service_environment_overrides
+
+Environment Variables to be added to the Kafka Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_broker_service_unit_overrides
+
+Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_broker_health_check_delay
+
+Time in seconds to wait before starting Kafka Health Checks.
+
+Default:  30
 
 ***
 
@@ -2260,6 +3140,38 @@ Default:  ""
 
 ***
 
+### kafka_connect_service_overrides
+
+Overrides to the Service Section of Connect Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_service_environment_overrides
+
+Environment Variables to be added to the Connect Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_service_unit_overrides
+
+Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_health_check_delay
+
+Time in seconds to wait before starting Connect Health Checks.
+
+Default:  30
+
+***
+
 # confluent.kafka_rest
 
 Below are the supported variables for the role confluent.kafka_rest
@@ -2271,6 +3183,38 @@ Below are the supported variables for the role confluent.kafka_rest
 Custom Java Args to add to the Rest Proxy Process
 
 Default:  ""
+
+***
+
+### kafka_rest_service_overrides
+
+Overrides to the Service Section of Rest Proxy Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_rest_service_environment_overrides
+
+Environment Variables to be added to the Rest Proxy Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_rest_service_unit_overrides
+
+Overrides to the Unit Section of Rest Proxy Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_rest_health_check_delay
+
+Time in seconds to wait before starting Rest Proxy Health Checks.
+
+Default:  20
 
 ***
 
@@ -2304,6 +3248,38 @@ Default:  /tmp/ksqldb
 
 ***
 
+### ksql_service_overrides
+
+Overrides to the Service Section of ksqlDB Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### ksql_service_environment_overrides
+
+Environment Variables to be added to the ksqlDB Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### ksql_service_unit_overrides
+
+Overrides to the Unit Section of ksqlDB Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### ksql_health_check_delay
+
+Time in seconds to wait before starting ksqlDB Health Checks.
+
+Default:  20
+
+***
+
 # confluent.schema_registry
 
 Below are the supported variables for the role confluent.schema_registry
@@ -2315,6 +3291,38 @@ Below are the supported variables for the role confluent.schema_registry
 Custom Java Args to add to the Schema Registry Process
 
 Default:  ""
+
+***
+
+### schema_registry_service_overrides
+
+Overrides to the Service Section of Schema Registry Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### schema_registry_service_environment_overrides
+
+Environment Variables to be added to the Schema Registry Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### schema_registry_service_unit_overrides
+
+Overrides to the Unit Section of Schema Registry Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### schema_registry_health_check_delay
+
+Time in seconds to wait before starting Schema Registry Health Checks.
+
+Default:  20
 
 ***
 
@@ -2337,6 +3345,92 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Zookeeper Process
 
 Default:  ""
+
+***
+
+### zookeeper_service_overrides
+
+Overrides to the Service Section of Zookeeper Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### zookeeper_service_environment_overrides
+
+Environment Variables to be added to the Zookeeper Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### zookeeper_service_unit_overrides
+
+Overrides to the Unit Section of Zookeeper Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### zookeeper_health_check_delay
+
+Time in seconds to wait before starting Zookeeper Health Checks.
+
+Default:  5
+
+***
+
+# confluent.kafka_connect_replicator
+
+Below are the supported variables for the role confluent.kafka_connect_replicator
+
+***
+
+### kafka_connect_replicator_custom_log4j
+
+Boolean to reconfigure Kafka Connect Replicator's logging with the RollingFileAppender and log cleanup functionality.
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_connect_replicator_custom_java_args
+
+Custom Java Args to add to the Kafka Connect Replicator Process
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_service_overrides
+
+Overrides to the Service Section of Kafka Connect Replicator Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_replicator_service_environment_overrides
+
+Environment Variables to be added to the Kafka Connect Replicator Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_replicator_service_unit_overrides
+
+Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_replicator_health_check_delay
+
+Time in seconds to wait before starting Kafka Connect Replicator Health Checks.
+
+Default:  30
 
 ***
 
