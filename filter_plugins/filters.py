@@ -108,7 +108,7 @@ class FilterModule(object):
                 final_dict[prop_list[0]] = prop_list[1]
         return final_dict
 
-    def listener_properties(self, listeners_dict, default_ssl_enabled, keystore_type, default_ssl_mutual_auth_enabled, default_sasl_protocol,
+    def listener_properties(self, listeners_dict, default_ssl_enabled, bouncy_castle_keystore, default_ssl_mutual_auth_enabled, default_sasl_protocol,
                             kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                             plain_jaas_config, keytab_path, kerberos_principal, kerberos_primary,
                             scram_user, scram_password, oauth_pem_path ):
@@ -125,7 +125,7 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.ssl.keystore.password'] = kafka_broker_keystore_storepass
                 final_dict['listener.name.' + listener_name + '.ssl.key.password'] = kafka_broker_keystore_keypass
 
-            if keystore_type == 'BCFKS':
+            if bouncy_castle_keystore:
                 final_dict['listener.name.' + listener_name + '.ssl.keymanager.algorithm'] = 'PKIX'
                 final_dict['listener.name.' + listener_name + '.ssl.trustmanager.algorithm'] = 'PKIX'
                 final_dict['listener.name.' + listener_name + '.ssl.keystore.type'] = 'BCFKS'
@@ -156,7 +156,7 @@ class FilterModule(object):
 
         return final_dict
 
-    def client_properties(self, listener_dict, default_ssl_enabled, keystore_type, default_ssl_mutual_auth_enabled, default_sasl_protocol,
+    def client_properties(self, listener_dict, default_ssl_enabled, bouncy_castle_keystore, default_ssl_mutual_auth_enabled, default_sasl_protocol,
                             config_prefix, truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass,
                             omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
                             kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
@@ -180,7 +180,7 @@ class FilterModule(object):
             final_dict[config_prefix + 'ssl.keystore.password'] = keystore_storepass
             final_dict[config_prefix + 'ssl.key.password'] = keystore_keypass
 
-        if keystore_type == 'BCFKS':
+        if bouncy_castle_keystore:
             final_dict[config_prefix + 'ssl.keymanager.algorithm'] = 'PKIX'
             final_dict[config_prefix + 'ssl.trustmanager.algorithm'] = 'PKIX'
             final_dict[config_prefix + 'ssl.keystore.type'] = 'BCFKS'
