@@ -1,6 +1,6 @@
 # How to test
 
-Starting with CP-Ansible 5.5.0, we have included testing via the [Molecule](https://molecule.readthedocs.io/en/latest/) framework, and strongly advise it's usage before submitting a Pull Request.
+Starting with CP-Ansible 5.5.0, we have included testing via the [Molecule](https://molecule.readthedocs.io/en/latest/) framework, and strongly advise its usage before submitting a Pull Request.
 
 ## Prerequisites
 
