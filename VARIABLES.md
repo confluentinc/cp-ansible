@@ -236,6 +236,14 @@ Default:  /usr/local/bin/confluent
 
 ***
 
+### default_internal_replication_factor
+
+Recommended replication factor, defaults to 3. When splitting your cluster across 2 DCs with 4 or more Brokers, this should be increased to 4 to balance topic replicas.
+
+Default:  3
+
+***
+
 ### sasl_protocol
 
 SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
@@ -670,9 +678,9 @@ Default:  []
 
 ### kafka_broker_default_internal_replication_factor
 
-Replication Factor for internal topics. Defaults to the minimum of the number of brokers and 3
+Replication Factor for internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
 
-Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ***
 
@@ -729,6 +737,14 @@ Default:  "{{schema_registry_default_group}}"
 Port Schema Registry API exposed over
 
 Default:  8081
+
+***
+
+### schema_registry_default_internal_replication_factor
+
+Replication Factor for schemas topic. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
+
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ***
 
@@ -1142,9 +1158,9 @@ Default:  connect-cluster
 
 ### kafka_connect_default_internal_replication_factor
 
-Replication Factor for connect internal topics. Defaults to the minimum of the number of brokers and 3
+Replication Factor for connect internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
 
-Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ***
 
@@ -1318,9 +1334,9 @@ Default:  []
 
 ### ksql_default_internal_replication_factor
 
-Replication Factor for ksqlDB internal topics. Defaults to the minimum of the number of brokers and 3
+Replication Factor for ksqlDB internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
 
-Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ***
 
@@ -1422,9 +1438,9 @@ Default:  []
 
 ### control_center_default_internal_replication_factor
 
-Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and 3
+Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
 
-Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, 3 ] | min }}"
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ***
 
@@ -2256,7 +2272,7 @@ Default:  "{{ssl_enabled}}"
 
 Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator.
 
-Default:  ""
+Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent{{'' if confluent_server_enabled else '-community'}}-{{confluent_package_version}}.tar.gz"
 
 ***
 
