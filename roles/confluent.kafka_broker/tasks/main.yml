@@ -186,27 +186,15 @@
   when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms or zookeeper_sasl_protocol in ['kerberos', 'digest']"
   notify: restart kafka
 
-- name: Create SCRAM Users - Standard
+- name: Create SCRAM Users
   shell: |
-    kafka-configs --zookeeper localhost:{{zookeeper_final_properties.clientPort}} --alter \
+    {{ binary_base_path }}/bin/kafka-configs --zookeeper localhost:{{zookeeper_final_properties.clientPort}} --alter \
       --add-config 'SCRAM-SHA-512=[password={{ item.value['password'] }}]' \
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram_users|dict2items }}"
   delegate_to: "{{ groups['zookeeper'][0] }}"
   run_once: true
-  when: "'SCRAM-SHA-512' in kafka_broker_sasl_enabled_mechanisms" and not installation_method == "archive"
-
-- name: Create SCRAM Users - Archive
-  shell: |
-    kafka-configs --zookeeper localhost:{{zookeeper_final_properties.clientPort}} --alter \
-      --add-config 'SCRAM-SHA-512=[password={{ item.value['password'] }}]' \
-      --entity-type users --entity-name {{ item.value['principal'] }}
-  loop: "{{ sasl_scram_users|dict2items }}"
-  delegate_to: "{{ groups['zookeeper'][0] }}"
-  run_once: true
-  environment:
-    PATH: "{{archive_destination_path}}/confluent-{{confluent_package_version}}/bin:{{ ansible_env.PATH }}"
-  when: "'SCRAM-SHA-512' in kafka_broker_sasl_enabled_mechanisms" and installation_method == "archive"
+  when: "'SCRAM-SHA-512' in kafka_broker_sasl_enabled_mechanisms"
 
 - name: Deploy JMX Exporter Config File
   copy:
