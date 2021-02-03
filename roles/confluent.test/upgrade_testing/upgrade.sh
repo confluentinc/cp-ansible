@@ -13,6 +13,9 @@ cd ..
 echo "Checking out $START_BRANCH branch"
 git checkout $START_BRANCH
 
+shopt -s expand_aliases
+alias molecule="docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock -v /Users/dbove/.cache:/root/.cache -v /Users/dbove/workspace/cp-ansible:/Users/dbove/workspace/cp-ansible -w /Users/dbove/workspace/cp-ansible/roles/confluent.test quay.io/ansible/molecule:3.1.5 molecule"
+
 ## Run Molecule Converge on scenario
 echo "Running molecule converge on $SCENARIO_NAME"
 molecule converge -s $SCENARIO_NAME
