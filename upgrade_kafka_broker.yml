@@ -4,10 +4,10 @@
   serial: 1
   vars:
     kafka_broker_upgrade_start_version: "5.3"
-    kafka_broker_rest_proxy_enabled: false
+    # kafka_broker_rest_proxy_enabled: false
   handlers:
     - name: restart kafka
-      include_tasks: roles/confluent.kafka_broker/tasks/restart_kafka.yml
+      include_tasks: roles/confluent.kafka_broker/tasks/restart_and_wait.yml
   tasks:
     - import_role:
         name: confluent.variables
@@ -34,6 +34,11 @@
         inter_broker_protocol_version: 2.6
         log_message_format_version: 2.6
       when: kafka_broker_upgrade_start_version is match('6.0.*')
+
+    - set_fact:
+        inter_broker_protocol_version: 2.7
+        log_message_format_version: 2.7
+      when: kafka_broker_upgrade_start_version is match('6.1.*')
 
     - name: Set Inter-Broker Protocol Version to Current Version
       lineinfile:
@@ -219,12 +224,13 @@
       # Files cannot be copied because directory is not created in check mode
       ignore_errors: "{{ ansible_check_mode }}"
 
-    - name: Disabling Embedded Rest Proxy
-      # Existing server.properties is missing configuration
-      lineinfile:
-        path: "{{ kafka_broker.config_file }}"
-        regexp: 'kafka.rest.enable=*'
-        line: 'kafka.rest.enable=false'
+    # # TODO add condition if it is enabled, dont need to run this task
+    # - name: Disabling Embedded Rest Proxy
+    #   # Existing server.properties is missing configuration
+    #   lineinfile:
+    #     path: "{{ kafka_broker.config_file }}"
+    #     regexp: 'kafka.rest.enable=*'
+    #     line: 'kafka.rest.enable=false'
 
     - name: Restart Service
       systemd:
@@ -246,10 +252,10 @@
     - inter_broker_protocol_version
   vars:
     upgrade_to_version: "6.0"
-    kafka_broker_rest_proxy_enabled: false
+    # kafka_broker_rest_proxy_enabled: false
   handlers:
     - name: restart kafka
-      include_tasks: roles/confluent.kafka_broker/tasks/restart_kafka.yml
+      include_tasks: roles/confluent.kafka_broker/tasks/restart_and_wait.yml
   tasks:
     - import_role:
         name: confluent.variables
@@ -269,6 +275,10 @@
     - set_fact:
         inter_broker_protocol_version: 2.6
       when: upgrade_to_version is match('6.0.*')
+
+    - set_fact:
+        inter_broker_protocol_version: 2.7
+      when: upgrade_to_version is match('6.1.*')
 
     - name: Set Inter-Broker Protocol Version to Current Version
       lineinfile:
