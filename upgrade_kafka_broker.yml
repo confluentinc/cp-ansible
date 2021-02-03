@@ -4,7 +4,6 @@
   serial: 1
   vars:
     kafka_broker_upgrade_start_version: "5.3"
-    # kafka_broker_rest_proxy_enabled: false
   handlers:
     - name: restart kafka
       include_tasks: roles/confluent.kafka_broker/tasks/restart_and_wait.yml
@@ -14,6 +13,27 @@
 
     - name: Set confluent_server_enabled Variable
       include_tasks: tasks/set_confluent_server_enabled.yml
+
+    - name: Load server.properties
+      slurp:
+        src: "{{ kafka_broker.config_file }}"
+      register: slurped_properties
+
+    - set_fact:
+        kafka_broker_rest_proxy_enabled: "{{ True if (slurped_properties.content|b64decode).split('\n') | select('match', '^kafka.rest.enable=true') | list | length == 1 else False }}"
+
+    # - debug:
+    #     msg: "{{ (slurped_properties.content|b64decode).split('\n') | select('match', '^kafka.rest.enable=true') | list | length }}"
+
+    # - debug:
+    #     msg: "{{kafka_broker_rest_proxy_enabled}}"
+    #
+    #
+    # - fail:
+
+    - set_fact:
+        broker_id: "{{ (slurped_properties.content|b64decode).split('\n') | select('match', '^broker.id.*') | list | first | regex_replace('^[-a-zA-Z0-9.]*[ ]?=[ ]?(.*)$', '\\1') }}"
+
 
     - set_fact:
         inter_broker_protocol_version: 2.3
@@ -142,6 +162,9 @@
     - import_role:
         name: confluent.variables
 
+    - debug:
+        msg: "{{kafka_broker_rest_proxy_enabled}}"
+
     - name: Create Backup Directory
       file:
         path: "/tmp/upgrade/{{ kafka_broker_service_name }}"
@@ -238,10 +261,13 @@
         name: "{{ kafka_broker_service_name }}"
         state: restarted
 
+    - debug:
+        msg: "{{kafka_broker_rest_proxy_enabled}}"
+
     - name: Kafka Broker Health Check
       include_tasks: roles/confluent.kafka_broker/tasks/health_check.yml
-      vars:
-        kafka_broker_rest_proxy_enabled: false
+      # vars:
+      #   kafka_broker_rest_proxy_enabled: false
       when: not ansible_check_mode
 
 - name: Kafka Broker Upgrade - Set Inter-Broker Protocol to Current Version
@@ -259,6 +285,10 @@
   tasks:
     - import_role:
         name: confluent.variables
+
+    - debug:
+        msg: "{{kafka_broker_rest_proxy_enabled}}"
+
 
     - set_fact:
         inter_broker_protocol_version: 2.3
