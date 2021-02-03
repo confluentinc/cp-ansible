@@ -1510,7 +1510,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### secrets_protection_enabled
 
-Boolean to enable secrets protection on all components except Zookeeper and Rest Proxy
+Boolean to enable secrets protection on all components except Zookeeper
 
 Default:  false
 
