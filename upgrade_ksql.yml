@@ -7,7 +7,7 @@
     - import_role:
         name: confluent.variables
 
-    - shell: "egrep 'ssl.client.auth ?= ?true' {{ ksql.config_file }}"
+    - shell: "egrep -i 'ssl.client.auth ?= ?true' {{ ksql.config_file }}"
       register: mtls_check
       failed_when: false
 
@@ -18,18 +18,43 @@
     - name: Get Package Facts
       package_facts:
         manager: auto
+      when: installation_method == "package"
 
+    # todo figure this out for tar install
     - set_fact:
         confluent_server_enabled: true
-      when: ansible_facts.packages['confluent-server'] is defined
+    #   when: ansible_facts.packages['confluent-server'] is defined
+    #
+    # - set_fact:
+    #     confluent_server_enabled: false
+    #   when: ansible_facts.packages['confluent-kafka-2.12'] is defined
+    #   when: ansible_facts.packages['confluent-server'] is not defined
 
-    - set_fact:
-        confluent_server_enabled: false
-      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
+    # - name: Set Current Package Version
+    #   set_fact:
+    #     ksql_current_version: "{{ ansible_facts.packages['confluent-ksqldb'][0]['version'] }}"
+    #   when: installation_method == "package"
+    #
+    # - name: Load override.conf
+    #   slurp:
+    #     src: "{{ ksql.systemd_override }}"
+    #   register: slurped_override
+    #
+    # - debug:
+    #     msg: "{{ slurped_override.content|b64decode }}"
+    #
+    # - debug:
+    #     msg: "{{ (slurped_override.content|b64decode) .split('\n') | select('match', '^kafka.rest.enable=true') | list }}"
+    #
+    # - fail:
+    # - set_fact:
+    #     kafka_broker_rest_proxy_enabled: "{{ True if (slurped_override.content|b64decode).split('\n') | select('match', '^kafka.rest.enable=true') | list | length == 1 else False }}"
 
+    # TODO this is wrong
     - name: Set Current Package Version
       set_fact:
-        ksql_current_version: "{{ ansible_facts.packages['confluent-ksqldb'][0]['version'] }}"
+        ksql_current_version: 6.0.1
+      when: installation_method == "archive"
 
     - debug:
         msg: "Current version: {{ksql_current_version}}   Upgrade to version: {{confluent_package_version}}"
@@ -80,6 +105,7 @@
       when:
         - ansible_os_family == "RedHat"
         - not confluent_server_enabled|bool
+        - installation_method == "package"
       # Packages will not be found in check mode because repos not changed
       ignore_errors: "{{ ansible_check_mode }}"
 
@@ -90,6 +116,7 @@
       when:
         - ansible_os_family == "Debian"
         - not confluent_server_enabled|bool
+        - installation_method == "package"
       # Packages will not be found in check mode because repos not changed
       ignore_errors: "{{ ansible_check_mode }}"
 
@@ -99,7 +126,9 @@
         state: latest
         update_cache: true
       loop: "{{ ksql_packages }}"
-      when: ansible_os_family == "RedHat"
+      when:
+        - ansible_os_family == "RedHat"
+        - installation_method == "package"
       # Packages will not be found in check mode because repos not changed
       ignore_errors: "{{ ansible_check_mode }}"
 
@@ -108,9 +137,22 @@
         name: "{{item}}{{confluent_package_debian_suffix}}"
         update_cache: true
       loop: "{{ ksql_packages }}"
-      when: ansible_os_family == "Debian"
+      when:
+        - ansible_os_family == "Debian"
+        - installation_method == "package"
       # Packages will not be found in check mode because repos not changed
       ignore_errors: "{{ ansible_check_mode }}"
+
+    # Archive File deployments need to create SystemD service units
+    # Copy the tarball's systemd service to the system
+    - name: Copy KSQL Service from archive file to system
+      copy:
+        src: "{{binary_base_path}}/lib/systemd/system/{{ksql.systemd_file|basename}}"
+        remote_src: true
+        dest: "{{ksql.systemd_file}}"
+        mode: 0644
+        force: true
+      when: installation_method == "archive"
 
     - name: Put back configuration
       copy:
@@ -122,6 +164,13 @@
         - "{{ ksql.systemd_override }}"
       # Files cannot be copied because directory is not created in check mode
       ignore_errors: "{{ ansible_check_mode }}"
+
+    - name: Make sure using correct Archive Installation
+      lineinfile:
+        path: "{{ ksql.systemd_override }}"
+        line: "ExecStart={{archive_config_base_path}}/confluent-{{confluent_package_version}}/bin/ksql-server-start {{ ksql.config_file }}"
+        regexp: "ExecStart={{archive_config_base_path}}/confluent-(.*)/bin/ksql-server-start {{ ksql.config_file }}"
+      when: installation_method == "archive"
 
     - name: Update RBAC Configs
       lineinfile:
