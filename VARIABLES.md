@@ -2272,7 +2272,7 @@ Default:  "{{ssl_enabled}}"
 
 Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator.
 
-Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent{{'' if confluent_server_enabled else '-community'}}-{{confluent_package_version}}.tar.gz"
+Default:  ""
 
 ***
 
