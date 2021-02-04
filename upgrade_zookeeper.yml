@@ -1,14 +1,51 @@
 ---
 - name: Zookeeper Upgrade - Prep
   hosts: zookeeper
+  gather_facts: false
   # Running serial=1 because add_host has problems
   # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
   serial: 1
   tags:
     - prep
   tasks:
+    - name: Gather OS Facts
+      setup:
+        # Only gathers items in list, filters out the rest
+        filter: ansible_os_family
+        gather_subset:
+          - '!all'
+
     - import_role:
         name: confluent.variables
+
+    - name: Load override.conf
+      slurp:
+        src: "{{ zookeeper.systemd_override }}"
+      register: slurped_override
+
+    - debug:
+        msg: "{{ (slurped_override.content|b64decode) .split('\n') }}"
+
+
+    - debug:
+        msg: "{{ (slurped_override.content|b64decode) .split('\n') |
+          select('match', '^ExecStart=' + archive_config_base_path + '/confluent-(.*)/bin/zookeeper-server-start ' + zookeeper.config_file) |
+          list | first | regex_replace('[^0-9]','') }}"
+
+# ExecStart=/opt/confluent/confluent-6.0.1/bin/zookeeper-server-start /opt/confluent/etc/kafka/zookeeper.properties
+
+# "ExecStart={{archive_config_base_path}}/confluent-(.*)/bin/zookeeper-server-start {{ zookeeper.config_file }}"
+
+    # - name: Make sure using correct Archive Installation
+    #   lineinfile:
+    #     path: "{{ ksql.systemd_override }}"
+    #     line: "ExecStart={{archive_config_base_path}}/confluent-{{confluent_package_version}}/bin/ksql-server-start {{ ksql.config_file }}"
+    #     regexp: "ExecStart={{archive_config_base_path}}/confluent-(.*)/bin/ksql-server-start {{ ksql.config_file }}"
+    #   when: installation_method == "archive"
+
+
+    - fail:
+
 
     - name: Zookeeper is Running
       systemd:
@@ -21,40 +58,58 @@
         tasks_from: health_check.yml
       when: not ansible_check_mode
 
+    # TODO this doesnt work w tar install
     - name: Get Package Facts
       package_facts:
         manager: auto
+      when: installation_method == "package"
 
     - set_fact:
-        confluent_server_enabled: true
-      when: ansible_facts.packages['confluent-server'] is defined
+        confluent_server_enabled: "{{ True if ansible_facts.packages['confluent-server'] is defined else False }}"
+        confluent_kafka_upgraded: "{{ True if ansible_facts.packages['confluent-kafka'] is defined else False }}"
+      when: installation_method == "package"
 
-    - set_fact:
-        confluent_server_enabled: false
-      when: ansible_facts.packages['confluent-kafka-2.12'] is defined or ansible_facts.packages['confluent-kafka'] is defined
+    # - set_fact:
+    #     confluent_server_enabled: false
+    #   when:
+    #     - ansible_facts.packages['confluent-server'] is not defined
+    #     - installation_method == "package"
+    #     # - ansible_facts.packages['confluent-kafka-2.12'] is defined or ansible_facts.packages['confluent-kafka'] is defined
 
-    - set_fact:
-        confluent_kafka_upgraded: true
-      when: ansible_facts.packages['confluent-kafka'] is defined
+    # - set_fact:
+    #     confluent_kafka_upgraded: "{{ True if ansible_facts.packages['confluent-kafka'] is defined else False}}"
+    #   when: installation_method == "package"
 
-    - set_fact:
-        confluent_kafka_upgraded: false
-      when: ansible_facts.packages['confluent-kafka'] is not defined
+    # - set_fact:
+    #     confluent_kafka_upgraded: false
+    #   when:
+    #     - ansible_facts.packages['confluent-kafka'] is not defined
+    #     - installation_method == "package"
 
     - name: Set Current Package Version of confluent-server
       set_fact:
         zookeeper_current_version: "{{ ansible_facts.packages['confluent-server'][0]['version'] }}"
-      when: confluent_server_enabled|bool
+      when:
+        - confluent_server_enabled|bool
+        - installation_method == "package"
 
     - name: Set Current Package Version of confluent-kafka-2.12
       set_fact:
         zookeeper_current_version: "{{ ansible_facts.packages['confluent-kafka-2.12'][0]['version'] }}"
-      when: not confluent_server_enabled|bool and not confluent_kafka_upgraded|bool
+      when:
+        - not confluent_server_enabled|bool
+        - not confluent_kafka_upgraded|bool
+        - installation_method == "package"
 
     - name: Set Current Package Version of confluent-kafka
       set_fact:
         zookeeper_current_version: "{{ ansible_facts.packages['confluent-kafka'][0]['version'] }}"
-      when: not confluent_server_enabled|bool and confluent_kafka_upgraded|bool
+      when:
+        - not confluent_server_enabled|bool
+        - confluent_kafka_upgraded|bool
+        - installation_method == "package"
+
+
 
     - debug:
         msg: "Current version: {{zookeeper_current_version}}   Upgrade to version: {{confluent_package_version}}"
@@ -148,6 +203,7 @@
       when:
         - ansible_os_family == "RedHat"
         - not confluent_server_enabled|bool
+        - installation_method == "package"
       # Packages will not be found in check mode because repos not changed
       ignore_errors: "{{ ansible_check_mode }}"
 
@@ -158,6 +214,7 @@
       when:
         - ansible_os_family == "Debian"
         - not confluent_server_enabled|bool
+        - installation_method == "package"
       # Packages will not be found in check mode because repos not changed
       ignore_errors: "{{ ansible_check_mode }}"
 
@@ -167,7 +224,9 @@
         state: latest
         update_cache: true
       loop: "{{ zookeeper_packages }}"
-      when: ansible_os_family == "RedHat"
+      when:
+        - ansible_os_family == "RedHat"
+        - installation_method == "package"
       # Packages will not be found in check mode because repos not changed
       ignore_errors: "{{ ansible_check_mode }}"
 
@@ -176,9 +235,22 @@
         name: "{{item}}{{confluent_package_debian_suffix}}"
         update_cache: true
       loop: "{{ zookeeper_packages }}"
-      when: ansible_os_family == "Debian"
+      when:
+        - ansible_os_family == "Debian"
+        - installation_method == "package"
       # Packages will not be found in check mode because repos not changed
       ignore_errors: "{{ ansible_check_mode }}"
+
+    # Archive File deployments need to create SystemD service units
+    # Copy the tarball's systemd service to the system
+    - name: Copy Zookeeper Service from archive file to system
+      copy:
+        src: "{{binary_base_path}}/lib/systemd/system/{{zookeeper.systemd_file|basename}}"
+        remote_src: true
+        dest: "{{zookeeper.systemd_file}}"
+        mode: 0644
+        force: true
+      when: installation_method == "archive"
 
     - name: Put back configuration
       copy:
