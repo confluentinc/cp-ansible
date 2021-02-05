@@ -1,0 +1,45 @@
+---
+- name: Confluent CLI system check
+  assert:
+    that: ansible_facts['system']|lower == "linux"
+    fail_msg: "Confluent CLI system not supported"
+    quiet: true
+
+- name: Confluent CLI architecture check
+  assert:
+    that: confluent_cli_goarch[ansible_facts['architecture']] is defined
+    fail_msg: "Confluent CLI architecture not supported"
+    quiet: true
+
+- name: Confluent CLI get checksums
+  set_fact:
+    confluent_cli_checksums: "{{lookup('url', confluent_cli_checksums_url, wantlist=True)}}"
+  when:
+    - confluent_cli_archive_path is not defined
+
+- name: Confluent CLI archive checksum
+  set_fact:
+    confluent_cli_sha256: "{{confluent_cli_checksums|select('match','.*'+confluent_cli_archive)|regex_findall('([a-fA-F0-9]+)\\s*.*')|first|string }}"
+  when:
+    - confluent_cli_archive_path is not defined
+
+- name: Confluent CLI download
+  get_url:
+    url: "{{confluent_cli_s3_archive+confluent_cli_archive}}"
+    dest: "/tmp/{{confluent_cli_archive}}"
+    checksum: "sha256:{{confluent_cli_sha256}}"
+  when:
+    - confluent_cli_archive_path is not defined
+
+- name: Confluent CLI set archive path
+  set_fact:
+    confluent_cli_archive_path: "/tmp/{{confluent_cli_archive}}"
+  when:
+    - confluent_cli_archive_path is not defined
+
+- name: Confluent CLI install binary
+  command:
+    cmd: "tar -C {{confluent_cli_path|dirname}} --strip-components=1 -xzf {{confluent_cli_archive_path}} {{confluent_cli_binary}}/{{confluent_cli_binary}}"
+    warn: no
+    creates: "{{confluent_cli_path}}"
+  
