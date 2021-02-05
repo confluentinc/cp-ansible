@@ -596,6 +596,14 @@ Default:  "{{kafka_broker.appender_log_path}}"
 
 ***
 
+### kafka_broker_schema_validation_enabled
+
+Boolean to configure Schema Validation on Kafka
+
+Default:  true
+
+***
+
 ### kafka_broker_jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on kafka
@@ -2272,7 +2280,7 @@ Default:  "{{ssl_enabled}}"
 
 Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator.
 
-Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent{{'' if confluent_server_enabled else '-community'}}-{{confluent_package_version}}.tar.gz"
+Default:  ""
 
 ***
 
