@@ -4,6 +4,14 @@ Below are the supported variables for the role confluent.variables
 
 ***
 
+### jolokia_url_remote
+
+To copy from Ansible control host or download
+
+Default:  true
+
+***
+
 ### jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on all components
@@ -41,6 +49,14 @@ Default:  admin
 Password for Jolokia Agent when using Basic Auth
 
 Default:  password
+
+***
+
+### jmxexporter_url_remote
+
+To copy from Ansible control host or download
+
+Default:  true
 
 ***
 
@@ -180,6 +196,22 @@ Default:  "/opt/confluent"
 
 ***
 
+### archive_owner
+
+Owner of the downloaded archive. Not mandatory to set.
+
+Default:  ""
+
+***
+
+### archive_group
+
+Group Owner of the downloaded archive. Not mandatory to set.
+
+Default:  ""
+
+***
+
 ### archive_config_base_path
 
 If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
@@ -246,7 +278,7 @@ Default:  true
 
 ### regenerate_keystore_and_truststore
 
-Boolean to have reruns of all.yml recreate Keystores
+Boolean to have reruns of all.yml recreate Keystores. Consider disabling this once installation is completed, as this triggers restarts.
 
 Default:  true
 
@@ -948,6 +980,14 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ***
 
+### kafka_connect_custom_rest_extension_classes
+
+Additional set of Connect extension classes.
+
+Default:  []
+
+***
+
 ### kafka_connect_jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on Connect
@@ -1225,6 +1265,14 @@ Default:  "{{ ksql.properties }}"
 Boolean to configure Monitoring Interceptors on ksqlDB.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
+
+***
+
+### ksql_log_streaming_enabled
+
+Boolean to enable ksqlDB Log Streaming.
+
+Default:  false
 
 ***
 
@@ -1510,7 +1558,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### secrets_protection_enabled
 
-Boolean to enable secrets protection on all components except Rest Proxy
+Boolean to enable secrets protection on all components except Zookeeper
 
 Default:  false
 
@@ -2020,17 +2068,25 @@ Default:  1.6.2
 
 ### jolokia_jar_url
 
-Full URL used for Jolokia Agent Jar Download
+Full URL used for Jolokia Agent Jar Download. When `jolokia_url_remote=false` this represents the path on Ansible control host.
 
 Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jvm/{{jolokia_version}}/jolokia-jvm-{{jolokia_version}}-agent.jar"
 
 ***
 
+### jmxexporter_version
+
+Version of JmxExporter Agent Jar to Donwload
+
+Default:  0.12.0
+
+***
+
 ### jmxexporter_jar_url
 
-Full URL used for Prometheus Exporter Jar Download
+Full URL used for Prometheus Exporter Jar Download. When `jolokia_url_remote=false` this represents the path on Ansible control host.
 
-Default:  https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.12.0/jmx_prometheus_javaagent-0.12.0.jar
+Default:  "https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/{{jmxexporter_version}}/jmx_prometheus_javaagent-{{jmxexporter_version}}.jar"
 
 ***
 
@@ -2038,7 +2094,7 @@ Default:  https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaag
 
 A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent-{{confluent_package_version}}.tar.gz"
+Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent{{'' if confluent_server_enabled else '-community'}}-{{confluent_package_version}}.tar.gz"
 
 ***
 
@@ -2080,6 +2136,30 @@ Default:  ""
 
 ***
 
+### control_center_service_overrides
+
+Overrides to the Service Section of Control Center Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_service_environment_overrides
+
+Environment Variables to be added to the Control Center Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_service_unit_overrides
+
+Overrides to the Unit Section of Control Center Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
 # confluent.kafka_broker
 
 Below are the supported variables for the role confluent.kafka_broker
@@ -2099,6 +2179,30 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Kafka Process
 
 Default:  ""
+
+***
+
+### kafka_broker_service_overrides
+
+Overrides to the Service Section of Kafka Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_broker_service_environment_overrides
+
+Environment Variables to be added to the Kafka Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_broker_service_unit_overrides
+
+Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
+
+Default: 
 
 ***
 
@@ -2124,6 +2228,30 @@ Default:  ""
 
 ***
 
+### kafka_connect_service_overrides
+
+Overrides to the Service Section of Connect Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_service_environment_overrides
+
+Environment Variables to be added to the Connect Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_service_unit_overrides
+
+Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
 # confluent.kafka_rest
 
 Below are the supported variables for the role confluent.kafka_rest
@@ -2143,6 +2271,30 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Rest Proxy Process
 
 Default:  ""
+
+***
+
+### kafka_rest_service_overrides
+
+Overrides to the Service Section of Rest Proxy Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_rest_service_environment_overrides
+
+Environment Variables to be added to the Rest Proxy Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_rest_service_unit_overrides
+
+Overrides to the Unit Section of Rest Proxy Systemd File. This variable is a dictionary.
+
+Default: 
 
 ***
 
@@ -2176,6 +2328,30 @@ Default:  /tmp/ksqldb
 
 ***
 
+### ksql_service_overrides
+
+Overrides to the Service Section of ksqlDB Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### ksql_service_environment_overrides
+
+Environment Variables to be added to the ksqlDB Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### ksql_service_unit_overrides
+
+Overrides to the Unit Section of ksqlDB Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
 # confluent.schema_registry
 
 Below are the supported variables for the role confluent.schema_registry
@@ -2198,6 +2374,30 @@ Default:  ""
 
 ***
 
+### schema_registry_service_overrides
+
+Overrides to the Service Section of Schema Registry Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### schema_registry_service_environment_overrides
+
+Environment Variables to be added to the Schema Registry Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### schema_registry_service_unit_overrides
+
+Overrides to the Unit Section of Schema Registry Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
 # confluent.zookeeper
 
 Below are the supported variables for the role confluent.zookeeper
@@ -2217,6 +2417,30 @@ Default:  "{{ custom_log4j }}"
 Custom Java Args to add to the Zookeeper Process
 
 Default:  ""
+
+***
+
+### zookeeper_service_overrides
+
+Overrides to the Service Section of Zookeeper Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### zookeeper_service_environment_overrides
+
+Environment Variables to be added to the Zookeeper Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### zookeeper_service_unit_overrides
+
+Overrides to the Unit Section of Zookeeper Systemd File. This variable is a dictionary.
+
+Default: 
 
 ***
 

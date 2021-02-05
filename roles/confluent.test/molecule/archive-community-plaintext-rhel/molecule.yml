@@ -7,7 +7,7 @@ platforms:
     groups:
       - zookeeper
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -19,7 +19,7 @@ platforms:
     groups:
       - kafka_broker
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -31,7 +31,7 @@ platforms:
     groups:
       - schema_registry
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -43,7 +43,7 @@ platforms:
     groups:
       - kafka_rest
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -55,7 +55,7 @@ platforms:
     groups:
       - kafka_connect
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -67,27 +67,14 @@ platforms:
     groups:
       - ksql
     image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
       - name: confluent
-  - name: control-center1
-    hostname: control-center1.confluent
-    groups:
-      - control_center
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    published_ports:
-      - "9021:9021"
-    networks:
-      - name: confluent
+  # Control center not included in community archive, must not have c3 in inventory
 provisioner:
   name: ansible
   config_options:
@@ -98,36 +85,15 @@ provisioner:
   inventory:
     group_vars:
       all:
-        sasl_protocol: plain
+        confluent_server_enabled: false
 
-        kafka_connect_confluent_hub_plugins:
-          - jcustenborder/kafka-connect-spooldir:2.0.43
+        installation_method: archive
 
-        kafka_connect_connectors:
-          - name: sample-connector-1
-            config:
-              connector.class: "FileStreamSinkConnector"
-              tasks.max: "1"
-              file: "/etc/kafka/connect-distributed.properties"
-              topics: "test_topic"
+        confluent_community_archive_url: "http://packages.confluent.io/archive/{{confluent_repo_version}}/confluent-community-{{confluent_package_version}}.tar.gz"
+        confluent_archive_file_source: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/confluent-community-{{confluent_package_version}}.tar.gz"
+        confluent_archive_file_remote: false
 
-        zookeeper_service_unit_overrides:
-          Description: Custom Zookeeper description
-
-        kafka_broker_service_unit_overrides:
-          Description: Custom Kafka description
-
-        kafka_connect_service_unit_overrides:
-          Description: Custom Connect description
-
-        kafka_rest_service_unit_overrides:
-          Description: Custom Rest Proxy description
-
-        ksql_service_unit_overrides:
-          Description: Custom KSQLDB description
-
-        control_center_service_unit_overrides:
-          Description: Custom C3 description
+        redhat_java_package_name: java-11-openjdk
 
 verifier:
   name: ansible
