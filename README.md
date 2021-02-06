@@ -25,6 +25,10 @@ You can find the documentation for running CP-Ansible at https://docs.confluent.
 
 You can find supported configuration variables in [VARIABLES.md](https://github.com/confluentinc/cp-ansible/blob/6.0.x/VARIABLES.md)
 
+## Version Bumps
+
+Use [bump2version](https://github.com/c4urself/bump2version) tool to bump versions in all the correct places.
+
 ## Contributing
 
 
