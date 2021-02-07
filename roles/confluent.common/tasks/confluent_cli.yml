@@ -11,41 +11,36 @@
     fail_msg: "Confluent CLI architecture not supported"
     quiet: true
 
-# confluent_cli_checksums_url contains a SHA256 txt checksum file with checksums for all archives
-- name: Confluent CLI get checksums
-  set_fact:
-    confluent_cli_checksums: "{{lookup('url', confluent_cli_checksums_url, wantlist=True)}}"
-  when:
-    - confluent_cli_archive_path is not defined
-# select confluent_cli_archive name in SHA256 txt file and extract the checksum string to confluent_cli_sha256
-- name: Confluent CLI archive checksum
-  set_fact:
-    confluent_cli_sha256: "{{confluent_cli_checksums|select('match','.*'+confluent_cli_archive)|regex_findall('([a-fA-F0-9]+)\\s*.*')|first|string }}"
-  when:
-    - confluent_cli_archive_path is not defined
+- name: Confluent CLI create base path
+  file:
+    path: "{{confluent_cli_base_path}}"
+    state: directory
+    mode: '0755'
 
-- name: Confluent CLI download
-  get_url:
-    url: "{{confluent_cli_s3_archive+confluent_cli_archive}}"
-    dest: "/tmp/{{confluent_cli_archive}}"
-    checksum: "sha256:{{confluent_cli_sha256}}"
-  when:
-    - confluent_cli_archive_path is not defined
-
-- name: Confluent CLI set archive path
-  set_fact:
-    confluent_cli_archive_path: "/tmp/{{confluent_cli_archive}}"
-  when:
-    - confluent_cli_archive_path is not defined
-
-- name: Confluent CLI create install directory
+- name: Confluent CLI create executable directory
   file:
     path: "{{confluent_cli_path|dirname}}"
     state: directory
     mode: '0755'
 
-- name: Confluent CLI install binary
-  command:
-    cmd: "tar -C {{confluent_cli_path|dirname}} --strip-components=1 -xzf {{confluent_cli_archive_path}} {{confluent_cli_binary}}/{{confluent_cli_binary}}"
-    warn: no
+- name: Expand remote Confluent CLI archive
+  unarchive:
+    src: "{{ confluent_cli_archive_file_source }}"
+    remote_src: "{{ confluent_cli_archive_file_remote }}"
+    dest: "{{confluent_cli_base_path}}"
+    group: "{{ omit if archive_group == '' else archive_group }}"
+    owner: "{{ omit if archive_owner == '' else archive_owner }}"
+    mode: 0755
     creates: "{{confluent_cli_path}}"
+  when: confluent_cli_custom_download_url is not defined
+
+- name: Download Confluent CLI - Custom URL
+  get_url:
+    url: "{{ confluent_cli_custom_download_url }}"
+    dest: "{{ confluent_cli_path }}"
+    mode: 0755
+  register: cli_download_result
+  until: cli_download_result is success
+  retries: 5
+  delay: 5
+  when: confluent_cli_custom_download_url is defined
