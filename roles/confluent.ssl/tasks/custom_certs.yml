@@ -41,26 +41,48 @@
       -keypass {{truststore_storepass}}
   when: cert_count|int == 1
 
+- name: Convert Truststore to BCFKS - FIPS
+  shell: |
+    keytool -importkeystore -v \
+      -srckeystore {{truststore_path}} \
+      -srcstorepass {{truststore_storepass}} \
+      -srcalias CARoot \
+      -srcstoretype PKCS12 \
+      -destkeystore {{bcfks_truststore_path}} \
+      -deststorepass {{truststore_storepass}} \
+      -destalias CARoot \
+      -deststoretype BCFKS \
+      -providername BCFIPS \
+      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+      -providerpath /usr/share/java/kafka/bc-fips-*.jar
+  when:
+    - cert_count|int == 1
+    - convert_to_bcfks|default(False)|bool
+
+- name: Create Cert Chain
+  shell: |
+    cat {{ca_cert_path}} {{cert_path}} > /var/ssl/private/generation/signed-cert-chain.crt
+
 - name: Put Key and Signed Cert into pkcs12 Format with Key Password
   shell: |
     openssl pkcs12 -export \
-      -in {{cert_path}} \
+      -in /var/ssl/private/generation/signed-cert-chain.crt \
       -inkey {{key_path}} \
-      -passin pass:{{ssl_key_password}} \
+      {% if ssl_key_password is defined %}-passin pass:{{ssl_key_password}}{% endif %} \
       -out /var/ssl/private/generation/client.p12 \
       -name kafkassl \
       -passout pass:mykeypassword
-  when: ssl_key_password is defined
+  # when: ssl_key_password is defined
 
-- name: Put Key and Signed Cert into pkcs12 Format without Key Password
-  shell: |
-    openssl pkcs12 -export \
-      -in {{cert_path}} \
-      -inkey {{key_path}} \
-      -out /var/ssl/private/generation/client.p12 \
-      -name kafkassl \
-      -passout pass:mykeypassword
-  when: ssl_key_password is not defined
+# - name: Put Key and Signed Cert into pkcs12 Format without Key Password
+#   shell: |
+#     openssl pkcs12 -export \
+#       -in {{cert_path}} \
+#       -inkey {{key_path}} \
+#       -out /var/ssl/private/generation/client.p12 \
+#       -name kafkassl \
+#       -passout pass:mykeypassword
+#   when: ssl_key_password is not defined
 
 - name: Create Keystore
   shell: |
@@ -82,4 +104,18 @@
       -storepass {{keystore_storepass}} \
       -keypass {{keystore_storepass}}
 
-# TODO add tasks to converge truststore/keystore into BCFKS
+- name: Convert Keystore to BCFKS - FIPS
+  shell: |
+    keytool -importkeystore -v \
+      -srckeystore {{keystore_path}} \
+      -srcstorepass {{keystore_storepass}} \
+      -srcalias kafkassl \
+      -srcstoretype PKCS12 \
+      -destkeystore {{bcfks_keystore_path}} \
+      -deststorepass {{keystore_storepass}} \
+      -destalias {{inventory_hostname}}  \
+      -deststoretype BCFKS \
+      -providername BCFIPS \
+      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+      -providerpath /usr/share/java/kafka/bc-fips-*.jar
+  when: convert_to_bcfks|default(False)|bool
