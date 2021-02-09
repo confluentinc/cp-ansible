@@ -188,11 +188,11 @@
 
 - name: Create SCRAM Users
   shell: |
-    {{ binary_base_path }}/bin/kafka-configs --zookeeper localhost:{{zookeeper_final_properties.clientPort}} --alter \
+    {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
+    {{ binary_base_path }}/bin/kafka-configs --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_final_properties.clientPort}} --alter \
       --add-config 'SCRAM-SHA-512=[password={{ item.value['password'] }}]' \
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram_users|dict2items }}"
-  delegate_to: "{{ groups['zookeeper'][0] }}"
   run_once: true
   when: "'SCRAM-SHA-512' in kafka_broker_sasl_enabled_mechanisms"
 
