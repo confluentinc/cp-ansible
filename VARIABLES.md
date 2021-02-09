@@ -228,11 +228,27 @@ Default:  "{{rbac_enabled or secrets_protection_enabled}}"
 
 ***
 
+### confluent_cli_base_path
+
+The path the Confluent CLI archive is expanded into.
+
+Default:  /opt/confluent-cli
+
+***
+
 ### confluent_cli_path
 
-Full path on hosts to install the Confluent CLI
+Full path on hosts for Confluent CLI symlink to executable
 
-Default:  /usr/local/bin/confluent
+Default:  "/usr/local/bin/confluent"
+
+***
+
+### confluent_cli_version
+
+Confluent CLI version to download (e.g. "1.9.0"). By default is the latest version
+
+Default:  latest
 
 ***
 
@@ -2101,6 +2117,30 @@ Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_vers
 ### confluent_archive_file_remote
 
 Set to true to indicate the archive file is remote (i.e. already on the target node) or a URL. Set to false if the archive file is on the control node.
+
+Default:  true
+
+***
+
+### confluent_cli_repository_baseurl
+
+Base URL for Confluent CLI packages
+
+Default:  "https://s3-us-west-2.amazonaws.com/confluent.cloud"
+
+***
+
+### confluent_cli_archive_file_source
+
+A path reference to a local archive file or URL. By default this is the URL from Confluent CLI repository.
+
+Default:  "{{confluent_cli_repository_baseurl}}/confluent-cli/archives/{{confluent_cli_version}}/{{confluent_cli_binary}}_{{(confluent_cli_version == 'latest') | ternary('', 'v')}}{{confluent_cli_version}}_{{ansible_system|lower}}_{{confluent_cli_goarch[ansible_architecture]}}.tar.gz"
+
+***
+
+### confluent_cli_archive_file_remote
+
+Set to true to indicate the CLI archive file is remote (i.e. already on the target node) or a URL. Set to false if the archive file is on the control node.
 
 Default:  true
 
