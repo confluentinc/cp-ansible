@@ -78,7 +78,7 @@ Default:  /opt/prometheus/jmx_prometheus_javaagent.jar
 
 ### fips_enabled
 
-Boolean to have cp-ansible configure components with FIPS security settings
+Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8
 
 Default:  false
 
