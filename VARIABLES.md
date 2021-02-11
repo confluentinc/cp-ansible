@@ -3064,6 +3064,14 @@ Below are the supported variables for the role confluent.control_center
 
 ***
 
+### control_center_custom_log4j
+
+Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
+
+Default:  "{{ custom_log4j }}"
+
+***
+
 ### control_center_custom_java_args
 
 Custom Java Args to add to the Control Center Process
@@ -3226,6 +3234,14 @@ Below are the supported variables for the role confluent.kafka_rest
 
 ***
 
+### kafka_rest_custom_log4j
+
+Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
+
+Default:  "{{ custom_log4j }}"
+
+***
+
 ### kafka_rest_custom_java_args
 
 Custom Java Args to add to the Rest Proxy Process
@@ -3331,6 +3347,14 @@ Default:  20
 # confluent.schema_registry
 
 Below are the supported variables for the role confluent.schema_registry
+
+***
+
+### schema_registry_custom_log4j
+
+Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
+
+Default:  "{{ custom_log4j }}"
 
 ***
 
