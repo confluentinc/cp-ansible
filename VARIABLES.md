@@ -588,6 +588,22 @@ Default:  "{{kafka_broker_configure_additional_brokers}}"
 
 ***
 
+### kafka_broker_configure_control_plane_listener
+
+Boolean to configure control plane listener on separate port. Applied only if kafka_broker_configure_multiple_listeners is true
+
+Default:  false
+
+***
+
+### kafka_broker_control_plane_listener_name
+
+Control Planer listener name.
+
+Default:  "controller"
+
+***
+
 ### kafka_broker_user
 
 Set this variable to customize the Linux User that the Kafka Broker Service runs with. Default user is cp-kafka.
