@@ -2208,14 +2208,6 @@ Default:
 
 ***
 
-### control_center_secrets_protection_file
-
-Control Center Secrets Protection Secrets File Path
-
-Default:  /var/ssl/private/control-center-security.properties
-
-***
-
 # confluent.kafka_broker
 
 Below are the supported variables for the role confluent.kafka_broker
@@ -2259,14 +2251,6 @@ Default:
 Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
 
 Default: 
-
-***
-
-### kafka_broker_secrets_protection_file
-
-Kafka Broker Secrets Protection Secrets File Path
-
-Default:  /var/ssl/private/kafka-broker-security.properties
 
 ***
 
@@ -2316,14 +2300,6 @@ Default:
 
 ***
 
-### kafka_connect_secrets_protection_file
-
-Connect Secrets Protection Secrets File Path
-
-Default:  /var/ssl/private/kafka-connect-security.properties
-
-***
-
 # confluent.kafka_rest
 
 Below are the supported variables for the role confluent.kafka_rest
@@ -2367,14 +2343,6 @@ Default:
 Overrides to the Unit Section of Rest Proxy Systemd File. This variable is a dictionary.
 
 Default: 
-
-***
-
-### kafka_rest_secrets_protection_file
-
-Rest Proxy Secrets Protection Secrets File Path
-
-Default:  /var/ssl/private/kafka-rest-security.properties
 
 ***
 
@@ -2432,14 +2400,6 @@ Default:
 
 ***
 
-### ksql_secrets_protection_file
-
-ksqlDB Secrets Protection Secrets File Path
-
-Default:  /var/ssl/private/ksql-security.properties
-
-***
-
 # confluent.schema_registry
 
 Below are the supported variables for the role confluent.schema_registry
@@ -2483,14 +2443,6 @@ Default:
 Overrides to the Unit Section of Schema Registry Systemd File. This variable is a dictionary.
 
 Default: 
-
-***
-
-### schema_registry_secrets_protection_file
-
-Schema Registry Secrets Protection Secrets File Path
-
-Default:  /var/ssl/private/schema-registry-security.properties
 
 ***
 
