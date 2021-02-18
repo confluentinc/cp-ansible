@@ -1,0 +1,42 @@
+---
+# https://www.thegeekdiary.com/how-to-make-centos-rhel-7-fips-140-2-compliant/
+- name: Host Prerequisites
+  hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest
+  gather_facts: false
+  tasks:
+    - name: Update system
+      shell: yum update -y
+
+    - name: Install Dracut Package
+      yum:
+        name: dracut-fips
+        state: latest
+
+    - name: Recreate the initramfs file
+      shell: dracut -f
+
+    - name: Modify the kernel command line of the current kernel in the grub.cfg file
+      lineinfile:
+        path: /etc/default/grub
+        regexp: 'GRUB_CMDLINE_LINUX="console=tty0 crashkernel=auto console=ttyS0,115200.*'
+        line: 'GRUB_CMDLINE_LINUX="console=tty0 crashkernel=auto console=ttyS0,115200 fips=1"'
+
+    - name: Rebuilding the grub.cfg file
+      shell: grub2-mkconfig -o /boot/grub2/grub.cfg
+
+    - name: Reboot
+      shell: systemctl reboot
+
+    - name: Get fips enabled file
+      shell: cat /proc/sys/crypto/fips_enabled
+      register: fips_enabled_file
+
+    - debug: var=fips_enabled_file.stdout
+
+    - name: Install Random Number Generator Package
+      yum:
+        name: rng-tools
+        state: latest
+
+    - name: Start RNG Service
+      shell: systemctl start rngd
