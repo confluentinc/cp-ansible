@@ -11,30 +11,14 @@
 
 - name: Create Truststore and Import the CA Cert
   shell: |
-    keytool -keystore {{bcfks_truststore_path}} -storetype BCFKS \
+    keytool -noprompt -keystore {{bcfks_truststore_path}} \
+      -storetype BCFKS -storepass {{truststore_storepass}} \
       -alias CARoot -importcert -file {{ca_cert_path}} \
-      -noprompt  \
-      -storepass {{truststore_storepass}} \
-      -providerpath /usr/share/java/kafka/bc-fips-1.0.2.jar \
-      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider
+      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+      -providerpath {% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}/{% else %}/usr/{% endif %}share/java/kafka/bc-fips-*.jar
   register: output
 
 - debug: var=output
-# - name: Convert Truststore to BCFKS - FIPS
-#   shell: |
-#     keytool -importkeystore -v \
-#       -srckeystore {{bcfks_truststore_path}} \
-#       -srcstorepass {{truststore_storepass}} \
-#       -srcalias CARoot \
-#       -srcstoretype BCFKS \
-#       -destkeystore {{truststore_path}} \
-#       -deststorepass {{truststore_storepass}} \
-#       -destalias CARoot \
-#       -deststoretype PKCS12 \
-#       -providername BCFIPS \
-#       -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
-#       -providerpath {% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}/{% else %}/usr/{% endif %}share/java/kafka/bc-fips-*.jar
-#   when: convert_to_bcfks|bool
 
 - name: Create Keystore
   shell: |
@@ -42,10 +26,10 @@
       -validity 720 -genkeypair -keyalg RSA -keysize 2048 \
       -storepass {{keystore_storepass}} -keypass {{keystore_storepass}} \
       -storetype BCFKS \
-      -providerpath /usr/share/java/kafka/bc-fips-1.0.2.jar \
+      -dname "CN={{service_name}},OU=TEST,O=CONFLUENT,L=PaloAlto,S=Ca,C=US" \
+      -ext "SAN={{hostnames | cert_extension}}" \
       -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
-      -dname CN={{inventory_hostname}} \
-      -ext SAN=DNS:{{inventory_hostname}}
+      -providerpath {% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}/{% else %}/usr/{% endif %}share/java/kafka/bc-fips-*.jar
   register: output
 
 - debug: var=output
@@ -64,37 +48,34 @@
     keytool -keystore {{bcfks_keystore_path}} -alias localhost \
       -storepass {{keystore_storepass}} -keypass {{keystore_storepass}} \
       -storetype BCFKS -certreq -file /var/ssl/private/generation/client.csr \
-      -providerpath /usr/share/java/kafka/bc-fips-1.0.2.jar \
-      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider
+      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+      -providerpath {% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}/{% else %}/usr/{% endif %}share/java/kafka/bc-fips-*.jar
   register: output
 
 - debug: var=output
 
-# - name: Create Openssl Config for SAN
-#   template:
-#     src: openssl-san.cnf.j2
-#     dest: /var/ssl/private/generation/openssl-san.cnf
+- name: Create Openssl Config for SAN
+  template:
+    src: openssl-san.cnf.j2
+    dest: /var/ssl/private/generation/openssl-san.cnf
 
 - name: Sign CSR with the Certificate Authority
   shell: |
     openssl x509 -req -CA {{ca_cert_path}} -CAkey {{ca_key_path}} \
       -in /var/ssl/private/generation/client.csr -out {{cert_path}} \
-      -days 720 -CAcreateserial -passin pass:{{ssl_self_signed_ca_password}}
+      -days 720 -CAcreateserial -passin pass:{{ssl_self_signed_ca_password}} \
+      -extfile /var/ssl/private/generation/openssl-san.cnf \
+      -extensions v3_req
   register: output
 
 - debug: var=output
 
-  #  \
-  # -extfile /var/ssl/private/generation/openssl-san.cnf \
-  # -extensions v3_req
-
 - name: Import the CA cert into the Keystore
   shell: |
-    keytool -keystore {{bcfks_keystore_path}} -storetype BCFKS \
-      -noprompt \
+    keytool -noprompt -keystore {{bcfks_keystore_path}} -storetype BCFKS \
       -alias CARoot -import -file {{ca_cert_path}} -storepass {{keystore_storepass}} \
-      -providerpath /usr/share/java/kafka/bc-fips-1.0.2.jar \
-      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider
+      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+      -providerpath {% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}/{% else %}/usr/{% endif %}share/java/kafka/bc-fips-*.jar
   register: output
 
 - debug: var=output
@@ -108,8 +89,8 @@
     keytool -keystore {{bcfks_keystore_path}} -storetype BCFKS \
       -storepass {{keystore_storepass}} -alias localhost -import -file /var/ssl/private/generation/signed-cert-chain.crt \
       -noprompt \
-      -providerpath /usr/share/java/kafka/bc-fips-1.0.2.jar \
-      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider
+      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+      -providerpath {% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}/{% else %}/usr/{% endif %}share/java/kafka/bc-fips-*.jar
   register: output
 
 - debug: var=output
