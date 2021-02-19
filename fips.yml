@@ -4,39 +4,75 @@
   hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest
   gather_facts: false
   tasks:
-    - name: Update system
-      shell: yum update -y
+    - name: Check fips_enabled file
+      stat:
+        path: /proc/sys/crypto/fips_enabled
+      register: fips_enabled_stat
 
-    - name: Install Dracut Package
-      yum:
-        name: dracut-fips
-        state: latest
+    - name: Load fips_enabled
+      slurp:
+        src: /proc/sys/crypto/fips_enabled
+      register: slurped_fips_enabled
+      when: fips_enabled_stat.stat.exists
+      become: true
 
-    - name: Recreate the initramfs file
-      shell: dracut -f
+    - block:
+        - name: Install Dracut Package
+          yum:
+            name: dracut-fips
+            state: latest
+          become: true
 
-    - name: Modify the kernel command line of the current kernel in the grub.cfg file
-      lineinfile:
-        path: /etc/default/grub
-        regexp: 'GRUB_CMDLINE_LINUX="console=tty0 crashkernel=auto console=ttyS0,115200.*'
-        line: 'GRUB_CMDLINE_LINUX="console=tty0 crashkernel=auto console=ttyS0,115200 fips=1"'
+        - name: Recreate the initramfs file
+          shell: dracut -f
+          become: true
 
-    - name: Rebuilding the grub.cfg file
-      shell: grub2-mkconfig -o /boot/grub2/grub.cfg
+        - name: Modify the kernel command line of the current kernel in the grub.cfg file
+          lineinfile:
+            path: /etc/default/grub
+            regexp: 'GRUB_CMDLINE_LINUX="console=tty0 crashkernel=auto console=ttyS0,115200.*'
+            line: 'GRUB_CMDLINE_LINUX="console=tty0 crashkernel=auto console=ttyS0,115200 fips=1"'
+          become: true
 
-    - name: Reboot
-      shell: systemctl reboot
+        - name: Rebuilding the grub.cfg file
+          shell: grub2-mkconfig -o /boot/grub2/grub.cfg
+          become: true
 
-    - name: Get fips enabled file
-      shell: cat /proc/sys/crypto/fips_enabled
-      register: fips_enabled_file
+        - name: Reboot of host
+          reboot:
+          become: true
 
-    - debug: var=fips_enabled_file.stdout
+        - name: Wait for SSH
+          wait_for:
+            port: 22
+            host: "{{ ansible_host }}"
+            search_regex: SSH
+            delay: 10
+            timeout: 320
+          connection: local
+      when: not fips_enabled_stat.stat.exists or slurped_fips_enabled.content|b64decode|default('') != '1\n'
+
+    - name: Load fips_enabled
+      slurp:
+        src: /proc/sys/crypto/fips_enabled
+      register: slurped_fips_enabled
+
+    - name: Assert fips enabled in System
+      assert:
+        that:
+          - slurped_fips_enabled.content|b64decode == '1\n'
+        fail_msg: "/proc/sys/crypto/fips_enabled: set to {{slurped_fips_enabled.content|b64decode}} not 1"
+        quiet: true
 
     - name: Install Random Number Generator Package
       yum:
         name: rng-tools
         state: latest
+      become: true
 
     - name: Start RNG Service
-      shell: systemctl start rngd
+      systemd:
+        name: rngd
+        enabled: true
+        state: started
+      become: true
