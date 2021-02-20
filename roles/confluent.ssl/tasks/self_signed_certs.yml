@@ -18,36 +18,16 @@
       -storepass {{truststore_storepass}} \
       -keypass {{truststore_storepass}}
 
-- name: Create Keystore
+- name: Create Host Key
   shell: |
-    keytool -genkeypair -noprompt \
-      -storetype pkcs12 \
-      -keyalg {{ssl_key_algorithm}} -keysize {{ssl_key_size}} \
-      -alias {{inventory_hostname}} \
-      -dname "CN={{service_name}},OU=TEST,O=CONFLUENT,L=PaloAlto,S=Ca,C=US" \
-      -ext "SAN={{hostnames | cert_extension}}" \
-      -keystore {{keystore_path}} \
-      -storepass {{keystore_storepass}} \
-      -keypass {{keystore_storepass}}
-
-# - name: Export Key from Keystore
-#   shell: |
-#     openssl pkcs12 \
-#         -in {{keystore_path}} \
-#         -passin pass:{{keystore_storepass}} \
-#         -nodes -nocerts \
-#         -out {{key_path}}
-#   when: export_certs|bool
+    openssl genrsa -out {{key_path}} \
+      2048 -passout pass:{{keystore_storepass}}
 
 - name: Create Certificate Signing Request
   shell: |
-    keytool -keystore {{keystore_path}} \
-      -storetype pkcs12 \
-      -alias {{inventory_hostname}} \
-      -certreq -file /var/ssl/private/generation/client.csr \
-      -ext "SAN={{hostnames | cert_extension}}" \
-      -storepass {{keystore_storepass}} \
-      -keypass {{keystore_storepass}}
+    openssl req -new -key {{key_path}} \
+      -out /var/ssl/private/generation/client.csr \
+      -subj '/CN=kafka_broker/OU=TEST/O=CONFLUENT/L=PaloAlto/ST=Ca/C=US'
 
 - name: Create Openssl Config for SAN
   template:
@@ -65,6 +45,20 @@
       -extfile /var/ssl/private/generation/openssl-san.cnf \
       -extensions v3_req
 
+- name: Create Cert Chain
+  shell: |
+    cat {{ca_cert_path}} {{cert_path}} > /var/ssl/private/generation/signed-cert-chain.crt
+
+- name: Create Keystore with Key and Signed Cert Chain
+  shell: |
+    openssl pkcs12 -export \
+      -in /var/ssl/private/generation/signed-cert-chain.crt \
+      -inkey {{key_path}} \
+      -chain -out {{keystore_path}} \
+      -name localhost \
+      -CAfile /var/ssl/private/ca.crt -caname CARoot \
+      -password pass:{{keystore_storepass}}
+
 - name: Import the CA cert into the Keystore
   shell: |
     keytool -noprompt -keystore {{keystore_path}} \
@@ -73,21 +67,3 @@
       -import -file {{ca_cert_path}} \
       -storepass {{keystore_storepass}} \
       -keypass {{keystore_storepass}}
-
-# - name: Create Cert Chain
-#   shell: |
-#     cat {{ca_cert_path}} {{cert_path}} > /var/ssl/private/generation/signed-cert-chain.crt
-
-- name: Import the Signed Host Cert into the Keystore
-  shell: |
-    keytool -noprompt -keystore {{keystore_path}} \
-      -storetype pkcs12 \
-      -alias {{inventory_hostname}} \
-      -import -file {{cert_path}} \
-      -ext "SAN={{hostnames | cert_extension}}" \
-      -storepass {{keystore_storepass}} \
-      -keypass {{keystore_storepass}}
-
-- name: Create Keystore and Truststore with Self Signed Certs
-  include_tasks: self_signed_certs_fips.yml
-  when: convert_to_bcfks|bool
