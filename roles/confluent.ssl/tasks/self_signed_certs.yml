@@ -9,19 +9,11 @@
     src: "generated_ssl_files/{{ssl_self_signed_ca_key_filename}}"
     dest: "{{ca_key_path}}"
 
-- name: Create Truststore and Import the CA Cert
-  shell: |
-    keytool -noprompt -keystore {{truststore_path}} \
-      -storetype pkcs12 \
-      -alias CARoot \
-      -import -file {{ca_cert_path}} \
-      -storepass {{truststore_storepass}} \
-      -keypass {{truststore_storepass}}
-
 - name: Create Host Key
   shell: |
-    openssl genrsa -out {{key_path}} \
-      2048 -passout pass:{{keystore_storepass}}
+    openssl genrsa -out {{key_path}} 2048
+
+# -passout pass:{{keystore_storepass}}
 
 - name: Create Certificate Signing Request
   shell: |
@@ -45,25 +37,5 @@
       -extfile /var/ssl/private/generation/openssl-san.cnf \
       -extensions v3_req
 
-- name: Create Cert Chain
-  shell: |
-    cat {{ca_cert_path}} {{cert_path}} > /var/ssl/private/generation/signed-cert-chain.crt
-
-- name: Create Keystore with Key and Signed Cert Chain
-  shell: |
-    openssl pkcs12 -export \
-      -in /var/ssl/private/generation/signed-cert-chain.crt \
-      -inkey {{key_path}} \
-      -chain -out {{keystore_path}} \
-      -name localhost \
-      -CAfile /var/ssl/private/ca.crt -caname CARoot \
-      -password pass:{{keystore_storepass}}
-
-- name: Import the CA cert into the Keystore
-  shell: |
-    keytool -noprompt -keystore {{keystore_path}} \
-      -storetype pkcs12 \
-      -alias CARoot \
-      -import -file {{ca_cert_path}} \
-      -storepass {{keystore_storepass}} \
-      -keypass {{keystore_storepass}}
+- name: Create Keystore and Truststore from Certs
+  include_tasks: create_keystores_from_certs.yml
