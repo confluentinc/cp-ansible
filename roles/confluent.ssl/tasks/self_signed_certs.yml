@@ -1,68 +1,23 @@
 ---
 - name: Copy CA Cert to Host
   copy:
-    src: "generated_ssl_files/{{ssl_self_signed_ca_cert_filename}}"
+    src: "{{ssl_self_signed_ca_cert_filepath}}"
     dest: "{{ca_cert_path}}"
 
 - name: Copy CA Key to Host
   copy:
-    src: "generated_ssl_files/{{ssl_self_signed_ca_key_filename}}"
+    src: "{{ssl_self_signed_ca_key_filepath}}"
     dest: "{{ca_key_path}}"
 
-- name: Create Truststore and Import the CA Cert
+- name: Create Host Key
   shell: |
-    keytool -noprompt -keystore {{truststore_path}} \
-      -storetype pkcs12 \
-      -alias CARoot \
-      -import -file {{ca_cert_path}} \
-      -storepass {{truststore_storepass}} \
-      -keypass {{truststore_storepass}}
-
-- name: Convert Truststore to BCFKS - FIPS
-  shell: |
-    keytool -importkeystore -v \
-      -srckeystore {{truststore_path}} \
-      -srcstorepass {{truststore_storepass}} \
-      -srcalias CARoot \
-      -srcstoretype PKCS12 \
-      -destkeystore {{bcfks_truststore_path}} \
-      -deststorepass {{truststore_storepass}} \
-      -destalias CARoot \
-      -deststoretype BCFKS \
-      -providername BCFIPS \
-      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
-      -providerpath {% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}/{% else %}/usr/{% endif %}share/java/kafka/bc-fips-*.jar
-  when: convert_to_bcfks|bool
-
-- name: Create Keystore
-  shell: |
-    keytool -genkeypair -noprompt \
-      -storetype pkcs12 \
-      -keyalg {{ssl_key_algorithm}} -keysize {{ssl_key_size}} \
-      -alias {{inventory_hostname}} \
-      -dname "CN={{service_name}},OU=TEST,O=CONFLUENT,L=PaloAlto,S=Ca,C=US" \
-      -ext "SAN={{hostnames | cert_extension}}" \
-      -keystore {{keystore_path}} \
-      -storepass {{keystore_storepass}} \
-      -keypass {{keystore_storepass}}
-
-- name: Export Key from Keystore
-  shell: |
-    openssl pkcs12 \
-        -in {{keystore_path}} \
-        -passin pass:{{keystore_storepass}} \
-        -nodes -nocerts \
-        -out {{key_path}}
+    openssl genrsa -out {{key_path}} 2048
 
 - name: Create Certificate Signing Request
   shell: |
-    keytool -keystore {{keystore_path}} \
-      -storetype pkcs12 \
-      -alias {{inventory_hostname}} \
-      -certreq -file /var/ssl/private/generation/client.csr \
-      -ext "SAN={{hostnames | cert_extension}}" \
-      -storepass {{keystore_storepass}} \
-      -keypass {{keystore_storepass}}
+    openssl req -new -key {{key_path}} \
+      -out /var/ssl/private/generation/client.csr \
+      -subj '/CN=kafka_broker/OU=TEST/O=CONFLUENT/L=PaloAlto/ST=Ca/C=US'
 
 - name: Create Openssl Config for SAN
   template:
@@ -80,41 +35,5 @@
       -extfile /var/ssl/private/generation/openssl-san.cnf \
       -extensions v3_req
 
-- name: Import the CA cert into the Keystore
-  shell: |
-    keytool -noprompt -keystore {{keystore_path}} \
-      -storetype pkcs12 \
-      -alias CARoot \
-      -import -file {{ca_cert_path}} \
-      -storepass {{keystore_storepass}} \
-      -keypass {{keystore_storepass}}
-
-- name: Create Cert Chain
-  shell: |
-    cat {{ca_cert_path}} {{cert_path}} > /var/ssl/private/generation/signed-cert-chain.crt
-
-- name: Import the Signed Host Cert into the Keystore
-  shell: |
-    keytool -noprompt -keystore {{keystore_path}} \
-      -storetype pkcs12 \
-      -alias {{inventory_hostname}} \
-      -import -file /var/ssl/private/generation/signed-cert-chain.crt \
-      -ext "SAN={{hostnames | cert_extension}}" \
-      -storepass {{keystore_storepass}} \
-      -keypass {{keystore_storepass}}
-
-- name: Convert Keystore to BCFKS - FIPS
-  shell: |
-    keytool -importkeystore -v \
-      -srckeystore {{keystore_path}} \
-      -srcstorepass {{keystore_storepass}} \
-      -srcalias {{inventory_hostname}} \
-      -srcstoretype PKCS12 \
-      -destkeystore {{bcfks_keystore_path}} \
-      -deststorepass {{keystore_storepass}} \
-      -destalias {{inventory_hostname}}  \
-      -deststoretype BCFKS \
-      -providername BCFIPS \
-      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
-      -providerpath {% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}/{% else %}/usr/{% endif %}share/java/kafka/bc-fips-*.jar
-  when: convert_to_bcfks|bool
+- name: Create Keystore and Truststore from Certs
+  include_tasks: create_keystores_from_certs.yml
