@@ -608,7 +608,7 @@ Default:  false
 
 Control Planer listener name.
 
-Default:  controller
+Default:  "{{ 'controller' if kafka_broker_configure_control_plane_listener|bool and kafka_broker_configure_multiple_listeners|bool else kafka_broker_inter_broker_listener_name }}"
 
 ***
 
