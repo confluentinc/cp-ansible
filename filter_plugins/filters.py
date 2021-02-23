@@ -219,7 +219,7 @@ class FilterModule(object):
         final_dict = {}
         for ansible_group in connect_group_list:
             # connect_group_list defaults to ['kafka_connect'], but there may be scenario where no connect group exists
-            if ansible_group in groups.keys():
+            if ansible_group in groups.keys() and len(groups[ansible_group]) > 0:
                 urls = []
                 for host in groups[ansible_group]:
                     if hostvars[host].get('kafka_connect_ssl_enabled', ssl_enabled):
@@ -247,7 +247,7 @@ class FilterModule(object):
         final_dict = {}
         for ansible_group in ksql_group_list:
             # ksql_group_list defaults to ['ksql'], but there may be scenario where no ksql group exists
-            if ansible_group in groups.keys():
+            if ansible_group in groups.keys() and len(groups[ansible_group]) > 0:
                 urls = []
                 advertised_urls = []
                 for host in groups[ansible_group]:
