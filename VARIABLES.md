@@ -302,7 +302,7 @@ Default:  false
 
 ### ssl_keystore_filepath
 
-Full path to host specific keystore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-keystore.jks"
+Full path to host specific keystore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use ansible_host variable eg "/tmp/certs/{{ansible_host}}-keystore.jks"
 
 Default:  ""
 
@@ -326,7 +326,7 @@ Default:  ""
 
 ### ssl_keystore_alias
 
-Keystore source alias for host specific certificate. Only required if keystore contains more than one certificate. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "{{inventory_hostname}}"
+Keystore source alias for host specific certificate. Only required if keystore contains more than one certificate. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use ansible_host variable eg "{{ansible_host}}"
 
 Default:  ""
 
@@ -374,7 +374,7 @@ Default:  ""
 
 ### ssl_signed_cert_filepath
 
-Full path to host specific signed cert on ansible control node. Used with ssl_custom_certs: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-signed.crt"
+Full path to host specific signed cert on ansible control node. Used with ssl_custom_certs: true. May set per host, or use ansible_host variable eg "/tmp/certs/{{ansible_host}}-signed.crt"
 
 Default:  ""
 
@@ -382,7 +382,7 @@ Default:  ""
 
 ### ssl_key_filepath
 
-Full path to host specific key on ansible control node. Used with ssl_custom_certs: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-key.pem"
+Full path to host specific key on ansible control node. Used with ssl_custom_certs: true. May set per host, or use ansible_host variable eg "/tmp/certs/{{ansible_host}}-key.pem"
 
 Default:  ""
 
