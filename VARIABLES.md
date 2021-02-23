@@ -580,6 +580,14 @@ Default:  "{{kafka_broker_default_group}}"
 
 ***
 
+### kafka_broker_schema_validation_enabled
+
+Boolean to configure Schema Validation on Kafka
+
+Default:  true
+
+***
+
 ### kafka_broker_jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on kafka
