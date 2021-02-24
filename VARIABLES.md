@@ -2798,9 +2798,9 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
 
 ### deployment_strategy
 
-Deployment strategy for all components. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+Deployment strategy for all components. Set to serial to run all provisionging tasks on one host at a time, this is less destructive but can fail when security modes get updated.
 
-Default:  rolling
+Default:  parallel
 
 ***
 
