@@ -7,6 +7,7 @@ class FilterModule(object):
             'kafka_protocol_defaults': self.kafka_protocol_defaults,
             'get_sasl_mechanisms': self.get_sasl_mechanisms,
             'get_hostnames': self.get_hostnames,
+            'resolve_hostname': self.resolve_hostname,
             'cert_extension': self.cert_extension,
             'ssl_required': self.ssl_required,
             'java_arg_build_out': self.java_arg_build_out,
@@ -65,6 +66,9 @@ class FilterModule(object):
             hostname = listeners_dict[listener].get('hostname', default_hostname)
             hostnames = hostnames + [hostname]
         return hostnames
+    
+    def resolve_hostname(self, hostvars_dict):
+        return hostvars_dict.get('hostname', hostvars_dict.get('ansible_host', hostvars_dict.get('inventory_hostname')))
 
     def cert_extension(self, hostnames):
         # Joins a list of hostnames to be added to SAN of certificate
