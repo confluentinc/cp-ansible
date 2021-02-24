@@ -3,6 +3,7 @@
     name: confluent.common
   tags: common
   when: not common_role_completed|bool
+  tags: common
 
 - name: Gather OS Facts
   setup:
@@ -111,6 +112,19 @@
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
 
+- name: Create Connect Distributed Config with Secrets Protection
+  include_tasks: ../../tasks/secrets_protection.yml
+  vars:
+    encrypt_passwords: "{{ kafka_connect_secrets_protection_encrypt_passwords }}"
+    properties: "{{ kafka_connect_secrets_protection_encrypt_properties }}"
+    config_path: "{{ kafka_connect.config_file }}"
+    config_template: connect-distributed.properties.j2
+    secrets_file: "{{ kafka_connect_secrets_protection_file }}"
+    secrets_file_owner: "{{ kafka_connect_user }}"
+    secrets_file_group: "{{ kafka_connect_group }}"
+    handler: restart connect distributed
+  when: kafka_connect_secrets_protection_enabled|bool
+
 - name: Create Connect Distributed Config
   template:
     src: connect-distributed.properties.j2
@@ -119,6 +133,7 @@
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
   notify: restart connect distributed
+  when: not kafka_connect_secrets_protection_enabled|bool
 
 - name: Install Connect Plugins
   include_tasks: connect_plugins.yml
@@ -156,16 +171,6 @@
     group: "{{kafka_connect_group}}"
   when: kafka_connect_jolokia_enabled|bool
   notify: restart connect distributed
-
-- name: Enable Secrets Protection
-  include_role:
-    name: confluent.common
-    tasks_from: secrets_protection.yml
-  vars:
-    encrypt_passwords: "{{ kafka_connect_secrets_protection_encrypt_passwords }}"
-    properties: "{{ kafka_connect_secrets_protection_encrypt_properties }}"
-    config_path: "{{ kafka_connect.config_file }}"
-  when: kafka_connect_secrets_protection_enabled|bool
 
 - name: Deploy JMX Exporter Config File
   copy:
