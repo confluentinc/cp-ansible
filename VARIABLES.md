@@ -302,7 +302,7 @@ Default:  false
 
 ### ssl_keystore_filepath
 
-Full path to host specific keystore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_host variable eg "/tmp/certs/{{inventory_host}}-keystore.jks"
+Full path to host specific keystore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-keystore.jks"
 
 Default:  ""
 
@@ -326,7 +326,7 @@ Default:  ""
 
 ### ssl_keystore_alias
 
-Keystore source alias for host specific certificate. Only required if keystore contains more than one certificate. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_host variable eg "{{inventory_host}}"
+Keystore source alias for host specific certificate. Only required if keystore contains more than one certificate. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "{{inventory_hostname}}"
 
 Default:  ""
 
@@ -374,7 +374,7 @@ Default:  ""
 
 ### ssl_signed_cert_filepath
 
-Full path to host specific signed cert on ansible control node. Used with ssl_custom_certs: true. May set per host, or use inventory_host variable eg "/tmp/certs/{{inventory_host}}-signed.crt"
+Full path to host specific signed cert on ansible control node. Used with ssl_custom_certs: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-signed.crt"
 
 Default:  ""
 
@@ -382,7 +382,7 @@ Default:  ""
 
 ### ssl_key_filepath
 
-Full path to host specific key on ansible control node. Used with ssl_custom_certs: true. May set per host, or use inventory_host variable eg "/tmp/certs/{{inventory_host}}-key.pem"
+Full path to host specific key on ansible control node. Used with ssl_custom_certs: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-key.pem"
 
 Default:  ""
 
@@ -3004,7 +3004,7 @@ Default:  "https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaa
 
 ### confluent_archive_file_source
 
-A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
+A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostnamename}}/{{confluent_archive_file_name}}".
 
 Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent{{'' if confluent_server_enabled else '-community'}}-{{confluent_package_version}}.tar.gz"
 
