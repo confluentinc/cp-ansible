@@ -79,7 +79,7 @@ class FilterModule(object):
             if host == "localhost":
                 hostnames.append("localhost")
             else:
-                hostnames.append(self.resolve_hostname.get(host))
+                hostnames.append(self.resolve_hostname(hostvars_dict.get(host)))
 
         return hostnames
 
