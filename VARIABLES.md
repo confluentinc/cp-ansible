@@ -580,11 +580,35 @@ Default:  "{{ zookeeper.properties }}"
 
 ***
 
+### kafka_broker_custom_listeners
+
+Dictionary to put additional listeners to be configured within Kafka. Each listener must include a 'name' and 'port' key. Optionally they can include the keys 'ssl_enabled', 'ssl_mutual_auth_enabled', and 'sasl_protocol'
+
+Default:  {}
+
+***
+
 ### kafka_broker_configure_multiple_listeners
 
 Boolean to configure more than one kafka listener. Defaults to true. NOTE- kafka_broker_configure_additional_brokers is deprecated
 
 Default:  "{{kafka_broker_configure_additional_brokers}}"
+
+***
+
+### kafka_broker_configure_control_plane_listener
+
+Boolean to configure control plane listener on separate port, which defaults to 8089. Applied only if kafka_broker_configure_multiple_listeners is true
+
+Default:  false
+
+***
+
+### kafka_broker_control_plane_listener_name
+
+Control Planer listener name.
+
+Default:  controller
 
 ***
 
@@ -3162,7 +3186,7 @@ Default:
 
 Time in seconds to wait before starting Kafka Health Checks.
 
-Default:  30
+Default:  20
 
 ***
 

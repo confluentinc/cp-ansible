@@ -291,21 +291,33 @@ zookeeper_custom_properties: "{{ zookeeper.properties }}"
 
 
 #### Kafka Broker Variables ####
-kafka_broker_default_listeners:
-  internal:
-    name: INTERNAL
-    port: 9092
-    ssl_enabled: "{{ ssl_enabled }}"
-    ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
-    sasl_protocol: "{{ 'OAUTH' if rbac_enabled|bool else sasl_protocol }}"
 
-kafka_broker_custom_listeners:
-  broker:
-    name: BROKER
-    port: 9091
-    ssl_enabled: "{{ ssl_enabled }}"
-    ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
-    sasl_protocol: "{{ sasl_protocol }}"
+kafka_broker_default_listeners: "{
+  'internal': {
+    'name': 'INTERNAL',
+    'port': 9092,
+    'ssl_enabled': {{ssl_enabled|string|lower}},
+    'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
+    'sasl_protocol': '{% if rbac_enabled|bool %}OAUTH{% else %}{{sasl_protocol}}{% endif %}'
+  }{% if kafka_broker_configure_multiple_listeners|bool %},
+  'broker': {
+    'name': 'BROKER',
+    'port': 9091,
+    'ssl_enabled': {{ssl_enabled|string|lower}},
+    'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
+    'sasl_protocol': '{{sasl_protocol}}'
+  }{% if kafka_broker_configure_control_plane_listener|bool %},
+  'controller': {
+    'name': 'CONTROLLER',
+    'port': 9089,
+    'ssl_enabled': {{ssl_enabled|string|lower}},
+    'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
+    'sasl_protocol': '{{sasl_protocol}}'
+  }{% endif %}{% endif %}
+}"
+
+### Dictionary to put additional listeners to be configured within Kafka. Each listener must include a 'name' and 'port' key. Optionally they can include the keys 'ssl_enabled', 'ssl_mutual_auth_enabled', and 'sasl_protocol'
+kafka_broker_custom_listeners: {}
 
 # Deprecated variable
 kafka_broker_configure_additional_brokers: true
@@ -313,6 +325,11 @@ kafka_broker_configure_additional_brokers: true
 ### Boolean to configure more than one kafka listener. Defaults to true. NOTE- kafka_broker_configure_additional_brokers is deprecated
 kafka_broker_configure_multiple_listeners: "{{kafka_broker_configure_additional_brokers}}"
 
+### Boolean to configure control plane listener on separate port, which defaults to 8089. Applied only if kafka_broker_configure_multiple_listeners is true
+kafka_broker_configure_control_plane_listener: false
+
+### Control Planer listener name.
+kafka_broker_control_plane_listener_name: controller
 kafka_broker_listeners: "{{ kafka_broker_default_listeners | combine(kafka_broker_custom_listeners, recursive=True) if kafka_broker_configure_multiple_listeners|bool else  kafka_broker_default_listeners}}"
 kafka_broker_inter_broker_listener_name: "{{ 'broker' if kafka_broker_configure_multiple_listeners|bool else 'internal' }}"
 
