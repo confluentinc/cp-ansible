@@ -48,6 +48,8 @@
 - name: Kafka Broker group
   group:
     name: "{{kafka_broker_group}}"
+  tags:
+    - privileged
 
 - name: Kafka Broker user
   user:
@@ -55,6 +57,8 @@
     comment: "Kafka User"
     system: true
     group: "{{kafka_broker_group}}"
+  tags:
+    - privileged
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -66,6 +70,8 @@
     mode: 0644
     force: true
   when: installation_method == "archive"
+  tags:
+    - systemd
 
 - include_role:
     name: confluent.ssl
@@ -118,6 +124,8 @@
     user: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
   when: kafka_broker_copy_files | length > 0
+  tags:
+    - configuration
 
 - name: Set Permissions on /var/lib/kafka
   file:
@@ -126,6 +134,9 @@
     group: "{{kafka_broker_group}}"
     state: directory
     mode: 0750
+  tags:
+    - privileged
+    - filesystem
 
 # To avoid a catastrophic user error where root directory permissions get recursively changed
 - name: Assert log.dirs Property not Misconfigured
@@ -142,6 +153,8 @@
     state: directory
     mode: 0750
   with_items: "{{ kafka_broker_final_properties['log.dirs'].split(',') }}"
+  tags:
+    - filesystem
 
 - name: Set Permissions on Data Dir files
   file:
@@ -150,6 +163,8 @@
     group: "{{kafka_broker_group}}"
     recurse: true
   with_items: "{{ kafka_broker_final_properties['log.dirs'].split(',') }}"
+  tags:
+    - filesystem
 
 - name: Create Kafka Broker Config directory
   file:
@@ -158,6 +173,8 @@
     mode: 0750
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
+  tags:
+    - filesystem
 
 - name: Create Kafka Broker Config with Secrets Protection
   include_role:
@@ -183,6 +200,8 @@
     group: "{{kafka_broker_group}}"
   notify: restart kafka
   when: not kafka_broker_secrets_protection_enabled|bool
+  tags:
+    - configuration
 
 - name: Create Kafka Broker Client Config
   template:
@@ -191,6 +210,8 @@
     mode: 0640
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
+  tags:
+    - configuration
 
 # Zookeeper shell cannot read server.properties if secrets protection is enabled. Keeping a separate file.
 - name: Create Zookeeper TLS Client Config
@@ -201,6 +222,8 @@
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
   when: zookeeper_ssl_enabled|bool
+  tags:
+    - configuration
 
 - name: Create Logs Directory
   file:
@@ -209,6 +232,8 @@
     group: "{{kafka_broker_group}}"
     owner: "{{kafka_broker_user}}"
     mode: 0770
+  tags:
+    - filesystem
 
 - name: Update Kafka log4j Config for Log Cleanup
   include_role:
@@ -221,6 +246,8 @@
     log4j_root_logger: "{{kafka_broker_log4j_root_logger}}"
     handler: "restart kafka"
   when: kafka_broker_custom_log4j|bool
+  tags:
+    - configuration
 
 - name: Set Permissions on Log4j Conf
   file:
@@ -228,6 +255,8 @@
     group: "{{kafka_broker_group}}"
     owner: "{{kafka_broker_user}}"
     mode: 0640
+  tags:
+    - filesystem
 
 - name: Create Kafka Broker Jolokia Config
   template:
@@ -238,6 +267,8 @@
     group: "{{kafka_broker_group}}"
   when: kafka_broker_jolokia_enabled|bool
   notify: restart kafka
+  tags:
+    - configuration
 
 - name: Create Kafka Broker Jaas Config
   template:
@@ -248,6 +279,8 @@
     group: "{{kafka_broker_group}}"
   when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms or zookeeper_sasl_protocol in ['kerberos', 'digest']"
   notify: restart kafka
+  tags:
+    - configuration
 
 - name: Create SCRAM Users
   shell: |
@@ -281,6 +314,8 @@
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
   when: kafka_broker_jmxexporter_enabled|bool
+  tags:
+    - configuration
 
 - name: Create Service Override Directory
   file:
@@ -289,6 +324,8 @@
     group: "{{kafka_broker_group}}"
     state: directory
     mode: 0640
+  tags:
+    - systemd
 
 - name: Write Service Overrides
   template:
@@ -298,6 +335,8 @@
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
   notify: restart kafka
+  tags:
+    - systemd
 
 - name: Tune virtual memory settings
   sysctl:
@@ -307,7 +346,9 @@
     sysctl_file: "{{ kafka_broker_sysctl_file }}"
     reload: true
   with_dict: "{{ kafka_broker_sysctl }}"
-  tags: sysctl
+  tags:
+    - sysctl
+    - privileged
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true

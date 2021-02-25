@@ -49,6 +49,8 @@
 - name: Create Connect Distributed Group
   group:
     name: "{{kafka_connect_group}}"
+  tags:
+    - privileged
 
 - name: Create Connect Distributed User
   user:
@@ -56,6 +58,8 @@
     comment: "Connect Distributed User"
     system: true
     group: "{{kafka_connect_group}}"
+  tags:
+    - privileged
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -67,6 +71,8 @@
     mode: 0644
     force: true
   when: installation_method == "archive"
+  tags:
+    - systemd
 
 - include_role:
     name: confluent.ssl
@@ -110,6 +116,8 @@
     user: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
   when: kafka_connect_copy_files | length > 0
+  tags:
+    - configuration
 
 - name: Configure RBAC
   include_tasks: rbac.yml
@@ -122,6 +130,8 @@
     mode: 0750
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
+  tags:
+    - filesystem
 
 - name: Create Connect Distributed Config with Secrets Protection
   include_role:
@@ -147,6 +157,8 @@
     group: "{{kafka_connect_group}}"
   notify: restart connect distributed
   when: not kafka_connect_secrets_protection_enabled|bool
+  tags:
+    - configuration
 
 - name: Install Connect Plugins
   include_tasks: connect_plugins.yml
@@ -158,6 +170,8 @@
     group: "{{kafka_connect_group}}"
     owner: "{{kafka_connect_user}}"
     mode: 0770
+  tags:
+    - filesystem
 
 - name: Update Connect log4j Config for Log Cleanup
   include_role:
@@ -170,6 +184,8 @@
     log4j_root_logger: "{{kafka_connect_log4j_root_logger}}"
     handler: "restart connect distributed"
   when: kafka_connect_custom_log4j|bool
+  tags:
+    - configuration
 
 - name: Set Permissions on Log4j Conf
   file:
@@ -177,6 +193,8 @@
     group: "{{kafka_connect_group}}"
     owner: "{{kafka_connect_user}}"
     mode: 0640
+  tags:
+    - filesystem
 
 - name: Create Connect Distributed Jolokia Config
   template:
@@ -187,6 +205,8 @@
     group: "{{kafka_connect_group}}"
   when: kafka_connect_jolokia_enabled|bool
   notify: restart connect distributed
+  tags:
+    - configuration
 
 - name: Deploy JMX Exporter Config File
   copy:
@@ -196,6 +216,8 @@
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
   when: kafka_connect_jmxexporter_enabled|bool
+  tags:
+    - configuration
 
 - name: Create Service Override Directory
   file:
@@ -204,6 +226,8 @@
     group: "{{kafka_connect_group}}"
     state: directory
     mode: 0640
+  tags:
+    - systemd
 
 - name: Write Service Overrides
   template:
@@ -213,6 +237,8 @@
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
   notify: restart connect distributed
+  tags:
+    - systemd
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -226,6 +252,8 @@
     name: "{{kafka_connect_service_name}}"
     enabled: true
     state: started
+  tags:
+    - systemd
 
 - name: Health Check
   include_tasks: health_check.yml

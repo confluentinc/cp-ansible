@@ -49,6 +49,8 @@
 - name: Create Control Center Group
   group:
     name: "{{control_center_group}}"
+  tags:
+    - privileged
 
 - name: Create Control Center User
   user:
@@ -56,6 +58,8 @@
     comment: "Control Center User"
     system: true
     group: "{{control_center_group}}"
+  tags:
+    - privileged
 
 - name: Set Control Center Data Dir permissions
   file:
@@ -64,6 +68,8 @@
     group: "{{control_center_group}}"
     state: directory
     mode: 0750
+  tags:
+    - filesystem
 
 - name: Set Control Center Data Dir file permissions
   file:
@@ -71,6 +77,8 @@
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
     recurse: true
+  tags:
+    - filesystem
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -82,6 +90,8 @@
     mode: 0644
     force: true
   when: installation_method == "archive"
+  tags:
+    - systemd
 
 - include_role:
     name: confluent.ssl
@@ -125,6 +135,8 @@
     user: "{{control_center_user}}"
     group: "{{control_center_group}}"
   when: control_center_copy_files | length > 0
+  tags:
+    - configuration
 
 - name: Configure RBAC
   include_tasks: rbac.yml
@@ -137,6 +149,9 @@
     mode: 0750
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
+  tags:
+    - configuration
+    - filesystem
 
 - name: Create Control Center Config with Secrets Protection
   include_role:
@@ -162,6 +177,8 @@
     group: "{{control_center_group}}"
   notify: restart control center
   when: not control_center_secrets_protection_enabled|bool
+  tags:
+    - configuration
 
 - name: Set Permissions on /var/log/confluent
   file:
@@ -170,6 +187,9 @@
     group: "{{control_center_group}}"
     mode: 0770
     state: directory
+  tags:
+    - privileged
+    - filesystem
 
 - name: Create Logs Directory
   file:
@@ -178,6 +198,8 @@
     group: "{{control_center_group}}"
     owner: "{{control_center_user}}"
     mode: 0770
+  tags:
+    - filesystem
 
 - name: Update log4j Config for Log Cleanup
   include_role:
@@ -197,6 +219,8 @@
     group: "{{control_center_group}}"
     owner: "{{control_center_user}}"
     mode: 0640
+  tags:
+    - filesystem
 
 - name: Create RocksDB Directory
   file:
@@ -206,6 +230,8 @@
     mode: 0750
     state: directory
   when: control_center_rocksdb_path != ""
+  tags:
+    - filesystem
 
 - name: Set Permission to RocksDB Files
   file:
@@ -214,6 +240,8 @@
     owner: "{{control_center_user}}"
     recurse: true
   when: control_center_rocksdb_path != ""
+  tags:
+    - filesystem
 
 - name: Create Service Override Directory
   file:
@@ -222,6 +250,8 @@
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
     mode: 0640
+  tags:
+    - systemd
 
 - name: Write Service Overrides
   template:
@@ -231,6 +261,8 @@
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
   notify: restart control center
+  tags:
+    - systemd
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -244,6 +276,8 @@
     name: "{{control_center_service_name}}"
     enabled: true
     state: started
+  tags:
+    - systemd
 
 - name: Health Check
   include_tasks: health_check.yml
