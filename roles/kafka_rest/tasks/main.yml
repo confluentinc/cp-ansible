@@ -47,6 +47,8 @@
 - name: Create Kafka Rest Group
   group:
     name: "{{kafka_rest_group}}"
+  tags:
+    - privileged
 
 - name: Check if Kafka Rest User Exists
   # Create user task must be skipped for non-linux users
@@ -62,6 +64,8 @@
     system: true
     group: "{{kafka_rest_group}}"
   when: (getent_passwd|default({}))[kafka_rest_user] is not defined
+  tags:
+    - privileged
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -73,6 +77,8 @@
     mode: 0644
     force: true
   when: installation_method == "archive"
+  tags:
+    - systemd
 
 - include_role:
     name: ssl
@@ -118,6 +124,8 @@
     user: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
   when: kafka_rest_copy_files | length > 0
+  tags:
+    - configuration
 
 - name: Configure RBAC
   include_tasks: rbac.yml
@@ -129,6 +137,8 @@
     state: directory
     mode: 0755
   when: rbac_enabled|bool
+  tags:
+    - filesystem
 
 - name: Copy in MDS Public Pem File
   copy:
@@ -139,6 +149,8 @@
     group: "{{kafka_rest_group}}"
   when: rbac_enabled|bool
   diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
 
 - name: Create Kafka Rest Config directory
   file:
@@ -147,6 +159,8 @@
     mode: 0750
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
+  tags:
+    - filesystem
 
 - name: Create Kafka Rest Config with Secrets Protection
   include_role:
@@ -173,6 +187,8 @@
   notify: restart kafka-rest
   when: not kafka_rest_secrets_protection_enabled|bool
   diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
 
 - name: Create Logs Directory
   file:
@@ -181,6 +197,8 @@
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
     mode: 0770
+  tags:
+    - filesystem
 
 - name: Update log4j Config for Log Cleanup
   include_role:
@@ -200,6 +218,8 @@
     group: "{{kafka_rest_group}}"
     owner: "{{kafka_rest_user}}"
     mode: 0640
+  tags:
+    - configuration
 
 - name: Create Kafka Rest Jolokia Config
   template:
@@ -211,6 +231,8 @@
   when: kafka_rest_jolokia_enabled|bool
   notify: restart kafka-rest
   diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
 
 - name: Deploy JMX Exporter Config File
   copy:
@@ -220,6 +242,8 @@
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
   when: kafka_rest_jmxexporter_enabled|bool
+  tags:
+    - configuration
 
 - name: Create Basic Auth Jaas File
   template:
@@ -248,6 +272,8 @@
     group: "{{kafka_rest_group}}"
     state: directory
     mode: 0640
+  tags:
+    - systemd
 
 - name: Write Service Overrides
   template:
@@ -258,6 +284,8 @@
     group: root
   notify: restart kafka-rest
   diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - systemd
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -271,6 +299,8 @@
     name: "{{kafka_rest_service_name}}"
     enabled: true
     state: started
+  tags:
+    - systemd
 
 - name: Health Check
   include_tasks: health_check.yml
