@@ -78,7 +78,7 @@ Default:  /opt/prometheus/jmx_prometheus_javaagent.jar
 
 ### fips_enabled
 
-Boolean to have cp-ansible configure components with FIPS security settings
+Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
 
 Default:  false
 
@@ -577,6 +577,14 @@ Default:  "{{kafka_broker_default_user}}"
 Only use to customize Linux Group Kafka Service user belongs to. Group must exist on host.
 
 Default:  "{{kafka_broker_default_group}}"
+
+***
+
+### kafka_broker_schema_validation_enabled
+
+Boolean to configure Schema Validation on Kafka
+
+Default:  true
 
 ***
 
