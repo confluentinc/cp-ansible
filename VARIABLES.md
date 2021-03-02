@@ -1724,6 +1724,14 @@ Default:  false
 
 ***
 
+### mask_secrets
+
+Boolean to mask secrets in playbook output
+
+Default:  true
+
+***
+
 ### regenerate_masterkey
 
 Boolean to Recreate Secrets File and Masterkey. Only set to false AFTER first cp-ansible run.
