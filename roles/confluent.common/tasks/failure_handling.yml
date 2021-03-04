@@ -1,16 +1,25 @@
 ---
-- name: Export Error Logs
-  shell: "journalctl -u {{service_name}} --since -10m > /tmp/{{service_name}}.log"
+- name: Create Directory on Controller for Host Error Files
+  file:
+    state: directory
+    path: "error_files/{{inventory_hostname}}"
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
 
-- name: Fetch Files for Investigation
+- name: Register all Log Files
+  find:
+    paths: "{{log_dir}}"
+    recurse: false
+  register: find_output
+
+- name: Fetch Config and Log Files
   fetch:
-    src: "{{item}}"
-    dest: "error_files/{{inventory_hostname}}-{{item|basename}}"
+    dest: "error_files/{{inventory_hostname}}/"
+    src: "{{ item }}"
     flat: true
-    fail_on_missing: false
-  loop:
-    - "{{config_file}}"
-    - "/tmp/{{service_name}}.log"
+  loop: "{{ find_output.files | map(attribute='path') | list + [config_file] }}"
 
 - name: Fail Installation
   fail:
