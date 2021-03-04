@@ -1,22 +1,37 @@
 ---
-- name: Host Prerequisites
-  hosts: zookeeper:kafka_broker
+- name: Remove the Kafka Rest Groups from Inventory
+  hosts: kafka_rest
   gather_facts: false
   tasks:
-    - import_role:
-        name: confluent.common
-      tags: common
+    - name: Change kafka_rest Group Name in Inventory File
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: 'kafka_rest:'
+        line: 'kafka_rest_ccloud:'
+      delegate_to: 127.0.0.1
+      run_once: true
 
-- name: Zookeeper Provisioning
-  hosts: zookeeper
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: confluent.zookeeper
+    - name: Refresh Inventory
+      meta: refresh_inventory
 
-- name: Kafka Broker Provisioning
-  hosts: kafka_broker
+- name: Converge
+  import_playbook: ../../../../all.yml
+
+- name: Kafka Rest Prepare
+  hosts: kafka_rest_ccloud
   gather_facts: false
   tasks:
     - import_role:
-        name: confluent.kafka_broker
+        name: confluent.variables
+
+    - name: Copy CA Cert to Host
+      copy:
+        src: "../../../../generated_ssl_files/{{ssl_self_signed_ca_cert_filepath|basename}}"
+        dest: /tmp/ca.crt
+
+    - name: Import CA into Java Trusted CAs
+      shell: |
+        keytool -noprompt -keystore /usr/lib/jvm/jre/lib/security/cacerts \
+          -alias CARoot \
+          -importcert -file /tmp/ca.crt \
+          -storepass changeit
