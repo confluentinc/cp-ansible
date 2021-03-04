@@ -3106,9 +3106,17 @@ Below are the supported variables for the role confluent.control_center
 
 ### control_center_custom_log4j
 
-Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
+Boolean to reconfigure Control Center's logging with RollingFileAppender and log cleanup
 
 Default:  "{{ custom_log4j }}"
+
+***
+
+### control_center_log4j_root_logger
+
+Root logger within Control Center's log4j config. Only honored if control_center_custom_log4j: true
+
+Default:  "INFO, main"
 
 ***
 
@@ -3174,6 +3182,14 @@ Default:  "{{ custom_log4j }}"
 
 ***
 
+### kafka_broker_log4j_root_logger
+
+Root logger within Kafka's log4j config. Only honored if kafka_broker_custom_log4j: true
+
+Default:  "INFO, stdout, kafkaAppender"
+
+***
+
 ### kafka_broker_custom_java_args
 
 Custom Java Args to add to the Kafka Process
@@ -3228,6 +3244,14 @@ Default:  "{{ custom_log4j }}"
 
 ***
 
+### kafka_connect_log4j_root_logger
+
+Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
+
+Default:  "INFO, stdout connectAppender"
+
+***
+
 ### kafka_connect_custom_java_args
 
 Custom Java Args to add to the Connect Process
@@ -3276,9 +3300,17 @@ Below are the supported variables for the role confluent.kafka_rest
 
 ### kafka_rest_custom_log4j
 
-Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
+Boolean to reconfigure Rest Proxy's logging with RollingFileAppender and log cleanup
 
 Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_rest_log4j_root_logger
+
+Root logger within Rest Proxy's log4j config. Only honored if kafka_rest_custom_log4j: true
+
+Default:  "INFO, stdout, file"
 
 ***
 
@@ -3333,6 +3365,14 @@ Below are the supported variables for the role confluent.ksql
 Boolean to reconfigure ksqlDB's logging with the RollingFileAppender and log cleanup functionality.
 
 Default:  "{{ custom_log4j }}"
+
+***
+
+### ksql_log4j_root_logger
+
+Root logger within ksqlDB's log4j config. Only honored if ksql_custom_log4j: true
+
+Default:  "INFO, stdout, main"
 
 ***
 
@@ -3392,9 +3432,17 @@ Below are the supported variables for the role confluent.schema_registry
 
 ### schema_registry_custom_log4j
 
-Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
+Boolean to reconfigure Schema Registry's logging with RollingFileAppender and log cleanup
 
 Default:  "{{ custom_log4j }}"
+
+***
+
+### schema_registry_log4j_root_logger
+
+Root logger within Schema Registry's log4j config. Only honored if schema_registry_custom_log4j: true
+
+Default:  "INFO, stdout, file"
 
 ***
 
@@ -3452,6 +3500,14 @@ Default:  "{{ custom_log4j }}"
 
 ***
 
+### zookeeper_log4j_root_logger
+
+Root logger within Zookeeper's log4j config. Only honored if zookeeper_custom_log4j: true
+
+Default:  INFO, stdout, zkAppender
+
+***
+
 ### zookeeper_custom_java_args
 
 Custom Java Args to add to the Zookeeper Process
@@ -3503,6 +3559,14 @@ Below are the supported variables for the role confluent.kafka_connect_replicato
 Boolean to reconfigure Kafka Connect Replicator's logging with the RollingFileAppender and log cleanup functionality.
 
 Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_connect_replicator_log4j_root_logger
+
+Root logger within Kafka Connect Replicator's log4j config. Only honored if kafka_connect_replicator_custom_log4j: true
+
+Default:  "INFO, replicatorAppender, stdout"
 
 ***
 
