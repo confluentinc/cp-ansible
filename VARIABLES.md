@@ -3230,6 +3230,22 @@ Default:  20
 
 ***
 
+### kafka_broker_controller_group
+
+Ansible group name to put kafka controller host into, used when gathering dynamic groups
+
+Default:  kafka_broker_controller
+
+***
+
+### kafka_broker_non_controller_group
+
+Ansible group name to put non-controller kafka hosts into, used when gathering dynamic groups
+
+Default:  kafka_broker_non_controller
+
+***
+
 # confluent.kafka_connect
 
 Below are the supported variables for the role confluent.kafka_connect
@@ -3545,6 +3561,22 @@ Default:
 Time in seconds to wait before starting Zookeeper Health Checks.
 
 Default:  5
+
+***
+
+### zookeeper_leader_group
+
+Ansible group name to put zookeeper leader host into, used when gathering dynamic groups
+
+Default:  zookeeper_leader
+
+***
+
+### zookeeper_follower_group
+
+Ansible group name to put follower zookeeper hosts into, used when gathering dynamic groups
+
+Default:  zookeeper_follower
 
 ***
 
