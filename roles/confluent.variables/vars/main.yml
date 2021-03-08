@@ -877,13 +877,15 @@ kafka_rest:
 
 kafka_rest_http_protocol: "{{ 'https' if kafka_rest_ssl_enabled|bool else 'http' }}"
 
+kafka_rest_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port'] }}"
+
 kafka_rest_properties:
   defaults:
     enabled: true
     properties:
       listeners: "{{kafka_rest_http_protocol}}://0.0.0.0:{{kafka_rest_port}}"
       host.name: "{{inventory_hostname}}"
-      bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}"
+      bootstrap.servers: "{{ ccloud_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_rest_bootstrap_servers }}"
       confluent.license.topic: _confluent-license
   id:
     enabled: "{{ inventory_hostname in groups.kafka_rest }}"
@@ -897,7 +899,8 @@ kafka_rest_properties:
       ssl.keystore.password: "{{kafka_rest_keystore_storepass}}"
       ssl.key.password: "{{kafka_rest_keystore_keypass}}"
   truststore:
-    enabled: "{{kafka_rest_ssl_mutual_auth_enabled|bool or mds_tls_enabled|bool}}"
+    enabled: "{{kafka_rest_ssl_mutual_auth_enabled|bool or (mds_tls_enabled|bool and not ccloud_kafka_enabled|bool)}}"
+    # CCloud kafka uses public certificates which are default java truststore
     properties:
       ssl.truststore.location: "{{kafka_rest_truststore_path}}"
       ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
@@ -908,7 +911,7 @@ kafka_rest_properties:
   kafka_client:
     enabled: true
     properties: "{{ kafka_broker_listeners[kafka_rest_kafka_listener_name] | client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
-                            'client.', kafka_rest_truststore_path, kafka_rest_truststore_storepass, kafka_rest_keystore_path, kafka_rest_keystore_storepass, kafka_rest_keystore_keypass,
+                            'client.', kafka_rest_truststore_path, kafka_rest_truststore_storepass, ccloud_kafka_enabled, kafka_rest_keystore_path, kafka_rest_keystore_storepass, kafka_rest_keystore_keypass,
                             false, sasl_plain_users.kafka_rest.principal, sasl_plain_users.kafka_rest.password, sasl_scram_users.kafka_rest.principal, sasl_scram_users.kafka_rest.password,
                             kerberos_kafka_broker_primary, kafka_rest_keytab_path, kafka_rest_kerberos_principal|default('rp'),
                             false, kafka_rest_ldap_user, kafka_rest_ldap_password, mds_bootstrap_server_urls) }}"
@@ -940,7 +943,7 @@ kafka_rest_properties:
   monitoring_interceptor_client:
     enabled: "{{ kafka_rest_monitoring_interceptors_enabled|bool }}"
     properties: "{{ kafka_broker_listeners[kafka_rest_kafka_listener_name] | client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
-                            'client.confluent.monitoring.interceptor.', kafka_rest_truststore_path, kafka_rest_truststore_storepass, kafka_rest_keystore_path, kafka_rest_keystore_storepass, kafka_rest_keystore_keypass,
+                            'client.confluent.monitoring.interceptor.', kafka_rest_truststore_path, kafka_rest_truststore_storepass, ccloud_kafka_enabled, kafka_rest_keystore_path, kafka_rest_keystore_storepass, kafka_rest_keystore_keypass,
                             false, sasl_plain_users.kafka_rest.principal, sasl_plain_users.kafka_rest.password, sasl_scram_users.kafka_rest.principal, sasl_scram_users.kafka_rest.password,
                             kerberos_kafka_broker_primary, kafka_rest_keytab_path, kafka_rest_kerberos_principal|default('rp'),
                             false, kafka_rest_ldap_user, kafka_rest_ldap_password, mds_bootstrap_server_urls) }}"
