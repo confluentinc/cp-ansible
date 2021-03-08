@@ -70,7 +70,10 @@ class FilterModule(object):
     
     def resolve_hostname(self, hosts_hostvars_dict):
         # Goes through selected possible VARs to provide the HOSTNAME for a given node for internal addressing within Confluent Platform
-        return hosts_hostvars_dict.get('hostname', hosts_hostvars_dict.get('ansible_host', hosts_hostvars_dict.get('inventory_hostname')))
+        if hosts_hostvars_dict.get('hostaliasing') == True:
+            return hosts_hostvars_dict.get('hostname', hosts_hostvars_dict.get('ansible_host', hosts_hostvars_dict.get('inventory_hostname')))
+        else:
+            return hosts_hostvars_dict.get('inventory_hostname')
 
     def resolve_hostnames(self, hosts, hostvars_dict):
         # Given a collection of hosts, usually from a group, will resolve the correct hostname to use for each.
