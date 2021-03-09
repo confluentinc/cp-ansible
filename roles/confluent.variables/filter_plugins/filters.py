@@ -249,6 +249,9 @@ class FilterModule(object):
 
                 final_dict['confluent.controlcenter.kafka.' + cluster_name + '.bootstrap.servers'] = ','.join(urls)
 
+                if delegate_hostvars.get('kafka_broker_rest_proxy_enabled') or delegate_hostvars.get('rbac_enabled'):
+                    final_dict['confluent.controlcenter.kafka.' + cluster_name + '.cprest.url'] = delegate_hostvars.get('mds_bootstrap_server_urls')
+
                 c_dict = self.client_properties(
                     delegate_listener, 
                     delegate_hostvars.get('ssl_enabled'), 
