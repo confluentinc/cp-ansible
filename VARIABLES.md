@@ -404,6 +404,14 @@ Default:  false
 
 ***
 
+### hostname_aliasing_enabled
+
+Enable Hostname Aliasing for host addressing. This will enable logic, on an individual host basis, to look for the variable `hostname`, followed by the reserved variable `ansible_host` and then `inventory_hostname` to resolve the appropriate FQDN of a host to use within configuration properties.
+
+Default:  false
+
+***
+
 ### zookeeper_user
 
 Set this variable to customize the Linux User that the Zookeeper Service runs with. Default user is cp-kafka.
