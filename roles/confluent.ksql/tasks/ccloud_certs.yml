@@ -1,0 +1,52 @@
+---
+
+# wget https://letsencrypt.org/certs/isrgrootx1.der
+# wget https://letsencrypt.org/certs/isrg-root-x2.der
+#
+# wget https://letsencrypt.org/certs/lets-encrypt-r3-cross-signed.der
+# wget https://letsencrypt.org/certs/lets-encrypt-r4-cross-signed.der
+#
+# wget https://letsencrypt.org/certs/lets-encrypt-e1.der
+# wget https://letsencrypt.org/certs/lets-encrypt-e2.der
+#
+# # to be idempotent
+# keytool -delete -alias isrgrootx1 -keystore $KEYSTORE -storepass <password> 2> /dev/null || true
+# keytool -delete -alias isrgrootx2 -keystore $KEYSTORE -storepass <password> 2> /dev/null || true
+#
+# keytool -delete -alias letsencryptauthorityr3 -keystore $KEYSTORE -storepass <password> 2> /dev/null || true
+# keytool -delete -alias letsencryptauthorityr4 -keystore $KEYSTORE -storepass <password> 2> /dev/null || true
+#
+# keytool -delete -alias letsencryptauthoritye1 -keystore $KEYSTORE -storepass <password> 2> /dev/null || true
+# keytool -delete -alias letsencryptauthoritye2 -keystore $KEYSTORE -storepass <password> 2> /dev/null || true
+#
+# keytool -trustcacerts -keystore $KEYSTORE -storepass <password> -noprompt -importcert -alias isrgrootx1 -file isrgrootx1.der
+# keytool -trustcacerts -keystore $KEYSTORE -storepass <password> -noprompt -importcert -alias isrgrootx2 -file isrg-root-x2.der
+#
+# keytool -trustcacerts -keystore $KEYSTORE -storepass <password> -noprompt -importcert -alias letsencryptauthorityr3 -file lets-encrypt-r3-cross-signed.der
+# keytool -trustcacerts -keystore $KEYSTORE -storepass <password> -noprompt -importcert -alias letsencryptauthorityr4 -file lets-encrypt-r4-cross-signed.der
+#
+# keytool -trustcacerts -keystore $KEYSTORE -storepass <password> -noprompt -importcert -alias letsencryptauthoritye1 -file lets-encrypt-e1.der
+# keytool -trustcacerts -keystore $KEYSTORE -storepass <password> -noprompt -importcert -alias letsencryptauthoritye2 -file lets-encrypt-e2.der
+#
+# rm -f isrgrootx1.der isrg-root-x2.der lets-encrypt-r3-cross-signed.der lets-encrypt-r4-cross-signed.der lets-encrypt-e1.der lets-encrypt-e2.der
+
+
+- name: Create Truststore and Import the CA Cert
+  shell: |
+    keytool -noprompt -keystore {{ksql_truststore_path}} \
+      -storetype pkcs12 \
+      -alias CARoot \
+      -import -file {{ca_cert_path}} \
+      -storepass {{ksql_truststore_storepass}}
+  no_log: "{{mask_secrets|bool}}"
+
+- name: Create BCFKS Truststore and Import the CA Cert
+  shell: |
+    keytool -noprompt -keystore {{bcfks_truststore_path}} \
+      -storetype BCFKS \
+      -alias CARoot \
+      -import -file {{ca_cert_path}} \
+      -storepass {{truststore_storepass}} \
+      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+      -providerpath {% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}/{% else %}/usr/{% endif %}share/java/kafka/bc-fips-*.jar
+  no_log: "{{mask_secrets|bool}}"
