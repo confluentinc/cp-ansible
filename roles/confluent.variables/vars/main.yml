@@ -1,6 +1,8 @@
 ---
 confluent_ansible_branch: 6.1.0-post
 
+systemd_base_dir: "{{'/lib/systemd/system' if ansible_distribution == 'Ubuntu' or ansible_distribution == 'Debian' else '/usr/lib/systemd/system'}}"
+
 #### Zookeeper Variables ####
 zookeeper_service_name: confluent-zookeeper
 zookeeper_main_package: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
@@ -491,7 +493,8 @@ schema_registry_final_properties: "{{ schema_registry_combined_properties | comb
 
 
 #### Kafka Connect Variables ####
-kafka_connect_service_name: confluent-kafka-connect
+kafka_connect_default_service_name: confluent-kafka-connect
+kafka_connect_default_config_filename: connect-distributed.properties
 kafka_connect_packages:
   - confluent-common
   - confluent-rest-utils
@@ -511,10 +514,11 @@ kafka_connect_packages:
 kafka_connect_default_user: cp-kafka-connect
 kafka_connect_default_group: confluent
 kafka_connect_default_log_dir: /var/log/kafka
+
 kafka_connect:
   server_start_file: "{{ binary_base_path }}/bin/connect-distributed"
-  config_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/connect-distributed.properties"
-  systemd_file: /usr/lib/systemd/system/{{kafka_connect_service_name}}.service
+  config_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/{{kafka_connect_config_filename}}"
+  systemd_file: "{{systemd_base_dir}}/{{kafka_connect_service_name}}.service"
   systemd_override: /etc/systemd/system/{{kafka_connect_service_name}}.service.d/override.conf
   log4j_file: "{% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}{% endif %}/etc/kafka/connect-log4j.properties"
 
@@ -1068,13 +1072,13 @@ control_center_properties:
       confluent.controlcenter.schema.registry.schema.registry.ssl.keystore.password: "{{control_center_keystore_storepass}}"
       confluent.controlcenter.schema.registry.schema.registry.ssl.key.password: "{{control_center_keystore_keypass}}"
   connect:
-    enabled: "{{ 'kafka_connect' in groups }}"
-    properties: "{{ kafka_connect_cluster_ansible_group_names | default(['kafka_connect']) | c3_connect_properties(groups, hostvars, kafka_connect_ssl_enabled,
+    enabled: "{{ kafka_connect_cluster_ansible_group_names | default(omit) | length > 0 }}"
+    properties: "{{ kafka_connect_cluster_ansible_group_names | c3_connect_properties(groups, hostvars, kafka_connect_ssl_enabled,
         kafka_connect_http_protocol, kafka_connect_rest_port, kafka_connect_group_id, control_center_truststore_path, control_center_truststore_storepass,
         control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass) }}"
   ksql:
-    enabled: "{{ 'ksql' in groups }}"
-    properties: "{{ ksql_cluster_ansible_group_names | default(['ksql']) | c3_ksql_properties(groups, hostvars, ksql_ssl_enabled,
+    enabled: "{{ ksql_cluster_ansible_group_names | default(omit) | length > 0 }}"
+    properties: "{{ ksql_cluster_ansible_group_names | c3_ksql_properties(groups, hostvars, ksql_ssl_enabled,
         ksql_http_protocol, ksql_listener_port, control_center_truststore_path, control_center_truststore_storepass,
         control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass) }}"
   rbac:
