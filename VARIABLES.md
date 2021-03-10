@@ -78,7 +78,7 @@ Default:  /opt/prometheus/jmx_prometheus_javaagent.jar
 
 ### fips_enabled
 
-Boolean to have cp-ansible configure components with FIPS security settings
+Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
 
 Default:  false
 
@@ -228,11 +228,27 @@ Default:  "{{rbac_enabled or secrets_protection_enabled}}"
 
 ***
 
+### confluent_cli_base_path
+
+The path the Confluent CLI archive is expanded into.
+
+Default:  /opt/confluent-cli
+
+***
+
 ### confluent_cli_path
 
-Full path on hosts to install the Confluent CLI
+Full path on hosts for Confluent CLI symlink to executable
 
-Default:  /usr/local/bin/confluent
+Default:  "/usr/local/bin/confluent"
+
+***
+
+### confluent_cli_version
+
+Confluent CLI version to download (e.g. "1.9.0"). By default is the latest version
+
+Default:  latest
 
 ***
 
@@ -572,11 +588,35 @@ Default:  "{{ zookeeper.properties }}"
 
 ***
 
+### kafka_broker_custom_listeners
+
+Dictionary to put additional listeners to be configured within Kafka. Each listener must include a 'name' and 'port' key. Optionally they can include the keys 'ssl_enabled', 'ssl_mutual_auth_enabled', and 'sasl_protocol'
+
+Default:  {}
+
+***
+
 ### kafka_broker_configure_multiple_listeners
 
 Boolean to configure more than one kafka listener. Defaults to true. NOTE- kafka_broker_configure_additional_brokers is deprecated
 
 Default:  "{{kafka_broker_configure_additional_brokers}}"
+
+***
+
+### kafka_broker_configure_control_plane_listener
+
+Boolean to configure control plane listener on separate port, which defaults to 8089. Applied only if kafka_broker_configure_multiple_listeners is true
+
+Default:  false
+
+***
+
+### kafka_broker_control_plane_listener_name
+
+Control Planer listener name.
+
+Default:  controller
 
 ***
 
@@ -1686,9 +1726,25 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### secrets_protection_enabled
 
-Boolean to enable secrets protection on all components except Rest Proxy
+Boolean to enable secrets protection on all components except Zookeeper
 
 Default:  false
+
+***
+
+### mask_secrets
+
+Boolean to mask secrets in playbook output
+
+Default:  true
+
+***
+
+### regenerate_masterkey
+
+Boolean to Recreate Secrets File and Masterkey. Only set to false AFTER first cp-ansible run.
+
+Default:  true
 
 ***
 
@@ -3026,9 +3082,49 @@ Default:  true
 
 ***
 
+### confluent_cli_repository_baseurl
+
+Base URL for Confluent CLI packages
+
+Default:  "https://s3-us-west-2.amazonaws.com/confluent.cloud"
+
+***
+
+### confluent_cli_archive_file_source
+
+A path reference to a local archive file or URL. By default this is the URL from Confluent CLI repository.
+
+Default:  "{{confluent_cli_repository_baseurl}}/confluent-cli/archives/{{confluent_cli_version}}/{{confluent_cli_binary}}_{{(confluent_cli_version == 'latest') | ternary('', 'v')}}{{confluent_cli_version}}_{{ansible_system|lower}}_{{confluent_cli_goarch[ansible_architecture]}}.tar.gz"
+
+***
+
+### confluent_cli_archive_file_remote
+
+Set to true to indicate the CLI archive file is remote (i.e. already on the target node) or a URL. Set to false if the archive file is on the control node.
+
+Default:  true
+
+***
+
 # confluent.control_center
 
 Below are the supported variables for the role confluent.control_center
+
+***
+
+### control_center_custom_log4j
+
+Boolean to reconfigure Control Center's logging with RollingFileAppender and log cleanup
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### control_center_log4j_root_logger
+
+Root logger within Control Center's log4j config. Only honored if control_center_custom_log4j: true
+
+Default:  "INFO, main"
 
 ***
 
@@ -3094,6 +3190,14 @@ Default:  "{{ custom_log4j }}"
 
 ***
 
+### kafka_broker_log4j_root_logger
+
+Root logger within Kafka's log4j config. Only honored if kafka_broker_custom_log4j: true
+
+Default:  "INFO, stdout, kafkaAppender"
+
+***
+
 ### kafka_broker_custom_java_args
 
 Custom Java Args to add to the Kafka Process
@@ -3130,7 +3234,7 @@ Default:
 
 Time in seconds to wait before starting Kafka Health Checks.
 
-Default:  30
+Default:  20
 
 ***
 
@@ -3145,6 +3249,14 @@ Below are the supported variables for the role confluent.kafka_connect
 Boolean to reconfigure Kafka Connect's logging with the RollingFileAppender and log cleanup functionality.
 
 Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_connect_log4j_root_logger
+
+Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
+
+Default:  "INFO, stdout connectAppender"
 
 ***
 
@@ -3191,6 +3303,22 @@ Default:  30
 # confluent.kafka_rest
 
 Below are the supported variables for the role confluent.kafka_rest
+
+***
+
+### kafka_rest_custom_log4j
+
+Boolean to reconfigure Rest Proxy's logging with RollingFileAppender and log cleanup
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_rest_log4j_root_logger
+
+Root logger within Rest Proxy's log4j config. Only honored if kafka_rest_custom_log4j: true
+
+Default:  "INFO, stdout, file"
 
 ***
 
@@ -3248,6 +3376,14 @@ Default:  "{{ custom_log4j }}"
 
 ***
 
+### ksql_log4j_root_logger
+
+Root logger within ksqlDB's log4j config. Only honored if ksql_custom_log4j: true
+
+Default:  "INFO, stdout, main"
+
+***
+
 ### ksql_custom_java_args
 
 Custom Java Args to add to the ksqlDB Process
@@ -3299,6 +3435,22 @@ Default:  20
 # confluent.schema_registry
 
 Below are the supported variables for the role confluent.schema_registry
+
+***
+
+### schema_registry_custom_log4j
+
+Boolean to reconfigure Schema Registry's logging with RollingFileAppender and log cleanup
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### schema_registry_log4j_root_logger
+
+Root logger within Schema Registry's log4j config. Only honored if schema_registry_custom_log4j: true
+
+Default:  "INFO, stdout, file"
 
 ***
 
@@ -3356,6 +3508,14 @@ Default:  "{{ custom_log4j }}"
 
 ***
 
+### zookeeper_log4j_root_logger
+
+Root logger within Zookeeper's log4j config. Only honored if zookeeper_custom_log4j: true
+
+Default:  INFO, stdout, zkAppender
+
+***
+
 ### zookeeper_custom_java_args
 
 Custom Java Args to add to the Zookeeper Process
@@ -3407,6 +3567,14 @@ Below are the supported variables for the role confluent.kafka_connect_replicato
 Boolean to reconfigure Kafka Connect Replicator's logging with the RollingFileAppender and log cleanup functionality.
 
 Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_connect_replicator_log4j_root_logger
+
+Root logger within Kafka Connect Replicator's log4j config. Only honored if kafka_connect_replicator_custom_log4j: true
+
+Default:  "INFO, replicatorAppender, stdout"
 
 ***
 

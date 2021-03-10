@@ -1,8 +1,8 @@
 ---
 - include_role:
     name: confluent.common
-  tags: common
   when: not common_role_completed|bool
+  tags: common
 
 - name: Gather OS Facts
   setup:
@@ -77,6 +77,7 @@
     schema_registry_ssl_enabled | bool or
     kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
     mds_tls_enabled | bool
+  tags: ssl
 
 - name: Configure Kerberos
   include_role:
@@ -111,6 +112,19 @@
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
 
+- name: Create Schema Registry Config with Secrets Protection
+  include_tasks: ../../tasks/secrets_protection.yml
+  vars:
+    encrypt_passwords: "{{ schema_registry_secrets_protection_encrypt_passwords }}"
+    properties: "{{ schema_registry_secrets_protection_encrypt_properties }}"
+    config_path: "{{ schema_registry.config_file }}"
+    config_template: schema-registry.properties.j2
+    secrets_file: "{{schema_registry_secrets_protection_file}}"
+    secrets_file_owner: "{{schema_registry_user}}"
+    secrets_file_group: "{{schema_registry_group}}"
+    handler: restart schema-registry
+  when: schema_registry_secrets_protection_enabled|bool
+
 - name: Create Schema Registry Config
   template:
     src: schema-registry.properties.j2
@@ -119,6 +133,7 @@
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
   notify: restart schema-registry
+  when: not schema_registry_secrets_protection_enabled|bool
 
 - name: Create Logs Directory
   file:
@@ -127,6 +142,16 @@
     group: "{{schema_registry_group}}"
     owner: "{{schema_registry_user}}"
     mode: 0770
+
+- name: Update log4j Config for Log Cleanup
+  include_role:
+    name: confluent.common
+    tasks_from: update_log4j.yml
+  vars:
+    log4j_file: "{{schema_registry.log4j_file}}"
+    log4j_root_logger: "{{schema_registry_log4j_root_logger}}"
+    handler: "restart schema-registry"
+  when: schema_registry_custom_log4j|bool
 
 - name: Set Permissions on Log4j Conf
   file:
@@ -144,16 +169,6 @@
     group: "{{schema_registry_group}}"
   when: schema_registry_jolokia_enabled|bool
   notify: restart schema-registry
-
-- name: Enable Secrets Protection
-  include_role:
-    name: confluent.common
-    tasks_from: secrets_protection.yml
-  vars:
-    encrypt_passwords: "{{ schema_registry_secrets_protection_encrypt_passwords }}"
-    properties: "{{ schema_registry_secrets_protection_encrypt_properties }}"
-    config_path: "{{ schema_registry.config_file }}"
-  when: schema_registry_secrets_protection_enabled|bool
 
 - name: Deploy JMX Exporter Config File
   copy:

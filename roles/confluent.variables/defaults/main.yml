@@ -34,12 +34,8 @@ jmxexporter_enabled: false
 ### Full path to download the Prometheus Exporter Agent Jar
 jmxexporter_jar_path: /opt/prometheus/jmx_prometheus_javaagent.jar
 
-### Boolean to have cp-ansible configure components with FIPS security settings
+### Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
 fips_enabled: false
-
-fips_jar_path: /usr/share/java/kafka/bc-fips-*.jar
-fips_provider_class: org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider
-pkcs12_enabled: "{{ true if fips_enabled|bool else false }}"
 
 ### Boolean to configure ZK, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 custom_log4j: true
@@ -112,8 +108,14 @@ archive_config_base_path: "{{ archive_destination_path }}"
 ### Boolean to have cp-ansible download the Confluent CLI
 confluent_cli_download_enabled: "{{rbac_enabled or secrets_protection_enabled}}"
 
-### Full path on hosts to install the Confluent CLI
-confluent_cli_path: /usr/local/bin/confluent
+### The path the Confluent CLI archive is expanded into.
+confluent_cli_base_path: /opt/confluent-cli
+
+### Full path on hosts for Confluent CLI symlink to executable
+confluent_cli_path: "/usr/local/bin/confluent"
+
+### Confluent CLI version to download (e.g. "1.9.0"). By default is the latest version
+confluent_cli_version: latest
 
 ### Recommended replication factor, defaults to 3. When splitting your cluster across 2 DCs with 4 or more Brokers, this should be increased to 4 to balance topic replicas.
 default_internal_replication_factor: 3
@@ -130,8 +132,8 @@ ssl_mutual_auth_enabled: false
 ### Boolean to create Keystores with Self Signed Certificates, defaults to true. Alternatively can use ssl_provided_keystore_and_truststore or ssl_custom_certs
 self_signed: "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_certs|bool else true }}"
 
-ssl_self_signed_ca_cert_filename: snakeoil-ca-1.crt
-ssl_self_signed_ca_key_filename: snakeoil-ca-1.key
+ssl_self_signed_ca_cert_filepath: generated_ssl_files/snakeoil-ca-1.crt
+ssl_self_signed_ca_key_filepath: generated_ssl_files/snakeoil-ca-1.key
 ssl_self_signed_ca_password: capassword123
 
 ### Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs.
@@ -288,21 +290,33 @@ zookeeper_custom_properties: "{{ zookeeper.properties }}"
 
 
 #### Kafka Broker Variables ####
-kafka_broker_default_listeners:
-  internal:
-    name: INTERNAL
-    port: 9092
-    ssl_enabled: "{{ ssl_enabled }}"
-    ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
-    sasl_protocol: "{{ 'OAUTH' if rbac_enabled|bool else sasl_protocol }}"
 
-kafka_broker_custom_listeners:
-  broker:
-    name: BROKER
-    port: 9091
-    ssl_enabled: "{{ ssl_enabled }}"
-    ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
-    sasl_protocol: "{{ sasl_protocol }}"
+kafka_broker_default_listeners: "{
+  'internal': {
+    'name': 'INTERNAL',
+    'port': 9092,
+    'ssl_enabled': {{ssl_enabled|string|lower}},
+    'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
+    'sasl_protocol': '{% if rbac_enabled|bool %}OAUTH{% else %}{{sasl_protocol}}{% endif %}'
+  }{% if kafka_broker_configure_multiple_listeners|bool %},
+  'broker': {
+    'name': 'BROKER',
+    'port': 9091,
+    'ssl_enabled': {{ssl_enabled|string|lower}},
+    'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
+    'sasl_protocol': '{{sasl_protocol}}'
+  }{% if kafka_broker_configure_control_plane_listener|bool %},
+  'controller': {
+    'name': 'CONTROLLER',
+    'port': 9089,
+    'ssl_enabled': {{ssl_enabled|string|lower}},
+    'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
+    'sasl_protocol': '{{sasl_protocol}}'
+  }{% endif %}{% endif %}
+}"
+
+### Dictionary to put additional listeners to be configured within Kafka. Each listener must include a 'name' and 'port' key. Optionally they can include the keys 'ssl_enabled', 'ssl_mutual_auth_enabled', and 'sasl_protocol'
+kafka_broker_custom_listeners: {}
 
 # Deprecated variable
 kafka_broker_configure_additional_brokers: true
@@ -310,6 +324,11 @@ kafka_broker_configure_additional_brokers: true
 ### Boolean to configure more than one kafka listener. Defaults to true. NOTE- kafka_broker_configure_additional_brokers is deprecated
 kafka_broker_configure_multiple_listeners: "{{kafka_broker_configure_additional_brokers}}"
 
+### Boolean to configure control plane listener on separate port, which defaults to 8089. Applied only if kafka_broker_configure_multiple_listeners is true
+kafka_broker_configure_control_plane_listener: false
+
+### Control Planer listener name.
+kafka_broker_control_plane_listener_name: controller
 kafka_broker_listeners: "{{ kafka_broker_default_listeners | combine(kafka_broker_custom_listeners, recursive=True) if kafka_broker_configure_multiple_listeners|bool else  kafka_broker_default_listeners}}"
 kafka_broker_inter_broker_listener_name: "{{ 'broker' if kafka_broker_configure_multiple_listeners|bool else 'internal' }}"
 
@@ -326,8 +345,15 @@ kafka_broker_group: "{{kafka_broker_default_group}}"
 ### Set this variable to customize the directory that the Kafka Broker writes log files to. Default location is /var/log/kafka. NOTE- kafka_broker.appender_log_path is deprecated.
 kafka_broker_log_dir: "{{kafka_broker.appender_log_path}}"
 
-kafka_broker_truststore_path: "/var/ssl/private/kafka_broker.truststore.jks"
-kafka_broker_keystore_path: "/var/ssl/private/kafka_broker.keystore.jks"
+kafka_broker_truststore_path: "{{kafka_broker_bcfks_truststore_path if fips_enabled|bool else kafka_broker_pkcs12_truststore_path}}"
+kafka_broker_keystore_path: "{{kafka_broker_bcfks_keystore_path if fips_enabled|bool else kafka_broker_pkcs12_keystore_path}}"
+
+kafka_broker_bcfks_truststore_path: "/var/ssl/private/kafka_broker.truststore.bcfks"
+kafka_broker_bcfks_keystore_path: "/var/ssl/private/kafka_broker.keystore.bcfks"
+
+kafka_broker_pkcs12_truststore_path: "/var/ssl/private/kafka_broker.truststore.jks"
+kafka_broker_pkcs12_keystore_path: "/var/ssl/private/kafka_broker.keystore.jks"
+
 kafka_broker_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_broker_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_broker_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_broker_keystore_storepass }}"
@@ -640,7 +666,8 @@ kafka_connect_secret_registry_key: 39ff95832750c0090d84ddf5344583832efe91ef
 kafka_connect_secret_registry_default_replication_factor:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 kafka_connect_plugins_path:
-  - /usr/share/java
+  - "{% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}/{% else %}/usr/{% endif %}share/java"
+
 
 kafka_connect_confluent_hub_plugins: []
 kafka_connect_confluent_hub_plugins_dest: /usr/share/java
@@ -791,57 +818,75 @@ control_center_default_internal_replication_factor: "{{ [ groups['kafka_broker']
 ### Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
 control_center_custom_properties: "{{ control_center.properties }}"
 
-sasl_scram_users:
-  admin:
-    principal: admin
-    password: admin-secret
-  client:
-    principal: client
-    password: client-secret
-  kafka_connect:
-    principal: kafka_connect
-    password: kafka_connect-secret
-  control_center:
-    principal: control_center
-    password: control_center-secret
-  kafka_rest:
-    principal: kafka_rest
-    password: kafka_rest-secret
-  ksql:
-    principal: ksql
-    password: ksql-secret
-  schema_registry:
-    principal: schema_registry
-    password: schema_registry-secret
-  kafka_connect_replicator:
-    principal: kafka_connect_replicator
-    password: kafka_connect_replicator-secret
+sasl_scram_users: "{
+  'admin': {
+    'principal': 'admin',
+    'password': 'admin-secret'
+  },
+  'client': {
+    'principal': 'client',
+    'password': 'client-secret'
+  }{% if 'schema_registry' in groups %},
+  'schema_registry': {
+    'principal': 'schema_registry',
+    'password': 'schema_registry-secret'
+  }{% endif %}{% if 'kafka_connect' in groups %},
+  'kafka_connect': {
+    'principal': 'kafka_connect',
+    'password': 'kafka_connect-secret'
+  }{% endif %}{% if 'kafka_rest' in groups %},
+  'kafka_rest': {
+    'principal': 'kafka_rest',
+    'password': 'kafka_rest-secret'
+  }{% endif %}{% if 'ksql' in groups %},
+  'ksql': {
+    'principal': 'ksql',
+    'password': 'ksql-secret'
+  }{% endif %}{% if 'control_center' in groups %},
+  'control_center': {
+    'principal': 'control_center',
+    'password': 'control_center-secret'
+  }{% endif %}{% if 'kafka_connect_replicator' in groups %},
+  'kafka_connect_replicator': {
+    'principal': 'kafka_connect_replicator',
+    'password': 'kafka_connect_replicator-secret'
+  }{% endif %}
+}"
 
-sasl_plain_users:
-  admin:
-    principal: admin
-    password: admin-secret
-  client:
-    principal: client
-    password: client-secret
-  kafka_connect:
-    principal: kafka_connect
-    password: kafka_connect-secret
-  control_center:
-    principal: control_center
-    password: control_center-secret
-  kafka_rest:
-    principal: kafka_rest
-    password: kafka_rest-secret
-  ksql:
-    principal: ksql
-    password: ksql-secret
-  schema_registry:
-    principal: schema_registry
-    password: schema_registry-secret
-  kafka_connect_replicator:
-    principal: kafka_connect_replicator
-    password: kafka_connect_replicator-secret
+sasl_plain_users: "{
+  'admin': {
+    'principal': 'admin',
+    'password': 'admin-secret'
+  },
+  'client': {
+    'principal': 'client',
+    'password': 'client-secret'
+  }{% if 'schema_registry' in groups %},
+  'schema_registry': {
+    'principal': 'schema_registry',
+    'password': 'schema_registry-secret'
+  }{% endif %}{% if 'kafka_connect' in groups %},
+  'kafka_connect': {
+    'principal': 'kafka_connect',
+    'password': 'kafka_connect-secret'
+  }{% endif %}{% if 'kafka_rest' in groups %},
+  'kafka_rest': {
+    'principal': 'kafka_rest',
+    'password': 'kafka_rest-secret'
+  }{% endif %}{% if 'ksql' in groups %},
+  'ksql': {
+    'principal': 'ksql',
+    'password': 'ksql-secret'
+  }{% endif %}{% if 'control_center' in groups %},
+  'control_center': {
+    'principal': 'control_center',
+    'password': 'control_center-secret'
+  }{% endif %}{% if 'kafka_connect_replicator' in groups %},
+  'kafka_connect_replicator': {
+    'principal': 'kafka_connect_replicator',
+    'password': 'kafka_connect_replicator-secret'
+  }{% endif %}
+}"
 
 zookeeper_digest_users:
   admin:
@@ -950,8 +995,14 @@ control_center_additional_system_admins: "{{rbac_component_additional_system_adm
 
 # Secrets Protection Variables
 
-### Boolean to enable secrets protection on all components except Rest Proxy
+### Boolean to enable secrets protection on all components except Zookeeper
 secrets_protection_enabled: false
+
+### Boolean to mask secrets in playbook output
+mask_secrets: true
+
+### Boolean to Recreate Secrets File and Masterkey. Only set to false AFTER first cp-ansible run.
+regenerate_masterkey: true
 
 ### Masterkey generated by the Confluent Secret CLI. If empty and secrets protection is enabled, then a master key will be randomly generated.
 secrets_protection_masterkey: ""
