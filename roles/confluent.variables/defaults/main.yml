@@ -35,11 +35,11 @@ jmxexporter_enabled: false
 jmxexporter_jar_path: /opt/prometheus/jmx_prometheus_javaagent.jar
 
 ### Boolean to have cp-ansible configure components with FIPS security settings
-fips_enabled: false
+fips_enabled: "{{_fips_enabled}}"
 
 fips_jar_path: /usr/share/java/kafka/bc-fips-*.jar
 fips_provider_class: org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider
-pkcs12_enabled: "{{ true if fips_enabled|bool else false }}"
+pkcs12_enabled: "{{ _pkcs12_enabled }}"
 
 ### Boolean to configure ZK, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 custom_log4j: true
@@ -48,7 +48,7 @@ custom_log4j: true
 kerberos_configure: true
 
 # Deprecated variable now that primary can be pulled from kafka_broker_kerberos_principal
-kerberos_kafka_broker_primary: "{{ (hostvars[ groups['kafka_broker'][0] | default('kafka') ] | default({})) ['kafka_broker_kerberos_principal'] | default('kafka/host@EXAMPLE>COM') | regex_replace('/.*') }}"
+kerberos_kafka_broker_primary: "{{ _kerberos_kafka_broker_primary }}"
 
 
 # TODO document the rest of the kerberos variables, also admin_hostname should default to kdc_hostname
@@ -56,7 +56,7 @@ kerberos_kafka_broker_primary: "{{ (hostvars[ groups['kafka_broker'][0] | defaul
 open_file_limit: 500000
 
 ### Boolean to install commercially licensed confluent-server instead of community version: confluent-kafka
-confluent_server_enabled: true
+confluent_server_enabled: "{{_confluent_server_enabled}}"
 
 ### Boolean to enable health checks on all components
 health_checks_enabled: true
@@ -122,13 +122,13 @@ confluent_cli_path: /usr/local/bin/confluent
 default_internal_replication_factor: 3
 
 ### SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
-sasl_protocol: none
+sasl_protocol: "{{_sasl_protocol}}"
 
 ### Boolean to configure components with TLS Encryption. Also manages Java Keystore creation
-ssl_enabled: false
+ssl_enabled: "{{_ssl_enabled}}"
 
 ### Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka
-ssl_mutual_auth_enabled: false
+ssl_mutual_auth_enabled: "{{_ssl_mutual_auth_enabled}}"
 
 ### Boolean to create Keystores with Self Signed Certificates, defaults to true. Alternatively can use ssl_provided_keystore_and_truststore or ssl_custom_certs
 self_signed: "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_certs|bool else true }}"
@@ -313,7 +313,7 @@ kafka_broker_configure_additional_brokers: true
 ### Boolean to configure more than one kafka listener. Defaults to true. NOTE- kafka_broker_configure_additional_brokers is deprecated
 kafka_broker_configure_multiple_listeners: "{{kafka_broker_configure_additional_brokers}}"
 
-kafka_broker_listeners: "{{ kafka_broker_default_listeners | combine(kafka_broker_custom_listeners, recursive=True) if kafka_broker_configure_multiple_listeners|bool else  kafka_broker_default_listeners}}"
+kafka_broker_listeners: "{{ _kafka_broker_listeners }}"
 kafka_broker_inter_broker_listener_name: "{{ 'broker' if kafka_broker_configure_multiple_listeners|bool else 'internal' }}"
 kafka_broker_metrics_reporter_listener_name: "{{ kafka_broker_inter_broker_listener_name }}"
 
@@ -330,16 +330,16 @@ kafka_broker_group: "{{kafka_broker_default_group}}"
 ### Set this variable to customize the directory that the Kafka Broker writes log files to. Default location is /var/log/kafka. NOTE- kafka_broker.appender_log_path is deprecated.
 kafka_broker_log_dir: "{{kafka_broker.appender_log_path}}"
 
-kafka_broker_truststore_path: "/var/ssl/private/kafka_broker.truststore.jks"
-kafka_broker_keystore_path: "/var/ssl/private/kafka_broker.keystore.jks"
-kafka_broker_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
-kafka_broker_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
-kafka_broker_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_broker_keystore_storepass }}"
+kafka_broker_truststore_path: "{{_kafka_broker_truststore_path}}"
+kafka_broker_keystore_path: "{{_kafka_broker_keystore_path}}"
+kafka_broker_truststore_storepass: "{{ _kafka_broker_truststore_storepass }}"
+kafka_broker_keystore_storepass: "{{ _kafka_broker_keystore_storepass }}"
+kafka_broker_keystore_keypass: "{{ _kafka_broker_keystore_keypass }}"
 kafka_broker_ca_cert_path: "/var/ssl/private/ca.crt"
 kafka_broker_cert_path: "/var/ssl/private/kafka_broker.crt"
 kafka_broker_key_path: "/var/ssl/private/kafka_broker.key"
 kafka_broker_export_certs: "{{ssl_mutual_auth_enabled}}"
-kafka_broker_keytab_path: /etc/security/keytabs/kafka_broker.keytab
+kafka_broker_keytab_path: "{{_kafka_broker_keytab_path}}"
 
 kafka_broker:
   # TODO deprecate these variables
@@ -402,10 +402,10 @@ kafka_broker_metrics_reporter_enabled: "{{ 'control_center' in groups }}"
 kafka_broker_custom_properties: "{{ kafka_broker.properties }}"
 
 ### Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
-kafka_broker_rest_proxy_enabled: "{{confluent_server_enabled}}"
+kafka_broker_rest_proxy_enabled: "{{_kafka_broker_rest_proxy_enabled}}"
 
 ### Use to register and identify your Kafka cluster in the MDS and Control Center Configs.
-kafka_broker_cluster_name: ""
+kafka_broker_cluster_name: "{{_kafka_broker_cluster_name}}"
 
 #### Schema Registry Variables ####
 
@@ -776,17 +776,17 @@ control_center_ssl_enabled: "{{ssl_enabled}}"
 ### Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
 control_center_log_dir: "{{control_center.appender_log_path}}"
 
-control_center_truststore_path: "/var/ssl/private/control_center.truststore.jks"
-control_center_keystore_path: "/var/ssl/private/control_center.keystore.jks"
-control_center_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
-control_center_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
-control_center_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_keystore_storepass }}"
+control_center_truststore_path: "{{_control_center_truststore_path}}"
+control_center_keystore_path: "{{_control_center_keystore_path}}"
+control_center_truststore_storepass: "{{ _control_center_truststore_storepass}}"
+control_center_keystore_storepass: "{{ _control_center_keystore_storepass }}"
+control_center_keystore_keypass: "{{ _control_center_keystore_keypass }}"
 control_center_ca_cert_path: "/var/ssl/private/ca.crt"
 control_center_cert_path: "/var/ssl/private/control_center.crt"
 control_center_key_path: "/var/ssl/private/control_center.key"
 control_center_export_certs: "{{ssl_mutual_auth_enabled}}"
-control_center_keytab_path: /etc/security/keytabs/control_center.keytab
-control_center_kafka_listener_name: internal
+control_center_keytab_path: "{{_control_center_keytab_path}}"
+control_center_kafka_listener_name: "{{_control_center_kafka_listener_name}}"
 control_center:
   appender_log_path: "{{control_center_default_log_dir}}"
   # Deprecated way of providing custom properties
@@ -801,57 +801,9 @@ control_center_default_internal_replication_factor: "{{ [ groups['kafka_broker']
 ### Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
 control_center_custom_properties: "{{ control_center.properties }}"
 
-sasl_scram_users:
-  admin:
-    principal: admin
-    password: admin-secret
-  client:
-    principal: client
-    password: client-secret
-  kafka_connect:
-    principal: kafka_connect
-    password: kafka_connect-secret
-  control_center:
-    principal: control_center
-    password: control_center-secret
-  kafka_rest:
-    principal: kafka_rest
-    password: kafka_rest-secret
-  ksql:
-    principal: ksql
-    password: ksql-secret
-  schema_registry:
-    principal: schema_registry
-    password: schema_registry-secret
-  kafka_connect_replicator:
-    principal: kafka_connect_replicator
-    password: kafka_connect_replicator-secret
+sasl_scram_users: "{{ _sasl_scram_users }}"
 
-sasl_plain_users:
-  admin:
-    principal: admin
-    password: admin-secret
-  client:
-    principal: client
-    password: client-secret
-  kafka_connect:
-    principal: kafka_connect
-    password: kafka_connect-secret
-  control_center:
-    principal: control_center
-    password: control_center-secret
-  kafka_rest:
-    principal: kafka_rest
-    password: kafka_rest-secret
-  ksql:
-    principal: ksql
-    password: ksql-secret
-  schema_registry:
-    principal: schema_registry
-    password: schema_registry-secret
-  kafka_connect_replicator:
-    principal: kafka_connect_replicator
-    password: kafka_connect_replicator-secret
+sasl_plain_users: "{{ _sasl_plain_users }}"
 
 zookeeper_digest_users:
   admin:
@@ -863,10 +815,10 @@ zookeeper_digest_users:
 
 
 ### Boolean to configure Confluent Platform with RBAC enabled. Creates Rolebindings for all components to function
-rbac_enabled: false
+rbac_enabled: "{{_rbac_enabled}}"
 
 ### Port to expose MDS Server API on
-mds_port: 8090
+mds_port: "{{_mds_port}}"
 
 # Deprecated
 mds_ssl_enabled: "{{ssl_enabled}}"
@@ -885,10 +837,10 @@ mds_super_user: mds
 mds_super_user_password: password
 
 ### LDAP User for Kafkas Embedded Rest Service to authenticate as
-kafka_broker_ldap_user: "{{mds_super_user}}"
+kafka_broker_ldap_user: "{{_kafka_broker_ldap_user}}"
 
 ### Password to kafka_broker_ldap_user LDAP User
-kafka_broker_ldap_password: "{{mds_super_user_password}}"
+kafka_broker_ldap_password: "{{_kafka_broker_ldap_password}}"
 
 ### LDAP User for Schema Registry to authenticate as
 schema_registry_ldap_user: schema-registry
@@ -915,10 +867,10 @@ kafka_rest_ldap_user: kafka-rest
 kafka_rest_ldap_password: password
 
 ### LDAP User for Control Center to authenticate as
-control_center_ldap_user: control-center
+control_center_ldap_user: "{{_control_center_ldap_user}}"
 
 ### Password to control_center_ldap_user LDAP User
-control_center_ldap_password: password
+control_center_ldap_password: "{{_control_center_ldap_password}}"
 
 ### Boolean to describe if kafka group should be configured with an External MDS Kafka Cluster. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, kafka_broker_rest_ssl_enabled
 external_mds_enabled: false
@@ -933,7 +885,7 @@ mds_broker_listener:
   sasl_protocol: "{{sasl_protocol}}"
 
 ### Comma separated urls for mds servers. Only set if external_mds_enabled: true
-mds_bootstrap_server_urls: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
+mds_bootstrap_server_urls: "{{_mds_bootstrap_server_urls}}"
 
 create_mds_certs: "{{ rbac_enabled }}"
 token_services_public_pem_file: generated_ssl_files/public.pem
