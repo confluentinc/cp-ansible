@@ -6,9 +6,7 @@ Starting with CP-Ansible 5.5.0, we have included testing via the [Molecule](http
 
 1. Python3 installed with PIP
 2. Docker installed
-3. Install the Molecule and Docker libraries
-
-
+3. Install the Molecule and Docker libraries  
 ```pip install molecule docker```
 
 Note: If using Molecule version 3.1.0 or later use the following command to install:
@@ -17,11 +15,7 @@ Note: If using Molecule version 3.1.0 or later use the following command to inst
 
 
 
-Note: We recommend increasing your docker memory to at least 20GB of RAM and your CPU count to 10.
-
-## Using Molecule
-
-The following is a list of the most common commands used with Molecule.
+Note: We recommend increasing your docker memory to at least 20GB of RAM and your CPU count to 10.  
 
 ### A note about Molecule
 
@@ -56,8 +50,10 @@ export CP_ANISBLE_PATH=<Replace this with the repo path>
 alias molecule="docker run -it --rm --dns="8.8.8.8" -v "/var/run/docker.sock:/var/run/docker.sock" -v ~/.cache:/root/.cache -v "$CP_ANISBLE_PATH:$CP_ANISBLE_PATH" -w "$CP_ANISBLE_PATH/roles/confluent.test" quay.io/ansible/molecule:3.1.5 molecule"
 ```
 
-Now you can run the molecule command as suggested later on. 
+Now you can run the molecule command as suggested later on.  
+## Using Molecule
 
+The following is a list of the most common commands used with Molecule.  
 
 ### Running a role
 
