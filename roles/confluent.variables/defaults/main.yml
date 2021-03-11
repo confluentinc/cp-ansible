@@ -186,6 +186,9 @@ ssl_key_password: ""
 ### Boolean stating certs and keys are already on hosts. Used with ssl_custom_certs: true.
 ssl_custom_certs_remote_src: false
 
+### Enable Hostname Aliasing for host addressing. This will enable logic, on an individual host basis, to look for the variable `hostname`, followed by the reserved variable `ansible_host` and then `inventory_hostname` to resolve the appropriate FQDN of a host to use within configuration properties.
+hostname_aliasing_enabled: false
+
 
 # Zookeeper Variables
 
@@ -267,10 +270,10 @@ zookeeper_health_check_command: "{% if zookeeper_sasl_protocol in ['kerberos', '
 -Dzookeeper.ssl.keyStore.password={{zookeeper_keystore_storepass}}
 -Dzookeeper.client.secure=true
 {% endif %}
-org.apache.zookeeper.client.FourLetterWordMain {{zookeeper_health_check_host | default(inventory_hostname)}} {{zookeeper_client_port}} srvr
+org.apache.zookeeper.client.FourLetterWordMain {{zookeeper_health_check_host | default(hostvars[inventory_hostname]|resolve_hostname) }} {{zookeeper_client_port}} srvr
 {% if zookeeper_ssl_enabled|bool %}true{% endif %}"
 
-zookeeper_current_node_hostname: "{{ inventory_hostname }}"
+zookeeper_current_node_hostname: "{{ hostvars[inventory_hostname]|resolve_hostname }}"
 
 ### Zookeeper peer port
 zookeeper_peer_port: 2888
@@ -396,9 +399,9 @@ kafka_broker_jolokia_password: "{{jolokia_password}}"
 
 # TODO move these to vars, should not be customizable, do they even belong w the shared vars
 kafka_broker_jolokia_java_arg_ssl_addon: ",keystore={{kafka_broker_keystore_path}},keystorePassword={{kafka_broker_keystore_storepass}},protocol=https"
-kafka_broker_jolokia_urp_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{inventory_hostname}}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
-kafka_broker_jolokia_active_controller_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{inventory_hostname}}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ActiveControllerCount"
-kafka_broker_erp_clusters_url: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(inventory_hostname) }}:{{mds_port}}/kafka/v3/clusters"
+kafka_broker_jolokia_urp_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{ hostvars[inventory_hostname]|resolve_hostname }}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
+kafka_broker_jolokia_active_controller_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{ hostvars[inventory_hostname]|resolve_hostname }}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ActiveControllerCount"
+kafka_broker_erp_clusters_url: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|resolve_hostname) }}:{{mds_port}}/kafka/v3/clusters"
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on kafka
 kafka_broker_jmxexporter_enabled: "{{jmxexporter_enabled}}"
@@ -970,7 +973,7 @@ mds_broker_listener:
   sasl_protocol: "{{sasl_protocol}}"
 
 ### Comma separated urls for mds servers. Only set if external_mds_enabled: true
-mds_bootstrap_server_urls: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
+mds_bootstrap_server_urls: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
 
 create_mds_certs: "{{ rbac_enabled }}"
 token_services_public_pem_file: generated_ssl_files/public.pem

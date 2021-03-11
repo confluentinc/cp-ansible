@@ -7,6 +7,8 @@ class FilterModule(object):
             'kafka_protocol_defaults': self.kafka_protocol_defaults,
             'get_sasl_mechanisms': self.get_sasl_mechanisms,
             'get_hostnames': self.get_hostnames,
+            'resolve_hostname': self.resolve_hostname,
+            'resolve_hostnames': self.resolve_hostnames,
             'cert_extension': self.cert_extension,
             'ssl_required': self.ssl_required,
             'java_arg_build_out': self.java_arg_build_out,
@@ -64,6 +66,24 @@ class FilterModule(object):
         for listener in listeners_dict:
             hostname = listeners_dict[listener].get('hostname', default_hostname)
             hostnames = hostnames + [hostname]
+        return hostnames
+    
+    def resolve_hostname(self, hosts_hostvars_dict):
+        # Goes through selected possible VARs to provide the HOSTNAME for a given node for internal addressing within Confluent Platform
+        if hosts_hostvars_dict.get('hostname_aliasing_enabled') == True:
+            return hosts_hostvars_dict.get('hostname', hosts_hostvars_dict.get('ansible_host', hosts_hostvars_dict.get('inventory_hostname')))
+        else:
+            return hosts_hostvars_dict.get('inventory_hostname')
+
+    def resolve_hostnames(self, hosts, hostvars_dict):
+        # Given a collection of hosts, usually from a group, will resolve the correct hostname to use for each.
+        hostnames = []
+        for host in hosts:
+            if host == "localhost":
+                hostnames.append("localhost")
+            else:
+                hostnames.append(self.resolve_hostname(hostvars_dict.get(host)))
+
         return hostnames
 
     def cert_extension(self, hostnames):
@@ -227,7 +247,7 @@ class FilterModule(object):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + host + ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
+                    urls.append(protocol + '://' + self.resolve_hostname(hostvars[host]) + ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
 
                 final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.cluster'] = ','.join(urls)
 
@@ -256,8 +276,8 @@ class FilterModule(object):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + host + ':' + str(hostvars[host].get('ksql_listener_port', port)))
-                    advertised_urls.append(protocol + '://' + hostvars[host].get('ksql_advertised_listener_hostname', host) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
+                    urls.append(protocol + '://' + self.resolve_hostname(hostvars[host]) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
+                    advertised_urls.append(protocol + '://' + hostvars[host].get('ksql_advertised_listener_hostname', self.resolve_hostname(hostvars[host])) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
 
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.url'] = ','.join(urls)
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.advertised.url'] = ','.join(advertised_urls)
