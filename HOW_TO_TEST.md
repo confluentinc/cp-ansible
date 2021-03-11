@@ -20,7 +20,7 @@ Note: If using Molecule version 3.1.0 or later use the following command to inst
 ```pip3 install molecule molecule-docker```
 
 
-## Running Molecule in a Container
+### Running Molecule in a Container
 
 At times, pip installation of molecule can lead to errors:
 ```
