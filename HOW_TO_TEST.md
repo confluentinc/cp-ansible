@@ -38,7 +38,6 @@ In your current shell create an alias to start molecule in a container:
 ```
 git clone https://github.com/confluentinc/cp-ansible
 cd cp-ansible
-git checkout 6.1.0-post
 export CP_ANISBLE_PATH=$PWD
 alias molecule="docker run -it --rm --dns="8.8.8.8" -v "/var/run/docker.sock:/var/run/docker.sock" -v ~/.cache:/root/.cache -v "$CP_ANISBLE_PATH:$CP_ANISBLE_PATH" -w "$CP_ANISBLE_PATH/roles/confluent.test" quay.io/ansible/molecule:3.1.5 molecule"
 ```
@@ -52,7 +51,6 @@ You can also consider integrating the alias in your bashrc file.
 ```
 git clone https://github.com/confluentinc/cp-ansible
 cd cp-ansible
-git checkout 6.1.0-post
 ```
 
 After that, in your bashrc file add the followings:
