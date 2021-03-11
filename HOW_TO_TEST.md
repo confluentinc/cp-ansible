@@ -6,7 +6,13 @@ Starting with CP-Ansible 5.5.0, we have included testing via the [Molecule](http
 
 1. Python3 installed with PIP
 2. Docker installed
-3. Install the Molecule and Docker libraries  
+
+Note: We recommend increasing your docker memory to at least 20GB of RAM and your CPU count to 10.  
+
+## Installing Molecule via pip
+
+To install the Molecule and Docker libraries  
+
 ```pip install molecule docker```
 
 Note: If using Molecule version 3.1.0 or later use the following command to install:
@@ -14,19 +20,14 @@ Note: If using Molecule version 3.1.0 or later use the following command to inst
 ```pip3 install molecule molecule-docker```
 
 
+## Running Molecule in a Container
 
-Note: We recommend increasing your docker memory to at least 20GB of RAM and your CPU count to 10.  
-
-### A note about Molecule
-
-You might find Molecule failing with an error like: 
+At times, pip installation of molecule can lead to errors:
 ```
 ImportError: No module named docker.common
 ```
-You can spend some time troubleshooting this issue with the prerequisites.  
-As a workaround you can use molecule in a container.  
 
-In your current shell create an alias to start molecule in a container: 
+As a workaround you can use molecule in a container. In your current shell create an alias to start molecule in a container:
 
 ```
 git clone https://github.com/confluentinc/cp-ansible
@@ -43,7 +44,8 @@ export CP_ANISBLE_PATH=<Replace this with the repo path>
 alias molecule="docker run -it --rm --dns="8.8.8.8" -v "/var/run/docker.sock:/var/run/docker.sock" -v ~/.cache:/root/.cache -v "$CP_ANISBLE_PATH:$CP_ANISBLE_PATH" -w "$CP_ANISBLE_PATH/roles/confluent.test" quay.io/ansible/molecule:3.1.5 molecule"
 ```
 
-Now you can run the molecule command as suggested later on.  
+Now you can run the molecule command as suggested later on.
+
 ## Using Molecule
 
 The following is a list of the most common commands used with Molecule.  
