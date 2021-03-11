@@ -244,15 +244,13 @@ class FilterModule(object):
                 cluster_name = str(delegate_hostvars.get('kafka_broker_cluster_name')).lower().replace(' ', '_')
 
                 urls = []
-                mds_urls = []
                 for host in groups[ansible_group]:
                     urls.append(self.resolve_hostname(hostvars[host]) + ':' + str(delegate_listener['port']))
-                    mds_urls.append(str(delegate_hostvars.get('mds_http_protocol'))+'://'+self.resolve_hostname(hostvars[host]) + ':' + str(delegate_hostvars.get('mds_port')))
 
                 final_dict['confluent.controlcenter.kafka.' + cluster_name + '.bootstrap.servers'] = ','.join(urls)
 
                 if delegate_hostvars.get('kafka_broker_rest_proxy_enabled') or delegate_hostvars.get('rbac_enabled'):
-                    final_dict['confluent.controlcenter.kafka.' + cluster_name + '.cprest.url'] = ','.join(mds_urls)
+                    final_dict['confluent.controlcenter.kafka.' + cluster_name + '.cprest.url'] = delegate_hostvars.get('mds_bootstrap_server_urls')
 
                 c_dict = self.client_properties(
                     delegate_listener, 
