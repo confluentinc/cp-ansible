@@ -35,7 +35,7 @@ To get a list of the scenarios:
 
 To the run scenarios:
 
-```cd roles/confluent.test```
+```cd roles/confluent.test```  
 ```molecule converge -s <scenario name>```
 
 ### SSHing into a container

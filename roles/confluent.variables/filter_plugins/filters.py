@@ -128,7 +128,7 @@ class FilterModule(object):
                 final_dict[prop_list[0]] = prop_list[1]
         return final_dict
 
-    def listener_properties(self, listeners_dict, default_ssl_enabled, default_pkcs12_enabled, default_ssl_mutual_auth_enabled, default_sasl_protocol,
+    def listener_properties(self, listeners_dict, default_ssl_enabled, bouncy_castle_keystore, default_ssl_mutual_auth_enabled, default_sasl_protocol,
                             kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                             plain_jaas_config, keytab_path, kerberos_principal, kerberos_primary,
                             scram_user, scram_password, oauth_pem_path ):
@@ -145,11 +145,11 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.ssl.keystore.password'] = kafka_broker_keystore_storepass
                 final_dict['listener.name.' + listener_name + '.ssl.key.password'] = kafka_broker_keystore_keypass
 
-            if listeners_dict[listener].get('pkcs12_enabled', default_pkcs12_enabled):
+            if bouncy_castle_keystore:
                 final_dict['listener.name.' + listener_name + '.ssl.keymanager.algorithm'] = 'PKIX'
                 final_dict['listener.name.' + listener_name + '.ssl.trustmanager.algorithm'] = 'PKIX'
-                final_dict['listener.name.' + listener_name + '.ssl.keystore.type'] = 'PKCS12'
-                final_dict['listener.name.' + listener_name + '.ssl.truststore.type'] = 'PKCS12'
+                final_dict['listener.name.' + listener_name + '.ssl.keystore.type'] = 'BCFKS'
+                final_dict['listener.name.' + listener_name + '.ssl.truststore.type'] = 'BCFKS'
                 final_dict['listener.name.' + listener_name + '.ssl.enabled.protocols'] = 'TLSv1.2'
 
             if listeners_dict[listener].get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
@@ -176,7 +176,7 @@ class FilterModule(object):
 
         return final_dict
 
-    def client_properties(self, listener_dict, default_ssl_enabled, default_pkcs12_enabled, default_ssl_mutual_auth_enabled, default_sasl_protocol,
+    def client_properties(self, listener_dict, default_ssl_enabled, bouncy_castle_keystore, default_ssl_mutual_auth_enabled, default_sasl_protocol,
                             config_prefix, truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass,
                             omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
                             kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
@@ -200,11 +200,11 @@ class FilterModule(object):
             final_dict[config_prefix + 'ssl.keystore.password'] = keystore_storepass
             final_dict[config_prefix + 'ssl.key.password'] = keystore_keypass
 
-        if listener_dict.get('pkcs12_enabled', default_pkcs12_enabled):
+        if bouncy_castle_keystore:
             final_dict[config_prefix + 'ssl.keymanager.algorithm'] = 'PKIX'
             final_dict[config_prefix + 'ssl.trustmanager.algorithm'] = 'PKIX'
-            final_dict[config_prefix + 'ssl.keystore.type'] = 'PKCS12'
-            final_dict[config_prefix + 'ssl.truststore.type'] = 'PKCS12'
+            final_dict[config_prefix + 'ssl.keystore.type'] = 'BCFKS'
+            final_dict[config_prefix + 'ssl.truststore.type'] = 'BCFKS'
 
         if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'PLAIN' and not omit_jaas_configs:
             final_dict[config_prefix + 'sasl.mechanism'] = 'PLAIN'
@@ -239,7 +239,7 @@ class FilterModule(object):
         final_dict = {}
         for ansible_group in connect_group_list:
             # connect_group_list defaults to ['kafka_connect'], but there may be scenario where no connect group exists
-            if ansible_group in groups.keys():
+            if ansible_group in groups.keys() and len(groups[ansible_group]) > 0:
                 delegate_host = hostvars[groups[ansible_group][0]]
                 group_id = delegate_host.get('kafka_connect_group_id', default_connect_group_id)
 
@@ -270,7 +270,7 @@ class FilterModule(object):
         final_dict = {}
         for ansible_group in ksql_group_list:
             # ksql_group_list defaults to ['ksql'], but there may be scenario where no ksql group exists
-            if ansible_group in groups.keys():
+            if ansible_group in groups.keys() and len(groups[ansible_group]) > 0:
                 urls = []
                 advertised_urls = []
                 for host in groups[ansible_group]:

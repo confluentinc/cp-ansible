@@ -1,8 +1,8 @@
 ---
 - include_role:
     name: confluent.common
-  tags: common
   when: not common_role_completed|bool
+  tags: common
 
 - name: Gather OS Facts
   setup:
@@ -92,6 +92,7 @@
     control_center_ssl_enabled|bool or
     kafka_broker_listeners[control_center_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
     mds_tls_enabled | bool
+  tags: ssl
 
 - name: Configure Kerberos
   include_role:
@@ -126,6 +127,19 @@
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
 
+- name: Create Control Center Config with Secrets Protection
+  include_tasks: ../../tasks/secrets_protection.yml
+  vars:
+    encrypt_passwords: "{{ control_center_secrets_protection_encrypt_passwords }}"
+    properties: "{{ control_center_secrets_protection_encrypt_properties }}"
+    config_path: "{{ control_center.config_file }}"
+    config_template: control-center.properties.j2
+    secrets_file: "{{ control_center_secrets_protection_file }}"
+    secrets_file_owner: "{{ control_center_user }}"
+    secrets_file_group: "{{ control_center_group }}"
+    handler: restart control center
+  when: control_center_secrets_protection_enabled|bool
+
 - name: Create Control Center Config
   template:
     src: control-center.properties.j2
@@ -134,6 +148,7 @@
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
   notify: restart control center
+  when: not control_center_secrets_protection_enabled|bool
 
 - name: Set Permissions on /var/log/confluent
   file:
@@ -149,6 +164,16 @@
     group: "{{control_center_group}}"
     owner: "{{control_center_user}}"
     mode: 0770
+
+- name: Update log4j Config for Log Cleanup
+  include_role:
+    name: confluent.common
+    tasks_from: update_log4j.yml
+  vars:
+    log4j_file: "{{control_center.log4j_file}}"
+    log4j_root_logger: "{{control_center_log4j_root_logger}}"
+    handler: "restart control center"
+  when: control_center_custom_log4j|bool
 
 - name: Set Permissions on Log4j Conf
   file:
@@ -173,16 +198,6 @@
     owner: "{{control_center_user}}"
     recurse: true
   when: control_center_rocksdb_path != ""
-
-- name: Enable Secrets Protection
-  include_role:
-    name: confluent.common
-    tasks_from: secrets_protection.yml
-  vars:
-    encrypt_passwords: "{{ control_center_secrets_protection_encrypt_passwords }}"
-    properties: "{{ control_center_secrets_protection_encrypt_properties }}"
-    config_path: "{{ control_center.config_file }}"
-  when: control_center_secrets_protection_enabled|bool
 
 - name: Create Service Override Directory
   file:
