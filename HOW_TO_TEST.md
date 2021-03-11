@@ -29,7 +29,7 @@ You might find Molecule failing with an error like:
 ```
 ImportError: No module named docker.common
 ```
-You can spend some time troubleshooting this issue with the prerequisites.
+You can spend some time troubleshooting this issue with the prerequisites.  
 As a workaround you can use molecule in a container.  
 
 In your current shell create an alias to start molecule in a container: 
