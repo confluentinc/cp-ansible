@@ -23,6 +23,48 @@ Note: We recommend increasing your docker memory to at least 20GB of RAM and you
 
 The following is a list of the most common commands used with Molecule.
 
+### A note about Molecule
+
+You might find Molecule failing with an error like: 
+```
+ImportError: No module named docker.common
+```
+You can spend some time troubleshooting this issue with the prerequisites.
+As a workaround you can use molecule in a container.  
+
+#### Method 1
+In your current shell create an alias to start molecule in a container: 
+
+```
+git clone https://github.com/confluentinc/cp-ansible
+cd cp-ansible
+git checkout 6.1.0-post
+export CP_ANISBLE_PATH=$PWD
+alias molecule="docker run -it --rm --dns="8.8.8.8" -v "/var/run/docker.sock:/var/run/docker.sock" -v ~/.cache:/root/.cache -v "$CP_ANISBLE_PATH:$CP_ANISBLE_PATH" -w "$CP_ANISBLE_PATH/roles/confluent.test" quay.io/ansible/molecule:3.1.5 molecule"
+```
+
+Now you can run the molecule command as suggested later on. 
+
+#### Method 2
+
+You can also consider integrating the alias in your bashrc file. 
+
+```
+git clone https://github.com/confluentinc/cp-ansible
+cd cp-ansible
+git checkout 6.1.0-post
+```
+
+After that, in your bashrc file add the followings:
+
+```
+export CP_ANISBLE_PATH=<Replace this with the repo path>
+alias molecule="docker run -it --rm --dns="8.8.8.8" -v "/var/run/docker.sock:/var/run/docker.sock" -v ~/.cache:/root/.cache -v "$CP_ANISBLE_PATH:$CP_ANISBLE_PATH" -w "$CP_ANISBLE_PATH/roles/confluent.test" quay.io/ansible/molecule:3.1.5 molecule"
+```
+
+Now you can run the molecule command as suggested later on. 
+
+
 ### Running a role
 
 Molecule allows for testing a role and will live inside a role's directory in a sub directory named molecule. Currently, most tests reside inside a special role called confluent.test in sub directories which use the following naming convention:
