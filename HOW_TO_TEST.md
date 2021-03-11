@@ -27,7 +27,8 @@ At times, pip installation of molecule can lead to errors:
 ImportError: No module named docker.common
 ```
 
-As a workaround you can use molecule in a container. In your current shell create an alias to start molecule in a container:
+As a workaround you can use molecule in a container.  
+In your current shell create an alias to start molecule in a container:
 
 ```
 git clone https://github.com/confluentinc/cp-ansible
