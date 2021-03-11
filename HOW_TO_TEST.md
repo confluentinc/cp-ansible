@@ -9,7 +9,7 @@ Starting with CP-Ansible 5.5.0, we have included testing via the [Molecule](http
 
 Note: We recommend increasing your docker memory to at least 20GB of RAM and your CPU count to 10.  
 
-## Installing Molecule via pip
+### Installing Molecule via pip
 
 To install the Molecule and Docker libraries  
 
