@@ -68,7 +68,7 @@ zookeeper_properties:
     properties: "{{ zookeeper_servers | split_to_dict }}"
 
 # Used only by zookeeper properties
-zookeeper_servers: "{% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}server.{{ hostvars[host]['zookeeper_id'] | default(groups.zookeeper.index(host) + 1)}}={{ zookeeper_current_node_hostname if host == inventory_hostname else host }}:{{zookeeper_peer_port}}:{{zookeeper_leader_port}}{% endfor %}"
+zookeeper_servers: "{% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}server.{{ hostvars[host]['zookeeper_id'] | default(groups.zookeeper.index(host) + 1)}}={{ zookeeper_current_node_hostname if host == inventory_hostname else hostvars[host]|resolve_hostname }}:{{zookeeper_peer_port}}:{{zookeeper_leader_port}}{% endfor %}"
 
 zookeeper_combined_properties: "{{ zookeeper_properties | combine_properties }}"
 
@@ -131,11 +131,11 @@ kafka_broker_properties:
       confluent.security.event.logger.exporter.kafka.topic.replicas: "{{audit_logs_destination_bootstrap_servers.split(',')|length if audit_logs_destination_enabled and rbac_enabled else kafka_broker_default_internal_replication_factor}}"
       confluent.support.metrics.enable: "true"
       confluent.support.customer.id: anonymous
-      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}"
+      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}"
       log.dirs: "{{ kafka_broker.datadir | join(',') }}"
       listener.security.protocol.map: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
       listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://:{{ listener['value']['port'] }}{% endfor %}"
-      advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(inventory_hostname) }}:{{ listener['value']['port'] }}{% endfor %}"
+      advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(hostvars[inventory_hostname]|resolve_hostname)  }}:{{ listener['value']['port'] }}{% endfor %}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
       kafka.rest.enable: "{{kafka_broker_rest_proxy_enabled|string|lower}}"
   broker_id:
@@ -214,7 +214,7 @@ kafka_broker_properties:
   rbac_mds:
     enabled: "{{ rbac_enabled and not external_mds_enabled }}"
     properties:
-      confluent.metadata.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(inventory_hostname) }}:{{mds_port}}"
+      confluent.metadata.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|resolve_hostname) }}:{{mds_port}}"
       confluent.metadata.server.listeners: "{{mds_http_protocol}}://0.0.0.0:{{mds_port}}"
       confluent.metadata.server.token.auth.enable: "true"
       confluent.metadata.server.token.max.lifetime.ms: 3600000
@@ -256,7 +256,7 @@ kafka_broker_properties:
     # Do not need duplicating confluent.metadata.server and confluent.http.server config, rely on mds configs when kafka is the mds
     enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) }}"
     properties:
-      confluent.http.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(inventory_hostname) }}:{{mds_port}}"
+      confluent.http.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|resolve_hostname) }}:{{mds_port}}"
       confluent.http.server.listeners: "{{mds_http_protocol}}://0.0.0.0:{{mds_port}}"
   embedded_rest_proxy_ssl:
     enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_ssl_enabled }}"
@@ -277,7 +277,7 @@ kafka_broker_properties:
     enabled: "{{ kafka_broker_rest_proxy_enabled }}"
     properties:
       # Internal listener will be the token listener when rbac is enabled
-      kafka.rest.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners['internal']['port']|string + ',') }}:{{kafka_broker_listeners['internal']['port']}}"
+      kafka.rest.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners['internal']['port']|string + ',') }}:{{kafka_broker_listeners['internal']['port']}}"
   embedded_rest_proxy_client:
     enabled: "{{ kafka_broker_rest_proxy_enabled }}"
     properties: "{{ kafka_broker_listeners['internal'] | client_properties(ssl_enabled, fips_enabled, ssl_mutual_auth_enabled, sasl_protocol,
@@ -313,7 +313,7 @@ kafka_broker_properties:
     enabled: "{{ kafka_broker_metrics_reporter_enabled|bool }}"
     properties:
       metric.reporters: io.confluent.metrics.reporter.ConfluentMetricsReporter
-      confluent.metrics.reporter.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}}"
+      confluent.metrics.reporter.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}}"
       confluent.metrics.reporter.topic.replicas: "{{kafka_broker_default_internal_replication_factor}}"
   metrics_reporter_client:
     enabled: "{{ kafka_broker_metrics_reporter_enabled|bool }}"
@@ -406,7 +406,7 @@ schema_registry:
 
 schema_registry_http_protocol: "{{ 'https' if schema_registry_ssl_enabled|bool else 'http' }}"
 
-schema_registry_url: "{{schema_registry_http_protocol}}://{{ groups['schema_registry'] | default(['localhost']) | join(':' + schema_registry_listener_port|string + ',' + schema_registry_http_protocol + '://') }}:{{schema_registry_listener_port}}"
+schema_registry_url: "{{schema_registry_http_protocol}}://{{ groups['schema_registry'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + schema_registry_listener_port|string + ',' + schema_registry_http_protocol + '://') }}:{{schema_registry_listener_port}}"
 
 schema_registry_properties:
   defaults:
@@ -417,9 +417,9 @@ schema_registry_properties:
       kafkastore.topic: _schemas
       kafkastore.topic.replication.factor: "{{schema_registry_default_internal_replication_factor}}"
       listeners: "{{schema_registry_http_protocol}}://0.0.0.0:{{schema_registry_listener_port}}"
-      host.name: "{{inventory_hostname}}"
+      host.name: "{{ hostvars[inventory_hostname]|resolve_hostname }}"
       inter.instance.protocol: "{{schema_registry_http_protocol}}"
-      kafkastore.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[schema_registry_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[schema_registry_kafka_listener_name]['port']}}"
+      kafkastore.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost'])  | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[schema_registry_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[schema_registry_kafka_listener_name]['port']}}"
       confluent.license.topic: _confluent-license
   ssl:
     enabled: "{{schema_registry_ssl_enabled}}"
@@ -546,11 +546,11 @@ kafka_connect_properties:
       connector.client.config.override.policy: All
       listeners: "{{kafka_connect_http_protocol}}://0.0.0.0:{{kafka_connect_rest_port}}"
       rest.advertised.listener: "{{kafka_connect_http_protocol}}"
-      rest.advertised.host.name: "{{inventory_hostname}}"
+      rest.advertised.host.name: "{{ hostvars[inventory_hostname]|resolve_hostname }}"
       rest.advertised.port: "{{kafka_connect_rest_port}}"
-      bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
-      producer.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
-      consumer.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
+      bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
+      producer.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
+      consumer.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
       confluent.license.topic: _confluent-command
   rest_classes:
     enabled: "{{ kafka_connect_final_rest_extension_classes|length > 0 }}"
@@ -611,8 +611,8 @@ kafka_connect_properties:
     enabled: "{{ kafka_connect_monitoring_interceptors_enabled|bool }}"
     properties:
       confluent.monitoring.interceptor.topic: _confluent-monitoring
-      producer.confluent.monitoring.interceptor.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
-      consumer.confluent.monitoring.interceptor.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
+      producer.confluent.monitoring.interceptor.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
+      consumer.confluent.monitoring.interceptor.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
       consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
       producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
   producer_monitoring_interceptor_client:
@@ -657,7 +657,7 @@ kafka_connect_properties:
       config.providers.secret.param.kafkastore.topic: _confluent-secrets
       config.providers.secret.param.kafkastore.topic.replication.factor: "{{kafka_connect_secret_registry_default_replication_factor}}"
       config.providers.secret.param.secret.registry.group.id: secret-registry
-      config.providers.secret.param.kafkastore.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
+      config.providers.secret.param.kafkastore.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_connect_kafka_listener_name]['port']}}"
   secret_registry_client:
     enabled: true
     properties: "{{ kafka_broker_listeners[kafka_connect_kafka_listener_name] | client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
@@ -733,7 +733,7 @@ ksql_properties:
       ksql.streams.producer.delivery.timeout.ms: 2147483647
       ksql.streams.producer.max.block.ms: 9223372036854775807
       listeners: "{{ksql_http_protocol}}://0.0.0.0:{{ksql_listener_port}}"
-      bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[ksql_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[ksql_kafka_listener_name]['port']}}"
+      bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[ksql_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[ksql_kafka_listener_name]['port']}}"
       security.protocol: "{{kafka_broker_listeners[ksql_kafka_listener_name] | kafka_protocol_defaults(ssl_enabled, sasl_protocol) }}"
   ssl:
     # KSQL SSL properties shared with Kafka Broker
@@ -797,7 +797,7 @@ ksql_properties:
       confluent.monitoring.interceptor.topic: _confluent-monitoring
       producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
       consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
-      confluent.monitoring.interceptor.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[ksql_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[ksql_kafka_listener_name]['port']}}"
+      confluent.monitoring.interceptor.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[ksql_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[ksql_kafka_listener_name]['port']}}"
   monitoring_interceptor_client:
     enabled: "{{ ksql_monitoring_interceptors_enabled|bool }}"
     properties: "{{ kafka_broker_listeners[ksql_kafka_listener_name] | client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
@@ -882,8 +882,8 @@ kafka_rest_properties:
     enabled: true
     properties:
       listeners: "{{kafka_rest_http_protocol}}://0.0.0.0:{{kafka_rest_port}}"
-      host.name: "{{inventory_hostname}}"
-      bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}"
+      host.name: "{{ hostvars[inventory_hostname]|resolve_hostname }}"
+      bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}"
       confluent.license.topic: _confluent-license
   id:
     enabled: "{{ inventory_hostname in groups.kafka_rest }}"
@@ -936,7 +936,7 @@ kafka_rest_properties:
       confluent.monitoring.interceptor.topic: _confluent-monitoring
       producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
       consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
-      confluent.monitoring.interceptor.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}"
+      confluent.monitoring.interceptor.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}"
   monitoring_interceptor_client:
     enabled: "{{ kafka_rest_monitoring_interceptors_enabled|bool }}"
     properties: "{{ kafka_broker_listeners[kafka_rest_kafka_listener_name] | client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
@@ -1024,7 +1024,7 @@ control_center_properties:
       confluent.monitoring.interceptor.topic.replication: "{{control_center_default_internal_replication_factor}}"
       confluent.controlcenter.command.topic.replication: "{{control_center_default_internal_replication_factor}}"
       confluent.controlcenter.rest.listeners: "{{control_center_http_protocol}}://{{control_center_listener_hostname}}:{{control_center_port}}"
-      bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | join(':' + kafka_broker_listeners[control_center_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[control_center_kafka_listener_name]['port']}}"
+      bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[control_center_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[control_center_kafka_listener_name]['port']}}"
       confluent.controlcenter.streams.security.protocol: "{{kafka_broker_listeners[control_center_kafka_listener_name] | kafka_protocol_defaults(ssl_enabled, sasl_protocol) }}"
   ssl:
     enabled: "{{control_center_ssl_enabled or (kafka_broker_rest_proxy_enabled and mds_tls_enabled) }}"
@@ -1037,7 +1037,7 @@ control_center_properties:
   broker_embedded_rest_endpoint:
     enabled: "{{kafka_broker_rest_proxy_enabled or rbac_enabled }}"
     properties:
-      confluent.controlcenter.streams.cprest.url: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
+      confluent.controlcenter.streams.cprest.url: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
   kafka_client:
     enabled: true
     properties: "{{ kafka_broker_listeners[control_center_kafka_listener_name] | client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
@@ -1146,7 +1146,7 @@ kafka_connect_replicator_properties:
     properties:
       listeners: "{{kafka_connect_replicator_http_protocol}}://0.0.0.0:{{kafka_connect_replicator_port}}"
       rest.advertised.listener: "{{kafka_connect_replicator_http_protocol}}"
-      rest.advertised.host.name: "{{inventory_hostname}}"
+      rest.advertised.host.name: "{{ hostvars[inventory_hostname]|resolve_hostname }}"
       rest.advertised.port: "{{kafka_connect_replicator_port}}"
       confluent.topic.bootstrap.servers: "{{kafka_connect_replicator_bootstrap_servers}}"
       offset.start: "{{kafka_connect_replicator_offset_start}}"
