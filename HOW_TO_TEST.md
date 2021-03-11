@@ -32,7 +32,6 @@ ImportError: No module named docker.common
 You can spend some time troubleshooting this issue with the prerequisites.
 As a workaround you can use molecule in a container.  
 
-#### Method 1
 In your current shell create an alias to start molecule in a container: 
 
 ```
@@ -43,9 +42,6 @@ alias molecule="docker run -it --rm --dns="8.8.8.8" -v "/var/run/docker.sock:/va
 ```
 
 Now you can run the molecule command as suggested later on. 
-
-#### Method 2
-
 You can also consider integrating the alias in your bashrc file. 
 
 ```
