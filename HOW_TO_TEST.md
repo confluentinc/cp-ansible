@@ -1,6 +1,6 @@
 # How to test
 
-Starting with CP-Ansible 5.5.0, we have included testing via the [Molecule](https://molecule.readthedocs.io/en/latest/) framework, and strongly advise it's usage before submitting a Pull Request.
+Starting with CP-Ansible 5.5.0, we have included testing via the [Molecule](https://molecule.readthedocs.io/en/latest/) framework, and strongly advise its usage before submitting a Pull Request.
 
 ## Prerequisites
 
@@ -8,7 +8,14 @@ Starting with CP-Ansible 5.5.0, we have included testing via the [Molecule](http
 2. Docker installed
 3. Install the Molecule and Docker libraries
 
+
 ```pip install molecule docker```
+
+Note: If using Molecule version 3.1.0 or later use the following command to install:
+
+```pip3 install molecule molecule-docker```
+
+
 
 Note: We recommend increasing your docker memory to at least 20GB of RAM and your CPU count to 10.
 
@@ -26,11 +33,10 @@ To get a list of the scenarios:
 
 ```ls roles/confluent.test/molecule```
 
-To the run scenarios: 
+To the run scenarios:
 
 ```cd roles/confluent.test```
 ```molecule converge -s <scenario name>```
-
 
 ### SSHing into a container
 

@@ -49,6 +49,7 @@ for line in `sed '/^$/d' $filename`; do
       IFS=$OIFS
       service=${split_hostnames[0]}
       internal=${split_hostnames[1]}
+      fqdn=$internal.confluent
       # external=${split_hostnames[2]}
       # echo "Service: $service hostname: $internal"
 
@@ -58,29 +59,35 @@ for line in `sed '/^$/d' $filename`; do
       CSR_FILENAME=$internal.csr
       CRT_SIGNED_FILENAME=$internal-ca1-signed.crt
       KEY_FILENAME=$internal-key.pem
-      EXT="SAN=dns:$internal"
-      # EXT="SAN=dns:$external,dns:$internal"
+      # EXT="SAN=dns:$internal"
+      EXT="SAN=dns:$internal,dns:$fqdn"
+
+      FORMAT=$1
+
+
 
       echo "  >>>  Create host keystore"
-      keytool -genkey -noprompt \
+      keytool -genkeypair -noprompt \
           -keystore $KEYSTORE_FILENAME \
           -alias $alias \
           -dname "CN=$service,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US" \
           -ext $EXT \
           -keyalg RSA \
-          -storetype pkcs12 \
+          -storetype $FORMAT \
           -keysize 2048 \
           -storepass keystorepass \
           -keypass keystorepass
 
 
-      echo "  >>>  Get host key from Keystore"
-      openssl pkcs12 \
-          -in $KEYSTORE_FILENAME \
-          -passin pass:keystorepass \
-          -passout pass:keypass \
-          -nodes -nocerts \
-          -out $KEY_FILENAME
+      if [ $FORMAT = "pkcs12" ]; then
+         echo "  >>>  Get host key from Keystore"
+         openssl pkcs12 \
+             -in $KEYSTORE_FILENAME \
+             -passin pass:keystorepass \
+             -passout pass:keypass \
+             -nodes -nocerts \
+             -out $KEY_FILENAME
+      fi
 
       echo "  >>>  Create the certificate signing request (CSR)"
       keytool -certreq \
@@ -113,6 +120,7 @@ CN = $service
 subjectAltName = @alt_names
 [alt_names]
 DNS.1 = $internal
+DNS.2 = $fqdn
 EOF
 )
 
@@ -123,6 +131,18 @@ EOF
           -file $CA_CRT  \
           -storepass keystorepass \
           -keypass keystorepass
+
+
+      if (( $# == 2 ))
+      then
+        echo "  >>>  Import the CA cert twice into the keystore"
+        keytool -noprompt -import \
+            -keystore $KEYSTORE_FILENAME \
+            -alias dumbcert \
+            -file $CA_CRT  \
+            -storepass keystorepass \
+            -keypass keystorepass
+      fi
 
       echo "  >>> Import the host certificate into the keystore"
       keytool -noprompt -import \

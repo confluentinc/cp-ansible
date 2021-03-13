@@ -1,13 +1,19 @@
 ---
+- name: Get Principal used on the Inter Broker Listener
+  include_tasks: set_principal.yml
+  when: ksql_log_streaming_enabled | bool
+
 - name: RBAC Setup Tasks
-  include_tasks: ../../tasks/rbac_setup.yml
+  import_role:
+    name: confluent.common
+    tasks_from: rbac_setup.yml
   vars:
     user: "{{ksql_user}}"
     group: "{{ksql_group}}"
 
 - name: Grant role System Admin to Additional KSQL Super Users
   uri:
-    url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{item}}/roles/SystemAdmin"
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{item}}/roles/SystemAdmin"
     method: POST
     validate_certs: false
     force_basic_auth: true
@@ -20,7 +26,7 @@
       {
         "clusters": {
           "kafka-cluster": "{{kafka_cluster_id}}",
-          "ksql-cluster": "{{ksql.properties['ksql.service.id']}}"
+          "ksql-cluster": "{{ksql_final_properties['ksql.service.id']}}"
         }
       }
     status_code: 204
@@ -28,7 +34,7 @@
 
 - name: Grant ResourceOwner of KSQL Cluster on KSQL User
   uri:
-    url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/ResourceOwner/bindings"
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/ResourceOwner/bindings"
     method: POST
     validate_certs: false
     force_basic_auth: true
@@ -42,7 +48,7 @@
         "scope": {
           "clusters": {
             "kafka-cluster":"{{kafka_cluster_id}}",
-            "ksql-cluster":"{{ksql.properties['ksql.service.id']}}"
+            "ksql-cluster":"{{ksql_final_properties['ksql.service.id']}}"
           }
         },
         "resourcePatterns": [{
@@ -52,9 +58,9 @@
       }
     status_code: 204
 
-- name: Grant ksql user the ResourceOwner role with three resourcePatterns
+- name: Grant ksql user the ResourceOwner role with four resourcePatterns
   uri:
-    url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/ResourceOwner/bindings"
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/ResourceOwner/bindings"
     method: POST
     validate_certs: false
     force_basic_auth: true
@@ -72,19 +78,19 @@
         },
         "resourcePatterns": [
           {
-            "resourceType": "Topic",
-            "name": "_confluent-ksql-{{ksql.properties['ksql.service.id']}}_command_topic",
-            "patternType":"LITERAL"
-          },
-          {
             "resourceType":"Topic",
-            "name":"{{ksql.properties['ksql.service.id']}}-ksql_processing_log",
+            "name":"{{ksql_final_properties['ksql.service.id']}}-ksql_processing_log",
             "patternType":"LITERAL"
           },
           {
             "resourceType":"Group",
-            "name":"_confluent-ksql-{{ksql.properties['ksql.service.id']}}",
+            "name":"_confluent-ksql-{{ksql_final_properties['ksql.service.id']}}",
             "patternType":"PREFIXED"
+          },
+          {
+            "resourceType":"Topic",
+            "name": "_confluent-ksql-{{ksql_final_properties['ksql.service.id']}}",
+            "patternType": "PREFIXED"
           }
         ]
       }
@@ -92,7 +98,7 @@
 
 - name: Grant ksql user the DeveloperWrite role on resourceType TransactionalId
   uri:
-    url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/DeveloperWrite/bindings"
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/DeveloperWrite/bindings"
     method: POST
     validate_certs: false
     force_basic_auth: true
@@ -110,16 +116,15 @@
         },
         "resourcePatterns": [{
           "resourceType": "TransactionalId",
-          "name": "{{ksql.properties['ksql.service.id']}}",
+          "name": "{{ksql_final_properties['ksql.service.id']}}",
           "patternType":"LITERAL"
         }]
       }
     status_code: 204
 
-# TODO find a way to get around hardcoding this sr cluster id
-- name: Grant ksql user the DeveloperRead role on resourceType Subject in Schema Registry Cluster
+- name: Grant ksql user the ResourceOwner role on resourceType Subject in Schema Registry Cluster
   uri:
-    url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/DeveloperRead/bindings"
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/ResourceOwner/bindings"
     method: POST
     validate_certs: false
     force_basic_auth: true
@@ -133,14 +138,73 @@
         "scope": {
           "clusters": {
             "kafka-cluster":"{{kafka_cluster_id}}",
-            "schema-registry-cluster":"schema-registry"
+            "schema-registry-cluster":"{{schema_registry_final_properties['schema.registry.group.id']}}"
           }
         },
         "resourcePatterns": [{
           "resourceType": "Subject",
-          "name": "_confluent-ksql-{{ksql.properties['ksql.service.id']}}",
+          "name": "_confluent-ksql-{{ksql_final_properties['ksql.service.id']}}",
           "patternType":"PREFIXED"
         }]
       }
     status_code: 204
   when: "'schema_registry' in groups"
+
+- name: Grant ksql user the DeveloperWrite role on Monitoring Interceptor Topic
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{ksql_ldap_user}}/roles/DeveloperWrite/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster":"{{kafka_cluster_id}}"
+          }
+        },
+        "resourcePatterns": [{
+          "resourceType": "Topic",
+          "name": "{{ksql_final_properties['confluent.monitoring.interceptor.topic']}}",
+          "patternType":"LITERAL"
+        }]
+      }
+    status_code: 204
+  when: ksql_monitoring_interceptors_enabled|bool
+
+- name: Grant ksql user the ResourceOwner role on the Processing Log Topic
+  uri:
+    url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{item}}/roles/ResourceOwner/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster":"{{kafka_cluster_id}}"
+          }
+        },
+        "resourcePatterns": [
+          {
+            "resourceType":"Topic",
+            "name":"{{ksql_final_properties['ksql.service.id']}}processing_log",
+            "patternType":"LITERAL"
+          }
+        ]
+      }
+    status_code: 204
+  loop:
+    - "{{ksql_ldap_user}}"
+    - "{{ksql_log4j_principal}}"
+  when: ksql_log_streaming_enabled | bool

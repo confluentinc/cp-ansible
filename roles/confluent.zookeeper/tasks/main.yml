@@ -1,20 +1,37 @@
 ---
 - include_role:
     name: confluent.common
+  tags: common
   when: not common_role_completed|bool
+
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_fqdn
 
 - name: Install the Zookeeper Packages
   yum:
     name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{zookeeper_packages}}"
-  when: ansible_os_family == "RedHat"
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
+  tags: package
 
 - name: Install the Zookeeper Packages
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{zookeeper_packages}}"
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
+  tags: package
 
 # Configure environment
 - name: Create Zookeeper Group
@@ -28,6 +45,17 @@
     system: true
     group: "{{zookeeper_group}}"
 
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Zookeeper Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{zookeeper.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{zookeeper.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method == "archive"
+
 - include_role:
     name: confluent.ssl
   vars:
@@ -37,10 +65,13 @@
     keystore_storepass: "{{zookeeper_keystore_storepass}}"
     keystore_keypass: "{{zookeeper_keystore_keypass}}"
     service_name: zookeeper
+    user: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
     hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
     ca_cert_path: "{{zookeeper_ca_cert_path}}"
     cert_path: "{{zookeeper_cert_path}}"
     key_path: "{{zookeeper_key_path}}"
+    export_certs: "{{zookeeper_export_certs}}"
   when: zookeeper_ssl_enabled|bool
 
 - name: Configure Kerberos
@@ -50,29 +81,65 @@
     kerberos_group: "{{zookeeper_group}}"
     kerberos_user: "{{zookeeper_user}}"
     kerberos_keytab_path: "{{zookeeper_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{zookeeper_keytab_path}}"
     kerberos_handler: "restart zookeeper"
   when: zookeeper_sasl_protocol == 'kerberos'
 
-- name: Set Zookeeper dataDir ownership
+- name: Copy Custom Zookeeper Files
+  include_role:
+    name: confluent.common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{zookeeper_copy_files}}"
+    user: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+  when: zookeeper_copy_files | length > 0
+
+- name: Set Zookeeper Data Dir Ownership
   file:
-    path: "{{zookeeper.properties.dataDir}}"
+    path: "{{zookeeper_final_properties.dataDir}}"
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
     state: directory
     mode: 0750
 
-- name: Set Ownership of Data Dir files
+- name: Set Ownership of Data Dir Files
   file:
-    path: "{{zookeeper.properties.dataDir}}"
+    path: "{{zookeeper_final_properties.dataDir}}"
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
     recurse: true
 
+- name: Set Zookeeper Transaction Log Data Dir Ownership
+  file:
+    path: "{{zookeeper_final_properties.dataLogDir}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+    state: directory
+    mode: 0750
+  when: zookeeper_final_properties.dataLogDir is defined
+
+- name: Set Ownership of Transaction Log Data Dir Files
+  file:
+    path: "{{zookeeper_final_properties.dataLogDir}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+    recurse: true
+  when: zookeeper_final_properties.dataLogDir is defined
+
 - name: Create Zookeeper myid File
   template:
     src: myid.j2
-    dest: "{{zookeeper.properties.dataDir}}/myid"
-    mode: 0555
+    dest: "{{zookeeper_final_properties.dataDir}}/myid"
+    mode: 0640
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+
+- name: Create Zookeeper Config directory
+  file:
+    path: "{{ zookeeper.config_file | dirname }}"
+    state: directory
+    mode: 0750
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
 
@@ -80,7 +147,7 @@
   template:
     src: zookeeper.properties.j2
     dest: "{{zookeeper.config_file}}"
-    mode: 0400
+    mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
   register: zookeeper_config
@@ -88,11 +155,19 @@
 
 - name: Create Log Directory
   file:
-    path: "{{zookeeper.log_path}}"
+    path: "{{zookeeper_log_dir}}"
     state: directory
     group: "{{zookeeper_group}}"
     owner: "{{zookeeper_user}}"
     mode: 0770
+
+- name: Create log4j Directory
+  file:
+    path: "{{zookeeper.log4j_file | dirname}}"
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+    state: directory
+    mode: 0750
 
 - name: Create Zookeeper log4j config
   template:
@@ -101,6 +176,17 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
+  when: zookeeper_custom_log4j|bool
+  notify: restart zookeeper
+
+- name: Create Zookeeper Jolokia Config
+  template:
+    src: zookeeper_jolokia.properties.j2
+    dest: "{{zookeeper_jolokia_config}}"
+    mode: 0640
+    owner: "{{zookeeper_user}}"
+    group: "{{zookeeper_group}}"
+  when: zookeeper_jolokia_enabled|bool
   notify: restart zookeeper
 
 - name: Create Zookeeper Jaas config
@@ -120,7 +206,7 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-  when: jmxexporter_enabled|bool
+  when: zookeeper_jmxexporter_enabled|bool
 
 - name: Create Service Override Directory
   file:
@@ -155,5 +241,5 @@
 - name: Zookeeper Health Check
   include: health_check.yml
   when:
-    - health_checks_enabled|bool
+    - zookeeper_health_checks_enabled|bool
     - not ansible_check_mode

@@ -1,42 +1,36 @@
 ---
-control_center_custom_log4j: "{{ custom_log4j }}"
+# More control_center variables are defined in the confluent.variables role
 
-control_center_java_args: []
+control_center_java_args:
+  - "{% if control_center_ssl_enabled|bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
 
+### Custom Java Args to add to the Control Center Process
 control_center_custom_java_args: ""
+
 control_center_final_java_args: "{{ control_center_java_args + [ control_center_custom_java_args ] }}"
 
-control_center_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | length, 3 ] | min }}"
+### Full Path to the RocksDB Data Directory. If left as empty string, cp-ansible will not configure RocksDB
 control_center_rocksdb_path: ""
 
-# C3 already has LimitNOFILE value set in unit file, empty value will not get written to override.conf
+# For following dictionaries, Key/Value Pairs with empty values will not be written into override.conf
+
+### Overrides to the Service Section of Control Center Systemd File. This variable is a dictionary.
 control_center_service_overrides:
-  LimitNOFILE:
   User: "{{ control_center_user if control_center_user != control_center_default_user else '' }}"
   Group: "{{ control_center_group if control_center_group != control_center_default_group else '' }}"
+  ExecStart: "{% if installation_method == 'archive' %}{{ control_center.server_start_file }} {{ control_center.config_file }}{% endif %}"
+
+### Environment Variables to be added to the Control Center Service. This variable is a dictionary.
 control_center_service_environment_overrides:
   ROCKSDB_SHAREDLIB_DIR: "{{control_center_rocksdb_path}}"
   CONTROL_CENTER_HEAP_OPTS: "-Xmx6g"
   CONTROL_CENTER_OPTS: "{{ control_center_final_java_args | java_arg_build_out }}"
-  CONTROL_CENTER_LOG4J_OPTS: "{% if control_center_custom_log4j|bool %}-Dlog4j.configuration=file:{{control_center.log4j_file}}{% endif %}"
+  # Remove trailing slash if there is one
+  LOG_DIR: "{{ control_center_log_dir|regex_replace('\\/$', '') }}"
+  CONFLUENT_SECURITY_MASTER_KEY: "{% if control_center_secrets_protection_enabled|bool %}{{secrets_protection_masterkey}}{% endif %}"
 
-control_center:
-  appender_log_path: /var/log/confluent/control-center/
-  c3appender_log_name: control-center.log
-  c3appender_max_log_files: 10
-  c3appender_log_file_size: 100MB
-  streamsappender_log_name: control-center-streams.log
-  streamsappender_max_log_files: 10
-  streamsappender_log_file_size: 100MB
-  kafkaappender_log_name: control-center-kafka.log
-  kafkaappender_max_log_files: 10
-  kafkaappender_log_file_size: 100MB
-  properties:
-    confluent.controlcenter.streams.num.stream.threads: 8
-    confluent.controlcenter.data.dir: /var/lib/confluent/control-center
-    confluent.controlcenter.ksql.enable: 'true'
-    confluent.controlcenter.schema.registry.enable: 'true'
-    confluent.controlcenter.internal.topics.replication: "{{control_center_default_internal_replication_factor}}"
-    confluent.metrics.topic.replication: "{{control_center_default_internal_replication_factor}}"
-    confluent.monitoring.interceptor.topic.replication: "{{control_center_default_internal_replication_factor}}"
-    confluent.controlcenter.command.topic.replication: "{{control_center_default_internal_replication_factor}}"
+### Overrides to the Unit Section of Control Center Systemd File. This variable is a dictionary.
+control_center_service_unit_overrides:
+
+### Time in seconds to wait before starting Control Center Health Checks.
+control_center_health_check_delay: 30

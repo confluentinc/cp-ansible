@@ -1,13 +1,15 @@
 ---
 - name: RBAC Setup Tasks
-  include_tasks: ../../tasks/rbac_setup.yml
+  import_role:
+    name: confluent.common
+    tasks_from: rbac_setup.yml
   vars:
     user: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
 
 - name: Grant role System Admin to Additional Schema Registry Super Users
   uri:
-    url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{item}}/roles/SystemAdmin"
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{item}}/roles/SystemAdmin"
     method: POST
     validate_certs: false
     force_basic_auth: true
@@ -20,7 +22,7 @@
       {
         "clusters": {
           "kafka-cluster": "{{kafka_cluster_id}}",
-          "schema-registry-cluster": "{{schema_registry.properties['schema.registry.group.id']}}"
+          "schema-registry-cluster": "{{schema_registry_final_properties['schema.registry.group.id']}}"
         }
       }
     status_code: 204
@@ -28,7 +30,7 @@
 
 - name: Grant Schema Registry user the role SecurityAdmin on the Schema Registry cluster
   uri:
-    url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{schema_registry_ldap_user}}/roles/SecurityAdmin"
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_ldap_user}}/roles/SecurityAdmin"
     method: POST
     validate_certs: false
     force_basic_auth: true
@@ -41,14 +43,14 @@
       {
         "clusters": {
           "kafka-cluster": "{{kafka_cluster_id}}",
-          "schema-registry-cluster": "{{schema_registry.properties['schema.registry.group.id']}}"
+          "schema-registry-cluster": "{{schema_registry_final_properties['schema.registry.group.id']}}"
         }
       }
     status_code: 204
 
 - name: Grant Schema Registry user ResourceOwner Schema Registry Group and Topic
   uri:
-    url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{schema_registry_ldap_user}}/roles/ResourceOwner/bindings"
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_ldap_user}}/roles/ResourceOwner/bindings"
     method: POST
     validate_certs: false
     force_basic_auth: true
@@ -67,12 +69,17 @@
         "resourcePatterns": [
           {
             "resourceType":"Group",
-            "name": "{{schema_registry.properties['schema.registry.group.id']}}",
+            "name": "{{schema_registry_final_properties['schema.registry.group.id']}}",
             "patternType":"LITERAL"
           },
           {
             "resourceType":"Topic",
-            "name": "{{schema_registry.properties['kafkastore.topic']}}",
+            "name": "{{schema_registry_final_properties['kafkastore.topic']}}",
+            "patternType":"LITERAL"
+          },
+          {
+            "resourceType":"Topic",
+            "name": "{{schema_registry_final_properties['confluent.license.topic']}}",
             "patternType":"LITERAL"
           }
         ]

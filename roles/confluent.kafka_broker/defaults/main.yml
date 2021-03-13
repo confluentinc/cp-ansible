@@ -1,82 +1,49 @@
 ---
-kafka_broker_custom_log4j: true
+# More kafka_broker variables are defined in the confluent.variables role
+
+### Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
+kafka_broker_custom_log4j: "{{ custom_log4j }}"
 
 kafka_broker_java_args:
+  - "{% if kafka_broker_listeners | ssl_required(ssl_enabled) | bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
   - "{% if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms or zookeeper_sasl_protocol in ['kerberos', 'digest'] %}-Djava.security.auth.login.config={{kafka_broker.jaas_file}}{% endif %}"
-  - "{% if kafka_broker_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=port={{kafka_broker_jolokia_port}},host=0.0.0.0{% if kafka_broker_jolokia_ssl_enabled|bool %}{{kafka_broker_jolokia_java_arg_ssl_addon}}{% endif %}{% endif %}"
+  - "{% if kafka_broker_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=config={{kafka_broker_jolokia_config}}{% endif %}"
   - "{% if kafka_broker_jmxexporter_enabled|bool %}-javaagent:{{jmxexporter_jar_path}}={{kafka_broker_jmxexporter_port}}:{{kafka_broker_jmxexporter_config_path}}{% endif %}"
-  - "{% if kafka_broker_custom_log4j|bool %}-Dlog4j.configuration=file:{{kafka_broker.log4j_file}}{% endif %}"
   - "{% if zookeeper_sasl_protocol == 'kerberos' and zookeeper_kerberos_primary != 'zookeeper' %}-Dzookeeper.sasl.client.username={{zookeeper_kerberos_primary}}{% endif %}"
 
 # Strip primary from the zookeeper principal on first zk host. Adds defaults for if there is not even a zookeeper group
 zookeeper_kerberos_primary: "{{ (hostvars[ groups['zookeeper'][0] | default('zookeeper') ] | default({})) ['zookeeper_kerberos_principal'] | default('zookeeper/host@EXAMPLE>COM') | regex_replace('/.*') }}"
 
+### Custom Java Args to add to the Kafka Process
 kafka_broker_custom_java_args: ""
+
 kafka_broker_final_java_args: "{{ kafka_broker_java_args + [ kafka_broker_custom_java_args ] }}"
 
-# Kafka already has LimitNOFILE value set in unit file, empty value will not get written to override.conf
+# For following dictionaries, Key/Value Pairs with empty values will not be written into override.conf
+
+### Overrides to the Service Section of Kafka Systemd File. This variable is a dictionary.
 kafka_broker_service_overrides:
-  LimitNOFILE:
   User: "{{ kafka_broker_user if kafka_broker_user != kafka_broker_default_user else '' }}"
   Group: "{{ kafka_broker_group if kafka_broker_group != kafka_broker_default_group else '' }}"
+  ExecStart: "{% if installation_method == 'archive' %}{{ kafka_broker.server_start_file }} {{ kafka_broker.config_file }}{% endif %}"
+
+### Environment Variables to be added to the Kafka Service. This variable is a dictionary.
 kafka_broker_service_environment_overrides:
-  KAFKA_HEAP_OPTS: "-Xmx1g"
+  KAFKA_HEAP_OPTS: "-Xms6g -Xmx6g -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80"
   KAFKA_OPTS: "{{ kafka_broker_final_java_args | java_arg_build_out }}"
+  # Remove trailing slash if there is one
+  LOG_DIR: "{{ kafka_broker_log_dir|regex_replace('\\/$', '') }}"
+  CONFLUENT_SECURITY_MASTER_KEY: "{% if kafka_broker_secrets_protection_enabled|bool %}{{secrets_protection_masterkey}}{% endif %}"
+
+### Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
+kafka_broker_service_unit_overrides:
 
 kafka_broker_sysctl:
   vm.swappiness: 1
   vm.dirty_background_ratio: 5
-  vm.dirty_ratio: 60
+  vm.dirty_ratio: 80
 
 kafka_broker_sysctl_file: /etc/sysctl.conf
 
-kafka_broker_metrics_reporter_enabled: true
-
-kafka_broker_default_interal_replication_factor: "{{ [ groups['kafka_broker'] | length, 3 ] | min }}"
-
-kafka_broker:
-  appender_log_path: /var/log/kafka/
-  kafka_appender_log_name: server.log
-  kafka_appender_max_log_files: 10
-  kafka_appender_log_file_size: 100MB
-  state_change_appender_log_name: state-change.log
-  state_change_appender_max_log_files: 10
-  state_change_appender_log_file_size: 100MB
-  request_appender_log_name: kafka-request.log
-  request_appender_max_log_files: 10
-  request_appender_log_file_size: 100MB
-  cleaner_appender_log_name: log-cleaner.log
-  cleaner_appender_max_log_files: 10
-  cleaner_appender_log_file_size: 100MB
-  controller_appender_log_name: controller.log
-  controller_appender_max_log_files: 10
-  controller_appender_log_file_size: 100MB
-  authorizer_appender_log_name: kafka-authorizer.log
-  authorizer_appender_max_log_files: 10
-  authorizer_appender_log_file_size: 100MB
-  metadata_appender_log_name: metadata.log
-  metadata_appender_max_log_files: 10
-  metadata_appender_log_file_size: 100mb
-  datadir:
-    - /var/lib/kafka/data
-  properties:
-    log.retention.check.interval.ms: 300000
-    group.initial.rebalance.delay.ms: 3000
-    log.retention.hours: 168
-    log.segment.bytes: 1073741824
-    num.io.threads: 16
-    num.network.threads: 8
-    num.partitions: 1
-    num.recovery.threads.per.data.dir: 2
-    offsets.topic.replication.factor: "{{kafka_broker_default_interal_replication_factor}}"
-    socket.receive.buffer.bytes: 102400
-    socket.request.max.bytes: 104857600
-    socket.send.buffer.bytes: 102400
-    transaction.state.log.min.isr: "{{ [ 2, kafka_broker_default_interal_replication_factor|int ] | min }}"
-    transaction.state.log.replication.factor: "{{kafka_broker_default_interal_replication_factor}}"
-    zookeeper.connection.timeout.ms: 18000
-    confluent.license.topic.replication.factor: "{{kafka_broker_default_interal_replication_factor}}"
-    confluent.metadata.topic.replication.factor: "{{kafka_broker_default_interal_replication_factor}}"
-    confluent.security.event.logger.exporter.kafka.topic.replicas: "{{kafka_broker_default_interal_replication_factor}}"
-    confluent.support.metrics.enable: "{{confluent.support.metrics_enabled|bool|lower}}"
-    confluent.support.customer.id: "{{confluent.support.customer_id}}"
+### Time in seconds to wait before starting Kafka Health Checks.
+kafka_broker_health_check_delay: 30

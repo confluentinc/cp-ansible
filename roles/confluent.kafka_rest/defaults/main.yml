@@ -1,28 +1,34 @@
 ---
-kafka_rest_custom_log4j: "{{ custom_log4j }}"
+# More kafka_rest variables are defined in the confluent.variables role
 
 kafka_rest_java_args:
-  - "{% if kafka_rest_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=port={{kafka_rest_jolokia_port}},host=0.0.0.0{% if kafka_rest_jolokia_ssl_enabled|bool %},keystore={{kafka_rest_keystore_path}},keystorePassword={{kafka_rest_keystore_storepass}},protocol=https{% endif %}{% endif %}"
-  - "{% if kafka_rest_custom_log4j|bool %}-Dlog4j.configuration=file:{{kafka_rest.log4j_file}}{% endif %}"
+  - "{% if kafka_rest_ssl_enabled|bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
+  - "{% if kafka_rest_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=config={{kafka_rest_jolokia_config}}{% endif %}"
+  - "{% if kafka_rest_jmxexporter_enabled|bool %}-javaagent:{{jmxexporter_jar_path}}={{kafka_rest_jmxexporter_port}}:{{kafka_rest_jmxexporter_config_path}}{% endif %}"
 
+### Custom Java Args to add to the Rest Proxy Process
 kafka_rest_custom_java_args: ""
+
 kafka_rest_final_java_args: "{{ kafka_rest_java_args + [ kafka_rest_custom_java_args ] }}"
 
-# Rest Proxy already has LimitNOFILE value set in unit file, empty value will not get written to override.conf
+# For following dictionaries, Key/Value Pairs with empty values will not be written into override.conf
+
+### Overrides to the Service Section of Rest Proxy Systemd File. This variable is a dictionary.
 kafka_rest_service_overrides:
-  LimitNOFILE:
   User: "{{ kafka_rest_user if kafka_rest_user != kafka_rest_default_user else '' }}"
   Group: "{{ kafka_rest_group if kafka_rest_group != kafka_rest_default_group else '' }}"
-kafka_rest_service_environment_overrides:
-  LOG_DIR: /var/log/kafka-rest
-  KAFKAREST_OPTS: "{{ kafka_rest_final_java_args | java_arg_build_out }}"
+  ExecStart: "{% if installation_method == 'archive' %}{{ kafka_rest.server_start_file }} {{ kafka_rest.config_file }}{% endif %}"
 
-kafka_rest:
-  appender_log_path: /var/log/rest-proxy/
-  appender_log_name: rest-proxy.log
-  appender_max_log_files: 10
-  appender_log_file_size: 100MB
-  properties:
-    id: "{{groups.kafka_rest.index(inventory_hostname) + 1}}"
-    producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
-    consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
+### Environment Variables to be added to the Rest Proxy Service. This variable is a dictionary.
+kafka_rest_service_environment_overrides:
+  KAFKAREST_HEAP_OPTS: "-Xms1g -Xmx1g -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80"
+  KAFKAREST_OPTS: "{{ kafka_rest_final_java_args | java_arg_build_out }}"
+  # Remove trailing slash if there is one
+  LOG_DIR: "{{ kafka_rest_log_dir|regex_replace('\\/$', '') }}"
+  CONFLUENT_SECURITY_MASTER_KEY: "{% if kafka_rest_secrets_protection_enabled|bool %}{{secrets_protection_masterkey}}{% endif %}"
+
+### Overrides to the Unit Section of Rest Proxy Systemd File. This variable is a dictionary.
+kafka_rest_service_unit_overrides:
+
+### Time in seconds to wait before starting Rest Proxy Health Checks.
+kafka_rest_health_check_delay: 20

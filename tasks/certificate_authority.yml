@@ -1,68 +1,149 @@
 ---
-- name: Install OpenSSL and Rsync - RedHat
-  yum:
-    name: "{{item}}"
-    state: present
-  loop:
-    - openssl
-    - rsync
-  when: ansible_os_family == "RedHat"
+- import_role:
+    name: confluent.variables
 
-- name: Install OpenSSL and Rsync - Debian
-  apt:
-    name: "{{item}}"
-    state: present
-  loop:
-    - openssl
-    - rsync
-  when: ansible_os_family == "Debian"
+- name: Register if CA Key Exists on Ansible Controller
+  tags: certificate_authority
+  stat:
+    path: "{{playbook_dir}}/generated_ssl_files/{{ssl_self_signed_ca_key_filename}}"
+  register: controller_ca_key_stat
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
 
-- name: Create SSL Certificate Generation Directory
-  file:
-    path: /var/ssl/private/generation
-    state: directory
-    mode: 0755
+- name: Register if CA Cert Exists on Ansible Controller
+  tags: certificate_authority
+  stat:
+    path: "{{playbook_dir}}/generated_ssl_files/{{ssl_self_signed_ca_cert_filename}}"
+  register: controller_ca_cert_stat
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
 
-- name: Create Certificate Authority
-  shell: |
-    openssl req -new -x509 \
-      -keyout /var/ssl/private/generation/{{ssl_self_signed_ca_key_filename}} \
-      -out /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
-      -days 365 \
-      -subj '/CN=ca1.test.confluent.io/OU=TEST/O=CONFLUENT/L=PaloAlto/S=Ca/C=US' \
-      -passin pass:{{ssl_self_signed_ca_password}} -passout pass:{{ssl_self_signed_ca_password}}
-  when:
-    - self_signed|bool
-    - regenerate_ca|bool
-    - kafka_broker_listeners | ssl_required(ssl_enabled)
+- name: Register if MDS Private Key Exists on Ansible Controller
+  tags: certificate_authority
+  stat:
+    path: "{{playbook_dir}}/generated_ssl_files/{{token_services_private_pem_file|basename}}"
+  register: controller_mds_private_key_stat
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
 
-- name: Create MDS Private key
-  shell: |
-    openssl genrsa \
-      -out /var/ssl/private/generation/{{token_services_private_pem_file|basename}} 2048
-  when: create_mds_certs|bool
+- name: Register if MDS Public Key Exists on Ansible Controller
+  tags: certificate_authority
+  stat:
+    path: "{{playbook_dir}}/generated_ssl_files/{{token_services_public_pem_file|basename}}"
+  register: controller_mds_public_key_stat
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
 
-- name: Extract MDS Public key
-  shell: |
-    openssl rsa \
-      -in /var/ssl/private/generation/{{token_services_private_pem_file|basename}} \
-      -outform PEM -pubout \
-      -out /var/ssl/private/generation/{{token_services_public_pem_file|basename}}
-  when: create_mds_certs|bool
+- name: Generate SSL Files
+  block:
+    - name: Gather OS Facts
+      tags: certificate_authority
+      setup:
+        filter: ansible_os_family
+        gather_subset:
+          - '!all'
 
-- name: "Copy Certificate Files Back to Ansible Host"
-  fetch:
-    src: "/var/ssl/private/generation/{{item}}"
-    dest: "generated_ssl_files/"
-    flat: true
-    fail_on_missing: false
-  loop:
-    - "{{ssl_self_signed_ca_key_filename}}"
-    - "{{ssl_self_signed_ca_cert_filename}}"
-    - "{{token_services_private_pem_file|basename}}"
-    - "{{token_services_public_pem_file|basename}}"
+    - name: Install OpenSSL and Rsync - RedHat
+      tags: certificate_authority
+      yum:
+        name: "{{item}}"
+        state: present
+      loop:
+        - openssl
+        - rsync
+      when: ansible_os_family == "RedHat"
 
-- name: Delete SSL Certificate Generation Directory
-  file:
-    path: /var/ssl/private/generation
-    state: absent
+    - name: Install OpenSSL and Rsync - Debian
+      tags: certificate_authority
+      apt:
+        name: "{{item}}"
+        state: present
+      loop:
+        - openssl
+        - rsync
+      when: ansible_os_family == "Debian"
+
+    - name: Create SSL Certificate Generation Directory
+      tags: certificate_authority
+      file:
+        path: /var/ssl/private/generation
+        state: directory
+        mode: 0755
+
+    - name: Create Certificate Authority
+      tags: certificate_authority
+      shell: |
+        openssl req -new -x509 \
+          -keyout /var/ssl/private/generation/{{ssl_self_signed_ca_key_filename}} \
+          -out /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
+          -days 365 \
+          -subj '/CN=ca1.test.confluent.io/OU=TEST/O=CONFLUENT/L=MountainView/S=Ca/C=US' \
+          -passin pass:{{ssl_self_signed_ca_password}} -passout pass:{{ssl_self_signed_ca_password}}
+      when: >
+        self_signed|bool and
+        (not controller_ca_key_stat.stat.exists|bool or not controller_ca_cert_stat.stat.exists|bool or regenerate_ca|bool) and
+        (zookeeper_ssl_enabled|bool or
+        kafka_broker_listeners | ssl_required(ssl_enabled) or
+        kafka_broker_rest_ssl_enabled|bool or
+        schema_registry_ssl_enabled|bool or
+        kafka_rest_ssl_enabled|bool or
+        kafka_connect_ssl_enabled|bool or
+        ksql_ssl_enabled|bool or
+        control_center_ssl_enabled|bool)
+
+    - name: Create MDS Private key
+      tags: certificate_authority
+      shell: |
+        openssl genrsa \
+          -out /var/ssl/private/generation/{{token_services_private_pem_file|basename}} 2048
+      when: create_mds_certs|bool
+
+    - name: Extract MDS Public key
+      tags: certificate_authority
+      shell: |
+        openssl rsa \
+          -in /var/ssl/private/generation/{{token_services_private_pem_file|basename}} \
+          -outform PEM -pubout \
+          -out /var/ssl/private/generation/{{token_services_public_pem_file|basename}}
+      when: create_mds_certs|bool
+
+    - name: "Copy Certificate Files Back to Ansible Host"
+      tags: certificate_authority
+      fetch:
+        src: "/var/ssl/private/generation/{{item}}"
+        dest: "generated_ssl_files/"
+        flat: true
+        fail_on_missing: false
+      loop:
+        - "{{ssl_self_signed_ca_key_filename}}"
+        - "{{ssl_self_signed_ca_cert_filename}}"
+        - "{{token_services_private_pem_file|basename}}"
+        - "{{token_services_public_pem_file|basename}}"
+
+    - name: Delete SSL Certificate Generation Directory
+      tags: certificate_authority
+      file:
+        path: /var/ssl/private/generation
+        state: absent
+
+  when: >
+    (rbac_enabled|bool and create_mds_certs|bool and
+    (not controller_mds_private_key_stat.stat.exists|bool or not controller_mds_public_key_stat.stat.exists|bool)) or
+    (self_signed|bool and
+    (not controller_ca_key_stat.stat.exists|bool or not controller_ca_cert_stat.stat.exists|bool or regenerate_ca|bool) and
+    (zookeeper_ssl_enabled|bool or
+    kafka_broker_listeners | ssl_required(ssl_enabled) or
+    kafka_broker_rest_ssl_enabled|bool or
+    schema_registry_ssl_enabled|bool or
+    kafka_rest_ssl_enabled|bool or
+    kafka_connect_ssl_enabled|bool or
+    ksql_ssl_enabled|bool or
+    control_center_ssl_enabled|bool))

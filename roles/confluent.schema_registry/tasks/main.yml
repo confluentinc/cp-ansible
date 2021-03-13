@@ -1,7 +1,18 @@
 ---
 - include_role:
     name: confluent.common
+  tags: common
   when: not common_role_completed|bool
+
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_fqdn
 
 # Install Packages
 - name: Install the Schema Registry Packages
@@ -9,13 +20,19 @@
     name: "{{item}}{{confluent_package_redhat_suffix}}"
     state: latest
   loop: "{{schema_registry_packages}}"
-  when: ansible_os_family == "RedHat"
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
+  tags: package
 
 - name: Install the Schema Registry Packages
   apt:
     name: "{{item}}{{confluent_package_debian_suffix}}"
   loop: "{{schema_registry_packages}}"
-  when: ansible_os_family == "Debian"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
+  tags: package
 
 # Configure environment
 - name: Schema Registry Group
@@ -29,6 +46,17 @@
     system: true
     group: "{{schema_registry_group}}"
 
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Schema Registry Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{schema_registry.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{schema_registry.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method == "archive"
+
 - include_role:
     name: confluent.ssl
   vars:
@@ -38,11 +66,17 @@
     keystore_storepass: "{{schema_registry_keystore_storepass}}"
     keystore_keypass: "{{schema_registry_keystore_keypass}}"
     service_name: schema_registry
+    user: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
     hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
     ca_cert_path: "{{schema_registry_ca_cert_path}}"
     cert_path: "{{schema_registry_cert_path}}"
     key_path: "{{schema_registry_key_path}}"
-  when: schema_registry_ssl_enabled|bool or kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
+    export_certs: "{{schema_registry_export_certs}}"
+  when: >
+    schema_registry_ssl_enabled | bool or
+    kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
+    mds_tls_enabled | bool
 
 - name: Configure Kerberos
   include_role:
@@ -51,12 +85,31 @@
     kerberos_group: "{{schema_registry_group}}"
     kerberos_user: "{{schema_registry_user}}"
     kerberos_keytab_path: "{{schema_registry_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{schema_registry_keytab_path}}"
     kerberos_handler: "restart schema-registry"
   when: kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
+
+- name: Copy Custom Schema Registry Files
+  include_role:
+    name: confluent.common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{schema_registry_copy_files}}"
+    user: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  when: schema_registry_copy_files | length > 0
 
 - name: Configure RBAC
   include_tasks: rbac.yml
   when: rbac_enabled|bool
+
+- name: Create Schema Registry Config directory
+  file:
+    path: "{{ schema_registry.config_file | dirname }}"
+    state: directory
+    mode: 0750
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
 
 - name: Create Schema Registry Config
   template:
@@ -69,20 +122,47 @@
 
 - name: Create Logs Directory
   file:
-    path: "{{schema_registry.appender_log_path}}"
+    path: "{{schema_registry_log_dir}}"
     state: directory
     group: "{{schema_registry_group}}"
     owner: "{{schema_registry_user}}"
     mode: 0770
 
-- name: Create Schema Registry log4j Config
+- name: Set Permissions on Log4j Conf
+  file:
+    path: "{{schema_registry.log4j_file}}"
+    group: "{{schema_registry_group}}"
+    owner: "{{schema_registry_user}}"
+    mode: 0640
+
+- name: Create Schema Registry Jolokia Config
   template:
-    src: schema_registry_log4j.properties.j2
-    dest: "{{schema_registry.log4j_file}}"
+    src: schema_registry_jolokia.properties.j2
+    dest: "{{schema_registry_jolokia_config}}"
     mode: 0640
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
+  when: schema_registry_jolokia_enabled|bool
   notify: restart schema-registry
+
+- name: Enable Secrets Protection
+  include_role:
+    name: confluent.common
+    tasks_from: secrets_protection.yml
+  vars:
+    encrypt_passwords: "{{ schema_registry_secrets_protection_encrypt_passwords }}"
+    properties: "{{ schema_registry_secrets_protection_encrypt_properties }}"
+    config_path: "{{ schema_registry.config_file }}"
+  when: schema_registry_secrets_protection_enabled|bool
+
+- name: Deploy JMX Exporter Config File
+  copy:
+    src: "schema_registry.yml"
+    dest: "{{schema_registry_jmxexporter_config_path}}"
+    mode: 0640
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  when: schema_registry_jmxexporter_enabled|bool
 
 - name: Create Service Override Directory
   file:
@@ -117,5 +197,9 @@
 - name: Health Check
   include_tasks: health_check.yml
   when:
-    - health_checks_enabled|bool
+    - schema_registry_health_checks_enabled|bool
     - not ansible_check_mode
+
+- name: Register Cluster
+  include_tasks: register_cluster.yml
+  when: schema_registry_cluster_name | length >0

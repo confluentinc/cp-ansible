@@ -1,66 +1,38 @@
 ---
+# More kafka_connect variables are defined in the confluent.variables role
+
+### Boolean to reconfigure Kafka Connect's logging with the RollingFileAppender and log cleanup functionality.
 kafka_connect_custom_log4j: "{{ custom_log4j }}"
 
 kafka_connect_java_args:
-  - "{% if kafka_connect_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=port={{kafka_connect_jolokia_port}},host=0.0.0.0{% if kafka_connect_jolokia_ssl_enabled|bool %},keystore={{kafka_connect_keystore_path}},keystorePassword={{kafka_connect_keystore_storepass}},protocol=https{% endif %}{% endif %}"
-  - "{% if kafka_connect_custom_log4j|bool %}-Dlog4j.configuration=file:{{kafka_connect.log4j_file}}{% endif %}"
+  - "{% if kafka_connect_ssl_enabled|bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
+  - "{% if kafka_connect_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=config={{kafka_connect_jolokia_config}}{% endif %}"
+  - "{% if kafka_connect_jmxexporter_enabled|bool %}-javaagent:{{jmxexporter_jar_path}}={{kafka_connect_jmxexporter_port}}:{{kafka_connect_jmxexporter_config_path}}{% endif %}"
 
+### Custom Java Args to add to the Connect Process
 kafka_connect_custom_java_args: ""
+
 kafka_connect_final_java_args: "{{ kafka_connect_java_args + [ kafka_connect_custom_java_args ] }}"
 
-# Empty values will not be written into override.conf
+# For following dictionaries, Key/Value Pairs with empty values will not be written into override.conf
+
+### Overrides to the Service Section of Connect Systemd File. This variable is a dictionary.
 kafka_connect_service_overrides:
   LimitNOFILE: 100000
   User: "{{ kafka_connect_user if kafka_connect_user != kafka_connect_default_user else '' }}"
   Group: "{{ kafka_connect_group if kafka_connect_group != kafka_connect_default_group else '' }}"
+  ExecStart: "{% if installation_method == 'archive' %}{{ kafka_connect.server_start_file }} {{ kafka_connect.config_file }}{% endif %}"
+
+### Environment Variables to be added to the Connect Service. This variable is a dictionary.
 kafka_connect_service_environment_overrides:
   KAFKA_HEAP_OPTS: "-Xms256M -Xmx2G"
   KAFKA_OPTS: "{{ kafka_connect_final_java_args | java_arg_build_out }}"
+  # Remove trailing slash if there is one
+  LOG_DIR: "{{ kafka_connect_log_dir|regex_replace('\\/$', '') }}"
+  CONFLUENT_SECURITY_MASTER_KEY: "{% if kafka_connect_secrets_protection_enabled|bool %}{{secrets_protection_masterkey}}{% endif %}"
 
-kafka_connect_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | length, 3 ] | min }}"
+### Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
+kafka_connect_service_unit_overrides:
 
-kafka_connect_secret_registry_enabled: "{{rbac_enabled}}"
-kafka_connect_secret_registry_key: 39ff95832750c0090d84ddf5344583832efe91ef
-
-kafka_connect_group_id: connect-cluster
-
-kafka_connect_plugins_path:
-  - /usr/share/java
-
-kafka_connect_confluent_hub_client:
-  file: "http://client.hub.confluent.io/confluent-hub-client-latest.tar.gz"
-  is_remote: true
-  install_dir: /etc/kafka/confluent-hub
-  timeout: 90
-kafka_connect_confluent_hub_plugins: []
-kafka_connect_confluent_hub_plugins_dest: /usr/share/java
-kafka_connect_plugins: []
-kafka_connect_plugins_remote: []
-kafka_connect_plugins_dest: /usr/share/java
-
-
-kafka_connect:
-  appender_log_path: /var/log/kafka/
-  appender_log_name: connect-distributed.log
-  appender_max_log_files: 10
-  appender_log_file_size: 100MB
-  properties:
-    rest.port: "{{kafka_connect_rest_port}}"
-    consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
-    producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
-    config.storage.replication.factor: "{{ kafka_connect_default_internal_replication_factor }}"
-    config.storage.topic: "{{kafka_connect_group_id}}-configs"
-    group.id: "{{kafka_connect_group_id}}"
-    internal.key.converter: org.apache.kafka.connect.json.JsonConverter
-    internal.key.converter.schemas.enable: "false"
-    internal.value.converter: org.apache.kafka.connect.json.JsonConverter
-    internal.value.converter.schemas.enable: "false"
-    offset.flush.interval.ms: 10000
-    offset.storage.replication.factor: "{{ kafka_connect_default_internal_replication_factor }}"
-    offset.storage.topic: "{{kafka_connect_group_id}}-offsets"
-    status.storage.replication.factor: "{{ kafka_connect_default_internal_replication_factor }}"
-    status.storage.topic: "{{kafka_connect_group_id}}-status"
-    key.converter: io.confluent.connect.avro.AvroConverter
-    value.converter: io.confluent.connect.avro.AvroConverter
-    plugin.path: "{{(kafka_connect_plugins_path + [kafka_connect_confluent_hub_plugins_dest, kafka_connect_plugins_dest]) | unique | join(',')}}"
-    connector.client.config.override.policy: All
+### Time in seconds to wait before starting Connect Health Checks.
+kafka_connect_health_check_delay: 30
