@@ -19,7 +19,8 @@ class FilterModule(object):
             'client_properties': self.client_properties,
             'c3_connect_properties': self.c3_connect_properties,
             'c3_ksql_properties': self.c3_ksql_properties,
-            'c3_client_properties': self.c3_client_properties
+            'c3_client_properties': self.c3_client_properties,
+            'resolve_value': self.resolve_value
         }
 
     def normalize_sasl_protocol(self, protocol):
@@ -231,87 +232,100 @@ class FilterModule(object):
                 final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"' + oauth_username + '\" password=\"' + oauth_password + '\" metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
 
         return final_dict
+
+    def resolve_value(self, host, key, global_vars):
+        if global_vars['hostvars'].has_key(host):
+            return global_vars['hostvars'][host].get(key, global_vars.get(key))
+        else:
+            return global_vars.get(key)
     
-    def c3_client_properties(self, kafka_broker_group_list, groups, hostvars):
+    def c3_client_properties(self, kafka_broker_group_list, global_vars):
         # For c3's extra kafka broker cluster properties, inputs a list of ansible groups of kafka broker hosts, as well as their ssl settings
         # Outputs a properties dictionary with properties necessary to connect to each cluster's group
         # Other inputs help fill out the properties
         final_dict = {}
         for ansible_group in kafka_broker_group_list:
-            if ansible_group in groups.keys():
-                delegate_hostvars = hostvars.get(groups[ansible_group][0])
-                delegate_listener = delegate_hostvars['kafka_broker_listeners'].get(delegate_hostvars['control_center_kafka_listener_name'])
-                cluster_name = str(delegate_hostvars.get('kafka_broker_cluster_name')).lower().replace(' ', '_')
+            if ansible_group in global_vars['groups'].keys():
+                delegate_host = global_vars['groups'][ansible_group][0]
+                delegate_listener = self.resolve_value(delegate_host, 'kafka_broker_listeners', global_vars).get(self.resolve_value(delegate_host, 'control_center_kafka_listener_name', global_vars))
+                cluster_name = str(self.resolve_value(delegate_host, 'kafka_broker_cluster_name', global_vars)).lower().replace(' ', '_')
+                
 
                 urls = []
                 mds_urls = []
-                for host in groups[ansible_group]:
-                    urls.append(self.resolve_hostname(hostvars[host]) + ':' + str(delegate_listener['port']))
-                    mds_urls.append(str(delegate_hostvars.get('mds_http_protocol'))+'://'+self.resolve_hostname(hostvars[host]) + ':' + str(delegate_hostvars.get('mds_port')))
+                for host in global_vars['groups'][ansible_group]:
+                    addr = self.resolve_hostname(global_vars['hostvars'][host])
+                    urls.append(addr + ':' + str(delegate_listener['port']))
+                    mds_urls.append(str(self.resolve_value(host, 'mds_http_protocol', global_vars))+'://'+ addr + ':' + str(self.resolve_value(host, 'mds_port', global_vars)))
 
                 final_dict['confluent.controlcenter.kafka.' + cluster_name + '.bootstrap.servers'] = ','.join(urls)
 
-                if delegate_hostvars.get('kafka_broker_rest_proxy_enabled') or delegate_hostvars.get('rbac_enabled'):
+                if self.resolve_value(delegate_host, 'kafka_broker_rest_proxy_enabled', global_vars) or self.resolve_value(delegate_host, 'rbac_enabled', global_vars):
                     final_dict['confluent.controlcenter.kafka.' + cluster_name + '.cprest.url'] = ','.join(mds_urls)
+
+                sasl_scram = self.resolve_value(delegate_host, 'sasl_scram_users', global_vars).get('control_center', global_vars.get('sasl_scram_users').get('control_center'))
+                sasl_plain = self.resolve_value(delegate_host, 'sasl_plain_users', global_vars).get('control_center', global_vars.get('sasl_plain_users').get('control_center'))
 
                 c_dict = self.client_properties(
                     delegate_listener, 
-                    delegate_hostvars.get('ssl_enabled'), 
-                    delegate_hostvars.get('pkcs12_enabled'), 
-                    delegate_hostvars.get('ssl_mutual_auth_enabled'), 
-                    delegate_hostvars.get('sasl_protocol'),
+                    self.resolve_value(delegate_host, 'ssl_enabled', global_vars), 
+                    self.resolve_value(delegate_host, 'pkcs12_enabled', global_vars), 
+                    self.resolve_value(delegate_host, 'ssl_mutual_auth_enabled', global_vars), 
+                    self.resolve_value(delegate_host, 'sasl_protocol', global_vars),
                     'confluent.controlcenter.kafka.' + cluster_name + '.', 
-                    delegate_hostvars.get('control_center_truststore_path'),
-                    delegate_hostvars.get('control_center_truststore_storepass'), 
-                    delegate_hostvars.get('control_center_keystore_path'), 
-                    delegate_hostvars.get('control_center_keystore_storepass'), 
-                    delegate_hostvars.get('control_center_keystore_keypass'),
+                    self.resolve_value(delegate_host, 'control_center_truststore_path', global_vars),
+                    self.resolve_value(delegate_host, 'control_center_truststore_storepass', global_vars), 
+                    self.resolve_value(delegate_host, 'control_center_keystore_path', global_vars), 
+                    self.resolve_value(delegate_host, 'control_center_keystore_storepass', global_vars), 
+                    self.resolve_value(delegate_host, 'control_center_keystore_keypass', global_vars),
                     False, 
-                    delegate_hostvars['sasl_plain_users']['control_center']['principal'], 
-                    delegate_hostvars['sasl_plain_users']['control_center']['password'], 
-                    delegate_hostvars['sasl_scram_users']['control_center']['principal'], 
-                    delegate_hostvars['sasl_scram_users']['control_center']['password'],
-                    delegate_hostvars.get('kerberos_kafka_broker_primary'), 
-                    delegate_hostvars.get('control_center_keytab_path'), 
-                    delegate_hostvars.get('control_center_kerberos_principal'),
+                    sasl_plain['principal'], 
+                    sasl_plain['password'], 
+                    sasl_scram['principal'], 
+                    sasl_scram['password'],
+                    self.resolve_value(delegate_host, 'kerberos_kafka_broker_primary', global_vars), 
+                    self.resolve_value(delegate_host, 'control_center_keytab_path', global_vars), 
+                    self.resolve_value(delegate_host, 'control_center_kerberos_principal', global_vars),
                     False, 
-                    delegate_hostvars.get('control_center_ldap_user'), 
-                    delegate_hostvars.get('control_center_ldap_password'),
-                    delegate_hostvars.get('mds_bootstrap_server_urls')
+                    self.resolve_value(delegate_host, 'control_center_ldap_user', global_vars), 
+                    self.resolve_value(delegate_host, 'control_center_ldap_password', global_vars),
+                    self.resolve_value(delegate_host, 'mds_bootstrap_server_urls', global_vars)
                 )
                 final_dict.update(c_dict)
 
         return final_dict
 
-    def c3_connect_properties(self, connect_group_list, groups, hostvars, ssl_enabled, http_protocol, port, default_connect_group_id,
-            truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass ):
+    def c3_connect_properties(self, connect_group_list, global_vars):
         # For c3's connect properties, inputs a list of ansible groups of connect hosts, as well as their ssl settings
         # Outputs a properties dictionary with properties necessary to connect to each connect group
         # Other inputs help fill out the properties
         final_dict = {}
         for ansible_group in connect_group_list:
             # connect_group_list defaults to ['kafka_connect'], but there may be scenario where no connect group exists
-            if ansible_group in groups.keys():
+            if ansible_group in global_vars['groups'].keys():
+                delegate_host = global_vars['groups'][ansible_group][0]
+                group_id = self.resolve_value(delegate_host, 'kafka_connect_group_id', global_vars)
+
                 urls = []
-                for host in groups[ansible_group]:
-                    if hostvars[host].get('kafka_connect_ssl_enabled', ssl_enabled):
+                for host in global_vars['groups'][ansible_group]:
+                    if self.resolve_value(delegate_host, 'kafka_connect_ssl_enabled', global_vars):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + self.resolve_hostname(hostvars[host]) + ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
+                    urls.append(protocol + '://' + self.resolve_hostname(global_vars['hostvars'][host]) + ':' + str(self.resolve_value(host, 'kafka_connect_rest_port', global_vars)))
 
-                final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.cluster'] = ','.join(urls)
+                final_dict['confluent.controlcenter.connect.' + group_id + '.cluster'] = ','.join(urls)
 
-                if hostvars[groups[ansible_group][0]].get('kafka_connect_ssl_enabled', ssl_enabled):
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.truststore.location'] = truststore_path
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.truststore.password'] = truststore_storepass
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.keystore.location'] = keystore_path
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.keystore.password'] = keystore_storepass
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.key.password'] = keystore_keypass
+                if self.resolve_value(delegate_host, 'kafka_connect_ssl_enabled', global_vars):
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.truststore.location'] = self.resolve_value(delegate_host, 'control_center_truststore_path', global_vars)
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.truststore.password'] = self.resolve_value(delegate_host, 'control_center_truststore_storepass', global_vars)
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.keystore.location'] = self.resolve_value(delegate_host, 'control_center_keystore_path', global_vars)
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.keystore.password'] = self.resolve_value(delegate_host, 'control_center_keystore_storepass', global_vars)
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.key.password'] = self.resolve_value(delegate_host, 'control_center_keystore_keypass', global_vars)
 
         return final_dict
 
-    def c3_ksql_properties(self, ksql_group_list, groups, hostvars, ssl_enabled, http_protocol, port,
+    def c3_ksql_properties(self, ksql_group_list, global_vars, ssl_enabled, http_protocol, port,
             truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass ):
         # For c3's ksql properties, inputs a list of ansible groups of ksql hosts, as well as their ssl settings
         # Outputs a properties dictionary with properties necessary to connect to each ksql group
@@ -319,25 +333,27 @@ class FilterModule(object):
         final_dict = {}
         for ansible_group in ksql_group_list:
             # ksql_group_list defaults to ['ksql'], but there may be scenario where no ksql group exists
-            if ansible_group in groups.keys():
+            if ansible_group in global_vars['groups'].keys():
+                delegate_host = global_vars['groups'][ansible_group][0]
                 urls = []
                 advertised_urls = []
-                for host in groups[ansible_group]:
-                    if hostvars[host].get('ksql_ssl_enabled', ssl_enabled):
+                for host in global_vars['groups'][ansible_group]:
+                    if self.resolve_value(delegate_host, 'ksql_ssl_enabled', global_vars):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + self.resolve_hostname(hostvars[host]) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
-                    advertised_urls.append(protocol + '://' + hostvars[host].get('ksql_advertised_listener_hostname', self.resolve_hostname(hostvars[host])) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
+                    port = str(self.resolve_value(host, 'ksql_listener_port', global_vars))
+                    urls.append(protocol + '://' + self.resolve_hostname(global_vars['hostvars'][host]) + ':' + port)
+                    advertised_urls.append(protocol + '://' + self.resolve_value(host, 'ksql_advertised_listener_hostname', {'ksql_advertised_listener_hostname': self.resolve_hostname(global_vars['hostvars'][host])}) + ':' + port)
 
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.url'] = ','.join(urls)
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.advertised.url'] = ','.join(advertised_urls)
 
-                if hostvars[groups[ansible_group][0]].get('ksql_ssl_enabled', ssl_enabled):
-                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.location'] = truststore_path
-                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.password'] = truststore_storepass
-                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.location'] = keystore_path
-                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.password'] = keystore_storepass
-                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.key.password'] = keystore_keypass
+                if self.resolve_value(delegate_host, 'ksql_ssl_enabled', global_vars):
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.location'] = self.resolve_value(delegate_host, 'control_center_truststore_path', global_vars)
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.password'] = self.resolve_value(delegate_host, 'control_center_truststore_storepass', global_vars)
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.location'] = self.resolve_value(delegate_host, 'control_center_keystore_path', global_vars)
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.password'] = self.resolve_value(delegate_host, 'control_center_keystore_storepass', global_vars)
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.key.password'] = self.resolve_value(delegate_host, 'control_center_keystore_keypass', global_vars)
 
         return final_dict
