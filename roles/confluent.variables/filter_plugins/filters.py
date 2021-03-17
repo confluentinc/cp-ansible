@@ -177,7 +177,7 @@ class FilterModule(object):
         return final_dict
 
     def client_properties(self, listener_dict, default_ssl_enabled, bouncy_castle_keystore, default_ssl_mutual_auth_enabled, default_sasl_protocol,
-                            config_prefix, truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass,
+                            config_prefix, truststore_path, truststore_storepass, public_certificates_enabled, keystore_path, keystore_storepass, keystore_keypass,
                             omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
                             kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
                             omit_oauth_configs, oauth_username, oauth_password, mds_bootstrap_server_urls):
@@ -186,7 +186,8 @@ class FilterModule(object):
         final_dict = {
             config_prefix + 'security.protocol': self.kafka_protocol_defaults(listener_dict, default_ssl_enabled, default_sasl_protocol)
         }
-        if listener_dict.get('ssl_enabled', default_ssl_enabled):
+        if listener_dict.get('ssl_enabled', default_ssl_enabled) and not public_certificates_enabled:
+            # Public certificates are in default java truststore, so these properties should be ommitted
             final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
             final_dict[config_prefix + 'ssl.truststore.password'] = truststore_storepass
 
