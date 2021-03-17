@@ -2958,7 +2958,7 @@ Default:  "{{pause_rolling_deployment}}"
 
 ### ccloud_kafka_broker_enabled
 
-Boolean to configure component to Confluent Cloud Kafka. Must also set ccloud_bootstrap_servers, ccloud_key, and ccloud_key. zookeeper and kafka_broker groups should not be in inventory.
+Boolean to configure component to Confluent Cloud Kafka. Must also set ccloud_bootstrap_servers, ccloud_key, and ccloud_secret. zookeeper and kafka_broker groups should not be in inventory.
 
 Default:  false
 
