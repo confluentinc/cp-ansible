@@ -447,8 +447,11 @@ schema_registry_default_internal_replication_factor: "{{ 3 if ccloud_kafka_broke
 ### Boolean to configure schema registry with TLS Encryption. Also manages Java Keystore creation
 schema_registry_ssl_enabled: "{{ssl_enabled}}"
 
-### Boolean to enable mTLS Authentication on Schema Registry
+# Deprecated- Boolean to enable mTLS Authentication on Schema Registry
 schema_registry_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
+schema_registry_authentication_type: "{{ 'mtls' if schema_registry_ssl_mutual_auth_enabled else 'none' }}"
 
 ### Set this variable to customize the directory that the Schema Registry writes log files to. Default location is /var/log/confluent/schema-registry. NOTE- schema_registry.appender_log_path is deprecated.
 schema_registry_log_dir: "{{schema_registry.appender_log_path}}"
@@ -901,6 +904,11 @@ zookeeper_digest_users:
     principal: kafka_broker
     password: kafka_broker-secret
 
+schema_registry_basic_users:
+  admin:
+    principal: admin
+    password: admin-secret
+    roles: admin
 
 ### Boolean to configure Confluent Platform with RBAC enabled. Creates Rolebindings for all components to function
 rbac_enabled: false
@@ -1151,11 +1159,11 @@ kafka_broker_rest_health_check_user: "{{mds_super_user}}"
 ### Password for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
 kafka_broker_rest_health_check_password: "{{mds_super_user_password}}"
 
-### User for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
-schema_registry_health_check_user: "{{schema_registry_ldap_user}}"
+### User for authenticated Schema Registry Health Check.
+schema_registry_health_check_user: "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registry_basic_users.admin.principal }}"
 
-### Password for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
-schema_registry_health_check_password: "{{schema_registry_ldap_password}}"
+### Password for authenticated Schema Registry Health Check.
+schema_registry_health_check_password: "{{ schema_registry_ldap_password if rbac_enabled|bool else schema_registry_basic_users.admin.password }}"
 
 ### User for authenticated Connect Health Check. Set if using customized security like Basic Auth.
 kafka_connect_health_check_user: "{{kafka_connect_ldap_user}}"
