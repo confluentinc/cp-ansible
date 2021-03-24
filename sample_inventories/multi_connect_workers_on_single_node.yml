@@ -1,0 +1,57 @@
+---
+### Multiple Kafka Connect Worker on the Same VM/Physical Node Example
+##
+## The following is an example inventory file of the configuration required for setting up Confluent Platform with:
+# Multiple Kafka Connect workers running/deployed on the same node
+
+all:
+  vars:
+    # Tell Control Center about both of our Kafka Connect Clusters
+    kafka_connect_cluster_ansible_group_names:
+    - kafka_connect_default
+    - kafka_connect_deuce
+    # Enable the Host aliasing feature.
+    # Host aliasing allows you to have separate configurations per Ansible Inventory Host even those they may be the same host.
+    hostname_aliasing_enabled: true
+
+zookeeper:
+  hosts:
+    zk[01:03].confluent.io:
+
+kafka_broker:
+  hosts:
+    kfk[01:03].confluent.io:
+
+control_center:
+  hosts:
+    ccc01.confluent.io:
+
+schema_registry:
+  hosts:
+    sr01.confluent.io:
+
+kafka_connect:
+  children:
+    # Define Cluster 1 aka the Default Cluster
+    # This cluster uses the default settings
+    kafka_connect_default:
+      hosts:
+        connect01.0:
+          ansible_host: connect01.confluent.io
+    # Define Cluster 2 aka the Deuce Cluster
+    # Since this cluster lives on the same node(s) as Cluster 1.
+    # We have to separate port binding, define separate configuration files and separate service names.
+    kafka_connect_deuce:
+      vars:
+        kafka_connect_service_name: confluent-kafka-connect-duece
+        kafka_connect_config_filename: connect-distributed-duece.properties
+        kafka_connect_rest_port: 8084
+        kafka_connect_jmxexporter_port: 8078
+        # We are defining 2 separate Connect Clusters. So we must change the Group ID in order to separate them via separate Topic names and Consumer Group name.
+        kafka_connect_group_id: connect-cluster-duece
+        # If Jolokia is enabled, you will need to also define these 2 additional configurations to change its port and config file.
+        #kafka_connect_jolokia_port: 7774
+        #kafka_connect_jolokia_config: /etc/kafka/kafka_connect_jolokia-duece.properties
+      hosts:
+        connect01.1:
+          ansible_host: connect01.confluent.io

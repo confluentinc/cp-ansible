@@ -428,6 +428,22 @@ Default:  false
 
 ***
 
+### kafka_connect_cluster_ansible_group_names
+
+Collection of Ansible Group names for All Kafka Connect Clusters that Control Center should be aware of.
+
+Default:  "{{ ['kafka_connect'] if 'kafka_connect' in groups else [] }}"
+
+***
+
+### ksql_cluster_ansible_group_names
+
+Collection of Ansible Group names for All ksqlDB Clusters that Control Center should be aware of.
+
+Default:  "{{ ['ksql'] if 'ksql' in groups else [] }}"
+
+***
+
 ### zookeeper_user
 
 Set this variable to customize the Linux User that the Zookeeper Service runs with. Default user is cp-kafka.
@@ -553,6 +569,22 @@ Default:  "{{jmxexporter_enabled}}"
 Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
 
 Default:  8079
+
+***
+
+### zookeeper_jmxexporter_config_source_path
+
+Path on Ansible Controller for Zookeeper jmx config file. Only necessary to set for custom config.
+
+Default:  zookeeper.yml
+
+***
+
+### zookeeper_jmxexporter_config_path
+
+Destination path for Zookeeper jmx config file
+
+Default:  /opt/prometheus/zookeeper.yml
 
 ***
 
@@ -721,6 +753,22 @@ Default:  "{{jmxexporter_enabled}}"
 Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
 
 Default:  8080
+
+***
+
+### kafka_broker_jmxexporter_config_source_path
+
+Path on Ansible Controller for Kafka Broker jmx config file. Only necessary to set for custom config.
+
+Default:  kafka.yml
+
+***
+
+### kafka_broker_jmxexporter_config_path
+
+Destination path for Kafka Broker jmx config file
+
+Default:  /opt/prometheus/kafka.yml
 
 ***
 
@@ -900,6 +948,22 @@ Default:  "{{jmxexporter_enabled}}"
 
 ***
 
+### schema_registry_jmxexporter_config_source_path
+
+Path on Ansible Controller for Schema Registry jmx config file. Only necessary to set for custom config.
+
+Default:  schema_registry.yml
+
+***
+
+### schema_registry_jmxexporter_config_path
+
+Destination path for Schema Registry jmx config file
+
+Default:  /opt/prometheus/schema_registry.yml
+
+***
+
 ### schema_registry_jmxexporter_port
 
 Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
@@ -1044,6 +1108,22 @@ Default:  "{{jmxexporter_enabled}}"
 
 ***
 
+### kafka_rest_jmxexporter_config_source_path
+
+Path on Ansible Controller for Rest Proxy jmx config file. Only necessary to set for custom config.
+
+Default:  kafka_rest.yml
+
+***
+
+### kafka_rest_jmxexporter_config_path
+
+Destination path for Rest Proxy jmx config file
+
+Default:  /opt/prometheus/kafka_rest.yml
+
+***
+
 ### kafka_rest_jmxexporter_port
 
 Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
@@ -1073,6 +1153,22 @@ Default:  "{{ kafka_rest.properties }}"
 Boolean to configure Monitoring Interceptors on Rest Proxy.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
+
+***
+
+### kafka_connect_service_name
+
+Service Name to define/use for Kafka Connect System.d.
+
+Default:  "{{kafka_connect_default_service_name}}"
+
+***
+
+### kafka_connect_config_filename
+
+Config/Properties Filename to use when setting up and configuring Kafka Connect
+
+Default:  "{{kafka_connect_default_config_filename}}"
 
 ***
 
@@ -1193,6 +1289,22 @@ Default:  "{{jolokia_password}}"
 Boolean to enable Prometheus Exporter Agent installation and configuration on Connect
 
 Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### kafka_connect_jmxexporter_config_source_path
+
+Path on Ansible Controller for Connect jmx config file. Only necessary to set for custom config.
+
+Default:  kafka_connect.yml
+
+***
+
+### kafka_connect_jmxexporter_config_path
+
+Destination path for Connect jmx config file
+
+Default:  /opt/prometheus/kafka_connect.yml
 
 ***
 
@@ -1377,6 +1489,22 @@ Default:  "{{jolokia_password}}"
 Boolean to enable Prometheus Exporter Agent installation and configuration on ksqlDB
 
 Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### ksql_jmxexporter_config_source_path
+
+Path on Ansible Controller for ksqlDB jmx config file. Only necessary to set for custom config.
+
+Default:  ksql.yml
+
+***
+
+### ksql_jmxexporter_config_path
+
+Destination path for ksqlDB jmx config file
+
+Default:  /opt/prometheus/ksql.yml
 
 ***
 

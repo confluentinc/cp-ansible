@@ -250,6 +250,9 @@ class FilterModule(object):
         for ansible_group in connect_group_list:
             # connect_group_list defaults to ['kafka_connect'], but there may be scenario where no connect group exists
             if ansible_group in groups.keys() and len(groups[ansible_group]) > 0:
+                delegate_host = hostvars[groups[ansible_group][0]]
+                group_id = delegate_host.get('kafka_connect_group_id', default_connect_group_id)
+
                 urls = []
                 for host in groups[ansible_group]:
                     if hostvars[host].get('kafka_connect_ssl_enabled', ssl_enabled):
@@ -258,14 +261,14 @@ class FilterModule(object):
                         protocol = 'http'
                     urls.append(protocol + '://' + self.resolve_hostname(hostvars[host]) + ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
 
-                final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.cluster'] = ','.join(urls)
+                final_dict['confluent.controlcenter.connect.' + group_id + '.cluster'] = ','.join(urls)
 
-                if hostvars[groups[ansible_group][0]].get('kafka_connect_ssl_enabled', ssl_enabled):
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.truststore.location'] = truststore_path
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.truststore.password'] = truststore_storepass
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.keystore.location'] = keystore_path
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.keystore.password'] = keystore_storepass
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.key.password'] = keystore_keypass
+                if delegate_host.get('kafka_connect_ssl_enabled', ssl_enabled):
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.truststore.location'] = truststore_path
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.truststore.password'] = truststore_storepass
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.keystore.location'] = keystore_path
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.keystore.password'] = keystore_storepass
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.key.password'] = keystore_keypass
 
         return final_dict
 

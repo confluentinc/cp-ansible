@@ -23,7 +23,9 @@
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
   tags: package
+  notify: restart connect distributed
 
 - name: Install the Kafka Connect Packages
   apt:
@@ -32,7 +34,9 @@
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
   tags: package
+  notify: restart connect distributed
 
 # Configure environment
 - name: Create Connect Distributed Group
@@ -56,6 +60,16 @@
     mode: 0644
     force: true
   when: installation_method == "archive"
+
+# Non-Archive File deployments need to create SystemD service units when the user changes the service name
+- name: Copy Kafka Connect Service from default install to system
+  copy:
+    src: "{{systemd_base_dir}}/{{kafka_connect_default_service_name}}.service"
+    remote_src: true
+    dest: "{{kafka_connect.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method != "archive" and kafka_connect_default_service_name != kafka_connect_service_name
 
 - include_role:
     name: confluent.ssl
@@ -178,7 +192,7 @@
 
 - name: Deploy JMX Exporter Config File
   copy:
-    src: "kafka_connect.yml"
+    src: "{{kafka_connect_jmxexporter_config_source_path}}"
     dest: "{{kafka_connect_jmxexporter_config_path}}"
     mode: 0640
     owner: "{{kafka_connect_user}}"
