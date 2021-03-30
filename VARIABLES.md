@@ -2480,7 +2480,7 @@ Default:  ""
 
 SCRAM principal for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2488,7 +2488,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 SCRAM password for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2664,7 +2664,7 @@ Default:  "{{kafka_connect_replicator_consumer_ssl_keystore_file_path}}"
 
 SCRAM principal for the Consumer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2672,7 +2672,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 SCRAM password for the Consumer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2768,7 +2768,7 @@ Default:  "{{kafka_connect_replicator_ssl_keystore_file_path}}"
 
 SCRAM principal for the Producer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2776,7 +2776,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 SCRAM password for the Producer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2880,7 +2880,7 @@ Default:  "{{ kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_pa
 
 SCRAM principal for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal}}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal}}"
 
 ***
 
@@ -2888,7 +2888,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal}}"
 
 SCRAM password for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
 
 ***
 
