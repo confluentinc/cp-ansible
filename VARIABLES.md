@@ -1596,6 +1596,22 @@ Default:  "{{ control_center.properties }}"
 
 ***
 
+### sasl_scram_users
+
+Dictionary containing additional sasl scram users to be created during provisioning.
+
+Default:  {}
+
+***
+
+### sasl_plain_users
+
+Dictionary containing additional sasl plain users to be created during provisioning.
+
+Default:  {}
+
+***
+
 ### rbac_enabled
 
 Boolean to configure Confluent Platform with RBAC enabled. Creates Rolebindings for all components to function
@@ -2496,7 +2512,7 @@ Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2504,7 +2520,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2680,7 +2696,7 @@ Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for the Consumer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2688,7 +2704,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for the Consumer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2784,7 +2800,7 @@ Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for the Producer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2792,7 +2808,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for the Producer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2896,7 +2912,7 @@ Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2904,7 +2920,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -3344,7 +3360,7 @@ Default:  "{{ custom_log4j }}"
 
 Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
 
-Default:  "INFO, stdout connectAppender"
+Default:  "INFO, stdout, connectAppender"
 
 ***
 
