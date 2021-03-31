@@ -1,0 +1,49 @@
+---
+- name: Get Package Facts
+  package_facts:
+
+- name: Determine if Confluent Platform Package Version Will Change
+  set_fact:
+    confluent_package_version_changed: >-
+      {{ ansible_facts.packages['confluent-common'] is defined
+          and ansible_facts.packages['confluent-common'][0].version
+            not in [confluent_package_version, confluent_full_package_version] }}
+
+- name: Get installed Confluent Packages
+  set_fact:
+    confluent_packages_actual: >
+      {{ ansible_facts.packages | dict2items | map(attribute='key') | select('match', 'confluent-') | list }}
+
+- name: Determine Confluent Packages to Remove
+  set_fact:
+    confluent_packages_removed: >
+      {{ confluent_packages_actual if confluent_package_version_changed|bool else
+          confluent_packages_actual | intersect(['confluent-kafka']) if confluent_server_enabled else
+          confluent_packages_actual | intersect(['confluent-server']) }}
+
+- name: Debug Confluent Packages to Remove
+  debug:
+    msg: "{{ confluent_packages_removed }}"
+  when: confluent_packages_removed|length > 0
+
+- name: Stop Service before Removing Confluent Packages
+  systemd:
+    name: "{{ service_name }}"
+    state: stopped
+  when: confluent_packages_removed|length > 0
+
+- name: Remove Confluent Packages - Red Hat
+  yum:
+    name: "{{ confluent_packages_removed }}"
+    state: absent
+  when:
+    - ansible_os_family == "RedHat"
+    - confluent_packages_removed|length > 0
+
+- name: Remove Confluent Packages - Debian
+  apt:
+    name: "{{ confluent_packages_removed }}"
+    state: absent
+  when:
+    - ansible_os_family == "Debian"
+    - confluent_packages_removed|length > 0
