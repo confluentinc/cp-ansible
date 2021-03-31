@@ -3344,7 +3344,7 @@ Default:  "{{ custom_log4j }}"
 
 Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
 
-Default:  "INFO, stdout connectAppender"
+Default:  "INFO, stdout, connectAppender"
 
 ***
 
