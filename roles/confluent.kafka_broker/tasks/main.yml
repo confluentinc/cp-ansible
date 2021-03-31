@@ -261,6 +261,18 @@
   when: "'SCRAM-SHA-512' in kafka_broker_sasl_enabled_mechanisms"
   no_log: "{{mask_secrets|bool}}"
 
+- name: Create SCRAM 256 Users
+  shell: |
+    {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
+    {{ binary_base_path }}/bin/kafka-configs {% if zookeeper_ssl_enabled|bool %}--zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
+      --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} --alter \
+      --add-config 'SCRAM-SHA-256=[password={{ item.value['password'] }}]' \
+      --entity-type users --entity-name {{ item.value['principal'] }}
+  loop: "{{ sasl_scram256_users_final|dict2items }}"
+  run_once: true
+  when: "'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms"
+  no_log: "{{mask_secrets|bool}}"
+
 - name: Deploy JMX Exporter Config File
   copy:
     src: "{{kafka_broker_jmxexporter_config_source_path}}"
