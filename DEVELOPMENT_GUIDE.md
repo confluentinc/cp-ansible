@@ -90,7 +90,7 @@ ksql_ssl_enabled: "{{ssl_enabled}}"
 
 Now `ksql_ssl_enabled` may seem like its only relevant for ksql tasks, but control center needs to be aware of the ssl settings of ksqlDB in its provisioning logic
 
-3. Is the variable needed my multiple components and should not be customizable by users? Yes -> Define variable in `confluent.variables/defaults/main.yml`
+3. Is the variable needed my multiple components and should not be customizable by users? Yes -> Define variable in `confluent.variables/vars/main.yml`
 
 ```
 ksql_service_name: "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('confluent-ksqldb' , 'confluent-ksql')}}"
