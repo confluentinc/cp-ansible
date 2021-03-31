@@ -3378,6 +3378,7 @@ Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_c
 
 Default:  "INFO, stdout, connectAppender"
 
+
 ***
 
 ### kafka_connect_max_log_files
