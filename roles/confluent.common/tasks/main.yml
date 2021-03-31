@@ -1,40 +1,119 @@
 ---
-# JVM Installation and Repo Setup
-- import_tasks: redhat.yml
-  when: ansible_os_family == "RedHat"
-- import_tasks: debian.yml
-  when: ansible_os_family == "Debian"
+- name: Confirm Hash Merging Enabled
+  assert:
+    that: lookup('config', 'DEFAULT_HASH_BEHAVIOUR') == 'merge'
+    fail_msg: "Hash Merging must be enabled in ansible.cfg: Confirm current directory is cp-ansible and permissions are set to 755 not 777"
 
-- name: Disable Require TTY in Sudoers (required for ansible synchronize)
-  lineinfile:
-    path: /etc/sudoers
-    state: absent
-    regexp: '^Defaults\s+requiretty.*$'
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_distribution
+    - ansible_system
+    - ansible_architecture
+
+# JVM Installation and Repo Setup
+- include_tasks: redhat.yml
+  when: ansible_os_family == "RedHat"
+
+- include_tasks: ubuntu.yml
+  when: ansible_distribution == "Ubuntu"
+
+- include_tasks: debian.yml
+  when: ansible_distribution == "Debian"
+
+# Process Archive File deployments
+- name: Create Confluent Platform install directory
+  file:
+    path: "{{archive_destination_path}}"
+    group: "{{ omit if archive_group == '' else archive_group }}"
+    owner: "{{ omit if archive_owner == '' else archive_owner }}"
+    state: directory
+    mode: 0755
+  when: installation_method == "archive"
+
+# If the target directory (i.e. creates) doesn't exist then download and expand the remote archive into target
+- name: Expand remote Confluent Platform archive
+  unarchive:
+    src: "{{ confluent_archive_file_source }}"
+    remote_src: "{{ confluent_archive_file_remote }}"
+    dest: "{{archive_destination_path}}"
+    group: "{{ omit if archive_group == '' else archive_group }}"
+    owner: "{{ omit if archive_owner == '' else archive_owner }}"
+    mode: 0755
+    creates: "{{archive_destination_path}}/confluent-{{confluent_package_version}}"
+  when: installation_method == "archive"
 
 - name: Create Jolokia directory
   file:
-    path: /opt/jolokia
+    path: "{{ jolokia_jar_path | dirname }}"
     state: directory
     mode: 0755
   when: jolokia_enabled|bool
+
+- name: Copy Jolokia Jar
+  copy:
+    src: "{{ jolokia_jar_url }}"
+    dest: "{{ jolokia_jar_path }}"
+    mode: 0755
+  when:
+    - jolokia_enabled|bool
+    - not jolokia_url_remote|bool
+    - not ansible_check_mode
 
 - name: Download Jolokia Jar
   get_url:
-    url: "{{jolokia_jar_url}}"
+    url: "{{ jolokia_jar_url }}"
     dest: "{{ jolokia_jar_path }}"
     mode: 0755
-  when: jolokia_enabled|bool
+  register: joklokia_download_result
+  until: joklokia_download_result is success
+  retries: 5
+  delay: 5
+  when:
+    - jolokia_enabled|bool
+    - jolokia_url_remote|bool
+    - not ansible_check_mode
 
 - name: Create Prometheus install directory
   file:
-    path: /opt/prometheus
+    path: "{{ jmxexporter_jar_path | dirname }}"
     state: directory
     mode: 0755
   when: jmxexporter_enabled|bool
+
+- name: Copy Prometheus Jar
+  copy:
+    src: "{{ jmxexporter_jar_url }}"
+    dest: "{{ jmxexporter_jar_path }}"
+    mode: 0755
+  when:
+    - jmxexporter_enabled|bool
+    - not jmxexporter_url_remote|bool
+    - not ansible_check_mode
 
 - name: Download Prometheus JMX Exporter Jar
   get_url:
     url: "{{ jmxexporter_jar_url }}"
     dest: "{{ jmxexporter_jar_path }}"
     mode: 0755
-  when: jmxexporter_enabled|bool
+  register: prometheus_download_result
+  until: prometheus_download_result is success
+  retries: 5
+  delay: 5
+  when:
+    - jmxexporter_enabled|bool
+    - jmxexporter_url_remote|bool
+    - not ansible_check_mode
+
+
+- name: Install Confluent CLI
+  include_tasks: confluent_cli.yml
+  when: confluent_cli_download_enabled|bool
+
+- set_fact:
+    common_role_completed: true

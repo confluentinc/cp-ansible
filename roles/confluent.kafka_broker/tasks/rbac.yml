@@ -1,0 +1,62 @@
+---
+- name: Get Principals used on the Inter Broker Listener
+  include_tasks: set_principal.yml
+  vars:
+    listener: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]}}"
+  loop: "{{ groups['kafka_broker'] }}"
+  args:
+    apply:
+      delegate_to: "{{item}}"
+      delegate_facts: true
+  run_once: true
+
+- name: Show principals
+  debug:
+    msg: "Principal for {{item}} is  {{ hostvars[item]['kafka_broker_principal'] }}"
+  loop: "{{ groups['kafka_broker'] }}"
+  run_once: true
+
+# Take super.users property, split into list, remove empty string from list, and add in mds_super_user
+- name: Initialize Super Users List
+  set_fact:
+    super_users: "{{ (kafka_broker_final_properties['super.users'] | default('')).split(';') | difference(['']) }} + [ 'User:{{ mds_super_user }}' ]"
+
+# Loop over each brokers principal and add to list
+- name: Add Each Broker's Principal to Super Users List
+  set_fact:
+    super_users: "{{super_users}}  + [ '{{ hostvars[item]['kafka_broker_principal'] }}' ]"
+  loop: "{{ groups['kafka_broker'] }}"
+
+- name: Remove Duplicates and Convert to String
+  set_fact:
+    super_users: "{{ super_users | unique | join(';') }}"
+
+- name: Add Super Users list to Kafka Properties
+  set_fact:
+    kafka_broker_final_properties: "{{ kafka_broker_final_properties | combine(
+      {
+          'super.users': super_users
+      }
+    ) }}"
+
+- name: Create SSL Certificate Directory
+  file:
+    path: /var/ssl/private
+    state: directory
+    mode: 0755
+
+- name: Copy in public pem files
+  copy:
+    src: "{{token_services_public_pem_file}}"
+    dest: "{{rbac_enabled_public_pem_path}}"
+    mode: 0640
+    owner: "{{kafka_broker_user}}"
+    group: "{{kafka_broker_group}}"
+
+- name: Copy in private pem files
+  copy:
+    src: "{{token_services_private_pem_file}}"
+    dest: "{{rbac_enabled_private_pem_path}}"
+    mode: 0640
+    owner: "{{kafka_broker_user}}"
+    group: "{{kafka_broker_group}}"

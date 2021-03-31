@@ -1,0 +1,31 @@
+---
+- name: "Installing Kafka Connect Connector(s) from Confluent Hub"
+  shell: |
+    {{ (installation_method == 'archive') | ternary(archive_destination_path + '/confluent-' + confluent_package_version, '/usr') }}/bin/confluent-hub install \
+      --no-prompt --component-dir {{kafka_connect_confluent_hub_plugins_dest}} \
+      {{ (installation_method == 'archive') | ternary('--worker-configs ' + kafka_connect.config_file, '') }} \
+      {{ item }}
+  args:
+    creates: "{{ kafka_connect_confluent_hub_plugins_dest }}/{{ item.split(':')[0] | replace('/', '-') }}"
+  loop: "{{kafka_connect_confluent_hub_plugins}}"
+  when: kafka_connect_confluent_hub_plugins|length > 0
+  notify: restart connect distributed
+
+- name: Set Permissions on Plugin Folder(s)
+  file:
+    path: "{{ kafka_connect_confluent_hub_plugins_dest }}/{{ item.split(':')[0] | replace('/', '-') }}"
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+    state: directory
+    mode: 0750
+  loop: "{{ kafka_connect_confluent_hub_plugins }}"
+  when: kafka_connect_confluent_hub_plugins|length > 0
+
+- name: Set Permissions on Plugin Files
+  file:
+    path: "{{ kafka_connect_confluent_hub_plugins_dest }}/{{ item.split(':')[0] | replace('/', '-') }}"
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+    recurse: true
+  loop: "{{ kafka_connect_confluent_hub_plugins }}"
+  when: kafka_connect_confluent_hub_plugins|length > 0

@@ -1,0 +1,146 @@
+---
+driver:
+  name: docker
+platforms:
+  # Unset env vars resolve to the empty string
+  - name: zookeeper1-kafka-broker1${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: zookeeper1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - zookeeper
+      - kafka_broker
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: schema-registry1${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: schema-registry1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - schema_registry
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: kafka-rest1${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: kafka-rest1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - kafka_rest
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: kafka-connect1${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: kafka-connect1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - kafka_connect
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: ksql1${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: ksql1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - ksql
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: control-center1${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: control-center1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - control_center
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    ## Commenting below to avoid port collision on jenkins server
+    ## Uncomment to view c3 in browser at localhost:9021
+    # published_ports:
+    #   - "9021:9021"
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      hash_behaviour: merge
+  playbooks:
+    converge: ../../../../all.yml
+  inventory:
+    group_vars:
+      all:
+        scenario_name: custom-user-plaintext-rhel
+      zookeeper:
+        zookeeper_user: cp-test
+        zookeeper_group: cp-test-group
+        zookeeper:
+          log_path: /kafka/logs/
+      kafka_broker:
+        kafka_broker_user: broker-test
+        kafka_broker_group: cp-test-group
+        kafka_broker:
+          appender_log_path: /kafka/logs/
+      schema_registry:
+        schema_registry_user: sr-custom
+        schema_registry_group: sr-custom-group
+        schema_registry:
+          appender_log_path: /kafka/logs/schemaregistry/
+      kafka_rest:
+        kafka_rest_user: rest-custom
+        kafka_rest_group: rest-custom-group
+        kafka_rest:
+          appender_log_path: /kafka/logs/kafkarest/
+      ksql:
+        ksql_user: ksql-custom
+        ksql_group: ksql-custom-group
+        ksql:
+          appender_log_path: /kafka/logs/ksql/
+      kafka_connect:
+        kafka_connect_user: connect-custom
+        kafka_connect_group: connect-custom-group
+        kafka_connect:
+          appender_log_path: /kafka/logs/kafkaconnect/
+      control_center:
+        control_center_user: c3-custom
+        control_center_group: c3-custom-group
+        control_center:
+          appender_log_path: /kafka/logs/controlcenter/
+
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - lint
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    # - idempotence
+    - side_effect
+    - verify
+    - cleanup
+    - destroy

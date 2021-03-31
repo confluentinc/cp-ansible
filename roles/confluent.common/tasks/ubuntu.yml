@@ -1,0 +1,60 @@
+---
+- name: Add Confluent Apt Key
+  apt_key:
+    url: "{{confluent_common_repository_debian_key_url}}"
+    state: present
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+
+- name: Add Confluent Apt Repo
+  apt_repository:
+    repo: "{{confluent_common_repository_debian_repository}}"
+    state: present
+  register: apt_add_result
+  until: apt_add_result is success
+  retries: 10
+  delay: 5
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+
+- name: Add Custom Apt Repo
+  copy:
+    src: "{{custom_apt_repo_filepath}}"
+    dest: /etc/apt/sources.list.d/custom_confluent.list
+  when: repository_configuration == 'custom'
+  notify:
+    - apt-get update
+
+- meta: flush_handlers
+
+- name: Make Sure man pages Directory Exists
+  file:
+    path: /usr/share/man/man1
+    state: directory
+
+- name: Add open JDK repo
+  apt_repository:
+    repo: "{{ubuntu_java_repository}}"
+  when:
+    - repository_configuration == 'confluent'
+    - install_java|bool
+
+- name: Install Java
+  apt:
+    name: "{{ubuntu_java_package_name}}"
+  register: java_install_result
+  until: java_install_result is success
+  retries: 10
+  delay: 5
+  when: install_java|bool
+  tags: package
+
+- name: Install OpenSSL
+  apt:
+    name: openssl
+  loop:
+    - openssl
+    - unzip
+  tags: package

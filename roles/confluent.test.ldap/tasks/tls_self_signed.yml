@@ -1,0 +1,33 @@
+---
+- name: Create CA
+  shell: |
+    openssl req -new -nodes -x509 \
+      -keyout /var/ssl/private/ldaps/{{root_key_name}} \
+      -out /var/ssl/private/ldaps/{{root_certificate_name}} \
+      -days 365 \
+      -subj '/CN=ca1.test.confluent.io/OU=TEST/O=CONFLUENT/L=PaloAlto/S=Ca/C=US'
+
+- name: Create private key for LDAP Server
+  shell: |
+    openssl genrsa -out /var/ssl/private/ldaps/{{ldap_private_key_name}} 2048
+
+- name: Create signing request for LDAP Server
+  shell: |
+    openssl req -new -key /var/ssl/private/ldaps/{{ldap_private_key_name}} \
+    -out /var/ssl/private/ldaps/{{ldap_csr_name}} \
+    -subj '/CN={{inventory_hostname}}/OU=TEST/O=CONFLUENT/L=PaloAlto/S=Ca/C=US'
+
+- name: Sign CSR with custom root CA
+  shell: |
+    openssl x509 -req -in /var/ssl/private/ldaps/{{ldap_csr_name}} \
+    -CA /var/ssl/private/ldaps/{{root_certificate_name}} \
+    -CAkey /var/ssl/private/ldaps/{{root_key_name}} \
+    -CAcreateserial \
+    -out /var/ssl/private/ldaps/{{ldap_crt_name}} \
+    -days {{certificate_days}} -sha256
+
+- name: Copy Generated SSL Files Back to Ansible Host
+  synchronize:
+    src: /var/ssl/private/ldaps/
+    dest: generated_ssl_files
+    mode: pull

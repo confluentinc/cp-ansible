@@ -1,74 +1,53 @@
+---
 - name: Host Prerequisites
-  hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest
+  hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest:kafka_connect_replicator
+  gather_facts: false
+  environment: "{{ proxy_env }}"
   tasks:
-  - import_role:
-      name: confluent.common
-  - import_role:
-      name: confluent.kerberos
-    when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms and kerberos_configure|bool"
-  - import_role:
-      name: confluent.ssl
-    when: kafka_broker_listeners | ssl_required
+    - import_role:
+        name: confluent.variables
 
-- name: Zookeeper Provisioning
-  hosts: zookeeper
-  gather_facts: no
-  tags:
-    - zookeeper
-  tasks:
-  - import_role:
-      name: confluent.zookeeper
+    - name: Create Certificate Authority and Copy to Ansible Host
+      include_tasks: tasks/certificate_authority.yml
+      tags: certificate_authority
+      run_once: true
+      when: >
+        create_mds_certs|bool or
+        (self_signed|bool and
+        (zookeeper_ssl_enabled|bool or
+        kafka_broker_listeners | ssl_required(ssl_enabled) or
+        kafka_broker_rest_ssl_enabled|bool or
+        schema_registry_ssl_enabled|bool or
+        kafka_rest_ssl_enabled|bool or
+        kafka_connect_ssl_enabled|bool or
+        ksql_ssl_enabled|bool or
+        control_center_ssl_enabled|bool))
 
-- name: Kafka Broker Provisioning
-  hosts: kafka_broker
-  gather_facts: no
-  tags:
-    - kafka_broker
-  tasks:
-  - import_role:
-      name: confluent.kafka_broker
+    - import_role:
+        name: confluent.common
+      tags: common
 
-- name: Schema Registry Provisioning
-  hosts: schema_registry
-  gather_facts: no
-  tags:
-    - schema_registry
-  tasks:
-  - import_role:
-      name: confluent.schema_registry
+    - name: Set Up Secrets Protection
+      include_tasks: tasks/masterkey.yml
+      run_once: true
+      when:
+        - secrets_protection_enabled|bool
+        - not secrets_protection_masterkey
+        - regenerate_masterkey|bool
+      tags: masterkey
 
-- name: Kafta Connect Provisioning
-  hosts: kafka_connect
-  gather_facts: no
-  tags:
-    - kafka_connect
-  tasks:
-  - import_role:
-      name: confluent.kafka_connect
+- import_playbook: zookeeper.yml
 
-- name: KSQL Provisioning
-  hosts: ksql
-  gather_facts: no
-  tags:
-    - ksql
-  tasks:
-  - import_role:
-      name: confluent.ksql
+- import_playbook: kafka_broker.yml
 
-- name: Kafka Rest Provisioning
-  hosts: kafka_rest
-  gather_facts: no
-  tags:
-    - kafka_rest
-  tasks:
-  - import_role:
-      name: confluent.kafka_rest
+- import_playbook: schema_registry.yml
 
-- name: Control Center Provisioning
-  hosts: control_center
-  gather_facts: no
-  tags:
-    - control_center
-  tasks:
-  - import_role:
-      name: confluent.control_center
+- import_playbook: kafka_connect.yml
+
+- import_playbook: ksql.yml
+
+- import_playbook: kafka_rest.yml
+
+- import_playbook: control_center.yml
+
+- import_playbook: kafka_connect_replicator.yml

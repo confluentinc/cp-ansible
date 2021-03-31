@@ -1,0 +1,270 @@
+---
+- name: Verify - kafka_broker
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: listener.security.protocol.map
+        expected_value: INTERNAL:SSL,BROKER:SSL
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: offsets.topic.replication.factor
+        expected_value: "4"
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/kafka_jolokia.properties
+        property: authMode
+        expected_value: basic
+
+    - name: Test jolokia endpoint with incorrect username/password
+      uri:
+        url: https://localhost:7771/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions
+        validate_certs: false
+        force_basic_auth: true
+        url_username: user2
+        url_password: pass
+        status_code: 401
+
+    - name: Test jolokia endpoint with correct username/password
+      uri:
+        url: https://localhost:7771/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions
+        validate_certs: false
+        force_basic_auth: true
+        url_username: user1
+        url_password: pass
+        status_code: 200
+
+    - name: Create Schema
+      uri:
+        url: https://schema-registry1:8081/subjects/users-value/versions
+        method: POST
+        validate_certs: false
+        client_cert: /var/ssl/private/kafka_broker.crt
+        client_key: /var/ssl/private/kafka_broker.key
+        headers:
+          Content-Type: application/vnd.schemaregistry.v1+json
+        body_format: json
+        body: '{ "schema": "[ { \"type\":\"record\", \"name\":\"user\", \"fields\": [ {\"name\":\"userid\",\"type\":\"long\"}, {\"name\":\"username\",\"type\":\"string\"} ]} ]" }'
+        status_code: 200
+      run_once: true
+
+    - name: Create kafka client properties file
+      shell: |
+        echo "security.protocol=SSL
+        ssl.truststore.location=/var/ssl/private/kafka_broker.truststore.jks
+        ssl.truststore.password=confluenttruststorepass
+        ssl.keystore.location=/var/ssl/private/kafka_broker.keystore.jks
+        ssl.keystore.password=confluentkeystorestorepass
+        ssl.key.password=confluentkeystorestorepass" > /tmp/config.props
+      run_once: true
+
+    - name: Create topic with schema validation enabled
+      shell: |
+        kafka-topics --create --topic users \
+          --bootstrap-server kafka-broker1:9092 \
+          --replication-factor 2 --partitions 2  \
+          --config confluent.value.schema.validation=true \
+          --command-config /tmp/config.props
+      run_once: true
+      register: output
+      failed_when:
+        - "'Topic users already exists' not in output.stdout"
+        - "'Created topic users' not in output.stdout"
+
+    - name: Write to topic
+      uri:
+        url: https://kafka-rest1:8082/topics/users
+        method: POST
+        validate_certs: false
+        client_cert: /var/ssl/private/kafka_broker.crt
+        client_key: /var/ssl/private/kafka_broker.key
+        headers:
+          Content-Type: application/vnd.kafka.avro.v2+json
+          Accept: application/vnd.kafka.v2+json
+        body_format: json
+        body: '{"value_schema_id": 1, "records": [{"value": {"user":{"userid": 1, "username": "Bunny Smith"}}}]}'
+        status_code: 200
+      run_once: true
+
+- name: Verify - schema_registry
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: kafkastore.security.protocol
+        expected_value: SSL
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: kafkastore.topic.replication.factor
+        expected_value: "4"
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema_registry_jolokia.properties
+        property: authMode
+        expected_value: basic
+
+- name: Verify - kafka_connect
+  hosts: kafka_connect
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: security.protocol
+        expected_value: SSL
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: config.storage.replication.factor
+        expected_value: "4"
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: offset.storage.replication.factor
+        expected_value: "4"
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: status.storage.replication.factor
+        expected_value: "4"
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/kafka_connect_jolokia.properties
+        property: authMode
+        expected_value: basic
+
+- name: Verify - kafka_rest
+  hosts: kafka_rest
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-rest/kafka-rest.properties
+        property: client.security.protocol
+        expected_value: SSL
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-rest/kafka_rest_jolokia.properties
+        property: authMode
+        expected_value: basic
+
+- name: Verify - ksql
+  hosts: ksql
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/ksqldb/ksql-server.properties
+        property: security.protocol
+        expected_value: SSL
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/ksqldb/ksql-server.properties
+        property: ksql.internal.topic.replicas
+        expected_value: "4"
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/ksqldb/ksql-server.properties
+        property: ksql.streams.replication.factor
+        expected_value: "4"
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/ksqldb/ksql_jolokia.properties
+        property: authMode
+        expected_value: basic
+
+- name: Verify - control_center
+  hosts: control_center
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.streams.security.protocol
+        expected_value: SSL
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.internal.topics.replication
+        expected_value: "4"
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.metrics.topic.replication
+        expected_value: "4"
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.monitoring.interceptor.topic.replication
+        expected_value: "4"
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.command.topic.replication
+        expected_value: "4"
+
+- name: Verify - CLI
+  hosts: all
+  gather_facts: false
+  tasks:
+    - shell: confluent --help

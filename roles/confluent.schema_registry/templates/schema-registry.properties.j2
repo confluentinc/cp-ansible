@@ -1,54 +1,5 @@
 # Maintained by Ansible
-{% for key, value in schema_registry.properties.items() %}
+{# schema_registry_final_properties defined in confluent.variables #}
+{% for key, value in schema_registry_final_properties|dictsort %}
 {{key}}={{value}}
 {% endfor %}
-
-# Schema Registry Configuration
-listeners={{schema_registry_http_protocol}}://0.0.0.0:{{schema_registry_listener_port}}
-host.name={{inventory_hostname}}
-inter.instance.protocol={{schema_registry_http_protocol}}
-{% if schema_registry_ssl_enabled|bool %}
-security.protocol=SSL
-ssl.keystore.location={{keystore_path}}
-ssl.keystore.password={{keystore_storepass}}
-ssl.key.password={{keystore_keypass}}
-{% if schema_registry_ssl_mutual_auth_enabled|bool %}
-ssl.truststore.location={{truststore_path}}
-ssl.truststore.password={{truststore_storepass}}
-ssl.client.auth=false
-#Set to true if you wish to force Client SSL Authentication
-{% endif %}
-{% endif %}
-
-# Kafka Broker Configuration
-kafkastore.bootstrap.servers={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[schema_registry_kafka_listener_name]['port']}}{% endfor %}
-
-kafkastore.security.protocol={{kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | kafka_protocol(kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'])}}
-{% if kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled']|bool %}
-kafkastore.ssl.truststore.location={{truststore_path}}
-kafkastore.ssl.truststore.password={{truststore_storepass}}
-{% if kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_mutual_auth_enabled']|bool %}
-kafkastore.ssl.keystore.location={{keystore_path}}
-kafkastore.ssl.keystore.password={{keystore_storepass}}
-kafkastore.ssl.key.password={{keystore_keypass}}
-{% endif %}
-{% endif %}
-{% if kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | normalize_sasl_protocol == 'PLAIN' %}
-kafkastore.sasl.mechanism=PLAIN
-kafkastore.sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required \
-   username="{{sasl_plain_users.schema_registry.principal}}" password="{{sasl_plain_users.schema_registry.password}}";
-{% endif %}
-{% if kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | normalize_sasl_protocol == 'GSSAPI' %}
-kafkastore.sasl.mechanism=GSSAPI
-kafkastore.sasl.kerberos.service.name={{kerberos_kafka_broker_primary}}
-kafkastore.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required \
-   useKeyTab=true \
-   storeKey=true \
-   keyTab="{{kerberos.keytab_dir}}/{{schema_registry_kerberos_keytab_path | basename}}" \
-   principal="{{schema_registry_kerberos_principal}}";
-{% endif %}
-{% if kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
-kafkastore.sasl.mechanism=SCRAM-SHA-256
-kafkastore.sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
-   username="{{sasl_scram_users.schema_registry.principal}}" password="{{sasl_scram_users.schema_registry.password}}";
-{% endif %}
