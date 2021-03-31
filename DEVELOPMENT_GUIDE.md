@@ -2,7 +2,7 @@
 
 The following document will be a reference guide to coding standards of cp-ansible. It is written to be idempotent, meaning whatever you set in your inventory file, the playbook and roles should provision on your hosts, and can be run multiple times without causing unnecessary changes to those hosts.
 
-#### Table Of Contents
+## Table Of Contents
 
 [Roles](#roles)
 
