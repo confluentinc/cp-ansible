@@ -17,7 +17,7 @@ The following document will be a reference guide to coding standards of cp-ansib
 [Branching Model](#branding-model)
 
 ## Roles
-Each Confluent component has its own role, with the name confluent.<component_name>. Within that role, main.yml is the entrypoint of all tasks run when the role is invoked. Here are a few tasks and coding standards associated with them:
+Each Confluent component has its own role, with the name `confluent.<component_name>`. Within that role, `main.yml` is the entrypoint of all tasks run when the role is invoked. Here are a few tasks and coding standards associated with them:
 
 ```
 - name: Write Service Overrides	(1)
@@ -55,13 +55,13 @@ Each Confluent component has its own role, with the name confluent.<component_na
       -import -file {{ca_cert_path}} \
       -storepass {{keystore_storepass}}
   no_log: "{{mask_secrets|bool}}"	(1)
+```
 
 1. Passwords are not logged
-```
 
 ## Variables
 
-Variables are defined in multiple places within cp-ansible. Each role will have its own variables defined in defaults/main.yml. These variables can be used by tasks within that role, but not tasks from other roles. For variables that must be scoped to multiple roles there is the confluent.variables role. This role is set as a dependency for most of our roles:
+Variables are defined in multiple places within cp-ansible. Each role will have its own variables defined in `defaults/main.yml`. These variables can be used by tasks within that role, but not tasks from other roles. For variables that must be scoped to multiple roles there is the confluent.variables role. This role is set as a dependency for most of our roles:
 
 ```
 # roles/confluent.ksql/meta/main.yml
@@ -187,15 +187,19 @@ The `kafka_broker_sasl_enabled_mechanisms` variable is a list built out of all o
 When adding new features to cp-ansible, ask these questions:
 
 1. What properties need to be added to enable this feature?
+
 Put those properties into the `<component>_properties` dictionary in `roles/confluent.variables/vars/main.yml`.
 
 2. What customizable variables should be defined to enable this feature?
+
 See the Variables section.
 
 3. What tasks need to be added to enable this feature on a host?
+
 Maybe additional rolebindings need to be created or additional files put on a host. Put those tasks in `roles/confluent.<component>/tasks/main.yml`.
 
 4. Does this feature need to be added to all components?
+
 If you add a security feature to one component, like a schema registry authentication type, the other components that connect to Schema Registry now need to be able to authenticate. All features should be developed and tested with the full platform suite in mind.
 
 ## Testing
