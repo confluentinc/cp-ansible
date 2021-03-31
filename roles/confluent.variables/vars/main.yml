@@ -28,11 +28,11 @@ zookeeper_properties:
       dataDir: /var/lib/zookeeper
       admin.enableServer: "false"
   non_secure:
-    enabled: "{{not zookeeper_ssl_enabled}}"
+    enabled: "{{ not zookeeper_ssl_enabled }}"
     properties:
       clientPort: "{{zookeeper_client_port}}"
-  ssl:
-    enabled: "{{zookeeper_ssl_enabled}}"
+  client_ssl:
+    enabled: "{{ zookeeper_ssl_enabled }}"
     properties:
       secureClientPort: "{{zookeeper_client_port}}"
       serverCnxnFactory: org.apache.zookeeper.server.NettyServerCnxnFactory
@@ -41,21 +41,32 @@ zookeeper_properties:
       ssl.keyStore.password: "{{zookeeper_keystore_storepass}}"
       ssl.trustStore.location: "{{zookeeper_truststore_path}}"
       ssl.trustStore.password: "{{zookeeper_truststore_storepass}}"
+      ssl.clientAuth: "{{ 'need' if zookeeper_client_authentication_type == 'mtls' else 'none' }}"
+  client_sasl:
+    enabled: "{{ zookeeper_client_authentication_type in ['kerberos', 'digest'] or zookeeper_quorum_authentication_type == 'digest'}}"
+    properties:
+      authProvider.sasl: org.apache.zookeeper.server.auth.SASLAuthenticationProvider
+  client_sasl_kerberos:
+    enabled: "{{ zookeeper_client_authentication_type == 'kerberos' }}"
+    properties:
+      kerberos.removeHostFromPrincipal: 'true'
+      kerberos.removeRealmFromPrincipal: 'true'
+  quorum_ssl:
+    enabled: "{{ zookeeper_quorum_authentication_type == 'mtls' }}"
+    properties:
       sslQuorum: "true"
       ssl.quorum.keyStore.location: "{{zookeeper_keystore_path}}"
       ssl.quorum.keyStore.password: "{{zookeeper_keystore_storepass}}"
       ssl.quorum.trustStore.location: "{{zookeeper_truststore_path}}"
       ssl.quorum.trustStore.password: "{{zookeeper_truststore_storepass}}"
-      ssl.clientAuth: "{{ 'need' if zookeeper_ssl_mutual_auth_enabled|bool else 'none' }}"
-  sasl:
-    enabled: "{{ zookeeper_sasl_protocol in ['kerberos', 'digest'] }}"
+  quorum_sasl:
+    enabled: "{{ zookeeper_quorum_authentication_type == 'digest' }}"
     properties:
-      authProvider.sasl: org.apache.zookeeper.server.auth.SASLAuthenticationProvider
-  sasl_kerberos:
-    enabled: "{{ zookeeper_sasl_protocol == 'kerberos' }}"
-    properties:
-      kerberos.removeHostFromPrincipal: 'true'
-      kerberos.removeRealmFromPrincipal: 'true'
+      quorum.auth.enableSasl: true
+      quorum.auth.learnerRequireSasl: true
+      quorum.auth.serverRequireSasl: true
+      quorum.auth.learner.saslLoginContext: QuorumLearner
+      quorum.auth.server.saslLoginContext: QuorumServer
   servers:
     enabled: true
     properties: "{{ zookeeper_servers | split_to_dict }}"
@@ -160,12 +171,12 @@ kafka_broker_properties:
       zookeeper.ssl.truststore.location: "{{kafka_broker_pkcs12_truststore_path}}"
       zookeeper.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   zk_mtls:
-    enabled: "{{ zookeeper_ssl_mutual_auth_enabled }}"
+    enabled: "{{ zookeeper_client_authentication_type == 'mtls' }}"
     properties:
       zookeeper.ssl.keystore.location: "{{kafka_broker_pkcs12_keystore_path}}"
       zookeeper.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
   zk_acls:
-    enabled: "{{ zookeeper_sasl_protocol in ['kerberos', 'digest'] }}"
+    enabled: "{{ zookeeper_client_authentication_type in ['kerberos', 'digest'] }}"
     properties:
       zookeeper.set.acl: 'true'
   sr:

@@ -470,25 +470,41 @@ Default:  "{{ssl_enabled}}"
 
 ### zookeeper_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+Deprecated- Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
 
 Default:  "{{ssl_mutual_auth_enabled}}"
 
 ***
 
-### zookeeper_client_port
+### zookeeper_sasl_protocol
 
-Port for Kafka to Zookeeper connections. NOTE- 2181 will be configured for zk health checks
+Deprecated- SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
 
-Default:  "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
+Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
 
 ***
 
-### zookeeper_sasl_protocol
+### zookeeper_quorum_authentication_type
 
-SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
+Authentication to put on ZK Server to Server connections. Available options: [mtls, digest].
 
-Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
+Default:  "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
+
+***
+
+### zookeeper_client_authentication_type
+
+Authentication to put on ZK Client to Server connections. This is Kafka's connection to ZK. Available options: [mtls, digest, kerberos].
+
+Default:  "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
+
+***
+
+### zookeeper_client_port
+
+Port for Kafka to Zookeeper connections
+
+Default:  "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
 
 ***
 
