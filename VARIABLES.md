@@ -452,6 +452,22 @@ Default:  "{{ssl_enabled}}"
 
 ***
 
+### zookeeper_ssl_mutual_auth_enabled
+
+Deprecated- Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+
+Default:  "{{ssl_mutual_auth_enabled}}"
+
+***
+
+### zookeeper_sasl_protocol
+
+Deprecated- SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
+
+Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
+
+***
+
 ### zookeeper_quorum_authentication_type
 
 Authentication to put on ZK Server to Server connections. Available options: [mtls, digest].
