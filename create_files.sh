@@ -15,4 +15,5 @@ do
 
   echo ${USER}:${GROUP} ${TARG}
   chown ${USER}:${GROUP} ${TARG}
+  chmod 2770 ${TARG}
 done
