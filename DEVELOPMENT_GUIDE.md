@@ -66,7 +66,7 @@ Each Confluent component has its own role, with the name `confluent.<component_n
 Variables are defined in multiple places within cp-ansible. Each role will have its own variables defined in `defaults/main.yml`. These variables can be used by tasks within that role, but not tasks from other roles. For variables that must be scoped to multiple roles there is the variables role. This role is set as a dependency for most of our roles:
 
 ```
-# roles/confluent.ksql/meta/main.yml
+# roles/ksql/meta/main.yml
 ---
 dependencies:
   - role: variables
