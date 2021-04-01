@@ -262,7 +262,7 @@ Default:  3
 
 ### sasl_protocol
 
-SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
+SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256
 
 Default:  none
 
@@ -1604,6 +1604,14 @@ Default:  {}
 
 ***
 
+### sasl_scram256_users
+
+Dictionary containing additional sasl scram users to be created during provisioning.
+
+Default:  {}
+
+***
+
 ### sasl_plain_users
 
 Dictionary containing additional sasl plain users to be created during provisioning.
@@ -2508,6 +2516,22 @@ Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
 
 ***
 
+### kafka_connect_replicator_sasl_scram256_principal
+
+SCRAM 256 principal for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_sasl_scram256_password
+
+SCRAM 256 password for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
+
+***
+
 ### kafka_connect_replicator_sasl_plain_principal
 
 SASL PLAIN principal for Kafka Connect Replicator to authenticate with.
@@ -2692,6 +2716,22 @@ Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
 
 ***
 
+### kafka_connect_replicator_consumer_sasl_scram256_principal
+
+SCRAM 256 principal for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram256_password
+
+SCRAM 256 password for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
+
+***
+
 ### kafka_connect_replicator_consumer_sasl_plain_principal
 
 SASL PLAIN principal for the Consumer to authenticate with.
@@ -2793,6 +2833,22 @@ Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 SCRAM password for the Producer to authenticate with.
 
 Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram256_principal
+
+SCRAM 256 principal for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram256_password
+
+SCRAM 256 password for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2905,6 +2961,22 @@ Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal}}"
 SCRAM password for the Monitoring Interceptor to authenticate with.
 
 Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram256_principal
+
+SCRAM 256 principal for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram256_password
+
+SCRAM 256 password for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -3393,7 +3465,6 @@ Default:  "{{ custom_log4j }}"
 Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
 
 Default:  "INFO, stdout, connectAppender"
-
 
 ***
 
