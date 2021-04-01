@@ -42,6 +42,7 @@
 - name: Create Kafka Connect Replicator Group
   group:
     name: "{{kafka_connect_replicator_group}}"
+  when: not users_and_paths_provided|bool
 
 - name: Create Kafka Connect Replicator User
   user:
@@ -49,7 +50,7 @@
     comment: "Confluent Replicator User"
     system: true
     group: "{{kafka_connect_replicator_group}}"
-  when: create_users|bool
+  when: not users_and_paths_provided|bool
 
 - name: Configure TLS for Kafka Connect Replicator Host
   include_role:
@@ -222,6 +223,7 @@
     mode: 0750
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
+  when: not users_and_paths_provided|bool
 
 - name: Create Logs Directory
   file:
@@ -230,6 +232,7 @@
     group: "{{kafka_connect_replicator_group}}"
     owner: "{{kafka_connect_replicator_user}}"
     mode: 0770
+  when: not users_and_paths_provided|bool
 
 - name: Create Kafka Connect Replicator Log4j Config
   template:
@@ -238,7 +241,14 @@
     mode: 0640
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
-  when: kafka_connect_replicator_custom_log4j|bool
+  when: kafka_connect_replicator_custom_log4j|bool and not users_and_paths_provided|bool
+  notify: Restart Kafka Connect Replicator
+
+- name: Create Kafka Connect Replicator Log4j Config
+  template:
+    src: kafka-connect-replicator-log4j.properties.j2
+    dest: "{{kafka_connect_replicator.log4j_file}}"
+  when: kafka_connect_replicator_custom_log4j|bool and users_and_paths_provided|bool
   notify: Restart Kafka Connect Replicator
 
 - name: Create Kafka Connect Replicator Jolokia Config
@@ -248,7 +258,14 @@
     mode: 0640
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
-  when: kafka_connect_replicator_jolokia_enabled|bool
+  when: kafka_connect_replicator_jolokia_enabled|bool and not users_and_paths_provided|bool
+  notify: Restart Kafka Connect Replicator
+
+- name: Create Kafka Connect Replicator Jolokia Config
+  template:
+    src: kafka-connect-replicator-jolokia.properties.j2
+    dest: "{{kafka_connect_replicator_jolokia_config}}"
+  when: kafka_connect_replicator_jolokia_enabled|bool and users_and_paths_provided|bool
   notify: Restart Kafka Connect Replicator
 
 - name: Create Kafka Connect Replicator Config
@@ -259,6 +276,14 @@
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   notify: Restart Kafka Connect Replicator
+  when: not users_and_paths_provided|bool
+
+- name: Create Kafka Connect Replicator Config
+  template:
+    src: kafka-connect-replicator.properties.j2
+    dest: "{{kafka_connect_replicator.replication_config_file}}"
+  notify: Restart Kafka Connect Replicator
+  when: users_and_paths_provided|bool
 
 - name: Create Kafka Connect Replicator Consumer Config
   template:
@@ -268,6 +293,14 @@
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   notify: Restart Kafka Connect Replicator
+  when: not users_and_paths_provided|bool
+
+- name: Create Kafka Connect Replicator Consumer Config
+  template:
+    src: kafka-connect-replicator-consumer.properties.j2
+    dest: "{{kafka_connect_replicator.consumer_config_file}}"
+  notify: Restart Kafka Connect Replicator
+  when: users_and_paths_provided|bool
 
 - name: Create Kafka Connect Replicator Producer Config
   template:
@@ -277,6 +310,14 @@
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   notify: Restart Kafka Connect Replicator
+  when: not users_and_paths_provided|bool
+
+- name: Create Kafka Connect Replicator Producer Config
+  template:
+    src: kafka-connect-replicator-producer.properties.j2
+    dest: "{{kafka_connect_replicator.producer_config_file}}"
+  notify: Restart Kafka Connect Replicator
+  when: users_and_paths_provided|bool
 
 - name: Create Kafka Connect Replicator Monitoring Interceptor Config
   template:
@@ -286,6 +327,14 @@
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   notify: Restart Kafka Connect Replicator
+  when: not users_and_paths_provided|bool
+
+- name: Create Kafka Connect Replicator Monitoring Interceptor Config
+  template:
+    src: kafka-connect-replicator-interceptors.properties.j2
+    dest: "{{kafka_connect_replicator.interceptors_config_file}}"
+  notify: Restart Kafka Connect Replicator
+  when: users_and_paths_provided|bool
 
 - name: Copy Kafka Connect Replicator Systemd script
   template:
@@ -295,6 +344,14 @@
     owner: root
     group: root
   notify: Restart Kafka Connect Replicator
+  when: not users_and_paths_provided|bool
+
+- name: Copy Kafka Connect Replicator Systemd script
+  template:
+    src: kafka-connect-replicator.service.j2
+    dest:  "{{kafka_connect_replicator.systemd_file}}"
+  notify: Restart Kafka Connect Replicator
+  when: users_and_paths_provided|bool
 
 - name: Create Kafka Connect Replicator Systemd override directory
   file:
@@ -303,6 +360,7 @@
     group: "{{kafka_connect_group}}"
     state: directory
     mode: 0640
+  when: not users_and_paths_provided|bool
 
 - name: Write Kafka Connect Replicator Service Overrides
   template:
@@ -312,6 +370,14 @@
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   notify: Restart Kafka Connect Replicator
+  when: not users_and_paths_provided|bool
+
+- name: Write Kafka Connect Replicator Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{ kafka_connect_replicator.systemd_override }}"
+  notify: Restart Kafka Connect Replicator
+  when: users_and_paths_provided|bool
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true

@@ -49,7 +49,7 @@
     comment: "Kafka REST User"
     system: true
     group: "{{kafka_rest_group}}"
-  when: create_users|bool
+  when: not users_and_paths_provided|bool
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -114,7 +114,7 @@
     path: /var/ssl/private
     state: directory
     mode: 0755
-  when: rbac_enabled|bool
+  when: rbac_enabled|bool and not users_and_paths_provided|bool
 
 - name: Copy in MDS Public Pem File
   copy:
@@ -123,7 +123,7 @@
     mode: '755'
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
-  when: rbac_enabled|bool
+  when: rbac_enabled|bool and not users_and_paths_provided|bool
 
 - name: Create Kafka Rest Config directory
   file:
@@ -132,6 +132,7 @@
     mode: 0750
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
+  when: not users_and_paths_provided|bool
 
 - name: Create Kafka Rest Config with Secrets Protection
   include_role:
@@ -156,7 +157,14 @@
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
   notify: restart kafka-rest
-  when: not kafka_rest_secrets_protection_enabled|bool
+  when: not kafka_rest_secrets_protection_enabled|bool and not users_and_paths_provided|bool
+
+- name: Create Kafka Rest Config
+  template:
+    src: kafka-rest.properties.j2
+    dest: "{{kafka_rest.config_file}}"
+  notify: restart kafka-rest
+  when: not kafka_rest_secrets_protection_enabled|bool and users_and_paths_provided|bool
 
 - name: Create Logs Directory
   file:
@@ -165,6 +173,7 @@
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
     mode: 0770
+  when: not users_and_paths_provided|bool
 
 - name: Update log4j Config for Log Cleanup
   include_role:
@@ -182,6 +191,7 @@
     group: "{{kafka_rest_group}}"
     owner: "{{kafka_rest_user}}"
     mode: 0640
+  when: not users_and_paths_provided|bool
 
 - name: Create Kafka Rest Jolokia Config
   template:
@@ -190,7 +200,14 @@
     mode: 0640
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
-  when: kafka_rest_jolokia_enabled|bool
+  when: kafka_rest_jolokia_enabled|bool and not users_and_paths_provided|bool
+  notify: restart kafka-rest
+
+- name: Create Kafka Rest Jolokia Config
+  template:
+    src: kafka_rest_jolokia.properties.j2
+    dest: "{{kafka_rest_jolokia_config}}"
+  when: kafka_rest_jolokia_enabled|bool and users_and_paths_provided|bool
   notify: restart kafka-rest
 
 - name: Deploy JMX Exporter Config File
@@ -200,7 +217,7 @@
     mode: 0640
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
-  when: kafka_rest_jmxexporter_enabled|bool
+  when: kafka_rest_jmxexporter_enabled|bool and not users_and_paths_provided|bool
 
 - name: Create Service Override Directory
   file:
@@ -209,6 +226,7 @@
     group: "{{kafka_rest_group}}"
     state: directory
     mode: 0640
+  when: not users_and_paths_provided|bool
 
 - name: Write Service Overrides
   template:
@@ -218,6 +236,14 @@
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
   notify: restart kafka-rest
+  when: not users_and_paths_provided|bool
+
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{kafka_rest.systemd_override}}"
+  notify: restart kafka-rest
+  when: users_and_paths_provided|bool
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true

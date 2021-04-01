@@ -48,7 +48,7 @@
     comment: "Kafka User"
     system: true
     group: "{{kafka_broker_group}}"
-  when: create_users|bool
+  when: not users_and_paths_provided|bool
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -120,6 +120,7 @@
     group: "{{kafka_broker_group}}"
     state: directory
     mode: 0750
+  when: not users_and_paths_provided|bool
 
 # To avoid a catastrophic user error where root directory permissions get recursively changed
 - name: Assert log.dirs Property not Misconfigured
@@ -136,6 +137,7 @@
     state: directory
     mode: 0750
   with_items: "{{ kafka_broker_final_properties['log.dirs'].split(',') }}"
+  when: not users_and_paths_provided|bool
 
 - name: Set Permissions on Data Dir files
   file:
@@ -144,6 +146,7 @@
     group: "{{kafka_broker_group}}"
     recurse: true
   with_items: "{{ kafka_broker_final_properties['log.dirs'].split(',') }}"
+  when: not users_and_paths_provided|bool
 
 - name: Create Kafka Broker Config directory
   file:
@@ -152,6 +155,7 @@
     mode: 0750
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
+  when: not users_and_paths_provided|bool
 
 - name: Create Kafka Broker Config with Secrets Protection
   include_role:
@@ -176,7 +180,14 @@
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
   notify: restart kafka
-  when: not kafka_broker_secrets_protection_enabled|bool
+  when: not kafka_broker_secrets_protection_enabled|bool and not users_and_paths_provided|bool
+
+- name: Create Kafka Broker Config
+  template:
+    src: server.properties.j2
+    dest: "{{kafka_broker.config_file}}"
+  notify: restart kafka
+  when: not kafka_broker_secrets_protection_enabled|bool and users_and_paths_provided|bool
 
 - name: Create Kafka Broker Client Config
   template:
@@ -185,6 +196,13 @@
     mode: 0640
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
+  when: not users_and_paths_provided|bool
+
+- name: Create Kafka Broker Client Config
+  template:
+    src: client.properties.j2
+    dest: "{{kafka_broker.client_config_file}}"
+  when: users_and_paths_provided|bool
 
 # Zookeeper shell cannot read server.properties if secrets protection is enabled. Keeping a separate file.
 - name: Create Zookeeper TLS Client Config
@@ -194,7 +212,13 @@
     mode: 0640
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
-  when: zookeeper_ssl_enabled|bool
+  when: zookeeper_ssl_enabled|bool and not users_and_paths_provided|bool
+
+- name: Create Zookeeper TLS Client Config
+  template:
+    src: zookeeper-tls-client.properties.j2
+    dest: "{{kafka_broker.zookeeper_tls_client_config_file}}"
+  when: zookeeper_ssl_enabled|bool and users_and_paths_provided|bool
 
 - name: Create Logs Directory
   file:
@@ -203,6 +227,7 @@
     group: "{{kafka_broker_group}}"
     owner: "{{kafka_broker_user}}"
     mode: 0770
+  when: not users_and_paths_provided|bool
 
 - name: Update Kafka log4j Config for Log Cleanup
   include_role:
@@ -220,6 +245,7 @@
     group: "{{kafka_broker_group}}"
     owner: "{{kafka_broker_user}}"
     mode: 0640
+  when: not users_and_paths_provided|bool
 
 - name: Create Kafka Broker Jolokia Config
   template:
@@ -228,7 +254,14 @@
     mode: 0640
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
-  when: kafka_broker_jolokia_enabled|bool
+  when: kafka_broker_jolokia_enabled|bool and not users_and_paths_provided|bool
+  notify: restart kafka
+
+- name: Create Kafka Broker Jolokia Config
+  template:
+    src: kafka_jolokia.properties.j2
+    dest: "{{kafka_broker_jolokia_config}}"
+  when: kafka_broker_jolokia_enabled|bool and users_and_paths_provided|bool
   notify: restart kafka
 
 - name: Create Kafka Broker Jaas Config
@@ -238,7 +271,14 @@
     mode: 0640
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
-  when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms or zookeeper_sasl_protocol in ['kerberos', 'digest']"
+  when: ("'GSSAPI' in kafka_broker_sasl_enabled_mechanisms or zookeeper_sasl_protocol in ['kerberos', 'digest']") and not users_and_paths_provided|bool
+  notify: restart kafka
+
+- name: Create Kafka Broker Jaas Config
+  template:
+    src: kafka_server_jaas.conf.j2
+    dest: "{{kafka_broker.jaas_file}}"
+  when: ("'GSSAPI' in kafka_broker_sasl_enabled_mechanisms or zookeeper_sasl_protocol in ['kerberos', 'digest']") and users_and_paths_provided|bool
   notify: restart kafka
 
 - name: Create SCRAM Users
@@ -260,7 +300,13 @@
     mode: 0640
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
-  when: kafka_broker_jmxexporter_enabled|bool
+  when: kafka_broker_jmxexporter_enabled|bool and not users_and_paths_provided|bool
+
+- name: Deploy JMX Exporter Config File
+  copy:
+    src: "{{kafka_broker_jmxexporter_config_source_path}}"
+    dest: "{{kafka_broker_jmxexporter_config_path}}"
+  when: kafka_broker_jmxexporter_enabled|bool and users_and_paths_provided|bool
 
 - name: Create Service Override Directory
   file:
@@ -269,6 +315,7 @@
     group: "{{kafka_broker_group}}"
     state: directory
     mode: 0640
+  when: not users_and_paths_provided|bool
 
 - name: Write Service Overrides
   template:
@@ -278,6 +325,14 @@
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
   notify: restart kafka
+  when: not users_and_paths_provided|bool
+
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{ kafka_broker.systemd_override }}"
+  notify: restart kafka
+  when: users_and_paths_provided|bool
 
 - name: Tune virtual memory settings
   sysctl:

@@ -49,7 +49,7 @@
     comment: "Zookeeper User"
     system: true
     group: "{{zookeeper_group}}"
-  when: create_users|bool
+  when: not users_and_paths_provided|bool
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -113,7 +113,7 @@
     group: "{{zookeeper_group}}"
     state: directory
     mode: 0750
-  when: create_users|bool
+  when: not users_and_paths_provided|bool
 
 - name: Set Ownership of Data Dir Files
   file:
@@ -121,7 +121,7 @@
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
     recurse: true
-  when: create_users|bool
+  when: not users_and_paths_provided|bool
 
 - name: Set Zookeeper Transaction Log Data Dir Ownership
   file:
@@ -147,6 +147,13 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
+  when: not users_and_paths_provided|bool
+
+- name: Create Zookeeper myid File
+  template:
+    src: myid.j2
+    dest: "{{zookeeper_final_properties.dataDir}}/myid"
+  when: users_and_paths_provided|bool
 
 - name: Create Zookeeper Config directory
   file:
@@ -155,6 +162,7 @@
     mode: 0750
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
+  when: not users_and_paths_provided|bool
 
 - name: Create Zookeeper Config
   template:
@@ -165,6 +173,15 @@
     group: "{{zookeeper_group}}"
   register: zookeeper_config
   notify: restart zookeeper
+  when: not users_and_paths_provided|bool
+
+- name: Create Zookeeper Config
+  template:
+    src: zookeeper.properties.j2
+    dest: "{{zookeeper.config_file}}"
+  register: zookeeper_config
+  notify: restart zookeeper
+  when: users_and_paths_provided|bool
 
 - name: Create Log Directory
   file:

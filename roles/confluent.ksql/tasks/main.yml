@@ -49,7 +49,7 @@
     comment: "Connect Distributed User"
     system: true
     group: "{{ksql_group}}"
-  when: create_users|bool
+  when: not users_and_paths_provided|bool
 
 - name: Set Ksql streams dir permissions
   file:
@@ -58,6 +58,7 @@
     group: "{{ksql_group}}"
     state: directory
     mode: 0750
+  when: not users_and_paths_provided|bool
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -124,6 +125,7 @@
     mode: 0750
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
+  when: not users_and_paths_provided|bool
 
 - name: Create Ksql Config with Secrets Protection
   include_role:
@@ -148,7 +150,14 @@
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
   notify: restart ksql
-  when: not ksql_secrets_protection_enabled|bool
+  when: not ksql_secrets_protection_enabled|bool and not users_and_paths_provided|bool
+
+- name: Create Ksql Config
+  template:
+    src: ksql-server.properties.j2
+    dest: "{{ksql.config_file}}"
+  notify: restart ksql
+  when: not ksql_secrets_protection_enabled|bool and users_and_paths_provided|bool
 
 - name: Create Logs Directory
   file:
@@ -157,6 +166,7 @@
     group: "{{ksql_group}}"
     owner: "{{ksql_user}}"
     mode: 0770
+  when: not users_and_paths_provided|bool
 
 - name: Create log4j Directory
   file:
@@ -165,6 +175,7 @@
     group: "{{ksql_group}}"
     state: directory
     mode: 0750
+  when: not users_and_paths_provided|bool
 
 - name: Create Ksql log4j Config
   template:
@@ -173,7 +184,14 @@
     mode: 0640
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
-  when: ksql_custom_log4j|bool
+  when: ksql_custom_log4j|bool and not users_and_paths_provided|bool
+  notify: restart ksql
+
+- name: Create Ksql log4j Config
+  template:
+    src: ksql-server_log4j.properties.j2
+    dest: "{{ksql.log4j_file}}"
+  when: ksql_custom_log4j|bool and users_and_paths_provided|bool
   notify: restart ksql
 
 - name: Create Ksql Jolokia Config
@@ -183,7 +201,14 @@
     mode: 0640
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
-  when: ksql_jolokia_enabled|bool
+  when: ksql_jolokia_enabled|bool and not users_and_paths_provided|bool
+  notify: restart ksql
+
+- name: Create Ksql Jolokia Config
+  template:
+    src: ksql_jolokia.properties.j2
+    dest: "{{ksql_jolokia_config}}"
+  when: ksql_jolokia_enabled|bool and users_and_paths_provided|bool
   notify: restart ksql
 
 - name: Create RocksDB Directory
@@ -193,7 +218,7 @@
     owner: "{{ksql_user}}"
     mode: 0750
     state: directory
-  when: ksql_rocksdb_path != ""
+  when: ksql_rocksdb_path != "" and not users_and_paths_provided|bool
 
 - name: Set Permission to RocksDB Files
   file:
@@ -201,7 +226,7 @@
     group: "{{ksql_group}}"
     owner: "{{ksql_user}}"
     recurse: true
-  when: ksql_rocksdb_path != ""
+  when: ksql_rocksdb_path != "" and not users_and_paths_provided|bool
 
 - name: Deploy JMX Exporter Config File
   copy:
@@ -210,7 +235,7 @@
     mode: 0640
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
-  when: ksql_jmxexporter_enabled|bool
+  when: ksql_jmxexporter_enabled|bool and not users_and_paths_provided|bool
 
 - name: Create Service Override Directory
   file:
@@ -219,6 +244,7 @@
     group: "{{ksql_group}}"
     state: directory
     mode: 0640
+  when: not users_and_paths_provided|bool
 
 - name: Write Service Overrides
   template:
@@ -228,6 +254,14 @@
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
   notify: restart ksql
+  when: not users_and_paths_provided|bool
+
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{ksql.systemd_override}}"
+  notify: restart ksql
+  when: users_and_paths_provided|bool
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true

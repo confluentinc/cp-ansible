@@ -49,7 +49,7 @@
     comment: "Schema Registry User"
     system: true
     group: "{{schema_registry_group}}"
-  when: create_users|bool
+  when: not users_and_paths_provided|bool
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -116,6 +116,7 @@
     mode: 0750
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
+  when: not users_and_paths_provided|bool
 
 - name: Create Schema Registry Config with Secrets Protection
   include_role:
@@ -140,7 +141,14 @@
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
   notify: restart schema-registry
-  when: not schema_registry_secrets_protection_enabled|bool
+  when: not schema_registry_secrets_protection_enabled|bool and not users_and_paths_provided|bool
+
+- name: Create Schema Registry Config
+  template:
+    src: schema-registry.properties.j2
+    dest: "{{schema_registry.config_file}}"
+  notify: restart schema-registry
+  when: not schema_registry_secrets_protection_enabled|bool and users_and_paths_provided|bool
 
 - name: Create Logs Directory
   file:
@@ -149,6 +157,7 @@
     group: "{{schema_registry_group}}"
     owner: "{{schema_registry_user}}"
     mode: 0770
+  when: not users_and_paths_provided|bool
 
 - name: Update log4j Config for Log Cleanup
   include_role:
@@ -166,6 +175,7 @@
     group: "{{schema_registry_group}}"
     owner: "{{schema_registry_user}}"
     mode: 0640
+  when: not users_and_paths_provided|bool
 
 - name: Create Schema Registry Jolokia Config
   template:
@@ -174,7 +184,14 @@
     mode: 0640
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
-  when: schema_registry_jolokia_enabled|bool
+  when: schema_registry_jolokia_enabled|bool and not users_and_paths_provided|bool
+  notify: restart schema-registry
+
+- name: Create Schema Registry Jolokia Config
+  template:
+    src: schema_registry_jolokia.properties.j2
+    dest: "{{schema_registry_jolokia_config}}"
+  when: schema_registry_jolokia_enabled|bool and users_and_paths_provided|bool
   notify: restart schema-registry
 
 - name: Deploy JMX Exporter Config File
@@ -184,7 +201,7 @@
     mode: 0640
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
-  when: schema_registry_jmxexporter_enabled|bool
+  when: schema_registry_jmxexporter_enabled|bool and not users_and_paths_provided|bool
 
 - name: Create Service Override Directory
   file:
@@ -193,6 +210,7 @@
     group: "{{schema_registry_group}}"
     state: directory
     mode: 0640
+  when: not users_and_paths_provided|bool
 
 - name: Write Service Overrides
   template:
@@ -202,6 +220,14 @@
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
   notify: restart schema-registry
+  when: not users_and_paths_provided|bool
+
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{schema_registry.systemd_override}}"
+  notify: restart schema-registry
+  when: users_and_paths_provided|bool
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
