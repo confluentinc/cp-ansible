@@ -198,6 +198,7 @@
     group: "{{zookeeper_group}}"
     owner: "{{zookeeper_user}}"
     mode: 0770
+  when: not users_and_paths_provided|bool
 
 - name: Create log4j Directory
   file:
@@ -206,6 +207,7 @@
     group: "{{zookeeper_group}}"
     state: directory
     mode: 0750
+  when: not users_and_paths_provided|bool
 
 - name: Create Zookeeper log4j config
   template:
@@ -214,7 +216,14 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-  when: zookeeper_custom_log4j|bool
+  when: zookeeper_custom_log4j|bool and not users_and_paths_provided|bool
+  notify: restart zookeeper
+
+- name: Create Zookeeper log4j config
+  template:
+    src: zookeeper_log4j.properties.j2
+    dest: "{{zookeeper.log4j_file}}"
+  when: zookeeper_custom_log4j|bool and users_and_paths_provided|bool
   notify: restart zookeeper
 
 - name: Create Zookeeper Jolokia Config
@@ -224,7 +233,14 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-  when: zookeeper_jolokia_enabled|bool
+  when: zookeeper_jolokia_enabled|bool and not users_and_paths_provided|bool
+  notify: restart zookeeper
+
+- name: Create Zookeeper Jolokia Config
+  template:
+    src: zookeeper_jolokia.properties.j2
+    dest: "{{zookeeper_jolokia_config}}"
+  when: zookeeper_jolokia_enabled|bool and users_and_paths_provided|bool
   notify: restart zookeeper
 
 - name: Create Zookeeper Jaas config
@@ -234,7 +250,14 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-  when: zookeeper_sasl_protocol in ['kerberos', 'digest']
+  when: zookeeper_sasl_protocol in ['kerberos', 'digest'] and not users_and_paths_provided|bool
+  notify: restart zookeeper
+
+- name: Create Zookeeper Jaas config
+  template:
+    src: zookeeper_jaas.conf.j2
+    dest: "{{zookeeper.jaas_file}}"
+  when: zookeeper_sasl_protocol in ['kerberos', 'digest'] and users_and_paths_provided|bool
   notify: restart zookeeper
 
 - name: Deploy JMX Exporter Config File
@@ -244,7 +267,13 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-  when: zookeeper_jmxexporter_enabled|bool
+  when: zookeeper_jmxexporter_enabled|bool and not users_and_paths_provided|bool
+
+- name: Deploy JMX Exporter Config File
+  copy:
+    src: "{{zookeeper_jmxexporter_config_source_path}}"
+    dest: "{{zookeeper_jmxexporter_config_path}}"
+  when: zookeeper_jmxexporter_enabled|bool and users_and_paths_provided|bool
 
 - name: Create Service Override Directory
   file:
@@ -253,6 +282,7 @@
     group: "{{zookeeper_group}}"
     state: directory
     mode: 0640
+  when: not users_and_paths_provided|bool
 
 - name: Write Service Overrides
   template:
@@ -262,6 +292,14 @@
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
   notify: restart zookeeper
+  when: not users_and_paths_provided|bool
+
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{zookeeper.systemd_override}}"
+  notify: restart zookeeper
+  when: users_and_paths_provided|bool
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
