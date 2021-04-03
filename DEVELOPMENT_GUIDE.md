@@ -213,16 +213,16 @@ Refer to our [How to test guide](HOW_TO_TEST.md) for how to set up Molecule test
 All Yaml files in CP-Ansible will get run through a linter during our build process.
 Pull requests with linting errors will not be accepted.
 
-We are currently using [Super-Linter](https://github.com/github/super-linter), but that is subject to change.
-They are providing a description on
-[how run Super-Linter locally](https://github.com/github/super-linter/blob/master/docs/run-linter-locally.md)
-to test your branch of code.
+We are currently linting with:
 
-To test/check manually, without using Super-Linter, you can run:
+- `ỳamllint`; latest stable version
+- `ansible-lint`; latest stable 5.x.x version
+
+To test/check manually you can run:
 
 ```shell
 yamllimt .
-ansible-lint -c .ansible-lint.yml
+ansible-lint *.yml
 ```
 
 ## Branching Model
