@@ -14,7 +14,9 @@ The following document will be a reference guide to coding standards of cp-ansib
 
 [Testing](#testing)
 
-[Branching Model](#branding-model)
+[Linting](#linting)
+
+[Branching Model](#branching-model)
 
 ## Roles
 Each Confluent component has its own role, with the name `confluent.<component_name>`. Within that role, `main.yml` is the entrypoint of all tasks run when the role is invoked. Here are a few tasks and coding standards associated with them:
@@ -205,6 +207,23 @@ If you add a security feature to one component, like a schema registry authentic
 ## Testing
 
 Refer to our [How to test guide](HOW_TO_TEST.md) for how to set up Molecule testing on your development machine. We run all scenarios within `roles/confluent.test/molecule/` before each release. When developing a new feature, we ask that you add a test case in molecule. You may be inclined to make a new scenario to test it, but please consider adding your feature test to an existing scenario to save time/resources during our release testing.
+
+## Linting
+
+All Yaml files in CP-Ansible will get run through a linter during our build process.
+Pull requests with linting errors will not be accepted.
+
+We are currently linting with:
+
+- `ỳamllint`; latest stable version
+- `ansible-lint`; latest stable 5.x.x version
+
+To test/check manually you can run:
+
+```shell
+yamllimt .
+ansible-lint *.yml
+```
 
 ## Branching Model
 
