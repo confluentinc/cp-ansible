@@ -50,6 +50,18 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+  - name: ccloud-schema-registry1
+    hostname: ccloud-schema-registry1.confluent
+    groups:
+      - ccloud_schema_registry
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: schema-registry1
     hostname: schema-registry1.confluent
     groups:
@@ -118,14 +130,27 @@ provisioner:
     defaults:
       hash_behaviour: merge
   inventory:
+    host_vars:
+      # Mocked out CCloud SR cluster
+      ccloud-schema-registry1:
+        ssl_enabled: true
+
+        schema_registry_authentication_type: basic
+
+        sasl_protocol: plain
+        ccloud_kafka_broker_enabled: false
+
     group_vars:
+      # Mocked out CCloud Kafka Cluster
       kafka_broker:
-        # CCloud kafka is sasl_ssl with these settings
         ssl_enabled: true
         sasl_protocol: plain
 
+        # This var messes with the sasl plain users
+        ccloud_kafka_broker_enabled: false
+
       all:
-        scenario_name: ccloud-kafka-rest
+        scenario_name: ccloud
 
         ssl_enabled: true
 
@@ -140,6 +165,11 @@ provisioner:
         ccloud_bootstrap_servers: kafka-broker1:9092
         ccloud_key: client
         ccloud_secret: client-secret
+
+        ccloud_schema_registry_enabled: true
+        ccloud_bootstrap_servers: https://ccloud-schema-registry1:9092
+        ccloud_schema_registry_key: client
+        ccloud_schema_registry_secret: client-secret
 
 verifier:
   name: ansible
