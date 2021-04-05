@@ -120,7 +120,7 @@ confluent_cli_version: latest
 ### Recommended replication factor, defaults to 3. When splitting your cluster across 2 DCs with 4 or more Brokers, this should be increased to 4 to balance topic replicas.
 default_internal_replication_factor: 3
 
-### SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
+### SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256
 sasl_protocol: none
 
 ### Boolean to configure components with TLS Encryption. Also manages Java Keystore creation
@@ -206,14 +206,20 @@ zookeeper_group: "{{zookeeper_default_group}}"
 ### Boolean to configure zookeeper with TLS Encryption. Also manages Java Keystore creation
 zookeeper_ssl_enabled: "{{ssl_enabled}}"
 
-### Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+### Deprecated- Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
 zookeeper_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
 
-### Port for Kafka to Zookeeper connections. NOTE- 2181 will be configured for zk health checks
-zookeeper_client_port: "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
-
-### SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
+### Deprecated- SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
 zookeeper_sasl_protocol: "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
+
+### Authentication to put on ZK Server to Server connections. Available options: [mtls, digest].
+zookeeper_quorum_authentication_type: "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
+
+### Authentication to put on ZK Client to Server connections. This is Kafka's connection to ZK. Available options: [mtls, digest, kerberos].
+zookeeper_client_authentication_type: "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
+
+### Port for Kafka to Zookeeper connections
+zookeeper_client_port: "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
 
 ### Set this variable to customize the directory that Zookeeper writes log files to. Default location is /var/log/kafka. NOTE- zookeeper.log_path is deprecated.
 zookeeper_log_dir: "{{zookeeper.log_path}}"
@@ -236,7 +242,7 @@ zookeeper_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keysto
 zookeeper_ca_cert_path: "/var/ssl/private/ca.crt"
 zookeeper_cert_path: "/var/ssl/private/zookeeper.crt"
 zookeeper_key_path: "/var/ssl/private/zookeeper.key"
-zookeeper_export_certs: "{{zookeeper_ssl_mutual_auth_enabled}}"
+zookeeper_export_certs: "{{ True if zookeeper_client_authentication_type == 'mtls' or zookeeper_quorum_authentication_type == 'mtls' else False }}"
 zookeeper_keytab_path: /etc/security/keytabs/zookeeper.keytab
 
 zookeeper:
@@ -279,8 +285,7 @@ zookeeper_jmxexporter_config_source_path: zookeeper.yml
 ### Destination path for Zookeeper jmx config file
 zookeeper_jmxexporter_config_path: /opt/prometheus/zookeeper.yml
 
-zookeeper_health_check_command: "{% if zookeeper_sasl_protocol in ['kerberos', 'digest'] %}KAFKA_OPTS='-Djava.security.auth.login.config={{zookeeper.jaas_file}}'{% endif %}
-{{ binary_base_path }}/bin/kafka-run-class
+zookeeper_health_check_command: "{{ binary_base_path }}/bin/kafka-run-class
 {% if zookeeper_ssl_enabled|bool %}
 -Dzookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
 -Dzookeeper.ssl.trustStore.location={{zookeeper_truststore_path}}
@@ -983,7 +988,8 @@ control_center_default_internal_replication_factor: "{{ 3 if ccloud_kafka_broker
 ### Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
 control_center_custom_properties: "{{ control_center.properties }}"
 
-sasl_scram_users: "{
+# Hash merging not working with new approach
+_sasl_scram_users: "{
   'admin': {
     'principal': 'admin',
     'password': 'admin-secret'
@@ -1018,7 +1024,54 @@ sasl_scram_users: "{
   }{% endif %}
 }"
 
-sasl_plain_users: "{
+### Dictionary containing additional sasl scram users to be created during provisioning.
+sasl_scram_users: {}
+
+sasl_scram_users_final: "{{ _sasl_scram_users | combine(sasl_scram_users, recursive=True) }}"
+
+# Hash merging not working with new approach
+_sasl_scram256_users: "{
+  'admin': {
+    'principal': 'admin',
+    'password': 'admin-secret'
+  },
+  'client': {
+    'principal': 'client',
+    'password': 'client-secret'
+  }{% if 'schema_registry' in groups %},
+  'schema_registry': {
+    'principal': 'schema_registry',
+    'password': 'schema_registry-secret'
+  }{% endif %}{% if 'kafka_connect' in groups %},
+  'kafka_connect': {
+    'principal': 'kafka_connect',
+    'password': 'kafka_connect-secret'
+  }{% endif %}{% if 'kafka_rest' in groups %},
+  'kafka_rest': {
+    'principal': 'kafka_rest',
+    'password': 'kafka_rest-secret'
+  }{% endif %}{% if 'ksql' in groups %},
+  'ksql': {
+    'principal': 'ksql',
+    'password': 'ksql-secret'
+  }{% endif %}{% if 'control_center' in groups %},
+  'control_center': {
+    'principal': 'control_center',
+    'password': 'control_center-secret'
+  }{% endif %}{% if 'kafka_connect_replicator' in groups %},
+  'kafka_connect_replicator': {
+    'principal': 'kafka_connect_replicator',
+    'password': 'kafka_connect_replicator-secret'
+  }{% endif %}
+}"
+
+### Dictionary containing additional sasl scram users to be created during provisioning.
+sasl_scram256_users: {}
+
+sasl_scram256_users_final: "{{ _sasl_scram256_users | combine(sasl_scram256_users, recursive=True) }}"
+
+# Hash merging not working with new approach
+_sasl_plain_users: "{
   'admin': {
     'principal': 'admin',
     'password': 'admin-secret'
@@ -1052,6 +1105,11 @@ sasl_plain_users: "{
     'password': 'kafka_connect_replicator-secret'
   }{% endif %}
 }"
+
+### Dictionary containing additional sasl plain users to be created during provisioning.
+sasl_plain_users: {}
+
+sasl_plain_users_final: "{{ _sasl_plain_users | combine(sasl_plain_users, recursive=True) }}"
 
 zookeeper_digest_users:
   admin:
@@ -1461,16 +1519,22 @@ kafka_connect_replicator_ssl_truststore_file_path: ""
 kafka_connect_replicator_ssl_keystore_file_path: ""
 
 ### SCRAM principal for Kafka Connect Replicator to authenticate with.
-kafka_connect_replicator_sasl_scram_principal: "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_sasl_scram_principal: "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ### SCRAM password for Kafka Connect Replicator to authenticate with.
-kafka_connect_replicator_sasl_scram_password: "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_sasl_scram_password: "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+### SCRAM 256 principal for Kafka Connect Replicator to authenticate with.
+kafka_connect_replicator_sasl_scram256_principal: "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+### SCRAM 256 password for Kafka Connect Replicator to authenticate with.
+kafka_connect_replicator_sasl_scram256_password: "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ### SASL PLAIN principal for Kafka Connect Replicator to authenticate with.
-kafka_connect_replicator_sasl_plain_principal: "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_sasl_plain_principal: "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ### SASL PLAIN password for Kafka Connect Replicator to authenticate with.
-kafka_connect_replicator_sasl_plain_password: "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_sasl_plain_password: "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ### Boolean that defines if the Jolokia agent is enabled on Kafka Connect Replicator.
 kafka_connect_replicator_jolokia_enabled: "{{jolokia_enabled}}"
@@ -1562,16 +1626,22 @@ kafka_connect_replicator_consumer_ssl_truststore_file_path: "{{kafka_connect_rep
 kafka_connect_replicator_consumer_ssl_keystore_file_path: "{{kafka_connect_replicator_consumer_ssl_keystore_file_path}}"
 
 ### SCRAM principal for the Consumer to authenticate with.
-kafka_connect_replicator_consumer_sasl_scram_principal: "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_consumer_sasl_scram_principal: "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ### SCRAM password for the Consumer to authenticate with.
-kafka_connect_replicator_consumer_sasl_scram_password: "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_consumer_sasl_scram_password: "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+### SCRAM 256 principal for the Consumer to authenticate with.
+kafka_connect_replicator_consumer_sasl_scram256_principal: "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+### SCRAM 256 password for the Consumer to authenticate with.
+kafka_connect_replicator_consumer_sasl_scram256_password: "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ### SASL PLAIN principal for the Consumer to authenticate with.
-kafka_connect_replicator_consumer_sasl_plain_principal: "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_consumer_sasl_plain_principal: "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ### SASL PLAIN password for the Consumer to authenticate with.
-kafka_connect_replicator_consumer_sasl_plain_password: "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_consumer_sasl_plain_password: "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 kafka_connect_replicator_consumer_truststore_path: "/var/ssl/private/kafka_connect_replicator_consumer.truststore.jks"
 kafka_connect_replicator_consumer_keystore_path: "/var/ssl/private/kafka_connect_replicator_consumer.keystore.jks"
@@ -1613,16 +1683,22 @@ kafka_connect_replicator_producer_ssl_truststore_file_path: "{{kafka_connect_rep
 kafka_connect_replicator_producer_ssl_keystore_file_path: "{{kafka_connect_replicator_ssl_keystore_file_path}}"
 
 ### SCRAM principal for the Producer to authenticate with.
-kafka_connect_replicator_producer_sasl_scram_principal: "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_producer_sasl_scram_principal: "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ### SCRAM password for the Producer to authenticate with.
-kafka_connect_replicator_producer_sasl_scram_password: "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_producer_sasl_scram_password: "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+### SCRAM 256 principal for the Producer to authenticate with.
+kafka_connect_replicator_producer_sasl_scram256_principal: "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+### SCRAM 256 password for the Producer to authenticate with.
+kafka_connect_replicator_producer_sasl_scram256_password: "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ### SASL PLAIN principal for the Producer to authenticate with.
-kafka_connect_replicator_producer_sasl_plain_principal: "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_producer_sasl_plain_principal: "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ### SASL PLAIN password for the Producer to authenticate with.
-kafka_connect_replicator_producer_sasl_plain_password: "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_producer_sasl_plain_password: "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 kafka_connect_replicator_producer_truststore_path: "/var/ssl/private/kafka_connect_replicator_producer.truststore.jks"
 kafka_connect_replicator_producer_keystore_path: "/var/ssl/private/kafka_connect_replicator_producer.keystore.jks"
@@ -1667,16 +1743,22 @@ kafka_connect_replicator_monitoring_interceptor_ssl_keystore_file_path: "{{kafka
 kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_path: "{{ kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_path }}"
 
 ### SCRAM principal for the Monitoring Interceptor to authenticate with.
-kafka_connect_replicator_monitoring_interceptor_sasl_scram_principal: "{{ sasl_scram_users.kafka_connect_replicator.principal}}"
+kafka_connect_replicator_monitoring_interceptor_sasl_scram_principal: "{{ sasl_scram_users_final.kafka_connect_replicator.principal}}"
 
 ### SCRAM password for the Monitoring Interceptor to authenticate with.
-kafka_connect_replicator_monitoring_interceptor_sasl_scram_password: "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_monitoring_interceptor_sasl_scram_password: "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+### SCRAM 256 principal for the Monitoring Interceptor to authenticate with.
+kafka_connect_replicator_monitoring_interceptor_sasl_scram256_principal: "{{ sasl_scram256_users_final.kafka_connect_replicator.principal}}"
+
+### SCRAM 256 password for the Monitoring Interceptor to authenticate with.
+kafka_connect_replicator_monitoring_interceptor_sasl_scram256_password: "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ### SASL PLAIN principal for the Monitoring Interceptor to authenticate with.
-kafka_connect_replicator_monitoring_interceptor_sasl_plain_principal: "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_monitoring_interceptor_sasl_plain_principal: "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ### SASL PLAIN password for the Monitoring Interceptor to authenticate with.
-kafka_connect_replicator_monitoring_interceptor_sasl_plain_password: "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_monitoring_interceptor_sasl_plain_password: "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 kafka_connect_replicator_monitoring_interceptor_truststore_path: "/var/ssl/private/kafka_connect_replicator_monitoring_interceptor.truststore.jks"
 kafka_connect_replicator_monitoring_interceptor_keystore_path: "/var/ssl/private/kafka_connect_replicator_monitoring_interceptor.keystore.jks"

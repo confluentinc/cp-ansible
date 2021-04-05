@@ -262,7 +262,7 @@ Default:  3
 
 ### sasl_protocol
 
-SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
+SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256
 
 Default:  none
 
@@ -470,25 +470,41 @@ Default:  "{{ssl_enabled}}"
 
 ### zookeeper_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+Deprecated- Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
 
 Default:  "{{ssl_mutual_auth_enabled}}"
 
 ***
 
-### zookeeper_client_port
+### zookeeper_sasl_protocol
 
-Port for Kafka to Zookeeper connections. NOTE- 2181 will be configured for zk health checks
+Deprecated- SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
 
-Default:  "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
+Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
 
 ***
 
-### zookeeper_sasl_protocol
+### zookeeper_quorum_authentication_type
 
-SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
+Authentication to put on ZK Server to Server connections. Available options: [mtls, digest].
 
-Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
+Default:  "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
+
+***
+
+### zookeeper_client_authentication_type
+
+Authentication to put on ZK Client to Server connections. This is Kafka's connection to ZK. Available options: [mtls, digest, kerberos].
+
+Default:  "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
+
+***
+
+### zookeeper_client_port
+
+Port for Kafka to Zookeeper connections
+
+Default:  "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
 
 ***
 
@@ -1684,6 +1700,30 @@ Default:  "{{ control_center.properties }}"
 
 ***
 
+### sasl_scram_users
+
+Dictionary containing additional sasl scram users to be created during provisioning.
+
+Default:  {}
+
+***
+
+### sasl_scram256_users
+
+Dictionary containing additional sasl scram users to be created during provisioning.
+
+Default:  {}
+
+***
+
+### sasl_plain_users
+
+Dictionary containing additional sasl plain users to be created during provisioning.
+
+Default:  {}
+
+***
+
 ### rbac_enabled
 
 Boolean to configure Confluent Platform with RBAC enabled. Creates Rolebindings for all components to function
@@ -2568,7 +2608,7 @@ Default:  ""
 
 SCRAM principal for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2576,7 +2616,23 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 SCRAM password for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_sasl_scram256_principal
+
+SCRAM 256 principal for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_sasl_scram256_password
+
+SCRAM 256 password for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2584,7 +2640,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2592,7 +2648,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2752,7 +2808,7 @@ Default:  "{{kafka_connect_replicator_consumer_ssl_keystore_file_path}}"
 
 SCRAM principal for the Consumer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2760,7 +2816,23 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 SCRAM password for the Consumer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram256_principal
+
+SCRAM 256 principal for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram256_password
+
+SCRAM 256 password for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2768,7 +2840,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for the Consumer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2776,7 +2848,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for the Consumer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2856,7 +2928,7 @@ Default:  "{{kafka_connect_replicator_ssl_keystore_file_path}}"
 
 SCRAM principal for the Producer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2864,7 +2936,23 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 SCRAM password for the Producer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram256_principal
+
+SCRAM 256 principal for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram256_password
+
+SCRAM 256 password for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2872,7 +2960,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for the Producer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2880,7 +2968,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for the Producer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2968,7 +3056,7 @@ Default:  "{{ kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_pa
 
 SCRAM principal for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal}}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal}}"
 
 ***
 
@@ -2976,7 +3064,23 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal}}"
 
 SCRAM password for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram256_principal
+
+SCRAM 256 principal for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram256_password
+
+SCRAM 256 password for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2984,7 +3088,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2992,7 +3096,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -3328,6 +3432,22 @@ Default:  "INFO, main"
 
 ***
 
+### control_center_max_log_files
+
+Max number of log files generated by Control Center. Only honored if control_center_custom_log4j: true
+
+Default:  10
+
+***
+
+### control_center_log_file_size
+
+Max size of a log file generated by Control Center. Only honored if control_center_custom_log4j: true
+
+Default:  100MB
+
+***
+
 ### control_center_custom_java_args
 
 Custom Java Args to add to the Control Center Process
@@ -3398,6 +3518,22 @@ Default:  "INFO, stdout, kafkaAppender"
 
 ***
 
+### kafka_broker_max_log_files
+
+Max number of log files generated by Kafka Broker. Only honored if kafka_broker_custom_log4j: true
+
+Default:  10
+
+***
+
+### kafka_broker_log_file_size
+
+Max size of a log file generated by Kafka Broker. Only honored if kafka_broker_custom_log4j: true
+
+Default:  100MB
+
+***
+
 ### kafka_broker_custom_java_args
 
 Custom Java Args to add to the Kafka Process
@@ -3457,6 +3593,22 @@ Default:  "{{ custom_log4j }}"
 Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
 
 Default:  "INFO, stdout, connectAppender"
+
+***
+
+### kafka_connect_max_log_files
+
+Max number of log files generated by Kafka Connect. Only honored if kafka_connect_custom_log4j: true
+
+Default:  10
+
+***
+
+### kafka_connect_log_file_size
+
+Max size of a log file generated by Kafka Connect. Only honored if kafka_connect_custom_log4j: true
+
+Default:  100MB
 
 ***
 
@@ -3522,6 +3674,22 @@ Default:  "INFO, stdout, file"
 
 ***
 
+### kafka_rest_max_log_files
+
+Max number of log files generated by Rest Proxy. Only honored if kafka_rest_custom_log4j: true
+
+Default:  10
+
+***
+
+### kafka_rest_log_file_size
+
+Max size of a log file generated by Rest Proxy. Only honored if kafka_rest_custom_log4j: true
+
+Default:  100MB
+
+***
+
 ### kafka_rest_custom_java_args
 
 Custom Java Args to add to the Rest Proxy Process
@@ -3581,6 +3749,22 @@ Default:  "{{ custom_log4j }}"
 Root logger within ksqlDB's log4j config. Only honored if ksql_custom_log4j: true
 
 Default:  "INFO, stdout, main"
+
+***
+
+### ksql_max_log_files
+
+Max number of log files generated by ksqlDB. Only honored if ksql_custom_log4j: true
+
+Default:  5
+
+***
+
+### ksql_log_file_size
+
+Max size of a log file generated by ksqlDB. Only honored if ksql_custom_log4j: true
+
+Default:  10MB
 
 ***
 
@@ -3654,6 +3838,22 @@ Default:  "INFO, stdout, file"
 
 ***
 
+### schema_registry_max_log_files
+
+Max number of log files generated by Schema Registry. Only honored if schema_registry_custom_log4j: true
+
+Default:  10
+
+***
+
+### schema_registry_log_file_size
+
+Max size of a log file generated by Schema Registry. Only honored if schema_registry_custom_log4j: true
+
+Default:  100MB
+
+***
+
 ### schema_registry_custom_java_args
 
 Custom Java Args to add to the Schema Registry Process
@@ -3713,6 +3913,22 @@ Default:  "{{ custom_log4j }}"
 Root logger within Zookeeper's log4j config. Only honored if zookeeper_custom_log4j: true
 
 Default:  INFO, stdout, zkAppender
+
+***
+
+### zookeeper_max_log_files
+
+Max number of log files generated by Zookeeper. Only honored if zookeeper_custom_log4j: true
+
+Default:  10
+
+***
+
+### zookeeper_log_file_size
+
+Max size of a log file generated by Zookeeper. Only honored if zookeeper_custom_log4j: true
+
+Default:  100MB
 
 ***
 

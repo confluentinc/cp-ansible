@@ -14,12 +14,20 @@
     - ansible_os_family
     - ansible_fqdn
 
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: confluent.common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ zookeeper_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
 # Install Packages
 - name: Install the Zookeeper Packages
   yum:
-    name: "{{item}}{{confluent_package_redhat_suffix}}"
+    name: "{{ zookeeper_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
-  loop: "{{zookeeper_packages}}"
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
@@ -29,8 +37,7 @@
 
 - name: Install the Zookeeper Packages
   apt:
-    name: "{{item}}{{confluent_package_debian_suffix}}"
-  loop: "{{zookeeper_packages}}"
+    name: "{{ zookeeper_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
@@ -89,7 +96,7 @@
     kerberos_keytab_path: "{{zookeeper_kerberos_keytab_path}}"
     kerberos_keytab_destination_path: "{{zookeeper_keytab_path}}"
     kerberos_handler: "restart zookeeper"
-  when: zookeeper_sasl_protocol == 'kerberos'
+  when: zookeeper_client_authentication_type == 'kerberos'
 
 - name: Copy Custom Zookeeper Files
   include_role:
@@ -202,7 +209,7 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-  when: zookeeper_sasl_protocol in ['kerberos', 'digest']
+  when: zookeeper_client_authentication_type in ['kerberos', 'digest'] or zookeeper_quorum_authentication_type in ['kerberos', 'digest']
   notify: restart zookeeper
 
 - name: Deploy JMX Exporter Config File
