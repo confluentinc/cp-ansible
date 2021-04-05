@@ -1125,11 +1125,25 @@ kafka_broker_rest_proxy_basic_users:
     password: admin-secret
     roles: admin
 
-schema_registry_basic_users:
-  admin:
-    principal: admin
-    password: admin-secret
-    roles: admin
+# schema_registry_basic_users:
+#   admin:
+#     principal: admin
+#     password: admin-secret
+#     roles: admin
+
+# Hash merging not working with new approach
+_schema_registry_basic_users: "{
+  'admin': {
+    'principal': '{% if ccloud_schema_registry_enabled|bool %}{{ccloud_schema_registry_key}}{% else %}admin{% endif %}',
+    'password': '{% if ccloud_schema_registry_enabled|bool %}{{ccloud_schema_registry_secret}}{% else %}admin-secret{% endif %}',
+    'roles': 'admin'
+  }
+}"
+
+### Dictionary containing additional sasl plain users to be created during provisioning.
+schema_registry_basic_users: {}
+
+schema_registry_basic_users_final: "{{ _schema_registry_basic_users | combine(schema_registry_basic_users, recursive=True) }}"
 
 kafka_connect_basic_users:
   admin:
@@ -1404,10 +1418,10 @@ kafka_broker_rest_health_check_user: "{{ mds_super_user if rbac_enabled|bool els
 kafka_broker_rest_health_check_password: "{{ mds_super_user_password if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.password }}"
 
 ### User for authenticated Schema Registry Health Check.
-schema_registry_health_check_user: "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registry_basic_users.admin.principal }}"
+schema_registry_health_check_user: "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registry_basic_users_final.admin.principal }}"
 
 ### Password for authenticated Schema Registry Health Check.
-schema_registry_health_check_password: "{{ schema_registry_ldap_password if rbac_enabled|bool else schema_registry_basic_users.admin.password }}"
+schema_registry_health_check_password: "{{ schema_registry_ldap_password if rbac_enabled|bool else schema_registry_basic_users_final.admin.password }}"
 
 ### User for authenticated Connect Health Check.
 kafka_connect_health_check_user: "{{ kafka_connect_ldap_user if rbac_enabled|bool else kafka_connect_basic_users.admin.principal }}"
@@ -1829,11 +1843,23 @@ ccloud_kafka_broker_enabled: false
 ### Bootstrap Servers to CCloud Kafka
 ccloud_bootstrap_servers: localhost:9092
 
-## CCloud Key
+## CCloud Kafka Key
 ccloud_key: xxxxx
 
-## CCloud Secret
+## CCloud Kafka Secret
 ccloud_secret: yyyyyy
 
 ### Boolean to skip truststore creation and configuration. Signifies kafka's certificates were signed by a public certificate authority.
 public_certificates_enabled: "{{ccloud_kafka_broker_enabled}}"
+
+### Boolean to configure component to Confluent Cloud Schema Registry. Must also set ccloud_schema_registry_url, ccloud_schema_registry_key, and ccloud_schema_registry_secret. schema_registry group should not be in inventory.
+ccloud_schema_registry_enabled: false
+
+### Url to CCloud Schema Registry
+ccloud_schema_registry_url: https://localhost:8081
+
+## CCloud Schema Registry Key
+ccloud_schema_registry_key: xxxxx
+
+## CCloud Schema Registry Secret
+ccloud_schema_registry_secret: yyyyyy

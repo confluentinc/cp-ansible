@@ -2328,7 +2328,7 @@ Default:  "{{ mds_super_user_password if rbac_enabled|bool else kafka_broker_res
 
 User for authenticated Schema Registry Health Check.
 
-Default:  "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registry_basic_users.admin.principal }}"
+Default:  "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registry_basic_users_final.admin.principal }}"
 
 ***
 
@@ -2336,7 +2336,7 @@ Default:  "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registr
 
 Password for authenticated Schema Registry Health Check.
 
-Default:  "{{ schema_registry_ldap_password if rbac_enabled|bool else schema_registry_basic_users.admin.password }}"
+Default:  "{{ schema_registry_ldap_password if rbac_enabled|bool else schema_registry_basic_users_final.admin.password }}"
 
 ***
 
