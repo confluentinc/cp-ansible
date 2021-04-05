@@ -868,6 +868,14 @@ Default:  "{{ssl_enabled}}"
 
 ***
 
+### schema_registry_ssl_mutual_auth_enabled
+
+Deprecated- Boolean to enable mTLS Authentication on Schema Registry
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
 ### schema_registry_authentication_type
 
 Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
@@ -1025,6 +1033,14 @@ Default:  8082
 Boolean to configure Rest Proxy with TLS Encryption. Also manages Java Keystore creation
 
 Default:  "{{ssl_enabled}}"
+
+***
+
+### kafka_rest_ssl_mutual_auth_enabled
+
+Deprecated- Boolean to enable mTLS Authentication on Rest Proxy
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ***
 
@@ -1201,6 +1217,14 @@ Default:  8083
 Boolean to configure Connect with TLS Encryption. Also manages Java Keystore creation
 
 Default:  "{{ssl_enabled}}"
+
+***
+
+### kafka_connect_ssl_mutual_auth_enabled
+
+Deprecated- Boolean to enable mTLS Authentication on Connect
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ***
 
@@ -1409,6 +1433,14 @@ Default:  8088
 Boolean to configure ksqlDB with TLS Encryption. Also manages Java Keystore creation
 
 Default:  "{{ssl_enabled}}"
+
+***
+
+### ksql_ssl_mutual_auth_enabled
+
+Deprecated - Boolean to enable mTLS Authentication on ksqlDB
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ***
 
@@ -3424,7 +3456,7 @@ Default:  "{{ custom_log4j }}"
 
 Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
 
-Default:  "INFO, stdout connectAppender"
+Default:  "INFO, stdout, connectAppender"
 
 ***
 
