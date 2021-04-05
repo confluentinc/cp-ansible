@@ -203,6 +203,12 @@ kafka_broker_properties:
     properties:
       confluent.basic.auth.credentials.source: USER_INFO
       confluent.basic.auth.user.info: "{{schema_registry_ldap_user | default('sr') }}:{{schema_registry_ldap_password | default('pass')}}"
+  sr_basic:
+    # Should not turn on basic auth if rbac is enabled
+    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
+    properties:
+      confluent.basic.auth.credentials.source: USER_INFO
+      confluent.basic.auth.user.info: "{{schema_registry_basic_users.admin.principal}}:{{schema_registry_basic_users.admin.password}}"
   rbac:
     enabled: "{{ rbac_enabled }}"
     properties:
@@ -271,6 +277,14 @@ kafka_broker_properties:
       confluent.http.server.ssl.trustmanager.algorithm: PKIX
       confluent.http.server.ssl.keystore.type: BCFKS
       confluent.http.server.ssl.truststore.type: BCFKS
+  embedded_rest_proxy_basic:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_proxy_authentication_type == 'basic' }}"
+    properties:
+      kafka.rest.resource.extension.class: io.confluent.kafkarest.security.KafkaRestSecurityResourceExtension
+      kafka.rest.confluent.rest.auth.propogate.method: JETTY_AUTH
+      kafka.rest.authentication.method: BASIC
+      kafka.rest.authentication.realm: KafkaRest
+      kafka.rest.authentication.roles: "{{ kafka_broker_rest_proxy_basic_users | get_roles | unique | join(',') }}"
   embedded_rest_proxy_client_bootstrap:
     enabled: "{{ kafka_broker_rest_proxy_enabled }}"
     properties:
@@ -423,9 +437,15 @@ schema_registry_properties:
       ssl.truststore.location: "{{schema_registry_truststore_path}}"
       ssl.truststore.password: "{{schema_registry_truststore_storepass}}"
   mtls:
-    enabled: "{{ schema_registry_ssl_mutual_auth_enabled }}"
+    enabled: "{{ schema_registry_authentication_type == 'mtls' }}"
     properties:
       ssl.client.auth: 'true'
+  basic:
+    enabled: "{{ schema_registry_authentication_type == 'basic' }}"
+    properties:
+      authentication.method: BASIC
+      authentication.realm: SchemaRegistry
+      authentication.roles: "{{ schema_registry_basic_users | get_roles | unique | join(',') }}"
   kafka_client:
     enabled: true
     properties: "{{ kafka_broker_listeners[schema_registry_kafka_listener_name] | client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
@@ -495,6 +515,7 @@ kafka_connect_http_protocol: "{{ 'https' if kafka_connect_ssl_enabled|bool else 
 kafka_connect_rest_extension_classes:
   - "{% if rbac_enabled|bool %}io.confluent.connect.security.ConnectSecurityExtension{% endif %}"
   - "{% if kafka_connect_secret_registry_enabled|bool %}io.confluent.connect.secretregistry.ConnectSecretRegistryExtension{% endif %}"
+  - "{% if kafka_connect_authentication_type == 'basic' %}org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension{% endif %}"
 
 kafka_connect_final_rest_extension_classes: "{{(kafka_connect_rest_extension_classes|difference(['']) + kafka_connect_custom_rest_extension_classes) | unique}}"
 
@@ -542,7 +563,7 @@ kafka_connect_properties:
       listeners.https.ssl.truststore.location: "{{kafka_connect_truststore_path}}"
       listeners.https.ssl.truststore.password: "{{kafka_connect_truststore_storepass}}"
   mtls:
-    enabled: "{{ kafka_connect_ssl_mutual_auth_enabled }}"
+    enabled: "{{ kafka_connect_authentication_type == 'mtls' }}"
     properties:
       listeners.https.ssl.client.auth: "true"
   sr:
@@ -563,6 +584,13 @@ kafka_connect_properties:
       key.converter.schema.registry.ssl.keystore.location: "{{kafka_connect_keystore_path}}"
       key.converter.schema.registry.ssl.keystore.password: "{{kafka_connect_keystore_storepass}}"
       key.converter.schema.registry.ssl.key.password: "{{kafka_connect_keystore_keypass}}"
+  sr_basic:
+    enabled: "{{ 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
+    properties:
+      value.converter.basic.auth.credentials.source: USER_INFO
+      value.converter.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users.admin.principal}}:{{schema_registry_basic_users.admin.password}}"
+      key.converter.basic.auth.credentials.source: USER_INFO
+      key.converter.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users.admin.principal}}:{{schema_registry_basic_users.admin.password}}"
   kafka_client:
     enabled: true
     properties: "{{ kafka_broker_listeners[kafka_connect_kafka_listener_name] | client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
@@ -710,9 +738,15 @@ ksql_properties:
       ssl.keystore.password: "{{ksql_keystore_storepass}}"
       ssl.key.password: "{{ksql_keystore_keypass}}"
   mtls:
-    enabled: "{{ ksql_ssl_mutual_auth_enabled }}"
+    enabled: "{{ ksql_authentication_type == 'mtls' }}"
     properties:
       ssl.client.auth: 'true'
+  basic:
+    enabled: "{{ ksql_authentication_type == 'basic' }}"
+    properties:
+      authentication.method: BASIC
+      authentication.realm: KsqlServer
+      authentication.roles: "{{ ksql_basic_users | get_roles | unique | join(',') }}"
   kafka_sasl_plain:
     enabled: "{{ kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' }}"
     properties:
@@ -757,6 +791,11 @@ ksql_properties:
       ksql.schema.registry.ssl.keystore.location: "{{ksql_keystore_path}}"
       ksql.schema.registry.ssl.keystore.password: "{{ksql_keystore_storepass}}"
       ksql.schema.registry.ssl.key.password: "{{ksql_keystore_keypass}}"
+  sr_basic:
+    enabled: "{{ 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
+    properties:
+      ksql.schema.registry.basic.auth.credentials.source: USER_INFO
+      ksql.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users.admin.principal}}:{{schema_registry_basic_users.admin.password}}"
   sr_rbac:
     enabled: "{{ 'schema_registry' in groups and rbac_enabled|bool }}"
     properties:
@@ -863,9 +902,15 @@ kafka_rest_properties:
       ssl.truststore.location: "{{kafka_rest_truststore_path}}"
       ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
   mtls:
-    enabled: "{{ kafka_rest_ssl_mutual_auth_enabled }}"
+    enabled: "{{ kafka_rest_authentication_type == 'mtls' }}"
     properties:
       ssl.client.auth: 'true'
+  basic:
+    enabled: "{{ kafka_rest_authentication_type == 'basic' }}"
+    properties:
+      authentication.method: BASIC
+      authentication.realm: KafkaRest
+      authentication.roles: "{{ kafka_rest_basic_users | get_roles | unique | join(',') }}"
   kafka_client:
     enabled: true
     properties: "{{ kafka_broker_listeners[kafka_rest_kafka_listener_name] | client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
@@ -891,6 +936,11 @@ kafka_rest_properties:
       schema.registry.ssl.keystore.location: "{{kafka_rest_keystore_path}}"
       schema.registry.ssl.keystore.password: "{{kafka_rest_keystore_storepass}}"
       schema.registry.ssl.key.password: "{{kafka_rest_keystore_keypass}}"
+  sr_basic:
+    enabled: "{{ 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
+    properties:
+      basic.auth.credentials.source: USER_INFO
+      schema.registry.basic.auth.user.info: "{{schema_registry_basic_users.admin.principal}}:{{schema_registry_basic_users.admin.password}}"
   monitoring_interceptor:
     enabled: "{{ kafka_rest_monitoring_interceptors_enabled|bool }}"
     properties:
@@ -984,6 +1034,14 @@ control_center_properties:
       confluent.controlcenter.rest.ssl.key.password: "{{control_center_keystore_keypass}}"
       confluent.controlcenter.rest.ssl.truststore.location: "{{control_center_truststore_path}}"
       confluent.controlcenter.rest.ssl.truststore.password: "{{control_center_truststore_storepass}}"
+  basic:
+    enabled: "{{ kafka_rest_authentication_type == 'basic' }}"
+    properties:
+      confluent.controlcenter.rest.authentication.method: BASIC
+      confluent.controlcenter.rest.authentication.realm: ControlCenter
+      confluent.controlcenter.rest.authentication.roles: "{{ (control_center_basic_users|get_roles + [ 'Restricted' ]) | unique | join(',') }}"
+      confluent.controlcenter.auth.restricted.roles: Restricted
+      confluent.controlcenter.auth.session.expiration.ms: 600000
   broker_embedded_rest_endpoint:
     enabled: "{{kafka_broker_rest_proxy_enabled or rbac_enabled }}"
     properties:
@@ -1014,6 +1072,11 @@ control_center_properties:
       confluent.controlcenter.schema.registry.schema.registry.ssl.keystore.location: "{{control_center_keystore_path}}"
       confluent.controlcenter.schema.registry.schema.registry.ssl.keystore.password: "{{control_center_keystore_storepass}}"
       confluent.controlcenter.schema.registry.schema.registry.ssl.key.password: "{{control_center_keystore_keypass}}"
+  sr_basic:
+    enabled: "{{ 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
+    properties:
+      confluent.controlcenter.schema.registry.basic.auth.credentials.source: USER_INFO
+      confluent.controlcenter.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users.admin.principal}}:{{schema_registry_basic_users.admin.password}}"
   connect:
     enabled: "{{ kafka_connect_cluster_ansible_group_names | default(omit) | length > 0 }}"
     properties: "{{ kafka_connect_cluster_ansible_group_names | c3_connect_properties(groups, hostvars, kafka_connect_ssl_enabled,

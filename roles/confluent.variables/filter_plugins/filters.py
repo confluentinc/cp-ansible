@@ -7,6 +7,7 @@ class FilterModule(object):
             'kafka_protocol_defaults': self.kafka_protocol_defaults,
             'get_sasl_mechanisms': self.get_sasl_mechanisms,
             'get_hostnames': self.get_hostnames,
+            'get_roles': self.get_roles,
             'resolve_hostname': self.resolve_hostname,
             'resolve_hostnames': self.resolve_hostnames,
             'cert_extension': self.cert_extension,
@@ -68,6 +69,14 @@ class FilterModule(object):
             hostname = listeners_dict[listener].get('hostname', default_hostname)
             hostnames = hostnames + [hostname]
         return hostnames
+
+    def get_roles(self, basic_users_dict):
+        # Loops over basic_users dictionary and returns all roles attached to each user
+        roles = []
+        for user in basic_users_dict:
+            user_roles = basic_users_dict[user].get('roles', 'admin').split(',')
+            roles = roles + user_roles
+        return roles
 
     def resolve_hostname(self, hosts_hostvars_dict):
         # Goes through selected possible VARs to provide the HOSTNAME for a given node for internal addressing within Confluent Platform

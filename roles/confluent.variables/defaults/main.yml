@@ -402,6 +402,7 @@ kafka_broker_keytab_path: /etc/security/keytabs/kafka_broker.keytab
 kafka_broker:
   # TODO deprecate these variables
   jaas_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_server_jaas.conf"
+  rest_proxy_password_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/password.properties"
   appender_log_path: "{{kafka_broker_default_log_dir}}"
   # Deprecated way of providing custom properties
   properties: {}
@@ -466,6 +467,9 @@ kafka_broker_custom_properties: "{{ kafka_broker.properties }}"
 ### Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
 kafka_broker_rest_proxy_enabled: "{{confluent_server_enabled and not ccloud_kafka_broker_enabled}}"
 
+### Authentication type to add to Kafka's embedded rest proxy or Admin API. Do not set when RBAC is enabled. Options: [basic, none]
+kafka_broker_rest_proxy_authentication_type: none
+
 ### Use to register and identify your Kafka cluster in the MDS.
 kafka_broker_cluster_name: ""
 
@@ -487,8 +491,11 @@ schema_registry_default_internal_replication_factor: "{{ 3 if ccloud_kafka_broke
 ### Boolean to configure schema registry with TLS Encryption. Also manages Java Keystore creation
 schema_registry_ssl_enabled: "{{ssl_enabled}}"
 
-### Boolean to enable mTLS Authentication on Schema Registry
+### Deprecated- Boolean to enable mTLS Authentication on Schema Registry
 schema_registry_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
+schema_registry_authentication_type: "{{ 'mtls' if schema_registry_ssl_mutual_auth_enabled else 'none' }}"
 
 ### Set this variable to customize the directory that the Schema Registry writes log files to. Default location is /var/log/confluent/schema-registry. NOTE- schema_registry.appender_log_path is deprecated.
 schema_registry_log_dir: "{{schema_registry.appender_log_path}}"
@@ -513,10 +520,12 @@ schema_registry_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_
 schema_registry_ca_cert_path: "/var/ssl/private/ca.crt"
 schema_registry_cert_path: "/var/ssl/private/schema_registry.crt"
 schema_registry_key_path: "/var/ssl/private/schema_registry.key"
-schema_registry_export_certs: "{{schema_registry_ssl_mutual_auth_enabled}}"
+schema_registry_export_certs: "{{ True if schema_registry_authentication_type == 'mtls' else False }}"
 schema_registry_keytab_path: /etc/security/keytabs/schema_registry.keytab
 schema_registry_kafka_listener_name: internal
 schema_registry:
+  jaas_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/schema-registry/jaas.conf"
+  password_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/schema-registry/password.properties"
   appender_log_path: "{{schema_registry_default_log_dir}}"
   # Deprecated way of providing custom properties
   properties: {}
@@ -577,8 +586,11 @@ kafka_rest_port: 8082
 ### Boolean to configure Rest Proxy with TLS Encryption. Also manages Java Keystore creation
 kafka_rest_ssl_enabled: "{{ssl_enabled}}"
 
-### Boolean to enable mTLS Authentication on Rest Proxy
+### Deprecated- Boolean to enable mTLS Authentication on Rest Proxy
 kafka_rest_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
+kafka_rest_authentication_type: "{{ 'mtls' if kafka_rest_ssl_mutual_auth_enabled else 'none' }}"
 
 ### Set this variable to customize the directory that the Rest Proxy writes log files to. Default location is /var/log/confluent/kafka-rest. NOTE- kafka_rest.appender_log_path is deprecated.
 kafka_rest_log_dir: "{{kafka_rest.appender_log_path}}"
@@ -605,10 +617,12 @@ kafka_rest_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keyst
 kafka_rest_ca_cert_path: "/var/ssl/private/ca.crt"
 kafka_rest_cert_path: "/var/ssl/private/kafka_rest.crt"
 kafka_rest_key_path: "/var/ssl/private/kafka_rest.key"
-kafka_rest_export_certs: "{{kafka_rest_ssl_mutual_auth_enabled}}"
+kafka_rest_export_certs: "{{ True if kafka_rest_authentication_type == 'mtls' else False }}"
 kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
 kafka_rest_kafka_listener_name: internal
 kafka_rest:
+  jaas_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-rest/jaas.conf"
+  password_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-rest/password.properties"
   appender_log_path: "{{kafka_rest_default_log_dir}}"
   # Deprecated way of providing custom properties
   properties: {}
@@ -676,8 +690,11 @@ kafka_connect_rest_port: 8083
 ### Boolean to configure Connect with TLS Encryption. Also manages Java Keystore creation
 kafka_connect_ssl_enabled: "{{ssl_enabled}}"
 
-### Boolean to enable mTLS Authentication on Connect
+### Deprecated- Boolean to enable mTLS Authentication on Connect
 kafka_connect_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### Authentication to put on Connect's Rest Endpoint. Available options: [mtls, basic, none].
+kafka_connect_authentication_type: "{{ 'mtls' if kafka_connect_ssl_mutual_auth_enabled|bool else 'none' }}"
 
 ### Set this variable to customize the directory that Kafka Connect writes log files to. Default location is /var/log/kafka. NOTE- kafka_connect.appender_log_path is deprecated.
 kafka_connect_log_dir: "{{kafka_connect.appender_log_path}}"
@@ -707,7 +724,7 @@ kafka_connect_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_ke
 kafka_connect_ca_cert_path: "/var/ssl/private/ca.crt"
 kafka_connect_cert_path: "/var/ssl/private/kafka_connect.crt"
 kafka_connect_key_path: "/var/ssl/private/kafka_connect.key"
-kafka_connect_export_certs: "{{kafka_connect_ssl_mutual_auth_enabled}}"
+kafka_connect_export_certs: "{{ True if kafka_connect_authentication_type == 'mtls' else False }}"
 kafka_connect_keytab_path: /etc/security/keytabs/kafka_connect.keytab
 kafka_connect_kafka_listener_name: internal
 
@@ -715,6 +732,8 @@ kafka_connect_kafka_listener_name: internal
 kafka_connect_custom_rest_extension_classes: []
 
 kafka_connect:
+  jaas_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/connect-jaas.conf"
+  password_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/connect-password.properties"
   appender_log_path: "{{kafka_connect_default_log_dir}}"
   # Deprecated way of providing custom properties
   properties: {}
@@ -804,8 +823,11 @@ ksql_listener_port: 8088
 ### Boolean to configure ksqlDB with TLS Encryption. Also manages Java Keystore creation
 ksql_ssl_enabled: "{{ssl_enabled}}"
 
-### Boolean to enable mTLS Authentication on ksqlDB
+### Deprecated - Boolean to enable mTLS Authentication on ksqlDB
 ksql_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### Authentication to put on ksqlDB's Rest Endpoint. Available options: [mtls, basic, none].
+ksql_authentication_type: "{{ 'mtls' if ksql_ssl_mutual_auth_enabled|bool else 'none' }}"
 
 ### Set this variable to customize the directory that ksqlDB writes log files to. Default location is /var/log/confluent/ksql. NOTE- ksql.appender_log_path is deprecated.
 ksql_log_dir: "{{ksql.appender_log_path}}"
@@ -833,12 +855,13 @@ ksql_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_an
 ksql_ca_cert_path: "/var/ssl/private/ca.crt"
 ksql_cert_path: "/var/ssl/private/ksql.crt"
 ksql_key_path: "/var/ssl/private/ksql.key"
-ksql_export_certs: "{{ksql_ssl_mutual_auth_enabled}}"
+ksql_export_certs: "{{ True if ksql_authentication_type == 'mtls' else False }}"
 ksql_keytab_path: /etc/security/keytabs/ksql.keytab
 ksql_kafka_listener_name: internal
 ksql_processing_log_kafka_listener_name: "{{kafka_broker_inter_broker_listener_name if rbac_enabled else ksql_kafka_listener_name}}"
 ksql:
-  jaas_file: "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql-server_jaas.conf' , '/etc/ksql/ksql-server_jaas.conf')}}"
+  jaas_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/ksql{{ 'db' if (confluent_package_version is version('5.5.0', '>=')) else '' }}/jaas.conf"
+  password_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/ksql{{ 'db' if (confluent_package_version is version('5.5.0', '>=')) else '' }}/password.properties"
   appender_log_path: "{{ksql_default_log_dir}}"
   properties: {}
 
@@ -917,6 +940,9 @@ control_center_listener_hostname: "0.0.0.0"
 ### Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
 control_center_ssl_enabled: "{{ssl_enabled}}"
 
+### Control Center Authentication. Available options: [basic, none].
+control_center_authentication_type: none
+
 ### Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
 control_center_log_dir: "{{control_center.appender_log_path}}"
 
@@ -946,6 +972,8 @@ control_center_export_certs: "{{ssl_mutual_auth_enabled}}"
 control_center_keytab_path: /etc/security/keytabs/control_center.keytab
 control_center_kafka_listener_name: internal
 control_center:
+  jaas_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/confluent-control-center/jaas.conf"
+  password_file: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/confluent-control-center/password.properties"
   appender_log_path: "{{control_center_default_log_dir}}"
   # Deprecated way of providing custom properties
   properties: {}
@@ -1091,6 +1119,40 @@ zookeeper_digest_users:
     principal: kafka_broker
     password: kafka_broker-secret
 
+kafka_broker_rest_proxy_basic_users:
+  admin:
+    principal: admin
+    password: admin-secret
+    roles: admin
+
+schema_registry_basic_users:
+  admin:
+    principal: admin
+    password: admin-secret
+    roles: admin
+
+kafka_connect_basic_users:
+  admin:
+    principal: admin
+    password: admin-secret
+
+ksql_basic_users:
+  admin:
+    principal: admin
+    password: admin-secret
+    roles: admin
+
+kafka_rest_basic_users:
+  admin:
+    principal: admin
+    password: admin-secret
+    roles: admin
+
+control_center_basic_users:
+  admin:
+    principal: admin
+    password: admin-secret
+    roles: admin
 
 ### Boolean to configure Confluent Platform with RBAC enabled. Creates Rolebindings for all components to function
 rbac_enabled: false
@@ -1335,41 +1397,41 @@ mds_health_check_user: "{{mds_super_user}}"
 ### Password for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
 mds_health_check_password: "{{mds_super_user_password}}"
 
-### User for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
-kafka_broker_rest_health_check_user: "{{mds_super_user}}"
+### User for authenticated Kafka Admin API Health Check.
+kafka_broker_rest_health_check_user: "{{ mds_super_user if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.principal }}"
 
-### Password for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
-kafka_broker_rest_health_check_password: "{{mds_super_user_password}}"
+### Password for authenticated Kafka Admin API Health Check.
+kafka_broker_rest_health_check_password: "{{ mds_super_user_password if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.password }}"
 
-### User for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
-schema_registry_health_check_user: "{{schema_registry_ldap_user}}"
+### User for authenticated Schema Registry Health Check.
+schema_registry_health_check_user: "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registry_basic_users.admin.principal }}"
 
-### Password for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
-schema_registry_health_check_password: "{{schema_registry_ldap_password}}"
+### Password for authenticated Schema Registry Health Check.
+schema_registry_health_check_password: "{{ schema_registry_ldap_password if rbac_enabled|bool else schema_registry_basic_users.admin.password }}"
 
-### User for authenticated Connect Health Check. Set if using customized security like Basic Auth.
-kafka_connect_health_check_user: "{{kafka_connect_ldap_user}}"
+### User for authenticated Connect Health Check.
+kafka_connect_health_check_user: "{{ kafka_connect_ldap_user if rbac_enabled|bool else kafka_connect_basic_users.admin.principal }}"
 
 ### Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
-kafka_connect_health_check_password: "{{kafka_connect_ldap_password}}"
+kafka_connect_health_check_password: "{{ kafka_connect_ldap_password if rbac_enabled|bool else kafka_connect_basic_users.admin.password }}"
 
 ### User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
-ksql_health_check_user: "{{ksql_ldap_user}}"
+ksql_health_check_user: "{{ ksql_ldap_user if rbac_enabled|bool else ksql_basic_users.admin.principal }}"
 
 ### Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
-ksql_health_check_password: "{{ksql_ldap_password}}"
+ksql_health_check_password: "{{ ksql_ldap_password if rbac_enabled|bool else ksql_basic_users.admin.password }}"
 
 ### User for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
-kafka_rest_health_check_user: "{{kafka_rest_ldap_user}}"
+kafka_rest_health_check_user: "{{ kafka_rest_ldap_user if rbac_enabled|bool else kafka_rest_basic_users.admin.principal }}"
 
 ### Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
-kafka_rest_health_check_password: "{{kafka_rest_ldap_password}}"
+kafka_rest_health_check_password: "{{ kafka_rest_ldap_password if rbac_enabled|bool else kafka_rest_basic_users.admin.password }}"
 
 ### User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
-control_center_health_check_user: "{{control_center_ldap_user}}"
+control_center_health_check_user: "{{ control_center_ldap_user if rbac_enabled|bool else control_center_basic_users.admin.principal }}"
 
 ### Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
-control_center_health_check_password: "{{control_center_ldap_password}}"
+control_center_health_check_password: "{{ control_center_ldap_password if rbac_enabled|bool else control_center_basic_users.admin.password }}"
 
 
 # Kafka Connect Replicator Variables

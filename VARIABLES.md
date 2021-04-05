@@ -828,6 +828,14 @@ Default:  "{{confluent_server_enabled and not ccloud_kafka_broker_enabled}}"
 
 ***
 
+### kafka_broker_rest_proxy_authentication_type
+
+Authentication type to add to Kafka's embedded rest proxy or Admin API. Do not set when RBAC is enabled. Options: [basic, none]
+
+Default:  none
+
+***
+
 ### kafka_broker_cluster_name
 
 Use to register and identify your Kafka cluster in the MDS.
@@ -878,9 +886,17 @@ Default:  "{{ssl_enabled}}"
 
 ### schema_registry_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on Schema Registry
+Deprecated- Boolean to enable mTLS Authentication on Schema Registry
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### schema_registry_authentication_type
+
+Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
+
+Default:  "{{ 'mtls' if schema_registry_ssl_mutual_auth_enabled else 'none' }}"
 
 ***
 
@@ -1038,9 +1054,17 @@ Default:  "{{ssl_enabled}}"
 
 ### kafka_rest_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on Rest Proxy
+Deprecated- Boolean to enable mTLS Authentication on Rest Proxy
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### kafka_rest_authentication_type
+
+Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
+
+Default:  "{{ 'mtls' if kafka_rest_ssl_mutual_auth_enabled else 'none' }}"
 
 ***
 
@@ -1214,9 +1238,17 @@ Default:  "{{ssl_enabled}}"
 
 ### kafka_connect_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on Connect
+Deprecated- Boolean to enable mTLS Authentication on Connect
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### kafka_connect_authentication_type
+
+Authentication to put on Connect's Rest Endpoint. Available options: [mtls, basic, none].
+
+Default:  "{{ 'mtls' if kafka_connect_ssl_mutual_auth_enabled|bool else 'none' }}"
 
 ***
 
@@ -1422,9 +1454,17 @@ Default:  "{{ssl_enabled}}"
 
 ### ksql_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on ksqlDB
+Deprecated - Boolean to enable mTLS Authentication on ksqlDB
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### ksql_authentication_type
+
+Authentication to put on ksqlDB's Rest Endpoint. Available options: [mtls, basic, none].
+
+Default:  "{{ 'mtls' if ksql_ssl_mutual_auth_enabled|bool else 'none' }}"
 
 ***
 
@@ -1617,6 +1657,14 @@ Default:  "0.0.0.0"
 Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
 
 Default:  "{{ssl_enabled}}"
+
+***
+
+### control_center_authentication_type
+
+Control Center Authentication. Available options: [basic, none].
+
+Default:  none
 
 ***
 
@@ -2262,41 +2310,41 @@ Default:  "{{mds_super_user_password}}"
 
 ### kafka_broker_rest_health_check_user
 
-User for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
+User for authenticated Kafka Admin API Health Check.
 
-Default:  "{{mds_super_user}}"
+Default:  "{{ mds_super_user if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.principal }}"
 
 ***
 
 ### kafka_broker_rest_health_check_password
 
-Password for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
+Password for authenticated Kafka Admin API Health Check.
 
-Default:  "{{mds_super_user_password}}"
+Default:  "{{ mds_super_user_password if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.password }}"
 
 ***
 
 ### schema_registry_health_check_user
 
-User for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
+User for authenticated Schema Registry Health Check.
 
-Default:  "{{schema_registry_ldap_user}}"
+Default:  "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registry_basic_users.admin.principal }}"
 
 ***
 
 ### schema_registry_health_check_password
 
-Password for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
+Password for authenticated Schema Registry Health Check.
 
-Default:  "{{schema_registry_ldap_password}}"
+Default:  "{{ schema_registry_ldap_password if rbac_enabled|bool else schema_registry_basic_users.admin.password }}"
 
 ***
 
 ### kafka_connect_health_check_user
 
-User for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+User for authenticated Connect Health Check.
 
-Default:  "{{kafka_connect_ldap_user}}"
+Default:  "{{ kafka_connect_ldap_user if rbac_enabled|bool else kafka_connect_basic_users.admin.principal }}"
 
 ***
 
@@ -2304,7 +2352,7 @@ Default:  "{{kafka_connect_ldap_user}}"
 
 Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{kafka_connect_ldap_password}}"
+Default:  "{{ kafka_connect_ldap_password if rbac_enabled|bool else kafka_connect_basic_users.admin.password }}"
 
 ***
 
@@ -2312,7 +2360,7 @@ Default:  "{{kafka_connect_ldap_password}}"
 
 User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{ksql_ldap_user}}"
+Default:  "{{ ksql_ldap_user if rbac_enabled|bool else ksql_basic_users.admin.principal }}"
 
 ***
 
@@ -2320,7 +2368,7 @@ Default:  "{{ksql_ldap_user}}"
 
 Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{ksql_ldap_password}}"
+Default:  "{{ ksql_ldap_password if rbac_enabled|bool else ksql_basic_users.admin.password }}"
 
 ***
 
@@ -2328,7 +2376,7 @@ Default:  "{{ksql_ldap_password}}"
 
 User for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{kafka_rest_ldap_user}}"
+Default:  "{{ kafka_rest_ldap_user if rbac_enabled|bool else kafka_rest_basic_users.admin.principal }}"
 
 ***
 
@@ -2336,7 +2384,7 @@ Default:  "{{kafka_rest_ldap_user}}"
 
 Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{kafka_rest_ldap_password}}"
+Default:  "{{ kafka_rest_ldap_password if rbac_enabled|bool else kafka_rest_basic_users.admin.password }}"
 
 ***
 
@@ -2344,7 +2392,7 @@ Default:  "{{kafka_rest_ldap_password}}"
 
 User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{control_center_ldap_user}}"
+Default:  "{{ control_center_ldap_user if rbac_enabled|bool else control_center_basic_users.admin.principal }}"
 
 ***
 
@@ -2352,7 +2400,7 @@ Default:  "{{control_center_ldap_user}}"
 
 Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{control_center_ldap_password}}"
+Default:  "{{ control_center_ldap_password if rbac_enabled|bool else control_center_basic_users.admin.password }}"
 
 ***
 
