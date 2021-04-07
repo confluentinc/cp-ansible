@@ -220,6 +220,14 @@ Default:  "{{ archive_destination_path }}"
 
 ***
 
+### config_prefix
+
+The configuration prefix to use, by default /etc
+
+Default:  "/etc/"
+
+***
+
 ### confluent_cli_download_enabled
 
 Boolean to have cp-ansible download the Confluent CLI
@@ -420,6 +428,14 @@ Default:  false
 
 ***
 
+### zookeeper_config_prefix
+
+Default Zookeeper config prefix
+
+Default:  "{{ config_prefix }}/kafka"
+
+***
+
 ### zookeeper_user
 
 Set this variable to customize the Linux User that the Zookeeper Service runs with. Default user is cp-kafka.
@@ -593,6 +609,14 @@ Default:  []
 Use to set custom zookeeper properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- zookeeper.properties is deprecated.
 
 Default:  "{{ zookeeper.properties }}"
+
+***
+
+### kafka_broker_config_prefix
+
+Default Kafka config prefix
+
+Default:  "{{ config_prefix }}/kafka"
 
 ***
 
@@ -796,6 +820,14 @@ Default:  ""
 
 ***
 
+### schema_registry_config_prefix
+
+Default Schema Registry config prefix
+
+Default:  "{{ config_prefix }}/schema-registry"
+
+***
+
 ### schema_registry_user
 
 Set this variable to customize the Linux User that the Schema Registry Service runs with. Default user is cp-schema-registry.
@@ -964,6 +996,14 @@ Default:  ""
 
 ***
 
+### kafka_rest_config_prefix
+
+Default Kafka Rest config prefix
+
+Default:  "{{ config_prefix }}/kafka-rest"
+
+***
+
 ### kafka_rest_user
 
 Set this variable to customize the Linux User that the Rest Proxy Service runs with. Default user is cp-kafka-rest.
@@ -1121,6 +1161,14 @@ Default:  "{{ kafka_rest.properties }}"
 Boolean to configure Monitoring Interceptors on Rest Proxy.
 
 Default:  "{{ monitoring_interceptors_enabled }}"
+
+***
+
+### kafka_connect_config_prefix
+
+Default Kafka Connect config prefix
+
+Default:  "{{ config_prefix }}/kafka"
 
 ***
 
@@ -1332,6 +1380,14 @@ Default:  ""
 
 ***
 
+### ksql_config_prefix
+
+Default KSQLDB config prefix
+
+Default:  "{{ config_prefix }}/{{(confluent_package_version is version('5.5.0', '>=')) | ternary('ksqldb' , 'ksql')}}"
+
+***
+
 ### ksql_user
 
 Set this variable to customize the Linux User that the ksqlDB Service runs with. Default user is cp-ksql.
@@ -1521,6 +1577,14 @@ Default:  ""
 Boolean to enable ksqlDB Log Streaming.
 
 Default:  false
+
+***
+
+### control_center_config_prefix
+
+Default Control Center config prefix
+
+Default:  "{{ config_prefix }}/confluent-control-center"
 
 ***
 
@@ -2297,6 +2361,14 @@ Default:  "{{control_center_ldap_user}}"
 Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{control_center_ldap_password}}"
+
+***
+
+### kafka_connect_replicator_config_prefix
+
+Default Kafka Connect Replicator config prefix
+
+Default:  "{{ config_prefix }}/kafka-connect-replicator"
 
 ***
 
