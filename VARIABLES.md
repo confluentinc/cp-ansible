@@ -260,6 +260,14 @@ Default:  "{{ archive_destination_path }}"
 
 ***
 
+### config_prefix
+
+The configuration prefix to use, by default /etc
+
+Default:  "/etc/"
+
+***
+
 ### confluent_cli_download_enabled
 
 Boolean to have cp-ansible download the Confluent CLI
@@ -497,6 +505,11 @@ Default:  "{{ ['ksql'] if 'ksql' in groups else [] }}"
 Boolean to Run Host Validations. Validations include OS Version compatibility and Proper Internet Connectivity
 
 Default:  true
+### zookeeper_config_prefix
+
+Default Zookeeper config prefix
+
+Default:  "{{ config_prefix }}/kafka"
 
 ***
 
@@ -697,6 +710,14 @@ Default:  []
 Use to set custom zookeeper properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- zookeeper.properties is deprecated.
 
 Default:  "{{ zookeeper.properties }}"
+
+***
+
+### kafka_broker_config_prefix
+
+Default Kafka config prefix
+
+Default:  "{{ config_prefix }}/kafka"
 
 ***
 
@@ -908,6 +929,14 @@ Default:  ""
 
 ***
 
+### schema_registry_config_prefix
+
+Default Schema Registry config prefix
+
+Default:  "{{ config_prefix }}/schema-registry"
+
+***
+
 ### schema_registry_user
 
 Set this variable to customize the Linux User that the Schema Registry Service runs with. Default user is cp-schema-registry.
@@ -1081,6 +1110,14 @@ Default:  "{{ schema_registry.properties }}"
 Use to register and identify your Schema Registry cluster in the MDS.
 
 Default:  ""
+
+***
+
+### kafka_rest_config_prefix
+
+Default Kafka Rest config prefix
+
+Default:  "{{ config_prefix }}/kafka-rest"
 
 ***
 
@@ -1265,6 +1302,11 @@ Default:  "{{kafka_connect_default_service_name}}"
 Config/Properties Filename to use when setting up and configuring Kafka Connect
 
 Default:  "{{kafka_connect_default_config_filename}}"
+### kafka_connect_config_prefix
+
+Default Kafka Connect config prefix
+
+Default:  "{{ config_prefix }}/kafka"
 
 ***
 
@@ -1484,6 +1526,14 @@ Default:  ""
 
 ***
 
+### ksql_config_prefix
+
+Default KSQLDB config prefix
+
+Default:  "{{ config_prefix }}/{{(confluent_package_version is version('5.5.0', '>=')) | ternary('ksqldb' , 'ksql')}}"
+
+***
+
 ### ksql_user
 
 Set this variable to customize the Linux User that the ksqlDB Service runs with. Default user is cp-ksql.
@@ -1681,6 +1731,14 @@ Default:  ""
 Boolean to enable ksqlDB Log Streaming.
 
 Default:  false
+
+***
+
+### control_center_config_prefix
+
+Default Control Center config prefix
+
+Default:  "{{ config_prefix }}/confluent-control-center"
 
 ***
 
@@ -2609,6 +2667,14 @@ Default:  "{{ control_center_ldap_user if rbac_enabled|bool else control_center_
 Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{ control_center_ldap_password if rbac_enabled|bool else control_center_basic_users.admin.password }}"
+
+***
+
+### kafka_connect_replicator_config_prefix
+
+Default Kafka Connect Replicator config prefix
+
+Default:  "{{ config_prefix }}/kafka-connect-replicator"
 
 ***
 
