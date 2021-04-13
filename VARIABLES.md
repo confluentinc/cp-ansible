@@ -824,7 +824,7 @@ Default:  "{{ kafka_broker.properties }}"
 
 Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
 
-Default:  "{{confluent_server_enabled and not ccloud_kafka_broker_enabled}}"
+Default:  "{{confluent_server_enabled and not ccloud_kafka_enabled}}"
 
 ***
 
@@ -872,7 +872,7 @@ Default:  8081
 
 Replication Factor for schemas topic. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
 
-Default:  "{{ 3 if ccloud_kafka_broker_enabled|bool else
+Default:  "{{ 3 if ccloud_kafka_enabled|bool else
 
 ***
 
@@ -1376,7 +1376,7 @@ Default:  connect-cluster
 
 Replication Factor for connect internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
 
-Default:  "{{ 3 if ccloud_kafka_broker_enabled|bool else
+Default:  "{{ 3 if ccloud_kafka_enabled|bool else
 
 ***
 
@@ -1576,7 +1576,7 @@ Default:  []
 
 Replication Factor for ksqlDB internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
 
-Default:  "{{ 3 if ccloud_kafka_broker_enabled|bool else
+Default:  "{{ 3 if ccloud_kafka_enabled|bool else
 
 ***
 
@@ -1688,7 +1688,7 @@ Default:  []
 
 Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
 
-Default:  "{{ 3 if ccloud_kafka_broker_enabled|bool else
+Default:  "{{ 3 if ccloud_kafka_enabled|bool else
 
 ***
 
@@ -1717,6 +1717,14 @@ Default:  {}
 ***
 
 ### sasl_plain_users
+
+Dictionary containing additional sasl plain users to be created during provisioning.
+
+Default:  {}
+
+***
+
+### schema_registry_basic_users
 
 Dictionary containing additional sasl plain users to be created during provisioning.
 
@@ -3236,15 +3244,15 @@ Default:  "{{pause_rolling_deployment}}"
 
 ***
 
-### ccloud_kafka_broker_enabled
+### ccloud_kafka_enabled
 
-Boolean to configure component to Confluent Cloud Kafka. Must also set ccloud_bootstrap_servers, ccloud_key, and ccloud_secret. zookeeper and kafka_broker groups should not be in inventory.
+Boolean to configure component to Confluent Cloud Kafka. Must also set ccloud_kafka_bootstrap_servers, ccloud_kafka_key, and ccloud_kafka_secret. zookeeper and kafka_broker groups should not be in inventory.
 
 Default:  false
 
 ***
 
-### ccloud_bootstrap_servers
+### ccloud_kafka_bootstrap_servers
 
 Bootstrap Servers to CCloud Kafka
 
@@ -3256,7 +3264,23 @@ Default:  localhost:9092
 
 Boolean to skip truststore creation and configuration. Signifies kafka's certificates were signed by a public certificate authority.
 
-Default:  "{{ccloud_kafka_broker_enabled}}"
+Default:  "{{ccloud_kafka_enabled}}"
+
+***
+
+### ccloud_schema_registry_enabled
+
+Boolean to configure component to Confluent Cloud Schema Registry. Must also set ccloud_schema_registry_url, ccloud_schema_registry_key, and ccloud_schema_registry_secret. schema_registry group should not be in inventory.
+
+Default:  false
+
+***
+
+### ccloud_schema_registry_url
+
+Url to CCloud Schema Registry
+
+Default:  https://localhost:8081
 
 ***
 
