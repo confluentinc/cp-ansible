@@ -2,7 +2,7 @@
 - name: Create Directory on Controller for Host Error Files
   file:
     state: directory
-    path: "error_files/{{inventory_hostname}}"
+    path: "error_files"
     mode: 0755
   delegate_to: localhost
   vars:
@@ -15,13 +15,37 @@
     recurse: false
   register: find_output
 
-- name: Fetch Config and Log Files
-  fetch:
-    dest: "error_files/{{inventory_hostname}}/"
+- name: Recreate directory
+  file:
+    path: "/tmp/error_files/{{inventory_hostname}}/"
+    state: absent
+
+- name: Recreate directory
+  file:
+    path: "/tmp/error_files/{{inventory_hostname}}/"
+    state: directory
+
+- name: Copy Config and Log Files to tmp dir
+  copy:
+    dest: "/tmp/error_files/{{inventory_hostname}}/"
     src: "{{ item }}"
-    flat: true
+    remote_src: true
   loop: "{{ find_output.files | map(attribute='path') | list + [config_file] }}"
 
+- name: Archive log files
+  archive:
+    path: "/tmp/error_files/{{inventory_hostname}}"
+    dest: "/tmp/error_files/{{inventory_hostname}}.tar.gz"
+    remove: yes
+    format: gz
+    force_archive: true
+
+- name: Fetch Config and Log Files
+  fetch:
+    src: "/tmp/error_files/{{inventory_hostname}}.tar.gz"
+    dest: "error_files/"
+    flat: yes
+
 - name: Fail Installation
-  fail:
-    msg: Health checks failed. Review log and property files in error_files/ directory
+  debug:
+    msg: Review log and property files in error_files/ directory
