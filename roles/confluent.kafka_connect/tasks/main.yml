@@ -42,7 +42,7 @@
 - name: Create Connect Distributed Group
   group:
     name: "{{kafka_connect_group}}"
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 - name: Create Connect Distributed User
   user:
@@ -50,7 +50,7 @@
     comment: "Connect Distributed User"
     system: true
     group: "{{kafka_connect_group}}"
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -59,17 +59,9 @@
     src: "{{binary_base_path}}/lib/systemd/system/{{kafka_connect.systemd_file|basename}}"
     remote_src: true
     dest: "{{kafka_connect.systemd_file}}"
-    mode: 0644
+    mode: "{{ omit if unprivileged_install else 0644 }}"
     force: true
-  when: installation_method == "archive" and not users_and_paths_provided|bool
-
-- name: Copy Kafka Connect Service from archive file to system
-  copy:
-    src: "{{binary_base_path}}/lib/systemd/system/{{kafka_connect.systemd_file|basename}}"
-    remote_src: true
-    dest: "{{kafka_connect.systemd_file}}"
-    force: true
-  when: installation_method == "archive" and users_and_paths_provided|bool
+  when: installation_method == "archive"
 
 - include_role:
     name: confluent.ssl
@@ -125,7 +117,7 @@
     mode: 0750
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 - name: Create Connect Distributed Config with Secrets Protection
   include_role:
@@ -146,18 +138,11 @@
   template:
     src: connect-distributed.properties.j2
     dest: "{{kafka_connect.config_file}}"
-    mode: 0640
-    owner: "{{kafka_connect_user}}"
-    group: "{{kafka_connect_group}}"
+    mode: "{{ omit if unprivileged_install else 0640 }}"
+    owner: "{{ omit if unprivileged_install else kafka_connect_user }}"
+    group: "{{ omit if unprivileged_install else kafka_connect_group }}"
   notify: restart connect distributed
-  when: not kafka_connect_secrets_protection_enabled|bool and not users_and_paths_provided|bool
-
-- name: Create Connect Distributed Config
-  template:
-    src: connect-distributed.properties.j2
-    dest: "{{kafka_connect.config_file}}"
-  notify: restart connect distributed
-  when: not kafka_connect_secrets_protection_enabled|bool and users_and_paths_provided|bool
+  when: not kafka_connect_secrets_protection_enabled|bool
 
 - name: Install Connect Plugins
   include_tasks: connect_plugins.yml
@@ -169,7 +154,7 @@
     group: "{{kafka_connect_group}}"
     owner: "{{kafka_connect_user}}"
     mode: 0770
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 - name: Update Connect log4j Config for Log Cleanup
   include_role:
@@ -187,39 +172,26 @@
     group: "{{kafka_connect_group}}"
     owner: "{{kafka_connect_user}}"
     mode: 0640
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 - name: Create Connect Distributed Jolokia Config
   template:
     src: kafka_connect_jolokia.properties.j2
     dest: "{{kafka_connect_jolokia_config}}"
-    mode: 0640
-    owner: "{{kafka_connect_user}}"
-    group: "{{kafka_connect_group}}"
-  when: kafka_connect_jolokia_enabled|bool and not users_and_paths_provided|bool
-  notify: restart connect distributed
-
-- name: Create Connect Distributed Jolokia Config
-  template:
-    src: kafka_connect_jolokia.properties.j2
-    dest: "{{kafka_connect_jolokia_config}}"
-  when: kafka_connect_jolokia_enabled|bool and users_and_paths_provided|bool
+    mode: "{{ omit if unprivileged_install else 0640 }}"
+    owner: "{{ omit if unprivileged_install else kafka_connect_user}} "
+    group: "{{ omit if unprivileged_install else kafka_connect_group}} "
+  when: kafka_connect_jolokia_enabled|bool
   notify: restart connect distributed
 
 - name: Deploy JMX Exporter Config File
   copy:
     src: "{{kafka_connect_jmxexporter_config_source_path}}"
     dest: "{{kafka_connect_jmxexporter_config_path}}"
-    mode: 0640
-    owner: "{{kafka_connect_user}}"
-    group: "{{kafka_connect_group}}"
-  when: kafka_connect_jmxexporter_enabled|bool and not users_and_paths_provided|bool
-
-- name: Deploy JMX Exporter Config File
-  copy:
-    src: "{{kafka_connect_jmxexporter_config_source_path}}"
-    dest: "{{kafka_connect_jmxexporter_config_path}}"
-  when: kafka_connect_jmxexporter_enabled|bool and users_and_paths_provided|bool
+    mode: "{{ omit if unprivileged_install else 0640 }}"
+    owner: "{{ omit if unprivileged_install else kafka_connect_user }}"
+    group: "{{ omit if unprivileged_install else kafka_connect_group }}"
+  when: kafka_connect_jmxexporter_enabled|bool
 
 - name: Create Service Override Directory
   file:
@@ -228,24 +200,22 @@
     group: "{{kafka_connect_group}}"
     state: directory
     mode: 0640
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 - name: Write Service Overrides
   template:
     src: override.conf.j2
     dest: "{{ kafka_connect.systemd_override }}"
-    mode: 0640
-    owner: "{{kafka_connect_user}}"
-    group: "{{kafka_connect_group}}"
+    mode: "{{ omit if unprivileged_install else 0640 }}"
+    owner: "{{ omit if unprivileged_install else kafka_connect_user }}"
+    group: "{{ omit if unprivileged_install else kafka_connect_group }}"
   notify: restart connect distributed
-  when: not users_and_paths_provided|bool
 
-- name: Write Service Overrides
-  template:
-    src: override.conf.j2
-    dest: "{{ kafka_connect.systemd_override }}"
+- name: Install Service in User-mode
+  shell:
+    cmd: "XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user enable {{kafka_connect.systemd_file}}"
   notify: restart connect distributed
-  when: users_and_paths_provided|bool
+  when: systemd_mode == 'user'
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -259,7 +229,7 @@
     name: "{{kafka_connect_service_name}}"
     enabled: true
     state: started
-    scope: user
+    scope: "{{ 'user' if systemd_mode == 'user' else 'system' }}"
 
 - name: Health Check
   include_tasks: health_check.yml

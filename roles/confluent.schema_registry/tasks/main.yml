@@ -42,6 +42,7 @@
 - name: Schema Registry Group
   group:
     name: "{{schema_registry_group}}"
+  when: not unprivileged_install|bool
 
 - name: Schema Registry User
   user:
@@ -49,7 +50,7 @@
     comment: "Schema Registry User"
     system: true
     group: "{{schema_registry_group}}"
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -58,9 +59,9 @@
     src: "{{binary_base_path}}/lib/systemd/system/{{schema_registry.systemd_file|basename}}"
     remote_src: true
     dest: "{{schema_registry.systemd_file}}"
-    mode: 0644
+    mode: "{{ omit if unprivileged_install else '0644' }}"
     force: true
-  when: installation_method == "archive" and not users_and_paths_provided|bool
+  when: installation_method == "archive"
 
 - name: Copy Schema Registry Service from archive file to system
   copy:
@@ -68,7 +69,7 @@
     remote_src: true
     dest: "{{schema_registry.systemd_file}}"
     force: true
-  when: installation_method == "archive" and users_and_paths_provided|bool
+  when: installation_method == "archive" and unprivileged_install|bool
 
 - include_role:
     name: confluent.ssl
@@ -124,7 +125,7 @@
     mode: 0750
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 - name: Create Schema Registry Config with Secrets Protection
   include_role:
@@ -145,18 +146,11 @@
   template:
     src: schema-registry.properties.j2
     dest: "{{schema_registry.config_file}}"
-    mode: 0640
-    owner: "{{schema_registry_user}}"
-    group: "{{schema_registry_group}}"
+    mode: "{{ omit if unprivileged_install else '0640' }}"
+    owner: "{{ omit if unprivileged_install else schema_registry_user }}"
+    group: "{{ omit if unprivileged_install else schema_registry_group }}"
   notify: restart schema-registry
-  when: not schema_registry_secrets_protection_enabled|bool and not users_and_paths_provided|bool
-
-- name: Create Schema Registry Config
-  template:
-    src: schema-registry.properties.j2
-    dest: "{{schema_registry.config_file}}"
-  notify: restart schema-registry
-  when: not schema_registry_secrets_protection_enabled|bool and users_and_paths_provided|bool
+  when: not schema_registry_secrets_protection_enabled|bool
 
 - name: Create Logs Directory
   file:
@@ -165,7 +159,7 @@
     group: "{{schema_registry_group}}"
     owner: "{{schema_registry_user}}"
     mode: 0770
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 - name: Update log4j Config for Log Cleanup
   include_role:
@@ -183,33 +177,26 @@
     group: "{{schema_registry_group}}"
     owner: "{{schema_registry_user}}"
     mode: 0640
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 - name: Create Schema Registry Jolokia Config
   template:
     src: schema_registry_jolokia.properties.j2
     dest: "{{schema_registry_jolokia_config}}"
-    mode: 0640
-    owner: "{{schema_registry_user}}"
-    group: "{{schema_registry_group}}"
-  when: schema_registry_jolokia_enabled|bool and not users_and_paths_provided|bool
-  notify: restart schema-registry
-
-- name: Create Schema Registry Jolokia Config
-  template:
-    src: schema_registry_jolokia.properties.j2
-    dest: "{{schema_registry_jolokia_config}}"
-  when: schema_registry_jolokia_enabled|bool and users_and_paths_provided|bool
+    mode: "{{ omit if unprivileged_install else '0640' }}"
+    owner: "{{ omit if unprivileged_install else schema_registry_user }}"
+    group: "{{ omit if unprivileged_install else schema_registry_group }}"
+  when: schema_registry_jolokia_enabled|bool
   notify: restart schema-registry
 
 - name: Deploy JMX Exporter Config File
   copy:
     src: "{{schema_registry_jmxexporter_config_source_path}}"
     dest: "{{schema_registry_jmxexporter_config_path}}"
-    mode: 0640
-    owner: "{{schema_registry_user}}"
-    group: "{{schema_registry_group}}"
-  when: schema_registry_jmxexporter_enabled|bool and not users_and_paths_provided|bool
+    mode: "{{ omit if unprivileged_install else '0640' }}"
+    owner: "{{ omit if unprivileged_install else schema_registry_user }}"
+    group: "{{ omit if unprivileged_install else schema_registry_group }}"
+  when: schema_registry_jmxexporter_enabled|bool
 
 - name: Create Service Override Directory
   file:
@@ -218,24 +205,22 @@
     group: "{{schema_registry_group}}"
     state: directory
     mode: 0640
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 - name: Write Service Overrides
   template:
     src: override.conf.j2
     dest: "{{schema_registry.systemd_override}}"
-    mode: 0640
-    owner: "{{schema_registry_user}}"
-    group: "{{schema_registry_group}}"
+    mode: "{{ omit if unprivileged_install else '0640' }}"
+    owner: "{{ omit if unprivileged_install else schema_registry_user }}"
+    group: "{{ omit if unprivileged_install else schema_registry_group }}"
   notify: restart schema-registry
-  when: not users_and_paths_provided|bool
 
-- name: Write Service Overrides
-  template:
-    src: override.conf.j2
-    dest: "{{schema_registry.systemd_override}}"
+- name: Install Service in User-mode
+  shell:
+    cmd: "XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user enable {{schema_registry.systemd_file}}"
   notify: restart schema-registry
-  when: users_and_paths_provided|bool
+  when: systemd_mode == 'user'
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -249,7 +234,7 @@
     name: "{{schema_registry_service_name}}"
     enabled: true
     state: started
-    scope: user
+    scope: "{{ 'user' if systemd_mode == 'user' else 'system' }}"
 
 - name: Health Check
   include_tasks: health_check.yml

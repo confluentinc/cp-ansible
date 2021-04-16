@@ -42,6 +42,7 @@
 - name: Create Kafka Rest Group
   group:
     name: "{{kafka_rest_group}}"
+  when: not unprivileged_install|bool
 
 - name: Create Kafka Rest User
   user:
@@ -49,7 +50,7 @@
     comment: "Kafka REST User"
     system: true
     group: "{{kafka_rest_group}}"
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -58,17 +59,9 @@
     src: "{{binary_base_path}}/lib/systemd/system/{{kafka_rest.systemd_file|basename}}"
     remote_src: true
     dest: "{{kafka_rest.systemd_file}}"
-    mode: 0644
+    mode: "{{ omit if unprivileged_install else '0644' }}"
     force: true
-  when: installation_method == "archive" and not users_and_paths_provided|bool
-
-- name: Copy Kafka REST Service from archive file to system
-  copy:
-    src: "{{binary_base_path}}/lib/systemd/system/{{kafka_rest.systemd_file|basename}}"
-    remote_src: true
-    dest: "{{kafka_rest.systemd_file}}"
-    force: true
-  when: installation_method == "archive" and users_and_paths_provided|bool
+  when: installation_method == "archive"
 
 - include_role:
     name: confluent.ssl
@@ -122,7 +115,7 @@
     path: /var/ssl/private
     state: directory
     mode: 0755
-  when: rbac_enabled|bool and not users_and_paths_provided|bool
+  when: rbac_enabled|bool and not unprivileged_install|bool
 
 - name: Copy in MDS Public Pem File
   copy:
@@ -131,7 +124,7 @@
     mode: '755'
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
-  when: rbac_enabled|bool and not users_and_paths_provided|bool
+  when: rbac_enabled|bool and not unprivileged_install|bool
 
 - name: Create Kafka Rest Config directory
   file:
@@ -140,7 +133,7 @@
     mode: 0750
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 - name: Create Kafka Rest Config with Secrets Protection
   include_role:
@@ -161,18 +154,11 @@
   template:
     src: kafka-rest.properties.j2
     dest: "{{kafka_rest.config_file}}"
-    mode: 0640
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
+    mode: "{{ omit if unprivileged_install else '0640' }}"
+    owner: "{{ omit if unprivileged_install else kafka_rest_user}} "
+    group: "{{ omit if unprivileged_install else kafka_rest_group}} "
   notify: restart kafka-rest
-  when: not kafka_rest_secrets_protection_enabled|bool and not users_and_paths_provided|bool
-
-- name: Create Kafka Rest Config
-  template:
-    src: kafka-rest.properties.j2
-    dest: "{{kafka_rest.config_file}}"
-  notify: restart kafka-rest
-  when: not kafka_rest_secrets_protection_enabled|bool and users_and_paths_provided|bool
+  when: not kafka_rest_secrets_protection_enabled|bool
 
 - name: Create Logs Directory
   file:
@@ -181,7 +167,7 @@
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
     mode: 0770
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 - name: Update log4j Config for Log Cleanup
   include_role:
@@ -199,33 +185,26 @@
     group: "{{kafka_rest_group}}"
     owner: "{{kafka_rest_user}}"
     mode: 0640
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 - name: Create Kafka Rest Jolokia Config
   template:
     src: kafka_rest_jolokia.properties.j2
     dest: "{{kafka_rest_jolokia_config}}"
-    mode: 0640
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-  when: kafka_rest_jolokia_enabled|bool and not users_and_paths_provided|bool
-  notify: restart kafka-rest
-
-- name: Create Kafka Rest Jolokia Config
-  template:
-    src: kafka_rest_jolokia.properties.j2
-    dest: "{{kafka_rest_jolokia_config}}"
-  when: kafka_rest_jolokia_enabled|bool and users_and_paths_provided|bool
+    mode: "{{ omit if unprivileged_install else '0640' }}"
+    owner: "{{ omit if unprivileged_install else kafka_rest_user}} "
+    group: "{{ omit if unprivileged_install else kafka_rest_group}} "
+  when: kafka_rest_jolokia_enabled|bool
   notify: restart kafka-rest
 
 - name: Deploy JMX Exporter Config File
   copy:
     src: "{{kafka_rest_jmxexporter_config_source_path}}"
     dest: "{{kafka_rest_jmxexporter_config_path}}"
-    mode: 0640
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-  when: kafka_rest_jmxexporter_enabled|bool and not users_and_paths_provided|bool
+    mode: "{{ omit if unprivileged_install else '0640' }}"
+    owner: "{{ omit if unprivileged_install else kafka_rest_user}} "
+    group: "{{ omit if unprivileged_install else kafka_rest_group}} "
+  when: kafka_rest_jmxexporter_enabled|bool
 
 - name: Create Service Override Directory
   file:
@@ -234,24 +213,22 @@
     group: "{{kafka_rest_group}}"
     state: directory
     mode: 0640
-  when: not users_and_paths_provided|bool
+  when: not unprivileged_install|bool
 
 - name: Write Service Overrides
   template:
     src: override.conf.j2
     dest: "{{kafka_rest.systemd_override}}"
-    mode: 0640
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
+    mode: "{{ omit if unprivileged_install else '0640' }}"
+    owner: "{{ omit if unprivileged_install else kafka_rest_user}} "
+    group: "{{ omit if unprivileged_install else kafka_rest_group}} "
   notify: restart kafka-rest
-  when: not users_and_paths_provided|bool
 
-- name: Write Service Overrides
-  template:
-    src: override.conf.j2
-    dest: "{{kafka_rest.systemd_override}}"
+- name: Install Service in User-mode
+  shell:
+    cmd: "XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user enable {{kafka_rest.systemd_file}}"
   notify: restart kafka-rest
-  when: users_and_paths_provided|bool
+  when: systemd_mode == 'user'
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -265,7 +242,7 @@
     name: "{{kafka_rest_service_name}}"
     enabled: true
     state: started
-    scope: user
+    scope: "{{ 'user' if systemd_mode == 'user' else 'system' }}"
 
 - name: Health Check
   include_tasks: health_check.yml

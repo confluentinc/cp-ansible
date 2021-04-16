@@ -84,7 +84,7 @@
       systemd:
         name: "{{ ksql_service_name }}"
         state: stopped
-        scope: user
+        scope: "{{ 'user' if systemd_mode == 'user' else 'system' }}"
 
     - name: Configure Repositories
       import_role:
@@ -154,17 +154,9 @@
         src: "{{binary_base_path}}/lib/systemd/system/{{ksql.systemd_file|basename}}"
         remote_src: true
         dest: "{{ksql.systemd_file}}"
-        mode: 0644
+        mode: "{{ omit if unprivileged_install else '0644' }}"
         force: true
-      when: installation_method == "archive" and not users_and_paths_provided|bool
-
-    - name: Copy Service from Archive Directory to System
-      copy:
-        src: "{{binary_base_path}}/lib/systemd/system/{{ksql.systemd_file|basename}}"
-        remote_src: true
-        dest: "{{ksql.systemd_file}}"
-        force: true
-      when: installation_method == "archive" and users_and_paths_provided|bool
+      when: installation_method == "archive"
 
     - name: Update Override to Use New Version
       lineinfile:
@@ -195,7 +187,7 @@
         daemon_reload: true
         name: "{{ ksql_service_name }}"
         state: restarted
-        scope: user
+        scope: "{{ 'user' if systemd_mode == 'user' else 'system' }}"
 
     - name: KSQL Health Check
       import_role:
