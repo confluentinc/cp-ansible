@@ -3,7 +3,7 @@
 # Implementing try/catch logic with ignore_errors and conditionals
 - name: Wait for API to return 200
   uri:
-    url: "{{kafka_connect_replicator_http_protocol}}://{{inventory_hostname}}:{{kafka_connect_replicator_port}}/connectors"
+    url: "{{kafka_connect_replicator_http_protocol}}://{{ hostvars[inventory_hostname]|resolve_hostname }}:{{kafka_connect_replicator_port}}/connectors"
     status_code: 200
     validate_certs: false
     # Basic auth header is redundant for non rbac install
@@ -19,7 +19,7 @@
 
 - name: Wait for API to return 200 - mTLS
   uri:
-    url: "{{kafka_connect_replicator_http_protocol}}://{{inventory_hostname}}:{{kafka_connect_replicator_port}}/connectors"
+    url: "{{kafka_connect_replicator_http_protocol}}://{{ hostvars[inventory_hostname]|resolve_hostname }}:{{kafka_connect_replicator_port}}/connectors"
     status_code: 200
     validate_certs: false
     client_cert: "{{kafka_connect_replicator_cert_path}}"
@@ -38,10 +38,12 @@
 - name: Fetch Files for Debugging Failure
   # Cannot use include_role in Ansible Handlers: https://github.com/ansible/ansible/issues/20493
   include_tasks:
-    file: ../../confluent.common/tasks/failure_handling.yml
+    file: ../../confluent.common/tasks/fetch_logs.yml
   vars:
     service_name: "{{kafka_connect_replicator_service_name}}"
     config_file: "{{kafka_connect_replicator.replication_config_file}}"
     log_dir: "{{ kafka_connect_replicator_log_dir|regex_replace('\\/$', '')}}"
+    user: "{{kafka_connect_replicator_user}}"
+    group: "{{kafka_connect_replicator_group}}"
   # Only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
   when: result1.failed|default(False) or result2.failed|default(False)

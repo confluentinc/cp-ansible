@@ -262,7 +262,7 @@ Default:  3
 
 ### sasl_protocol
 
-SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
+SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256
 
 Default:  none
 
@@ -420,6 +420,30 @@ Default:  false
 
 ***
 
+### hostname_aliasing_enabled
+
+Enable Hostname Aliasing for host addressing. This will enable logic, on an individual host basis, to look for the variable `hostname`, followed by the reserved variable `ansible_host` and then `inventory_hostname` to resolve the appropriate FQDN of a host to use within configuration properties.
+
+Default:  false
+
+***
+
+### kafka_connect_cluster_ansible_group_names
+
+Collection of Ansible Group names for All Kafka Connect Clusters that Control Center should be aware of.
+
+Default:  "{{ ['kafka_connect'] if 'kafka_connect' in groups else [] }}"
+
+***
+
+### ksql_cluster_ansible_group_names
+
+Collection of Ansible Group names for All ksqlDB Clusters that Control Center should be aware of.
+
+Default:  "{{ ['ksql'] if 'ksql' in groups else [] }}"
+
+***
+
 ### zookeeper_user
 
 Set this variable to customize the Linux User that the Zookeeper Service runs with. Default user is cp-kafka.
@@ -446,25 +470,41 @@ Default:  "{{ssl_enabled}}"
 
 ### zookeeper_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+Deprecated- Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
 
 Default:  "{{ssl_mutual_auth_enabled}}"
 
 ***
 
-### zookeeper_client_port
+### zookeeper_sasl_protocol
 
-Port for Kafka to Zookeeper connections. NOTE- 2181 will be configured for zk health checks
+Deprecated- SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
 
-Default:  "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
+Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
 
 ***
 
-### zookeeper_sasl_protocol
+### zookeeper_quorum_authentication_type
 
-SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
+Authentication to put on ZK Server to Server connections. Available options: [mtls, digest].
 
-Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
+Default:  "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
+
+***
+
+### zookeeper_client_authentication_type
+
+Authentication to put on ZK Client to Server connections. This is Kafka's connection to ZK. Available options: [mtls, digest, kerberos].
+
+Default:  "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
+
+***
+
+### zookeeper_client_port
+
+Port for Kafka to Zookeeper connections
+
+Default:  "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
 
 ***
 
@@ -784,7 +824,15 @@ Default:  "{{ kafka_broker.properties }}"
 
 Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
 
-Default:  "{{confluent_server_enabled}}"
+Default:  "{{confluent_server_enabled and not ccloud_kafka_broker_enabled}}"
+
+***
+
+### kafka_broker_rest_proxy_authentication_type
+
+Authentication type to add to Kafka's embedded rest proxy or Admin API. Do not set when RBAC is enabled. Options: [basic, none]
+
+Default:  none
 
 ***
 
@@ -824,7 +872,7 @@ Default:  8081
 
 Replication Factor for schemas topic. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
 
-Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
+Default:  "{{ 3 if ccloud_kafka_broker_enabled|bool else
 
 ***
 
@@ -838,9 +886,17 @@ Default:  "{{ssl_enabled}}"
 
 ### schema_registry_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on Schema Registry
+Deprecated- Boolean to enable mTLS Authentication on Schema Registry
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### schema_registry_authentication_type
+
+Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
+
+Default:  "{{ 'mtls' if schema_registry_ssl_mutual_auth_enabled else 'none' }}"
 
 ***
 
@@ -998,9 +1054,17 @@ Default:  "{{ssl_enabled}}"
 
 ### kafka_rest_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on Rest Proxy
+Deprecated- Boolean to enable mTLS Authentication on Rest Proxy
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### kafka_rest_authentication_type
+
+Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
+
+Default:  "{{ 'mtls' if kafka_rest_ssl_mutual_auth_enabled else 'none' }}"
 
 ***
 
@@ -1124,6 +1188,22 @@ Default:  "{{ monitoring_interceptors_enabled }}"
 
 ***
 
+### kafka_connect_service_name
+
+Service Name to define/use for Kafka Connect System.d.
+
+Default:  "{{kafka_connect_default_service_name}}"
+
+***
+
+### kafka_connect_config_filename
+
+Config/Properties Filename to use when setting up and configuring Kafka Connect
+
+Default:  "{{kafka_connect_default_config_filename}}"
+
+***
+
 ### kafka_connect_user
 
 Set this variable to customize the Linux User that the Kafka Connect Service runs with. Default user is cp-kafka-connect.
@@ -1158,9 +1238,17 @@ Default:  "{{ssl_enabled}}"
 
 ### kafka_connect_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on Connect
+Deprecated- Boolean to enable mTLS Authentication on Connect
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### kafka_connect_authentication_type
+
+Authentication to put on Connect's Rest Endpoint. Available options: [mtls, basic, none].
+
+Default:  "{{ 'mtls' if kafka_connect_ssl_mutual_auth_enabled|bool else 'none' }}"
 
 ***
 
@@ -1288,7 +1376,7 @@ Default:  connect-cluster
 
 Replication Factor for connect internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
 
-Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
+Default:  "{{ 3 if ccloud_kafka_broker_enabled|bool else
 
 ***
 
@@ -1366,9 +1454,17 @@ Default:  "{{ssl_enabled}}"
 
 ### ksql_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on ksqlDB
+Deprecated - Boolean to enable mTLS Authentication on ksqlDB
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### ksql_authentication_type
+
+Authentication to put on ksqlDB's Rest Endpoint. Available options: [mtls, basic, none].
+
+Default:  "{{ 'mtls' if ksql_ssl_mutual_auth_enabled|bool else 'none' }}"
 
 ***
 
@@ -1480,7 +1576,7 @@ Default:  []
 
 Replication Factor for ksqlDB internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
 
-Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
+Default:  "{{ 3 if ccloud_kafka_broker_enabled|bool else
 
 ***
 
@@ -1564,6 +1660,14 @@ Default:  "{{ssl_enabled}}"
 
 ***
 
+### control_center_authentication_type
+
+Control Center Authentication. Available options: [basic, none].
+
+Default:  none
+
+***
+
 ### control_center_log_dir
 
 Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
@@ -1584,7 +1688,7 @@ Default:  []
 
 Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
 
-Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
+Default:  "{{ 3 if ccloud_kafka_broker_enabled|bool else
 
 ***
 
@@ -1593,6 +1697,30 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, defaul
 Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
 
 Default:  "{{ control_center.properties }}"
+
+***
+
+### sasl_scram_users
+
+Dictionary containing additional sasl scram users to be created during provisioning.
+
+Default:  {}
+
+***
+
+### sasl_scram256_users
+
+Dictionary containing additional sasl scram users to be created during provisioning.
+
+Default:  {}
+
+***
+
+### sasl_plain_users
+
+Dictionary containing additional sasl plain users to be created during provisioning.
+
+Default:  {}
 
 ***
 
@@ -1760,7 +1888,7 @@ Default:
 
 Comma separated urls for mds servers. Only set if external_mds_enabled: true
 
-Default:  "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
+Default:  "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
 
 ***
 
@@ -2182,41 +2310,41 @@ Default:  "{{mds_super_user_password}}"
 
 ### kafka_broker_rest_health_check_user
 
-User for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
+User for authenticated Kafka Admin API Health Check.
 
-Default:  "{{mds_super_user}}"
+Default:  "{{ mds_super_user if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.principal }}"
 
 ***
 
 ### kafka_broker_rest_health_check_password
 
-Password for authenticated Kafka Admin API Health Check. Set if using customized security like Basic Auth.
+Password for authenticated Kafka Admin API Health Check.
 
-Default:  "{{mds_super_user_password}}"
+Default:  "{{ mds_super_user_password if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.password }}"
 
 ***
 
 ### schema_registry_health_check_user
 
-User for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
+User for authenticated Schema Registry Health Check.
 
-Default:  "{{schema_registry_ldap_user}}"
+Default:  "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registry_basic_users.admin.principal }}"
 
 ***
 
 ### schema_registry_health_check_password
 
-Password for authenticated Schema Registry Health Check. Set if using customized security like Basic Auth.
+Password for authenticated Schema Registry Health Check.
 
-Default:  "{{schema_registry_ldap_password}}"
+Default:  "{{ schema_registry_ldap_password if rbac_enabled|bool else schema_registry_basic_users.admin.password }}"
 
 ***
 
 ### kafka_connect_health_check_user
 
-User for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+User for authenticated Connect Health Check.
 
-Default:  "{{kafka_connect_ldap_user}}"
+Default:  "{{ kafka_connect_ldap_user if rbac_enabled|bool else kafka_connect_basic_users.admin.principal }}"
 
 ***
 
@@ -2224,7 +2352,7 @@ Default:  "{{kafka_connect_ldap_user}}"
 
 Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{kafka_connect_ldap_password}}"
+Default:  "{{ kafka_connect_ldap_password if rbac_enabled|bool else kafka_connect_basic_users.admin.password }}"
 
 ***
 
@@ -2232,7 +2360,7 @@ Default:  "{{kafka_connect_ldap_password}}"
 
 User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{ksql_ldap_user}}"
+Default:  "{{ ksql_ldap_user if rbac_enabled|bool else ksql_basic_users.admin.principal }}"
 
 ***
 
@@ -2240,7 +2368,7 @@ Default:  "{{ksql_ldap_user}}"
 
 Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{ksql_ldap_password}}"
+Default:  "{{ ksql_ldap_password if rbac_enabled|bool else ksql_basic_users.admin.password }}"
 
 ***
 
@@ -2248,7 +2376,7 @@ Default:  "{{ksql_ldap_password}}"
 
 User for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{kafka_rest_ldap_user}}"
+Default:  "{{ kafka_rest_ldap_user if rbac_enabled|bool else kafka_rest_basic_users.admin.principal }}"
 
 ***
 
@@ -2256,7 +2384,7 @@ Default:  "{{kafka_rest_ldap_user}}"
 
 Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{kafka_rest_ldap_password}}"
+Default:  "{{ kafka_rest_ldap_password if rbac_enabled|bool else kafka_rest_basic_users.admin.password }}"
 
 ***
 
@@ -2264,7 +2392,7 @@ Default:  "{{kafka_rest_ldap_password}}"
 
 User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{control_center_ldap_user}}"
+Default:  "{{ control_center_ldap_user if rbac_enabled|bool else control_center_basic_users.admin.principal }}"
 
 ***
 
@@ -2272,7 +2400,7 @@ Default:  "{{control_center_ldap_user}}"
 
 Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{control_center_ldap_password}}"
+Default:  "{{ control_center_ldap_password if rbac_enabled|bool else control_center_basic_users.admin.password }}"
 
 ***
 
@@ -2480,7 +2608,7 @@ Default:  ""
 
 SCRAM principal for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2488,7 +2616,23 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 SCRAM password for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_sasl_scram256_principal
+
+SCRAM 256 principal for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_sasl_scram256_password
+
+SCRAM 256 password for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2496,7 +2640,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2504,7 +2648,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2664,7 +2808,7 @@ Default:  "{{kafka_connect_replicator_consumer_ssl_keystore_file_path}}"
 
 SCRAM principal for the Consumer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2672,7 +2816,23 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 SCRAM password for the Consumer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram256_principal
+
+SCRAM 256 principal for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram256_password
+
+SCRAM 256 password for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2680,7 +2840,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for the Consumer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2688,7 +2848,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for the Consumer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2768,7 +2928,7 @@ Default:  "{{kafka_connect_replicator_ssl_keystore_file_path}}"
 
 SCRAM principal for the Producer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2776,7 +2936,23 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 SCRAM password for the Producer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram256_principal
+
+SCRAM 256 principal for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram256_password
+
+SCRAM 256 password for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2784,7 +2960,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for the Producer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2792,7 +2968,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for the Producer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2880,7 +3056,7 @@ Default:  "{{ kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_pa
 
 SCRAM principal for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal}}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal}}"
 
 ***
 
@@ -2888,7 +3064,23 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal}}"
 
 SCRAM password for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram256_principal
+
+SCRAM 256 principal for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram256_password
+
+SCRAM 256 password for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2896,7 +3088,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2904,7 +3096,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -3041,6 +3233,30 @@ Default:  "{{pause_rolling_deployment}}"
 Boolean to Pause Rolling Deployment after each Kafka Connect Replicator Node starts up.
 
 Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### ccloud_kafka_broker_enabled
+
+Boolean to configure component to Confluent Cloud Kafka. Must also set ccloud_bootstrap_servers, ccloud_key, and ccloud_secret. zookeeper and kafka_broker groups should not be in inventory.
+
+Default:  false
+
+***
+
+### ccloud_bootstrap_servers
+
+Bootstrap Servers to CCloud Kafka
+
+Default:  localhost:9092
+
+***
+
+### public_certificates_enabled
+
+Boolean to skip truststore creation and configuration. Signifies kafka's certificates were signed by a public certificate authority.
+
+Default:  "{{ccloud_kafka_broker_enabled}}"
 
 ***
 
@@ -3216,6 +3432,22 @@ Default:  "INFO, main"
 
 ***
 
+### control_center_max_log_files
+
+Max number of log files generated by Control Center. Only honored if control_center_custom_log4j: true
+
+Default:  10
+
+***
+
+### control_center_log_file_size
+
+Max size of a log file generated by Control Center. Only honored if control_center_custom_log4j: true
+
+Default:  100MB
+
+***
+
 ### control_center_custom_java_args
 
 Custom Java Args to add to the Control Center Process
@@ -3286,6 +3518,22 @@ Default:  "INFO, stdout, kafkaAppender"
 
 ***
 
+### kafka_broker_max_log_files
+
+Max number of log files generated by Kafka Broker. Only honored if kafka_broker_custom_log4j: true
+
+Default:  10
+
+***
+
+### kafka_broker_log_file_size
+
+Max size of a log file generated by Kafka Broker. Only honored if kafka_broker_custom_log4j: true
+
+Default:  100MB
+
+***
+
 ### kafka_broker_custom_java_args
 
 Custom Java Args to add to the Kafka Process
@@ -3344,7 +3592,23 @@ Default:  "{{ custom_log4j }}"
 
 Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
 
-Default:  "INFO, stdout connectAppender"
+Default:  "INFO, stdout, connectAppender"
+
+***
+
+### kafka_connect_max_log_files
+
+Max number of log files generated by Kafka Connect. Only honored if kafka_connect_custom_log4j: true
+
+Default:  10
+
+***
+
+### kafka_connect_log_file_size
+
+Max size of a log file generated by Kafka Connect. Only honored if kafka_connect_custom_log4j: true
+
+Default:  100MB
 
 ***
 
@@ -3410,6 +3674,22 @@ Default:  "INFO, stdout, file"
 
 ***
 
+### kafka_rest_max_log_files
+
+Max number of log files generated by Rest Proxy. Only honored if kafka_rest_custom_log4j: true
+
+Default:  10
+
+***
+
+### kafka_rest_log_file_size
+
+Max size of a log file generated by Rest Proxy. Only honored if kafka_rest_custom_log4j: true
+
+Default:  100MB
+
+***
+
 ### kafka_rest_custom_java_args
 
 Custom Java Args to add to the Rest Proxy Process
@@ -3446,7 +3726,7 @@ Default:
 
 Time in seconds to wait before starting Rest Proxy Health Checks.
 
-Default:  20
+Default:  15
 
 ***
 
@@ -3469,6 +3749,22 @@ Default:  "{{ custom_log4j }}"
 Root logger within ksqlDB's log4j config. Only honored if ksql_custom_log4j: true
 
 Default:  "INFO, stdout, main"
+
+***
+
+### ksql_max_log_files
+
+Max number of log files generated by ksqlDB. Only honored if ksql_custom_log4j: true
+
+Default:  5
+
+***
+
+### ksql_log_file_size
+
+Max size of a log file generated by ksqlDB. Only honored if ksql_custom_log4j: true
+
+Default:  10MB
 
 ***
 
@@ -3542,6 +3838,22 @@ Default:  "INFO, stdout, file"
 
 ***
 
+### schema_registry_max_log_files
+
+Max number of log files generated by Schema Registry. Only honored if schema_registry_custom_log4j: true
+
+Default:  10
+
+***
+
+### schema_registry_log_file_size
+
+Max size of a log file generated by Schema Registry. Only honored if schema_registry_custom_log4j: true
+
+Default:  100MB
+
+***
+
 ### schema_registry_custom_java_args
 
 Custom Java Args to add to the Schema Registry Process
@@ -3578,7 +3890,7 @@ Default:
 
 Time in seconds to wait before starting Schema Registry Health Checks.
 
-Default:  20
+Default:  15
 
 ***
 
@@ -3601,6 +3913,22 @@ Default:  "{{ custom_log4j }}"
 Root logger within Zookeeper's log4j config. Only honored if zookeeper_custom_log4j: true
 
 Default:  INFO, stdout, zkAppender
+
+***
+
+### zookeeper_max_log_files
+
+Max number of log files generated by Zookeeper. Only honored if zookeeper_custom_log4j: true
+
+Default:  10
+
+***
+
+### zookeeper_log_file_size
+
+Max size of a log file generated by Zookeeper. Only honored if zookeeper_custom_log4j: true
+
+Default:  100MB
 
 ***
 
