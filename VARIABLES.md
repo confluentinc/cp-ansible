@@ -3260,6 +3260,38 @@ Default:  "{{ccloud_kafka_broker_enabled}}"
 
 ***
 
+### systemd_base_dir
+
+systemd main file location. You may want to change it to match the archive_destination_path when installing in user/alternative locations.
+
+Default:  "{{'/lib/systemd/system' if ansible_os_family == 'Debian' else '/usr/lib/systemd/system'}}"
+
+***
+
+### systemd_override_dir
+
+systemd override file location. You may want to change it to match the archive_destination_path when installing in user/alternative locations.
+
+Default:  /etc/systemd/system/
+
+***
+
+### privileged_install
+
+Boolean to configure un-privileged installation. Defaults to privileged. When running un-privileged, systemd_mode will need to be set to 'user' and files+folders will need to be created with the proper rights and owners before running ansible. See 'unprivileged_install.md'
+
+Default:  true
+
+***
+
+### systemd_mode
+
+Boolean to configure systemd in user-mode. Defaults to 'system'.
+
+Default:  "{{ 'system' if privileged_install else 'user'}}"
+
+***
+
 # confluent.common
 
 Below are the supported variables for the role confluent.common
