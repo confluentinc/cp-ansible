@@ -33,15 +33,15 @@ In your current shell create an alias to start molecule in a container:
 ```
 git clone https://github.com/confluentinc/cp-ansible
 cd cp-ansible
-export CP_ANISBLE_PATH=$PWD
-alias molecule="docker run -it --rm --dns="8.8.8.8" -v "/var/run/docker.sock:/var/run/docker.sock" -v ~/.cache:/root/.cache -v "$CP_ANISBLE_PATH:$CP_ANISBLE_PATH" -w "$CP_ANISBLE_PATH/roles/confluent.test" quay.io/ansible/molecule:3.1.5 molecule"
+export CP_ANSIBLE_PATH=$PWD
+alias molecule="docker run -it --rm --dns="8.8.8.8" -v "/var/run/docker.sock:/var/run/docker.sock" -v ~/.cache:/root/.cache -v "$CP_ANSIBLE_PATH:$CP_ANSIBLE_PATH" -w "$CP_ANSIBLE_PATH/roles/confluent.test" quay.io/ansible/molecule:3.1.5 molecule"
 ```
 
 To make the alias permanent, add the following to your bashrc file:
 
 ```
-export CP_ANISBLE_PATH=<Replace this with the repo path>
-alias molecule="docker run -it --rm --dns="8.8.8.8" -v "/var/run/docker.sock:/var/run/docker.sock" -v ~/.cache:/root/.cache -v "$CP_ANISBLE_PATH:$CP_ANISBLE_PATH" -w "$CP_ANISBLE_PATH/roles/confluent.test" quay.io/ansible/molecule:3.1.5 molecule"
+export CP_ANSIBLE_PATH=<Replace this with the repo path>
+alias molecule="docker run -it --rm --dns="8.8.8.8" -v "/var/run/docker.sock:/var/run/docker.sock" -v ~/.cache:/root/.cache -v "$CP_ANSIBLE_PATH:$CP_ANSIBLE_PATH" -w "$CP_ANSIBLE_PATH/roles/confluent.test" quay.io/ansible/molecule:3.1.5 molecule"
 ```
 
 Now the molecule command will run a container, but function as it should.

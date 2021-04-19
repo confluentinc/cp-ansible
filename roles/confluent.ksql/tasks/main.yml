@@ -14,12 +14,20 @@
     - ansible_os_family
     - ansible_fqdn
 
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: confluent.common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ ksql_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
 # Install Packages
 - name: Install the KSQL Packages
   yum:
-    name: "{{item}}{{confluent_package_redhat_suffix}}"
+    name: "{{ ksql_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
-  loop: "{{ksql_packages}}"
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
@@ -29,8 +37,7 @@
 
 - name: Install the KSQL Packages
   apt:
-    name: "{{item}}{{confluent_package_debian_suffix}}"
-  loop: "{{ksql_packages}}"
+    name: "{{ ksql_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
@@ -82,15 +89,20 @@
     service_name: ksql
     user: "{{ksql_user}}"
     group: "{{ksql_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
     ca_cert_path: "{{ksql_ca_cert_path}}"
     cert_path: "{{ksql_cert_path}}"
     key_path: "{{ksql_key_path}}"
     export_certs: "{{ksql_export_certs}}"
   when: >
     ksql_ssl_enabled|bool or
-    kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
-    mds_tls_enabled | bool
+    ( kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool and not public_certificates_enabled|bool ) or
+    ( mds_tls_enabled|bool and not public_certificates_enabled|bool )
+  tags: ssl
+
+- name: Import Public Confluent Cloud Certificates Authority Certs into Truststore
+  include_tasks: ccloud_certs.yml
+  when: ccloud_kafka_broker_enabled|bool
   tags: ssl
 
 - name: Configure Kerberos
@@ -215,6 +227,26 @@
     owner: "{{ omit if unprivileged_install else ksql_user }}"
     group: "{{ omit if unprivileged_install else ksql_group }}"
   when: ksql_jmxexporter_enabled|bool
+
+- name: Create Basic Auth Jaas File
+  template:
+    src: jaas.conf.j2
+    dest: "{{ksql.jaas_file}}"
+    mode: 0640
+    owner: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+  notify: restart ksql
+  when: ksql_authentication_type == 'basic'
+
+- name: Create Basic Auth Password File
+  template:
+    src: password.properties.j2
+    dest: "{{ksql.password_file}}"
+    mode: 0640
+    owner: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+  notify: restart ksql
+  when: ksql_authentication_type == 'basic'
 
 - name: Create Service Override Directory
   file:

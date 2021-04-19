@@ -3,7 +3,7 @@
 # Implementing try/catch logic with ignore_errors and conditionals
 - name: Wait for API to return 200
   uri:
-    url: "{{schema_registry_http_protocol}}://{{inventory_hostname}}:{{schema_registry_listener_port}}/subjects"
+    url: "{{schema_registry_http_protocol}}://{{ hostvars[inventory_hostname]|resolve_hostname }}:{{schema_registry_listener_port}}/subjects"
     status_code: 200
     validate_certs: false
     # Basic auth header is redundant for non rbac install
@@ -14,12 +14,12 @@
   until: result1.status == 200
   retries: 30
   delay: 5
-  when: not schema_registry_ssl_mutual_auth_enabled|bool
+  when: schema_registry_authentication_type != 'mtls'
   ignore_errors: true
 
 - name: Wait for API to return 200 - mTLS
   uri:
-    url: "{{schema_registry_http_protocol}}://{{inventory_hostname}}:{{schema_registry_listener_port}}/subjects"
+    url: "{{schema_registry_http_protocol}}://{{ hostvars[inventory_hostname]|resolve_hostname }}:{{schema_registry_listener_port}}/subjects"
     status_code: 200
     validate_certs: false
     client_cert: "{{schema_registry_cert_path}}"
@@ -32,16 +32,18 @@
   until: result2.status == 200
   retries: 30
   delay: 5
-  when: schema_registry_ssl_mutual_auth_enabled|bool
+  when: schema_registry_authentication_type == 'mtls'
   ignore_errors: true
 
 - name: Fetch Files for Debugging Failure
   # Cannot use include_role in Ansible Handlers: https://github.com/ansible/ansible/issues/20493
   include_tasks:
-    file: ../../confluent.common/tasks/failure_handling.yml
+    file: ../../confluent.common/tasks/fetch_logs.yml
   vars:
     service_name: "{{schema_registry_service_name}}"
     config_file: "{{schema_registry.config_file}}"
     log_dir: "{{schema_registry_service_environment_overrides.LOG_DIR}}"
+    user: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
   # Only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
   when: result1.failed|default(False) or result2.failed|default(False)

@@ -14,12 +14,20 @@
     - ansible_os_family
     - ansible_fqdn
 
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: confluent.common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ kafka_rest_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
 # Install Packages
 - name: Install the Kafka Rest Packages
   yum:
-    name: "{{item}}{{confluent_package_redhat_suffix}}"
+    name: "{{ kafka_rest_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
-  loop: "{{kafka_rest_packages}}"
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
@@ -29,8 +37,7 @@
 
 - name: Install the Kafka Rest Packages
   apt:
-    name: "{{item}}{{confluent_package_debian_suffix}}"
-  loop: "{{kafka_rest_packages}}"
+    name: "{{ kafka_rest_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
@@ -74,15 +81,16 @@
     service_name: kafka_rest
     user: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
     ca_cert_path: "{{kafka_rest_ca_cert_path}}"
     cert_path: "{{kafka_rest_cert_path}}"
     key_path: "{{kafka_rest_key_path}}"
     export_certs: "{{kafka_rest_export_certs}}"
+  # CCloud Kafka does not need Keystores/Truststores
   when: >
     kafka_rest_ssl_enabled|bool or
-    kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
-    mds_tls_enabled | bool
+    ( kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool and not public_certificates_enabled|bool ) or
+    ( mds_tls_enabled|bool and not public_certificates_enabled|bool )
   tags: ssl
 
 - name: Configure Kerberos
@@ -175,6 +183,8 @@
     tasks_from: update_log4j.yml
   vars:
     log4j_file: "{{kafka_rest.log4j_file}}"
+    log4j_max_backup_index: "{{kafka_rest_max_log_files}}"
+    log4j_max_file_size: "{{kafka_rest_log_file_size}}"
     log4j_root_logger: "{{kafka_rest_log4j_root_logger}}"
     handler: "restart kafka-rest"
   when: kafka_rest_custom_log4j|bool
@@ -205,6 +215,26 @@
     owner: "{{ omit if unprivileged_install else kafka_rest_user}} "
     group: "{{ omit if unprivileged_install else kafka_rest_group}} "
   when: kafka_rest_jmxexporter_enabled|bool
+
+- name: Create Basic Auth Jaas File
+  template:
+    src: jaas.conf.j2
+    dest: "{{kafka_rest.jaas_file}}"
+    mode: 0640
+    owner: "{{kafka_rest_user}}"
+    group: "{{kafka_rest_group}}"
+  notify: restart kafka-rest
+  when: kafka_rest_authentication_type == 'basic'
+
+- name: Create Basic Auth Password File
+  template:
+    src: password.properties.j2
+    dest: "{{kafka_rest.password_file}}"
+    mode: 0640
+    owner: "{{kafka_rest_user}}"
+    group: "{{kafka_rest_group}}"
+  notify: restart kafka-rest
+  when: kafka_rest_authentication_type == 'basic'
 
 - name: Create Service Override Directory
   file:
