@@ -3278,7 +3278,7 @@ Default:  /etc/systemd/system/
 
 ### privileged_install
 
-Boolean to configure un-privileged installation. Defaults to privileged. When running un-privileged, systemd_mode will need to be set to 'user' and files+folders will need to be created with the proper rights and owners before running ansible. See 'unprivileged_install.md'
+Boolean to configure un-privileged installation. Defaults to privileged. When running un-privileged, systemd_mode will need to be set to 'user' and files+folders will need to be created with the proper rights and owners before running ansible. See 'UNPRIVILEGED_INSTALL.md'
 
 Default:  true
 
