@@ -49,7 +49,7 @@
 - name: Create Zookeeper Group
   group:
     name: "{{zookeeper_group}}"
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 - name: Create Zookeeper User
   user:
@@ -57,7 +57,7 @@
     comment: "Zookeeper User"
     system: true
     group: "{{zookeeper_group}}"
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -70,9 +70,9 @@
     src: "{{binary_base_path}}/lib/systemd/system/{{zookeeper.systemd_file|basename}}"
     remote_src: true
     dest: "{{zookeeper.systemd_file}}"
-    mode: "{{ omit if unprivileged_install else '0644' }}"
+    mode: "{{ omit if not privileged_install else '0644' }}"
     force: true
-  when: installation_method == "archive" and not unprivileged_install|bool
+  when: installation_method == "archive" and privileged_install|bool
 
 - include_role:
     name: confluent.ssl
@@ -121,7 +121,7 @@
     group: "{{zookeeper_group}}"
     state: directory
     mode: 0750
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 - name: Set Ownership of Data Dir Files
   file:
@@ -129,7 +129,7 @@
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
     recurse: true
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 - name: Set Zookeeper Transaction Log Data Dir Ownership
   file:
@@ -152,9 +152,9 @@
   template:
     src: myid.j2
     dest: "{{zookeeper_final_properties.dataDir}}/myid"
-    mode: "{{ omit if unprivileged_install else '0640' }}"
-    owner: "{{ omit if unprivileged_install else zookeeper_user }}"
-    group: "{{ omit if unprivileged_install else zookeeper_group }}"
+    mode: "{{ omit if not privileged_install else '0640' }}"
+    owner: "{{ omit if not privileged_install else zookeeper_user }}"
+    group: "{{ omit if not privileged_install else zookeeper_group }}"
 
 - name: Create Zookeeper Config directory
   file:
@@ -163,15 +163,15 @@
     mode: 0750
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 - name: Create Zookeeper Config
   template:
     src: zookeeper.properties.j2
     dest: "{{zookeeper.config_file}}"
-    mode: "{{ omit if unprivileged_install else '0640' }}"
-    owner: "{{ omit if unprivileged_install else zookeeper_user }}"
-    group: "{{ omit if unprivileged_install else zookeeper_group }}"
+    mode: "{{ omit if not privileged_install else '0640' }}"
+    owner: "{{ omit if not privileged_install else zookeeper_user }}"
+    group: "{{ omit if not privileged_install else zookeeper_group }}"
   register: zookeeper_config
   notify: restart zookeeper
 
@@ -182,7 +182,7 @@
     group: "{{zookeeper_group}}"
     owner: "{{zookeeper_user}}"
     mode: 0770
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 - name: Create log4j Directory
   file:
@@ -191,15 +191,15 @@
     group: "{{zookeeper_group}}"
     state: directory
     mode: 0750
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 - name: Create Zookeeper log4j config
   template:
     src: zookeeper_log4j.properties.j2
     dest: "{{zookeeper.log4j_file}}"
-    mode: "{{ omit if unprivileged_install else '0640' }}"
-    owner: "{{ omit if unprivileged_install else zookeeper_user }}"
-    group: "{{ omit if unprivileged_install else zookeeper_group }}"
+    mode: "{{ omit if not privileged_install else '0640' }}"
+    owner: "{{ omit if not privileged_install else zookeeper_user }}"
+    group: "{{ omit if not privileged_install else zookeeper_group }}"
   when: zookeeper_custom_log4j|bool
   notify: restart zookeeper
 
@@ -207,9 +207,9 @@
   template:
     src: zookeeper_jolokia.properties.j2
     dest: "{{zookeeper_jolokia_config}}"
-    mode: "{{ omit if unprivileged_install else '0640' }}"
-    owner: "{{ omit if unprivileged_install else zookeeper_user }}"
-    group: "{{ omit if unprivileged_install else zookeeper_group }}"
+    mode: "{{ omit if not privileged_install else '0640' }}"
+    owner: "{{ omit if not privileged_install else zookeeper_user }}"
+    group: "{{ omit if not privileged_install else zookeeper_group }}"
   when: zookeeper_jolokia_enabled|bool
   notify: restart zookeeper
 
@@ -217,9 +217,9 @@
   template:
     src: zookeeper_jaas.conf.j2
     dest: "{{zookeeper.jaas_file}}"
-    mode: "{{ omit if unprivileged_install else '0640' }}"
-    owner: "{{ omit if unprivileged_install else zookeeper_user }}"
-    group: "{{ omit if unprivileged_install else zookeeper_group }}"
+    mode: "{{ omit if not privileged_install else '0640' }}"
+    owner: "{{ omit if not privileged_install else zookeeper_user }}"
+    group: "{{ omit if not privileged_install else zookeeper_group }}"
   when: zookeeper_client_authentication_type in ['kerberos', 'digest'] or zookeeper_quorum_authentication_type in ['kerberos', 'digest']
   notify: restart zookeeper
 
@@ -227,9 +227,9 @@
   copy:
     src: "{{zookeeper_jmxexporter_config_source_path}}"
     dest: "{{zookeeper_jmxexporter_config_path}}"
-    mode: "{{ omit if unprivileged_install else '0640' }}"
-    owner: "{{ omit if unprivileged_install else zookeeper_user }}"
-    group: "{{ omit if unprivileged_install else zookeeper_group }}"
+    mode: "{{ omit if not privileged_install else '0640' }}"
+    owner: "{{ omit if not privileged_install else zookeeper_user }}"
+    group: "{{ omit if not privileged_install else zookeeper_group }}"
   when: zookeeper_jmxexporter_enabled|bool
 
 - name: Create Service Override Directory
@@ -239,15 +239,15 @@
     group: "{{zookeeper_group}}"
     state: directory
     mode: 0640
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 - name: Write Service Overrides
   template:
     src: override.conf.j2
     dest: "{{zookeeper.systemd_override}}"
-    mode: "{{ omit if unprivileged_install else '0640' }}"
-    owner: "{{ omit if unprivileged_install else zookeeper_user }}"
-    group: "{{ omit if unprivileged_install else zookeeper_group }}"
+    mode: "{{ omit if not privileged_install else '0640' }}"
+    owner: "{{ omit if not privileged_install else zookeeper_user }}"
+    group: "{{ omit if not privileged_install else zookeeper_group }}"
   notify: restart zookeeper
 
 - name: Install Service in User-mode

@@ -49,7 +49,7 @@
 - name: Create Connect Distributed Group
   group:
     name: "{{kafka_connect_group}}"
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 - name: Create Connect Distributed User
   user:
@@ -57,7 +57,7 @@
     comment: "Connect Distributed User"
     system: true
     group: "{{kafka_connect_group}}"
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -66,7 +66,7 @@
     src: "{{binary_base_path}}/lib/systemd/system/{{kafka_connect.systemd_file|basename}}"
     remote_src: true
     dest: "{{kafka_connect.systemd_file}}"
-    mode: "{{ omit if unprivileged_install else 0644 }}"
+    mode: "{{ omit if not privileged_install else 0644 }}"
     force: true
   when: installation_method == "archive"
 
@@ -135,7 +135,7 @@
     mode: 0750
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 - name: Create Connect Distributed Config with Secrets Protection
   include_role:
@@ -156,9 +156,9 @@
   template:
     src: connect-distributed.properties.j2
     dest: "{{kafka_connect.config_file}}"
-    mode: "{{ omit if unprivileged_install else 0640 }}"
-    owner: "{{ omit if unprivileged_install else kafka_connect_user }}"
-    group: "{{ omit if unprivileged_install else kafka_connect_group }}"
+    mode: "{{ omit if not privileged_install else 0640 }}"
+    owner: "{{ omit if not privileged_install else kafka_connect_user }}"
+    group: "{{ omit if not privileged_install else kafka_connect_group }}"
   notify: restart connect distributed
   when: not kafka_connect_secrets_protection_enabled|bool
 
@@ -172,7 +172,7 @@
     group: "{{kafka_connect_group}}"
     owner: "{{kafka_connect_user}}"
     mode: 0770
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 - name: Update Connect log4j Config for Log Cleanup
   include_role:
@@ -192,15 +192,15 @@
     group: "{{kafka_connect_group}}"
     owner: "{{kafka_connect_user}}"
     mode: 0640
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 - name: Create Connect Distributed Jolokia Config
   template:
     src: kafka_connect_jolokia.properties.j2
     dest: "{{kafka_connect_jolokia_config}}"
-    mode: "{{ omit if unprivileged_install else 0640 }}"
-    owner: "{{ omit if unprivileged_install else kafka_connect_user}} "
-    group: "{{ omit if unprivileged_install else kafka_connect_group}} "
+    mode: "{{ omit if not privileged_install else 0640 }}"
+    owner: "{{ omit if not privileged_install else kafka_connect_user}} "
+    group: "{{ omit if not privileged_install else kafka_connect_group}} "
   when: kafka_connect_jolokia_enabled|bool
   notify: restart connect distributed
 
@@ -208,9 +208,9 @@
   copy:
     src: "{{kafka_connect_jmxexporter_config_source_path}}"
     dest: "{{kafka_connect_jmxexporter_config_path}}"
-    mode: "{{ omit if unprivileged_install else 0640 }}"
-    owner: "{{ omit if unprivileged_install else kafka_connect_user }}"
-    group: "{{ omit if unprivileged_install else kafka_connect_group }}"
+    mode: "{{ omit if not privileged_install else 0640 }}"
+    owner: "{{ omit if not privileged_install else kafka_connect_user }}"
+    group: "{{ omit if not privileged_install else kafka_connect_group }}"
   when: kafka_connect_jmxexporter_enabled|bool
 
 - name: Create Basic Auth Jaas File
@@ -240,15 +240,15 @@
     group: "{{kafka_connect_group}}"
     state: directory
     mode: 0640
-  when: not unprivileged_install|bool
+  when: privileged_install|bool
 
 - name: Write Service Overrides
   template:
     src: override.conf.j2
     dest: "{{ kafka_connect.systemd_override }}"
-    mode: "{{ omit if unprivileged_install else 0640 }}"
-    owner: "{{ omit if unprivileged_install else kafka_connect_user }}"
-    group: "{{ omit if unprivileged_install else kafka_connect_group }}"
+    mode: "{{ omit if not privileged_install else 0640 }}"
+    owner: "{{ omit if not privileged_install else kafka_connect_user }}"
+    group: "{{ omit if not privileged_install else kafka_connect_group }}"
   notify: restart connect distributed
 
 - name: Install Service in User-mode
