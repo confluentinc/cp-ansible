@@ -40,15 +40,13 @@ To make sure that the installation process is using our custom options, instead 
 - All service account users are members of the `confluent` group.
 - The user running the installation is `acme-install`
 - The service accounts running the Confluent components are:
-
--- `acme-kafka` for zookeepers and brokers
--- `acme-schema-registry` for Schema Registry
--- `acme-connect` for Connect
--- `acme-connect-replicator` for Replicator
--- `acme-ksql` for ksqlDB
--- `acme-rest` for REST Proxy
--- `acme-control-center` for Control Center
--- and so on...
+  - `acme-kafka` for zookeepers and brokers
+  - `acme-schema-registry` for Schema Registry
+  - `acme-connect` for Connect
+  - `acme-connect-replicator` for Replicator
+  - `acme-ksql` for ksqlDB
+  - `acme-rest` for REST Proxy
+  - `acme-control-center` for Control Center
 
 **Application Files and Folders**
 These folders and empty files needs to be created before running the install. We create empty files because the installation process will not be able to change their ownership and group.
