@@ -40,6 +40,7 @@ To make sure that the installation process is using our custom options, instead 
 - All service account users are members of the `confluent` group.
 - The user running the installation is `acme-install`
 - The service accounts running the Confluent components are:
+
 -- `acme-kafka` for zookeepers and brokers
 -- `acme-schema-registry` for Schema Registry
 -- `acme-connect` for Connect
@@ -60,7 +61,7 @@ Notable paths:
 - application log files under `/usr/local/confluent/log`
 - data directories: `/usr/local/confluent/zookeeper/data/` and `/usr/local/confluent/kafka/data/`
 
-To automate the create of the files and folders, a script is provided (`create_files.sh`) and it takes its input from `acme_install_files.txt`. This file can be modified to match the desired account names. Setting the proper corresponding values in the `ansible` inventory file is also necessary.
+To automate the create of the files and folders, a script is provided (`unprivileged_create_files.sh`) and it takes its input from `unprivileged_preliminary_files.txt`. This file can be modified to match the desired account names. Setting the proper corresponding values in the `ansible` inventory file is also necessary.
 
 ### Target System and User Settings
 
@@ -135,9 +136,9 @@ ec2-user		ALL = /usr/bin/su - acme-install
 ```
 
 
-## Changes to the cp-ansible Configuration
+## cp-ansible Configuration
 
-This section describes the variables to **set inside the inventory file** of our modified `cp-ansible` scripts.
+This section describes the variables to **set inside your inventory file**. You can find an example of this inventory in: `sample_inventories/unprivileged.yml`.
 
 ```
 ---
