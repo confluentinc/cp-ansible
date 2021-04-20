@@ -166,7 +166,7 @@ all:
     ansible_connection: local                                                (1)
     ansible_user: ec2-user
     ansible_become: true
-    ansible_become_user: achmea-kafka                                        (2)
+    ansible_become_user: acme-kafka                                          (2)
 
     # required for unprivileged installation
     privileged_install: false                                                (3)
