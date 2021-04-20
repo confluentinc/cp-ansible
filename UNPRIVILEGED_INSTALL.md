@@ -1,6 +1,6 @@
 # Unprivileged Installation
 
-## Constraints
+## 1 - Constraints
 
 The goal of this project is to install the Confluent platform under the following constraints:
 1. The user installing the software should not be privileged.
@@ -9,8 +9,6 @@ The goal of this project is to install the Confluent platform under the followin
 4. The files and folders of the platform should not be installed in system paths.
 5. The installation should be as automated as possible.
 
-## Installation
-
 From these constraints, we chose to:
 - Use `cp-ansible` with the necessary modifications (to respond to constraint #5 and try to avoid re-inventing the wheel as much as possible).
 - Use the `archive` option of `cp-ansible`, which means extracting the software from the tarball.
@@ -18,11 +16,11 @@ From these constraints, we chose to:
 - Have the admin create users, groups and paths prior to running the installation. This is the only time privileges are needed and typically this would be the role of the system administrator to provide VMs or systems with these resources already installed. We developed a few tools to help with this part.
 
 
-## Pre-requisites on the target hosts
+## 2 - Pre-requisites on the target hosts
 
 Prior to running `cp-ansible`, the following resources must be created on the system by the system administrator or the team preparing the base VMs.
 
-### Packages
+### 2.1 - Packages
 The following software is necessary on the target host:
 - git
 - python3 (3.5 or higher)
@@ -31,7 +29,7 @@ The following software is necessary on the target host:
 - unzip
 - openssl
 
-### Users and Paths
+### 2.2 - Users and Paths
 
 These resources (users, groups, folders) are not privileged.
 
@@ -80,7 +78,7 @@ $ ./unprivileged_create_files.sh ./unprivileged_preliminary_files.txt
 
 Setting the same values for the paths in the `ansible` inventory file is also necessary.
 
-### Target System and User Settings
+### 2.3 - Target System and User Settings
 
 **systemd user-mode configuration**
 
@@ -153,7 +151,7 @@ ec2-user		ALL = /usr/bin/su - acme-install
 ```
 
 
-## cp-ansible Configuration
+## 3 - cp-ansible Configuration
 
 Once, the target system has been prepared with the proper group, users, files, folders and systemd settings, you can run `ansible`.
 
