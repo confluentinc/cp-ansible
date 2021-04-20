@@ -20,6 +20,8 @@ From these constraints, we chose to:
 
 Prior to running `cp-ansible`, the following resources must be created on the system by the system administrator or the team preparing the base VMs.
 
+IMPORTANT: These steps need to be run by an administrator because they require root access.
+
 ### 2.1 - Packages
 The following software is necessary on the target host:
 - git
