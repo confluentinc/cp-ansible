@@ -87,11 +87,9 @@ Setting the same values for the paths in the `ansible` inventory file is also ne
 
 ### 2.3 - SystemD Setup
 
-**systemd user-mode configuration**
-
 To enable `systemd` to run in user-mode, there are 4 steps:
 
-(1) A few file must be added to the system:
+(1) A few files must be added to the system:
 
 - `/etc/systemd/user/dbus.socket`
 - `/etc/systemd/user/dbus.service`
@@ -136,9 +134,9 @@ $ sudo systemctl --global enable dbus.socket
 Created symlink /etc/systemd/user/default.target.wants/dbus.socket → /etc/systemd/user/dbus.socket.
 ```
 
-(3) Session life-time
+(3) Extend Session Life-time
 
-For systemd to work in user-mode, the executing user must have its own instance of dbus started (it's a systemd requirement). The user dbus process is normally started during normal login but for services such as Confluent components, the dbus session must started at boot-time and not end if interactive sessions are closed.
+For `systemd` to work in user-mode, the executing user must have its own instance of `dbus` started (it's a `systemd` requirement). The user `dbus` process is normally started during normal login but for services such as Confluent components, the `dbus` session must started at boot-time and not end if interactive sessions are closed.
 
 To do so, for each service account, run: `sudo loginctl enable-linger <user>`
 
@@ -151,7 +149,7 @@ If you get the 'Failed to connect to bus: no such file or directory' error, then
 
 ## 3 - cp-ansible Configuration
 
-Once, the target system has been prepared with the proper group, users, files, folders and systemd settings, you can run `ansible`.
+Once, the target system has been prepared with the proper group, users, files, folders and `systemd` settings, you can run `ansible`.
 
 This section describes the variables to **set inside your inventory file**. You can find an example of this inventory in: `sample_inventories/unprivileged.yml`.
 
@@ -203,7 +201,7 @@ all:
 1. Because of our constraints, we have to use the `local` install
 2. The user we become is unprivileged
 3. `privileged_install: true` is the main switch for disabling the privileged calls from `cp-ansible`
-4. `systemd_mode: user` is the switch for installing the services in systemd user-mode
+4. `systemd_mode: user` is the switch for installing the services in `systemd` user-mode
 5. The archive file settings allow `cp-ansible` to find the tarball
 6. `archive` installation is the only choice to control where the files will go
 7. `archive_destination_path` is the main setting to control where the files will be installed
