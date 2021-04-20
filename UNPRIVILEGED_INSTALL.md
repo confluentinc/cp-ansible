@@ -20,18 +20,20 @@ From these constraints, we chose to:
 
 ## Pre-requisites on the target hosts
 
+Prior to running `cp-ansible`, the following resources must be created on the system by the system administrator or the team preparing the base VMs.
+
 ### Packages
 The following software is necessary on the target host:
 - git
 - python3 (3.5 or higher)
 - ansible (2.9 or higher)
-- java (version as required by the Confluent platform, 8 or 11)
+- java (version 8 or 11 as required by the Confluent platform, see https://docs.confluent.io/platform/current/installation/versions-interoperability.html#java)
 - unzip
 - openssl
 
 ### Users and Paths
 
-Prior to running `cp-ansible`, the following resources must be created on the system by the system administrator. These resources (users, groups, folders) are not privileged.
+These resources (users, groups, folders) are not privileged.
 
 --> Replace `acme` below with the appropriate client name or the name of your project.
 
@@ -48,18 +50,35 @@ To make sure that the installation process is using our custom options, instead 
   - `acme-rest` for REST Proxy
   - `acme-control-center` for Control Center
 
+To create groups and users, ON RHEL, run:
+
+```
+$ sudo groupadd confluent
+
+$ sudo useradd --gid confluent --create-home --home-dir /home/acme-kafka acme-kafka
+# repeat for all service accounts
+```
+
 **Application Files and Folders**
 These folders and empty files needs to be created before running the install. We create empty files because the installation process will not be able to change their ownership and group.
 
 Notable paths:
 
-- `/usr/local/confluent` as the base folder for everything
+- `/usr/local/confluent` as the base folder for everything (another typical choice is `/opt/confluent`)
 - settings and component properties will go under: `/usr/local/confluent/etc/`
-- `systemd` configuration under: `/usr/local/confluent/lib/systemd/`
-- application log files under `/usr/local/confluent/log`
+- `systemd` configuration files under: `/usr/local/confluent/lib/systemd/`
+- application log files under: `/usr/local/confluent/log`
 - data directories: `/usr/local/confluent/zookeeper/data/` and `/usr/local/confluent/kafka/data/`
 
-To automate the create of the files and folders, a script is provided (`unprivileged_create_files.sh`) and it takes its input from `unprivileged_preliminary_files.txt`. This file can be modified to match the desired account names. Setting the proper corresponding values in the `ansible` inventory file is also necessary.
+To automate the create of the files and folders, a script is provided (`unprivileged_create_files.sh`) and it takes its input from `unprivileged_preliminary_files.txt`.
+
+Update `unprivileged_preliminary_files.txt` to match the desired paths, group and account names, then run:
+
+```
+$ ./unprivileged_create_files.sh ./unprivileged_preliminary_files.txt
+```
+
+Setting the same values for the paths in the `ansible` inventory file is also necessary.
 
 ### Target System and User Settings
 
@@ -136,35 +155,37 @@ ec2-user		ALL = /usr/bin/su - acme-install
 
 ## cp-ansible Configuration
 
+Once, the target system has been prepared with the proper group, users, files, folders and systemd settings, you can run `ansible`.
+
 This section describes the variables to **set inside your inventory file**. You can find an example of this inventory in: `sample_inventories/unprivileged.yml`.
 
 ```
 ---
 all:
   vars:
-    ansible_connection: local                          (1)
+    ansible_connection: local                                                (1)
     ansible_user: ec2-user
     ansible_become: true
-    ansible_become_user: achmea-kafka                  (2)
+    ansible_become_user: achmea-kafka                                        (2)
 
     # required for unprivileged installation
-    privileged_install: false                          (3)
-    systemd_mode: user                                 (4)
+    privileged_install: false                                                (3)
+    systemd_mode: user                                                       (4)
 
     confluent_archive_file_source: /home/ec2-user/confluent-6.1.1.tar.gz
-    confluent_archive_file_remote: false               (5)
+    confluent_archive_file_remote: false                                     (5)
 
-    installation_method: archive                       (6)
+    installation_method: archive                                             (6)
     # when installation_method = archive, archive_destination_path defaults to: /opt/confluent
     # override if you wish to place the files somewhere else
-    archive_destination_path: /usr/local/confluent     (7)
+    archive_destination_path: /usr/local/confluent                           (7)
     # when installation_method = archive,
     # binary_base_path = archive_destination_path + version, for example: /opt/confluent-5.5.3
 
     # by default, these would go to /var/log/
     # for example zookeeper_log_dir would use zookeeper_default_log_dir (= /var/log/kafka)
     # so they need to be overridden when wanting to install to user paths
-    zookeeper_log_dir: "{{binary_base_path}}/log/zookeeper"      (8)
+    zookeeper_log_dir: "{{binary_base_path}}/log/zookeeper"                  (8)
     kafka_broker_log_dir: "{{binary_base_path}}/log/kafka"
     schema_registry_log_dir: "{{binary_base_path}}/log/schema_registry"
     kafka_rest_log_dir: "{{binary_base_path}}/log/rest"
@@ -176,10 +197,10 @@ all:
     kafka_connect_jmxexporter_config_path: "{{archive_destination_path}}/prometheus/kafka_connect.yml"
 
     # disable and ensure that they are on the system before running the install
-    install_java: false                                (9)
+    install_java: false                                                      (9)
     install_openssl_unzip: false
 
-    zookeeper_service_environment_overrides:           (10)
+    zookeeper_service_environment_overrides:                                (10)
       JAVA_HOME: /usr/local/confluent/java    
 ```
 
