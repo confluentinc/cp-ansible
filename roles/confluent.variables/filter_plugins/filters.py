@@ -7,6 +7,9 @@ class FilterModule(object):
             'kafka_protocol_defaults': self.kafka_protocol_defaults,
             'get_sasl_mechanisms': self.get_sasl_mechanisms,
             'get_hostnames': self.get_hostnames,
+            'get_roles': self.get_roles,
+            'resolve_hostname': self.resolve_hostname,
+            'resolve_hostnames': self.resolve_hostnames,
             'cert_extension': self.cert_extension,
             'ssl_required': self.ssl_required,
             'java_arg_build_out': self.java_arg_build_out,
@@ -65,6 +68,32 @@ class FilterModule(object):
         for listener in listeners_dict:
             hostname = listeners_dict[listener].get('hostname', default_hostname)
             hostnames = hostnames + [hostname]
+        return hostnames
+
+    def get_roles(self, basic_users_dict):
+        # Loops over basic_users dictionary and returns all roles attached to each user
+        roles = []
+        for user in basic_users_dict:
+            user_roles = basic_users_dict[user].get('roles', 'admin').split(',')
+            roles = roles + user_roles
+        return roles
+
+    def resolve_hostname(self, hosts_hostvars_dict):
+        # Goes through selected possible VARs to provide the HOSTNAME for a given node for internal addressing within Confluent Platform
+        if hosts_hostvars_dict.get('hostname_aliasing_enabled') == True:
+            return hosts_hostvars_dict.get('hostname', hosts_hostvars_dict.get('ansible_host', hosts_hostvars_dict.get('inventory_hostname')))
+        else:
+            return hosts_hostvars_dict.get('inventory_hostname')
+
+    def resolve_hostnames(self, hosts, hostvars_dict):
+        # Given a collection of hosts, usually from a group, will resolve the correct hostname to use for each.
+        hostnames = []
+        for host in hosts:
+            if host == "localhost":
+                hostnames.append("localhost")
+            else:
+                hostnames.append(self.resolve_hostname(hostvars_dict.get(host)))
+
         return hostnames
 
     def cert_extension(self, hostnames):
@@ -162,7 +191,7 @@ class FilterModule(object):
         return final_dict
 
     def client_properties(self, listener_dict, default_ssl_enabled, bouncy_castle_keystore, default_ssl_mutual_auth_enabled, default_sasl_protocol,
-                            config_prefix, truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass,
+                            config_prefix, truststore_path, truststore_storepass, public_certificates_enabled, keystore_path, keystore_storepass, keystore_keypass,
                             omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password, sasl_scram256_username, sasl_scram256_password,
                             kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
                             omit_oauth_configs, oauth_username, oauth_password, mds_bootstrap_server_urls):
@@ -171,7 +200,8 @@ class FilterModule(object):
         final_dict = {
             config_prefix + 'security.protocol': self.kafka_protocol_defaults(listener_dict, default_ssl_enabled, default_sasl_protocol)
         }
-        if listener_dict.get('ssl_enabled', default_ssl_enabled):
+        if listener_dict.get('ssl_enabled', default_ssl_enabled) and not public_certificates_enabled:
+            # Public certificates are in default java truststore, so these properties should be ommitted
             final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
             final_dict[config_prefix + 'ssl.truststore.password'] = truststore_storepass
 
@@ -229,22 +259,25 @@ class FilterModule(object):
         for ansible_group in connect_group_list:
             # connect_group_list defaults to ['kafka_connect'], but there may be scenario where no connect group exists
             if ansible_group in groups.keys() and len(groups[ansible_group]) > 0:
+                delegate_host = hostvars[groups[ansible_group][0]]
+                group_id = delegate_host.get('kafka_connect_group_id', default_connect_group_id)
+
                 urls = []
                 for host in groups[ansible_group]:
                     if hostvars[host].get('kafka_connect_ssl_enabled', ssl_enabled):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + host + ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
+                    urls.append(protocol + '://' + self.resolve_hostname(hostvars[host]) + ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
 
-                final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.cluster'] = ','.join(urls)
+                final_dict['confluent.controlcenter.connect.' + group_id + '.cluster'] = ','.join(urls)
 
-                if hostvars[groups[ansible_group][0]].get('kafka_connect_ssl_enabled', ssl_enabled):
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.truststore.location'] = truststore_path
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.truststore.password'] = truststore_storepass
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.keystore.location'] = keystore_path
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.keystore.password'] = keystore_storepass
-                    final_dict['confluent.controlcenter.connect.' + hostvars[groups[ansible_group][0]].get('kafka_connect_group_id', default_connect_group_id) + '.ssl.key.password'] = keystore_keypass
+                if delegate_host.get('kafka_connect_ssl_enabled', ssl_enabled):
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.truststore.location'] = truststore_path
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.truststore.password'] = truststore_storepass
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.keystore.location'] = keystore_path
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.keystore.password'] = keystore_storepass
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.key.password'] = keystore_keypass
 
         return final_dict
 
@@ -264,8 +297,8 @@ class FilterModule(object):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + host + ':' + str(hostvars[host].get('ksql_listener_port', port)))
-                    advertised_urls.append(protocol + '://' + hostvars[host].get('ksql_advertised_listener_hostname', host) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
+                    urls.append(protocol + '://' + self.resolve_hostname(hostvars[host]) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
+                    advertised_urls.append(protocol + '://' + hostvars[host].get('ksql_advertised_listener_hostname', self.resolve_hostname(hostvars[host])) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
 
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.url'] = ','.join(urls)
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.advertised.url'] = ','.join(advertised_urls)

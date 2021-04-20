@@ -1,0 +1,43 @@
+---
+- name: Remove the Kafka Rest Groups from Inventory
+  hosts: kafka_rest
+  gather_facts: false
+  tasks:
+    - name: Change kafka_rest Group Name in Inventory File
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: "{{item}}:"
+        line: "{{item}}_ccloud:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - schema_registry
+        - kafka_connect
+        - kafka_rest
+        - ksql
+        - control_center
+
+    - name: Refresh Inventory
+      meta: refresh_inventory
+
+- name: Converge
+  import_playbook: ../../../../all.yml
+
+- name: Prepare other Components
+  hosts: schema_registry_ccloud:kafka_connect_ccloud:kafka_rest_ccloud:ksql_ccloud:control_center_ccloud
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - name: Copy CA Cert to Host
+      copy:
+        src: "../../../../generated_ssl_files/{{ssl_self_signed_ca_cert_filepath|basename}}"
+        dest: /tmp/ca.crt
+
+    - name: Import CA into Java Trusted CAs
+      shell: |
+        keytool -noprompt -keystore /usr/lib/jvm/jre/lib/security/cacerts \
+          -alias CARoot \
+          -importcert -file /tmp/ca.crt \
+          -storepass changeit

@@ -94,15 +94,16 @@
     service_name: control_center
     user: "{{control_center_user}}"
     group: "{{control_center_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
     ca_cert_path: "{{control_center_ca_cert_path}}"
     cert_path: "{{control_center_cert_path}}"
     key_path: "{{control_center_key_path}}"
     export_certs: "{{control_center_export_certs}}"
+  # CCloud Kafka does not need Keystores/Truststores
   when: >
     control_center_ssl_enabled|bool or
-    kafka_broker_listeners[control_center_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
-    mds_tls_enabled | bool
+    ( kafka_broker_listeners[control_center_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool and not public_certificates_enabled|bool ) or
+    ( mds_tls_enabled | bool and not public_certificates_enabled|bool )
   tags: ssl
 
 - name: Configure Kerberos
@@ -214,6 +215,26 @@
     owner: "{{control_center_user}}"
     recurse: true
   when: control_center_rocksdb_path != ""
+
+- name: Create Basic Auth Jaas File
+  template:
+    src: jaas.conf.j2
+    dest: "{{control_center.jaas_file}}"
+    mode: 0640
+    owner: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+  notify: restart control center
+  when: control_center_authentication_type == 'basic'
+
+- name: Create Basic Auth Password File
+  template:
+    src: password.properties.j2
+    dest: "{{control_center.password_file}}"
+    mode: 0640
+    owner: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+  notify: restart control center
+  when: control_center_authentication_type == 'basic'
 
 - name: Create Service Override Directory
   file:

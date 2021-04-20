@@ -79,15 +79,16 @@
     service_name: kafka_rest
     user: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
     ca_cert_path: "{{kafka_rest_ca_cert_path}}"
     cert_path: "{{kafka_rest_cert_path}}"
     key_path: "{{kafka_rest_key_path}}"
     export_certs: "{{kafka_rest_export_certs}}"
+  # CCloud Kafka does not need Keystores/Truststores
   when: >
     kafka_rest_ssl_enabled|bool or
-    kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
-    mds_tls_enabled | bool
+    ( kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool and not public_certificates_enabled|bool ) or
+    ( mds_tls_enabled|bool and not public_certificates_enabled|bool )
   tags: ssl
 
 - name: Configure Kerberos
@@ -209,6 +210,26 @@
     owner: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
   when: kafka_rest_jmxexporter_enabled|bool
+
+- name: Create Basic Auth Jaas File
+  template:
+    src: jaas.conf.j2
+    dest: "{{kafka_rest.jaas_file}}"
+    mode: 0640
+    owner: "{{kafka_rest_user}}"
+    group: "{{kafka_rest_group}}"
+  notify: restart kafka-rest
+  when: kafka_rest_authentication_type == 'basic'
+
+- name: Create Basic Auth Password File
+  template:
+    src: password.properties.j2
+    dest: "{{kafka_rest.password_file}}"
+    mode: 0640
+    owner: "{{kafka_rest_user}}"
+    group: "{{kafka_rest_group}}"
+  notify: restart kafka-rest
+  when: kafka_rest_authentication_type == 'basic'
 
 - name: Create Service Override Directory
   file:
