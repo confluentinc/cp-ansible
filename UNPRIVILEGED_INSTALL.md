@@ -1,4 +1,4 @@
-# Un-privileged installation of Confluent Using cp-ansible and non-root accounts
+# Unprivileged Installation
 
 ## Constraints
 
