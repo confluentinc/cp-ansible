@@ -57,6 +57,13 @@ $ sudo useradd --gid confluent --create-home --home-dir /home/acme-kafka acme-ka
 # repeat for all service accounts
 ```
 
+**Installation User Settings**
+
+You might have to adjust the `sudo` settings of your current user to allow it to run as the `ansible_become_user`.
+```
+ec2-user		ALL = /usr/bin/su - acme-install
+```
+
 **Application Files and Folders**
 These folders and empty files needs to be created before running the install. We create empty files because the installation process will not be able to change their ownership and group.
 
@@ -78,7 +85,7 @@ $ ./unprivileged_create_files.sh ./unprivileged_preliminary_files.txt
 
 Setting the same values for the paths in the `ansible` inventory file is also necessary.
 
-### 2.3 - Target System and User Settings
+### 2.3 - SystemD Setup
 
 **systemd user-mode configuration**
 
@@ -141,15 +148,6 @@ To do so, for each service account, run: `sudo loginctl enable-linger <user>`
 
 
 If you get the 'Failed to connect to bus: no such file or directory' error, then it's because either dbus is not properly setup for user-mode operations, or you do not have the required envvar.
-
-**specific user settings**
-
-Something similar might be necessary in the `sudo` settings depending on the rights of your current user.
-
-```
-ec2-user		ALL = /usr/bin/su - acme-install
-```
-
 
 ## 3 - cp-ansible Configuration
 
