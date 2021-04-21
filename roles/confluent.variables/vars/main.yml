@@ -207,7 +207,7 @@ kafka_broker_properties:
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
     properties:
       confluent.basic.auth.credentials.source: USER_INFO
-      confluent.basic.auth.user.info: "{{schema_registry_basic_users.admin.principal}}:{{schema_registry_basic_users.admin.password}}"
+      confluent.basic.auth.user.info: "{{schema_registry_basic_users_final.admin.principal}}:{{schema_registry_basic_users_final.admin.password}}"
   rbac:
     enabled: "{{ rbac_enabled }}"
     properties:
@@ -406,7 +406,9 @@ schema_registry:
 
 schema_registry_http_protocol: "{{ 'https' if schema_registry_ssl_enabled|bool else 'http' }}"
 
-schema_registry_url: "{{schema_registry_http_protocol}}://{{ groups['schema_registry'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + schema_registry_listener_port|string + ',' + schema_registry_http_protocol + '://') }}:{{schema_registry_listener_port}}"
+_schema_registry_url: "{{schema_registry_http_protocol}}://{{ groups['schema_registry'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + schema_registry_listener_port|string + ',' + schema_registry_http_protocol + '://') }}:{{schema_registry_listener_port}}"
+
+schema_registry_url: "{{ ccloud_schema_registry_url if ccloud_schema_registry_enabled else _schema_registry_url }}"
 
 schema_registry_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost'])  | resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[schema_registry_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[schema_registry_kafka_listener_name]['port']}}"
 
@@ -421,7 +423,7 @@ schema_registry_properties:
       listeners: "{{schema_registry_http_protocol}}://0.0.0.0:{{schema_registry_listener_port}}"
       host.name: "{{ hostvars[inventory_hostname]|resolve_hostname }}"
       inter.instance.protocol: "{{schema_registry_http_protocol}}"
-      kafkastore.bootstrap.servers: "{{ ccloud_bootstrap_servers if ccloud_kafka_broker_enabled|bool else schema_registry_bootstrap_servers }}"
+      kafkastore.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else schema_registry_bootstrap_servers }}"
       confluent.license.topic: _confluent-license
   ssl:
     enabled: "{{schema_registry_ssl_enabled}}"
@@ -444,7 +446,7 @@ schema_registry_properties:
     properties:
       authentication.method: BASIC
       authentication.realm: SchemaRegistry
-      authentication.roles: "{{ schema_registry_basic_users | get_roles | unique | join(',') }}"
+      authentication.roles: "{{ schema_registry_basic_users_final | get_roles | unique | join(',') }}"
   kafka_client:
     enabled: true
     properties: "{{ kafka_broker_listeners[schema_registry_kafka_listener_name] | client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
@@ -545,9 +547,9 @@ kafka_connect_properties:
       rest.advertised.listener: "{{kafka_connect_http_protocol}}"
       rest.advertised.host.name: "{{ hostvars[inventory_hostname]|resolve_hostname }}"
       rest.advertised.port: "{{kafka_connect_rest_port}}"
-      bootstrap.servers: "{{ ccloud_bootstrap_servers if ccloud_kafka_broker_enabled|bool else kafka_connect_bootstrap_servers }}"
-      producer.bootstrap.servers: "{{ ccloud_bootstrap_servers if ccloud_kafka_broker_enabled|bool else kafka_connect_bootstrap_servers }}"
-      consumer.bootstrap.servers: "{{ ccloud_bootstrap_servers if ccloud_kafka_broker_enabled|bool else kafka_connect_bootstrap_servers }}"
+      bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_connect_bootstrap_servers }}"
+      producer.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_connect_bootstrap_servers }}"
+      consumer.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_connect_bootstrap_servers }}"
       confluent.license.topic: _confluent-command
   rest_classes:
     enabled: "{{ kafka_connect_final_rest_extension_classes|length > 0 }}"
@@ -571,7 +573,7 @@ kafka_connect_properties:
       value.converter.schema.registry.url: "{{schema_registry_url}}"
       key.converter.schema.registry.url: "{{schema_registry_url}}"
   sr_ssl:
-    enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool }}"
+    enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool and not ccloud_schema_registry_enabled }}"
     properties:
       value.converter.schema.registry.ssl.truststore.location: "{{kafka_connect_truststore_path}}"
       value.converter.schema.registry.ssl.truststore.password: "{{kafka_connect_truststore_storepass}}"
@@ -584,12 +586,12 @@ kafka_connect_properties:
       key.converter.schema.registry.ssl.keystore.password: "{{kafka_connect_keystore_storepass}}"
       key.converter.schema.registry.ssl.key.password: "{{kafka_connect_keystore_keypass}}"
   sr_basic:
-    enabled: "{{ 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
+    enabled: "{{ ('schema_registry' in groups and schema_registry_authentication_type == 'basic') or ccloud_schema_registry_enabled|bool }}"
     properties:
       value.converter.basic.auth.credentials.source: USER_INFO
-      value.converter.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users.admin.principal}}:{{schema_registry_basic_users.admin.password}}"
+      value.converter.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users_final.admin.principal}}:{{schema_registry_basic_users_final.admin.password}}"
       key.converter.basic.auth.credentials.source: USER_INFO
-      key.converter.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users.admin.principal}}:{{schema_registry_basic_users.admin.password}}"
+      key.converter.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users_final.admin.principal}}:{{schema_registry_basic_users_final.admin.password}}"
   kafka_client:
     enabled: true
     properties: "{{ kafka_broker_listeners[kafka_connect_kafka_listener_name] | client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
@@ -615,8 +617,8 @@ kafka_connect_properties:
     enabled: "{{ kafka_connect_monitoring_interceptors_enabled|bool }}"
     properties:
       confluent.monitoring.interceptor.topic: _confluent-monitoring
-      producer.confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_bootstrap_servers if ccloud_kafka_broker_enabled|bool else kafka_connect_bootstrap_servers }}"
-      consumer.confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_bootstrap_servers if ccloud_kafka_broker_enabled|bool else kafka_connect_bootstrap_servers }}"
+      producer.confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_connect_bootstrap_servers }}"
+      consumer.confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_connect_bootstrap_servers }}"
       consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
       producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
   producer_monitoring_interceptor_client:
@@ -725,11 +727,11 @@ ksql_properties:
       ksql.streams.producer.delivery.timeout.ms: 2147483647
       ksql.streams.producer.max.block.ms: 9223372036854775807
       listeners: "{{ksql_http_protocol}}://0.0.0.0:{{ksql_listener_port}}"
-      bootstrap.servers: "{{ ccloud_bootstrap_servers if ccloud_kafka_broker_enabled|bool else ksql_bootstrap_servers }}"
+      bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else ksql_bootstrap_servers }}"
       security.protocol: "{{kafka_broker_listeners[ksql_kafka_listener_name] | kafka_protocol_defaults(ssl_enabled, sasl_protocol) }}"
   ssl:
     # KSQL SSL properties shared with Kafka Broker
-    enabled: "{{ kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled']|default(ssl_enabled)|bool or ksql_ssl_enabled|bool }}"
+    enabled: "{{ ksql_ssl_enabled|bool or ( kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled']|default(ssl_enabled)|bool and not ccloud_kafka_enabled|bool ) }}"
     properties:
       ssl.truststore.location: "{{ksql_truststore_path}}"
       ssl.truststore.password: "{{ksql_truststore_storepass}}"
@@ -783,7 +785,7 @@ ksql_properties:
     properties:
       ksql.schema.registry.url: "{{schema_registry_url}}"
   sr_ssl:
-    enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool }}"
+    enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool and not ccloud_schema_registry_enabled|bool }}"
     properties:
       ksql.schema.registry.ssl.truststore.location: "{{ksql_truststore_path}}"
       ksql.schema.registry.ssl.truststore.password: "{{ksql_truststore_storepass}}"
@@ -791,10 +793,10 @@ ksql_properties:
       ksql.schema.registry.ssl.keystore.password: "{{ksql_keystore_storepass}}"
       ksql.schema.registry.ssl.key.password: "{{ksql_keystore_keypass}}"
   sr_basic:
-    enabled: "{{ 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
+    enabled: "{{ ('schema_registry' in groups and schema_registry_authentication_type == 'basic') or ccloud_schema_registry_enabled|bool }}"
     properties:
       ksql.schema.registry.basic.auth.credentials.source: USER_INFO
-      ksql.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users.admin.principal}}:{{schema_registry_basic_users.admin.password}}"
+      ksql.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users_final.admin.principal}}:{{schema_registry_basic_users_final.admin.password}}"
   sr_rbac:
     enabled: "{{ 'schema_registry' in groups and rbac_enabled|bool }}"
     properties:
@@ -806,7 +808,7 @@ ksql_properties:
       confluent.monitoring.interceptor.topic: _confluent-monitoring
       producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
       consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
-      confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_bootstrap_servers if ccloud_kafka_broker_enabled|bool else ksql_bootstrap_servers }}"
+      confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else ksql_bootstrap_servers }}"
   monitoring_interceptor_client:
     enabled: "{{ ksql_monitoring_interceptors_enabled|bool }}"
     properties: "{{ kafka_broker_listeners[ksql_kafka_listener_name] | client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
@@ -881,7 +883,7 @@ kafka_rest_properties:
     properties:
       listeners: "{{kafka_rest_http_protocol}}://0.0.0.0:{{kafka_rest_port}}"
       host.name: "{{ hostvars[inventory_hostname]|resolve_hostname }}"
-      bootstrap.servers: "{{ ccloud_bootstrap_servers if ccloud_kafka_broker_enabled|bool else kafka_rest_bootstrap_servers }}"
+      bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_rest_bootstrap_servers }}"
       confluent.license.topic: _confluent-license
   id:
     enabled: "{{ inventory_hostname in groups.kafka_rest }}"
@@ -928,7 +930,7 @@ kafka_rest_properties:
     properties:
       schema.registry.url: "{{schema_registry_url}}"
   sr_ssl:
-    enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool }}"
+    enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool and not ccloud_schema_registry_enabled|bool }}"
     properties:
       schema.registry.ssl.truststore.location: "{{kafka_rest_truststore_path}}"
       schema.registry.ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
@@ -936,17 +938,17 @@ kafka_rest_properties:
       schema.registry.ssl.keystore.password: "{{kafka_rest_keystore_storepass}}"
       schema.registry.ssl.key.password: "{{kafka_rest_keystore_keypass}}"
   sr_basic:
-    enabled: "{{ 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
+    enabled: "{{ ('schema_registry' in groups and schema_registry_authentication_type == 'basic') or ccloud_schema_registry_enabled|bool }}"
     properties:
       basic.auth.credentials.source: USER_INFO
-      schema.registry.basic.auth.user.info: "{{schema_registry_basic_users.admin.principal}}:{{schema_registry_basic_users.admin.password}}"
+      schema.registry.basic.auth.user.info: "{{schema_registry_basic_users_final.admin.principal}}:{{schema_registry_basic_users_final.admin.password}}"
   monitoring_interceptor:
     enabled: "{{ kafka_rest_monitoring_interceptors_enabled|bool }}"
     properties:
       confluent.monitoring.interceptor.topic: _confluent-monitoring
       producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
       consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
-      confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_bootstrap_servers if ccloud_kafka_broker_enabled|bool else kafka_rest_bootstrap_servers }}"
+      confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_rest_bootstrap_servers }}"
   monitoring_interceptor_client:
     enabled: "{{ kafka_rest_monitoring_interceptors_enabled|bool }}"
     properties: "{{ kafka_broker_listeners[kafka_rest_kafka_listener_name] | client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
@@ -1023,7 +1025,7 @@ control_center_properties:
       confluent.monitoring.interceptor.topic.replication: "{{control_center_default_internal_replication_factor}}"
       confluent.controlcenter.command.topic.replication: "{{control_center_default_internal_replication_factor}}"
       confluent.controlcenter.rest.listeners: "{{control_center_http_protocol}}://{{control_center_listener_hostname}}:{{control_center_port}}"
-      bootstrap.servers: "{{ ccloud_bootstrap_servers if ccloud_kafka_broker_enabled|bool else control_center_bootstrap_servers }}"
+      bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else control_center_bootstrap_servers }}"
       confluent.controlcenter.streams.security.protocol: "{{kafka_broker_listeners[control_center_kafka_listener_name] | kafka_protocol_defaults(ssl_enabled, sasl_protocol) }}"
   ssl:
     enabled: "{{control_center_ssl_enabled or (kafka_broker_rest_proxy_enabled and mds_tls_enabled) }}"
@@ -1064,7 +1066,7 @@ control_center_properties:
     properties:
       confluent.controlcenter.schema.registry.url: "{{schema_registry_url}}"
   sr_ssl:
-    enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool }}"
+    enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool and not ccloud_schema_registry_enabled|bool }}"
     properties:
       confluent.controlcenter.schema.registry.schema.registry.ssl.truststore.location: "{{control_center_truststore_path}}"
       confluent.controlcenter.schema.registry.schema.registry.ssl.truststore.password: "{{control_center_truststore_storepass}}"
@@ -1072,10 +1074,10 @@ control_center_properties:
       confluent.controlcenter.schema.registry.schema.registry.ssl.keystore.password: "{{control_center_keystore_storepass}}"
       confluent.controlcenter.schema.registry.schema.registry.ssl.key.password: "{{control_center_keystore_keypass}}"
   sr_basic:
-    enabled: "{{ 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
+    enabled: "{{ ('schema_registry' in groups and schema_registry_authentication_type == 'basic') or ccloud_schema_registry_enabled|bool }}"
     properties:
       confluent.controlcenter.schema.registry.basic.auth.credentials.source: USER_INFO
-      confluent.controlcenter.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users.admin.principal}}:{{schema_registry_basic_users.admin.password}}"
+      confluent.controlcenter.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users_final.admin.principal}}:{{schema_registry_basic_users_final.admin.password}}"
   connect:
     enabled: "{{ kafka_connect_cluster_ansible_group_names | default(omit) | length > 0 }}"
     properties: "{{ kafka_connect_cluster_ansible_group_names | c3_connect_properties(groups, hostvars, kafka_connect_ssl_enabled,
@@ -1119,7 +1121,7 @@ control_center_properties:
     properties:
       confluent.telemetry.labels.confluent.ansible.playbooks.version: "{{confluent_ansible_branch}}"
   ccloud:
-    enabled: "{{ccloud_kafka_broker_enabled}}"
+    enabled: "{{ccloud_kafka_enabled}}"
     properties:
       confluent.metrics.topic.max.message.bytes: 8388608
 
