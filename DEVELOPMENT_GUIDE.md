@@ -215,7 +215,7 @@ Pull requests with linting errors will not be accepted.
 
 We are currently linting with:
 
-- `ỳamllint`; latest stable version
+- `yamllint`; latest stable version
 - `ansible-lint`; latest stable 5.x.x version
 
 To test/check manually you can run:
