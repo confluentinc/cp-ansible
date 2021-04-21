@@ -149,6 +149,17 @@ To do so, for each service account, run: `sudo loginctl enable-linger <user>`
 
 If you get the 'Failed to connect to bus: no such file or directory' error, then it's because either dbus is not properly setup for user-mode operations, or you do not have the required envvar.
 
+### 2.4 - OS Settings
+
+On brokers, ensure that the following entries are set in `/etc/sysctl.conf`:
+
+```
+vm.swappiness: 1
+vm.dirty_background_ratio: 5
+vm.dirty_ratio: 80
+vm.max_map_count: 262144
+```
+
 ## 3 - cp-ansible Configuration
 
 Once, the target system has been prepared with the proper group, users, files, folders and `systemd` settings, you can run `ansible`.
