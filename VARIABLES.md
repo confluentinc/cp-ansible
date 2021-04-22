@@ -444,6 +444,14 @@ Default:  "{{ ['ksql'] if 'ksql' in groups else [] }}"
 
 ***
 
+### validate_hosts
+
+Boolean to Run Host Validations. Validations include OS Version compatibility and Proper Internet Connectivity
+
+Default:  true
+
+***
+
 ### zookeeper_user
 
 Set this variable to customize the Linux User that the Zookeeper Service runs with. Default user is cp-kafka.
