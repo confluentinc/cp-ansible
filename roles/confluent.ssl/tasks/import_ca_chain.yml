@@ -14,7 +14,23 @@
     for file in /var/ssl/private/generation/trustCAs/*; do
         fileName="${file##*/}"
         keytool -noprompt -keystore {{truststore_path}} \
+            -storetype pkcs12 \
             -alias "$fileName" \
             -trustcacerts -import -file "$file" \
             -deststorepass {{truststore_storepass}}
     done
+
+- name: Create BCFKS Truststore with Certificates - FIPS
+  shell: |
+    for file in /var/ssl/private/generation/trustCAs/*; do
+        fileName="${file##*/}"
+        keytool -noprompt -keystore {{bcfks_truststore_path}} \
+            -storetype BCFKS \
+            -alias "$fileName" \
+            -trustcacerts -import -file "$file" \
+            -deststorepass {{truststore_storepass}} \
+            -providername BCFIPS \
+            -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+            -providerpath {% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}/{% else %}/usr/{% endif %}share/java/kafka/bc-fips-*.jar
+    done
+  when: create_bouncy_castle_keystore|bool

@@ -8,20 +8,19 @@
     - import_role:
         name: confluent.variables
 
-    - name: Check if Kafka Service Running
-      shell: "systemctl show -p SubState {{kafka_broker_service_name}}"
-      changed_when: false
-      # On some SELinux enabled hosts this command will error out, handled in next set_fact task
-      failed_when: false
-      check_mode: false
-      register: substate
+    - name: Populate service facts
+      service_facts:
 
-    - set_fact:
-        install_pattern: "{{ 'parallel' if substate.stdout != 'SubState=running' or substate.rc == 1 or kafka_broker_deployment_strategy == 'parallel' else 'serial' }}"
+    - name: Determine Installation Pattern - Parallel or Serial
+      set_fact:
+        install_pattern: "{{ 'parallel' if service_state != 'running' or kafka_broker_deployment_strategy == 'parallel' else 'serial' }}"
+      vars:
+        service_state: "{{ ansible_facts.services[kafka_broker_service_name + '.service'].state | default('unknown') }}"
 
-    - name: "Group Hosts by Installation Pattern: Parallel or Serial"
+    - name: Group Hosts by Installation Pattern
       group_by:
         key: kafka_broker_{{install_pattern}}
+      changed_when: false
 
 - name: Kafka Broker Parallel Provisioning
   hosts: kafka_broker_parallel
@@ -37,36 +36,10 @@
   gather_facts: false
   tags: kafka_broker
   environment: "{{ proxy_env }}"
-  vars_files:
-    - roles/confluent.kafka_broker/defaults/main.yml
   tasks:
     - import_role:
-        name: confluent.variables
-
-    # TODO When Zookeeper is removed, use kafka-metadata-quorum script. See KIP-595
-    - name: Get Controller Broker ID
-      shell: |
-        {{ binary_base_path }}/bin/zookeeper-shell {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} \
-          {% if zookeeper_ssl_enabled|bool %}-zk-tls-config-file {{kafka_broker.zookeeper_tls_client_config_file}}{% endif %} \
-          get /controller | grep brokerid
-      register: controller_query
-      run_once: true
-      changed_when: false
-      check_mode: false
-
-    - set_fact:
-        controller_json: "{{controller_query.stdout}}"
-        broker_id: "{{kafka_broker_final_properties['broker.id']}}"
-
-    - debug:
-        msg: "Broker ID: {{broker_id}} and Controller ID: {{controller_json.brokerid}}"
-
-    - set_fact:
-        mode: "{{ 'non_controller' if broker_id|int != controller_json.brokerid|int else 'controller' }}"
-
-    - name: "Group Hosts by kafka_broker Mode: Controller or Non Controller"
-      group_by:
-        key: kafka_broker_{{mode}}
+        name: confluent.kafka_broker
+        tasks_from: dynamic_groups.yml
 
 - name: Kafka Broker Non Controllers Provisioning
   hosts: kafka_broker_non_controller

@@ -72,9 +72,9 @@
       template:
         src: roles/confluent.kafka_broker/templates/client.properties.j2
         dest: "{{kafka_broker.client_config_file}}"
-        mode: 0640
         owner: "{{kafka_broker_user}}"
         group: "{{kafka_broker_group}}"
+        mode: 0640
 
     - meta: flush_handlers
 
@@ -100,14 +100,11 @@
 - name: Kafka Broker Upgrade - Host Ordering
   hosts: kafka_broker
   gather_facts: false
-  serial: 1
   tasks:
-    # Sets active_controller_count var for each host
-    - name: Create Ordered Kafka Broker Groups
-      import_tasks: tasks/create_ordered_kafka_groups.yml
+    - import_role:
+        name: confluent.kafka_broker
+        tasks_from: dynamic_groups.yml
       vars:
-        controller_group: controller
-        non_controller_group: non_controllers
         archive_version: "{{kafka_broker_current_version | default(confluent_package_version)}}"
 
     - name: Set Current Package Version of confluent-server
@@ -159,25 +156,21 @@
     - debug:
         msg: "Current version: {{kafka_broker_current_version}}   Upgrade to version: {{confluent_package_version}}"
 
-    - name: Add host to Non Controller Group
-      add_host:
-        name: "{{ inventory_hostname }}"
-        group: upgrade_non_controllers
-      delegate_to: localhost
+    - name: Add host to Upgrade Non Controller Group
+      group_by:
+        key: upgrade_non_controllers
       changed_when: false
       when:
-        - broker_id|int != controller_json.brokerid|int
+        - inventory_hostname in groups['kafka_broker_non_controller']
         - kafka_broker_current_version != confluent_full_package_version
         - kafka_broker_current_version != confluent_package_version
 
-    - name: Add host to Controller Group
-      add_host:
-        name: "{{ inventory_hostname }}"
-        group: upgrade_controller
-      delegate_to: localhost
+    - name: Add host to Upgrade Controller Group
+      group_by:
+        key: upgrade_controller
       changed_when: false
       when:
-        - broker_id|int == controller_json.brokerid|int
+        - inventory_hostname in groups['kafka_broker_controller']
         - kafka_broker_current_version != confluent_full_package_version
         - kafka_broker_current_version != confluent_package_version
 
@@ -209,6 +202,9 @@
         src: "{{ item }}"
         remote_src: true
         dest: "/tmp/upgrade/{{ kafka_broker_service_name }}/{{ item | basename }}-{{timestamp}}"
+        owner: "{{kafka_broker_user}}"
+        group: "{{kafka_broker_group}}"
+        mode: 0640
       loop:
         - "{{ kafka_broker.config_file }}"
         - "{{ kafka_broker.systemd_override }}"
@@ -278,6 +274,9 @@
         dest: "{{ item }}"
         remote_src: true
         src: "/tmp/upgrade/{{ kafka_broker_service_name }}/{{ item | basename }}-{{timestamp}}"
+        owner: "{{kafka_broker_user}}"
+        group: "{{kafka_broker_group}}"
+        mode: 0640
       loop:
         - "{{ kafka_broker.config_file }}"
         - "{{ zookeeper.config_file }}"

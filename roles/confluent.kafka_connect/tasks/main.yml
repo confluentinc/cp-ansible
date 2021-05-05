@@ -1,8 +1,8 @@
 ---
 - include_role:
     name: confluent.common
-  tags: common
   when: not common_role_completed|bool
+  tags: common
 
 - name: Gather OS Facts
   setup:
@@ -14,25 +14,36 @@
     - ansible_os_family
     - ansible_fqdn
 
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: confluent.common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ kafka_connect_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
 # Install Packages
 - name: Install the Kafka Connect Packages
   yum:
-    name: "{{item}}{{confluent_package_redhat_suffix}}"
+    name: "{{ kafka_connect_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
-  loop: "{{kafka_connect_packages}}"
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
   tags: package
+  notify: restart connect distributed
 
 - name: Install the Kafka Connect Packages
   apt:
-    name: "{{item}}{{confluent_package_debian_suffix}}"
-  loop: "{{kafka_connect_packages}}"
+    name: "{{ kafka_connect_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
   tags: package
+  notify: restart connect distributed
 
 # Configure environment
 - name: Create Connect Distributed Group
@@ -77,6 +88,7 @@
     kafka_connect_ssl_enabled|bool or
     kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
     mds_tls_enabled | bool
+  tags: ssl
 
 - name: Configure Kerberos
   include_role:
@@ -111,6 +123,21 @@
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
 
+- name: Create Connect Distributed Config with Secrets Protection
+  include_role:
+    name: confluent.common
+    tasks_from: secrets_protection.yml
+  vars:
+    encrypt_passwords: "{{ kafka_connect_secrets_protection_encrypt_passwords }}"
+    properties: "{{ kafka_connect_secrets_protection_encrypt_properties }}"
+    config_path: "{{ kafka_connect.config_file }}"
+    config_template: connect-distributed.properties.j2
+    secrets_file: "{{ kafka_connect_secrets_protection_file }}"
+    secrets_file_owner: "{{ kafka_connect_user }}"
+    secrets_file_group: "{{ kafka_connect_group }}"
+    handler: restart connect distributed
+  when: kafka_connect_secrets_protection_enabled|bool
+
 - name: Create Connect Distributed Config
   template:
     src: connect-distributed.properties.j2
@@ -119,6 +146,7 @@
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
   notify: restart connect distributed
+  when: not kafka_connect_secrets_protection_enabled|bool
 
 - name: Install Connect Plugins
   include_tasks: connect_plugins.yml
@@ -137,6 +165,9 @@
     tasks_from: update_log4j.yml
   vars:
     log4j_file: "{{kafka_connect.log4j_file}}"
+    log4j_max_backup_index: "{{kafka_connect_max_log_files}}"
+    log4j_max_file_size: "{{kafka_connect_log_file_size}}"
+    log4j_root_logger: "{{kafka_connect_log4j_root_logger}}"
     handler: "restart connect distributed"
   when: kafka_connect_custom_log4j|bool
 
@@ -157,19 +188,9 @@
   when: kafka_connect_jolokia_enabled|bool
   notify: restart connect distributed
 
-- name: Enable Secrets Protection
-  include_role:
-    name: confluent.common
-    tasks_from: secrets_protection.yml
-  vars:
-    encrypt_passwords: "{{ kafka_connect_secrets_protection_encrypt_passwords }}"
-    properties: "{{ kafka_connect_secrets_protection_encrypt_properties }}"
-    config_path: "{{ kafka_connect.config_file }}"
-  when: kafka_connect_secrets_protection_enabled|bool
-
 - name: Deploy JMX Exporter Config File
   copy:
-    src: "kafka_connect.yml"
+    src: "{{kafka_connect_jmxexporter_config_source_path}}"
     dest: "{{kafka_connect_jmxexporter_config_path}}"
     mode: 0640
     owner: "{{kafka_connect_user}}"

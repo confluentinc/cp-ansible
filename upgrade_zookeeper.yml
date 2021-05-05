@@ -2,9 +2,6 @@
 - name: Zookeeper Upgrade - Prep
   hosts: zookeeper
   gather_facts: false
-  # Running serial=1 because add_host has problems
-  # https://stackoverflow.com/questions/42106527/ansible-how-to-call-module-add-host-for-all-hosts-of-the-play
-  serial: 1
   tags:
     - prep
   tasks:
@@ -80,37 +77,31 @@
     - debug:
         msg: "Current version: {{zookeeper_current_version}}   Upgrade to version: {{confluent_package_version}}"
 
-    - name: Get Leader/Follower
-      shell: "{{zookeeper_health_check_command}} | grep Mode"
-      args:
-        executable: /bin/bash
-      register: leader_query
-      changed_when: false
-      check_mode: false
+    - import_role:
+        name: confluent.zookeeper
+        tasks_from: dynamic_groups.yml
 
-    - name: Add host to Follower Group
-      add_host:
-        name: "{{ inventory_hostname }}"
-        group: upgrade_zookeeper_followers
-      delegate_to: localhost
+    - name: Add host to Upgrade Follower Group
+      group_by:
+        key: upgrade_zookeeper_followers
+      changed_when: false
       when:
-        - '"follower" in leader_query.stdout'
+        - inventory_hostname in groups['zookeeper_follower']
         - zookeeper_current_version != confluent_full_package_version
         - zookeeper_current_version != confluent_package_version
 
-    - name: Add host to Leader Group
-      add_host:
-        name: "{{ inventory_hostname }}"
-        group: upgrade_zookeeper_leader
-      delegate_to: localhost
+    - name: Add host to Upgrade Leader Group
+      group_by:
+        key: upgrade_zookeeper_leader
+      changed_when: false
       when:
-        - '"leader" in leader_query.stdout'
+        - inventory_hostname in groups['zookeeper_leader']
         - zookeeper_current_version != confluent_full_package_version
         - zookeeper_current_version != confluent_package_version
 
     - debug:
         msg: "Leader: {{inventory_hostname}}"
-      when: '"leader" in leader_query.stdout'
+      when: inventory_hostname in groups['zookeeper_leader']
 
 - name: Zookeeper Upgrade
   # Putting leader group last here with serial=1 so the leader runs last
@@ -137,6 +128,9 @@
         src: "{{ item }}"
         remote_src: true
         dest: "/tmp/upgrade/{{ zookeeper_service_name }}/{{ item | basename }}-{{timestamp}}"
+        owner: "{{zookeeper_user}}"
+        group: "{{zookeeper_group}}"
+        mode: 0640
       loop:
         - "{{ zookeeper.config_file }}"
         - "{{ zookeeper.systemd_override }}"
@@ -215,6 +209,9 @@
         dest: "{{ item }}"
         remote_src: true
         src: "/tmp/upgrade/{{ zookeeper_service_name }}/{{ item | basename }}-{{timestamp}}"
+        owner: "{{zookeeper_user}}"
+        group: "{{zookeeper_group}}"
+        mode: 0640
       loop:
         - "{{ zookeeper.config_file }}"
         - "{{ kafka_broker.config_file }}"

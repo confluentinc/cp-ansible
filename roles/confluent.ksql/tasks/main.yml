@@ -1,8 +1,8 @@
 ---
 - include_role:
     name: confluent.common
-  tags: common
   when: not common_role_completed|bool
+  tags: common
 
 - name: Gather OS Facts
   setup:
@@ -14,25 +14,36 @@
     - ansible_os_family
     - ansible_fqdn
 
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: confluent.common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ ksql_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
 # Install Packages
 - name: Install the KSQL Packages
   yum:
-    name: "{{item}}{{confluent_package_redhat_suffix}}"
+    name: "{{ ksql_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
-  loop: "{{ksql_packages}}"
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
   tags: package
+  notify: restart ksql
 
 - name: Install the KSQL Packages
   apt:
-    name: "{{item}}{{confluent_package_debian_suffix}}"
-  loop: "{{ksql_packages}}"
+    name: "{{ ksql_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
   tags: package
+  notify: restart ksql
 
 # Configure environment
 - name: Create Ksql Group
@@ -85,6 +96,7 @@
     ksql_ssl_enabled|bool or
     kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
     mds_tls_enabled | bool
+  tags: ssl
 
 - name: Configure Kerberos
   include_role:
@@ -119,6 +131,21 @@
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
 
+- name: Create Ksql Config with Secrets Protection
+  include_role:
+    name: confluent.common
+    tasks_from: secrets_protection.yml
+  vars:
+    encrypt_passwords: "{{ ksql_secrets_protection_encrypt_passwords }}"
+    properties: "{{ ksql_secrets_protection_encrypt_properties }}"
+    config_path: "{{ ksql.config_file }}"
+    config_template: ksql-server.properties.j2
+    secrets_file: "{{ ksql_secrets_protection_file }}"
+    secrets_file_owner: "{{ ksql_user }}"
+    secrets_file_group: "{{ ksql_group }}"
+    handler: restart ksql
+  when: ksql_secrets_protection_enabled|bool
+
 - name: Create Ksql Config
   template:
     src: ksql-server.properties.j2
@@ -126,8 +153,8 @@
     mode: 0640
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
-  notify:
-    - restart ksql
+  notify: restart ksql
+  when: not ksql_secrets_protection_enabled|bool
 
 - name: Create Logs Directory
   file:
@@ -165,16 +192,6 @@
   when: ksql_jolokia_enabled|bool
   notify: restart ksql
 
-- name: Enable Secrets Protection
-  include_role:
-    name: confluent.common
-    tasks_from: secrets_protection.yml
-  vars:
-    encrypt_passwords: "{{ ksql_secrets_protection_encrypt_passwords }}"
-    properties: "{{ ksql_secrets_protection_encrypt_properties }}"
-    config_path: "{{ ksql.config_file }}"
-  when: ksql_secrets_protection_enabled|bool
-
 - name: Create RocksDB Directory
   file:
     path: "{{ksql_rocksdb_path}}"
@@ -194,7 +211,7 @@
 
 - name: Deploy JMX Exporter Config File
   copy:
-    src: "ksql.yml"
+    src: "{{ksql_jmxexporter_config_source_path}}"
     dest: "{{ksql_jmxexporter_config_path}}"
     mode: 0640
     owner: "{{ksql_user}}"

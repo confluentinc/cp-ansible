@@ -8,20 +8,19 @@
     - import_role:
         name: confluent.variables
 
-    - name: Check if Zookeeper Service Running
-      shell: "systemctl show -p SubState {{zookeeper_service_name}}"
-      changed_when: false
-      # On some SELinux enabled hosts this command will error out, handled in next set_fact task
-      failed_when: false
-      check_mode: false
-      register: substate
+    - name: Populate service facts
+      service_facts:
 
-    - set_fact:
-        install_pattern: "{{ 'parallel' if substate.stdout != 'SubState=running' or substate.rc == 1 or zookeeper_deployment_strategy == 'parallel' else 'serial' }}"
+    - name: Determine Installation Pattern - Parallel or Serial
+      set_fact:
+        install_pattern: "{{ 'parallel' if service_state != 'running' or zookeeper_deployment_strategy == 'parallel' else 'serial' }}"
+      vars:
+        service_state: "{{ ansible_facts.services[zookeeper_service_name + '.service'].state | default('unknown') }}"
 
-    - name: "Group Hosts by Installation Pattern: Parallel or Serial"
+    - name: Group Hosts by Installation Pattern
       group_by:
         key: zookeeper_{{install_pattern}}
+      changed_when: false
 
 - name: Zookeeper Parallel Provisioning
   hosts: zookeeper_parallel
@@ -37,30 +36,10 @@
   gather_facts: false
   tags: zookeeper
   environment: "{{ proxy_env }}"
-  vars_files:
-    - roles/confluent.zookeeper/defaults/main.yml
   tasks:
     - import_role:
-        name: confluent.variables
-
-    - name: Get Leader/Follower
-      shell: "{{zookeeper_health_check_command}} | grep Mode"
-      args:
-        executable: /bin/bash
-      register: leader_query
-      changed_when: false
-      check_mode: false
-
-    - set_fact:
-        # Modes are either: follower, leader, standalone, will treat standalone as leaders
-        mode: "{{ 'follower' if 'follower' in leader_query.stdout else 'leader' }}"
-
-    - debug:
-        msg: "{{leader_query.stdout}}"
-
-    - name: "Group Hosts by Zookeeper Mode: Follower or Leader"
-      group_by:
-        key: zookeeper_{{mode}}
+        name: confluent.zookeeper
+        tasks_from: dynamic_groups.yml
 
 - name: Zookeeper Followers Provisioning
   hosts: zookeeper_follower
