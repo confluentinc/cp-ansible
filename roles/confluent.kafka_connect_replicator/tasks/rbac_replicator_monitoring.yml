@@ -1,0 +1,69 @@
+---
+- name: Set Principal - Sasl Scram
+  set_fact:
+    replicator_principal: "{{ confluent_replicator_monitoring_interceptor_sasl_scram_user| default(sasl_scram_users.confluent_replicator.principal) }}"
+  when: confluent_replicator_monitoring_interceptor_sasl_scram_enabled==true
+
+- name: Set Principal - Sasl Plain
+  set_fact:
+    replicator_principal: "{{ confluent_replicator_monitoring_interceptor_sasl_plain_username| default(sasl_plain_users.confluent_replicator.principal) }}"
+  when: confluent_replicator_monitoring_interceptor_sasl_plain_enabled==true
+
+- name: Set Principal - Sasl Kerberos
+  set_fact:
+    replicator_principal: "{{ confluent_replicator_monitoring_interceptor_kerberos_principal| default('kafka') }}"
+  when: confluent_replicator_monitoring_interceptor_kerberos_enabled==true
+
+- name: Extract Common Name from Keystore - SSL Mutual Auth
+  # Examine the keystore
+  # Search lines with Entry type: "PrivateKeyEntry" and return that line and all after, ca cert is of type "trustedCertEntry"
+  # Search for first "Owner" line
+  # Extract DNAME from line
+  # Remove spaces after commas
+  shell: |
+    keytool -list -keystore {{confluent_replicator_monitoring_interceptor_keystore_path}} \
+        -storepass {{confluent_replicator_monitoring_interceptor_keystore_storepass}} -v \
+        | grep PrivateKeyEntry -A1000 \
+        | grep Owner -m1 \
+        | cut -d ":" -f2 \
+        | cut -c2- \
+        | sed 's/^.*CN=//' \
+        | cut -d "," -f1
+  register: distinguished_name_from_keystore
+  when: confluent_replicator_monitoring_interceptor_security_protocol == 'SSL' and confluent_replicator_monitoring_interceptor_ssl_enabled == true
+
+- name: Set Principal - SSL Mutual Auth
+  set_fact:
+    replicator_principal: "{{ distinguished_name_from_keystore.stdout }}"
+  when: confluent_replicator_monitoring_interceptor_security_protocol == 'SSL' and confluent_replicator_monitoring_interceptor_ssl_enabled == true
+
+- name: Normalize User Name
+  set_fact:
+    replicator_principal: "User:{{ replicator_principal }}"
+  when: replicator_principal is defined
+
+- name: Grant Replicator user the DeveloperWrite role on Monitoring Interceptor Topic
+  uri:
+    url: "{{confluent_replicator_monitoring_interceptor_mds_url.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/{{replicator_principal}}/roles/DeveloperWrite/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{confluent_replicator_monitoring_interceptor_mds_username}}"
+    url_password: "{{confluent_replicator_monitoring_interceptor_mds_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster":"{{confluent_replicator_monitoring_interceptor_rbac_cluster_id}}"
+          }
+        },
+        "resourcePatterns": [{
+          "resourceType": "Topic",
+          "name": "{{confluent_replicator_monitoring_interceptor_final_properties['confluent.monitoring.interceptor.topic']}}",
+          "patternType":"LITERAL"
+        }]
+      }
+    status_code: 204
