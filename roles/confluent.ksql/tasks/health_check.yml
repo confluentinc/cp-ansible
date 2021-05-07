@@ -35,15 +35,20 @@
   when: ksql_authentication_type == 'mtls'
   ignore_errors: true
 
-- name: Fetch Files for Debugging Failure
-  # Cannot use include_role in Ansible Handlers: https://github.com/ansible/ansible/issues/20493
-  include_tasks:
-    file: ../../confluent.common/tasks/fetch_logs.yml
-  vars:
-    service_name: "{{ksql_service_name}}"
-    config_file: "{{ksql.config_file}}"
-    log_dir: "{{ksql_service_environment_overrides.LOG_DIR}}"
-    user: "{{ksql_user}}"
-    group: "{{ksql_group}}"
-  # Only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
+- name: Fetch Log Files and Error out
+  block:
+    - name: Fetch Files for Debugging Failure
+      # Cannot use include_role in Ansible Handlers: https://github.com/ansible/ansible/issues/20493
+      include_tasks: ../../confluent.common/tasks/fetch_logs.yml
+      vars:
+        service_name: "{{ksql_service_name}}"
+        config_file: "{{ksql.config_file}}"
+        log_dir: "{{ksql_service_environment_overrides.LOG_DIR}}"
+        user: "{{ksql_user}}"
+        group: "{{ksql_group}}"
+
+    - name: Fail Provisioning
+      fail:
+        msg: Health checks failed. Review exported files.
+  # When only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
   when: result1.failed|default(False) or result2.failed|default(False)
