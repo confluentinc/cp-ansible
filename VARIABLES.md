@@ -444,6 +444,14 @@ Default:  "{{ ['ksql'] if 'ksql' in groups else [] }}"
 
 ***
 
+### validate_hosts
+
+Boolean to Run Host Validations. Validations include OS Version compatibility and Proper Internet Connectivity
+
+Default:  true
+
+***
+
 ### zookeeper_user
 
 Set this variable to customize the Linux User that the Zookeeper Service runs with. Default user is cp-kafka.
@@ -622,7 +630,7 @@ Default:  3888
 
 ### zookeeper_copy_files
 
-Use to copy files from control node to zookeeper hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to zookeeper hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
@@ -790,7 +798,7 @@ Default:  /opt/prometheus/kafka.yml
 
 ### kafka_broker_copy_files
 
-Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
@@ -998,7 +1006,7 @@ Default:  8078
 
 ### schema_registry_copy_files
 
-Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
@@ -1166,7 +1174,7 @@ Default:  8075
 
 ### kafka_rest_copy_files
 
-Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
@@ -1358,7 +1366,7 @@ Default:  8077
 
 ### kafka_connect_copy_files
 
-Use to copy files from control node to connect hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to connect hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
@@ -1566,7 +1574,7 @@ Default:  8076
 
 ### ksql_copy_files
 
-Use to copy files from control node to ksqlDB hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to ksqlDB hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
@@ -1678,7 +1686,7 @@ Default:  "{{control_center.appender_log_path}}"
 
 ### control_center_copy_files
 
-Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
