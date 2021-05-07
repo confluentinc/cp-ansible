@@ -50,14 +50,20 @@
     # Skip if any previous checks failed
     - not topics.failed|default(False) and not mds_result.failed|default(False)
 
-- name: Fetch Files for Debugging Failure
-  # Cannot use include_role in Ansible Handlers: https://github.com/ansible/ansible/issues/20493
-  include_tasks:
-    file: ../../confluent.common/tasks/fetch_logs.yml
-  vars:
-    service_name: "{{kafka_broker_service_name}}"
-    config_file: "{{kafka_broker.config_file}}"
-    log_dir: "{{kafka_broker_service_environment_overrides.LOG_DIR}}"
-    user: "{{kafka_broker_user}}"
-    group: "{{kafka_broker_group}}"
+- name: Fetch Log Files and Error out
+  block:
+    - name: Fetch Files for Debugging Failure
+      # Cannot use include_role in Ansible Handlers: https://github.com/ansible/ansible/issues/20493
+      include_tasks: ../../confluent.common/tasks/fetch_logs.yml
+      vars:
+        service_name: "{{kafka_broker_service_name}}"
+        config_file: "{{kafka_broker.config_file}}"
+        log_dir: "{{kafka_broker_service_environment_overrides.LOG_DIR}}"
+        user: "{{kafka_broker_user}}"
+        group: "{{kafka_broker_group}}"
+
+    - name: Fail Provisioning
+      fail:
+        msg: Health checks failed. Review exported files.
+  # When only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
   when: topics.failed|default(False) or mds_result.failed|default(False) or erp_result.failed|default(False)
