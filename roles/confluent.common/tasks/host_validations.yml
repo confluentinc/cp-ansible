@@ -1,22 +1,33 @@
 ---
+- name: Confirm Running as Root
+  assert:
+    that: ansible_user_id == 'root'
+    fail_msg: "CP-Ansible must have sudo access. Current User ID: {{ansible_user_id}} is not root. 
+      Make sure to set ansible_become to true and provide sudo access.
+      To skip host validations, set validate_hosts to false."
+  tags: validate
+
 - name: Confirm Rhel Version Supported
   assert:
     that: ansible_distribution_major_version in ['7', '8']
-    fail_msg: "Rhel Version: {{ansible_distribution_major_version}} not in supported versions: 7, 8"
+    fail_msg: "Rhel Version: {{ansible_distribution_major_version}} not in supported versions: 7, 8.
+      To skip host validations, set validate_hosts to false." 
   when: ansible_os_family == "RedHat"
   tags: validate
 
 - name: Confirm Ubuntu Version Supported
   assert:
     that: ansible_distribution_major_version in ['16', '18']
-    fail_msg: "Ubuntu Version: {{ansible_distribution_major_version}} not in supported versions: 16, 18"
+    fail_msg: "Ubuntu Version: {{ansible_distribution_major_version}} not in supported versions: 16, 18.
+      To skip host validations, set validate_hosts to false."
   when: ansible_distribution == "Ubuntu"
   tags: validate
 
 - name: Confirm Debian Version Supported
   assert:
     that: ansible_distribution_major_version in ['9']
-    fail_msg: "Debian Version: {{ansible_distribution_major_version}} not in supported versions: 9"
+    fail_msg: "Debian Version: {{ansible_distribution_major_version}} not in supported versions: 9.
+      To skip host validations, set validate_hosts to false."
   when: ansible_distribution == "Debian"
   tags: validate
 
@@ -27,4 +38,12 @@
   when: >
     ( installation_method == 'package' and repository_configuration == 'confluent') or
     ( installation_method == 'archive' and confluent_common_repository_baseurl in confluent_archive_file_source )
+  ignore_errors: true
+  register: internet_access_check
   tags: validate
+
+- name: Fail Provisioning because No Network Connectivity
+  fail:
+    msg: "Failed to connect to Package Repository at {{confluent_common_repository_baseurl}} from Host. 
+      Confirm network connectivity. To skip host validations, set validate_hosts to false."
+  when: internet_access_check.failed
