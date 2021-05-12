@@ -23,8 +23,7 @@
   when: installation_method == "package"
   tags: package
 
-# Install Packages
-- name: Install the KSQL Packages
+- name: Install the Ksql Packages
   yum:
     name: "{{ ksql_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
@@ -35,7 +34,7 @@
   tags: package
   notify: restart ksql
 
-- name: Install the KSQL Packages
+- name: Install the Ksql Packages
   apt:
     name: "{{ ksql_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
   when:
@@ -45,17 +44,25 @@
   tags: package
   notify: restart ksql
 
-# Configure environment
 - name: Create Ksql Group
   group:
     name: "{{ksql_group}}"
 
+- name: Check if Ksql User Exists
+  # The following task fails for non-local linux users
+  shell: "getent passwd {{ksql_user}}"
+  register: user_output
+  failed_when: false
+  changed_when: false
+  check_mode: false
+
 - name: Create Ksql User
   user:
     name: "{{ksql_user}}"
-    comment: "Connect Distributed User"
+    comment: Confluent KSQL
     system: true
     group: "{{ksql_group}}"
+  when: user_output.rc != 0
 
 - name: Set Ksql streams dir permissions
   file:

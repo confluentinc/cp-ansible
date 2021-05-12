@@ -23,7 +23,6 @@
   when: installation_method == "package"
   tags: package
 
-# Install Packages
 - name: Install the Kafka Rest Packages
   yum:
     name: "{{ kafka_rest_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
@@ -45,21 +44,29 @@
   tags: package
   notify: restart kafka-rest
 
-# Configure environment
 - name: Create Kafka Rest Group
   group:
     name: "{{kafka_rest_group}}"
 
+- name: Check if Kafka Rest User Exists
+  # The following task fails for non-local linux users
+  shell: "getent passwd {{kafka_rest_user}}"
+  register: user_output
+  failed_when: false
+  changed_when: false
+  check_mode: false
+
 - name: Create Kafka Rest User
   user:
     name: "{{kafka_rest_user}}"
-    comment: "Kafka REST User"
+    comment: Confluent REST proxy
     system: true
     group: "{{kafka_rest_group}}"
+  when: user_output.rc != 0
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
-- name: Copy Kafka REST Service from archive file to system
+- name: Copy Kafka Rest Service from archive file to system
   copy:
     src: "{{binary_base_path}}/lib/systemd/system/{{kafka_rest.systemd_file|basename}}"
     remote_src: true
