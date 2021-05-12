@@ -23,7 +23,6 @@
   when: installation_method == "package"
   tags: package
 
-# Install Packages
 - name: Install the Control Center Packages
   yum:
     name: "{{ control_center_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
@@ -45,17 +44,25 @@
   tags: package
   notify: restart control center
 
-# Configure environment
 - name: Create Control Center Group
   group:
     name: "{{control_center_group}}"
 
+- name: Check if Control Center User Exists
+  # The following task fails for non-local linux users
+  shell: "getent passwd {{control_center_user}}"
+  register: user_output
+  failed_when: false
+  changed_when: false
+  check_mode: false
+
 - name: Create Control Center User
   user:
     name: "{{control_center_user}}"
-    comment: "Control Center User"
+    comment: Confluent Control Center
     system: true
     group: "{{control_center_group}}"
+  when: user_output.rc != 0
 
 - name: Set Control Center Data Dir permissions
   file:
