@@ -23,7 +23,6 @@
   when: installation_method == "package"
   tags: package
 
-# Install Packages
 - name: Install the Kafka Connect Replicator Packages
   yum:
     name: "{{ kafka_connect_replicator_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
@@ -45,17 +44,25 @@
   tags: package
   notify: Restart Kafka Connect Replicator
 
-# Configure environment
 - name: Create Kafka Connect Replicator Group
   group:
     name: "{{kafka_connect_replicator_group}}"
 
+- name: Check if Kafka Connect Replicator User Exists
+  # The following task fails for non-local linux users
+  shell: "getent passwd {{kafka_connect_replicator_user}}"
+  register: user_output
+  failed_when: false
+  changed_when: false
+  check_mode: false
+
 - name: Create Kafka Connect Replicator User
   user:
     name: "{{kafka_connect_replicator_user}}"
-    comment: "Confluent Replicator User"
+    comment: Confluent Kafka Connect Replicator
     system: true
     group: "{{kafka_connect_replicator_group}}"
+  when: user_output.rc != 0
 
 - name: Configure TLS for Kafka Connect Replicator Host
   include_role:
