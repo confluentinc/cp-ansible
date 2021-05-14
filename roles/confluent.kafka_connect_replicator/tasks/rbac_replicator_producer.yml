@@ -1,60 +1,33 @@
 ---
-- name: Set Principal - Sasl Scram
-  set_fact:
-    replicator_principal: "{{ confluent_replicator_producer_sasl_scram_user| default(sasl_scram_users.confluent_replicator.principal) }}"
-  when: confluent_replicator_producer_sasl_scram_enabled==true
+- name: Create SSL Certificate Directory
+  file:
+    path: /var/ssl/private
+    state: directory
+    mode: 0755
+  when: copy_certs | default(True)
 
-- name: Set Principal - Sasl Plain
-  set_fact:
-    replicator_principal: "{{ confluent_replicator_producer_sasl_plain_username| default(sasl_plain_users.confluent_replicator.principal) }}"
-  when: confluent_replicator_producer_sasl_plain_enabled==true
-
-- name: Set Principal - Sasl Kerberos
-  set_fact:
-    replicator_principal: "{{ confluent_replicator_producer_kerberos_principal| default('kafka') }}"
-  when: confluent_replicator_producer_kerberos_enabled==true
-
-- name: Extract Common Name from Keystore - SSL Mutual Auth
-  # Examine the keystore
-  # Search lines with Entry type: "PrivateKeyEntry" and return that line and all after, ca cert is of type "trustedCertEntry"
-  # Search for first "Owner" line
-  # Extract DNAME from line
-  # Remove spaces after commas
-  shell: |
-    keytool -list -keystore {{confluent_replicator_producer_keystore_path}} \
-        -storepass {{confluent_replicator_keystore_storepass}} -v \
-        | grep PrivateKeyEntry -A1000 \
-        | grep Owner -m1 \
-        | cut -d ":" -f2 \
-        | cut -c2- \
-        | sed 's/^.*CN=//' \
-        | cut -d "," -f1
-  register: distinguished_name_from_keystore
-  when: confluent_replicator_security_protocol == 'SSL' and confluent_replicator_producer_ssl_enabled == true
-
-- name: Set Principal - SSL Mutual Auth
-  set_fact:
-    kafka_broker_principal: "{{ distinguished_name_from_keystore.stdout }}"
-  when: confluent_replicator_producer_security_protocol == 'SSL' and confluent_replicator_producer_ssl_enabled == true
-
-- name: Normalize User Name
-  set_fact:
-    replicator_principal: "User:{{ replicator_principal }}"
-  when: replicator_principal is defined
+- name: Copy in MDS Public Pem File
+  copy:
+    src: "{{ kafka_connect_replicator_producer_erp_pem_file }}"
+    dest: "{{ kafka_connect_replicator_producer_rbac_enabled_public_pem_path }}"
+    mode: 0640
+    owner: "{{user}}"
+    group: "{{group}}"
+  when: copy_certs | default(True)
 
 # Take confluent_replicator_white_list property, split into list
 - name: Set Replicator Topic White List
   set_fact:
-    topic_white_list: "{{ confluent_replicator_white_list.split(',') | default('') | difference(['']) }} "
+    topic_white_list: "{{ kafka_connect_replicator_white_list.split(',') | default('')| difference(['']) }} "
 
 - name: Grant Confluent Replicator User ResourceOwner on White List Topics
   uri:
-    url: "{{confluent_replicator_producer_mds_url.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/{{replicator_principal}}/roles/ResourceOwner/bindings"
+    url: "{{confluent_replicator_mds_url.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/{{kafka_connect_replicator_producer_ldap_principal}}/roles/ResourceOwner/bindings"
     method: POST
     validate_certs: false
     force_basic_auth: true
-    url_username: "{{confluent_replicator_producer_mds_username}}"
-    url_password: "{{confluent_replicator_producer_mds_password}}"
+    url_username: "{{confluent_replicator_erp_admin_user}}"
+    url_password: "{{confluent_replicator_erp_admin_password}}"
     headers:
       Content-Type: application/json
     body_format: json
@@ -62,7 +35,7 @@
       {
         "scope": {
           "clusters": {
-            "kafka-cluster":"{{confluent_replicator_producer_rbac_cluster_id}}"}},
+            "kafka-cluster":"{{kafka_connect_replicator_producer_kafka_cluster_id}}"}},
             "resourcePatterns": [
               {
                 "resourceType":"Topic",
@@ -74,4 +47,4 @@
         }
       }
     status_code: 204
-    with_items: "{{ topic_white_list }}"
+  with_items: "{{ topic_white_list }}"
