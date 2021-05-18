@@ -23,7 +23,6 @@
   when: installation_method == "package"
   tags: package
 
-# Install Packages
 - name: Install the Kafka Connect Packages
   yum:
     name: "{{ kafka_connect_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
@@ -45,17 +44,24 @@
   tags: package
   notify: restart connect distributed
 
-# Configure environment
-- name: Create Connect Distributed Group
+- name: Create Kafka Connect Group
   group:
     name: "{{kafka_connect_group}}"
 
-- name: Create Connect Distributed User
+- name: Check if Kafka Connect User Exists
+  # Create user task must be skipped for non-linux users
+  getent:
+    database: passwd
+    key: "{{kafka_connect_user}}"
+  failed_when: false
+
+- name: Create Kafka Connect User
   user:
     name: "{{kafka_connect_user}}"
-    comment: "Connect Distributed User"
+    comment: Confluent Kafka Connect
     system: true
     group: "{{kafka_connect_group}}"
+  when: (getent_passwd|default({}))[kafka_connect_user] is not defined
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -127,7 +133,7 @@
   include_tasks: rbac.yml
   when: rbac_enabled|bool
 
-- name: Create Connect Distributed Config directory
+- name: Create Kafka Connect Config directory
   file:
     path: "{{ kafka_connect.config_file | dirname }}"
     state: directory
@@ -135,7 +141,7 @@
     owner: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
 
-- name: Create Connect Distributed Config with Secrets Protection
+- name: Create Kafka Connect Config with Secrets Protection
   include_role:
     name: confluent.common
     tasks_from: secrets_protection.yml
@@ -150,7 +156,7 @@
     handler: restart connect distributed
   when: kafka_connect_secrets_protection_enabled|bool
 
-- name: Create Connect Distributed Config
+- name: Create Kafka Connect Config
   template:
     src: connect-distributed.properties.j2
     dest: "{{kafka_connect.config_file}}"
@@ -190,7 +196,7 @@
     owner: "{{kafka_connect_user}}"
     mode: 0640
 
-- name: Create Connect Distributed Jolokia Config
+- name: Create Kafka Connect Jolokia Config
   template:
     src: kafka_connect_jolokia.properties.j2
     dest: "{{kafka_connect_jolokia_config}}"
