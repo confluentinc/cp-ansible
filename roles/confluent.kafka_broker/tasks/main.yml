@@ -23,7 +23,6 @@
   when: installation_method == "package"
   tags: package
 
-# Install Packages
 - name: Install the Kafka Broker Packages
   yum:
     name: "{{ kafka_broker_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
@@ -49,12 +48,20 @@
   group:
     name: "{{kafka_broker_group}}"
 
-- name: Kafka Broker user
+- name: Check if Kafka Broker User Exists
+  # Create user task must be skipped for non-linux users
+  getent:
+    database: passwd
+    key: "{{kafka_broker_user}}"
+  failed_when: false
+
+- name: Create Kafka Broker user
   user:
     name: "{{kafka_broker_user}}"
-    comment: "Kafka User"
+    comment: Confluent Kafka
     system: true
     group: "{{kafka_broker_group}}"
+  when: (getent_passwd|default({}))[kafka_broker_user] is not defined
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
