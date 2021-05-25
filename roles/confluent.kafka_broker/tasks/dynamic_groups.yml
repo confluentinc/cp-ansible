@@ -1,10 +1,7 @@
 ---
 - name: Gather OS Facts
   setup:
-    # Only gathers items in list, filters out the rest
     filter: ansible_os_family
-    gather_subset:
-      - '!all'
 
 - name: Load server.properties
   slurp:
@@ -25,6 +22,19 @@
         or 'zookeeper.ssl.client.enable=true' in slurped_properties.content|b64decode
     - kafka_broker_secrets_protection_enabled|bool
 
+- name: Load override.conf - Archive Installer
+  slurp:
+    src: "{{ kafka_broker.systemd_override }}"
+  register: slurped_override
+  when: installation_method == "archive"
+
+- name: Set kafka_broker_current_version variable - Archive Installer
+  set_fact:
+    kafka_broker_current_version: "{{ (slurped_override.content|b64decode) .split('\n') |
+      select('match', '^ExecStart=' + archive_config_base_path + '/confluent-(.*)/bin/kafka-server-start ' + kafka_broker.config_file) |
+      list | first | regex_search('[0-9]+(.[0-9]+)+') }}"
+  when: installation_method == "archive"
+
 # TODO When Zookeeper is removed, use kafka-metadata-quorum script. See KIP-595
 - name: Get Controller Broker ID
   shell: >
@@ -37,6 +47,8 @@
           get /controller | grep brokerid
   args:
     executable: /bin/bash
+  vars:
+    archive_version: "{{ kafka_broker_current_version | default(confluent_package_version) }}"
   register: controller_query
   run_once: true
   changed_when: false
