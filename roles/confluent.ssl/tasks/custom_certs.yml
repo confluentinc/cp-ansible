@@ -9,33 +9,33 @@
   copy:
     remote_src: "{{ssl_custom_certs_remote_src}}"
     src: "{{ssl_signed_cert_filepath}}"
-    dest: "{{ ssl_file_directory }}{{service_name}}.chain"
+    dest: "{{ ssl_file_dir_final }}{{service_name}}.chain"
 
 - name: Extract Final Cert from Signed Cert Chain
   shell: |
-    tac {{ ssl_file_directory }}{{service_name}}.chain | awk '!flag; /-----BEGIN CERTIFICATE-----/{flag = 1};' | tac > {{cert_path}}
+    tac {{ ssl_file_dir_final }}{{service_name}}.chain | awk '!flag; /-----BEGIN CERTIFICATE-----/{flag = 1};' | tac > {{cert_path}}
 
 - name: Copy Key to Host
   copy:
     remote_src: "{{ssl_custom_certs_remote_src}}"
     src: "{{ssl_key_filepath}}"
-    dest: "{{ ssl_file_directory }}generation/{{service_name}}.key"
+    dest: "{{ ssl_file_dir_final }}generation/{{service_name}}.key"
 
 - name: Load Private Key
   slurp:
-    src: "{{ ssl_file_directory }}generation/{{service_name}}.key"
+    src: "{{ ssl_file_dir_final }}generation/{{service_name}}.key"
   register: slurped_private_key
 
 - name: Copy Key to Final Location - Non Encrypted
   copy:
     remote_src: true
-    src: "{{ ssl_file_directory }}generation/{{service_name}}.key"
+    src: "{{ ssl_file_dir_final }}generation/{{service_name}}.key"
     dest: "{{key_path}}"
   when: "'BEGIN ENCRYPTED PRIVATE KEY' not in slurped_private_key.content|b64decode"
 
 - name: Create Non Encrypted Private Key
   shell: |
-    openssl rsa -in {{ ssl_file_directory }}generation/{{service_name}}.key \
+    openssl rsa -in {{ ssl_file_dir_final }}generation/{{service_name}}.key \
       -out {{key_path}} {% if ssl_key_password is defined %}-passin pass:{{ssl_key_password}} -passout pass:{{ssl_key_password}}{% endif %}
   when: "'BEGIN ENCRYPTED PRIVATE KEY' in slurped_private_key.content|b64decode"
   no_log: "{{mask_secrets|bool}}"
