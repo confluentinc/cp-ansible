@@ -1,10 +1,29 @@
 ---
+- name: Gather OS Facts
+  setup:
+    filter: ansible_os_family
+
+- name: Load override.conf - Archive Installer
+  slurp:
+    src: "{{ zookeeper.systemd_override }}"
+  register: slurped_override
+  when: installation_method == "archive"
+
+- name: Set zookeeper_current_version variable - Archive Installer
+  set_fact:
+    zookeeper_current_version: "{{ (slurped_override.content|b64decode) .split('\n') |
+      select('match', '^ExecStart=' + archive_config_base_path + '/confluent-(.*)/bin/zookeeper-server-start ' + zookeeper.config_file) |
+      list | first | regex_search('[0-9]+(.[0-9]+)+') }}"
+  when: installation_method == "archive"
+
 - name: Get Leader/Follower
   shell: >
     set -o pipefail &&
       {{ zookeeper_health_check_command }} | grep Mode
   args:
     executable: /bin/bash
+  vars:
+    archive_version: "{{ zookeeper_current_version | default(confluent_package_version) }}"
   register: leader_query
   changed_when: false
   check_mode: false
