@@ -4,6 +4,14 @@ Below are the supported variables for the role confluent.variables
 
 ***
 
+### confluent_package_version
+
+Version of Confluent Platform to install
+
+Default:  6.1.1
+
+***
+
 ### jolokia_url_remote
 
 To copy from Ansible control host or download
