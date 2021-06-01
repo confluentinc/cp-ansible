@@ -300,6 +300,14 @@ Default:  "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_c
 
 ***
 
+### ssl_file_dir
+
+Directory on hosts to store all ssl files.
+
+Default:  /var/ssl/private/
+
+***
+
 ### regenerate_ca
 
 Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs.
