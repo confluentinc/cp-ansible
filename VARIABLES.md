@@ -4,6 +4,14 @@ Below are the supported variables for the role confluent.variables
 
 ***
 
+### confluent_package_version
+
+Version of Confluent Platform to install
+
+Default:  6.1.1
+
+***
+
 ### jolokia_url_remote
 
 To copy from Ansible control host or download
@@ -289,6 +297,14 @@ Default:  false
 Boolean to create Keystores with Self Signed Certificates, defaults to true. Alternatively can use ssl_provided_keystore_and_truststore or ssl_custom_certs
 
 Default:  "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_certs|bool else true }}"
+
+***
+
+### ssl_file_dir
+
+Directory on hosts to store all ssl files.
+
+Default:  /var/ssl/private/
 
 ***
 
