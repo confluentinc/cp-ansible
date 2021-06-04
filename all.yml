@@ -1,16 +1,19 @@
 ---
 - name: Host Prerequisites
-  hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest
+  hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest:kafka_connect_replicator
   gather_facts: false
   environment: "{{ proxy_env }}"
   tasks:
+    - import_role:
+        name: confluent.variables
+
     - name: Create Certificate Authority and Copy to Ansible Host
       include_tasks: tasks/certificate_authority.yml
       tags: certificate_authority
       run_once: true
       when: >
         create_mds_certs|bool or
-        (self_signed|bool and regenerate_ca|bool and
+        (self_signed|bool and
         (zookeeper_ssl_enabled|bool or
         kafka_broker_listeners | ssl_required(ssl_enabled) or
         kafka_broker_rest_ssl_enabled|bool or
@@ -26,67 +29,25 @@
 
     - name: Set Up Secrets Protection
       include_tasks: tasks/masterkey.yml
-      when: secrets_protection_enabled|bool and not secrets_protection_masterkey
+      run_once: true
+      when:
+        - secrets_protection_enabled|bool
+        - not secrets_protection_masterkey
+        - regenerate_masterkey|bool
+      tags: masterkey
 
-- name: Zookeeper Provisioning
-  hosts: zookeeper
-  gather_facts: false
-  tags: zookeeper
-  environment: "{{ proxy_env }}"
-  tasks:
-    - import_role:
-        name: confluent.zookeeper
+- import_playbook: zookeeper.yml
 
-- name: Kafka Broker Provisioning
-  hosts: kafka_broker
-  gather_facts: false
-  tags: kafka_broker
-  environment: "{{ proxy_env }}"
-  tasks:
-    - import_role:
-        name: confluent.kafka_broker
+- import_playbook: kafka_broker.yml
 
-- name: Schema Registry Provisioning
-  hosts: schema_registry
-  gather_facts: false
-  tags: schema_registry
-  environment: "{{ proxy_env }}"
-  tasks:
-    - import_role:
-        name: confluent.schema_registry
+- import_playbook: schema_registry.yml
 
-- name: Kafta Connect Provisioning
-  hosts: kafka_connect
-  gather_facts: false
-  tags: kafka_connect
-  environment: "{{ proxy_env }}"
-  tasks:
-    - import_role:
-        name: confluent.kafka_connect
+- import_playbook: kafka_connect.yml
 
-- name: KSQL Provisioning
-  hosts: ksql
-  gather_facts: false
-  tags: ksql
-  environment: "{{ proxy_env }}"
-  tasks:
-    - import_role:
-        name: confluent.ksql
+- import_playbook: ksql.yml
 
-- name: Kafka Rest Provisioning
-  hosts: kafka_rest
-  gather_facts: false
-  tags: kafka_rest
-  environment: "{{ proxy_env }}"
-  tasks:
-    - import_role:
-        name: confluent.kafka_rest
+- import_playbook: kafka_rest.yml
 
-- name: Control Center Provisioning
-  hosts: control_center
-  gather_facts: false
-  tags: control_center
-  environment: "{{ proxy_env }}"
-  tasks:
-    - import_role:
-        name: confluent.control_center
+- import_playbook: control_center.yml
+
+- import_playbook: kafka_connect_replicator.yml

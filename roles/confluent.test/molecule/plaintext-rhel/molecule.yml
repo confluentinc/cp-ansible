@@ -49,6 +49,18 @@ platforms:
     privileged: true
     networks:
       - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: kafka-broker2${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: kafka-broker2${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
   - name: schema-registry1${JOB_BASE_NAME}${BUILD_NUMBER}
     hostname: schema-registry1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
     groups:
@@ -125,10 +137,22 @@ provisioner:
       all:
         scenario_name: plaintext-rhel
 
+        # Testing the copy local agents feature
+        jolokia_enabled: true
+        jolokia_url_remote: false
+        jolokia_jar_url: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/jolokia.jar"
+
+        jmxexporter_enabled: true
+        jmxexporter_url_remote: false
+        jmxexporter_jar_url: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/jmxexporter.jar"
+
         # Testing the copy files feature
         zookeeper_copy_files:
           - source_path: "roles/confluent.test/molecule/{{scenario_name}}/molecule.yml"
             destination_path: /tmp/molecule.yml
+          - source_path: "roles/confluent.test/molecule/{{scenario_name}}/molecule.yml"
+            destination_path: /tmp/molecule2.yml
+            file_mode: '0666'
 
         kafka_broker_copy_files: "{{zookeeper_copy_files}}"
         schema_registry_copy_files: "{{zookeeper_copy_files}}"
@@ -139,9 +163,6 @@ provisioner:
 
 verifier:
   name: ansible
-lint: |
-  set -e
-  yamllint -c ../../.yamllint ../..
 scenario:
   test_sequence:
     - lint

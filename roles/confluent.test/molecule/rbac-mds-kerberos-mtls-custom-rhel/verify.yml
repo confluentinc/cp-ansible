@@ -1,4 +1,79 @@
 ---
+- name: Verify Audit Logs Pt1
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    # MDS -> Audit logs destination cluster with non super-user Principal, needs rolebindings
+
+    # confluent iam rolebinding create --principal User:<audit-log-admin> --role ResourceOwner --resource Topic:confluent-audit-log-events --prefix --cluster-name audit_logs
+    - name: Grant Audit Logs Principal ResourceOwner on confluent-audit-log-events Prefixed Topics
+      uri:
+        url: "http://mds-kafka-broker1:8090/security/1.0/principals/User:kafka/roles/ResourceOwner/bindings"
+        method: POST
+        validate_certs: false
+        force_basic_auth: true
+        url_username: mds
+        url_password: password
+        headers:
+          Content-Type: application/json
+        body_format: json
+        body: >
+          {
+            "scope": {
+              "clusterName": "audit_logs"
+            },
+            "resourcePatterns": [{
+              "resourceType": "Topic",
+              "name": "confluent-audit-log-events",
+              "patternType":"PREFIXED"
+            }]
+          }
+        status_code: 204
+      run_once: true
+
+    # confluent iam rolebinding create --principal User:<audit-log-writer> --role DeveloperWrite --resource Topic:confluent-audit-log-events --prefix --cluster-name audit_logs
+    - name: Grant Audit Logs Principal DeveloperWrite on confluent-audit-log-events Prefixed Topics
+      uri:
+        url: "http://mds-kafka-broker1:8090/security/1.0/principals/User:kafka/roles/DeveloperWrite/bindings"
+        method: POST
+        validate_certs: false
+        force_basic_auth: true
+        url_username: mds
+        url_password: password
+        headers:
+          Content-Type: application/json
+        body_format: json
+        body: >
+          {
+            "scope": {
+              "clusterName": "audit_logs"
+            },
+            "resourcePatterns": [{
+              "resourceType": "Topic",
+              "name": "confluent-audit-log-events",
+              "patternType":"PREFIXED"
+            }]
+          }
+        status_code: 204
+      run_once: true
+
+    # Give kafka a bit to let new RoleBindings work
+    - name: Create Topic
+      shell: |
+        kafka-topics --bootstrap-server mds-kafka-broker1:9091 \
+          --command-config /etc/kafka/client.properties \
+          --create --if-not-exists --topic test1
+      delegate_to: mds-kafka-broker1
+      run_once: true
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: confluent.security.event.logger.exporter.kafka.topic.replicas
+        expected_value: "3"
+
 - name: Verify - kafka_broker
   hosts: kafka_broker2
   gather_facts: false
@@ -128,3 +203,32 @@
         file_path: /etc/confluent-control-center/control-center-production.properties
         property: confluent.metadata.bootstrap.server.urls
         expected_value: http://mds-kafka-broker1:8090,http://mds-kafka-broker2:8090
+
+- name: Verify Audit Logs Pt2
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Create Topic
+      shell: |
+        kafka-topics --bootstrap-server mds-kafka-broker1:9091 \
+          --command-config /etc/kafka/client.properties \
+          --create --if-not-exists --topic test2
+      delegate_to: mds-kafka-broker1
+      run_once: true
+
+    - name: Consume audit logs topic
+      shell: |
+        timeout 10 kafka-console-consumer --bootstrap-server kafka-broker1:9091 \
+            --consumer.config /etc/kafka/client.properties \
+            --from-beginning --topic confluent-audit-log-events
+      register: output
+      delegate_to: kafka-broker1
+      run_once: true
+      failed_when: false
+
+    - name: Assert audit log there
+      assert:
+        that:
+          - "'\"resourceType\":\"Topic\",\"resourceName\":\"test2\"' in output.stdout"
+        fail_msg: "test1 topic creation should be in audit logs topic"
+        quiet: true

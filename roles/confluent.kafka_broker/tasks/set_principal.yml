@@ -1,18 +1,23 @@
 ---
 - name: Set Principal - Sasl Scram
   set_fact:
-    kafka_broker_principal: "{{ sasl_scram_users.admin.principal }}"
-  when: kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-512'
+    kafka_broker_principal: "User:{{ sasl_scram_users_final.admin.principal }}"
+  when: listener['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-512'
+
+- name: Set Principal - Sasl Scram 256
+  set_fact:
+    kafka_broker_principal: "User:{{ sasl_scram256_users_final.admin.principal }}"
+  when: listener['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256'
 
 - name: Set Principal - Sasl Plain
   set_fact:
-    kafka_broker_principal: "{{ sasl_plain_users.admin.principal }}"
-  when: kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN'
+    kafka_broker_principal: "User:{{ sasl_plain_users_final.admin.principal }}"
+  when: listener['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN'
 
 - name: Set Principal - Sasl Kerberos
   set_fact:
-    kafka_broker_principal: "{{ kerberos_kafka_broker_primary }}"
-  when: kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
+    kafka_broker_principal: "User:{{ kerberos_kafka_broker_primary }}"
+  when: listener['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
 
 - name: Extract Common Name from Keystore - SSL Mutual Auth
   # Examine the keystore
@@ -29,20 +34,16 @@
         | cut -c2- \
         | sed 's/\s*,\s*/,/g'
   register: distinguished_name_from_keystore
+  changed_when: false
   when:
-    - kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'none'
-    - kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
-    - kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
+    - listener['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'none'
+    - listener['ssl_enabled'] | default(ssl_enabled) | bool
+    - listener['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
 
 - name: Set Principal - SSL Mutual Auth
   set_fact:
-    kafka_broker_principal: "{{ distinguished_name_from_keystore.stdout }}"
+    kafka_broker_principal: "User:{{ distinguished_name_from_keystore.stdout }}"
   when:
-    - kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'none'
-    - kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
-    - kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
-
-- name: Normalize User Name
-  set_fact:
-    kafka_broker_principal: "User:{{ kafka_broker_principal }}"
-  when: kafka_broker_principal is defined
+    - listener['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'none'
+    - listener['ssl_enabled'] | default(ssl_enabled) | bool
+    - listener['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool

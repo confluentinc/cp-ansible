@@ -1,20 +1,36 @@
 ---
 - name: Create trustCA directory
   file:
-    path: /var/ssl/private/generation/trustCAs
+    path: "{{ ssl_file_dir_final }}/generation/trustCAs"
     state: directory
     mode: 0755
 
 - name: Split CA Certificate Bundle into Cert Files
   shell: |
-    cat {{ca_cert_path}} | awk 'split_after==1{n++;split_after=0} /-----END CERTIFICATE-----/ {split_after=1} {print > ("/var/ssl/private/generation/trustCAs/ca" n ".pem")}'
+    cat {{ca_cert_path}} | awk 'split_after==1{n++;split_after=0} /-----END CERTIFICATE-----/ {split_after=1} {print > ("{{ ssl_file_dir_final }}/generation/trustCAs/ca" n ".pem")}'
 
 - name: Create Truststore with Certificates
   shell: |
-    for file in /var/ssl/private/generation/trustCAs/*; do
+    for file in {{ ssl_file_dir_final }}/generation/trustCAs/*; do
         fileName="${file##*/}"
         keytool -noprompt -keystore {{truststore_path}} \
+            -storetype pkcs12 \
             -alias "$fileName" \
             -trustcacerts -import -file "$file" \
             -deststorepass {{truststore_storepass}}
     done
+
+- name: Create BCFKS Truststore with Certificates - FIPS
+  shell: |
+    for file in {{ ssl_file_dir_final }}/generation/trustCAs/*; do
+        fileName="${file##*/}"
+        keytool -noprompt -keystore {{bcfks_truststore_path}} \
+            -storetype BCFKS \
+            -alias "$fileName" \
+            -trustcacerts -import -file "$file" \
+            -deststorepass {{truststore_storepass}} \
+            -providername BCFIPS \
+            -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+            -providerpath {% if installation_method == 'archive' %}{{archive_destination_path}}/confluent-{{confluent_package_version}}/{% else %}/usr/{% endif %}share/java/kafka/bc-fips-*.jar
+    done
+  when: create_bouncy_castle_keystore|bool

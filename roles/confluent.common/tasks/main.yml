@@ -3,32 +3,40 @@
   assert:
     that: lookup('config', 'DEFAULT_HASH_BEHAVIOUR') == 'merge'
     fail_msg: "Hash Merging must be enabled in ansible.cfg: Confirm current directory is cp-ansible and permissions are set to 755 not 777"
-    quiet: true
+  tags: validate
 
 - name: Gather OS Facts
   setup:
-    # Only gathers items in list, filters out the rest
-    filter: "{{item}}"
     gather_subset:
       - '!all'
-  loop:
-    - ansible_os_family
-    - ansible_distribution
+      - '!any'
+      - user
+      - os_family
+  tags: always
 
-# JVM Installation and Repo Setup
-- include_tasks: redhat.yml
+- name: Host Validations
+  include_tasks: host_validations.yml
+  when: validate_hosts|bool
+  tags: validate
+
+- name: Red Hat Repo Setup and Java Installation
+  include_tasks: redhat.yml
   when: ansible_os_family == "RedHat"
 
-- include_tasks: ubuntu.yml
+- name: Ubuntu Repo Setup and Java Installation
+  include_tasks: ubuntu.yml
   when: ansible_distribution == "Ubuntu"
 
-- include_tasks: debian.yml
+- name: Debian Repo Setup and Java Installation
+  include_tasks: debian.yml
   when: ansible_distribution == "Debian"
 
 # Process Archive File deployments
 - name: Create Confluent Platform install directory
   file:
     path: "{{archive_destination_path}}"
+    group: "{{ omit if archive_group == '' else archive_group }}"
+    owner: "{{ omit if archive_owner == '' else archive_owner }}"
     state: directory
     mode: 0755
   when: installation_method == "archive"
@@ -39,36 +47,59 @@
     src: "{{ confluent_archive_file_source }}"
     remote_src: "{{ confluent_archive_file_remote }}"
     dest: "{{archive_destination_path}}"
+    group: "{{ omit if archive_group == '' else archive_group }}"
+    owner: "{{ omit if archive_owner == '' else archive_owner }}"
     mode: 0755
     creates: "{{archive_destination_path}}/confluent-{{confluent_package_version}}"
   when: installation_method == "archive"
 
 - name: Create Jolokia directory
   file:
-    path: /opt/jolokia
+    path: "{{ jolokia_jar_path | dirname }}"
     state: directory
     mode: 0755
   when: jolokia_enabled|bool
+
+- name: Copy Jolokia Jar
+  copy:
+    src: "{{ jolokia_jar_url }}"
+    dest: "{{ jolokia_jar_path }}"
+    mode: 0755
+  when:
+    - jolokia_enabled|bool
+    - not jolokia_url_remote|bool
+    - not ansible_check_mode
 
 - name: Download Jolokia Jar
   get_url:
     url: "{{ jolokia_jar_url }}"
     dest: "{{ jolokia_jar_path }}"
     mode: 0755
-  register: joklokia_download_result
-  until: joklokia_download_result is success
+  register: jolokia_download_result
+  until: jolokia_download_result is success
   retries: 5
   delay: 5
   when:
     - jolokia_enabled|bool
+    - jolokia_url_remote|bool
     - not ansible_check_mode
 
 - name: Create Prometheus install directory
   file:
-    path: /opt/prometheus
+    path: "{{ jmxexporter_jar_path | dirname }}"
     state: directory
     mode: 0755
   when: jmxexporter_enabled|bool
+
+- name: Copy Prometheus Jar
+  copy:
+    src: "{{ jmxexporter_jar_url }}"
+    dest: "{{ jmxexporter_jar_path }}"
+    mode: 0755
+  when:
+    - jmxexporter_enabled|bool
+    - not jmxexporter_url_remote|bool
+    - not ansible_check_mode
 
 - name: Download Prometheus JMX Exporter Jar
   get_url:
@@ -81,41 +112,13 @@
   delay: 5
   when:
     - jmxexporter_enabled|bool
+    - jmxexporter_url_remote|bool
     - not ansible_check_mode
 
-- name: Download Confluent CLI Install Script - Standard
-  get_url:
-    url: https://cnfl.io/cli
-    dest: /tmp/install.sh
-    mode: 0755
-  when:
-    - confluent_cli_download_enabled|bool
-    - confluent_cli_custom_download_url is not defined
 
-- name: Install Confluent CLI - Standard
-  shell: "/tmp/install.sh -b {{ confluent_cli_path | dirname }}"
-  args:
-    creates: "{{ confluent_cli_path }}"
-  register: cli_download_result
-  until: cli_download_result is success
-  retries: 5
-  delay: 5
-  when:
-    - confluent_cli_download_enabled|bool
-    - confluent_cli_custom_download_url is not defined
-
-- name: Download Confluent CLI - Custom URL
-  get_url:
-    url: "{{ confluent_cli_custom_download_url }}"
-    dest: "{{ confluent_cli_path }}"
-    mode: 0755
-  register: cli_download_result
-  until: cli_download_result is success
-  retries: 5
-  delay: 5
-  when:
-    - confluent_cli_download_enabled|bool
-    - confluent_cli_custom_download_url is defined
+- name: Install Confluent CLI
+  include_tasks: confluent_cli.yml
+  when: confluent_cli_download_enabled|bool
 
 - set_fact:
     common_role_completed: true

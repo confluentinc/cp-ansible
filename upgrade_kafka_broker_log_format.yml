@@ -3,33 +3,40 @@
   hosts: kafka_broker
   serial: 1
   vars:
-    kafka_broker_upgrade_end_version: "6.0"
-    kafka_broker_rest_proxy_enabled: false
+    kafka_broker_upgrade_end_version: "6.1"
+  vars_files:
+    - roles/confluent.kafka_broker/defaults/main.yml
   handlers:
     - name: restart kafka
-      include_tasks: roles/confluent.kafka_broker/tasks/restart_kafka.yml
+      include_tasks: roles/confluent.kafka_broker/tasks/restart_and_wait.yml
   tasks:
+    - name: Gather OS Facts
+      setup:
+        # Only gathers items in list, filters out the rest
+        filter: ansible_os_family
+        gather_subset:
+          - '!all'
+
     - import_role:
         name: confluent.variables
 
     - name: Set confluent_server_enabled Variable
       include_tasks: tasks/set_confluent_server_enabled.yml
 
-    - set_fact:
-        log_message_format_version: 2.3
-      when: kafka_broker_upgrade_end_version is match('5.3.*')
+    - name: Load server.properties
+      slurp:
+        src: "{{ kafka_broker.config_file }}"
+      register: slurped_properties
 
     - set_fact:
-        log_message_format_version: 2.4
-      when: kafka_broker_upgrade_end_version is match('5.4.*')
+        kafka_broker_rest_proxy_enabled: "{{ True if (slurped_properties.content|b64decode).split('\n') | select('match', '^kafka.rest.enable=true') | list | length == 1 else False }}"
 
     - set_fact:
-        log_message_format_version: 2.5
-      when: kafka_broker_upgrade_end_version is match('5.5.*')
-
-    - set_fact:
-        log_message_format_version: 2.6
-      when: kafka_broker_upgrade_end_version is match('6.0.*')
+        log_message_format_version: "{{'2.3' if kafka_broker_upgrade_end_version is match('5.3.*') else
+          '2.4' if kafka_broker_upgrade_end_version is match('5.4.*') else
+          '2.5' if kafka_broker_upgrade_end_version is match('5.5.*') else
+          '2.6' if kafka_broker_upgrade_end_version is match('6.0.*') else
+          '2.7' }}"
 
     - name: Set Log Message Format Version to Current Version
       lineinfile:
@@ -38,3 +45,9 @@
         regexp: log.message.format.version.*
         state: present
       notify: restart kafka
+
+    - meta: flush_handlers
+
+    - name: Kafka Broker Health Check
+      include_tasks: roles/confluent.kafka_broker/tasks/health_check.yml
+      when: not ansible_check_mode

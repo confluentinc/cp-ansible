@@ -1,4 +1,8 @@
 ---
+- name: Get Principal used on the Inter Broker Listener
+  include_tasks: set_principal.yml
+  when: ksql_log_streaming_enabled | bool
+
 - name: RBAC Setup Tasks
   import_role:
     name: confluent.common
@@ -73,11 +77,6 @@
           }
         },
         "resourcePatterns": [
-          {
-            "resourceType":"Topic",
-            "name":"{{ksql_final_properties['ksql.service.id']}}-ksql_processing_log",
-            "patternType":"LITERAL"
-          },
           {
             "resourceType":"Group",
             "name":"_confluent-ksql-{{ksql_final_properties['ksql.service.id']}}",
@@ -172,3 +171,35 @@
       }
     status_code: 204
   when: ksql_monitoring_interceptors_enabled|bool
+
+- name: Grant ksql user the ResourceOwner role on the Processing Log Topic
+  uri:
+    url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/principals/User:{{item}}/roles/ResourceOwner/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster":"{{kafka_cluster_id}}"
+          }
+        },
+        "resourcePatterns": [
+          {
+            "resourceType":"Topic",
+            "name":"{{ksql_final_properties['ksql.logging.processing.topic.name']}}",
+            "patternType":"LITERAL"
+          }
+        ]
+      }
+    status_code: 204
+  loop:
+    - "{{ksql_ldap_user}}"
+    - "{{ksql_log4j_principal}}"
+  when: ksql_log_streaming_enabled | bool

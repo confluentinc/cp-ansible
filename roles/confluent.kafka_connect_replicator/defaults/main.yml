@@ -1,0 +1,37 @@
+---
+# More Kafka Connect Replicator variables are defined in the confluent.variables role
+
+### Boolean to reconfigure Kafka Connect Replicator's logging with the RollingFileAppender and log cleanup functionality.
+kafka_connect_replicator_custom_log4j: "{{ custom_log4j }}"
+
+### Root logger within Kafka Connect Replicator's log4j config. Only honored if kafka_connect_replicator_custom_log4j: true
+kafka_connect_replicator_log4j_root_logger: "INFO, replicatorAppender, stdout"
+
+kafka_connect_replicator_java_args:
+  - "{% if kafka_connect_replicator_ssl_mutual_auth_enabled| bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
+  - "{% if kafka_connect_replicator_jolokia_enabled|bool %}-javaagent:{{kafka_connect_replicator_jolokia_jar_path}}=config={{kafka_connect_replicator_jolokia_config}}{% endif %}"
+
+### Custom Java Args to add to the Kafka Connect Replicator Process
+kafka_connect_replicator_custom_java_args: ""
+
+kafka_connect_replicator_final_java_args: "{{ kafka_connect_replicator_java_args + [ kafka_connect_replicator_custom_java_args ] }}"
+
+# For following dictionaries, Key/Value Pairs with empty values will not be written into override.conf
+
+### Overrides to the Service Section of Kafka Connect Replicator Systemd File. This variable is a dictionary.
+kafka_connect_replicator_service_overrides:
+  LimitNOFILE: 100000
+  User: "{{ kafka_connect_replicator_user if kafka_connect_replicator_user != kafka_connect_replicator_default_user else '' }}"
+  Group: "{{ kafka_connect_replicator_group if kafka_connect_replicator_group != kafka_connect_replicator_default_group else '' }}"
+
+### Environment Variables to be added to the Kafka Connect Replicator Service. This variable is a dictionary.
+kafka_connect_replicator_service_environment_overrides:
+  KAFKA_HEAP_OPTS: "-Xms256M -Xmx2G"
+  KAFKA_OPTS: "{{ kafka_connect_replicator_final_java_args | java_arg_build_out }}"
+  KAFKA_LOG4J_OPTS: "{% if kafka_connect_replicator_custom_log4j|bool %}-Dlog4j.configuration=file:{{ kafka_connect_replicator.log4j_file }}{% endif %}"
+
+### Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
+kafka_connect_replicator_service_unit_overrides:
+
+### Time in seconds to wait before starting Kafka Connect Replicator Health Checks.
+kafka_connect_replicator_health_check_delay: 30

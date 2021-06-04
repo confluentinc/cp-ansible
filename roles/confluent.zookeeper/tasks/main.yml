@@ -2,6 +2,7 @@
 - include_role:
     name: confluent.common
   when: not common_role_completed|bool
+  tags: common
 
 - name: Gather OS Facts
   setup:
@@ -13,34 +14,55 @@
     - ansible_os_family
     - ansible_fqdn
 
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: confluent.common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ zookeeper_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
+# Install Packages
 - name: Install the Zookeeper Packages
   yum:
-    name: "{{item}}{{confluent_package_redhat_suffix}}"
+    name: "{{ zookeeper_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
-  loop: "{{zookeeper_packages}}"
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: package
+  notify: restart zookeeper
 
 - name: Install the Zookeeper Packages
   apt:
-    name: "{{item}}{{confluent_package_debian_suffix}}"
-  loop: "{{zookeeper_packages}}"
+    name: "{{ zookeeper_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: package
+  notify: restart zookeeper
 
-# Configure environment
 - name: Create Zookeeper Group
   group:
     name: "{{zookeeper_group}}"
 
+- name: Check if Zookeeper User Exists
+  # Create user task must be skipped for non-linux users
+  getent:
+    database: passwd
+    key: "{{zookeeper_user}}"
+  failed_when: false
+
 - name: Create Zookeeper User
   user:
     name: "{{zookeeper_user}}"
-    comment: "Zookeeper User"
+    comment: Confluent Kafka
     system: true
     group: "{{zookeeper_group}}"
+  when: (getent_passwd|default({}))[zookeeper_user] is not defined
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -64,12 +86,13 @@
     service_name: zookeeper
     user: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
     ca_cert_path: "{{zookeeper_ca_cert_path}}"
     cert_path: "{{zookeeper_cert_path}}"
     key_path: "{{zookeeper_key_path}}"
     export_certs: "{{zookeeper_export_certs}}"
   when: zookeeper_ssl_enabled|bool
+  tags: ssl
 
 - name: Configure Kerberos
   include_role:
@@ -80,7 +103,7 @@
     kerberos_keytab_path: "{{zookeeper_kerberos_keytab_path}}"
     kerberos_keytab_destination_path: "{{zookeeper_keytab_path}}"
     kerberos_handler: "restart zookeeper"
-  when: zookeeper_sasl_protocol == 'kerberos'
+  when: zookeeper_client_authentication_type == 'kerberos'
 
 - name: Copy Custom Zookeeper Files
   include_role:
@@ -193,12 +216,12 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-  when: zookeeper_sasl_protocol in ['kerberos', 'digest']
+  when: zookeeper_client_authentication_type in ['kerberos', 'digest'] or zookeeper_quorum_authentication_type in ['kerberos', 'digest']
   notify: restart zookeeper
 
 - name: Deploy JMX Exporter Config File
   copy:
-    src: "zookeeper.yml"
+    src: "{{zookeeper_jmxexporter_config_source_path}}"
     dest: "{{zookeeper_jmxexporter_config_path}}"
     mode: 0640
     owner: "{{zookeeper_user}}"

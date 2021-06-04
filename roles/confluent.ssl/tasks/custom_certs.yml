@@ -9,83 +9,36 @@
   copy:
     remote_src: "{{ssl_custom_certs_remote_src}}"
     src: "{{ssl_signed_cert_filepath}}"
-    dest: "{{cert_path}}"
+    dest: "{{ ssl_file_dir_final }}/{{service_name}}.chain"
+
+- name: Extract Final Cert from Signed Cert Chain
+  shell: |
+    tac {{ ssl_file_dir_final }}/{{service_name}}.chain | awk '!flag; /-----BEGIN CERTIFICATE-----/{flag = 1};' | tac > {{cert_path}}
 
 - name: Copy Key to Host
   copy:
     remote_src: "{{ssl_custom_certs_remote_src}}"
     src: "{{ssl_key_filepath}}"
+    dest: "{{ ssl_file_dir_final }}/generation/{{service_name}}.key"
+
+- name: Load Private Key
+  slurp:
+    src: "{{ ssl_file_dir_final }}/generation/{{service_name}}.key"
+  register: slurped_private_key
+
+- name: Copy Key to Final Location - Non Encrypted
+  copy:
+    remote_src: true
+    src: "{{ ssl_file_dir_final }}/generation/{{service_name}}.key"
     dest: "{{key_path}}"
+  when: "'BEGIN ENCRYPTED PRIVATE KEY' not in slurped_private_key.content|b64decode"
 
-- set_fact:
-    extra_args: ""
-  when: not fips_enabled|bool
-
-- set_fact:
-    extra_args: "-providerpath {{fips_jar_path}} -providerclass {{fips_provider_class}}"
-  when: fips_enabled|bool
-
-- name: Count Certificates in Ca Cert
+- name: Create Non Encrypted Private Key
   shell: |
-    grep -c "END CERTIFICATE" {{ca_cert_path}}
-  check_mode: false
-  register: ca_cert_count_grep
+    openssl rsa -in {{ ssl_file_dir_final }}/generation/{{service_name}}.key \
+      -out {{key_path}} {% if ssl_key_password is defined %}-passin pass:{{ssl_key_password}} -passout pass:{{ssl_key_password}}{% endif %}
+  when: "'BEGIN ENCRYPTED PRIVATE KEY' in slurped_private_key.content|b64decode"
+  no_log: "{{mask_secrets|bool}}"
 
-- name: Set the Certificate Count Var
-  set_fact:
-    cert_count: "{{ca_cert_count_grep.stdout}}"
-
-- name: Create Truststore and Import the CA Chain
-  include_tasks: import_ca_chain.yml
-  when: cert_count|int > 1
-
-- name: Create Truststore and Import the CA Cert
-  shell: |
-    keytool -noprompt -keystore {{truststore_path}} \
-      -storetype pkcs12 \
-      -alias CARoot \
-      -import -file {{ca_cert_path}} \
-      -storepass {{truststore_storepass}} \
-      -keypass {{truststore_storepass}} {{extra_args}}
-  when: cert_count|int == 1
-
-- name: Put Key and Signed Cert into pkcs12 Format with Key Password
-  shell: |
-    openssl pkcs12 -export \
-      -in {{cert_path}} \
-      -inkey {{key_path}} \
-      -passin pass:{{ssl_key_password}} \
-      -out /var/ssl/private/generation/client.p12 \
-      -name kafkassl \
-      -passout pass:mykeypassword
-  when: ssl_key_password is defined
-
-- name: Put Key and Signed Cert into pkcs12 Format without Key Password
-  shell: |
-    openssl pkcs12 -export \
-      -in {{cert_path}} \
-      -inkey {{key_path}} \
-      -out /var/ssl/private/generation/client.p12 \
-      -name kafkassl \
-      -passout pass:mykeypassword
-  when: ssl_key_password is not defined
-
-- name: Create Keystore
-  shell: |
-    keytool -importkeystore \
-      -srckeystore /var/ssl/private/generation/client.p12 \
-      -srcstoretype pkcs12 \
-      -srcstorepass mykeypassword \
-      -destkeystore {{keystore_path}} \
-      -deststoretype pkcs12 \
-      -deststorepass {{keystore_storepass}} \
-      -destkeypass {{keystore_storepass}} {{extra_args}}
-
-- name: Import the CA Cert into Keystore
-  shell: |
-    keytool -noprompt -keystore {{keystore_path}} \
-      -storetype pkcs12 \
-      -alias CARoot \
-      -import -file {{ca_cert_path}} \
-      -storepass {{keystore_storepass}} \
-      -keypass {{keystore_storepass}} {{extra_args}}
+- name: Create Keystore and Truststore from Certs
+  include_tasks: create_keystores_from_certs.yml

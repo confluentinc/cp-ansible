@@ -1,0 +1,50 @@
+---
+- name: Confluent CLI system check
+  assert:
+    that: ansible_facts['system']|lower == "linux"
+    fail_msg: "Confluent CLI system not supported"
+    quiet: true
+
+- name: Confluent CLI architecture check
+  assert:
+    that: confluent_cli_goarch[ansible_facts['architecture']] is defined
+    fail_msg: "Confluent CLI architecture not supported"
+    quiet: true
+
+- name: Confluent CLI create base path
+  file:
+    path: "{{item}}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{confluent_cli_base_path}}"
+    - "{{confluent_cli_base_path}}/{{confluent_cli_binary}}"
+
+- name: Expand remote Confluent CLI archive
+  unarchive:
+    src: "{{ confluent_cli_archive_file_source }}"
+    remote_src: "{{ confluent_cli_archive_file_remote }}"
+    dest: "{{confluent_cli_base_path}}"
+    group: "{{ omit if archive_group == '' else archive_group }}"
+    owner: "{{ omit if archive_owner == '' else archive_owner }}"
+    mode: 0755
+    creates: "{{confluent_cli_base_path}}/{{confluent_cli_binary}}/{{confluent_cli_binary}}"
+  when: confluent_cli_custom_download_url is not defined
+
+- name: Download Confluent CLI - Custom URL
+  get_url:
+    url: "{{ confluent_cli_custom_download_url }}"
+    dest: "{{confluent_cli_base_path}}/{{confluent_cli_binary}}/{{confluent_cli_binary}}"
+    mode: 0755
+  register: cli_download_result
+  until: cli_download_result is success
+  retries: 5
+  delay: 5
+  when: confluent_cli_custom_download_url is defined
+
+- name: "Confluent CLI create symlink in {{confluent_cli_path}}"
+  file:
+    src: "{{confluent_cli_base_path}}/{{confluent_cli_binary}}/{{confluent_cli_binary}}"
+    dest: "{{confluent_cli_path}}"
+    state: link
+    force: true

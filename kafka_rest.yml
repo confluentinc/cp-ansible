@@ -1,0 +1,47 @@
+---
+- name: Kafka Rest Status Finding
+  hosts: kafka_rest
+  gather_facts: false
+  tags: kafka_rest
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - name: Populate service facts
+      service_facts:
+
+    - name: Determine Installation Pattern - Parallel or Serial
+      set_fact:
+        install_pattern: "{{ 'parallel' if service_state != 'running' or kafka_rest_deployment_strategy == 'parallel' else 'serial' }}"
+      vars:
+        service_state: "{{ ansible_facts.services[kafka_rest_service_name + '.service'].state | default('unknown') }}"
+
+    - name: Group Hosts by Installation Pattern
+      group_by:
+        key: kafka_rest_{{install_pattern}}
+      changed_when: false
+
+- name: Kafka Rest Parallel Provisioning
+  hosts: kafka_rest_parallel
+  gather_facts: false
+  tags: kafka_rest
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.kafka_rest
+
+- name: Kafka Rest Serial Provisioning
+  hosts: kafka_rest_serial
+  serial: 1
+  gather_facts: false
+  tags: kafka_rest
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.kafka_rest
+
+    - name: Proceed Prompt
+      pause:
+        prompt: "Press Enter to Proceed to Next Node. Ctrl + C to Abort"
+      when: kafka_rest_pause_rolling_deployment|bool

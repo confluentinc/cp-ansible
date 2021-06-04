@@ -11,6 +11,29 @@
       changed_when: false
       failed_when: linecheck.rc != 1
 
+    - name: Create Topic
+      shell: |
+        kafka-topics --bootstrap-server mds-kafka-broker1:9091 \
+          --command-config /etc/kafka/client.properties \
+          --create --if-not-exists --topic test1
+      run_once: true
+
+    - name: Consume audit logs topic
+      shell: |
+        timeout 10 kafka-console-consumer --bootstrap-server kafka-broker1:9091 \
+            --consumer.config /etc/kafka/client.properties \
+            --from-beginning --topic confluent-audit-log-events
+      register: output
+      run_once: true
+      failed_when: false
+
+    - name: Assert audit log there
+      assert:
+        that:
+          - "'\"resourceType\":\"Topic\",\"resourceName\":\"test1\"' in output.stdout"
+        fail_msg: "test1 topic creation should be in audit logs topic"
+        quiet: true
+
 - name: Verify - schema_registry
   hosts: schema_registry2
   gather_facts: false

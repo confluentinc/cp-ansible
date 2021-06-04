@@ -2,6 +2,7 @@
 - include_role:
     name: confluent.common
   when: not common_role_completed|bool
+  tags: common
 
 - name: Gather OS Facts
   setup:
@@ -13,35 +14,54 @@
     - ansible_os_family
     - ansible_fqdn
 
-# Install Packages
-- name: Install the KSQL Packages
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: confluent.common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ ksql_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
+- name: Install the Ksql Packages
   yum:
-    name: "{{item}}{{confluent_package_redhat_suffix}}"
+    name: "{{ ksql_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
-  loop: "{{ksql_packages}}"
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: package
+  notify: restart ksql
 
-- name: Install the KSQL Packages
+- name: Install the Ksql Packages
   apt:
-    name: "{{item}}{{confluent_package_debian_suffix}}"
-  loop: "{{ksql_packages}}"
+    name: "{{ ksql_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: package
+  notify: restart ksql
 
-# Configure environment
 - name: Create Ksql Group
   group:
     name: "{{ksql_group}}"
 
+- name: Check if Ksql User Exists
+  # Create user task must be skipped for non-linux users
+  getent:
+    database: passwd
+    key: "{{ksql_user}}"
+  failed_when: false
+
 - name: Create Ksql User
   user:
     name: "{{ksql_user}}"
-    comment: "Connect Distributed User"
+    comment: Confluent KSQL
     system: true
     group: "{{ksql_group}}"
+  when: (getent_passwd|default({}))[ksql_user] is not defined
 
 - name: Set Ksql streams dir permissions
   file:
@@ -73,15 +93,27 @@
     service_name: ksql
     user: "{{ksql_user}}"
     group: "{{ksql_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
     ca_cert_path: "{{ksql_ca_cert_path}}"
     cert_path: "{{ksql_cert_path}}"
     key_path: "{{ksql_key_path}}"
     export_certs: "{{ksql_export_certs}}"
   when: >
     ksql_ssl_enabled|bool or
-    kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool or
-    mds_tls_enabled | bool
+    ( kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool and not public_certificates_enabled|bool ) or
+    ( mds_tls_enabled|bool and not public_certificates_enabled|bool ) or
+    ( 'schema_registry' in groups and schema_registry_ssl_enabled|bool )
+  tags: ssl
+
+- name: Import Public Confluent Cloud Certificates Authority Certs into Truststore
+  # Only necessary if there is a truststore, otherwise case rely on Java default CAs
+  include_tasks: ccloud_certs.yml
+  when: >
+    ( ccloud_kafka_enabled|bool or ccloud_schema_registry_enabled|bool ) and
+    ( ksql_ssl_enabled|bool or
+    ( kafka_broker_listeners[ksql_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool and not public_certificates_enabled|bool ) or
+    ( mds_tls_enabled|bool and not public_certificates_enabled|bool ) )
+  tags: ssl
 
 - name: Configure Kerberos
   include_role:
@@ -92,7 +124,7 @@
     kerberos_keytab_path: "{{ksql_kerberos_keytab_path}}"
     kerberos_keytab_destination_path: "{{ksql_keytab_path}}"
     kerberos_handler: "restart ksql"
-  when: kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
+  when: (kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI') or (kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' and ksql_log_streaming_enabled | bool)
 
 - name: Copy Custom KSQL Files
   include_role:
@@ -116,6 +148,21 @@
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
 
+- name: Create Ksql Config with Secrets Protection
+  include_role:
+    name: confluent.common
+    tasks_from: secrets_protection.yml
+  vars:
+    encrypt_passwords: "{{ ksql_secrets_protection_encrypt_passwords }}"
+    properties: "{{ ksql_secrets_protection_encrypt_properties }}"
+    config_path: "{{ ksql.config_file }}"
+    config_template: ksql-server.properties.j2
+    secrets_file: "{{ ksql_secrets_protection_file }}"
+    secrets_file_owner: "{{ ksql_user }}"
+    secrets_file_group: "{{ ksql_group }}"
+    handler: restart ksql
+  when: ksql_secrets_protection_enabled|bool
+
 - name: Create Ksql Config
   template:
     src: ksql-server.properties.j2
@@ -123,8 +170,8 @@
     mode: 0640
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
-  notify:
-    - restart ksql
+  notify: restart ksql
+  when: not ksql_secrets_protection_enabled|bool
 
 - name: Create Logs Directory
   file:
@@ -134,12 +181,23 @@
     owner: "{{ksql_user}}"
     mode: 0770
 
-- name: Set Permissions on Log4j Conf
+- name: Create log4j Directory
   file:
-    path: "{{ksql.log4j_file}}"
+    path: "{{ksql.log4j_file | dirname}}"
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
+    state: directory
+    mode: 0750
+
+- name: Create Ksql log4j Config
+  template:
+    src: ksql-server_log4j.properties.j2
+    dest: "{{ksql.log4j_file}}"
     mode: 0640
+    owner: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+  when: ksql_custom_log4j|bool
+  notify: restart ksql
 
 - name: Create Ksql Jolokia Config
   template:
@@ -150,16 +208,6 @@
     group: "{{ksql_group}}"
   when: ksql_jolokia_enabled|bool
   notify: restart ksql
-
-- name: Enable Secrets Protection
-  include_role:
-    name: confluent.common
-    tasks_from: secrets_protection.yml
-  vars:
-    encrypt_passwords: "{{ ksql_secrets_protection_encrypt_passwords }}"
-    properties: "{{ ksql_secrets_protection_encrypt_properties }}"
-    config_path: "{{ ksql.config_file }}"
-  when: ksql_secrets_protection_enabled|bool
 
 - name: Create RocksDB Directory
   file:
@@ -180,12 +228,32 @@
 
 - name: Deploy JMX Exporter Config File
   copy:
-    src: "ksql.yml"
+    src: "{{ksql_jmxexporter_config_source_path}}"
     dest: "{{ksql_jmxexporter_config_path}}"
     mode: 0640
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
   when: ksql_jmxexporter_enabled|bool
+
+- name: Create Basic Auth Jaas File
+  template:
+    src: jaas.conf.j2
+    dest: "{{ksql.jaas_file}}"
+    mode: 0640
+    owner: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+  notify: restart ksql
+  when: ksql_authentication_type == 'basic'
+
+- name: Create Basic Auth Password File
+  template:
+    src: password.properties.j2
+    dest: "{{ksql.password_file}}"
+    mode: 0640
+    owner: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+  notify: restart ksql
+  when: ksql_authentication_type == 'basic'
 
 - name: Create Service Override Directory
   file:

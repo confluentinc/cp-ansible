@@ -1,14 +1,23 @@
 ---
 - name: KSQL Upgrade
   hosts: ksql
+  gather_facts: false
   environment: "{{ proxy_env }}"
   serial: 1
   tasks:
+    - name: Gather OS Facts
+      setup:
+        # Only gathers items in list, filters out the rest
+        filter: ansible_os_family
+        gather_subset:
+          - '!all'
+
     - import_role:
         name: confluent.variables
 
-    - shell: "egrep 'ssl.client.auth ?= ?true' {{ ksql.config_file }}"
+    - shell: "egrep -i 'ssl.client.auth ?= ?true' {{ ksql.config_file }}"
       register: mtls_check
+      changed_when: false
       failed_when: false
 
     - name: Set MTLS Variable
@@ -18,18 +27,26 @@
     - name: Get Package Facts
       package_facts:
         manager: auto
+      when: installation_method == "package"
 
-    - set_fact:
-        confluent_server_enabled: true
-      when: ansible_facts.packages['confluent-server'] is defined
-
-    - set_fact:
-        confluent_server_enabled: false
-      when: ansible_facts.packages['confluent-kafka-2.12'] is defined
-
-    - name: Set Current Package Version
+    - name: Set ksql_current_version variable - Package
       set_fact:
+        confluent_server_enabled: "{{ True if ansible_facts.packages['confluent-server'] is defined else False }}"
         ksql_current_version: "{{ ansible_facts.packages['confluent-ksqldb'][0]['version'] }}"
+      when: installation_method == "package"
+
+    - name: Load override.conf
+      slurp:
+        src: "{{ ksql.systemd_override }}"
+      register: slurped_override
+      when: installation_method == "archive"
+
+    - name: Set ksql_current_version variable - Archive
+      set_fact:
+        ksql_current_version: "{{ (slurped_override.content|b64decode) .split('\n') |
+          select('match', '^ExecStart=' + archive_config_base_path + '/confluent-(.*)/bin/ksql-server-start ' + ksql.config_file) |
+          list | first | regex_search('[0-9]+(.[0-9]+)+') }}"
+      when: installation_method == "archive"
 
     - debug:
         msg: "Current version: {{ksql_current_version}}   Upgrade to version: {{confluent_package_version}}"
@@ -39,7 +56,6 @@
         that:
           - ksql_current_version is version('5.5.0', '>=')
         fail_msg: "Current KSQL Version: {{ksql_current_version}} is lower than the minimal supported upgrade version: 5.5.0"
-        quiet: true
 
     - name: Create Backup Directory
       file:
@@ -47,18 +63,24 @@
         path: "/tmp/upgrade/{{ ksql_service_name }}"
         state: directory
         mode: 0640
+      when: installation_method == "package"
 
     - set_fact:
         timestamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+      when: installation_method == "package"
 
     - name: Backup Configuration files
       copy:
         src: "{{ item }}"
         remote_src: true
         dest: "/tmp/upgrade/{{ ksql_service_name }}/{{ item | basename }}-{{timestamp}}"
+        owner: "{{ ksql_user }}"
+        group: "{{ ksql_group}}"
+        mode: 0640
       loop:
         - "{{ ksql.config_file }}"
         - "{{ ksql.systemd_override }}"
+      when: installation_method == "package"
       # Files cannot be copied because directory is not created in check mode
       ignore_errors: "{{ ansible_check_mode }}"
 
@@ -80,6 +102,7 @@
       when:
         - ansible_os_family == "RedHat"
         - not confluent_server_enabled|bool
+        - installation_method == "package"
       # Packages will not be found in check mode because repos not changed
       ignore_errors: "{{ ansible_check_mode }}"
 
@@ -90,6 +113,7 @@
       when:
         - ansible_os_family == "Debian"
         - not confluent_server_enabled|bool
+        - installation_method == "package"
       # Packages will not be found in check mode because repos not changed
       ignore_errors: "{{ ansible_check_mode }}"
 
@@ -97,8 +121,11 @@
       yum:
         name: "{{item}}{{confluent_package_redhat_suffix}}"
         state: latest
+        update_cache: true
       loop: "{{ ksql_packages }}"
-      when: ansible_os_family == "RedHat"
+      when:
+        - ansible_os_family == "RedHat"
+        - installation_method == "package"
       # Packages will not be found in check mode because repos not changed
       ignore_errors: "{{ ansible_check_mode }}"
 
@@ -107,7 +134,9 @@
         name: "{{item}}{{confluent_package_debian_suffix}}"
         update_cache: true
       loop: "{{ ksql_packages }}"
-      when: ansible_os_family == "Debian"
+      when:
+        - ansible_os_family == "Debian"
+        - installation_method == "package"
       # Packages will not be found in check mode because repos not changed
       ignore_errors: "{{ ansible_check_mode }}"
 
@@ -116,11 +145,31 @@
         dest: "{{ item }}"
         remote_src: true
         src: "/tmp/upgrade/{{ ksql_service_name }}/{{ item | basename }}-{{timestamp}}"
+        owner: "{{ ksql_user }}"
+        group: "{{ ksql_group}}"
+        mode: 0640
       loop:
         - "{{ ksql.config_file }}"
         - "{{ ksql.systemd_override }}"
+      when: installation_method == "package"
       # Files cannot be copied because directory is not created in check mode
       ignore_errors: "{{ ansible_check_mode }}"
+
+    - name: Copy Service from Archive Directory to System
+      copy:
+        src: "{{binary_base_path}}/lib/systemd/system/{{ksql.systemd_file|basename}}"
+        remote_src: true
+        dest: "{{ksql.systemd_file}}"
+        mode: 0644
+        force: true
+      when: installation_method == "archive"
+
+    - name: Update Override to Use New Version
+      lineinfile:
+        path: "{{ ksql.systemd_override }}"
+        line: "ExecStart={{archive_config_base_path}}/confluent-{{confluent_package_version}}/bin/ksql-server-start {{ ksql.config_file }}"
+        regexp: "ExecStart={{archive_config_base_path}}/confluent-(.*)/bin/ksql-server-start {{ ksql.config_file }}"
+      when: installation_method == "archive"
 
     - name: Update RBAC Configs
       lineinfile:
@@ -128,7 +177,7 @@
         regexp: "{{ item }}"
         state: absent
       loop:
-        - 'rest.servlet.initializor.classes=io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecirutyHandler'
+        - 'rest.servlet.initializor.classes=io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler'
         - 'websocket.servlet.initializor.classes=io.confluent.common.security.initializer.InstallBearerOrBasicSecurityHandler'
       when: rbac_enabled|bool
 
