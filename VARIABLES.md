@@ -1902,7 +1902,7 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### kafka_broker_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Kafka.
+Boolean to encrypt all properties containing 'password' or 'basic.auth.user.info' for Kafka.
 
 Default:  "{{kafka_broker_secrets_protection_enabled}}"
 
@@ -1926,7 +1926,7 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### schema_registry_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Schema Registry.
+Boolean to encrypt all properties containing 'password' or 'basic.auth.user.info' for Schema Registry.
 
 Default:  "{{schema_registry_secrets_protection_enabled}}"
 
@@ -1950,7 +1950,7 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### kafka_connect_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Connect.
+Boolean to encrypt all properties containing 'password' or 'basic.auth.user.info' for Connect.
 
 Default:  "{{kafka_connect_secrets_protection_enabled}}"
 
@@ -1974,7 +1974,7 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### kafka_rest_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Rest Proxy.
+Boolean to encrypt all properties containing 'password' or 'basic.auth.user.info' for Rest Proxy.
 
 Default:  "{{kafka_rest_secrets_protection_enabled}}"
 
@@ -1998,7 +1998,7 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### ksql_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for KSQL.
+Boolean to encrypt all properties containing 'password' or 'basic.auth.user.info' for KSQL.
 
 Default:  "{{ksql_secrets_protection_enabled}}"
 
@@ -2022,7 +2022,7 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### control_center_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Control Center.
+Boolean to encrypt all properties containing 'password' or 'basic.auth.user.info' for Control Center.
 
 Default:  "{{control_center_secrets_protection_enabled}}"
 
