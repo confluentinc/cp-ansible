@@ -1,7 +1,7 @@
 ---
 - name: Create SSL Certificate Directory
   file:
-    path: /var/ssl/private
+    path: /var/ssl/private/kafka_connect_replicator_producer
     state: directory
     mode: 0755
   when: copy_certs | default(True)
@@ -11,31 +11,55 @@
     src: "{{ kafka_connect_replicator_producer_erp_pem_file }}"
     dest: "{{ kafka_connect_replicator_producer_rbac_enabled_public_pem_path }}"
     mode: 0640
-    owner: "{{user}}"
-    group: "{{group}}"
+    owner: "{{kafka_connect_replicator_user}}"
+    group: "{{kafka_connect_replicator_group}}"
   when: copy_certs | default(True)
 
-# Take confluent_replicator_white_list property, split into list
-- name: Set Replicator Topic White List
-  set_fact:
-    topic_white_list: "{{ kafka_connect_replicator_white_list.split(',') | default('')| difference(['']) }} "
+# - name: Grant Confluent Replicator User ResourceOwner on White List Topics
+#   uri:
+#     url: "{{kafka_connect_replicator_producer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_producer_ldap_user}}/roles/ResourceOwner/bindings"
+#     method: POST
+#     validate_certs: false
+#     force_basic_auth: true
+#     url_username: "{{kafka_connect_replicator_producer_erp_admin_user}}"
+#     url_password: "{{kafka_connect_replicator_producer_erp_admin_password}}"
+#     headers:
+#       Content-Type: application/json
+#     body_format: json
+#     body: >
+#       {
+#         "scope": {
+#           "clusters": {
+#             "kafka-cluster":"{{kafka_connect_replicator_producer_kafka_cluster_id}}"}},
+#             "resourcePatterns": [
+#               {
+#                 "resourceType":"Topic",
+#                 "name":"{{ item }}",
+#                 "patternType":"LITERAL"
+#               }
+#             ]
+#           }
+#         }
+#       }
+#     status_code: 204
+#   with_items: "{{ kafka_connect_replicator_white_list.split(',') }}"
 
 - name: Grant Confluent Replicator User ResourceOwner on White List Topics
   uri:
-    url: "{{confluent_replicator_mds_url.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/{{kafka_connect_replicator_producer_ldap_principal}}/roles/ResourceOwner/bindings"
+    url: "{{kafka_connect_replicator_producer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_producer_ldap_user}}/roles/ResourceOwner/bindings"
     method: POST
     validate_certs: false
     force_basic_auth: true
-    url_username: "{{confluent_replicator_erp_admin_user}}"
-    url_password: "{{confluent_replicator_erp_admin_password}}"
+    url_username: "{{kafka_connect_replicator_producer_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_producer_erp_admin_password}}"
     headers:
       Content-Type: application/json
     body_format: json
     body: >
       {
         "scope": {
-          "clusters": {
-            "kafka-cluster":"{{kafka_connect_replicator_producer_kafka_cluster_id}}"}},
+          "clusterName": "{{ kafka_connect_replicator_producer_kafka_cluster_id }}"
+        },
             "resourcePatterns": [
               {
                 "resourceType":"Topic",
@@ -47,4 +71,4 @@
         }
       }
     status_code: 204
-  with_items: "{{ topic_white_list }}"
+  with_items: "{{ kafka_connect_replicator_white_list.split(',') }}"

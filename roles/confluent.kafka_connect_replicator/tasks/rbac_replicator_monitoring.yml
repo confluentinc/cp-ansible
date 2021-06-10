@@ -1,7 +1,7 @@
 ---
 - name: Create SSL Certificate Directory
   file:
-    path: /var/ssl/private
+    path: /var/ssl/private/kafka_connect_replicator_monitoring_interceptor
     state: directory
     mode: 0755
   when: copy_certs | default(True)
@@ -11,33 +11,58 @@
     src: "{{ kafka_connect_replicator_monitoring_interceptor_erp_pem_file }}"
     dest: "{{ kafka_connect_replicator_monitoring_interceptor_rbac_enabled_public_pem_path }}"
     mode: 0640
-    owner: "{{user}}"
-    group: "{{group}}"
+    owner: "{{kafka_connect_replicator_user}}"
+    group: "{{kafka_connect_replicator_group}}"
   when: copy_certs | default(True)
+
+# - name: Grant connect user the DeveloperWrite role on Monitoring Interceptor Topic
+#   uri:
+#     url: "{{kafka_connect_replicator_monitoring_interceptor_erp_host.split(',')[0]}}/security/1.0/principals/User:{{kafka_connect_replicator_monitoring_interceptor_ldap_user}}/roles/DeveloperWrite/bindings"
+#     method: POST
+#     validate_certs: false
+#     force_basic_auth: true
+#     url_username: "{{kafka_connect_replicator_monitoring_interceptor_erp_admin_user}}"
+#     url_password: "{{kafka_connect_replicator_monitoring_interceptor_erp_admin_password}}"
+#     headers:
+#       Content-Type: application/json
+#     body_format: json
+#     body: >
+#       {
+#         "scope": {
+#           "clusters": {
+#             "kafka-cluster":"{{kafka_connect_replicator_monitoring_interceptor_kafka_cluster_id}}"
+#           }
+#         },
+#         "resourcePatterns": [{
+#           "resourceType": "Topic",
+#           "name": "{{kafka_connect_replicator_monitoring_interceptor_final_properties['confluent.monitoring.interceptor.topic']}}",
+#           "patternType":"LITERAL"
+#         }]
+#       }
+#     status_code: 204
+#   when: kafka_connect_replicator_monitoring_interceptors_enabled|bool
 
 - name: Grant connect user the DeveloperWrite role on Monitoring Interceptor Topic
   uri:
-    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{kafka_connect_replicator_monitoring_interceptor_ldap_user}}/roles/DeveloperWrite/bindings"
+    url: "{{kafka_connect_replicator_monitoring_interceptor_erp_host.split(',')[0]}}/security/1.0/principals/User:{{kafka_connect_replicator_monitoring_interceptor_ldap_user}}/roles/DeveloperWrite/bindings"
     method: POST
     validate_certs: false
     force_basic_auth: true
-    url_username: "{{mds_super_user}}"
-    url_password: "{{mds_super_user_password}}"
+    url_username: "{{kafka_connect_replicator_monitoring_interceptor_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_monitoring_interceptor_erp_admin_password}}"
     headers:
       Content-Type: application/json
     body_format: json
     body: >
       {
         "scope": {
-          "clusters": {
-            "kafka-cluster":"{{kafka_cluster_id}}"
-          }
+          "clusterName": "{{ kafka_connect_replicator_monitoring_interceptor_kafka_cluster_id }}"
         },
         "resourcePatterns": [{
           "resourceType": "Topic",
-          "name": "{{kafka_connect_final_properties['confluent.monitoring.interceptor.topic']}}",
+          "name": "{{kafka_connect_replicator_monitoring_interceptor_final_properties['confluent.monitoring.interceptor.topic']}}",
           "patternType":"LITERAL"
         }]
       }
     status_code: 204
-  when: kafka_connect_monitoring_interceptors_enabled|bool
+  when: kafka_connect_replicator_monitoring_interceptors_enabled|bool
