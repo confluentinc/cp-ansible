@@ -3358,7 +3358,7 @@ Default:  true
 
 Java Package to install on RHEL/Centos hosts. Possible values java-1.8.0-openjdk or java-11-openjdk
 
-Default:  java-1.8.0-openjdk
+Default:  java-11-openjdk
 
 ***
 
@@ -3366,7 +3366,7 @@ Default:  java-1.8.0-openjdk
 
 Java Package to install on Debian hosts. Possible values openjdk-8-jdk or openjdk-11-jdk
 
-Default:  openjdk-8-jdk
+Default:  openjdk-11-jdk
 
 ***
 
@@ -3374,7 +3374,7 @@ Default:  openjdk-8-jdk
 
 Java Package to install on Ubuntu hosts. Possible values openjdk-8-jdk or openjdk-11-jdk
 
-Default:  openjdk-8-jdk
+Default:  openjdk-11-jdk
 
 ***
 
