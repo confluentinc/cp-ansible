@@ -16,6 +16,27 @@
       list | first | regex_search('[0-9]+(.[0-9]+)+') }}"
   when: installation_method == "archive"
 
+- name: Load zookeeper.properties
+  slurp:
+    src: "{{ zookeeper.config_file }}"
+  register: slurped_properties
+
+# - debug:
+#     msg: "{{ (slurped_properties.content|b64decode).split('\n') }}"
+
+# - debug:
+#     msg: "{{ (slurped_properties.content|b64decode).split('\n') |
+#       select('match', '^ssl.clientAuth=need') }}"
+
+- name: Set Current zookeeper_ssl_enabled, Create Backup
+  set_fact:
+    zookeeper_ssl_enabled_backup: "{{ zookeeper_ssl_enabled }}"
+    zookeeper_ssl_enabled: "{{ (slurped_properties.content|b64decode).split('\n') |
+      select('match', '^ssl.clientAuth=need') | length > 0 }}"
+
+- debug:
+    msg: "{{ zookeeper_ssl_enabled }}"
+
 - name: Get Leader/Follower
   shell: >
     set -o pipefail &&
@@ -30,6 +51,13 @@
 
 - debug:
     msg: "{{ leader_query.stdout }}"
+
+- name: Restore zookeeper_ssl_enabled
+  set_fact:
+    zookeeper_ssl_enabled: "{{ zookeeper_ssl_enabled_backup }}"
+
+- debug:
+    msg: "{{ zookeeper_ssl_enabled }}"
 
 - name: "Group Hosts by Zookeeper Mode: Follower or Leader"
   group_by:
