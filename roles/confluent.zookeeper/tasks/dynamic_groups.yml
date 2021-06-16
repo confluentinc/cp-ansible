@@ -21,12 +21,6 @@
     src: "{{ zookeeper.config_file }}"
   register: slurped_properties
 
-- name: Set Current zookeeper_ssl_enabled, Create Backup
-  set_fact:
-    zookeeper_ssl_enabled_backup: "{{ zookeeper_ssl_enabled }}"
-    zookeeper_ssl_enabled: "{{ (slurped_properties.content|b64decode).split('\n') |
-      select('match', '^ssl.clientAuth=need') | length > 0 }}"
-
 - name: Get Leader/Follower
   shell: >
     set -o pipefail &&
@@ -35,16 +29,14 @@
     executable: /bin/bash
   vars:
     archive_version: "{{ zookeeper_current_version | default(confluent_package_version) }}"
+    zookeeper_ssl_enabled: "{{ (slurped_properties.content|b64decode).split('\n') |
+      select('match', '^ssl.clientAuth=need') | length > 0 }}"
   register: leader_query
   changed_when: false
   check_mode: false
 
 - debug:
     msg: "{{ leader_query.stdout }}"
-
-- name: Restore zookeeper_ssl_enabled
-  set_fact:
-    zookeeper_ssl_enabled: "{{ zookeeper_ssl_enabled_backup }}"
 
 - name: "Group Hosts by Zookeeper Mode: Follower or Leader"
   group_by:
