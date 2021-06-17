@@ -1,0 +1,70 @@
+---
+
+- set_fact:
+    timestamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+
+- name: Stop services
+  systemd:
+    name: "{{ item }}"
+    state: stopped
+    daemon_reload: yes
+  loop: "{{ services }}"
+
+- name: Create Backup Folders
+  file:
+    path: "/tmp/upgrade/{{ item | dirname }}"
+    state: directory
+    mode: 0640
+  loop: "{{ backup_files }}"
+
+- name: Backup Configuration files
+  copy:
+    src: "{{ item }}"
+    remote_src: yes
+    dest: "/tmp/upgrade/{{ item }}-{{timestamp}}"
+  loop: "{{ backup_files }}"
+
+- name: Remove the Packages - Red Hat
+  yum:
+    name: "confluent-*"
+    state: absent
+    autoremove: yes
+  when: ansible_os_family == "RedHat"
+
+- name: Remove the Packages - Debian
+  apt:
+    name: "confluent-*"
+    state: absent
+    autoremove: yes
+  when: ansible_os_family == "Debian"
+
+- name: Install the Packages - Red Hat
+  yum:
+    name: "{{item}}{{confluent_package_redhat_suffix}}"
+    update_cache: yes
+    state: latest
+  loop: "{{ packages }}"
+  when: ansible_os_family == "RedHat"
+
+- name: Install the Packages - Debian
+  apt:
+    name: "{{item}}{{confluent_package_debian_suffix}}"
+    update_cache: yes
+  loop: "{{ packages }}"
+  when: ansible_os_family == "Debian"
+
+- name: Put back configuration
+  copy:
+    dest: "{{ item }}"
+    remote_src: yes
+    src: "/tmp/upgrade/{{ item }}-{{timestamp}}"
+  loop: "{{ backup_files }}"
+
+- name: reload systemd
+  command: systemctl daemon-reload
+
+- name: Restart Service
+  systemd:
+    name: "{{ item }}"
+    state: restarted
+  loop: "{{ services }}"
