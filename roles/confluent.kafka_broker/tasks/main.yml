@@ -256,11 +256,25 @@
   when: "'GSSAPI' in kafka_broker_sasl_enabled_mechanisms or zookeeper_sasl_protocol in ['kerberos', 'digest']"
   notify: restart kafka
 
+- name: Create Zookeeper chroot
+  shell: >
+    {{ binary_base_path }}/bin/zookeeper-shell {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} \
+      {% if zookeeper_ssl_enabled|bool %}-zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
+      create {{zookeeper_chroot}} ""
+  register: create_chroot
+  run_once: true
+  check_mode: false
+  failed_when:
+    - "'Node already exists: ' + zookeeper_chroot not in create_chroot.stderr"
+    - "'Created ' + zookeeper_chroot not in create_chroot.stderr"
+  changed_when: "'Created ' + zookeeper_chroot in create_chroot.stderr"
+  when: zookeeper_chroot|length > 0
+
 - name: Create SCRAM Users
   shell: |
     {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
     {{ binary_base_path }}/bin/kafka-configs {% if zookeeper_ssl_enabled|bool %}--zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
-      --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} --alter \
+      --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
       --add-config 'SCRAM-SHA-512=[password={{ item.value['password'] }}]' \
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram_users_final|dict2items }}"
@@ -272,7 +286,7 @@
   shell: |
     {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
     {{ binary_base_path }}/bin/kafka-configs {% if zookeeper_ssl_enabled|bool %}--zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
-      --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} --alter \
+      --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
       --add-config 'SCRAM-SHA-256=[password={{ item.value['password'] }}]' \
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram256_users_final|dict2items }}"
