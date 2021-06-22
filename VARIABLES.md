@@ -540,6 +540,14 @@ Default:  "{{zookeeper.log_path}}"
 
 ***
 
+### zookeeper_chroot
+
+Chroot path in Zookeeper used by Kafka. Defaults to no chroot. Must begin with a /
+
+Default:  ""
+
+***
+
 ### zookeeper_jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on zookeeper
