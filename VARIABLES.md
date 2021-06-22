@@ -1860,19 +1860,19 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ***
 
-### secrets_protection_enabled
-
-Boolean to enable secrets protection on all components except Zookeeper
-
-Default:  false
-
-***
-
 ### mask_secrets
 
 Boolean to mask secrets in playbook output
 
 Default:  true
+
+***
+
+### secrets_protection_enabled
+
+Boolean to enable secrets protection on all components except Zookeeper
+
+Default:  false
 
 ***
 
@@ -1900,6 +1900,14 @@ Default:  generated_ssl_files/security.properties
 
 ***
 
+### secrets_protection_encrypt_passwords
+
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config'.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
 ### kafka_broker_secrets_protection_enabled
 
 Boolean to enable secrets protection in Kafka broker.
@@ -1910,9 +1918,9 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### kafka_broker_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Kafka.
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Kafka.
 
-Default:  "{{kafka_broker_secrets_protection_enabled}}"
+Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
@@ -1934,9 +1942,9 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### schema_registry_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Schema Registry.
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Schema Registry.
 
-Default:  "{{schema_registry_secrets_protection_enabled}}"
+Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
@@ -1958,9 +1966,9 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### kafka_connect_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Connect.
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Connect.
 
-Default:  "{{kafka_connect_secrets_protection_enabled}}"
+Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
@@ -1982,9 +1990,9 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### kafka_rest_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Rest Proxy.
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Rest Proxy.
 
-Default:  "{{kafka_rest_secrets_protection_enabled}}"
+Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
@@ -2006,9 +2014,9 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### ksql_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for KSQL.
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for KSQL.
 
-Default:  "{{ksql_secrets_protection_enabled}}"
+Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
@@ -2030,9 +2038,9 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### control_center_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Control Center.
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Control Center.
 
-Default:  "{{control_center_secrets_protection_enabled}}"
+Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
