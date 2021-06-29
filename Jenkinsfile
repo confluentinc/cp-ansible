@@ -90,7 +90,7 @@ def job = {
         ]
         echo "Overriding Ansible vars for testing with base-config:\n" + prettyPrint(toJson(override_config))
 
-        writeYaml file: "roles/confluent.test/base-config.yml", data: base_config
+        writeYaml file: "tests/base-config.yml", data: base_config
 
         molecule_args = "--base-config base-config.yml"
     }
@@ -100,7 +100,7 @@ def job = {
             sh """
 docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
 
-cd roles/confluent.test
+cd tests
 molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
             """
         }
@@ -111,7 +111,7 @@ def post = {
     withDockerServer([uri: dockerHost()]) {
         stage("Destroy Scenario: ${params.SCENARIO_NAME}") {
             sh """
-cd roles/confluent.test
+cd tests
 molecule destroy -s ${params.SCENARIO_NAME} || true
 """
         }
