@@ -1,0 +1,175 @@
+---
+driver:
+  name: docker
+platforms:
+  - name: zookeeper1
+    hostname: zookeeper1.confluent
+    groups:
+      - zookeeper
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  # Testing colocated secrets protection
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center
+      - schema_registry
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9021:9021"
+    networks:
+      - name: confluent
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: ../../roles/
+  config_options:
+    defaults:
+      hash_behaviour: merge
+  playbooks:
+    prepare: prepare.yml
+    converge: ../../all.yml
+  inventory:
+    group_vars:
+      all:
+        scenario_name: mtls-custombundle-rhel
+
+        ssl_enabled: true
+        fips_enabled: true
+
+        kafka_broker_custom_properties:
+          slash.double: 'that\\this'
+          slash.single: 'that\this'
+          slash.random: 'that\this\\whatever\whichever'
+
+        secrets_protection_enabled: true
+        secrets_protection_masterkey: "UWQYODNQVqwbQeFgytYYoMr+FjK9Q6I0F6r16u6Z0EI="
+        secrets_protection_security_file: "molecule/{{scenario_name}}/security.properties"
+        # Test the unique filter by adding a prop containing password
+        kafka_broker_secrets_protection_encrypt_properties: [advertised.listeners, broker.id, ssl.key.password]
+        schema_registry_secrets_protection_encrypt_properties: [ssl.keystore.location]
+        kafka_rest_secrets_protection_encrypt_passwords: false
+        kafka_rest_secrets_protection_encrypt_properties: [listeners, bootstrap.servers]
+
+        # cert creation script does not use fqdn, which is a requirement for zk ssl
+        zookeeper_ssl_enabled: false
+
+        ssl_custom_certs: true
+        ssl_ca_cert_filepath: "molecule/{{scenario_name}}/generated_ssl_files/caBundle.pem"
+        ssl_signed_cert_filepath: "molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}.chain"
+        ssl_key_filepath: "molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}.key"
+        # cert creation script does not put password on key, validates ssl try/catch
+        # ssl_key_password: keypass
+
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - lint
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    # - idempotence
+    - side_effect
+    - verify
+    - cleanup
+    - destroy

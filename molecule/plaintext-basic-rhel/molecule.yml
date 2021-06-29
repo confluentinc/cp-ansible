@@ -1,0 +1,171 @@
+---
+driver:
+  name: docker
+platforms:
+  # Unset env vars resolve to the empty string
+  - name: zookeeper1${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: zookeeper1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - zookeeper
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: kafka-broker1${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: kafka-broker1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: schema-registry1${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: schema-registry1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - schema_registry
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: kafka-rest1${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: kafka-rest1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - kafka_rest
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: kafka-connect1${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: kafka-connect1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - kafka_connect
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: ksql1${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: ksql1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - ksql
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: control-center1${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: control-center1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - control_center
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    ## Commenting below to avoid port collision on jenkins server
+    ## Uncomment to view c3 in browser at localhost:9021
+    published_ports:
+      - "9021:9021"
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: ../../roles/
+  config_options:
+    defaults:
+      hash_behaviour: merge
+  playbooks:
+    converge: ../../all.yml
+  inventory:
+    group_vars:
+      all:
+        scenario_name: plaintext-basic-rhel
+
+        # Kafka Rest API Basic Auth
+        kafka_broker_rest_proxy_authentication_type: basic
+        schema_registry_authentication_type: basic
+        kafka_connect_authentication_type: basic
+        ksql_authentication_type: basic
+        kafka_rest_authentication_type: basic
+        control_center_authentication_type: basic
+
+        kafka_broker_rest_proxy_basic_users:
+          client:
+            principal: client
+            password: client-secret
+            roles: client,admin
+
+        schema_registry_basic_users:
+          client:
+            principal: client
+            password: client-secret
+            roles: client,developer,admin
+
+        kafka_connect_basic_users:
+          admin:
+            principal: user1
+            password: password
+
+        ksql_basic_users:
+          admin:
+            principal: user1
+            password: user1-secret
+            roles: user1
+          client:
+            principal: client
+            password: client-secret
+            roles: client
+
+        kafka_rest_basic_users:
+          client:
+            principal: client
+            password: client-secret
+            roles: client
+
+        control_center_basic_users:
+          client:
+            principal: client
+            password: client-secret
+            roles: client
+
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - lint
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    # - idempotence
+    - side_effect
+    - verify
+    - cleanup
+    - destroy
