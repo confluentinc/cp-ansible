@@ -206,7 +206,7 @@ If you add a security feature to one component, like a schema registry authentic
 
 ## Testing
 
-Refer to our [How to test guide](HOW_TO_TEST.md) for how to set up Molecule testing on your development machine. We run all scenarios within `roles/confluent.test/molecule/` before each release. When developing a new feature, we ask that you add a test case in molecule. You may be inclined to make a new scenario to test it, but please consider adding your feature test to an existing scenario to save time/resources during our release testing.
+Refer to our [How to test guide](HOW_TO_TEST.md) for how to set up Molecule testing on your development machine. We run all scenarios within `molecule/` before each release. When developing a new feature, we ask that you add a test case in molecule. You may be inclined to make a new scenario to test it, but please consider adding your feature test to an existing scenario to save time/resources during our release testing.
 
 ## Linting
 
