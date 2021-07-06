@@ -84,6 +84,22 @@ Default:  false
 
 ***
 
+### fetch_log_files
+
+Boolean to have cp-ansible fetch log files upon a failed healthcheck. Can be overwritten for each component
+
+Default:  true
+
+***
+
+### fetch_log_files_exclude_patterns
+
+List or string of regex for log files to be excluded upon a failed healthcheck. Can be overwritten for each component
+
+Default:  ""
+
+***
+
 ### custom_log4j
 
 Boolean to configure ZK, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
@@ -436,6 +452,22 @@ Default:  "{{zookeeper_default_group}}"
 
 ***
 
+### zookeeper_fetch_log_files
+
+Boolean to have cp-ansible fetch zookeeper log files upon failure
+
+Default:  "{{ fetch_log_files }}"
+
+***
+
+### zookeeper_fetch_log_files_exclude_patterns
+
+List or string of regex for log files to be excluded upon a failed zookeeper healthcheck.
+
+Default:  "{{ fetch_log_files_exclude_patterns }}"
+
+***
+
 ### zookeeper_ssl_enabled
 
 Boolean to configure zookeeper with TLS Encryption. Also manages Java Keystore creation
@@ -617,6 +649,22 @@ Default:  "{{kafka_broker_configure_additional_brokers}}"
 Boolean to configure control plane listener on separate port, which defaults to 8089. Applied only if kafka_broker_configure_multiple_listeners is true
 
 Default:  false
+
+***
+
+### kafka_broker_fetch_log_files
+
+Boolean to have cp-ansible fetch kafka_broker log files upon failure
+
+Default:  "{{ fetch_log_files }}"
+
+***
+
+### kafka_broker_fetch_log_files_exclude_patterns
+
+List or string of regex for log files to be excluded upon a failed kafka_broker healthcheck.
+
+Default:  "{{ fetch_log_files_exclude_patterns }}"
 
 ***
 
@@ -828,6 +876,22 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, defaul
 
 ***
 
+### schema_registry_fetch_log_files
+
+Boolean to have cp-ansible fetch schema_registry log files upon failure
+
+Default:  "{{ fetch_log_files }}"
+
+***
+
+### schema_registry_fetch_log_files_exclude_patterns
+
+List or string of regex for log files to be excluded upon a failed schema_registry healthcheck.
+
+Default:  "{{ fetch_log_files_exclude_patterns }}"
+
+***
+
 ### schema_registry_ssl_enabled
 
 Boolean to configure schema registry with TLS Encryption. Also manages Java Keystore creation
@@ -969,6 +1033,22 @@ Default:  ""
 Set this variable to customize the Linux User that the Rest Proxy Service runs with. Default user is cp-kafka-rest.
 
 Default:  "{{kafka_rest_default_user}}"
+
+***
+
+### kafka_rest_fetch_log_files
+
+Boolean to have cp-ansible fetch kafka_rest log files upon failure
+
+Default:  "{{ fetch_log_files }}"
+
+***
+
+### kafka_rest_fetch_log_files_exclude_patterns
+
+List or string of regex for log files to be excluded upon a failed kafka_rest healthcheck.
+
+Default:  "{{ fetch_log_files_exclude_patterns }}"
 
 ***
 
@@ -1137,6 +1217,22 @@ Default:  "{{kafka_connect_default_user}}"
 Set this variable to customize the Linux Group that the Kafka Connect Service user belongs to. Default group is confluent.
 
 Default:  "{{kafka_connect_default_group}}"
+
+***
+
+### kafka_connect_fetch_log_files
+
+Boolean to have cp-ansible fetch kafka_connect log files upon failure
+
+Default:  "{{ fetch_log_files }}"
+
+***
+
+### kafka_connect_fetch_log_files_exclude_patterns
+
+List or string of regex for log files to be excluded upon a failed kafka_connect healthcheck.
+
+Default:  "{{ fetch_log_files_exclude_patterns }}"
 
 ***
 
@@ -1348,6 +1444,22 @@ Default:  "{{ksql_default_group}}"
 
 ***
 
+### ksql_fetch_log_files
+
+Boolean to have cp-ansible fetch ksql log files upon failure
+
+Default:  "{{ fetch_log_files }}"
+
+***
+
+### ksql_fetch_log_files_exclude_patterns
+
+List or string of regex for log files to be excluded upon a failed ksql healthcheck.
+
+Default:  "{{ fetch_log_files_exclude_patterns }}"
+
+***
+
 ### ksql_listener_port
 
 Port ksqlDB API exposed over
@@ -1537,6 +1649,22 @@ Default:  "{{control_center_default_user}}"
 Set this variable to customize the Linux Group that the Control Center Service user belongs to. Default group is confluent.
 
 Default:  "{{control_center_default_group}}"
+
+***
+
+### control_center_fetch_log_files
+
+Boolean to have cp-ansible fetch control_center log files upon failure
+
+Default:  "{{ fetch_log_files }}"
+
+***
+
+### control_center_fetch_log_files_exclude_patterns
+
+List or string of regex for log files to be excluded upon a failed control_center healthcheck.
+
+Default:  "{{ fetch_log_files_exclude_patterns }}"
 
 ***
 
@@ -2361,6 +2489,22 @@ Default:  true
 Boolean to enable health checks on Kafka Connect Replicator.
 
 Default:  true
+
+***
+
+### kafka_connect_replicator_fetch_log_files
+
+Boolean to have cp-ansible fetch kafka_connect_replicator log files upon failure
+
+Default:  "{{ fetch_log_files }}"
+
+***
+
+### kafka_connect_replicator_fetch_log_files_exclude_patterns
+
+List or string of regex for log files to be excluded upon a failed kafka_connect_replicator healthcheck.
+
+Default:  "{{ fetch_log_files_exclude_patterns }}"
 
 ***
 
@@ -3344,7 +3488,7 @@ Default:  "{{ custom_log4j }}"
 
 Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
 
-Default:  "INFO, stdout connectAppender"
+Default:  "INFO, stdout, connectAppender"
 
 ***
 
