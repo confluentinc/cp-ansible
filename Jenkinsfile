@@ -100,7 +100,7 @@ def job = {
             sh """
 docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
 
-molecule test -s ${params.SCENARIO_NAME}
+molecule test ${molecule_args} --base-config .config/molecule/config.yml -s ${params.SCENARIO_NAME}
             """
         }
     }
