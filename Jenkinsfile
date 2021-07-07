@@ -100,7 +100,7 @@ def job = {
             sh """
 docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
 
-molecule test -s ${params.SCENARIO_NAME} -- -e zookeeper_custom_java_args='-Dzookeeper.ssl.hostnameVerification=false -Dzookeeper.ssl.quorum.hostnameVerification=false'
+molecule test -s ${params.SCENARIO_NAME} -- -e zookeeper_custom_java_args="-Dzookeeper.ssl.hostnameVerification=false -Dzookeeper.ssl.quorum.hostnameVerification=false"
             """
         }
     }
