@@ -100,9 +100,7 @@ def job = {
             sh """
 docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
 
-python3.9 -m pip install 'molecule[lint,docker]==3.3.*'
-
-molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
+molecule test -s ${params.SCENARIO_NAME} -- -e zookeeper_custom_java_args='-Dzookeeper.ssl.hostnameVerification=false -Dzookeeper.ssl.quorum.hostnameVerification=false'
             """
         }
     }
