@@ -92,7 +92,8 @@ def job = {
 
         writeYaml file: "base-config.yml", data: base_config
 
-        molecule_args = "--base-config base-config.yml"
+        # by providing a base config outside of the default location, it is required to pass both
+        molecule_args = "--base-config base-config.yml --base-config .config/molecule/config.yml"
     }
 
     withDockerServer([uri: dockerHost()]) {
@@ -100,7 +101,7 @@ def job = {
             sh """
 docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
 
-molecule ${molecule_args} --base-config .config/molecule/config.yml test -s ${params.SCENARIO_NAME}
+molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
             """
         }
     }
