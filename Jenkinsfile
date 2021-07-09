@@ -92,7 +92,7 @@ def job = {
 
         writeYaml file: "base-config.yml", data: base_config
 
-        # by providing a base config outside of the default location, it is required to pass both
+        // by providing a base config outside of the default location, it is required to pass both
         molecule_args = "--base-config base-config.yml --base-config .config/molecule/config.yml"
     }
 
