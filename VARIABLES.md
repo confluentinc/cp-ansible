@@ -8,7 +8,7 @@ Below are the supported variables for the role confluent.variables
 
 Version of Confluent Platform to install
 
-Default:  6.1.1
+Default:  6.1.2
 
 ***
 
@@ -1809,6 +1809,14 @@ Default:
 Comma separated urls for mds servers. Only set if external_mds_enabled: true
 
 Default:  "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
+
+***
+
+### regenerate_token_pem
+
+To regenerate MDS Token Pem files on subsequent runs of the playbook, set this to true.F
+
+Default:  false
 
 ***
 
