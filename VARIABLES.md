@@ -1814,7 +1814,7 @@ Default:  "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localho
 
 ### regenerate_token_pem
 
-To regenerate MDS Token Pem files on subsequent runs of the playbook, set this to true.F
+To regenerate MDS Token Pem files on subsequent runs of the playbook, set this to true.
 
 Default:  false
 
