@@ -101,6 +101,11 @@ def job = {
             sh """
 docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
 
+cd ../
+mkdir -p ansible_collections/confluent
+cp -r $WORKSPACE ansible_collections/confluent/platform
+cd ansible_collections/confluent/platform
+
 molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
             """
         }
@@ -111,6 +116,7 @@ def post = {
     withDockerServer([uri: dockerHost()]) {
         stage("Destroy Scenario: ${params.SCENARIO_NAME}") {
             sh """
+cd ../ansible_collections/confluent/platform
 molecule destroy -s ${params.SCENARIO_NAME} || true
 """
         }
