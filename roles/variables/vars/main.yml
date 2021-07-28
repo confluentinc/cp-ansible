@@ -77,7 +77,7 @@ zookeeper_properties:
     properties: "{{ zookeeper_servers | split_to_dict }}"
 
 # Used only by zookeeper properties
-zookeeper_servers: "{% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}server.{{ hostvars[host]['zookeeper_id'] | default(groups.zookeeper.index(host) + 1)}}={{ zookeeper_current_node_hostname if host == inventory_hostname else hostvars[host]|resolve_hostname }}:{{zookeeper_peer_port}}:{{zookeeper_leader_port}}{% endfor %}"
+zookeeper_servers: "{% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}server.{{ hostvars[host]['zookeeper_id'] | default(groups.zookeeper.index(host) + 1)}}={{ zookeeper_current_node_hostname if host == inventory_hostname else hostvars[host]|confluent.platform.resolve_hostname }}:{{zookeeper_peer_port}}:{{zookeeper_leader_port}}{% endfor %}"
 
 zookeeper_combined_properties: "{{ zookeeper_properties | combine_properties }}"
 
@@ -133,7 +133,7 @@ kafka_broker_properties:
       log.dirs: "{{ kafka_broker.datadir | join(',') }}"
       listener.security.protocol.map: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
       listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://:{{ listener['value']['port'] }}{% endfor %}"
-      advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(hostvars[inventory_hostname]|resolve_hostname)  }}:{{ listener['value']['port'] }}{% endfor %}"
+      advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname)  }}:{{ listener['value']['port'] }}{% endfor %}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
       kafka.rest.enable: "{{kafka_broker_rest_proxy_enabled|string|lower}}"
   broker_id:
@@ -223,7 +223,7 @@ kafka_broker_properties:
   rbac_mds:
     enabled: "{{ rbac_enabled and not external_mds_enabled }}"
     properties:
-      confluent.metadata.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|resolve_hostname) }}:{{mds_port}}"
+      confluent.metadata.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname) }}:{{mds_port}}"
       confluent.metadata.server.listeners: "{{mds_http_protocol}}://0.0.0.0:{{mds_port}}"
       confluent.metadata.server.token.auth.enable: "true"
       confluent.metadata.server.token.max.lifetime.ms: 3600000
@@ -265,7 +265,7 @@ kafka_broker_properties:
     # Do not need duplicating confluent.metadata.server and confluent.http.server config, rely on mds configs when kafka is the mds
     enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) }}"
     properties:
-      confluent.http.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|resolve_hostname) }}:{{mds_port}}"
+      confluent.http.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname) }}:{{mds_port}}"
       confluent.http.server.listeners: "{{mds_http_protocol}}://0.0.0.0:{{mds_port}}"
   embedded_rest_proxy_ssl:
     enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_ssl_enabled }}"
@@ -427,7 +427,7 @@ schema_registry_properties:
       kafkastore.topic: _schemas
       kafkastore.topic.replication.factor: "{{schema_registry_default_internal_replication_factor}}"
       listeners: "{{schema_registry_http_protocol}}://0.0.0.0:{{schema_registry_listener_port}}"
-      host.name: "{{ hostvars[inventory_hostname]|resolve_hostname }}"
+      host.name: "{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}"
       inter.instance.protocol: "{{schema_registry_http_protocol}}"
       kafkastore.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else schema_registry_bootstrap_servers }}"
       confluent.license.topic: _confluent-license
@@ -551,7 +551,7 @@ kafka_connect_properties:
       connector.client.config.override.policy: All
       listeners: "{{kafka_connect_http_protocol}}://0.0.0.0:{{kafka_connect_rest_port}}"
       rest.advertised.listener: "{{kafka_connect_http_protocol}}"
-      rest.advertised.host.name: "{{ hostvars[inventory_hostname]|resolve_hostname }}"
+      rest.advertised.host.name: "{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}"
       rest.advertised.port: "{{kafka_connect_rest_port}}"
       bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_connect_bootstrap_servers }}"
       producer.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_connect_bootstrap_servers }}"
@@ -889,7 +889,7 @@ kafka_rest_properties:
     enabled: true
     properties:
       listeners: "{{kafka_rest_http_protocol}}://0.0.0.0:{{kafka_rest_port}}"
-      host.name: "{{ hostvars[inventory_hostname]|resolve_hostname }}"
+      host.name: "{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}"
       bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_rest_bootstrap_servers }}"
       confluent.license.topic: _confluent-license
   id:
@@ -1161,7 +1161,7 @@ kafka_connect_replicator_properties:
     properties:
       listeners: "{{kafka_connect_replicator_http_protocol}}://0.0.0.0:{{kafka_connect_replicator_port}}"
       rest.advertised.listener: "{{kafka_connect_replicator_http_protocol}}"
-      rest.advertised.host.name: "{{ hostvars[inventory_hostname]|resolve_hostname }}"
+      rest.advertised.host.name: "{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}"
       rest.advertised.port: "{{kafka_connect_replicator_port}}"
       confluent.topic.bootstrap.servers: "{{kafka_connect_replicator_bootstrap_servers}}"
       offset.start: "{{kafka_connect_replicator_offset_start}}"
