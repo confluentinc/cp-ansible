@@ -148,7 +148,7 @@ schema_registry_properties:
 Within the `schema_registry_properties` dictionary, there are subditionaries containing an enabled flag and a set of properties. In the above example, the ssl properties only need to be included when `schema_registry_ssl_enabled` is set to true. Below there is this line:
 
 ```
-schema_registry_combined_properties: "{{schema_registry_properties | combine_properties}}"
+schema_registry_combined_properties: "{{schema_registry_properties | confluent.platform.combine_properties}}"
 ```
 
 A `combine_properties` filter is used to merge all "enabled" property sets. And finally we use one final merge to enable customizing the property sets:
