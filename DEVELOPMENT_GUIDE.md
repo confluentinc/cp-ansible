@@ -179,7 +179,7 @@ Because properties are fully customizable, it is important to use the final prop
 Ansible itself has a robust set of filters, but at times they do not fit cp-ansible’s needs. We have defined additional filters at `plugins/filter/filters.py`. In the below example we combine a custom filter `get_sasl_mechanisms` and our of the box ansible filters to set a variable:
 
 ```
-kafka_broker_sasl_enabled_mechanisms: "{{ kafka_broker_listeners | get_sasl_mechanisms(sasl_protocol) | difference(['none']) | unique }}"
+kafka_broker_sasl_enabled_mechanisms: "{{ kafka_broker_listeners | confluent.platform.get_sasl_mechanisms(sasl_protocol) | difference(['none']) | unique }}"
 ```
 
 The `kafka_broker_sasl_enabled_mechanisms` variable is a list built out of all of the sasl mechanisms defined in the `kafka_broker_listeners` dictionary.
