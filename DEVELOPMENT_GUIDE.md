@@ -1,6 +1,6 @@
 # Development Guide
 
-The following document will be a reference guide to coding standards of cp-ansible. It is written to be idempotent, meaning whatever you set in your inventory file, the playbook and roles should provision on your hosts, and can be run multiple times without causing unnecessary changes to those hosts.
+The following document will be a reference guide to coding standards of cp-ansible. It is written to be idempotent, meaning whatever you set in your inventory file, the playbooks and roles should provision on your hosts, and can be run multiple times without causing unnecessary changes on those hosts or restarts to those services.
 
 ## Table Of Contents
 
@@ -19,7 +19,7 @@ The following document will be a reference guide to coding standards of cp-ansib
 [Branching Model](#branching-model)
 
 ## Roles
-Each Confluent component has its own role, with the name `confluent.<component_name>`. Within that role, `main.yml` is the entrypoint of all tasks run when the role is invoked. Here are a few tasks and coding standards associated with them:
+Each Confluent component has its own role, with the name `<component_name>`. Within that role, `main.yml` is the entrypoint of all tasks run when the role is invoked. Here are a few tasks and coding standards associated with them:
 
 ```
 - name: Write Service Overrides	(1)
@@ -72,7 +72,7 @@ dependencies:
   - role: confluent.variables
 ```
 
-What this means is all the variables defined in the confluent.variables role are accessible in the ksql provisioning tasks. When defining variables ask these questions:
+What this means is all the variables defined in the `variables` role are accessible in the ksql provisioning tasks. When defining variables ask these questions:
 
 1. Is the variable only used by tasks in one role? Yes -> Define variable  in `<role>/defaults/main.yml` Ex:
 
@@ -83,7 +83,7 @@ ksql_log4j_root_logger: "INFO, stdout, main"
 
 This log4j variable is only needed in the ksql’s log4j tasks.
 
-2. Is the variable needed by multiple components and should be customizable by users? Yes -> Define variable in `confluent.variables/defaults/main.yml` Ex:
+2. Is the variable needed by multiple components and should be customizable by users? Yes -> Define variable in `variables/defaults/main.yml` Ex:
 
 ```
 ### Boolean to configure ksqlDB with TLS Encryption. Also manages Java Keystore creation
@@ -92,7 +92,7 @@ ksql_ssl_enabled: "{{ssl_enabled}}"
 
 Now `ksql_ssl_enabled` may seem like its only relevant for ksql tasks, but control center needs to be aware of the ssl settings of ksqlDB in its provisioning logic
 
-3. Is the variable needed my multiple components and should not be customizable by users? Yes -> Define variable in `confluent.variables/vars/main.yml`
+3. Is the variable needed my multiple components and should not be customizable by users? Yes -> Define variable in `variables/vars/main.yml`
 
 ```
 ksql_service_name: "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('confluent-ksqldb' , 'confluent-ksql')}}"
@@ -120,7 +120,7 @@ git commit -m 'updated variable docs'
 
 ## Component Properties
 
-A complex aspect of CP-Ansible is setting the correct properties for a component based on variables set in an inventory or group_vars. There are many logic gates that determine if a set of properties should be added to a component or not. All of the logic surrounding which properties get added to a component is defined in `roles/confluent.variables/vars/main.yml`. Here is an example:
+A complex aspect of CP-Ansible is setting the correct properties for a component based on variables set in an inventory or group_vars. There are many logic gates that determine if a set of properties should be added to a component or not. All of the logic surrounding which properties get added to a component is defined in `roles/variables/vars/main.yml`. Here is an example:
 
 ```
 schema_registry_properties:
@@ -184,13 +184,15 @@ kafka_broker_sasl_enabled_mechanisms: "{{ kafka_broker_listeners | get_sasl_mech
 
 The `kafka_broker_sasl_enabled_mechanisms` variable is a list built out of all of the sasl mechanisms defined in the `kafka_broker_listeners` dictionary.
 
+Cp-ansible is written as an Ansible Collection. This means all custom filter invokations must use the Fully Qualified Filter Name, or simply put, must begin with `confluent.platform`
+
 ## Adding new features
 
 When adding new features to cp-ansible, ask these questions:
 
 1. What properties need to be added to enable this feature?
 
-Put those properties into the `<component>_properties` dictionary in `roles/confluent.variables/vars/main.yml`.
+Put those properties into the `<component>_properties` dictionary in `roles/variables/vars/main.yml`.
 
 2. What customizable variables should be defined to enable this feature?
 
@@ -198,7 +200,7 @@ See the Variables section.
 
 3. What tasks need to be added to enable this feature on a host?
 
-Maybe additional rolebindings need to be created or additional files put on a host. Put those tasks in `roles/confluent.<component>/tasks/main.yml`.
+Maybe additional rolebindings need to be created or additional files put on a host. Put those tasks in `roles/<component>/tasks/main.yml`.
 
 4. Does this feature need to be added to all components?
 
