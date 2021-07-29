@@ -184,7 +184,7 @@ kafka_broker_sasl_enabled_mechanisms: "{{ kafka_broker_listeners | get_sasl_mech
 
 The `kafka_broker_sasl_enabled_mechanisms` variable is a list built out of all of the sasl mechanisms defined in the `kafka_broker_listeners` dictionary.
 
-Cp-ansible is written as an Ansible Collection. This means all custom filter invokations must use the Fully Qualified Filter Name, or simply put, must begin with `confluent.platform`
+Cp-ansible is written as an Ansible Collection. This means all custom filter invokations must use their Fully Qualified Filter Name, or simply put, must begin with `confluent.platform.`
 
 ## Adding new features
 
