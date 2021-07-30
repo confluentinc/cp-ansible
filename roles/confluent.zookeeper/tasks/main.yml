@@ -14,12 +14,20 @@
     - ansible_os_family
     - ansible_fqdn
 
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: confluent.common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ zookeeper_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
 # Install Packages
 - name: Install the Zookeeper Packages
   yum:
-    name: "{{item}}{{confluent_package_redhat_suffix}}"
+    name: "{{ zookeeper_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
-  loop: "{{zookeeper_packages}}"
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
@@ -29,8 +37,7 @@
 
 - name: Install the Zookeeper Packages
   apt:
-    name: "{{item}}{{confluent_package_debian_suffix}}"
-  loop: "{{zookeeper_packages}}"
+    name: "{{ zookeeper_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
@@ -38,17 +45,24 @@
   tags: package
   notify: restart zookeeper
 
-# Configure environment
 - name: Create Zookeeper Group
   group:
     name: "{{zookeeper_group}}"
 
+- name: Check if Zookeeper User Exists
+  # Create user task must be skipped for non-linux users
+  getent:
+    database: passwd
+    key: "{{zookeeper_user}}"
+  failed_when: false
+
 - name: Create Zookeeper User
   user:
     name: "{{zookeeper_user}}"
-    comment: "Zookeeper User"
+    comment: Confluent Kafka
     system: true
     group: "{{zookeeper_group}}"
+  when: (getent_passwd|default({}))[zookeeper_user] is not defined
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system

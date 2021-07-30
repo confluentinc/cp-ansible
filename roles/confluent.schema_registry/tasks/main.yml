@@ -14,12 +14,20 @@
     - ansible_os_family
     - ansible_fqdn
 
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: confluent.common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ schema_registry_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
 # Install Packages
 - name: Install the Schema Registry Packages
   yum:
-    name: "{{item}}{{confluent_package_redhat_suffix}}"
+    name: "{{ schema_registry_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
-  loop: "{{schema_registry_packages}}"
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
@@ -29,8 +37,7 @@
 
 - name: Install the Schema Registry Packages
   apt:
-    name: "{{item}}{{confluent_package_debian_suffix}}"
-  loop: "{{schema_registry_packages}}"
+    name: "{{ schema_registry_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
@@ -38,17 +45,24 @@
   tags: package
   notify: restart schema-registry
 
-# Configure environment
 - name: Schema Registry Group
   group:
     name: "{{schema_registry_group}}"
 
-- name: Schema Registry User
+- name: Check if Schema Registry User Exists
+  # Create user task must be skipped for non-linux users
+  getent:
+    database: passwd
+    key: "{{schema_registry_user}}"
+  failed_when: false
+
+- name: Create Schema Registry User
   user:
     name: "{{schema_registry_user}}"
-    comment: "Schema Registry User"
+    comment: Confluent Schema Registry
     system: true
     group: "{{schema_registry_group}}"
+  when: (getent_passwd|default({}))[schema_registry_user] is not defined
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -121,10 +135,10 @@
     name: confluent.common
     tasks_from: secrets_protection.yml
   vars:
+    final_properties: "{{ schema_registry_final_properties }}"
     encrypt_passwords: "{{ schema_registry_secrets_protection_encrypt_passwords }}"
-    properties: "{{ schema_registry_secrets_protection_encrypt_properties }}"
+    encrypt_properties: "{{ schema_registry_secrets_protection_encrypt_properties }}"
     config_path: "{{ schema_registry.config_file }}"
-    config_template: schema-registry.properties.j2
     secrets_file: "{{schema_registry_secrets_protection_file}}"
     secrets_file_owner: "{{schema_registry_user}}"
     secrets_file_group: "{{schema_registry_group}}"
@@ -155,6 +169,8 @@
     tasks_from: update_log4j.yml
   vars:
     log4j_file: "{{schema_registry.log4j_file}}"
+    log4j_max_backup_index: "{{schema_registry_max_log_files}}"
+    log4j_max_file_size: "{{schema_registry_log_file_size}}"
     log4j_root_logger: "{{schema_registry_log4j_root_logger}}"
     handler: "restart schema-registry"
   when: schema_registry_custom_log4j|bool

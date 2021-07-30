@@ -4,6 +4,14 @@ Below are the supported variables for the role confluent.variables
 
 ***
 
+### confluent_package_version
+
+Version of Confluent Platform to install
+
+Default:  6.1.2
+
+***
+
 ### jolokia_url_remote
 
 To copy from Ansible control host or download
@@ -262,7 +270,7 @@ Default:  3
 
 ### sasl_protocol
 
-SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
+SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256
 
 Default:  none
 
@@ -289,6 +297,14 @@ Default:  false
 Boolean to create Keystores with Self Signed Certificates, defaults to true. Alternatively can use ssl_provided_keystore_and_truststore or ssl_custom_certs
 
 Default:  "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_certs|bool else true }}"
+
+***
+
+### ssl_file_dir
+
+Directory on hosts to store all ssl files.
+
+Default:  /var/ssl/private/
 
 ***
 
@@ -476,6 +492,14 @@ Default:  "{{zookeeper.log_path}}"
 
 ***
 
+### zookeeper_chroot
+
+Chroot path in Zookeeper used by Kafka. Defaults to no chroot. Must begin with a /
+
+Default:  ""
+
+***
+
 ### zookeeper_jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on zookeeper
@@ -582,7 +606,7 @@ Default:  3888
 
 ### zookeeper_copy_files
 
-Use to copy files from control node to zookeeper hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to zookeeper hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
@@ -750,7 +774,7 @@ Default:  /opt/prometheus/kafka.yml
 
 ### kafka_broker_copy_files
 
-Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
@@ -942,7 +966,7 @@ Default:  8078
 
 ### schema_registry_copy_files
 
-Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
@@ -1102,7 +1126,7 @@ Default:  8075
 
 ### kafka_rest_copy_files
 
-Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
@@ -1270,7 +1294,7 @@ Default:  8077
 
 ### kafka_connect_copy_files
 
-Use to copy files from control node to connect hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to connect hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
@@ -1470,7 +1494,7 @@ Default:  8076
 
 ### ksql_copy_files
 
-Use to copy files from control node to ksqlDB hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to ksqlDB hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
@@ -1574,7 +1598,7 @@ Default:  "{{control_center.appender_log_path}}"
 
 ### control_center_copy_files
 
-Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 
@@ -1593,6 +1617,30 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, defaul
 Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
 
 Default:  "{{ control_center.properties }}"
+
+***
+
+### sasl_scram_users
+
+Dictionary containing additional sasl scram users to be created during provisioning.
+
+Default:  {}
+
+***
+
+### sasl_scram256_users
+
+Dictionary containing additional sasl scram users to be created during provisioning.
+
+Default:  {}
+
+***
+
+### sasl_plain_users
+
+Dictionary containing additional sasl plain users to be created during provisioning.
+
+Default:  {}
 
 ***
 
@@ -1764,6 +1812,14 @@ Default:  "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localho
 
 ***
 
+### regenerate_token_pem
+
+To regenerate MDS Token Pem files on subsequent runs of the playbook, set this to true.
+
+Default:  false
+
+***
+
 ### rbac_component_additional_system_admins
 
 List of users to be granted system admin Role Bindings across all components
@@ -1812,19 +1868,19 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ***
 
-### secrets_protection_enabled
-
-Boolean to enable secrets protection on all components except Zookeeper
-
-Default:  false
-
-***
-
 ### mask_secrets
 
 Boolean to mask secrets in playbook output
 
 Default:  true
+
+***
+
+### secrets_protection_enabled
+
+Boolean to enable secrets protection on all components except Zookeeper
+
+Default:  false
 
 ***
 
@@ -1852,6 +1908,14 @@ Default:  generated_ssl_files/security.properties
 
 ***
 
+### secrets_protection_encrypt_passwords
+
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config'.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
 ### kafka_broker_secrets_protection_enabled
 
 Boolean to enable secrets protection in Kafka broker.
@@ -1862,9 +1926,9 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### kafka_broker_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Kafka.
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Kafka.
 
-Default:  "{{kafka_broker_secrets_protection_enabled}}"
+Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
@@ -1886,9 +1950,9 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### schema_registry_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Schema Registry.
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Schema Registry.
 
-Default:  "{{schema_registry_secrets_protection_enabled}}"
+Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
@@ -1910,9 +1974,9 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### kafka_connect_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Connect.
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Connect.
 
-Default:  "{{kafka_connect_secrets_protection_enabled}}"
+Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
@@ -1934,9 +1998,9 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### kafka_rest_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Rest Proxy.
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Rest Proxy.
 
-Default:  "{{kafka_rest_secrets_protection_enabled}}"
+Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
@@ -1958,9 +2022,9 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### ksql_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for KSQL.
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for KSQL.
 
-Default:  "{{ksql_secrets_protection_enabled}}"
+Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
@@ -1982,9 +2046,9 @@ Default:  "{{secrets_protection_enabled}}"
 
 ### control_center_secrets_protection_encrypt_passwords
 
-Boolean to encrypt all properties containing 'password' for Control Center.
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Control Center.
 
-Default:  "{{control_center_secrets_protection_enabled}}"
+Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
@@ -2480,7 +2544,7 @@ Default:  ""
 
 SCRAM principal for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2488,7 +2552,23 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 SCRAM password for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_sasl_scram256_principal
+
+SCRAM 256 principal for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_sasl_scram256_password
+
+SCRAM 256 password for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2496,7 +2576,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2504,7 +2584,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for Kafka Connect Replicator to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2664,7 +2744,7 @@ Default:  "{{kafka_connect_replicator_consumer_ssl_keystore_file_path}}"
 
 SCRAM principal for the Consumer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2672,7 +2752,23 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 SCRAM password for the Consumer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram256_principal
+
+SCRAM 256 principal for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram256_password
+
+SCRAM 256 password for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2680,7 +2776,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for the Consumer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2688,7 +2784,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for the Consumer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2768,7 +2864,7 @@ Default:  "{{kafka_connect_replicator_ssl_keystore_file_path}}"
 
 SCRAM principal for the Producer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2776,7 +2872,23 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
 
 SCRAM password for the Producer to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram256_principal
+
+SCRAM 256 principal for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram256_password
+
+SCRAM 256 password for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2784,7 +2896,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for the Producer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2792,7 +2904,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for the Producer to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2880,7 +2992,7 @@ Default:  "{{ kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_pa
 
 SCRAM principal for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal}}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal}}"
 
 ***
 
@@ -2888,7 +3000,23 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.principal}}"
 
 SCRAM password for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram256_principal
+
+SCRAM 256 principal for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram256_password
+
+SCRAM 256 password for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -2896,7 +3024,7 @@ Default:  "{{ sasl_scram_users.kafka_connect_replicator.password }}"
 
 SASL PLAIN principal for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ***
 
@@ -2904,7 +3032,7 @@ Default:  "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
 
 SASL PLAIN password for the Monitoring Interceptor to authenticate with.
 
-Default:  "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
@@ -3216,6 +3344,22 @@ Default:  "INFO, main"
 
 ***
 
+### control_center_max_log_files
+
+Max number of log files generated by Control Center. Only honored if control_center_custom_log4j: true
+
+Default:  10
+
+***
+
+### control_center_log_file_size
+
+Max size of a log file generated by Control Center. Only honored if control_center_custom_log4j: true
+
+Default:  100MB
+
+***
+
 ### control_center_custom_java_args
 
 Custom Java Args to add to the Control Center Process
@@ -3286,6 +3430,22 @@ Default:  "INFO, stdout, kafkaAppender"
 
 ***
 
+### kafka_broker_max_log_files
+
+Max number of log files generated by Kafka Broker. Only honored if kafka_broker_custom_log4j: true
+
+Default:  10
+
+***
+
+### kafka_broker_log_file_size
+
+Max size of a log file generated by Kafka Broker. Only honored if kafka_broker_custom_log4j: true
+
+Default:  100MB
+
+***
+
 ### kafka_broker_custom_java_args
 
 Custom Java Args to add to the Kafka Process
@@ -3344,7 +3504,23 @@ Default:  "{{ custom_log4j }}"
 
 Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
 
-Default:  "INFO, stdout connectAppender"
+Default:  "INFO, stdout, connectAppender"
+
+***
+
+### kafka_connect_max_log_files
+
+Max number of log files generated by Kafka Connect. Only honored if kafka_connect_custom_log4j: true
+
+Default:  10
+
+***
+
+### kafka_connect_log_file_size
+
+Max size of a log file generated by Kafka Connect. Only honored if kafka_connect_custom_log4j: true
+
+Default:  100MB
 
 ***
 
@@ -3410,6 +3586,22 @@ Default:  "INFO, stdout, file"
 
 ***
 
+### kafka_rest_max_log_files
+
+Max number of log files generated by Rest Proxy. Only honored if kafka_rest_custom_log4j: true
+
+Default:  10
+
+***
+
+### kafka_rest_log_file_size
+
+Max size of a log file generated by Rest Proxy. Only honored if kafka_rest_custom_log4j: true
+
+Default:  100MB
+
+***
+
 ### kafka_rest_custom_java_args
 
 Custom Java Args to add to the Rest Proxy Process
@@ -3469,6 +3661,22 @@ Default:  "{{ custom_log4j }}"
 Root logger within ksqlDB's log4j config. Only honored if ksql_custom_log4j: true
 
 Default:  "INFO, stdout, main"
+
+***
+
+### ksql_max_log_files
+
+Max number of log files generated by ksqlDB. Only honored if ksql_custom_log4j: true
+
+Default:  5
+
+***
+
+### ksql_log_file_size
+
+Max size of a log file generated by ksqlDB. Only honored if ksql_custom_log4j: true
+
+Default:  10MB
 
 ***
 
@@ -3542,6 +3750,22 @@ Default:  "INFO, stdout, file"
 
 ***
 
+### schema_registry_max_log_files
+
+Max number of log files generated by Schema Registry. Only honored if schema_registry_custom_log4j: true
+
+Default:  10
+
+***
+
+### schema_registry_log_file_size
+
+Max size of a log file generated by Schema Registry. Only honored if schema_registry_custom_log4j: true
+
+Default:  100MB
+
+***
+
 ### schema_registry_custom_java_args
 
 Custom Java Args to add to the Schema Registry Process
@@ -3601,6 +3825,22 @@ Default:  "{{ custom_log4j }}"
 Root logger within Zookeeper's log4j config. Only honored if zookeeper_custom_log4j: true
 
 Default:  INFO, stdout, zkAppender
+
+***
+
+### zookeeper_max_log_files
+
+Max number of log files generated by Zookeeper. Only honored if zookeeper_custom_log4j: true
+
+Default:  10
+
+***
+
+### zookeeper_log_file_size
+
+Max size of a log file generated by Zookeeper. Only honored if zookeeper_custom_log4j: true
+
+Default:  100MB
 
 ***
 

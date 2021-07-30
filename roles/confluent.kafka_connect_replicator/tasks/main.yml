@@ -14,12 +14,19 @@
     - ansible_os_family
     - ansible_fqdn
 
-# Install Packages
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: confluent.common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ kafka_connect_replicator_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
 - name: Install the Kafka Connect Replicator Packages
   yum:
-    name: "{{item}}{{confluent_package_redhat_suffix}}"
+    name: "{{ kafka_connect_replicator_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
-  loop: "{{kafka_connect_replicator_packages}}"
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
@@ -29,8 +36,7 @@
 
 - name: Install the Kafka Connect Replicator Packages
   apt:
-    name: "{{item}}{{confluent_package_debian_suffix}}"
-  loop: "{{kafka_connect_replicator_packages}}"
+    name: "{{ kafka_connect_replicator_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
@@ -38,17 +44,24 @@
   tags: package
   notify: Restart Kafka Connect Replicator
 
-# Configure environment
 - name: Create Kafka Connect Replicator Group
   group:
     name: "{{kafka_connect_replicator_group}}"
 
+- name: Check if Kafka Connect Replicator User Exists
+  # Create user task must be skipped for non-linux users
+  getent:
+    database: passwd
+    key: "{{kafka_connect_replicator_user}}"
+  failed_when: false
+
 - name: Create Kafka Connect Replicator User
   user:
     name: "{{kafka_connect_replicator_user}}"
-    comment: "Confluent Replicator User"
+    comment: Confluent Kafka Connect Replicator
     system: true
     group: "{{kafka_connect_replicator_group}}"
+  when: (getent_passwd|default({}))[kafka_connect_replicator_user] is not defined
 
 - name: Configure TLS for Kafka Connect Replicator Host
   include_role:
@@ -298,8 +311,8 @@
 - name: Create Kafka Connect Replicator Systemd override directory
   file:
     path: "{{kafka_connect_replicator.systemd_override | dirname}}"
-    owner: "{{kafka_connect_user}}"
-    group: "{{kafka_connect_group}}"
+    owner: "{{kafka_connect_replicator_user}}"
+    group: "{{kafka_connect_replicator_group}}"
     state: directory
     mode: 0640
 

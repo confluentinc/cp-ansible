@@ -14,12 +14,19 @@
     - ansible_os_family
     - ansible_fqdn
 
-# Install Packages
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: confluent.common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ control_center_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
 - name: Install the Control Center Packages
   yum:
-    name: "{{item}}{{confluent_package_redhat_suffix}}"
+    name: "{{ control_center_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
-  loop: "{{control_center_packages}}"
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
@@ -29,8 +36,7 @@
 
 - name: Install the Control Center Packages
   apt:
-    name: "{{item}}{{confluent_package_debian_suffix}}"
-  loop: "{{control_center_packages}}"
+    name: "{{ control_center_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
@@ -38,17 +44,25 @@
   tags: package
   notify: restart control center
 
-# Configure environment
 - name: Create Control Center Group
   group:
     name: "{{control_center_group}}"
 
+- name: Check if Control Center User Exists
+  # Create user task must be skipped for non-linux users
+  getent:
+    database: passwd
+    key: "{{control_center_user}}"
+  failed_when: false
+
 - name: Create Control Center User
   user:
     name: "{{control_center_user}}"
-    comment: "Control Center User"
+    comment: Confluent Control Center
     system: true
     group: "{{control_center_group}}"
+  when: (getent_passwd|default({}))[control_center_user] is not defined
+
 
 - name: Set Control Center Data Dir permissions
   file:
@@ -136,10 +150,10 @@
     name: confluent.common
     tasks_from: secrets_protection.yml
   vars:
+    final_properties: "{{ control_center_final_properties }}"
     encrypt_passwords: "{{ control_center_secrets_protection_encrypt_passwords }}"
-    properties: "{{ control_center_secrets_protection_encrypt_properties }}"
+    encrypt_properties: "{{ control_center_secrets_protection_encrypt_properties }}"
     config_path: "{{ control_center.config_file }}"
-    config_template: control-center.properties.j2
     secrets_file: "{{ control_center_secrets_protection_file }}"
     secrets_file_owner: "{{ control_center_user }}"
     secrets_file_group: "{{ control_center_group }}"
@@ -161,6 +175,7 @@
     path: /var/log/confluent/
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
+    mode: 0770
     state: directory
 
 - name: Create Logs Directory
@@ -177,6 +192,8 @@
     tasks_from: update_log4j.yml
   vars:
     log4j_file: "{{control_center.log4j_file}}"
+    log4j_max_backup_index: "{{control_center_max_log_files}}"
+    log4j_max_file_size: "{{control_center_log_file_size}}"
     log4j_root_logger: "{{control_center_log4j_root_logger}}"
     handler: "restart control center"
   when: control_center_custom_log4j|bool

@@ -8,18 +8,16 @@
     - import_role:
         name: confluent.variables
 
-    - name: Check if Kafka Service Running
-      shell: "systemctl show -p SubState {{kafka_rest_service_name}}"
-      changed_when: false
-      # On some SELinux enabled hosts this command will error out, handled in next set_fact task
-      failed_when: false
-      check_mode: false
-      register: substate
+    - name: Populate service facts
+      service_facts:
 
-    - set_fact:
-        install_pattern: "{{ 'parallel' if substate.stdout != 'SubState=running' or substate.rc == 1 or kafka_rest_deployment_strategy == 'parallel' else 'serial' }}"
+    - name: Determine Installation Pattern - Parallel or Serial
+      set_fact:
+        install_pattern: "{{ 'parallel' if service_state != 'running' or kafka_rest_deployment_strategy == 'parallel' else 'serial' }}"
+      vars:
+        service_state: "{{ ansible_facts.services[kafka_rest_service_name + '.service'].state | default('unknown') }}"
 
-    - name: "Group Hosts by Installation Pattern: Parallel or Serial"
+    - name: Group Hosts by Installation Pattern
       group_by:
         key: kafka_rest_{{install_pattern}}
       changed_when: false
@@ -36,6 +34,7 @@
 - name: Kafka Rest Serial Provisioning
   hosts: kafka_rest_serial
   serial: 1
+  any_errors_fatal: true
   gather_facts: false
   tags: kafka_rest
   environment: "{{ proxy_env }}"

@@ -4,12 +4,18 @@
   gather_facts: false
   environment: "{{ proxy_env }}"
   tasks:
+    - name: Gather OS Facts
+      setup:
+        # Only gathers items in list, filters out the rest
+        filter: ansible_os_family
+        gather_subset:
+          - '!all'
+
     - name: Schema Registry Role Bindings
       import_role:
         name: confluent.schema_registry
         tasks_from: rbac.yml
       vars:
-        cluster_id_source: zookeeper
         copy_certs: false
       run_once: true
       when: rbac_enabled|bool
@@ -34,6 +40,7 @@
 
     - shell: "egrep -i 'ssl.client.auth ?= ?true' {{ schema_registry.config_file }}"
       register: mtls_check
+      changed_when: false
       failed_when: false
 
     - name: Set MTLS Variable
@@ -77,6 +84,8 @@
           - "{{ schema_registry.systemd_override }}"
         restore_files:
           - "{{ schema_registry.config_file }}"
+        config_owner: "{{ schema_registry_user }}"
+        config_group: "{{ schema_registry_group}}"
       when:
         - schema_registry_current_version != confluent_full_package_version
         - schema_registry_current_version != confluent_package_version

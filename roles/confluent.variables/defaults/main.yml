@@ -1,8 +1,9 @@
 ---
 # Custom filters used in this file are defined in filter_plugins/filters.py
 
-confluent_repo_version: 6.1
-confluent_package_version: 6.1.1
+### Version of Confluent Platform to install
+confluent_package_version: 6.1.2
+
 confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
 confluent_package_debian_suffix: "{{ '=' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
@@ -120,7 +121,7 @@ confluent_cli_version: latest
 ### Recommended replication factor, defaults to 3. When splitting your cluster across 2 DCs with 4 or more Brokers, this should be increased to 4 to balance topic replicas.
 default_internal_replication_factor: 3
 
-### SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram
+### SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256
 sasl_protocol: none
 
 ### Boolean to configure components with TLS Encryption. Also manages Java Keystore creation
@@ -135,6 +136,9 @@ self_signed: "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custo
 ssl_self_signed_ca_cert_filepath: generated_ssl_files/snakeoil-ca-1.crt
 ssl_self_signed_ca_key_filepath: generated_ssl_files/snakeoil-ca-1.key
 ssl_self_signed_ca_password: capassword123
+
+### Directory on hosts to store all ssl files.
+ssl_file_dir: /var/ssl/private/
 
 ### Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs.
 regenerate_ca: false
@@ -210,6 +214,9 @@ zookeeper_sasl_protocol: "{{sasl_protocol if sasl_protocol == 'kerberos' else 'n
 ### Set this variable to customize the directory that Zookeeper writes log files to. Default location is /var/log/kafka. NOTE- zookeeper.log_path is deprecated.
 zookeeper_log_dir: "{{zookeeper.log_path}}"
 
+### Chroot path in Zookeeper used by Kafka. Defaults to no chroot. Must begin with a /
+zookeeper_chroot: ""
+
 zookeeper_packages:
   - confluent-common
   - confluent-rest-utils
@@ -220,14 +227,14 @@ zookeeper_packages:
   - confluent-telemetry
   - "{{ zookeeper_main_package }}"
 
-zookeeper_truststore_path: "/var/ssl/private/zookeeper.truststore.jks"
-zookeeper_keystore_path: "/var/ssl/private/zookeeper.keystore.jks"
+zookeeper_truststore_path: "{{ ssl_file_dir_final }}/zookeeper.truststore.jks"
+zookeeper_keystore_path: "{{ ssl_file_dir_final }}/zookeeper.keystore.jks"
 zookeeper_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 zookeeper_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 zookeeper_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else zookeeper_keystore_storepass }}"
-zookeeper_ca_cert_path: "/var/ssl/private/ca.crt"
-zookeeper_cert_path: "/var/ssl/private/zookeeper.crt"
-zookeeper_key_path: "/var/ssl/private/zookeeper.key"
+zookeeper_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+zookeeper_cert_path: "{{ ssl_file_dir_final }}/zookeeper.crt"
+zookeeper_key_path: "{{ ssl_file_dir_final }}/zookeeper.key"
 zookeeper_export_certs: "{{zookeeper_ssl_mutual_auth_enabled}}"
 zookeeper_keytab_path: /etc/security/keytabs/zookeeper.keytab
 
@@ -292,7 +299,7 @@ zookeeper_peer_port: 2888
 ### Zookeeper leader port
 zookeeper_leader_port: 3888
 
-### Use to copy files from control node to zookeeper hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+### Use to copy files from control node to zookeeper hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 zookeeper_copy_files: []
 
 # User provided properties, merged into the final properties dictionary with precedence
@@ -371,18 +378,18 @@ kafka_broker_packages:
 kafka_broker_truststore_path: "{{kafka_broker_bcfks_truststore_path if fips_enabled|bool else kafka_broker_pkcs12_truststore_path}}"
 kafka_broker_keystore_path: "{{kafka_broker_bcfks_keystore_path if fips_enabled|bool else kafka_broker_pkcs12_keystore_path}}"
 
-kafka_broker_bcfks_truststore_path: "/var/ssl/private/kafka_broker.truststore.bcfks"
-kafka_broker_bcfks_keystore_path: "/var/ssl/private/kafka_broker.keystore.bcfks"
+kafka_broker_bcfks_truststore_path: "{{ ssl_file_dir_final }}/kafka_broker.truststore.bcfks"
+kafka_broker_bcfks_keystore_path: "{{ ssl_file_dir_final }}/kafka_broker.keystore.bcfks"
 
-kafka_broker_pkcs12_truststore_path: "/var/ssl/private/kafka_broker.truststore.jks"
-kafka_broker_pkcs12_keystore_path: "/var/ssl/private/kafka_broker.keystore.jks"
+kafka_broker_pkcs12_truststore_path: "{{ ssl_file_dir_final }}/kafka_broker.truststore.jks"
+kafka_broker_pkcs12_keystore_path: "{{ ssl_file_dir_final }}/kafka_broker.keystore.jks"
 
 kafka_broker_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_broker_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_broker_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_broker_keystore_storepass }}"
-kafka_broker_ca_cert_path: "/var/ssl/private/ca.crt"
-kafka_broker_cert_path: "/var/ssl/private/kafka_broker.crt"
-kafka_broker_key_path: "/var/ssl/private/kafka_broker.key"
+kafka_broker_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+kafka_broker_cert_path: "{{ ssl_file_dir_final }}/kafka_broker.crt"
+kafka_broker_key_path: "{{ ssl_file_dir_final }}/kafka_broker.key"
 kafka_broker_export_certs: "{{ssl_mutual_auth_enabled}}"
 kafka_broker_keytab_path: /etc/security/keytabs/kafka_broker.keytab
 
@@ -392,7 +399,8 @@ kafka_broker:
   appender_log_path: "{{kafka_broker_default_log_dir}}"
   # Deprecated way of providing custom properties
   properties: {}
-  # Deprecated way of setting kafkas log.dirs property
+  # Deprecated way of setting kafkas log.dirs property, use kafka_broker_custom_properties:
+  # log.dirs: dir1,dir2
   datadir:
     - /var/lib/kafka/data
 
@@ -438,7 +446,7 @@ kafka_broker_jmxexporter_config_source_path: kafka.yml
 ### Destination path for Kafka Broker jmx config file
 kafka_broker_jmxexporter_config_path: /opt/prometheus/kafka.yml
 
-### Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+### Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 kafka_broker_copy_files: []
 
 ### Replication Factor for internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
@@ -491,14 +499,14 @@ schema_registry_packages:
   - confluent-schema-registry
   - confluent-security
 
-schema_registry_truststore_path: "/var/ssl/private/schema_registry.truststore.jks"
-schema_registry_keystore_path: "/var/ssl/private/schema_registry.keystore.jks"
+schema_registry_truststore_path: "{{ ssl_file_dir_final }}/schema_registry.truststore.jks"
+schema_registry_keystore_path: "{{ ssl_file_dir_final }}/schema_registry.keystore.jks"
 schema_registry_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 schema_registry_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 schema_registry_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else schema_registry_keystore_storepass }}"
-schema_registry_ca_cert_path: "/var/ssl/private/ca.crt"
-schema_registry_cert_path: "/var/ssl/private/schema_registry.crt"
-schema_registry_key_path: "/var/ssl/private/schema_registry.key"
+schema_registry_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+schema_registry_cert_path: "{{ ssl_file_dir_final }}/schema_registry.crt"
+schema_registry_key_path: "{{ ssl_file_dir_final }}/schema_registry.key"
 schema_registry_export_certs: "{{schema_registry_ssl_mutual_auth_enabled}}"
 schema_registry_keytab_path: /etc/security/keytabs/schema_registry.keytab
 schema_registry_kafka_listener_name: internal
@@ -540,7 +548,7 @@ schema_registry_jmxexporter_config_path: /opt/prometheus/schema_registry.yml
 ### Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
 schema_registry_jmxexporter_port: 8078
 
-### Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+### Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 schema_registry_copy_files: []
 
 ### Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
@@ -583,14 +591,14 @@ kafka_rest_packages:
   - confluent-control-center-fe
   - confluent-control-center
 
-kafka_rest_truststore_path: "/var/ssl/private/kafka_rest.truststore.jks"
-kafka_rest_keystore_path: "/var/ssl/private/kafka_rest.keystore.jks"
+kafka_rest_truststore_path: "{{ ssl_file_dir_final }}/kafka_rest.truststore.jks"
+kafka_rest_keystore_path: "{{ ssl_file_dir_final }}/kafka_rest.keystore.jks"
 kafka_rest_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_rest_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_rest_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_rest_keystore_storepass }}"
-kafka_rest_ca_cert_path: "/var/ssl/private/ca.crt"
-kafka_rest_cert_path: "/var/ssl/private/kafka_rest.crt"
-kafka_rest_key_path: "/var/ssl/private/kafka_rest.key"
+kafka_rest_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+kafka_rest_cert_path: "{{ ssl_file_dir_final }}/kafka_rest.crt"
+kafka_rest_key_path: "{{ ssl_file_dir_final }}/kafka_rest.key"
 kafka_rest_export_certs: "{{kafka_rest_ssl_mutual_auth_enabled}}"
 kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
 kafka_rest_kafka_listener_name: internal
@@ -632,7 +640,7 @@ kafka_rest_jmxexporter_config_path: /opt/prometheus/kafka_rest.yml
 ### Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
 kafka_rest_jmxexporter_port: 8075
 
-### Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+### Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 kafka_rest_copy_files: []
 
 ### Use to set custom Rest Proxy properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_rest.properties is deprecated.
@@ -679,14 +687,14 @@ kafka_connect_packages:
   - confluent-control-center
   - confluent-schema-registry
 
-kafka_connect_truststore_path: "/var/ssl/private/kafka_connect.truststore.jks"
-kafka_connect_keystore_path: "/var/ssl/private/kafka_connect.keystore.jks"
+kafka_connect_truststore_path: "{{ ssl_file_dir_final }}/kafka_connect.truststore.jks"
+kafka_connect_keystore_path: "{{ ssl_file_dir_final }}/kafka_connect.keystore.jks"
 kafka_connect_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_connect_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_connect_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_connect_keystore_storepass }}"
-kafka_connect_ca_cert_path: "/var/ssl/private/ca.crt"
-kafka_connect_cert_path: "/var/ssl/private/kafka_connect.crt"
-kafka_connect_key_path: "/var/ssl/private/kafka_connect.key"
+kafka_connect_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+kafka_connect_cert_path: "{{ ssl_file_dir_final }}/kafka_connect.crt"
+kafka_connect_key_path: "{{ ssl_file_dir_final }}/kafka_connect.key"
 kafka_connect_export_certs: "{{kafka_connect_ssl_mutual_auth_enabled}}"
 kafka_connect_keytab_path: /etc/security/keytabs/kafka_connect.keytab
 kafka_connect_kafka_listener_name: internal
@@ -732,7 +740,7 @@ kafka_connect_jmxexporter_config_path: /opt/prometheus/kafka_connect.yml
 ### Port to expose connect prometheus metrics. Beware of port collisions if colocating components on same host
 kafka_connect_jmxexporter_port: 8077
 
-### Use to copy files from control node to connect hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+### Use to copy files from control node to connect hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 kafka_connect_copy_files: []
 
 ### Connect Service Group Id. Customize when configuring multiple connect clusters in same inventory
@@ -803,14 +811,14 @@ ksql_packages:
   - confluent-control-center-fe
   - confluent-control-center
 
-ksql_truststore_path: "/var/ssl/private/ksql.truststore.jks"
-ksql_keystore_path: "/var/ssl/private/ksql.keystore.jks"
+ksql_truststore_path: "{{ ssl_file_dir_final }}/ksql.truststore.jks"
+ksql_keystore_path: "{{ ssl_file_dir_final }}/ksql.keystore.jks"
 ksql_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 ksql_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 ksql_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else ksql_keystore_storepass }}"
-ksql_ca_cert_path: "/var/ssl/private/ca.crt"
-ksql_cert_path: "/var/ssl/private/ksql.crt"
-ksql_key_path: "/var/ssl/private/ksql.key"
+ksql_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+ksql_cert_path: "{{ ssl_file_dir_final }}/ksql.crt"
+ksql_key_path: "{{ ssl_file_dir_final }}/ksql.key"
 ksql_export_certs: "{{ksql_ssl_mutual_auth_enabled}}"
 ksql_keytab_path: /etc/security/keytabs/ksql.keytab
 ksql_kafka_listener_name: internal
@@ -853,7 +861,7 @@ ksql_jmxexporter_config_path: /opt/prometheus/ksql.yml
 ### Port to expose ksqlDB prometheus metrics. Beware of port collisions if colocating components on same host
 ksql_jmxexporter_port: 8076
 
-### Use to copy files from control node to ksqlDB hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+### Use to copy files from control node to ksqlDB hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 ksql_copy_files: []
 
 ### Replication Factor for ksqlDB internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
@@ -911,14 +919,14 @@ control_center_packages:
   - confluent-control-center-fe
   - confluent-control-center
 
-control_center_truststore_path: "/var/ssl/private/control_center.truststore.jks"
-control_center_keystore_path: "/var/ssl/private/control_center.keystore.jks"
+control_center_truststore_path: "{{ ssl_file_dir_final }}/control_center.truststore.jks"
+control_center_keystore_path: "{{ ssl_file_dir_final }}/control_center.keystore.jks"
 control_center_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 control_center_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 control_center_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_keystore_storepass }}"
-control_center_ca_cert_path: "/var/ssl/private/ca.crt"
-control_center_cert_path: "/var/ssl/private/control_center.crt"
-control_center_key_path: "/var/ssl/private/control_center.key"
+control_center_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+control_center_cert_path: "{{ ssl_file_dir_final }}/control_center.crt"
+control_center_key_path: "{{ ssl_file_dir_final }}/control_center.key"
 control_center_export_certs: "{{ssl_mutual_auth_enabled}}"
 control_center_keytab_path: /etc/security/keytabs/control_center.keytab
 control_center_kafka_listener_name: internal
@@ -927,7 +935,7 @@ control_center:
   # Deprecated way of providing custom properties
   properties: {}
 
-### Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+### Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 control_center_copy_files: []
 
 ### Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
@@ -936,7 +944,8 @@ control_center_default_internal_replication_factor: "{{ [ groups['kafka_broker']
 ### Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
 control_center_custom_properties: "{{ control_center.properties }}"
 
-sasl_scram_users: "{
+# Hash merging not working with new approach
+_sasl_scram_users: "{
   'admin': {
     'principal': 'admin',
     'password': 'admin-secret'
@@ -971,7 +980,13 @@ sasl_scram_users: "{
   }{% endif %}
 }"
 
-sasl_plain_users: "{
+### Dictionary containing additional sasl scram users to be created during provisioning.
+sasl_scram_users: {}
+
+sasl_scram_users_final: "{{ _sasl_scram_users | combine(sasl_scram_users, recursive=True) }}"
+
+# Hash merging not working with new approach
+_sasl_scram256_users: "{
   'admin': {
     'principal': 'admin',
     'password': 'admin-secret'
@@ -1005,6 +1020,52 @@ sasl_plain_users: "{
     'password': 'kafka_connect_replicator-secret'
   }{% endif %}
 }"
+
+### Dictionary containing additional sasl scram users to be created during provisioning.
+sasl_scram256_users: {}
+
+sasl_scram256_users_final: "{{ _sasl_scram256_users | combine(sasl_scram256_users, recursive=True) }}"
+
+# Hash merging not working with new approach
+_sasl_plain_users: "{
+  'admin': {
+    'principal': 'admin',
+    'password': 'admin-secret'
+  },
+  'client': {
+    'principal': 'client',
+    'password': 'client-secret'
+  }{% if 'schema_registry' in groups %},
+  'schema_registry': {
+    'principal': 'schema_registry',
+    'password': 'schema_registry-secret'
+  }{% endif %}{% if 'kafka_connect' in groups %},
+  'kafka_connect': {
+    'principal': 'kafka_connect',
+    'password': 'kafka_connect-secret'
+  }{% endif %}{% if 'kafka_rest' in groups %},
+  'kafka_rest': {
+    'principal': 'kafka_rest',
+    'password': 'kafka_rest-secret'
+  }{% endif %}{% if 'ksql' in groups %},
+  'ksql': {
+    'principal': 'ksql',
+    'password': 'ksql-secret'
+  }{% endif %}{% if 'control_center' in groups %},
+  'control_center': {
+    'principal': 'control_center',
+    'password': 'control_center-secret'
+  }{% endif %}{% if 'kafka_connect_replicator' in groups %},
+  'kafka_connect_replicator': {
+    'principal': 'kafka_connect_replicator',
+    'password': 'kafka_connect_replicator-secret'
+  }{% endif %}
+}"
+
+### Dictionary containing additional sasl plain users to be created during provisioning.
+sasl_plain_users: {}
+
+sasl_plain_users_final: "{{ _sasl_plain_users | combine(sasl_plain_users, recursive=True) }}"
 
 zookeeper_digest_users:
   admin:
@@ -1028,8 +1089,8 @@ mds_ssl_enabled: "{{ssl_enabled}}"
 kafka_broker_rest_ssl_enabled: "{{mds_ssl_enabled}}"
 
 mds_acls_enabled: "{{rbac_enabled}}"
-rbac_enabled_public_pem_path: /var/ssl/private/public.pem
-rbac_enabled_private_pem_path: /var/ssl/private/tokenKeypair.pem
+rbac_enabled_public_pem_path: "{{ ssl_file_dir_final }}/public.pem"
+rbac_enabled_private_pem_path: "{{ ssl_file_dir_final }}/tokenKeypair.pem"
 
 ### LDAP User which will be granted super user permissions to create role bindings in the MDS
 mds_super_user: mds
@@ -1092,6 +1153,9 @@ create_mds_certs: "{{ rbac_enabled }}"
 token_services_public_pem_file: generated_ssl_files/public.pem
 token_services_private_pem_file: generated_ssl_files/tokenKeypair.pem
 
+### To regenerate MDS Token Pem files on subsequent runs of the playbook, set this to true.
+regenerate_token_pem: false
+
 ### List of users to be granted system admin Role Bindings across all components
 rbac_component_additional_system_admins: []
 
@@ -1111,13 +1175,13 @@ kafka_connect_additional_system_admins: "{{rbac_component_additional_system_admi
 ### List of users to be granted system admin Role Bindings on the Control Center Cluster
 control_center_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
+### Boolean to mask secrets in playbook output
+mask_secrets: true
+
 # Secrets Protection Variables
 
 ### Boolean to enable secrets protection on all components except Zookeeper
 secrets_protection_enabled: false
-
-### Boolean to mask secrets in playbook output
-mask_secrets: true
 
 ### Boolean to Recreate Secrets File and Masterkey. Only set to false AFTER first cp-ansible run.
 regenerate_masterkey: true
@@ -1128,11 +1192,14 @@ secrets_protection_masterkey: ""
 ### Security file generated by the Confluent Secret CLI. If empty and secrets protection is enabled, then a security file will be randomly generated.
 secrets_protection_security_file: generated_ssl_files/security.properties
 
+### Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config'.
+secrets_protection_encrypt_passwords: "{{secrets_protection_enabled}}"
+
 ### Boolean to enable secrets protection in Kafka broker.
 kafka_broker_secrets_protection_enabled: "{{secrets_protection_enabled}}"
 
-### Boolean to encrypt all properties containing 'password' for Kafka.
-kafka_broker_secrets_protection_encrypt_passwords: "{{kafka_broker_secrets_protection_enabled}}"
+### Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Kafka.
+kafka_broker_secrets_protection_encrypt_passwords: "{{secrets_protection_encrypt_passwords}}"
 
 ### List of Kafka properties to encrypt. Can be used in addition to kafka_broker_secrets_protection_encrypt_passwords.
 kafka_broker_secrets_protection_encrypt_properties: []
@@ -1140,8 +1207,8 @@ kafka_broker_secrets_protection_encrypt_properties: []
 ### Boolean to enable secrets protection in schema registry.
 schema_registry_secrets_protection_enabled: "{{secrets_protection_enabled}}"
 
-### Boolean to encrypt all properties containing 'password' for Schema Registry.
-schema_registry_secrets_protection_encrypt_passwords: "{{schema_registry_secrets_protection_enabled}}"
+### Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Schema Registry.
+schema_registry_secrets_protection_encrypt_passwords: "{{secrets_protection_encrypt_passwords}}"
 
 ### List of Schema Registry properties to encrypt. Can be used in addition to schema_registry_secrets_protection_encrypt_passwords.
 schema_registry_secrets_protection_encrypt_properties: []
@@ -1149,8 +1216,8 @@ schema_registry_secrets_protection_encrypt_properties: []
 ### Boolean to enable secrets protection in Connect.
 kafka_connect_secrets_protection_enabled: "{{secrets_protection_enabled}}"
 
-### Boolean to encrypt all properties containing 'password' for Connect.
-kafka_connect_secrets_protection_encrypt_passwords: "{{kafka_connect_secrets_protection_enabled}}"
+### Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Connect.
+kafka_connect_secrets_protection_encrypt_passwords: "{{secrets_protection_encrypt_passwords}}"
 
 ### List of Connect properties to encrypt. Can be used in addition to kafka_connect_secrets_protection_encrypt_passwords.
 kafka_connect_secrets_protection_encrypt_properties: []
@@ -1158,8 +1225,8 @@ kafka_connect_secrets_protection_encrypt_properties: []
 ### Boolean to enable secrets protection in Rest Proxy.
 kafka_rest_secrets_protection_enabled: "{{secrets_protection_enabled}}"
 
-### Boolean to encrypt all properties containing 'password' for Rest Proxy.
-kafka_rest_secrets_protection_encrypt_passwords: "{{kafka_rest_secrets_protection_enabled}}"
+### Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Rest Proxy.
+kafka_rest_secrets_protection_encrypt_passwords: "{{secrets_protection_encrypt_passwords}}"
 
 ### List of Rest Proxy properties to encrypt. Can be used in addition to kafka_rest_secrets_protection_encrypt_passwords.
 kafka_rest_secrets_protection_encrypt_properties: []
@@ -1167,8 +1234,8 @@ kafka_rest_secrets_protection_encrypt_properties: []
 ### Boolean to enable secrets protection in KSQL.
 ksql_secrets_protection_enabled: "{{secrets_protection_enabled}}"
 
-### Boolean to encrypt all properties containing 'password' for KSQL.
-ksql_secrets_protection_encrypt_passwords: "{{ksql_secrets_protection_enabled}}"
+### Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for KSQL.
+ksql_secrets_protection_encrypt_passwords: "{{secrets_protection_encrypt_passwords}}"
 
 ### List of KSQL properties to encrypt. Can be used in addition to ksql_secrets_protection_encrypt_passwords.
 ksql_secrets_protection_encrypt_properties: []
@@ -1176,8 +1243,8 @@ ksql_secrets_protection_encrypt_properties: []
 ### Boolean to enable secrets protection in Control Center.
 control_center_secrets_protection_enabled: "{{secrets_protection_enabled}}"
 
-### Boolean to encrypt all properties containing 'password' for Control Center.
-control_center_secrets_protection_encrypt_passwords: "{{control_center_secrets_protection_enabled}}"
+### Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Control Center.
+control_center_secrets_protection_encrypt_passwords: "{{secrets_protection_encrypt_passwords}}"
 
 ### List of Control Center properties to encrypt. Can be used in addition to control_center_secrets_protection_encrypt_passwords.
 control_center_secrets_protection_encrypt_properties: []
@@ -1380,16 +1447,22 @@ kafka_connect_replicator_ssl_truststore_file_path: ""
 kafka_connect_replicator_ssl_keystore_file_path: ""
 
 ### SCRAM principal for Kafka Connect Replicator to authenticate with.
-kafka_connect_replicator_sasl_scram_principal: "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_sasl_scram_principal: "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ### SCRAM password for Kafka Connect Replicator to authenticate with.
-kafka_connect_replicator_sasl_scram_password: "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_sasl_scram_password: "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+### SCRAM 256 principal for Kafka Connect Replicator to authenticate with.
+kafka_connect_replicator_sasl_scram256_principal: "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+### SCRAM 256 password for Kafka Connect Replicator to authenticate with.
+kafka_connect_replicator_sasl_scram256_password: "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ### SASL PLAIN principal for Kafka Connect Replicator to authenticate with.
-kafka_connect_replicator_sasl_plain_principal: "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_sasl_plain_principal: "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ### SASL PLAIN password for Kafka Connect Replicator to authenticate with.
-kafka_connect_replicator_sasl_plain_password: "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_sasl_plain_password: "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ### Boolean that defines if the Jolokia agent is enabled on Kafka Connect Replicator.
 kafka_connect_replicator_jolokia_enabled: "{{jolokia_enabled}}"
@@ -1440,14 +1513,14 @@ kafka_connect_replicator_packages:
   - confluent-control-center
   - confluent-schema-registry
 
-kafka_connect_replicator_truststore_path: "/var/ssl/private/kafka_connect_replicator.truststore.jks"
-kafka_connect_replicator_keystore_path: "/var/ssl/private/kafka_connect_replicator.keystore.jks"
+kafka_connect_replicator_truststore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.truststore.jks"
+kafka_connect_replicator_keystore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.keystore.jks"
 kafka_connect_replicator_truststore_storepass: "{{ ssl_truststore_password if kafka_connect_replicator_ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_connect_replicator_keystore_storepass: "{{ ssl_keystore_store_password if kafka_connect_replicator_ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_connect_replicator_keystore_keypass: "{{ ssl_keystore_key_password if kafka_connect_replicator_ssl_provided_keystore_and_truststore|bool else kafka_connect_replicator_keystore_storepass }}"
-kafka_connect_replicator_ca_cert_path: "/var/ssl/private/kafka_connect_replicator_ca.crt"
-kafka_connect_replicator_cert_path: "/var/ssl/private/kafka_connect_replicator.crt"
-kafka_connect_replicator_key_path: "/var/ssl/private/kafka_connect_replicator.key"
+kafka_connect_replicator_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_ca.crt"
+kafka_connect_replicator_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.crt"
+kafka_connect_replicator_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.key"
 kafka_connect_replicator_export_certs: kafka_connect_replicator_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
 kafka_connect_replicator_keytab_path: /etc/security/keytabs/kafka_connect_replicator.keytab
 kafka_connect_replicator_kerberos_keytab_path: /etc/security/keytabs/kafka_connect_replicator.keytab
@@ -1481,25 +1554,31 @@ kafka_connect_replicator_consumer_ssl_truststore_file_path: "{{kafka_connect_rep
 kafka_connect_replicator_consumer_ssl_keystore_file_path: "{{kafka_connect_replicator_consumer_ssl_keystore_file_path}}"
 
 ### SCRAM principal for the Consumer to authenticate with.
-kafka_connect_replicator_consumer_sasl_scram_principal: "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_consumer_sasl_scram_principal: "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ### SCRAM password for the Consumer to authenticate with.
-kafka_connect_replicator_consumer_sasl_scram_password: "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_consumer_sasl_scram_password: "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+### SCRAM 256 principal for the Consumer to authenticate with.
+kafka_connect_replicator_consumer_sasl_scram256_principal: "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+### SCRAM 256 password for the Consumer to authenticate with.
+kafka_connect_replicator_consumer_sasl_scram256_password: "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ### SASL PLAIN principal for the Consumer to authenticate with.
-kafka_connect_replicator_consumer_sasl_plain_principal: "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_consumer_sasl_plain_principal: "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ### SASL PLAIN password for the Consumer to authenticate with.
-kafka_connect_replicator_consumer_sasl_plain_password: "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_consumer_sasl_plain_password: "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
-kafka_connect_replicator_consumer_truststore_path: "/var/ssl/private/kafka_connect_replicator_consumer.truststore.jks"
-kafka_connect_replicator_consumer_keystore_path: "/var/ssl/private/kafka_connect_replicator_consumer.keystore.jks"
+kafka_connect_replicator_consumer_truststore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.truststore.jks"
+kafka_connect_replicator_consumer_keystore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.keystore.jks"
 kafka_connect_replicator_consumer_truststore_storepass: "{{ ssl_truststore_password if kafka_connect_replicator_consumer_ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_connect_replicator_consumer_keystore_storepass: "{{ ssl_keystore_store_password if kafka_connect_replicator_consumer_ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_connect_replicator_consumer_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_connect_replicator_consumer_keystore_storepass }}"
-kafka_connect_replicator_consumer_ca_cert_path: "/var/ssl/private/kafka_connect_replicator_consumer_ca.crt"
-kafka_connect_replicator_consumer_cert_path: "/var/ssl/private/kafka_connect_replicator_consumer.crt"
-kafka_connect_replicator_consumer_key_path: "/var/ssl/private/kafka_connect_replicator_consumer.key"
+kafka_connect_replicator_consumer_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer_ca.crt"
+kafka_connect_replicator_consumer_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.crt"
+kafka_connect_replicator_consumer_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.key"
 kafka_connect_replicator_consumer_export_certs: kafka_connect_replicator_consumer_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
 kafka_connect_replicator_consumer_keytab_path: /etc/security/keytabs/kafka_connect_replicator_consumer.keytab
 kafka_connect_replicator_consumer_kerberos_keytab_path: /etc/security/keytabs/kafka_connect_replicator_consumer.keytab
@@ -1532,25 +1611,31 @@ kafka_connect_replicator_producer_ssl_truststore_file_path: "{{kafka_connect_rep
 kafka_connect_replicator_producer_ssl_keystore_file_path: "{{kafka_connect_replicator_ssl_keystore_file_path}}"
 
 ### SCRAM principal for the Producer to authenticate with.
-kafka_connect_replicator_producer_sasl_scram_principal: "{{ sasl_scram_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_producer_sasl_scram_principal: "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
 
 ### SCRAM password for the Producer to authenticate with.
-kafka_connect_replicator_producer_sasl_scram_password: "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_producer_sasl_scram_password: "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+### SCRAM 256 principal for the Producer to authenticate with.
+kafka_connect_replicator_producer_sasl_scram256_principal: "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+### SCRAM 256 password for the Producer to authenticate with.
+kafka_connect_replicator_producer_sasl_scram256_password: "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ### SASL PLAIN principal for the Producer to authenticate with.
-kafka_connect_replicator_producer_sasl_plain_principal: "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_producer_sasl_plain_principal: "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ### SASL PLAIN password for the Producer to authenticate with.
-kafka_connect_replicator_producer_sasl_plain_password: "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_producer_sasl_plain_password: "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
-kafka_connect_replicator_producer_truststore_path: "/var/ssl/private/kafka_connect_replicator_producer.truststore.jks"
-kafka_connect_replicator_producer_keystore_path: "/var/ssl/private/kafka_connect_replicator_producer.keystore.jks"
+kafka_connect_replicator_producer_truststore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.truststore.jks"
+kafka_connect_replicator_producer_keystore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.keystore.jks"
 kafka_connect_replicator_producer_truststore_storepass: "{{ ssl_truststore_password if kafka_connect_replicator_producer_ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_connect_replicator_producer_keystore_storepass: "{{ ssl_keystore_store_password if kafka_connect_replicator_producer_ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_connect_replicator_producer_keystore_keypass: "{{ ssl_keystore_key_password if kafka_connect_replicator_producer_ssl_provided_keystore_and_truststore|bool else kafka_connect_replicator_producer_keystore_storepass }}"
-kafka_connect_replicator_producer_ca_cert_path: "/var/ssl/private/kafka_connect_replicator_producer_ca.crt"
-kafka_connect_replicator_producer_cert_path: "/var/ssl/private/kafka_connect_replicator_producer.crt"
-kafka_connect_replicator_producer_key_path: "/var/ssl/private/kafka_connect_replicator_producer.key"
+kafka_connect_replicator_producer_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer_ca.crt"
+kafka_connect_replicator_producer_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.crt"
+kafka_connect_replicator_producer_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.key"
 kafka_connect_replicator_producer_export_certs: kafka_connect_replicator_producer_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
 kafka_connect_replicator_producer_keytab_path: /etc/security/keytabs/kafka_connect_replicator_producer.keytab
 kafka_connect_replicator_producer_kerberos_keytab_path: /etc/security/keytabs/kafka_connect_replicator_producer.keytab
@@ -1586,25 +1671,31 @@ kafka_connect_replicator_monitoring_interceptor_ssl_keystore_file_path: "{{kafka
 kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_path: "{{ kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_path }}"
 
 ### SCRAM principal for the Monitoring Interceptor to authenticate with.
-kafka_connect_replicator_monitoring_interceptor_sasl_scram_principal: "{{ sasl_scram_users.kafka_connect_replicator.principal}}"
+kafka_connect_replicator_monitoring_interceptor_sasl_scram_principal: "{{ sasl_scram_users_final.kafka_connect_replicator.principal}}"
 
 ### SCRAM password for the Monitoring Interceptor to authenticate with.
-kafka_connect_replicator_monitoring_interceptor_sasl_scram_password: "{{ sasl_scram_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_monitoring_interceptor_sasl_scram_password: "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+### SCRAM 256 principal for the Monitoring Interceptor to authenticate with.
+kafka_connect_replicator_monitoring_interceptor_sasl_scram256_principal: "{{ sasl_scram256_users_final.kafka_connect_replicator.principal}}"
+
+### SCRAM 256 password for the Monitoring Interceptor to authenticate with.
+kafka_connect_replicator_monitoring_interceptor_sasl_scram256_password: "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
 
 ### SASL PLAIN principal for the Monitoring Interceptor to authenticate with.
-kafka_connect_replicator_monitoring_interceptor_sasl_plain_principal: "{{ sasl_plain_users.kafka_connect_replicator.principal }}"
+kafka_connect_replicator_monitoring_interceptor_sasl_plain_principal: "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 
 ### SASL PLAIN password for the Monitoring Interceptor to authenticate with.
-kafka_connect_replicator_monitoring_interceptor_sasl_plain_password: "{{ sasl_plain_users.kafka_connect_replicator.password }}"
+kafka_connect_replicator_monitoring_interceptor_sasl_plain_password: "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
-kafka_connect_replicator_monitoring_interceptor_truststore_path: "/var/ssl/private/kafka_connect_replicator_monitoring_interceptor.truststore.jks"
-kafka_connect_replicator_monitoring_interceptor_keystore_path: "/var/ssl/private/kafka_connect_replicator_monitoring_interceptor.keystore.jks"
+kafka_connect_replicator_monitoring_interceptor_truststore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.truststore.jks"
+kafka_connect_replicator_monitoring_interceptor_keystore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.keystore.jks"
 kafka_connect_replicator_monitoring_interceptor_truststore_storepass: "{{ ssl_truststore_password if kafka_connect_replicator_monitoring_interceptor_ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_connect_replicator_monitoring_interceptor_keystore_storepass: "{{ ssl_keystore_store_password if kafka_connect_replicator_monitoring_interceptor_ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_connect_replicator_monitoring_interceptor_keystore_keypass: "{{ ssl_keystore_key_password if kafka_connect_replicator_monitoring_interceptor_ssl_provided_keystore_and_truststore|bool else kafka_connect_replicator_monitoring_interceptor_keystore_storepass}}"
-kafka_connect_replicator_monitoring_interceptor_ca_cert_path: "/var/ssl/private/kafka_connect_replicator_monitoring_interceptor_ca.crt"
-kafka_connect_replicator_monitoring_interceptor_cert_path: "/var/ssl/private/kafka_connect_replicator_monitoring_interceptor.crt"
-kafka_connect_replicator_monitoring_interceptor_key_path: "/var/ssl/private/kafka_connect_replicator_monitoring_interceptor.key"
+kafka_connect_replicator_monitoring_interceptor_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor_ca.crt"
+kafka_connect_replicator_monitoring_interceptor_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.crt"
+kafka_connect_replicator_monitoring_interceptor_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.key"
 kafka_connect_replicator_monitoring_interceptor_export_certs: kafka_connect_replicator_monitoring_interceptor_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
 kafka_connect_replicator_monitoring_interceptor_keytab_path: /etc/security/keytabs/kafka_connect_replicator_monitoring_interceptor.keytab
 
