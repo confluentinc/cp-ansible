@@ -2332,6 +2332,54 @@ Default:  false
 
 ***
 
+### audit_logs_destination_principal
+
+Principal used to authenticate to the remote host where audit logs will be written to.  This is a mandatory field.
+
+Default:  kafka
+
+***
+
+### audit_logs_destintatoin_erp_host
+
+The URL to the ERP to register access permissions for Audit Logs.
+
+Default:  http://localhost:8090
+
+***
+
+### audit_logs_destination_erp_admin_user
+
+The admin user for the ERP which can set the permissions for Audit Log access.
+
+Default:  mds
+
+***
+
+### audit_logs_destination_erp_admin_password
+
+The password for the admin user on the ERP which can set the permissions for Audit Log access.
+
+Default:  password
+
+***
+
+### audit_logs_destination_kafka_cluster_name
+
+Set this to the name of your destination kafka cluster.
+
+Default:  ""
+
+***
+
+### audit_logs_destintation_kafka_cluster_id
+
+Set this to the ID value of your destination kafka cluster, if you are not using a cluster name.
+
+Default:  ""
+
+***
+
 ### audit_logs_destination_bootstrap_servers
 
 Kafka hosts and listener ports on the Audit Logs Destination Kafka Cluster. audit_logs_destination_listener dictionary must describe its security settings. Must be configured if audit_logs_destination_enabled: true
