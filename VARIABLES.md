@@ -1780,6 +1780,70 @@ Default:  password
 
 ***
 
+### kafka_connect_replicator_ldap_user
+
+LDAP User for Confluent Replicator to authenticate as
+
+Default:  replicator
+
+***
+
+### kafka_connect_replicator_ldap_password
+
+Password for kafka_connect_replicator_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### kafka_connect_replicator_consumer_ldap_user
+
+LDAP User for Confluent Replicator Consumer to authenticate as
+
+Default:  "{{kafka_connect_replicator_ldap_user}}"
+
+***
+
+### kafka_connect_replicator_consumer_ldap_password
+
+Password for kafka_connect_replicator_consumer_ldap_user LDAP User
+
+Default:  "{{kafka_connect_replicator_ldap_password}}"
+
+***
+
+### kafka_connect_replicator_producer_ldap_user
+
+LDAP User for Confluent Replicator Producer to authenticate as
+
+Default:  "{{kafka_connect_replicator_ldap_user}}"
+
+***
+
+### kafka_connect_replicator_producer_ldap_password
+
+Password for kafka_connect_replicator_producer_ldap_user LDAP User
+
+Default:  "{{kafka_connect_replicator_ldap_password}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ldap_user
+
+LDAP User for Confluent Replicator Monitoring Interceptor to authenticate as
+
+Default:  "{{kafka_connect_replicator_ldap_user}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ldap_password
+
+Password for kafka_connect_replicator_monitoring_interceptor_ldap_user LDAP User
+
+Default:  "{{kafka_connect_replicator_ldap_password}}"
+
+***
+
 ### external_mds_enabled
 
 Boolean to describe if kafka group should be configured with an External MDS Kafka Cluster. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, kafka_broker_rest_ssl_enabled
@@ -2372,6 +2436,14 @@ Default:  replicator
 
 ***
 
+### kafka_connect_replicator_cluster_name
+
+Set this variable to customize the Cluster Name registered in the Cluster Registry.
+
+Default:  ""
+
+***
+
 ### kafka_connect_replicator_offset_start
 
 Set this variable to customize the offset starting point for Kafka Connect Replicator.
@@ -2401,6 +2473,14 @@ Default:  connect-status
 Set this variable to customize the topic where Kafka Connect Replicator stores it's configuration.
 
 Default:  connect-configs
+
+***
+
+### kafka_connect_replicator_consumer_timestamps_topic
+
+Set this variable to customize the topic where Kafka Connect Replicator consumer stores it's timestamps.
+
+Default:   __consumer_timestamps
 
 ***
 
@@ -2456,7 +2536,7 @@ Default:  true
 
 User for authenticated Connect Health Check. Set if using customized security like Basic Auth.
 
-Default:  connect
+Default:  "{{kafka_connect_replicator_ldap_user}}"
 
 ***
 
@@ -2464,7 +2544,7 @@ Default:  connect
 
 Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
 
-Default:  password
+Default:  "{{kafka_connect_replicator_ldap_password}}"
 
 ***
 
@@ -2668,6 +2748,126 @@ Default:  100mb
 
 ***
 
+### kakfa_connect_replicator_rbac_enabled
+
+Boolean to configure Kafka Connect Replicator to support RBAC. Creates Rolebindings for client to function.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_erp_tls_enabled
+
+Boolean to configure Kafka Connect Replicator to support connecting to ERP with TLS.
+
+Default:  false
+
+***
+
+### kakfa_connect_replicator_consumer_rbac_enabled
+
+Boolean to configure Kafka Connect Replicator Consumer to support RBAC. Creates Rolebindings for client to function.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_consumer_erp_tls_enabled
+
+Boolean to configure Kafka Connect Replicator Consumer to support connecting to ERP with TLS.
+
+Default:  false
+
+***
+
+### kakfa_connect_replicator_producer_rbac_enabled
+
+Boolean to configure Kafka Connect Replicator Producer to support RBAC. Creates Rolebindings for client to function.
+
+Default:  "{{ kakfa_connect_replicator_rbac_enabled }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_tls_enabled
+
+Boolean to configure Kafka Connect Replicator Producer to support connecting to ERP with TLS.
+
+Default:  "{{ kafka_connect_replicator_erp_tls_enabled }}"
+
+***
+
+### kakfa_connect_replicator_monitoring_interceptor_rbac_enabled
+
+Boolean to configure Kafka Connect Replicator Monitoring Interceptor to support RBAC. Creates Rolebindings for client to function.
+
+Default:  "{{ kakfa_connect_replicator_rbac_enabled }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_tls_enabled
+
+Boolean to configure Kafka Connect Replicator Monitoring Interceptor to support connecting to ERP with TLS.
+
+Default:  "{{ kafka_connect_replicator_erp_tls_enabled }}"
+
+***
+
+### kafka_connect_replicator_erp_host
+
+Variable to define the location of the Embedded Rest Proxy for configuring RBAC.
+
+Default:  localhost:8090
+
+***
+
+### kafka_connect_replicator_erp_admin_user
+
+Set this variable to the user name of the admin user for the Embedded Rest Proxy, to configure RBAC.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_erp_admin_password
+
+Set this variable to the password for the Embedded Rest Proxy user, to configure RBAC.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_kafka_cluster_id
+
+Set this variable to the Cluster ID for the kafka cluster which you are interacting with.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_kafka_cluster_name
+
+Set this variable to the Cluster Name when using Cluster Registry for identification.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_erp_pem_file
+
+Set this variable to the path where the public pem file for the ERP server is located.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_rbac_enabled_public_pem_path
+
+Set this variable to override the default location of the public pem file for connecting to the ERP when RBAC is enabled.
+
+Default:  /var/ssl/private/kafka_connect_replicator/public.pem
+
+***
+
 ### kafka_connect_replicator_consumer_bootstrap_servers
 
 Variable to define bootstrap servers for Kafka Connect Replicator Consumer.  Mandatory for Kafka Connect Replicator setup.
@@ -2788,6 +2988,62 @@ Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
+### kafka_connect_replicator_consumer_erp_host
+
+Variable to define the location of the Embedded Rest Proxy for configuring RBAC.
+
+Default:  localhost:8090
+
+***
+
+### kafka_connect_replicator_consumer_erp_admin_user
+
+Set this variable to the user name of the admin user for the Embedded Rest Proxy, to configure RBAC.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_consumer_erp_admin_password
+
+Set this variable to the password for the Embedded Rest Proxy user, to configure RBAC.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_consumer_kafka_cluster_id
+
+Set this variable to the Cluster ID for the kafka cluster which you are interacting with.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_consumer_kafka_cluster_name
+
+Set this variable to the Cluster Name when using Cluster Registry for identification.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_consumer_erp_pem_file
+
+Set this variable to the path where the public pem file for the ERP server is located.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_consumer_rbac_enabled_public_pem_path
+
+Set this variable to override the default location of the public pem file for connecting to the ERP when RBAC is enabled.
+
+Default:  /var/ssl/private/kafka_connect_replicator_consumer/public.pem
+
+***
+
 ### kafka_connect_replicator_producer_bootstrap_servers
 
 Variable to define bootstrap servers for Kafka Connect Replicator Producer.  Mandatory for Kafka Connect Replicator setup.
@@ -2905,6 +3161,62 @@ Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 SASL PLAIN password for the Producer to authenticate with.
 
 Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_host
+
+Variable to define the location of the Embedded Rest Proxy for configuring RBAC. Defaults to kafka_connect_replicator_erp_host.
+
+Default:  "{{ kafka_connect_replicator_erp_host }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_admin_user
+
+Set this variable to the user name of the admin user for the Embedded Rest Proxy, to configure RBAC.  Defaults to kafka_connect_replicator_erp_user.
+
+Default:  "{{ kafka_connect_replicator_erp_admin_user }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_admin_password
+
+Set this variable to the password for the Embedded Rest Proxy user, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
+
+Default:  "{{ kafka_connect_replicator_erp_admin_password }}"
+
+***
+
+### kafka_connect_replicator_producer_kafka_cluster_id
+
+Set this variable to the Cluster ID for the kafka cluster which you are interacting with. Defaults to match kafka_connect_replicator_kafka_cluster_id.
+
+Default:  "{{ kafka_connect_replicator_kafka_cluster_id }}"
+
+***
+
+### kafka_connect_replicator_producer_kafka_cluster_name
+
+Set this variable to the Cluster Name when using Cluster Registry for identification.
+
+Default:  "{{ kafka_connect_replicator_kafka_cluster_name }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_pem_file
+
+Set this variable to the path where the public pem file for the ERP server is located.
+
+Default:  "{{ kafka_connect_replicator_erp_pem_file }}"
+
+***
+
+### kafka_connect_replicator_producer_rbac_enabled_public_pem_path
+
+Set this variable to override the default location of the public pem file for connecting to the ERP when RBAC is enabled.
+
+Default:  "{{ kafka_connect_replicator_rbac_enabled_public_pem_path }}"
 
 ***
 
@@ -3041,6 +3353,62 @@ Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 Deployment strategy for all components. Set to rolling to run all provisionging tasks on one host at a time, this is less destructive but can fail when security modes get updated.
 
 Default:  parallel
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_host
+
+Variable to define the location of the Embedded Rest Proxy for configuring RBAC. Defaults to kafka_connect_replicator_erp_host.
+
+Default:  "{{ kafka_connect_replicator_erp_host }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_admin_user
+
+Set this variable to the user name of the admin user for the Embedded Rest Proxy, to configure RBAC.  Defaults to kafka_connect_replicator_erp_user.
+
+Default:  "{{ kafka_connect_replicator_erp_admin_user }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_admin_password
+
+Set this variable to the password for the Embedded Rest Proxy user, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
+
+Default:  "{{ kafka_connect_replicator_erp_admin_password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_kafka_cluster_id
+
+Set this variable to the Cluster ID for the kafka cluster which you are interacting with. Defaults to match kafka_connect_replicator_kafka_cluster_id.
+
+Default:  "{{ kafka_connect_replicator_kafka_cluster_id }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_kafka_cluster_name
+
+Set this variable to the Cluster Name when using Cluster Registry for identification.
+
+Default:  "{{ kafka_connect_replicator_kafka_cluster_name }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_pem_file
+
+Set this variable to the path where the public pem file for the ERP server is located.
+
+Default:  "{{ kafka_connect_replicator_erp_pem_file }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_rbac_enabled_public_pem_path
+
+Set this variable to override the default location of the public pem file for connecting to the ERP when RBAC is enabled.
+
+Default:  "{{ kafka_connect_replicator_rbac_enabled_public_pem_path }}"
 
 ***
 
