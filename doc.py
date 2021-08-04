@@ -7,14 +7,14 @@ And writes to formatted markdown file
 """
 
 def parse_variable_file(role_name, docs_file):
-    docs_file.write("# confluent." + role_name)
+    docs_file.write("# " + role_name)
     docs_file.write("\n\n")
-    docs_file.write("Below are the supported variables for the role confluent." + role_name)
+    docs_file.write("Below are the supported variables for the role " + role_name)
     docs_file.write("\n\n")
     docs_file.write("***")
     docs_file.write("\n\n")
 
-    variables_file = open("roles/confluent." + role_name + "/defaults/main.yml", "r")
+    variables_file = open("roles/" + role_name + "/defaults/main.yml", "r")
     lines = variables_file.read().split('\n')
 
     for i in range(len(lines)):
