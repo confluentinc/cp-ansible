@@ -1,0 +1,379 @@
+---
+- name: Create SSL Certificate Directory
+  file:
+    path: /var/ssl/private/kafka_connect_replicator
+    state: directory
+    mode: 0755
+
+- name: Copy in MDS Public Pem File
+  copy:
+    src: "{{ kafka_connect_replicator_erp_pem_file }}"
+    dest: "{{ kafka_connect_replicator_rbac_enabled_public_pem_path }}"
+    mode: 0640
+    owner: "{{kafka_connect_replicator_user}}"
+    group: "{{kafka_connect_replicator_group}}"
+
+- name: Grant Confluent Replicator User SystemAdmin on Kafka cluster
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_ldap_user}}/roles/SystemAdmin"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "clusters": {
+          "kafka-cluster": "{{kafka_connect_replicator_kafka_cluster_id}}",
+        }
+      }
+    status_code: 204
+  when: kafka_connect_replicator_kafka_cluster_id != ""
+
+- name: Grant Confluent Replicator User SystemAdmin on Replicator Cluster
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_ldap_user}}/roles/SystemAdmin"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "clusters": {
+          "kafka-cluster": "{{kafka_connect_replicator_kafka_cluster_id}}"
+          "connect-cluster": "{{kafka_connect_replicator_cluster_id}}"
+        }
+      }
+    status_code: 204
+  when: kafka_connect_replicator_kafka_cluster_id != ""
+
+- name: Grant Confluent Replicator User ResourceOwner on Connect Topics
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_ldap_user}}/roles/ResourceOwner/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster":"{{kafka_connect_replicator_kafka_cluster_id}}"}},
+            "resourcePatterns": [
+              {
+                "resourceType":"Group",
+                "name":"{{ kafka_connect_replicator_cluster_id }}",
+                "patternType":"PREFIXED"
+              },
+              {
+                "resourceType":"Topic",
+                "name": "{{ kafka_connect_replicator_offsets_topic }}",
+                "patternType": "LITERAL"
+              },
+              {
+                "resourceType":"Topic",
+                "name": "{{ kafka_connect_replicator_storage_topic }}",
+                "patternType": "LITERAL"
+              },
+              {
+                "resourceType":"Topic",
+                "name": "{{ kafka_connect_replicator_status_topic }}",
+                "patternType": "LITERAL"
+              }
+            ]
+          }
+        }
+      }
+    status_code: 204
+  when: kafka_connect_replicator_kafka_cluster_id != ""
+
+
+- name: Grant Confluent Replicator User Developer Read on Command Topic
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_ldap_user}}/roles/DeveloperRead/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster":"{{kafka_connect_replicator_kafka_cluster_id}}"}},
+            "resourcePatterns": [
+              {
+                "resourceType":"Topic",
+                "name": "{{kafka_connect_replicator_final_properties['confluent.license.topic']}}",
+                "patternType": "LITERAL"
+              }
+            ]
+          }
+        }
+      }
+    status_code: 204
+  when: kafka_connect_replicator_kafka_cluster_id != ""
+
+
+- name: Grant Confluent Replicator User Developer Write on Command Topic
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_ldap_user}}/roles/DeveloperWrite/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster":"{{kafka_connect_replicator_kafka_cluster_id}}"}},
+            "resourcePatterns": [
+              {
+                "resourceType":"Topic",
+                "name": "{{kafka_connect_replicator_final_properties['confluent.license.topic']}}",
+                "patternType": "LITERAL"
+              }
+            ]
+          }
+        }
+      }
+    status_code: 204
+  when: kafka_connect_replicator_kafka_cluster_id != ""
+
+
+- name: Grant Confluent Replicator User Developer Manage on Command Topic
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_ldap_user}}/roles/DeveloperManage/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster":"{{kafka_connect_replicator_kafka_cluster_id}}"}},
+            "resourcePatterns": [
+              {
+                "resourceType":"Topic",
+                "name": "{{kafka_connect_replicator_final_properties['confluent.license.topic']}}",
+                "patternType": "LITERAL"
+              }
+            ]
+          }
+        }
+      }
+    status_code: 204
+  when: kafka_connect_replicator_kafka_cluster_id != ""
+
+# The following block of URI calls sets up the permissions for replicator when cluster_name is used for the indetifier.
+
+- name: Grant Confluent Replicator User SystemAdmin on Kafka cluster
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_ldap_user}}/roles/SystemAdmin"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+          "clusterName": "{{kafka_connect_replicator_kafka_cluster_name}}"
+        }
+      }
+    status_code: 204
+  when: kafka_connect_replicator_kafka_cluster_name != ""
+
+- name: Grant Confluent Replicator User SystemAdmin on Replicator Cluster
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_ldap_user}}/roles/SystemAdmin"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+          "clusterName": "{{kafka_connect_replicator_cluster_name}}"
+        }
+      }
+    status_code: 204
+  when: kafka_connect_replicator_kafka_cluster_name != ""
+
+- name: Grant Confluent Replicator User ResourceOwner on Connect Topics
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_ldap_user}}/roles/ResourceOwner/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusterName": "{{ kafka_connect_replicator_kafka_cluster_name }}"
+        },
+            "resourcePatterns": [
+              {
+                "resourceType":"Group",
+                "name":"{{ kafka_connect_replicator_cluster_id }}",
+                "patternType":"PREFIXED"
+              },
+              {
+                "resourceType":"Topic",
+                "name": "{{ kafka_connect_replicator_offsets_topic }}",
+                "patternType": "LITERAL"
+              },
+              {
+                "resourceType":"Topic",
+                "name": "{{ kafka_connect_replicator_storage_topic }}",
+                "patternType": "LITERAL"
+              },
+              {
+                "resourceType":"Topic",
+                "name": "{{ kafka_connect_replicator_status_topic }}",
+                "patternType": "LITERAL"
+              }
+            ]
+          }
+        }
+      }
+    status_code: 204
+  when: kafka_connect_replicator_kafka_cluster_name != ""
+
+- name: Grant Confluent Replicator User Developer Read on Command Topic
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_ldap_user}}/roles/DeveloperRead/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusterName": "{{ kafka_connect_replicator_kafka_cluster_name }}"
+        },
+            "resourcePatterns": [
+              {
+                "resourceType":"Topic",
+                "name": "{{kafka_connect_replicator_final_properties['confluent.license.topic']}}",
+                "patternType": "LITERAL"
+              }
+            ]
+          }
+        }
+      }
+    status_code: 204
+  when: kafka_connect_replicator_kafka_cluster_name != ""
+
+- name: Grant Confluent Replicator User Developer Write on Command Topic
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_ldap_user}}/roles/DeveloperWrite/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusterName": "{{ kafka_connect_replicator_kafka_cluster_name }}"
+        },
+            "resourcePatterns": [
+              {
+                "resourceType":"Topic",
+                "name": "{{kafka_connect_replicator_final_properties['confluent.license.topic']}}",
+                "patternType": "LITERAL"
+              }
+            ]
+          }
+        }
+      }
+    status_code: 204
+  when: kafka_connect_replicator_kafka_cluster_name != ""
+
+- name: Grant Confluent Replicator User Developer Manage on Command Topic
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_ldap_user}}/roles/DeveloperManage/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusterName": "{{ kafka_connect_replicator_kafka_cluster_name }}"
+        },
+            "resourcePatterns": [
+              {
+                "resourceType":"Topic",
+                "name": "{{kafka_connect_replicator_final_properties['confluent.license.topic']}}",
+                "patternType": "LITERAL"
+              }
+            ]
+          }
+        }
+      }
+    status_code: 204
+  when: kafka_connect_replicator_kafka_cluster_name != ""
+
+- name: Grant Confluent Replicator User Security Admin on Destination cluster
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_ldap_user}}/roles/SecurityAdmin"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+          "clusterName": "{{ kafka_connect_replicator_kafka_cluster_name }}",
+          "connect-cluster": "{{ kafka_connect_replicator_cluster_id }}"
+      }
+    status_code: 204
+  when: kafka_connect_replicator_kafka_cluster_name != ""
