@@ -1,6 +1,6 @@
-# confluent.variables
+# variables
 
-Below are the supported variables for the role confluent.variables
+Below are the supported variables for the role variables
 
 ***
 
@@ -8,7 +8,7 @@ Below are the supported variables for the role confluent.variables
 
 Version of Confluent Platform to install
 
-Default:  6.1.2
+Default:  6.2.0
 
 ***
 
@@ -2436,14 +2436,6 @@ Default:  ""
 
 ***
 
-### audit_logs_destintation_kafka_cluster_id
-
-Set this to the ID value of your destination kafka cluster, if you are not using a cluster name.
-
-Default:  ""
-
-***
-
 ### audit_logs_destination_bootstrap_servers
 
 Kafka hosts and listener ports on the Audit Logs Destination Kafka Cluster. audit_logs_destination_listener dictionary must describe its security settings. Must be configured if audit_logs_destination_enabled: true
@@ -3748,9 +3740,9 @@ Default:  https://localhost:8081
 
 ***
 
-# confluent.common
+# common
 
-Below are the supported variables for the role confluent.common
+Below are the supported variables for the role common
 
 ***
 
@@ -3898,9 +3890,9 @@ Default:  true
 
 ***
 
-# confluent.control_center
+# control_center
 
-Below are the supported variables for the role confluent.control_center
+Below are the supported variables for the role control_center
 
 ***
 
@@ -3984,9 +3976,9 @@ Default:  30
 
 ***
 
-# confluent.kafka_broker
+# kafka_broker
 
-Below are the supported variables for the role confluent.kafka_broker
+Below are the supported variables for the role kafka_broker
 
 ***
 
@@ -4062,9 +4054,9 @@ Default:  20
 
 ***
 
-# confluent.kafka_connect
+# kafka_connect
 
-Below are the supported variables for the role confluent.kafka_connect
+Below are the supported variables for the role kafka_connect
 
 ***
 
@@ -4140,9 +4132,9 @@ Default:  30
 
 ***
 
-# confluent.kafka_rest
+# kafka_rest
 
-Below are the supported variables for the role confluent.kafka_rest
+Below are the supported variables for the role kafka_rest
 
 ***
 
@@ -4218,9 +4210,9 @@ Default:  15
 
 ***
 
-# confluent.ksql
+# ksql
 
-Below are the supported variables for the role confluent.ksql
+Below are the supported variables for the role ksql
 
 ***
 
@@ -4304,9 +4296,9 @@ Default:  20
 
 ***
 
-# confluent.schema_registry
+# schema_registry
 
-Below are the supported variables for the role confluent.schema_registry
+Below are the supported variables for the role schema_registry
 
 ***
 
@@ -4382,9 +4374,9 @@ Default:  15
 
 ***
 
-# confluent.zookeeper
+# zookeeper
 
-Below are the supported variables for the role confluent.zookeeper
+Below are the supported variables for the role zookeeper
 
 ***
 
@@ -4460,9 +4452,9 @@ Default:  5
 
 ***
 
-# confluent.kafka_connect_replicator
+# kafka_connect_replicator
 
-Below are the supported variables for the role confluent.kafka_connect_replicator
+Below are the supported variables for the role kafka_connect_replicator
 
 ***
 
@@ -4522,9 +4514,9 @@ Default:  30
 
 ***
 
-# confluent.ssl
+# ssl
 
-Below are the supported variables for the role confluent.ssl
+Below are the supported variables for the role ssl
 
 ***
 
