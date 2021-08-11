@@ -8,7 +8,7 @@ Below are the supported variables for the role confluent.variables
 
 Version of Confluent Platform to install
 
-Default:  6.1.2
+Default:  6.2.0
 
 ***
 
@@ -2431,14 +2431,6 @@ Default:  password
 ### audit_logs_destination_kafka_cluster_name
 
 Set this to the name of your destination kafka cluster.
-
-Default:  ""
-
-***
-
-### audit_logs_destintation_kafka_cluster_id
-
-Set this to the ID value of your destination kafka cluster, if you are not using a cluster name.
 
 Default:  ""
 
