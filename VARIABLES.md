@@ -2972,6 +2972,22 @@ Default:  "{{ kafka_connect_replicator_erp_tls_enabled }}"
 
 ***
 
+### kafka_connect_replicator_truststore_storepass
+
+The password for the Kafka Connect Replicator TLS truststore.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_keystore_storepass
+
+The password for the Kafka Connect Replicator TLS keystore.  Defaults to confluentkeystorestorepass.
+
+Default:  ""
+
+***
+
 ### kafka_connect_replicator_erp_host
 
 Variable to define the location of the Embedded Rest Proxy for configuring RBAC.
@@ -3148,6 +3164,22 @@ Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
 ***
 
+### kafka_connect_replicator_consumer_truststore_storepass
+
+The password for the Kafka Connect Replicator Consumer TLS truststore.
+
+Default:  "{{ kafka_connect_replicator_truststore_storepass }}"
+
+***
+
+### kafka_connect_replicator_consumer_keystore_storepass
+
+The password for the Kafka Connect Replicator Consumer TLS keystore.
+
+Default:  "{{  kafka_connect_replicator_keystore_storepass }}"
+
+***
+
 ### kafka_connect_replicator_consumer_erp_host
 
 Variable to define the location of the Embedded Rest Proxy for configuring RBAC.
@@ -3321,6 +3353,22 @@ Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 SASL PLAIN password for the Producer to authenticate with.
 
 Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_producer_truststore_storepass
+
+The password for the Kafka Connect Replicator Producer TLS truststore.  Defaults to match kafka_connect_replicator_truststore_storepass.
+
+Default:  "{{ kafka_connect_replicator_truststore_storepass}}"
+
+***
+
+### kafka_connect_replicator_producer_keystore_storepass
+
+The password for the Kafka Connect Replicator Producer TLS keystore.  Defaults to match kafka_connect_replicator_keystore_storepass.
+
+Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
 
 ***
 
@@ -3505,6 +3553,22 @@ Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
 SASL PLAIN password for the Monitoring Interceptor to authenticate with.
 
 Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_truststore_storepass
+
+The password for the Kafka Connect Replicator Monitoring Interceptor TLS truststore.  Defaults to match kafka_connect_replicator_truststore_storepass.
+
+Default:  "{{ kafka_connect_replicator_truststore_storepass}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_keystore_storepass
+
+The password for the Kafka Connect Replicator Monitoring Interceptor TLS keystore.  Defaults to match kafka_connect_replicator_keystore_storepass.
+
+Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
 
 ***
 
