@@ -1,0 +1,22 @@
+---
+- name: Register Kafka Connect Subgroups
+  set_fact: subgroups="{{ ((subgroups | default([])) + hostvars[item].group_names) | difference('kafka_connect') }}"
+  with_items: "{{groups['kafka_connect']}}"
+
+- name: Register connector configs and remove deleted connectors for single cluster
+  confluent.platform.kafka_connectors:
+    connect_url: "{{kafka_connect_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_connect_rest_port}}/connectors"
+    active_connectors: "{{ kafka_connect_connectors }}"
+  when:
+    - kafka_connect_connectors is defined
+    - subgroups|length == 0
+  run_once: true
+
+- name: Register connector configs and remove deleted connectors for Multiple Clusters
+  confluent.platform.kafka_connectors:
+    connect_url: "http{% if hostvars[groups[item][0]].kafka_connect_ssl_enabled|default(kafka_connect_ssl_enabled) %}s{% endif %}://{{ hostvars[groups[item][0]]|confluent.platform.resolve_hostname }}:{{ hostvars[groups[item][0]].kafka_connect_rest_port|default(kafka_connect_rest_port) }}/connectors"
+    active_connectors: "{{ hostvars[groups[item][0]].kafka_connect_connectors }}"
+  when: hostvars[groups[item][0]].kafka_connect_connectors is defined
+  delegate_to: "{{ groups[item][0] }}"
+  loop: "{{subgroups}}"
+  run_once: true

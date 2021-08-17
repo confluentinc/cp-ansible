@@ -1,0 +1,53 @@
+---
+- name: Host Prerequisites
+  hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest:kafka_connect_replicator
+  gather_facts: false
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Create Certificate Authority and Copy to Ansible Host
+      include_tasks: tasks/certificate_authority.yml
+      tags: certificate_authority
+      run_once: true
+      when: >
+        create_mds_certs|bool or
+        (self_signed|bool and
+        (zookeeper_ssl_enabled|bool or
+        kafka_broker_listeners | confluent.platform.ssl_required(ssl_enabled) or
+        kafka_broker_rest_ssl_enabled|bool or
+        schema_registry_ssl_enabled|bool or
+        kafka_rest_ssl_enabled|bool or
+        kafka_connect_ssl_enabled|bool or
+        ksql_ssl_enabled|bool or
+        control_center_ssl_enabled|bool))
+
+    - import_role:
+        name: common
+      tags: common
+
+    - name: Set Up Secrets Protection
+      include_tasks: tasks/masterkey.yml
+      run_once: true
+      when:
+        - secrets_protection_enabled|bool
+        - not secrets_protection_masterkey
+        - regenerate_masterkey|bool
+      tags: masterkey
+
+- import_playbook: ./zookeeper.yml
+
+- import_playbook: ./kafka_broker.yml
+
+- import_playbook: ./schema_registry.yml
+
+- import_playbook: ./kafka_connect.yml
+
+- import_playbook: ./ksql.yml
+
+- import_playbook: ./kafka_rest.yml
+
+- import_playbook: ./control_center.yml
+
+- import_playbook: ./kafka_connect_replicator.yml

@@ -1,0 +1,34 @@
+---
+# Cannot use Block/Rescue in Ansible Handlers: https://github.com/ansible/ansible/issues/14270
+# Implementing try/catch logic with ignore_errors and conditionals
+- name: Wait for webpage to serve content
+  uri:
+    url: "{{control_center_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{control_center_port}}"
+    validate_certs: false
+    # Basic auth header is redundant for non rbac install
+    url_username: "{{control_center_health_check_user}}"
+    url_password: "{{control_center_health_check_password}}"
+    force_basic_auth: true
+  register: result1
+  until: result1.status == 200
+  retries: 40
+  delay: 10
+  when: not rbac_enabled|bool
+  ignore_errors: true
+
+- name: Fetch Log Files and Error out
+  block:
+    - name: Fetch Files for Debugging Failure
+      # Cannot use include_role in Ansible Handlers: https://github.com/ansible/ansible/issues/20493
+      include_tasks: ../../common/tasks/fetch_logs.yml
+      vars:
+        service_name: "{{control_center_service_name}}"
+        config_file: "{{control_center.config_file}}"
+        log_dir: "{{control_center_service_environment_overrides.LOG_DIR}}"
+        user: "{{control_center_user}}"
+        group: "{{control_center_group}}"
+
+    - name: Fail Provisioning
+      fail:
+        msg: Health checks failed. Review exported files.
+  when: result1.failed|default(False)

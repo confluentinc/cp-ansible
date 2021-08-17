@@ -1,0 +1,73 @@
+---
+- name: Kafka Broker Status Finding
+  hosts: kafka_broker
+  gather_facts: false
+  tags: kafka_broker
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Populate service facts
+      service_facts:
+
+    - name: Determine Installation Pattern - Parallel or Serial
+      set_fact:
+        install_pattern: "{{ 'parallel' if service_state != 'running' or kafka_broker_deployment_strategy == 'parallel' else 'serial' }}"
+      vars:
+        service_state: "{{ ansible_facts.services[kafka_broker_service_name + '.service'].state | default('unknown') }}"
+
+    - name: Group Hosts by Installation Pattern
+      group_by:
+        key: kafka_broker_{{install_pattern}}
+      changed_when: false
+
+- name: Kafka Broker Parallel Provisioning
+  hosts: kafka_broker_parallel
+  gather_facts: false
+  tags: kafka_broker
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: kafka_broker
+
+- name: Kafka Broker Serial Ordering
+  hosts: kafka_broker_serial
+  gather_facts: false
+  tags: kafka_broker
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: kafka_broker
+        tasks_from: dynamic_groups.yml
+
+- name: Kafka Broker Non Controllers Provisioning
+  hosts: kafka_broker_non_controller
+  serial: 1
+  any_errors_fatal: true
+  gather_facts: false
+  tags: kafka_broker
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: kafka_broker
+
+    - name: Proceed Prompt
+      pause:
+        prompt: "Press Enter to Proceed to Next Node. Ctrl + C to Abort"
+      when: kafka_broker_pause_rolling_deployment|bool
+
+- name: Kafka Broker Controller Provisioning
+  hosts: kafka_broker_controller
+  any_errors_fatal: true
+  gather_facts: false
+  tags: kafka_broker
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: kafka_broker
+
+    - name: Proceed Prompt
+      pause:
+        prompt: "Press Enter to Proceed to Next Node. Ctrl + C to Abort"
+      when: kafka_broker_pause_rolling_deployment|bool

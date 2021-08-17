@@ -1,0 +1,263 @@
+---
+- include_role:
+    name: common
+  when: not common_role_completed|bool
+  tags: common
+
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_fqdn
+
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ schema_registry_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
+# Install Packages
+- name: Install the Schema Registry Packages
+  yum:
+    name: "{{ schema_registry_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
+    state: latest
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: package
+  notify: restart schema-registry
+
+- name: Install the Schema Registry Packages
+  apt:
+    name: "{{ schema_registry_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: package
+  notify: restart schema-registry
+
+- name: Schema Registry Group
+  group:
+    name: "{{schema_registry_group}}"
+
+- name: Check if Schema Registry User Exists
+  # Create user task must be skipped for non-linux users
+  getent:
+    database: passwd
+    key: "{{schema_registry_user}}"
+  failed_when: false
+
+- name: Create Schema Registry User
+  user:
+    name: "{{schema_registry_user}}"
+    comment: Confluent Schema Registry
+    system: true
+    group: "{{schema_registry_group}}"
+  when: (getent_passwd|default({}))[schema_registry_user] is not defined
+
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Schema Registry Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{schema_registry.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{schema_registry.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method == "archive"
+
+- include_role:
+    name: ssl
+  vars:
+    truststore_storepass: "{{schema_registry_truststore_storepass}}"
+    truststore_path: "{{schema_registry_truststore_path}}"
+    keystore_path: "{{schema_registry_keystore_path}}"
+    keystore_storepass: "{{schema_registry_keystore_storepass}}"
+    keystore_keypass: "{{schema_registry_keystore_keypass}}"
+    service_name: schema_registry
+    user: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    ca_cert_path: "{{schema_registry_ca_cert_path}}"
+    cert_path: "{{schema_registry_cert_path}}"
+    key_path: "{{schema_registry_key_path}}"
+    export_certs: "{{schema_registry_export_certs}}"
+  # CCloud Kafka does not need Keystores/Truststores
+  when: >
+    schema_registry_ssl_enabled | bool or
+    ( kafka_broker_listeners[schema_registry_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool and not public_certificates_enabled|bool ) or
+    ( mds_tls_enabled | bool and not public_certificates_enabled|bool )
+  tags: ssl
+
+- name: Configure Kerberos
+  include_role:
+    name: kerberos
+  vars:
+    kerberos_group: "{{schema_registry_group}}"
+    kerberos_user: "{{schema_registry_user}}"
+    kerberos_keytab_path: "{{schema_registry_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{schema_registry_keytab_path}}"
+    kerberos_handler: "restart schema-registry"
+  when: kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'GSSAPI'
+
+- name: Copy Custom Schema Registry Files
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{schema_registry_copy_files}}"
+    user: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  when: schema_registry_copy_files | length > 0
+
+- name: Configure RBAC
+  include_tasks: rbac.yml
+  when: rbac_enabled|bool
+
+- name: Create Schema Registry Config directory
+  file:
+    path: "{{ schema_registry.config_file | dirname }}"
+    state: directory
+    mode: 0750
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+
+- name: Create Schema Registry Config with Secrets Protection
+  include_role:
+    name: common
+    tasks_from: secrets_protection.yml
+  vars:
+    final_properties: "{{ schema_registry_final_properties }}"
+    encrypt_passwords: "{{ schema_registry_secrets_protection_encrypt_passwords }}"
+    encrypt_properties: "{{ schema_registry_secrets_protection_encrypt_properties }}"
+    config_path: "{{ schema_registry.config_file }}"
+    secrets_file: "{{schema_registry_secrets_protection_file}}"
+    secrets_file_owner: "{{schema_registry_user}}"
+    secrets_file_group: "{{schema_registry_group}}"
+    handler: restart schema-registry
+  when: schema_registry_secrets_protection_enabled|bool
+
+- name: Create Schema Registry Config
+  template:
+    src: schema-registry.properties.j2
+    dest: "{{schema_registry.config_file}}"
+    mode: 0640
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  notify: restart schema-registry
+  when: not schema_registry_secrets_protection_enabled|bool
+
+- name: Create Logs Directory
+  file:
+    path: "{{schema_registry_log_dir}}"
+    state: directory
+    group: "{{schema_registry_group}}"
+    owner: "{{schema_registry_user}}"
+    mode: 0770
+
+- name: Update log4j Config for Log Cleanup
+  include_role:
+    name: common
+    tasks_from: update_log4j.yml
+  vars:
+    log4j_file: "{{schema_registry.log4j_file}}"
+    log4j_max_backup_index: "{{schema_registry_max_log_files}}"
+    log4j_max_file_size: "{{schema_registry_log_file_size}}"
+    log4j_root_logger: "{{schema_registry_log4j_root_logger}}"
+    handler: "restart schema-registry"
+  when: schema_registry_custom_log4j|bool
+
+- name: Set Permissions on Log4j Conf
+  file:
+    path: "{{schema_registry.log4j_file}}"
+    group: "{{schema_registry_group}}"
+    owner: "{{schema_registry_user}}"
+    mode: 0640
+
+- name: Create Schema Registry Jolokia Config
+  template:
+    src: schema_registry_jolokia.properties.j2
+    dest: "{{schema_registry_jolokia_config}}"
+    mode: 0640
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  when: schema_registry_jolokia_enabled|bool
+  notify: restart schema-registry
+
+- name: Deploy JMX Exporter Config File
+  copy:
+    src: "{{schema_registry_jmxexporter_config_source_path}}"
+    dest: "{{schema_registry_jmxexporter_config_path}}"
+    mode: 0640
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  when: schema_registry_jmxexporter_enabled|bool
+
+- name: Create Basic Auth Jaas File
+  template:
+    src: jaas.conf.j2
+    dest: "{{schema_registry.jaas_file}}"
+    mode: 0640
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  notify: restart schema-registry
+  when: schema_registry_authentication_type == 'basic'
+
+- name: Create Basic Auth Password File
+  template:
+    src: password.properties.j2
+    dest: "{{schema_registry.password_file}}"
+    mode: 0640
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  notify: restart schema-registry
+  when: schema_registry_authentication_type == 'basic'
+
+- name: Create Service Override Directory
+  file:
+    path: "{{schema_registry.systemd_override | dirname}}"
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+    state: directory
+    mode: 0640
+
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{schema_registry.systemd_override}}"
+    mode: 0640
+    owner: root
+    group: root
+  notify: restart schema-registry
+
+- name: Certs were Updated - Trigger Restart
+  command: /bin/true
+  notify: restart schema-registry
+  when: certs_updated|bool
+
+- meta: flush_handlers
+
+- name: Start Schema Registry Service
+  systemd:
+    name: "{{schema_registry_service_name}}"
+    enabled: true
+    state: started
+
+- name: Health Check
+  include_tasks: health_check.yml
+  when:
+    - schema_registry_health_checks_enabled|bool
+    - not ansible_check_mode
+
+- name: Register Cluster
+  include_tasks: register_cluster.yml
+  when: schema_registry_cluster_name | length >0 and rbac_enabled|bool

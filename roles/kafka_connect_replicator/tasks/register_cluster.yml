@@ -1,0 +1,37 @@
+---
+- name: Get Kafka Cluster Id
+  import_role:
+    name: common
+    tasks_from: rbac_setup.yml
+  vars:
+    copy_certs: false
+
+- name: Register Kafka Replicator Cluster
+  uri:
+    url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/registry/clusters"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
+    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      [
+          {
+              "clusterName": "{{kafka_connect_replicator_cluster_name}}",
+              "scope": {
+                  "clusters": {
+                      "kafka-cluster": "{{kafka_cluster_id}}",
+                      "connect-cluster": "{{kafka_connect_replicator_final_properties['group.id']}}"
+                  }
+              },
+              "hosts": [ {% for host in groups['kafka_connect_replicator'] %}{% if loop.index > 1%},{% endif %}{ "host": "{{host}}", "port": {{kafka_connect_replicator_port}} }{% endfor %}
+              ],
+              "protocol": "{{kafka_connect_replicator_http_protocol | upper}}"
+          }
+      ]
+    status_code: 204
+  run_once: true
+  register: output

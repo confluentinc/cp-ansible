@@ -1,0 +1,279 @@
+---
+- include_role:
+    name: common
+  when: not common_role_completed|bool
+  tags: common
+
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_fqdn
+
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ kafka_connect_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
+- name: Install the Kafka Connect Packages
+  yum:
+    name: "{{ kafka_connect_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
+    state: latest
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: package
+  notify: restart connect distributed
+
+- name: Install the Kafka Connect Packages
+  apt:
+    name: "{{ kafka_connect_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: package
+  notify: restart connect distributed
+
+- name: Create Kafka Connect Group
+  group:
+    name: "{{kafka_connect_group}}"
+
+- name: Check if Kafka Connect User Exists
+  # Create user task must be skipped for non-linux users
+  getent:
+    database: passwd
+    key: "{{kafka_connect_user}}"
+  failed_when: false
+
+- name: Create Kafka Connect User
+  user:
+    name: "{{kafka_connect_user}}"
+    comment: Confluent Kafka Connect
+    system: true
+    group: "{{kafka_connect_group}}"
+  when: (getent_passwd|default({}))[kafka_connect_user] is not defined
+
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Kafka Connect Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{kafka_connect.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{kafka_connect.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method == "archive"
+
+# Non-Archive File deployments need to create SystemD service units when the user changes the service name
+- name: Copy Kafka Connect Service from default install to system
+  copy:
+    src: "{{systemd_base_dir}}/{{kafka_connect_default_service_name}}.service"
+    remote_src: true
+    dest: "{{kafka_connect.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method != "archive" and kafka_connect_default_service_name != kafka_connect_service_name
+
+- include_role:
+    name: ssl
+  vars:
+    truststore_storepass: "{{kafka_connect_truststore_storepass}}"
+    truststore_path: "{{kafka_connect_truststore_path}}"
+    keystore_path: "{{kafka_connect_keystore_path}}"
+    keystore_storepass: "{{kafka_connect_keystore_storepass}}"
+    keystore_keypass: "{{kafka_connect_keystore_keypass}}"
+    service_name: kafka_connect
+    user: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    ca_cert_path: "{{kafka_connect_ca_cert_path}}"
+    cert_path: "{{kafka_connect_cert_path}}"
+    key_path: "{{kafka_connect_key_path}}"
+    export_certs: "{{kafka_connect_export_certs}}"
+  # CCloud Kafka does not need Keystores/Truststores
+  when: >
+    kafka_connect_ssl_enabled|bool or
+    ( kafka_broker_listeners[kafka_connect_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool and not public_certificates_enabled|bool ) or
+    ( mds_tls_enabled | bool and not public_certificates_enabled|bool ) or
+    ( 'schema_registry' in groups and schema_registry_ssl_enabled|bool )
+  tags: ssl
+
+- name: Configure Kerberos
+  include_role:
+    name: kerberos
+  vars:
+    kerberos_group: "{{kafka_connect_group}}"
+    kerberos_user: "{{kafka_connect_user}}"
+    kerberos_keytab_path: "{{kafka_connect_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{kafka_connect_keytab_path}}"
+    kerberos_handler: "restart connect distributed"
+  when: kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'GSSAPI'
+
+- name: Copy Kafka Connect Files
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{kafka_connect_copy_files}}"
+    user: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+  when: kafka_connect_copy_files | length > 0
+
+- name: Configure RBAC
+  include_tasks: rbac.yml
+  when: rbac_enabled|bool
+
+- name: Create Kafka Connect Config directory
+  file:
+    path: "{{ kafka_connect.config_file | dirname }}"
+    state: directory
+    mode: 0750
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+
+- name: Create Kafka Connect Config with Secrets Protection
+  include_role:
+    name: common
+    tasks_from: secrets_protection.yml
+  vars:
+    final_properties: "{{ kafka_connect_final_properties }}"
+    encrypt_passwords: "{{ kafka_connect_secrets_protection_encrypt_passwords }}"
+    encrypt_properties: "{{ kafka_connect_secrets_protection_encrypt_properties }}"
+    config_path: "{{ kafka_connect.config_file }}"
+    secrets_file: "{{ kafka_connect_secrets_protection_file }}"
+    secrets_file_owner: "{{ kafka_connect_user }}"
+    secrets_file_group: "{{ kafka_connect_group }}"
+    handler: restart connect distributed
+  when: kafka_connect_secrets_protection_enabled|bool
+
+- name: Create Kafka Connect Config
+  template:
+    src: connect-distributed.properties.j2
+    dest: "{{kafka_connect.config_file}}"
+    mode: 0640
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+  notify: restart connect distributed
+  when: not kafka_connect_secrets_protection_enabled|bool
+
+- name: Install Connect Plugins
+  include_tasks: connect_plugins.yml
+
+- name: Create Logs Directory
+  file:
+    path: "{{kafka_connect_log_dir}}"
+    state: directory
+    group: "{{kafka_connect_group}}"
+    owner: "{{kafka_connect_user}}"
+    mode: 0770
+
+- name: Update Connect log4j Config for Log Cleanup
+  include_role:
+    name: common
+    tasks_from: update_log4j.yml
+  vars:
+    log4j_file: "{{kafka_connect.log4j_file}}"
+    log4j_max_backup_index: "{{kafka_connect_max_log_files}}"
+    log4j_max_file_size: "{{kafka_connect_log_file_size}}"
+    log4j_root_logger: "{{kafka_connect_log4j_root_logger}}"
+    handler: "restart connect distributed"
+  when: kafka_connect_custom_log4j|bool
+
+- name: Set Permissions on Log4j Conf
+  file:
+    path: "{{kafka_connect.log4j_file}}"
+    group: "{{kafka_connect_group}}"
+    owner: "{{kafka_connect_user}}"
+    mode: 0640
+
+- name: Create Kafka Connect Jolokia Config
+  template:
+    src: kafka_connect_jolokia.properties.j2
+    dest: "{{kafka_connect_jolokia_config}}"
+    mode: 0640
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+  when: kafka_connect_jolokia_enabled|bool
+  notify: restart connect distributed
+
+- name: Deploy JMX Exporter Config File
+  copy:
+    src: "{{kafka_connect_jmxexporter_config_source_path}}"
+    dest: "{{kafka_connect_jmxexporter_config_path}}"
+    mode: 0640
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+  when: kafka_connect_jmxexporter_enabled|bool
+
+- name: Create Basic Auth Jaas File
+  template:
+    src: jaas.conf.j2
+    dest: "{{kafka_connect.jaas_file}}"
+    mode: 0640
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+  notify: restart connect distributed
+  when: kafka_connect_authentication_type == 'basic'
+
+- name: Create Basic Auth Password File
+  template:
+    src: password.properties.j2
+    dest: "{{kafka_connect.password_file}}"
+    mode: 0640
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+  notify: restart connect distributed
+  when: kafka_connect_authentication_type == 'basic'
+
+- name: Create Service Override Directory
+  file:
+    path: "{{kafka_connect.systemd_override | dirname}}"
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+    state: directory
+    mode: 0640
+
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{ kafka_connect.systemd_override }}"
+    mode: 0640
+    owner: root
+    group: root
+  notify: restart connect distributed
+
+- name: Certs were Updated - Trigger Restart
+  command: /bin/true
+  notify: restart connect distributed
+  when: certs_updated|bool
+
+- meta: flush_handlers
+
+- name: Start Connect Service
+  systemd:
+    name: "{{kafka_connect_service_name}}"
+    enabled: true
+    state: started
+
+- name: Health Check
+  include_tasks: health_check.yml
+  when:
+    - kafka_connect_health_checks_enabled|bool
+    - not ansible_check_mode
+
+- name: Register Cluster
+  include_tasks: register_cluster.yml
+  when: kafka_connect_cluster_name|length > 0 and rbac_enabled|bool
+
+- name: Deploy Connectors
+  include_tasks: deploy_connectors.yml

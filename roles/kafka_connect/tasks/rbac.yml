@@ -1,0 +1,161 @@
+---
+- name: RBAC Setup Tasks
+  import_role:
+    name: common
+    tasks_from: rbac_setup.yml
+  vars:
+    user: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+
+- name: Grant role System Admin to Additional Connect Super Users
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{item}}/roles/SystemAdmin"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "clusters": {
+          "kafka-cluster": "{{kafka_cluster_id}}",
+          "connect-cluster": "{{kafka_connect_final_properties['group.id']}}"
+        }
+      }
+    status_code: 204
+  loop: "{{kafka_connect_additional_system_admins}}"
+  when: not ansible_check_mode
+
+- name: Grant role Security Admin to Connect user
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/SecurityAdmin"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "clusters": {
+          "kafka-cluster": "{{kafka_cluster_id}}",
+          "connect-cluster": "{{kafka_connect_final_properties['group.id']}}"
+        }
+      }
+    status_code: 204
+  when: not ansible_check_mode
+
+- name: Grant Connect User ResourceOwner on Connect Topics and Group
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster":"{{kafka_cluster_id}}"}},
+            "resourcePatterns": [
+              {
+                "resourceType":"Group",
+                "name":"{{kafka_connect_final_properties['group.id']}}",
+                "patternType":"LITERAL"
+              },
+              {
+                "resourceType":"Topic",
+                "name":"{{kafka_connect_final_properties['config.storage.topic']}}",
+                "patternType":"LITERAL"
+              },
+              {
+                "resourceType":"Topic",
+                "name":"{{kafka_connect_final_properties['offset.storage.topic']}}",
+                "patternType":"LITERAL"
+              },
+              {
+                "resourceType":"Topic",
+                "name":"{{kafka_connect_final_properties['status.storage.topic']}}",
+                "patternType":"LITERAL"
+              },
+              {
+                "resourceType":"Topic",
+                "name":"{{kafka_connect_final_properties['confluent.license.topic']}}",
+                "patternType":"LITERAL"
+              }
+            ]
+          }
+        }
+      }
+    status_code: 204
+  when: not ansible_check_mode
+
+- name: Grant Connect User ResourceOwner on Secret Registry Topic and Group
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/ResourceOwner/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster":"{{kafka_cluster_id}}"}},
+            "resourcePatterns": [
+              {
+                "resourceType":"Group",
+                "name":"{{kafka_connect_final_properties['config.providers.secret.param.secret.registry.group.id']}}",
+                "patternType":"LITERAL"
+              },
+              {
+                "resourceType":"Topic",
+                "name":"{{kafka_connect_final_properties['config.providers.secret.param.kafkastore.topic']}}",
+                "patternType":"LITERAL"
+              }
+            ]
+          }
+        }
+      }
+    status_code: 204
+  when: kafka_connect_secret_registry_enabled|bool and not ansible_check_mode
+
+- name: Grant connect user the DeveloperWrite role on Monitoring Interceptor Topic
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{kafka_connect_ldap_user}}/roles/DeveloperWrite/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster":"{{kafka_cluster_id}}"
+          }
+        },
+        "resourcePatterns": [{
+          "resourceType": "Topic",
+          "name": "{{kafka_connect_final_properties['confluent.monitoring.interceptor.topic']}}",
+          "patternType":"LITERAL"
+        }]
+      }
+    status_code: 204
+  when: kafka_connect_monitoring_interceptors_enabled|bool and not ansible_check_mode
