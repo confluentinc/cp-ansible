@@ -1,3 +1,5 @@
+# You might need to comment out some of the backup/restore files if running on soak cluster
+# - check which files are present or absent by hand and update the script before running it
 - name: Reinstall ZK and Kafka
   hosts: zookeeper:kafka_broker
   serial: 1
@@ -33,14 +35,14 @@
       - name: Reinstall ZK and Kafka
         include_tasks: tasks/reinstall_components.yml
         vars:
-          tmp_name: "zk_and_kafka"
           packages: "{{ (zookeeper_packages + kafka_broker_packages) | unique}}"
           backup_files:
             - "{{ kafka_broker.config_file }}"
+            - "{{ kafka_broker.systemd_override }}"
+            - "{{ kafka_broker.log4j_file }}"
             - "{{ zookeeper.config_file }}"
-          restore_files:
-            - "{{ kafka_broker.config_file }}"
-            - "{{ zookeeper.config_file }}"
+            - "{{ zookeeper.systemd_override }}"
+            - "{{ zookeeper.log4j_file }}"
       - name: Start ZK
         systemd:
           name: "{{ zookeeper_service_name }}"
@@ -63,7 +65,7 @@
         when: health_checks_enabled|bool
       - name: Sleep instead of Kafka Broker Health Check
         pause:
-          seconds: 30
+          minutes: 2
         when: not health_checks_enabled|bool
       when: zk_kafka|bool  
     - debug:
@@ -89,14 +91,13 @@
       - name: Reinstall Schema Registry
         include_tasks: tasks/reinstall_and_restart_components.yml
         vars:
-          tmp_name: "schema_registry"
           services:
             - "{{ schema_registry_service_name }}"
           packages: "{{ schema_registry_packages }}"
           backup_files:
             - "{{ schema_registry.config_file }}"
-          restore_files:
-            - "{{ schema_registry.config_file }}"
+            - "{{ schema_registry.systemd_override }}"
+            - "{{ schema_registry.log4j_file }}"
       - name: Schema Registry Health Check
         import_role:
           name: confluent.schema_registry
@@ -104,7 +105,7 @@
         when: health_checks_enabled|bool
       - name: Sleep instead of SR Health Check
         pause:
-          seconds: 30
+          minutes: 1
         when: not health_checks_enabled|bool
       when: sr|bool
     - debug:
@@ -130,7 +131,6 @@
       - name: Reinstall Connect and KSQL
         include_tasks: tasks/reinstall_and_restart_components.yml
         vars:
-          tmp_name: "connect_and_ksql"
           services:
             - "{{ kafka_connect_service_name }}"
             - "{{ ksql_service_name }}"
@@ -139,10 +139,11 @@
           # packages: "{{ (kafka_connect_packages + schema_registry_packages + control_center_packages) | unique}}"
           backup_files:
             - "{{ kafka_connect.config_file }}"
+            - "{{ kafka_connect.systemd_override }}"
+            - "{{ kafka_connect.log4j_file }}"
             - "{{ ksql.config_file }}"
-          restore_files:
-            - "{{ kafka_connect.config_file }}"
-            - "{{ ksql.config_file }}"
+            - "{{ ksql.systemd_override }}"
+            - "{{ ksql.log4j_file }}"
       - name: KSQL Health Check
         import_role:
           name: confluent.ksql
@@ -155,7 +156,8 @@
         when: health_checks_enabled|bool
       - name: Sleep instead of Connect and KSQL Health Checks
         pause:
-          seconds: 30
+          # connect takes a bit to start
+          minutes: 2
         when: not health_checks_enabled|bool
       when: connect_ksql|bool
     - debug:
@@ -181,7 +183,6 @@
       - name: Reinstall REST Proxy and C3
         include_tasks: tasks/reinstall_and_restart_components.yml
         vars:
-          tmp_name: "rest_and_c3"
           services:
             - "{{ kafka_rest_service_name }}"
             - "{{ control_center_service_name }}"
@@ -189,10 +190,11 @@
           packages: "{{ (kafka_rest_packages + control_center_packages + schema_registry_packages) | unique}}"
           backup_files:
             - "{{ kafka_rest.config_file }}"
+            - "{{ kafka_rest.systemd_override }}"
+            - "{{ kafka_rest.log4j_file }}"
             - "{{ control_center.config_file }}"
-          restore_files:
-            - "{{ kafka_rest.config_file }}"
-            - "{{ control_center.config_file }}"
+            - "{{ control_center.systemd_override }}"
+            - "{{ control_center.log4j_file }}"
       - name: Kafka Rest Health Check
         import_role:
           name: confluent.kafka_rest
@@ -206,7 +208,7 @@
       - name: Sleep instead of REST Proxy and C3 Health Checks
         pause:
           # C3 takes some time to start up usually, give it a minute
-          minutes: 1
+          minutes: 2
         when: not health_checks_enabled|bool
       when: rest_c3|bool
     - debug:
