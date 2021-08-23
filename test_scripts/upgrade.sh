@@ -12,12 +12,16 @@ fi
 
 export KSQL_INVALID_VERSION=5.4
 
-## Change to molecule directory
+## Change to project root
 cd ..
 
 ## Checkout starting branch
 echo "Checking out $START_BRANCH branch"
 git checkout $START_BRANCH
+
+## Change to molecule directory on pre 7.0 branches
+
+cd roles/confluent.test/
 
 ## Run Molecule Converge on scenario
 echo "Running molecule converge on $SCENARIO_NAME"
