@@ -3,7 +3,13 @@
 set -e
 
 ## Variables
-export END_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+## If current version is set to true, will change END_BRANCH to be equal to the latest CP BRANCH.
+if [[$CURRENT_VERSION = true]]
+then
+  export END_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+fi
+
 export KSQL_INVALID_VERSION=5.4
 
 ## Change to molecule directory
