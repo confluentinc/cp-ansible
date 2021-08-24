@@ -69,8 +69,11 @@ echo "Upgrade Kafka Broker Log Format"
 ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_kafka_broker_log_format.yml
 
 ## Configure Kafka Admin API
-echo "Configure Kafka Admin API"
-ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_kafka_broker_rest_configuration.yml
+if [[$ADMIN_API = true]]
+then
+  echo "Configure Kafka Admin API"
+  ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_kafka_broker_rest_configuration.yml
+fi
 
 ## Destroy Infrastructure
 cd roles/confluent.test
