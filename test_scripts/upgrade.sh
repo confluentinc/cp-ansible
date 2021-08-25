@@ -3,15 +3,25 @@
 set -e
 
 ## Variables
-export END_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+## If current version is set to true, will change END_BRANCH to be equal to the latest CP BRANCH.
+if [[$CURRENT_VERSION = true]]
+then
+  export END_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+fi
+
 export KSQL_INVALID_VERSION=5.4
 
-## Change to molecule directory
+## Change to project root
 cd ..
 
 ## Checkout starting branch
 echo "Checking out $START_BRANCH branch"
 git checkout $START_BRANCH
+
+## Change to molecule directory on pre 7.0 branches
+
+cd roles/confluent.test/
 
 ## Run Molecule Converge on scenario
 echo "Running molecule converge on $SCENARIO_NAME"
@@ -59,8 +69,11 @@ echo "Upgrade Kafka Broker Log Format"
 ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_kafka_broker_log_format.yml
 
 ## Configure Kafka Admin API
-echo "Configure Kafka Admin API"
-ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_kafka_broker_rest_configuration.yml
+if [[$ADMIN_API = true]]
+then
+  echo "Configure Kafka Admin API"
+  ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_kafka_broker_rest_configuration.yml
+fi
 
 ## Destroy Infrastructure
 cd roles/confluent.test
