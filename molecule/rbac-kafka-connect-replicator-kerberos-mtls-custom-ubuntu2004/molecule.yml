@@ -1,0 +1,391 @@
+### rbac-mds-kerberos-mtls-custom-rhel
+##
+##  Tests Multi Cluster RBAC Replicator with kerberos auth on the MDS and mtls on second cluster
+##
+---
+driver:
+  name: docker
+platforms:
+  - name: mds-ldap1
+    hostname: mds-ldap1.confluent
+    groups:
+      - ldap_server
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mds-kerberos1
+    hostname: mds-kerberos1.confluent
+    groups:
+      - kerberos_server
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  # MDS Zookeeper and Kafka
+  - name: mds-zookeeper1
+    hostname: mds-zookeeper1.confluent
+    groups:
+      - zookeeper
+      - mds
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mds-kafka-broker1
+    hostname: mds-kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - mds
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mds-kafka-broker2
+    hostname: mds-kafka-broker2.confluent
+    groups:
+      - kafka_broker
+      - mds
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mds-kafka-broker3
+    hostname: mds-kafka-broker3.confluent
+    groups:
+      - kafka_broker
+      - mds
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  # Cluster 2 goups, groupnames will be changed during converge phase
+  - name: zookeeper1
+    hostname: zookeeper1.confluent
+    groups:
+      - zookeeper2
+      - cluster2
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker2
+      - cluster2
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker2
+      - cluster2
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
+    groups:
+      - kafka_broker2
+      - cluster2
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect-replicator1
+    hostname: kafka_connect_replicator1.confluent
+    groups:
+      - kafka_connect_replicator2
+      - cluster2
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    converge: converge.yml
+  inventory:
+    group_vars:
+      # Shared properties among mds cluster and cluster2 groups (as well as kerberos and ldap)
+      all:
+        scenario_name: rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004
+
+        rbac_enabled: true
+
+        create_mds_certs: false
+        token_services_public_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/public.pem"
+        token_services_private_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/tokenKeypair.pem"
+
+        kafka_broker_custom_listeners:
+          client_listener:
+            name: CLIENT
+            port: 9093
+
+        mds_super_user: mds
+        mds_super_user_password: password
+
+        kafka_broker_ldap_user: kafka_broker
+        kafka_broker_ldap_password: password
+
+        kafka_connect_replicator_ldap_user: replicator
+        kafka_connect_replicator_ldap_password: password
+
+        rbac_component_additional_system_admins:
+          - user1
+
+        kerberos_kafka_broker_primary: kafka
+        kerberos:
+          realm: realm.example.com
+          kdc_hostname: mds-kerberos1
+          admin_hostname: mds-kerberos1
+
+        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
+        kafka_broker_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
+
+      mds:
+        ssl_enabled: false
+        ssl_mutual_auth_enabled: false
+        sasl_protocol: kerberos
+
+        kafka_broker_cluster_name: mds
+
+        kafka_broker_custom_properties:
+          ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+          ldap.com.sun.jndi.ldap.read.timeout: 3000
+          ldap.java.naming.provider.url: ldap://mds-ldap1:389
+          ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
+          ldap.java.naming.security.credentials: password
+          ldap.java.naming.security.authentication: simple
+          ldap.user.search.base: OU=rbac,DC=example,DC=com
+          ldap.group.search.base: OU=rbac,DC=example,DC=com
+          ldap.user.name.attribute: uid
+          ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.group.name.attribute: cn
+          ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.user.object.class: account
+
+      cluster2:
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
+
+        kafka_broker_cluster_name: destination_cluster
+
+        kafka_broker_custom_listeners:
+          client_listener:
+            ssl_enabled: false
+            ssl_mutual_auth_enabled: false
+            sasl_protocol: kerberos
+            name: CLIENT
+            port: 9093
+
+        ssl_custom_certs: true
+        ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        ssl_key_password: keypass
+
+        external_mds_enabled: true
+        mds_broker_bootstrap_servers: mds-kafka-broker1:9093,mds-kafka-broker2:9093
+        mds_bootstrap_server_urls: http://mds-kafka-broker1:8090,http://mds-kafka-broker2:8090
+        mds_broker_listener:
+          ssl_enabled: false
+          ssl_mutual_auth_enabled: false
+          sasl_protocol: kerberos
+
+      kafka_connect_replicator:
+
+        kafka_connect_replicator_listener:
+          ssl_enabled: true
+          ssl_mutual_auth_enabled: false
+          sasl_protocol: oauth
+
+        kafka_connect_replicator_cluster_name: replicator
+        kafka_connect_replicator_white_list: test-replicator-source
+        kafka_connect_replicator_bootstrap_servers: kafka-broker1:9092
+        kafka_connect_replicator_ssl_ca_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        kafka_connect_replicator_ssl_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        kafka_connect_replicator_ssl_key_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        kafka_connect_replicator_ssl_key_password: keypass
+        kafka_connect_replicator_truststore_storepass: confluenttruststorepass
+        kafka_connect_replicator_keystore_storepass: confluentkeystorestorepass
+
+        kakfa_connect_replicator_rbac_enabled: true
+        kafka_connect_replicator_erp_tls_enabled: false
+        kafka_connect_replicator_erp_host: http://mds-kafka-broker1:8090,http://mds-kafka-broker2:8090
+        kafka_connect_replicator_erp_admin_user: mds
+        kafka_connect_replicator_erp_admin_password: password
+        # kafka_connect_replicator_kafka_cluster_id: destination_cluster
+        kafka_connect_replicator_kafka_cluster_name: destination_cluster
+        kafka_connect_replicator_erp_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/public.pem"
+
+        kafka_connect_replicator_consumer_listener:
+          ssl_enabled: false
+          ssl_mutual_auth_enabled: false
+          sasl_protocol: oauth
+
+        kafka_connect_replicator_consumer_bootstrap_servers: mds-kafka-broker1:9092
+        # Validating these vars default properly
+        # kafka_connect_replicator_consumer_ssl_ca_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        # kafka_connect_replicator_consumer_ssl_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        # kafka_connect_replicator_consumer_ssl_key_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        # kafka_connect_replicator_consumer_ssl_key_password: keypass
+        # kafka_connect_replicator_truststore_storepass: confluenttruststorepass
+        # kafka_connect_replicator_keystore_storepass: confluentkeystorestorepass
+        kafka_connect_replicator_consumer_custom_properties:
+          client.id: consumer-test
+
+        kakfa_connect_replicator_consumer_rbac_enabled: true
+        kafka_connect_replicator_consumer_erp_tls_enabled: false
+        kafka_connect_replicator_consumer_erp_host: http://mds-kafka-broker1:8090,http://mds-kafka-broker2:8090
+        kafka_connect_replicator_consumer_erp_admin_user: mds
+        kafka_connect_replicator_consumer_erp_admin_password: password
+        # kafka_connect_replicator_consumer_kafka_cluster_id: mds
+        kafka_connect_replicator_consumer_kafka_cluster_name: mds
+        kafka_connect_replicator_consumer_erp_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/public.pem"
+
+        kafka_connect_replicator_producer_listener:
+          ssl_enabled: true
+          ssl_mutual_auth_enabled: false
+          sasl_protocol: oauth
+
+        kafka_connect_replicator_producer_bootstrap_servers: kafka-broker1:9092
+        kafka_connect_replicator_producer_ssl_ca_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        kafka_connect_replicator_producer_ssl_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        kafka_connect_replicator_producer_ssl_key_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        kafka_connect_replicator_producer_ssl_key_password: keypass
+        kafka_connect_replicator_producer_custom_properties:
+          client.id: producer-test
+
+        kafka_connect_replicator_monitoring_interceptor_listener:
+          ssl_enabled: true
+          ssl_mutual_auth_enabled: false
+          sasl_protocol: oauth
+
+        kafka_connect_replicator_monitoring_interceptor_bootstrap_servers: kafka-broker1:9092
+        # Testing these variables default properly
+        # kafka_connect_replicator_monitoring_interceptor_ssl_ca_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        # kafka_connect_replicator_monitoring_interceptor_ssl_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        # kafka_connect_replicator_monitoring_interceptor_ssl_key_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        # kafka_connect_replicator_monitoring_interceptor_ssl_key_password: keypass
+
+      ldap_server:
+        ldaps_enabled: false
+        ldaps_custom_certs: false
+
+        ldap_admin_password: ldppassword
+
+        ldap_rbac_group: rbac
+        ldap_dc: example
+        ldap_dc_extension: com
+
+        ldap_users:
+          - username: "{{kafka_broker_ldap_user}}"
+            password: "{{kafka_broker_ldap_password}}"
+            uid: 9999
+            guid: 99
+          - username: "{{mds_super_user}}"
+            password: "{{mds_super_user_password}}"
+            uid: 9993
+            guid: 93
+          - username: user1
+            password: user1p
+            uid: 9992
+            guid: 92
+          - username: "{{kafka_connect_replicator_ldap_user}}"
+            password: "{{kafka_connect_replicator_ldap_password}}"
+            uid: 9991
+            guid: 91
+
+      kerberos_server:
+        realm_name: "{{ kerberos.realm | upper }}"
+
+        keytab_output_directory: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs"
+
+        kerberos_principals:
+          - principal: "zookeeper/mds-zookeeper1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/zookeeper-mds-zookeeper1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-mds-kafka-broker1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker2.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-mds-kafka-broker2.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker3.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-mds-kafka-broker3.keytab"
+          - principal: "zookeeper/zookeeper1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker2.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-kafka-broker2.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker3.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-kafka-broker3.keytab"
+
+verifier:
+  name: ansible
+lint: |
+    set -e
+    yamllint -c ../../.yamllint ../..
+scenario:
+  test_sequence:
+    - lint
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    # - idempotence
+    - side_effect
+    - verify
+    - cleanup
+    - destroy
