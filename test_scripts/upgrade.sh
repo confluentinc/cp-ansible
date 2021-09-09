@@ -5,7 +5,7 @@ set -e
 ## Variables
 
 ## If current version is set to true, will change END_BRANCH to be equal to the latest CP BRANCH.
-if [[$CURRENT_VERSION = true]]
+if [[ $CURRENT_VERSION == true ]]
 then
   export END_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 fi
@@ -33,6 +33,48 @@ cd ../..
 ## Checkout ending branch
 echo "Checkout $END_BRANCH branch"
 git checkout $END_BRANCH
+
+
+## With the 6.2.x release, we have removed upgrade playbooks and now handle everything via reconfiguration.  We've added an if statement so that
+## this single script can handle all scenarios.
+
+if [[ $UPGRADE_PLAYBOOK == false ]]
+then
+
+## Upgrade Zookeeper via reconfiguration
+echo "Upgrade Zookeeper"
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags zookeeper
+
+## Upgrade Brokers via reconfiguration
+echo "Upgrade Kafka Brokers"
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags kafka_broker
+
+## Upgrade Schema Registry via reconfiguration
+echo "Upgrade Schema Registry"
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags schema_registry
+
+## Upgrade Kafka Connect via reconfiguration
+echo "Upgrade Kafka Connect"
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags kafka_connect
+
+## Upgrade KSQL via reconfiguration
+if (( ${KSQL_INVALID_VERSION%%.*} < ${START_UPGRADE_VERSION%%.*} || ( ${KSQL_INVALID_VERSION%%.*} == ${START_UPGRADE_VERSION%%.*} && ${KSQL_INVALID_VERSION##*.} < ${START_UPGRADE_VERSION##*.} ) )) ; then
+echo "Upgrade KSQLDB"
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags ksql
+fi
+
+## Upgrade Kafka Rest
+echo "Upgrade Kafka Rest"
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i /.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags kafka_rest
+
+## Upgrade Control Center via reconfiguration
+echo "Upgrade Control Center"
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags control_center
+
+## Upgrade Kafka Broker Log format via reconfiguration
+# echo "Upgrade Kafka Broker Log Format"
+
+else
 
 ## Upgrade Zookeeper
 echo "Upgrade Zookeeper"
@@ -69,10 +111,11 @@ echo "Upgrade Kafka Broker Log Format"
 ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_kafka_broker_log_format.yml
 
 ## Configure Kafka Admin API
-if [[$ADMIN_API = true]]
+if [[ $ADMIN_API == true ]]
 then
   echo "Configure Kafka Admin API"
   ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_kafka_broker_rest_configuration.yml
+fi
 fi
 
 ## Destroy Infrastructure
