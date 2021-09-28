@@ -121,3 +121,8 @@ fi
 ## Destroy Infrastructure
 cd roles/confluent.test
 molecule destroy -s $SCENARIO_NAME
+
+## Write success file when complete
+## Note: Upgrade testing in CP-Ansible-Tools repo will check to see if this file exists to know the tests past.
+
+touch all_tests_passed.txt
