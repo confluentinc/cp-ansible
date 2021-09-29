@@ -1,88 +1,70 @@
+---
 lowercaseOutputName: true
-
 rules:
-# Special cases and very specific rules
-- pattern : kafka.server<type=(.+), name=(.+), clientId=(.+), topic=(.+), partition=(.*)><>Value
-  name: kafka_server_$1_$2
-  type: GAUGE
-  labels:
-    clientId: "$3"
-    topic: "$4"
-    partition: "$5"
-- pattern : kafka.server<type=(.+), name=(.+), clientId=(.+), brokerHost=(.+), brokerPort=(.+)><>Value
-  name: kafka_server_$1_$2
-  type: GAUGE
-  labels:
-    clientId: "$3"
-    broker: "$4:$5"
-- pattern : kafka.coordinator.(\w+)<type=(.+), name=(.+)><>Value
-  name: kafka_coordinator_$1_$2_$3
-  type: GAUGE
+  # Special cases and very specific rules
+  - pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), topic=(.+), partition=(.*)><>Value
+    name: kafka_server_$1_$2
+    type: GAUGE
+    labels:
+      clientId: "$3"
+      topic: "$4"
+      partition: "$5"
+  - pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), brokerHost=(.+), brokerPort=(.+)><>Value
+    name: kafka_server_$1_$2
+    type: GAUGE
+    labels:
+      clientId: "$3"
+      broker: "$4:$5"
 
-# Generic per-second counters with 0-2 key/value pairs
-- pattern: kafka.(\w+)<type=(.+), name=(.+)PerSec\w*, (.+)=(.+), (.+)=(.+)><>Count
-  name: kafka_$1_$2_$3_total
-  type: COUNTER
-  labels:
-    "$4": "$5"
-    "$6": "$7"
-- pattern: kafka.(\w+)<type=(.+), name=(.+)PerSec\w*, (.+)=(.+)><>Count
-  name: kafka_$1_$2_$3_total
-  type: COUNTER
-  labels:
-    "$4": "$5"
-- pattern: kafka.(\w+)<type=(.+), name=(.+)PerSec\w*><>Count
-  name: kafka_$1_$2_$3_total
-  type: COUNTER
+  - pattern: kafka.server<type=KafkaRequestHandlerPool, name=RequestHandlerAvgIdlePercent><>OneMinuteRate
+    name: kafka_server_kafkarequesthandlerpool_requesthandleravgidlepercent_total
+    type: GAUGE
 
-# Generic gauges with 0-2 key/value pairs
-- pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.+), (.+)=(.+)><>Value
-  name: kafka_$1_$2_$3
-  type: GAUGE
-  labels:
-    "$4": "$5"
-    "$6": "$7"
-- pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.+)><>Value
-  name: kafka_$1_$2_$3
-  type: GAUGE
-  labels:
-    "$4": "$5"
-- pattern: kafka.(\w+)<type=(.+), name=(.+)><>Value
-  name: kafka_$1_$2_$3
-  type: GAUGE
+  - pattern: kafka.server<type=socket-server-metrics, clientSoftwareName=(.+), clientSoftwareVersion=(.+), listener=(.+), networkProcessor=(.+)><>connections
+    name: kafka_server_socketservermetrics_connections
+    type: GAUGE
+    labels:
+      client_software_name: "$1"
+      client_software_version: "$2"
+      listener: "$3"
+      network_processor: "$4"
 
-# Emulate Prometheus 'Summary' metrics for the exported 'Histogram's.
-#
-# Note that these are missing the '_sum' metric!
-- pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.+), (.+)=(.+)><>Count
-  name: kafka_$1_$2_$3_count
-  type: COUNTER
-  labels:
-    "$4": "$5"
-    "$6": "$7"
-- pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.*), (.+)=(.+)><>(\d+)thPercentile
-  name: kafka_$1_$2_$3
-  type: GAUGE
-  labels:
-    "$4": "$5"
-    "$6": "$7"
-    quantile: "0.$8"
-- pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.+)><>Count
-  name: kafka_$1_$2_$3_count
-  type: COUNTER
-  labels:
-    "$4": "$5"
-- pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.*)><>(\d+)thPercentile
-  name: kafka_$1_$2_$3
-  type: GAUGE
-  labels:
-    "$4": "$5"
-    quantile: "0.$6"
-- pattern: kafka.(\w+)<type=(.+), name=(.+)><>Count
-  name: kafka_$1_$2_$3_count
-  type: COUNTER
-- pattern: kafka.(\w+)<type=(.+), name=(.+)><>(\d+)thPercentile
-  name: kafka_$1_$2_$3
-  type: GAUGE
-  labels:
-    quantile: "0.$4"
+  - pattern: "kafka.server<type=socket-server-metrics, listener=(.+), networkProcessor=(.+)><>(.+):"
+    name: kafka_server_socketservermetrics_$3
+    type: GAUGE
+    labels:
+      listener: "$1"
+      network_processor: "$2"
+
+  # Count and Value
+  - pattern: kafka.(.*)<type=(.+), name=(.+), (.+)=(.+), (.+)=(.+)><>(Count|Value)
+    name: kafka_$1_$2_$3
+    labels:
+      "$4": "$5"
+      "$6": "$7"
+  - pattern: kafka.(.*)<type=(.+), name=(.+), (.+)=(.+)><>(Count|Value)
+    name: kafka_$1_$2_$3
+    labels:
+      "$4": "$5"
+  - pattern: kafka.(.*)<type=(.+), name=(.+)><>(Count|Value)
+    name: kafka_$1_$2_$3
+
+  # Percentile
+  - pattern: kafka.(.*)<type=(.+), name=(.+), (.+)=(.*), (.+)=(.+)><>(\d+)thPercentile
+    name: kafka_$1_$2_$3
+    type: GAUGE
+    labels:
+      "$4": "$5"
+      "$6": "$7"
+      quantile: "0.$8"
+  - pattern: kafka.(.*)<type=(.+), name=(.+), (.+)=(.*)><>(\d+)thPercentile
+    name: kafka_$1_$2_$3
+    type: GAUGE
+    labels:
+      "$4": "$5"
+      quantile: "0.$6"
+  - pattern: kafka.(.*)<type=(.+), name=(.+)><>(\d+)thPercentile
+    name: kafka_$1_$2_$3
+    type: GAUGE
+    labels:
+      quantile: "0.$4"

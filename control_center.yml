@@ -1,0 +1,47 @@
+---
+- name: Control Center Status Finding
+  hosts: control_center
+  gather_facts: false
+  tags: control_center
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.variables
+
+    - name: Populate service facts
+      service_facts:
+
+    - name: Determine Installation Pattern - Parallel or Serial
+      set_fact:
+        install_pattern: "{{ 'parallel' if service_state != 'running' or control_center_deployment_strategy == 'parallel' else 'serial' }}"
+      vars:
+        service_state: "{{ ansible_facts.services[control_center_service_name + '.service'].state | default('unknown') }}"
+
+    - name: Group Hosts by Installation Pattern
+      group_by:
+        key: control_center_{{install_pattern}}
+      changed_when: false
+
+- name: Control Center Parallel Provisioning
+  hosts: control_center_parallel
+  gather_facts: false
+  tags: control_center
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.control_center
+
+- name: Control Center Serial Provisioning
+  hosts: control_center_serial
+  serial: 1
+  gather_facts: false
+  tags: control_center
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: confluent.control_center
+
+    - name: Proceed Prompt
+      pause:
+        prompt: "Press Enter to Proceed to Next Node. Ctrl + C to Abort"
+      when: control_center_pause_rolling_deployment|bool

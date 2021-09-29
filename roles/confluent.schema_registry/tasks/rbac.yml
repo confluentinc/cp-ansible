@@ -1,0 +1,87 @@
+---
+- name: RBAC Setup Tasks
+  import_role:
+    name: confluent.common
+    tasks_from: rbac_setup.yml
+  vars:
+    user: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+
+- name: Grant role System Admin to Additional Schema Registry Super Users
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{item}}/roles/SystemAdmin"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "clusters": {
+          "kafka-cluster": "{{kafka_cluster_id}}",
+          "schema-registry-cluster": "{{schema_registry_final_properties['schema.registry.group.id']}}"
+        }
+      }
+    status_code: 204
+  loop: "{{schema_registry_additional_system_admins}}"
+
+- name: Grant Schema Registry user the role SecurityAdmin on the Schema Registry cluster
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_ldap_user}}/roles/SecurityAdmin"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "clusters": {
+          "kafka-cluster": "{{kafka_cluster_id}}",
+          "schema-registry-cluster": "{{schema_registry_final_properties['schema.registry.group.id']}}"
+        }
+      }
+    status_code: 204
+
+- name: Grant Schema Registry user ResourceOwner Schema Registry Group and Topic
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_ldap_user}}/roles/ResourceOwner/bindings"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "scope": {
+          "clusters": {
+            "kafka-cluster": "{{kafka_cluster_id}}"
+          }
+        },
+        "resourcePatterns": [
+          {
+            "resourceType":"Group",
+            "name": "{{schema_registry_final_properties['schema.registry.group.id']}}",
+            "patternType":"LITERAL"
+          },
+          {
+            "resourceType":"Topic",
+            "name": "{{schema_registry_final_properties['kafkastore.topic']}}",
+            "patternType":"LITERAL"
+          },
+          {
+            "resourceType":"Topic",
+            "name": "{{schema_registry_final_properties['confluent.license.topic']}}",
+            "patternType":"LITERAL"
+          }
+        ]
+      }
+    status_code: 204

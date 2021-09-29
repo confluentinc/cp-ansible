@@ -16,7 +16,9 @@ While we appreciate all code changes submitted, please understand that some PR's
 
 [How to file a feature request](#how-to-file-a-feature-request)
 
-[How to file a pull request](#how-to-file-a-pull-request) 
+[How to test](#how-to-test)
+
+[How to file a pull request](#how-to-file-a-pull-request)
 
 
 ## Code of Conduct
@@ -34,7 +36,7 @@ You can ask questions via two methods:
     Please be sure to tag the post as a `question`.
 
 
-2. For Confluent Enterprise Support customers, we would strongly adivse you to open a Support ticket which will be addressed within your Support contract SLA:
+2. For Confluent Enterprise Support customers, we would strongly advise you to open a Support ticket which will be addressed within your Support contract SLA:
 
     ```https://support.confluent.io```
 
@@ -57,7 +59,7 @@ You can file bugs via two methods:
 
 * Use a clear and descriptive title for the issue to identify the problem.
 
-* Describe the exact steps which reproduce the problem in as many details as possible. For example, run the Ansible playbook with the `-vvv` switch and pipe the output to a file.  Provide a link to the file 
+* Describe the exact steps which reproduce the problem in as many details as possible. For example, run the Ansible playbook with the `-vvv` switch and pipe the output to a file.  Provide a link to the file
 
 * Provide specific examples to demonstrate the steps. Include links to files or GitHub projects, or copy/pasteable snippets, which you use in those examples. If you're providing snippets in the issue, use Markdown code blocks.
 
@@ -65,7 +67,7 @@ You can file bugs via two methods:
 
 * Explain which behavior you expected to see instead and why.
 
-## How to file a feature request 
+## How to file a feature request
 
 1. You can open an issue on the project itself, here on github, which will be answered on a best effort basis:
 
@@ -99,8 +101,9 @@ The process described here has several goals:
 Please follow these steps to have your contribution considered by the maintainers:
 
 1. Follow all instructions in [the template](PULL_REQUEST_TEMPLATE.md)
-2. Follow the styleguides
-3. After you submit your pull request, verify that all status checks are passing
+2. Make sure you have reviewed [How to test](HOW_TO_TEST.md) and our [Development Guide](DEVELOPMENT_GUIDE.md)
+3. Follow the styleguides
+4. After you submit your pull request, verify that all status checks are passing
 
 While the prerequisites above must be satisfied prior to having your pull request reviewed, the reviewer(s) may ask you to complete additional design work, tests, or other changes before your pull request can be ultimately accepted.
 

@@ -1,0 +1,37 @@
+---
+- name: Get Kafka Cluster Id
+  import_role:
+    name: confluent.common
+    tasks_from: rbac_setup.yml
+  vars:
+    copy_certs: false
+
+- name: Register Kafka Connect Cluster
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/registry/clusters"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      [
+          {
+              "clusterName": "{{kafka_connect_cluster_name}}",
+              "scope": {
+                  "clusters": {
+                      "kafka-cluster": "{{kafka_cluster_id}}",
+                      "connect-cluster": "{{kafka_connect_final_properties['group.id']}}"
+                  }
+              },
+              "hosts": [ {% for host in groups['kafka_connect'] %}{% if loop.index > 1%},{% endif %}{ "host": "{{host}}", "port": {{kafka_connect_rest_port}} }{% endfor %}
+              ],
+              "protocol": "{{kafka_connect_http_protocol | upper}}"
+          }
+      ]
+    status_code: 204
+  run_once: true
+  register: output

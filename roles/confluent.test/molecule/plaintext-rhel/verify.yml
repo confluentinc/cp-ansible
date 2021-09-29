@@ -1,9 +1,9 @@
 ---
 - name: Verify Package Version
   hosts: all
-  gather_facts: no
+  gather_facts: false
   vars:
-    latest_version: 5.3.3-1
+    latest_version: 6.2.0
   tasks:
     - import_role:
         name: confluent.variables
@@ -11,11 +11,16 @@
     - shell: "rpm -qa | grep confluent | grep {{latest_version}}"
       register: package_grep
       failed_when: "package_grep.rc == 0"
-      when: confluent.package_version != latest_version
+      when: confluent_package_version != latest_version
+
+    - name: Verify log4j conf
+      import_role:
+        name: confluent.test
+        tasks_from: check_log4j.yml
 
 - name: Verify - kafka_broker
   hosts: kafka_broker
-  gather_facts: no
+  gather_facts: false
   tasks:
     - import_role:
         name: confluent.test
@@ -25,9 +30,28 @@
         property: confluent.metrics.reporter.security.protocol
         expected_value: PLAINTEXT
 
+    - name: Get stats on copied file
+      stat:
+        path: /tmp/molecule.yml
+      register: copied_file
+
+    - name: Assert copied file's permissions correct
+      assert:
+        that:
+          - copied_file.stat.exists
+          - copied_file.stat.gr_name == 'confluent'
+          - copied_file.stat.pw_name == 'cp-kafka'
+        quiet: true
+
+    - name: Embedded Rest Proxy returning Cluster details
+      uri:
+        url: http://localhost:8090/kafka/v3/clusters
+        status_code: 200
+        validate_certs: false
+
 - name: Verify - schema_registry
   hosts: schema_registry
-  gather_facts: no
+  gather_facts: false
   tasks:
     - import_role:
         name: confluent.test
@@ -37,9 +61,22 @@
         property: kafkastore.security.protocol
         expected_value: PLAINTEXT
 
+    - name: Get stats on copied file
+      stat:
+        path: /tmp/molecule.yml
+      register: copied_file
+
+    - name: Assert copied file's permissions correct
+      assert:
+        that:
+          - copied_file.stat.exists
+          - copied_file.stat.gr_name == 'confluent'
+          - copied_file.stat.pw_name == 'cp-schema-registry'
+        quiet: true
+
 - name: Verify - kafka_rest
   hosts: kafka_rest
-  gather_facts: no
+  gather_facts: false
   tasks:
     - import_role:
         name: confluent.test
@@ -49,9 +86,22 @@
         property: client.security.protocol
         expected_value: PLAINTEXT
 
+    - name: Get stats on copied file
+      stat:
+        path: /tmp/molecule.yml
+      register: copied_file
+
+    - name: Assert copied file's permissions correct
+      assert:
+        that:
+          - copied_file.stat.exists
+          - copied_file.stat.gr_name == 'confluent'
+          - copied_file.stat.pw_name == 'cp-kafka-rest'
+        quiet: true
+
 - name: Verify - kafka_connect
   hosts: kafka_connect
-  gather_facts: no
+  gather_facts: false
   tasks:
     - import_role:
         name: confluent.test
@@ -61,21 +111,47 @@
         property: security.protocol
         expected_value: PLAINTEXT
 
+    - name: Get stats on copied file
+      stat:
+        path: /tmp/molecule.yml
+      register: copied_file
+
+    - name: Assert copied file's permissions correct
+      assert:
+        that:
+          - copied_file.stat.exists
+          - copied_file.stat.gr_name == 'confluent'
+          - copied_file.stat.pw_name == 'cp-kafka-connect'
+        quiet: true
+
 - name: Verify - ksql
   hosts: ksql
-  gather_facts: no
+  gather_facts: false
   tasks:
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/ksql/ksql-server.properties
+        file_path: /etc/ksqldb/ksql-server.properties
         property: security.protocol
         expected_value: PLAINTEXT
 
+    - name: Get stats on copied file
+      stat:
+        path: /tmp/molecule.yml
+      register: copied_file
+
+    - name: Assert copied file's permissions correct
+      assert:
+        that:
+          - copied_file.stat.exists
+          - copied_file.stat.gr_name == 'confluent'
+          - copied_file.stat.pw_name == 'cp-ksql'
+        quiet: true
+
 - name: Verify - control_center
   hosts: control_center
-  gather_facts: no
+  gather_facts: false
   tasks:
     - import_role:
         name: confluent.test
@@ -84,3 +160,112 @@
         file_path: /etc/confluent-control-center/control-center-production.properties
         property: confluent.controlcenter.streams.security.protocol
         expected_value: PLAINTEXT
+
+    - name: Get stats on copied file
+      stat:
+        path: /tmp/molecule.yml
+      register: copied_file
+
+    - name: Assert copied file's permissions correct
+      assert:
+        that:
+          - copied_file.stat.exists
+          - copied_file.stat.gr_name == 'confluent'
+          - copied_file.stat.pw_name == 'cp-control-center'
+        quiet: true
+
+- name: Verify - zookeper
+  hosts: zookeeper
+  gather_facts: false
+  tasks:
+    - name: Check jolokia/jmxexporter rest endpoint
+      uri:
+        url: "{{item}}"
+        status_code: 200
+      with_items:
+        - "http://{{inventory_hostname}}:7770/jolokia/list"
+        - "http://{{inventory_hostname}}:8079"
+
+    - name: Get stats on first copied file
+      stat:
+        path: /tmp/molecule.yml
+      register: copied_file
+
+    - name: Assert first copied file's permissions correct
+      assert:
+        that:
+          - copied_file.stat.exists
+          - copied_file.stat.gr_name == 'confluent'
+          - copied_file.stat.pw_name == 'cp-kafka'
+          - copied_file.stat.mode == '0640'
+        quiet: true
+
+    - name: Get stats on second copied file
+      stat:
+        path: /tmp/molecule2.yml
+      register: copied_file2
+
+    - name: Assert second copied file's permissions correct
+      assert:
+        that:
+          - copied_file2.stat.exists
+          - copied_file2.stat.gr_name == 'confluent'
+          - copied_file2.stat.pw_name == 'cp-kafka'
+          - copied_file2.stat.mode == '0666'
+        quiet: true
+
+- name: Verify - kafka_broker
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Check jolokia/jmxexporter rest endpoint
+      uri:
+        url: "{{ item }}"
+        status_code: 200
+      with_items:
+        - "http://{{inventory_hostname}}:7771/jolokia/list"
+        - "http://{{inventory_hostname}}:8080"
+- name: Verify - schema_registry
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+    - name: Check jolokia/jmxexporter rest endpoint
+      uri:
+        url: "{{ item }}"
+        status_code: 200
+      with_items:
+        - "http://{{inventory_hostname}}:7772/jolokia/list"
+        - "http://{{inventory_hostname}}:8078"
+- name: Verify - kafka_connect
+  hosts: kafka_connect
+  gather_facts: false
+  tasks:
+    - name: Check jolokia/jmxexporter rest endpoint
+      uri:
+        url: "{{ item }}"
+        status_code: 200
+      with_items:
+        - "http://{{inventory_hostname}}:7773/jolokia/list"
+        - "http://{{inventory_hostname}}:8077"
+- name: Verify - ksql
+  hosts: ksql
+  gather_facts: false
+  tasks:
+    - name: Check jolokia/jmxexporter rest endpoint
+      uri:
+        url: "{{ item }}"
+        status_code: 200
+      with_items:
+        - "http://{{inventory_hostname}}:7774/jolokia/list"
+        - "http://{{inventory_hostname}}:8076"
+- name: Verify - kafka_rest
+  hosts: kafka_rest
+  gather_facts: false
+  tasks:
+    - name: Check jolokia/jmxexporter rest endpoint
+      uri:
+        url: "{{ item }}"
+        status_code: 200
+      with_items:
+        - "http://{{inventory_hostname}}:7775/jolokia/list"
+        - "http://{{inventory_hostname}}:8075"

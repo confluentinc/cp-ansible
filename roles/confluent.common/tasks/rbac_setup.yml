@@ -1,0 +1,51 @@
+---
+- name: Get Kafka Cluster ID from Embedded Rest Proxy
+  uri:
+    url: "{{mds_http_protocol}}://{{ hostvars[groups['kafka_broker'][0]] | resolve_hostname }}:{{mds_port}}/kafka/v3/clusters"
+    method: GET
+    validate_certs: false
+    body_format: json
+    return_content: true
+    status_code: 200
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    force_basic_auth: true
+  register: cluster_id_query
+  when: cluster_id_source | default('erp') == 'erp'
+
+- name: Parse Kafka Cluster ID from json query
+  set_fact:
+    kafka_cluster_id: "{{ cluster_id_query.json.data[0].cluster_id }}"
+  when: cluster_id_source | default('erp') == 'erp'
+
+# TODO this will not work for Secure ZK or Archive installation method
+- name: Get Kafka Cluster ID from Zookeeper
+  shell: /usr/bin/zookeeper-shell localhost:2181 get /cluster/id | grep version
+  delegate_to: "{{ groups['zookeeper'][0] }}"
+  register: zk_cluster_id_query
+  when: cluster_id_source | default('erp') == 'zookeeper'
+
+- set_fact:
+    cluster_id_json: "{{ zk_cluster_id_query.stdout }}"
+  when: cluster_id_source | default('erp') == 'zookeeper'
+
+- name: Set kafka_cluster_id Variable
+  set_fact:
+    kafka_cluster_id: "{{ cluster_id_json.id }}"
+  when: cluster_id_source | default('erp') == 'zookeeper'
+
+- name: Create SSL Certificate Directory
+  file:
+    path: "{{ ssl_file_dir_final }}"
+    state: directory
+    mode: 0755
+  when: copy_certs | default(True)
+
+- name: Copy in MDS Public Pem File
+  copy:
+    src: "{{token_services_public_pem_file}}"
+    dest: "{{rbac_enabled_public_pem_path}}"
+    mode: 0640
+    owner: "{{user}}"
+    group: "{{group}}"
+  when: copy_certs | default(True)

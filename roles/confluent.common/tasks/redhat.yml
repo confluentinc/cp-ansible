@@ -4,35 +4,58 @@
     name: Confluent.dist
     file: confluent
     description: "Confluent repository (dist)"
-    baseurl: "{{confluent_common.repository.redhat.dist.baseurl}}"
-    gpgcheck: "{{confluent_common.repository.redhat.dist.gpgcheck}}"
-    gpgkey: "{{confluent_common.repository.redhat.dist.gpgkey}}"
-    enabled: "{{confluent_common.repository.redhat.dist.enabled}}"
-  notify: yum-clean-all
-  when: not custom_yum_repofile|bool
+    baseurl: "{{confluent_common_repository_redhat_dist_baseurl}}"
+    gpgcheck: "{{confluent_common_repository_redhat_dist_gpgcheck}}"
+    gpgkey: "{{confluent_common_repository_redhat_dist_gpgkey}}"
+    enabled: "{{confluent_common_repository_redhat_dist_enabled}}"
+  register: confluent_dist_repo_result
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
 
 - name: Add Confluent Yum Repo
   yum_repository:
     name: Confluent
     file: confluent
     description: "Confluent repository"
-    baseurl: "{{confluent_common.repository.redhat.main.baseurl}}"
-    gpgcheck: "{{confluent_common.repository.redhat.main.gpgcheck}}"
-    gpgkey: "{{confluent_common.repository.redhat.main.gpgkey}}"
-    enabled: "{{confluent_common.repository.redhat.main.enabled}}"
-  notify: yum-clean-all
-  when: not custom_yum_repofile|bool
+    baseurl: "{{confluent_common_repository_redhat_main_baseurl}}"
+    gpgcheck: "{{confluent_common_repository_redhat_main_gpgcheck}}"
+    gpgkey: "{{confluent_common_repository_redhat_main_gpgkey}}"
+    enabled: "{{confluent_common_repository_redhat_main_enabled}}"
+  register: confluent_repo_result
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
 
 - name: Add Custom Repo file
   copy:
     src: "{{custom_yum_repofile_filepath}}"
     dest: /etc/yum.repos.d/custom-confluent.repo
-  when: custom_yum_repofile|bool
+    mode: 0644
+  register: custom_repo_result
+  when: repository_configuration == 'custom'
 
-- meta: flush_handlers
+# Not using handler because of https://github.com/ansible/ansible/issues/41313
+- name: yum-clean-all
+  command: yum clean all
+  args:
+    warn: false
+  when: confluent_dist_repo_result.changed|default(False) or confluent_repo_result.changed|default(False) or custom_repo_result.changed|default(False)
 
 - name: Install Java
   yum:
     name: "{{redhat_java_package_name}}"
     state: present
+  register: java_install_result
+  until: java_install_result is success
+  retries: 10
+  delay: 5
   when: install_java|bool
+  tags: package
+
+- name: Install OpenSSL and Unzip
+  yum:
+    name:
+      - openssl
+      - unzip
+  tags: package

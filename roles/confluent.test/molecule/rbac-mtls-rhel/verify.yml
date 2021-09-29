@@ -1,0 +1,315 @@
+---
+- name: Verify - Zookeeper
+  hosts: zookeeper
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 2182
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/zookeeper.crt
+        service_key: /var/ssl/private/zookeeper.key
+
+- name: Verify - kafka_broker
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: confluent.metadata.server.ssl.keystore.location
+        expected_value: /var/ssl/private/kafka_broker.keystore.jks
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: ldap.java.naming.provider.url
+        expected_value: ldap://ldap1:389
+
+    - name: Get super.users
+      shell: grep "super.users" /etc/kafka/server.properties
+      register: super_users_grep
+
+    - name: Assert super users found in server.properties
+      assert:
+        that:
+          - "'User:dom' in super_users_grep.stdout"
+          - "'User:jeff' in super_users_grep.stdout"
+        fail_msg: "Super Users property: {{super_users_grep.stdout}} does not contain User:dom and User:jeff"
+
+    - include_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: "{{item}}"
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/kafka_broker.crt
+        service_key: /var/ssl/private/kafka_broker.key
+      loop:
+        - 8090
+        - 9091
+        - 9092
+        - 9093
+
+- name: Verify - schema_registry
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: public.key.path
+        expected_value: /var/ssl/private/public.pem
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 8081
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/schema_registry.crt
+        service_key: /var/ssl/private/schema_registry.key
+
+- name: Verify - kafka_rest
+  hosts: kafka_rest
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-rest/kafka-rest.properties
+        property: public.key.path
+        expected_value: /var/ssl/private/public.pem
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 8082
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/kafka_rest.crt
+        service_key: /var/ssl/private/kafka_rest.key
+
+- name: Verify - kafka_connect
+  hosts: kafka_connect
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: public.key.path
+        expected_value: /var/ssl/private/public.pem
+
+    # Below tests are for connect secret registry
+    - name: Get Connect Cluster Details
+      uri:
+        url: https://localhost:8083
+        status_code: 200
+        validate_certs: false
+        url_username: kafka-connect1
+        url_password: password
+        force_basic_auth: true
+      register: connect_cluster_query
+
+    - set_fact:
+        connect_cluster_json: "{{connect_cluster_query.json}}"
+
+    - name: Set kafka_cluster_id Variable
+      set_fact:
+        kafka_cluster_id: "{{connect_cluster_json.kafka_cluster_id}}"
+
+    - name: Grant role System Admin to mds user on Connect Cluster and Kafka Cluster
+      shell: |
+        curl -X POST https://kafka-broker1:8090/security/1.0/principals/User:mds/roles/SystemAdmin \
+          -u "mds":"password" -H "Content-Type: application/json" \
+          --cacert /var/ssl/private/ca.crt --key /var/ssl/private/kafka_connect.key --cert /var/ssl/private/kafka_connect.crt \
+          -d '{"clusters":{"kafka-cluster":"{{kafka_cluster_id}}","connect-cluster":"connect-cluster"}}'
+
+    # TODO add another user in molecule.yml and use this user instead of mds
+    - name: Create secret
+      shell: |
+        curl -u mds:password -H 'Content-Type: application/json' \
+          -d '{"secret": "t1"}' -k https://localhost:8083/secret/paths/conn1/keys/topic/versions
+
+    - name: Create test sink file
+      shell: |
+        touch /tmp/file-sink-test.txt
+        chmod 666 /tmp/file-sink-test.txt
+
+    - name: Create connector
+      shell: |
+        curl -k -X PUT https://localhost:8083/connectors/conn1/config \
+          -H "Content-Type: application/json" -u mds:password \
+          -d '{"connector.class": "org.apache.kafka.connect.file.FileStreamSinkConnector",
+          "tasks.max": "1",
+          "topics": "${secret:conn1:topic}",
+          "file": "/tmp/file-sink-test.txt",
+          "principal.service.name": "mds",
+          "principal.service.password": "password",
+          "consumer.override.security.protocol": "SASL_SSL",
+          "consumer.override.sasl.mechanism": "OAUTHBEARER",
+          "consumer.override.sasl.login.callback.handler.class": "io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler",
+          "consumer.override.bootstrap.servers": "kafka-broker1:9092"}'
+
+    - name: Wait connector status to return 200
+      uri:
+        url: https://localhost:8083/connectors/conn1/status
+        status_code: 200
+        validate_certs: false
+        url_username: mds
+        url_password: password
+        force_basic_auth: true
+      register: result
+      until: result.status == 200
+      retries: 10
+      delay: 5
+
+    - name: Wait connector status to return Running
+      uri:
+        url: https://localhost:8083/connectors/conn1/status
+        status_code: 200
+        validate_certs: false
+        url_username: mds
+        url_password: password
+        force_basic_auth: true
+      register: connector_status_response
+      until: connector_status_response.json.connector.state == 'RUNNING'
+      retries: 10
+      delay: 5
+
+    - name: Wait connector tasks to return Running
+      uri:
+        url: https://localhost:8083/connectors/conn1/status
+        status_code: 200
+        validate_certs: false
+        url_username: mds
+        url_password: password
+        force_basic_auth: true
+      register: connector_status_response
+      until: connector_status_response.json.tasks[0].state == 'RUNNING'
+      retries: 10
+      delay: 5
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 8083
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/kafka_connect.crt
+        service_key: /var/ssl/private/kafka_connect.key
+
+- name: Verify - ksql
+  hosts: ksql
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/ksqldb/ksql-server.properties
+        property: public.key.path
+        expected_value: /var/ssl/private/public.pem
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 8088
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/kafka_connect.crt
+        service_key: /var/ssl/private/kafka_connect.key
+
+- name: Verify - control_center
+  hosts: control_center
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: public.key.path
+        expected_value: /var/ssl/private/public.pem
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_tls_version.yml
+      vars:
+        service_port: 9021
+        service_ca: /var/ssl/private/ca.crt
+        service_cert: /var/ssl/private/kafka_connect.crt
+        service_key: /var/ssl/private/kafka_connect.key
+
+- name: Validate Cluster Registry
+  hosts: schema_registry
+  gather_facts: false
+  vars:
+    mds_http_protocol: https
+    mds_port: 8090
+    mds_super_user: mds
+    mds_super_user_password: password
+    broker_name: Test-Broker
+    connect_name: Test-Connect
+    ksql_name: Test-Ksql
+    schema_registry_name: Test-Schema
+  tasks:
+    - name: Get Kafka Cluster Id
+      import_role:
+        name: confluent.common
+        tasks_from: rbac_setup.yml
+      vars:
+        copy_certs: false
+
+    - name: Retrieve Cluster Registry details
+      uri:
+        url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/registry/clusters"
+        method: GET
+        validate_certs: false
+        force_basic_auth: true
+        url_username: "{{mds_super_user}}"
+        url_password: "{{mds_super_user_password}}"
+        status_code: 200
+      register: cluster_name_query
+
+    - set_fact:
+        cluster_name_query_json: "{{ cluster_name_query.json }}"
+
+    - name: Assert Broker Cluster ID as expected
+      assert:
+        that:
+          - broker_name == "{{cluster_name_query_json[0]['clusterName']}}"
+        fail_msg: "Broker ID set to {{cluster_name_query_json[0]['clusterName']}} not {{broker_name}}"
+        quiet: true
+
+    - name: Assert Kafka Connect Cluster ID as expected
+      assert:
+        that:
+          - connect_name == "{{cluster_name_query_json[1]['clusterName']}}"
+        fail_msg: "Connect Cluster ID set to {{cluster_name_query_json[1]['clusterName']}} not {{connect_name}}"
+        quiet: true
+
+    - name: Assert KSQL Cluster ID as expected
+      assert:
+        that:
+          - ksql_name == "{{cluster_name_query_json[2]['clusterName']}}"
+        fail_msg: "KSQL Cluster ID set to {{cluster_name_query_json[2]['clusterName']}} not {{ksql_name}}"
+        quiet: true
+
+    - name: Assert Schema Registry Cluster ID as expected
+      assert:
+        that:
+          - schema_registry_name == "{{cluster_name_query_json[3]['clusterName']}}"
+        fail_msg: "Schema Registry Cluster ID set to {{cluster_name_query_json[3]['clusterName']}} not {{schema_registry_name}}"
+        quiet: true

@@ -8,6 +8,29 @@ platforms:
     groups:
       - zookeeper
     image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: zookeeper2${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: zookeeper2${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - zookeeper
+    image: geerlingguy/docker-centos7-ansible
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: zookeeper3${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: zookeeper3${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - zookeeper
+    image: geerlingguy/docker-centos7-ansible
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -19,6 +42,19 @@ platforms:
     groups:
       - kafka_broker
     image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: kafka-broker2${JOB_BASE_NAME}${BUILD_NUMBER}
+    hostname: kafka-broker2${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -30,6 +66,7 @@ platforms:
     groups:
       - schema_registry
     image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -41,6 +78,7 @@ platforms:
     groups:
       - kafka_rest
     image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -52,6 +90,7 @@ platforms:
     groups:
       - kafka_connect
     image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -63,6 +102,7 @@ platforms:
     groups:
       - ksql
     image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -74,14 +114,15 @@ platforms:
     groups:
       - control_center
     image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     ## Commenting below to avoid port collision on jenkins server
     ## Uncomment to view c3 in browser at localhost:9021
-    # published_ports:
-    #   - "9021:9021"
+    published_ports:
+      - "9021:9021"
     networks:
       - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
 provisioner:
@@ -91,6 +132,35 @@ provisioner:
       hash_behaviour: merge
   playbooks:
     converge: ../../../../all.yml
+  inventory:
+    group_vars:
+      all:
+        scenario_name: plaintext-rhel
+
+        # Testing the copy local agents feature
+        jolokia_enabled: true
+        jolokia_url_remote: false
+        jolokia_jar_url: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/jolokia.jar"
+
+        jmxexporter_enabled: true
+        jmxexporter_url_remote: false
+        jmxexporter_jar_url: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/jmxexporter.jar"
+
+        # Testing the copy files feature
+        zookeeper_copy_files:
+          - source_path: "roles/confluent.test/molecule/{{scenario_name}}/molecule.yml"
+            destination_path: /tmp/molecule.yml
+          - source_path: "roles/confluent.test/molecule/{{scenario_name}}/molecule.yml"
+            destination_path: /tmp/molecule2.yml
+            file_mode: '0666'
+
+        kafka_broker_copy_files: "{{zookeeper_copy_files}}"
+        schema_registry_copy_files: "{{zookeeper_copy_files}}"
+        kafka_connect_copy_files: "{{zookeeper_copy_files}}"
+        kafka_rest_copy_files: "{{zookeeper_copy_files}}"
+        ksql_copy_files: "{{zookeeper_copy_files}}"
+        control_center_copy_files: "{{zookeeper_copy_files}}"
+
 verifier:
   name: ansible
 scenario:

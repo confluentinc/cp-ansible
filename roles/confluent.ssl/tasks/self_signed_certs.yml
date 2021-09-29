@@ -1,65 +1,44 @@
-- name: Create Certificate Authority and Copy to Ansible Host
-  include_tasks: certificate_authority.yml
-  run_once: true
-  when: self_signed|bool and regenerate_ca|bool
-
+---
 - name: Copy CA Cert to Host
   copy:
-    src: "generated_ssl_files/{{ssl_self_signed_ca_cert_filename}}"
-    dest: "/var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}}"
+    src: "{{ssl_self_signed_ca_cert_filepath}}"
+    dest: "{{ca_cert_path}}"
 
 - name: Copy CA Key to Host
   copy:
-    src: "generated_ssl_files/{{ssl_self_signed_ca_key_filename}}"
-    dest: "/var/ssl/private/generation/{{ssl_self_signed_ca_key_filename}}"
+    src: "{{ssl_self_signed_ca_key_filepath}}"
+    dest: "{{ca_key_path}}"
 
-- name: Create Truststore and Import the CA Cert
+- name: Create Host Key
   shell: |
-    keytool -noprompt -keystore {{truststore_path}} -storetype pkcs12 \
-      -alias CARoot -import -file /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
-      -storepass {{truststore_storepass}} -keypass {{truststore_storepass}}
-
-- name: Create Keystore
-  shell: |
-    keytool -genkey -noprompt \
-      -storetype pkcs12 \
-      -alias {{inventory_hostname}} \
-      -dname "CN={{inventory_hostname}},OU=TEST,O=CONFLUENT,L=PaloAlto,S=Ca,C=US" \
-      -ext san=dns:{{inventory_hostname}} \
-      -keystore {{keystore_path}} \
-      -keyalg RSA \
-      -storepass {{keystore_storepass}} \
-      -keypass {{keystore_storepass}}
+    openssl genrsa -out {{key_path}} {{ssl_key_size}}
 
 - name: Create Certificate Signing Request
   shell: |
-    keytool -keystore {{keystore_path}} \
-      -alias {{inventory_hostname}} \
-      -certreq -file /var/ssl/private/generation/client.csr \
-      -storepass {{keystore_storepass}} \
-      -keypass {{keystore_storepass}}
+    openssl req -new -key {{key_path}} \
+      -out {{ ssl_file_dir_final }}/generation/client.csr \
+      -subj '/CN={{service_name}}/OU=TEST/O=CONFLUENT/L=PaloAlto/ST=Ca/C=US'
+
+- name: Create Openssl Config for SAN
+  template:
+    src: openssl-san.cnf.j2
+    dest: "{{ ssl_file_dir_final }}/generation/openssl-san.cnf"
 
 - name: Sign CSR with the Certificate Authority
   shell: |
-    openssl x509 -req -CA /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
-      -CAkey /var/ssl/private/generation/{{ssl_self_signed_ca_key_filename}} \
-      -in /var/ssl/private/generation/client.csr \
-      -out /var/ssl/private/generation/client-signed.crt \
+    openssl x509 -req -CA {{ca_cert_path}} \
+      -CAkey {{ca_key_path}} \
+      -in {{ ssl_file_dir_final }}/generation/client.csr \
+      -out {{cert_path}} \
       -days {{keystore_expiration_days}} -CAcreateserial \
-      -passin pass:{{ssl_self_signed_ca_password}}
+      -passin pass:{{ssl_self_signed_ca_password}} \
+      -extfile {{ ssl_file_dir_final }}/generation/openssl-san.cnf \
+      -extensions v3_req
+  no_log: "{{mask_secrets|bool}}"
 
-- name: Import the CA cert into the Keystore
+- name: Create Cert Chain
   shell: |
-    keytool -noprompt -keystore {{keystore_path}} \
-      -alias CARoot \
-      -import -file /var/ssl/private/generation/{{ssl_self_signed_ca_cert_filename}} \
-      -storepass {{keystore_storepass}} \
-      -keypass {{keystore_storepass}}
+    cat {{ca_cert_path}} {{cert_path}} > {{ ssl_file_dir_final }}/{{service_name}}.chain
 
-- name: Import the Signed Host Cert into the Keystore
-  shell: |
-    keytool -noprompt -keystore {{keystore_path}} \
-      -alias {{inventory_hostname}} \
-      -import -file /var/ssl/private/generation/client-signed.crt \
-      -storepass {{keystore_storepass}} \
-      -keypass {{keystore_storepass}}
+- name: Create Keystore and Truststore from Certs
+  include_tasks: create_keystores_from_certs.yml

@@ -1,0 +1,35 @@
+---
+- name: Create SSL Certificate ldaps Directory
+  file:
+    path: /var/ssl/private/ldaps/
+    state: directory
+    mode: 0755
+  when:
+
+- name: Generate Self Signed Certificates
+  include_tasks: tls_self_signed.yml
+  when: not ldaps_custom_certs|bool
+
+- name: Import Custom Certificates
+  include_tasks: tls_custom_certs.yml
+  when: ldaps_custom_certs|bool
+
+- name: Create certificate configuration
+  template:
+    src: certs.ldif.j2
+    dest: /tmp/certs.ldif
+
+- name: Update certificate configuration for OpenLDAP
+  shell: "ldapmodify -Y EXTERNAL  -H ldapi:/// -f /tmp/certs.ldif"
+
+- name: Configure OpenLDAP to listen over TLS
+  copy:
+    src: slapd
+    dest: /etc/sysconfig/slapd
+    owner: root
+    group: root
+
+- name: Restart slapd service
+  service:
+    name: slapd
+    state: restarted

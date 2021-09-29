@@ -1,17 +1,35 @@
-// Specifies a unique keytab and principal name for each broker
+{% if 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms %}
 KafkaServer {
     com.sun.security.auth.module.Krb5LoginModule required
     useKeyTab=true
     storeKey=true
-    keyTab="{{kerberos.keytab_dir}}/{{kafka_broker_kerberos_keytab_path | basename}}"
+    keyTab="{{kafka_broker_keytab_path}}"
     principal="{{kafka_broker_kerberos_principal}}";
 };
+{% endif %}
+{% if zookeeper_client_authentication_type == 'kerberos' %}
 
-// ZooKeeper client authentication
 Client {
     com.sun.security.auth.module.Krb5LoginModule required
     useKeyTab=true
     storeKey=true
-    keyTab="{{kerberos.keytab_dir}}/{{kafka_broker_kerberos_keytab_path | basename}}"
+    keyTab="{{kafka_broker_keytab_path}}"
     principal="{{kafka_broker_kerberos_principal}}";
 };
+{% endif %}
+{% if zookeeper_client_authentication_type == 'digest' %}
+
+Client {
+    org.apache.zookeeper.server.auth.DigestLoginModule required
+    username="{{zookeeper_digest_users.kafka_broker.principal}}"
+    password="{{zookeeper_digest_users.kafka_broker.password}}";
+};
+{% endif %}
+{% if kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_proxy_authentication_type == 'basic' %}
+
+KafkaRest {
+    org.eclipse.jetty.jaas.spi.PropertyFileLoginModule required
+    file="{{kafka_broker.rest_proxy_password_file}}"
+    debug="false";
+};
+{% endif %}

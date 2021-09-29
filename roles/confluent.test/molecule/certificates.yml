@@ -1,0 +1,120 @@
+---
+- name: Install OpenSSL Rsync and Java
+  hosts: zookeeper[0]
+  tasks:
+    - name: Install OpenSSL Rsync and Java
+      yum:
+        name:
+          - openssl
+          - rsync
+          - java-1.8.0-openjdk
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install OpenSSL Rsync and Java
+      apt:
+        name:
+          - openssl
+          - rsync
+          - openjdk-8-jdk
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Create SSL Certificate Generation Directory
+      file:
+        path: /var/ssl/private/generation
+        state: directory
+        mode: 0755
+
+    - name: Copy in cert generation files in
+      copy:
+        src: "{{item}}"
+        dest: "/var/ssl/private/generation/{{item|basename}}"
+        mode: 0777
+      loop:
+        - certs-create.sh
+
+    - name: Create certificate hosts file
+      block:
+        - name: Copy certificate hosts file
+          copy:
+            src: "{{item}}"
+            dest: "/var/ssl/private/generation/{{item|basename}}"
+            mode: 0777
+          loop:
+            - "{{scenario_name}}/certificate-hosts"
+      rescue:
+        - shell: touch /var/ssl/private/generation/certificate-hosts
+
+        - name: Write zookeeper hostnames for cert creation
+          lineinfile:
+            line: "zookeeper:{{item}}"
+            path: /var/ssl/private/generation/certificate-hosts
+          loop: "{{groups['zookeeper']}}"
+          when: groups['zookeeper'] is defined
+
+        - name: Write kafka hostnames for cert creation
+          lineinfile:
+            line: "kafka_broker:{{item}}"
+            path: /var/ssl/private/generation/certificate-hosts
+          loop: "{{groups['kafka_broker']}}"
+          when: groups['kafka_broker'] is defined
+
+        - name: Write sr hostnames for cert creation
+          lineinfile:
+            line: "schema_registry:{{item}}"
+            path: /var/ssl/private/generation/certificate-hosts
+          loop: "{{groups['schema_registry']}}"
+          when: groups['schema_registry'] is defined
+
+        - name: Write kafka_connect hostnames for cert creation
+          lineinfile:
+            line: "kafka_connect:{{item}}"
+            path: /var/ssl/private/generation/certificate-hosts
+          loop: "{{groups['kafka_connect']}}"
+          when: groups['kafka_connect'] is defined
+
+        - name: Write kafka_rest hostnames for cert creation
+          lineinfile:
+            line: "kafka_rest:{{item}}"
+            path: /var/ssl/private/generation/certificate-hosts
+          loop: "{{groups['kafka_rest']}}"
+          when: groups['kafka_rest'] is defined
+
+        - name: Write ksql hostnames for cert creation
+          lineinfile:
+            line: "ksql:{{item}}"
+            path: /var/ssl/private/generation/certificate-hosts
+          loop: "{{groups['ksql']}}"
+          when: groups['ksql'] is defined
+
+        - name: Write control_center hostnames for cert creation
+          lineinfile:
+            line: "control_center:{{item}}"
+            path: /var/ssl/private/generation/certificate-hosts
+          loop: "{{groups['control_center']}}"
+          when: groups['control_center'] is defined
+
+        - name: Write ldap hostnames for cert creation
+          lineinfile:
+            line: "openldap:{{item}}"
+            path: /var/ssl/private/generation/certificate-hosts
+          loop: "{{groups['ldap_server']}}"
+          when: groups['ldap_server'] is defined
+
+    - name: Run
+      shell: |
+        ./certs-create.sh {{molecule_certs_format|default('PKCS12')|lower}}{% if molecule_add_extra_cert|default(False)|bool %} true{% endif %}
+      args:
+        chdir: /var/ssl/private/generation/
+
+    - name: Copy Generated SSL Files Back to Ansible Host
+      synchronize:
+        src: /var/ssl/private/generation/
+        dest: "{{scenario_name}}/generated_ssl_files"
+        mode: pull
+
+    - name: Delete SSL Certificate Generation Directory
+      file:
+        path: /var/ssl/private/generation
+        state: absent

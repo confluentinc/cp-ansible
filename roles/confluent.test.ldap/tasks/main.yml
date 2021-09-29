@@ -1,0 +1,94 @@
+---
+- name: Get Package Facts
+  package_facts:
+    manager: auto
+
+- name: Disable SELinux
+  selinux:
+    policy: targeted
+    state: disabled
+  when: ansible_facts.packages['selinux-policy'] is defined
+
+- name: Install LDAP Server Packages
+  yum:
+    name:
+      - rsyslog
+      - libselinux-python
+      - openldap
+      - openldap-servers
+      - compat-openldap
+      - openldap-clients
+      - openldap-devel
+      - nss-pam-ldapd
+    state: latest
+
+- name: Start slapd Service
+  service:
+    name: slapd
+    enabled: true
+    state: started
+
+- name: generate password sha
+  shell: slappasswd -h {SSHA} -s "{{ ldap_admin_password }}"
+  register: password_output
+
+- set_fact:
+    ldap_admin_password_sha: "{{ password_output.stdout }}"
+
+- name: Create config file
+  template:
+    src: db.ldif.j2
+    dest: /tmp/db.ldif
+
+- name: Load config file
+  shell: ldapmodify -Y EXTERNAL  -H ldapi:/// -f /tmp/db.ldif
+
+- name: Copy file with owner and permissions
+  copy:
+    src: /usr/share/openldap-servers/DB_CONFIG.example
+    dest: /var/lib/ldap/DB_CONFIG
+    remote_src: true
+
+- name: Recursively change ownership of a /var/lib/ldap
+  file:
+    path: /var/lib/ldap/
+    state: directory
+    recurse: true
+    owner: ldap
+    group: ldap
+
+- name: Load config file
+  shell: "{{item}}"
+  loop:
+    - ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/cosine.ldif
+    - ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/nis.ldif
+    - ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/inetorgperson.ldif
+
+- name: Create base groups config file
+  template:
+    src: base.ldif.j2
+    dest: /tmp/base.ldif
+
+- name: Create base groups
+  shell: "ldapadd -x -D 'cn=ldapadm,dc={{ldap_dc}},dc={{ldap_dc_extension}}' -f /tmp/base.ldif -w {{ldap_admin_password}}"
+
+- name: Create LDAP Users
+  include_tasks: create_user.yml
+  vars:
+    ldap_user: "{{item.username}}"
+    ldap_user_uid: "{{item.uid}}"
+    ldap_user_gid: "{{item.guid}}"
+    ldap_user_password: "{{item.password}}"
+  loop: "{{ ldap_users }}"
+
+- name: Enable logging in rsyslog
+  lineinfile:
+    path: /etc/rsyslog.conf
+    line: local4.* /var/log/ldap.log
+    regexp: '.*ldap.log.*'
+  notify:
+    - restart rsyslog
+
+- name: Configure TLS
+  include_tasks: tls.yml
+  when: ldaps_enabled|bool

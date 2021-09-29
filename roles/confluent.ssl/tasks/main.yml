@@ -1,31 +1,47 @@
 ---
-- name: Delete SSL Certificate Directory
+- name: Register if Keystore Exists
+  stat:
+    path: "{{keystore_path}}"
+  register: keystore
+
+- name: Register if Truststore Exists
+  stat:
+    path: "{{truststore_path}}"
+  register: truststore
+
+- name: Create Keystore and Truststore
+  include_tasks: create_keystore_and_truststore.yml
+  when: not keystore.stat.exists|bool or not truststore.stat.exists|bool or regenerate_keystore_and_truststore|bool
+
+- name: Set Truststore and Keystore File Permissions
   file:
-    path: /var/ssl/private
-    state: absent
+    path: "{{item}}"
+    owner: "{{user}}"
+    group: "{{group}}"
+    mode: 0640
+  loop:
+    - "{{keystore_path}}"
+    - "{{truststore_path}}"
 
-- name: Create SSL Certificate Generation Directory
+- name: Set Cert and Key File Permissions
   file:
-    path: /var/ssl/private/generation
-    state: directory
-    mode: 0755
+    path: "{{item}}"
+    owner: "{{user}}"
+    group: "{{group}}"
+    mode: 0640
+  loop:
+    - "{{ca_cert_path}}"
+    - "{{cert_path}}"
+    - "{{key_path}}"
+  when: export_certs|bool
 
-- name: Create Keystore and Truststore with Self Signed Certs
-  include_tasks: self_signed_certs.yml
-  when: self_signed|bool
-
-- name: Create Keystore and Truststore with Custom Certs
-  include_tasks: custom_certs.yml
-  when: ssl_custom_certs|bool
-
-- name: Copy Keystore and Truststore to Host
-  include_tasks: provided_keystore_and_truststore.yml
-  when: ssl_provided_keystore_and_truststore|bool
-
-- set_fact:
-    certs_updated: true
-
-- name: Delete SSL Certificate Generation Directory
+- name: Set BCFKS Truststore and Keystore File Permissions
   file:
-    path: /var/ssl/private/generation
-    state: absent
+    path: "{{item}}"
+    owner: "{{user}}"
+    group: "{{group}}"
+    mode: 0640
+  loop:
+    - "{{bcfks_keystore_path}}"
+    - "{{bcfks_truststore_path}}"
+  when: create_bouncy_castle_keystore|bool

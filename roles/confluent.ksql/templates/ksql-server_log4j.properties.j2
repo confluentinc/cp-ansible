@@ -1,4 +1,6 @@
 #
+# Copyright 2018 Confluent Inc.
+#
 # Licensed under the Confluent Community License (the "License"); you may not use
 # this file except in compliance with the License.  You may obtain a copy of the
 # License at
@@ -14,59 +16,109 @@
 # this is a sample log4j config that will roll log files
 # lines with `File=` may need to be updated for your environment
 
-log4j.rootLogger=INFO, stdout, ksqlAppender
+log4j.rootLogger={{ksql_log4j_root_logger}}
 
 log4j.appender.stdout=org.apache.log4j.ConsoleAppender
 log4j.appender.stdout.layout=org.apache.log4j.PatternLayout
 log4j.appender.stdout.layout.ConversionPattern=[%d] %p %m (%c)%n
 
 # appenders
-log4j.appender.ksqlAppender=org.apache.log4j.RollingFileAppender
-log4j.appender.ksqlAppender.File={{ksql.appender_log_path}}{{ksql.appender_log_name}}
-log4j.appender.ksqlAppender.layout=org.apache.log4j.PatternLayout
-log4j.appender.ksqlAppender.layout.ConversionPattern=[%d] %p %m (%c:%L)%n
-log4j.appender.ksqlAppender.MaxFileSize={{ksql.appender_log_file_size}}
-log4j.appender.ksqlAppender.MaxBackupIndex={{ksql.appender_max_log_files}}
-log4j.appender.ksqlAppender.append=true
+log4j.appender.main=org.apache.log4j.RollingFileAppender
+log4j.appender.main.File=${ksql.log.dir}/ksql.log
+log4j.appender.main.layout=org.apache.log4j.PatternLayout
+log4j.appender.main.layout.ConversionPattern=[%d] %p %m (%c:%L)%n
+log4j.appender.main.MaxFileSize={{ksql_log_file_size}}
+log4j.appender.main.MaxBackupIndex={{ksql_max_log_files}}
+log4j.appender.main.append=true
 
-log4j.appender.streamsAppender=org.apache.log4j.RollingFileAppender
-log4j.appender.streamsAppender.File={{ksql.appender_log_path}}{{ksql.streams_appender_log_name}}
-log4j.appender.streamsAppender.layout=org.apache.log4j.PatternLayout
-log4j.appender.streamsAppender.layout.ConversionPattern=[%d] %p %m (%c:%L)%n
-log4j.appender.streamsAppender.MaxFileSize={{ksql.streams_appender_log_file_size}}
-log4j.appender.streamsAppender.MaxBackupIndex={{ksql.streams_appender_max_log_files}}
-log4j.appender.streamsAppender.append=true
+log4j.appender.streams=org.apache.log4j.RollingFileAppender
+log4j.appender.streams.File=${ksql.log.dir}/ksql-streams.log
+log4j.appender.streams.layout=org.apache.log4j.PatternLayout
+log4j.appender.streams.layout.ConversionPattern=[%d] %p %m (%c:%L)%n
 
-log4j.appender.kafkaAppender=org.apache.log4j.RollingFileAppender
-log4j.appender.kafkaAppender.File={{ksql.appender_log_path}}{{ksql.kafka_appender_log_name}}
-log4j.appender.kafkaAppender.layout=org.apache.log4j.PatternLayout
-log4j.appender.kafkaAppender.layout.ConversionPattern=[%d] %p %m (%c:%L)%n
-log4j.appender.kafkaAppender.MaxFileSize={{ksql.kafka_appender_log_file_size}}
-log4j.appender.kafkaAppender.MaxBackupIndex={{ksql.kafka_appender_max_log_files}}
-log4j.appender.kafkaAppender.append=true
+log4j.appender.kafka=org.apache.log4j.RollingFileAppender
+log4j.appender.kafka.File=${ksql.log.dir}/ksql-kafka.log
+log4j.appender.kafka.layout=org.apache.log4j.PatternLayout
+log4j.appender.kafka.layout.ConversionPattern=[%d] %p %m (%c:%L)%n
+log4j.appender.kafka.MaxFileSize={{ksql_log_file_size}}
+log4j.appender.kafka.MaxBackupIndex={{ksql_max_log_files}}
+log4j.appender.kafka.append=true
+{% if ksql_log_streaming_enabled | bool %}
 
 log4j.appender.kafka_appender=org.apache.kafka.log4jappender.KafkaLog4jAppender
 log4j.appender.kafka_appender.layout=io.confluent.common.logging.log4j.StructuredJsonLayout
-log4j.appender.kafka_appender.BrokerList=localhost:9092
-log4j.appender.kafka_appender.Topic=default_ksql_processing_log
-log4j.logger.processing=ERROR, kafka_appender
+log4j.appender.kafka_appender.BrokerList={% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['port']}}{% endfor %}
+
+log4j.appender.kafka_appender.Topic={{ksql_processing_log}}
+{% set listener = kafka_broker_listeners[ksql_processing_log_kafka_listener_name] %}
+
+log4j.appender.kafka_appender.SecurityProtocol={{listener | kafka_protocol_defaults(sasl_protocol, ssl_enabled) }}
+{% if listener['ssl_enabled'] | default(ssl_enabled) | bool %}
+log4j.appender.kafka_appender.SslTruststoreLocation={{ksql_truststore_path}}
+log4j.appender.kafka_appender.SslTruststorePassword={{ksql_truststore_storepass}}
+{% if listener['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
+log4j.appender.kafka_appender.SslKeystoreLocation={{ksql_keystore_path}}
+log4j.appender.kafka_appender.SslKeystorePassword={{ksql_keystore_keypass}}
+log4j.appender.kafka_appender.SslKeyPassword={{ksql_keystore_keypass}}
+{% endif %}
+{% endif %}
+{% if listener['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN' %}
+log4j.appender.kafka_appender.SaslMechanism=PLAIN
+log4j.appender.kafka_appender.ClientJaasConf=org.apache.kafka.common.security.plain.PlainLoginModule required \
+   username="{{sasl_plain_users_final.ksql.principal}}" password="{{sasl_plain_users_final.ksql.password}}";
+{% endif %}
+{% if listener['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-512' %}
+log4j.appender.kafka_appender.SaslMechanism=SCRAM-SHA-512
+log4j.appender.kafka_appender.ClientJaasConf=org.apache.kafka.common.security.scram.ScramLoginModule required \
+   username="{{sasl_scram_users_final.ksql.principal}}" password="{{sasl_scram_users_final.ksql.password}}";
+{% endif %}
+{% if listener['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256' %}
+log4j.appender.kafka_appender.SaslMechanism=SCRAM-SHA-256
+log4j.appender.kafka_appender.ClientJaasConf=org.apache.kafka.common.security.scram.ScramLoginModule required \
+   username="{{sasl_scram256_users_final.ksql.principal}}" password="{{sasl_scram_users_final.ksql.password}}";
+{% endif %}
+{% if listener['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI' %}
+log4j.appender.kafka_appender.SaslMechanism=GSSAPI
+log4j.appender.kafka_appender.SaslKerberosServiceName={{kerberos_kafka_broker_primary}}
+log4j.appender.kafka_appender.clientJaasConf=com.sun.security.auth.module.Krb5LoginModule required \
+   useKeyTab=true storeKey=true keyTab="{{ksql_keytab_path}}" \
+   principal="{{ksql_kerberos_principal}}" serviceName="{{kerberos_kafka_broker_primary}}";
+{% endif %}
+{% endif %}
 
 # loggers
-log4j.logger.org.apache.kafka.streams=INFO, streamsAppender
+
+log4j.logger.org.reflections=ERROR, main
+
+# Uncomment the following line to stop KSQL from logging out each request it receives:
+#log4j.logger.io.confluent.ksql.rest.server.resources.KsqlResource=WARN
+
+# And this one to avoid the logs being spammed with KsqlConfig values.
+# Though these can be useful for debugging / investigations.
+#log4j.logger.io.confluent.ksql.util.KsqlConfig=WARN
+{% if ksql_log_streaming_enabled | bool %}
+
+## KSQL Processing logs:
+log4j.logger.processing=WARN, kafka_appender
+log4j.additivity.processing=false
+{% endif %}
+
+## Kafka Streams logs:
+log4j.logger.org.apache.kafka.streams=INFO, streams
 log4j.additivity.org.apache.kafka.streams=false
 
-log4j.logger.kafka=ERROR, kafkaAppender
+## Kafka client logs:
+log4j.logger.kafka=WARN, kafka
 log4j.additivity.kafka=false
 
-log4j.logger.org.apache.zookeeper=ERROR, kafkaAppender
+log4j.logger.org.apache.zookeeper=WARN, kafka
 log4j.additivity.org.apache.zookeeper=false
 
-log4j.logger.org.apache.kafka=ERROR, kafkaAppender
+log4j.logger.org.apache.kafka=WARN, kafka
 log4j.additivity.org.apache.kafka=false
 
-log4j.logger.org.I0Itec.zkclient=ERROR, kafkaAppender
+log4j.logger.org.I0Itec.zkclient=WARN, kafka
 log4j.additivity.org.I0Itec.zkclient=false
 
-log4j.logger.processing=ERROR, kafka_appender
-log4j.additivity.processing=false
-
+# To achieve high throughput on pull queries, avoid logging every request from Jetty
+log4j.logger.io.confluent.rest-utils.requests=WARN

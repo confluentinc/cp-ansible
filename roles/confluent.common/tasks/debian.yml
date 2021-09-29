@@ -1,26 +1,42 @@
 ---
+- name: Gather OS Facts
+  setup:
+    # Only gathers ansible_distribution_release, filters out the rest
+    filter: ansible_distribution_release
+    gather_subset:
+      - '!all'
+
 - name: Install apt-transport-https
-  shell: apt-get install apt-transport-https -y --force-yes
-  args:
-    warn: no
+  apt:
+    name: apt-transport-https
+  tags: package
 
 - name: Add Confluent Apt Key
   apt_key:
-    url: "{{confluent_common.repository.debian.key_url}}"
+    url: "{{confluent_common_repository_debian_key_url}}"
     state: present
-  when: not custom_apt_repo|bool
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
 
 - name: Add Confluent Apt Repo
   apt_repository:
-    repo: "{{confluent_common.repository.debian.repository}}"
+    repo: "{{confluent_common_repository_debian_repository}}"
     state: present
-  when: not custom_apt_repo|bool
+  register: apt_add_result
+  until: apt_add_result is success
+  retries: 10
+  delay: 5
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
 
 - name: Add Custom Apt Repo
   copy:
     src: "{{custom_apt_repo_filepath}}"
     dest: /etc/apt/sources.list.d/custom_confluent.list
-  when: custom_apt_repo|bool
+    mode: 0644
+  when: repository_configuration == 'custom'
   notify:
     - apt-get update
 
@@ -30,11 +46,12 @@
   copy:
     content: 'Acquire::Check-Valid-Until "0";'
     dest: /etc/apt/apt.conf.d/skip-check
+    mode: 0644
   notify:
     - debian apt-get update
   when:
     - install_java|bool
-    - not custom_apt_repo|bool
+    - repository_configuration == 'confluent'
 
 - name: Add jessie-backports Repo
   lineinfile:
@@ -45,7 +62,7 @@
     - debian apt-get update
   when:
     - install_java|bool
-    - not custom_apt_repo|bool
+    - repository_configuration == 'confluent'
     - ansible_distribution_release == "jessie"
 
 - name: Add stretch-backports Repo
@@ -57,8 +74,33 @@
     - debian apt-get update
   when:
     - install_java|bool
-    - not custom_apt_repo|bool
+    - repository_configuration == 'confluent'
     - ansible_distribution_release == "stretch"
+
+- name: Add buster-backports Repo
+  lineinfile:
+    path: /etc/apt/sources.list
+    line: deb [check-valid-until=no] http://ftp.debian.org/debian buster-backports main
+    regexp: '.*buster-backports.*'
+  notify:
+    - debian apt-get update
+  when:
+    - install_java|bool
+    - repository_configuration == 'confluent'
+    - ansible_distribution_release == "buster"
+
+- name: Add sid Repo for JAVA Buster
+  lineinfile:
+    dest: /etc/apt/sources.list
+    insertafter: EOF
+    line: "deb http://ftp.us.debian.org/debian sid main"
+    regex: '.*sid main.*'
+  notify:
+    - debian apt-get update
+  when:
+    - install_java|bool
+    - repository_configuration == 'confluent'
+    - ansible_distribution_release == "buster"
 
 - meta: flush_handlers
 
@@ -67,33 +109,62 @@
     name: "{{ debian_java_package_name }}"
     state: present
     default_release: jessie-backports
+  register: java_install_result
+  until: java_install_result is success
+  retries: 10
+  delay: 5
   when:
     - install_java|bool
-    - not custom_apt_repo|bool
+    - repository_configuration == 'confluent'
     - ansible_distribution_release == "jessie"
+  tags: package
 
 - name: Install Java - stretch
   apt:
     name: "{{ debian_java_package_name }}"
     state: present
     default_release: stretch-backports
+  register: java_install_result
+  until: java_install_result is success
+  retries: 10
+  delay: 5
   when:
     - install_java|bool
-    - not custom_apt_repo|bool
+    - repository_configuration == 'confluent'
     - ansible_distribution_release == "stretch"
+  tags: package
+
+- name: Install Java - buster
+  apt:
+    name: "{{ debian_java_package_name }}"
+    state: present
+  register: java_install_result
+  until: java_install_result is success
+  retries: 10
+  delay: 5
+  when:
+    - install_java|bool
+    - repository_configuration == 'confluent'
+    - ansible_distribution_release == "buster"
 
 - name: Install Java (Custom Repo)
   apt:
     name: "{{ debian_java_package_name }}"
     state: present
+  register: java_install_result
+  until: java_install_result is success
+  retries: 10
+  delay: 5
   when:
     - install_java|bool
-    - custom_apt_repo|bool
+    - repository_configuration in ['custom', 'none']
+  tags: package
 
-- name: Install rsync
+- name: Install ca-certificates, openssl, unzip
   apt:
-    name: "{{ item }}"
-    state: present
-  loop:
-    - rsync
-    - ca-certificates
+    name:
+      - ca-certificates
+      - openssl
+      - unzip
+      - curl
+  tags: package

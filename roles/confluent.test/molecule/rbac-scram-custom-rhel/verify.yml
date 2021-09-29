@@ -1,0 +1,131 @@
+---
+- name: Verify - kafka_broker
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: confluent.metadata.server.ssl.keystore.location
+        expected_value: /var/ssl/private/kafka_broker.keystore.jks
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: ldap.java.naming.factory.initial
+        expected_value: com.sun.jndi.ldap.LdapCtxFactory
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: transaction.state.log.min.isr
+        expected_value: "2"
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: confluent.balancer.enable
+        expected_value: "true"
+
+    - name: Get Clusters associated with user1
+      uri:
+        url: "https://{{groups['kafka_broker'][0]}}:8090/security/1.0/lookup/managed/clusters/principal/User:user1"
+        validate_certs: false
+        force_basic_auth: true
+        url_username: "{{mds_super_user}}"
+        url_password: "{{mds_super_user_password}}"
+      register: clusters
+      run_once: true
+
+    - name: Assert cluster count expected
+      assert:
+        that:
+          - clusters.json|length == 4
+        fail_msg: "There should only be for clusters in {{clusters.json}}"
+        quiet: true
+
+    - name: Get Clusters associated with user2
+      uri:
+        url: "https://{{groups['kafka_broker'][0]}}:8090/security/1.0/lookup/managed/clusters/principal/User:user2"
+        validate_certs: false
+        force_basic_auth: true
+        url_username: "{{mds_super_user}}"
+        url_password: "{{mds_super_user_password}}"
+      register: clusters
+      run_once: true
+
+    - name: Assert cluster count expected
+      assert:
+        that:
+          - clusters.json|length == 1
+        fail_msg: "There should only be for clusters in {{clusters.json}}"
+        quiet: true
+
+- name: Verify - schema_registry
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: ssl.truststore.location
+        expected_value: /var/ssl/private/schema_registry.truststore.jks
+
+- name: Verify - kafka_rest
+  hosts: kafka_rest
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-rest/kafka-rest.properties
+        property: ssl.truststore.location
+        expected_value: /var/ssl/private/kafka_rest.truststore.jks
+
+- name: Verify - kafka_connect
+  hosts: kafka_connect
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: ssl.truststore.location
+        expected_value: /var/ssl/private/kafka_connect.truststore.jks
+
+- name: Verify - ksql
+  hosts: ksql
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/ksqldb/ksql-server.properties
+        property: ssl.truststore.location
+        expected_value: /var/ssl/private/ksql.truststore.jks
+
+
+- name: Verify - control_center
+  hosts: control_center
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.streams.ssl.truststore.location
+        expected_value: /var/ssl/private/control_center.truststore.jks

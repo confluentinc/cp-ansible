@@ -1,0 +1,203 @@
+---
+- name: Verify - Zookeeper User Change and custom logging path
+  hosts: zookeeper,kafka_broker
+  gather_facts: false
+  vars:
+    zookeeper_user: zk-test-user
+    ansible_os_family: RedHat
+  tasks:
+    - name: Create Zookeeper User
+      user:
+        name: "{{zookeeper_user}}"
+        comment: "Zookeeper User"
+        system: true
+        group: cp-test-group
+
+    - name: Create Zookeeper Log Directory
+      file:
+        path: /kafka/logs/
+        state: directory
+        # TODO discuss this recurse here
+        recurse: true
+        group: cp-test-group
+        owner: "{{zookeeper_user}}"
+        mode: 0770
+
+    - name: Restart Service
+      systemd:
+        daemon_reload: true
+        name: "{{zookeeper_service_name}}"
+        state: restarted
+
+    - import_role:
+        name: confluent.zookeeper
+        tasks_from: health_check.yml
+
+    - name: Restart Service
+      systemd:
+        daemon_reload: true
+        name: "{{kafka_broker_service_name}}"
+        state: restarted
+
+    - import_role:
+        name: confluent.kafka_broker
+        tasks_from: health_check.yml
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_ownership.yml
+      vars:
+        file_name: zookeeper-server.log
+        custom_path: /kafka/logs/
+        group: cp-test-group
+        user: zk-test-user
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_log4j.yml
+      vars:
+        process_search_string: "kafka.Kafka"
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_log4j.yml
+      vars:
+        process_search_string: "org.apache.zookeeper.server.quorum.QuorumPeerMain"
+
+- name: Verify - Schema Registry custom user and custom group and custom logging directory and log file presence
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_user.yml
+      vars:
+        user: sr-cust+
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_group.yml
+      vars:
+        user: sr-custom
+        group: sr-custom-group
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_ownership.yml
+      vars:
+        file_name: schema-registry.log
+        custom_path: /kafka/logs/schemaregistry/
+        group: sr-custom-group
+        user: sr-custom
+
+- name: Verify - Kafka Connect custom user and custom group and custom logging directory and log file presence
+  hosts: kafka_connect
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_user.yml
+      vars:
+        user: connect+
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_group.yml
+      vars:
+        user: connect-custom
+        group: connect-custom-group
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_ownership.yml
+      vars:
+        file_name: connect.log
+        custom_path: /kafka/logs/kafkaconnect/
+        group: connect-custom-group
+        user: connect-custom
+
+- name: Verify - Rest Proxy custom user and custom group and custom logging directory and log file presence
+  hosts: kafka_rest
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_user.yml
+      vars:
+        user: rest-cu+
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_group.yml
+      vars:
+        user: rest-custom
+        group: rest-custom-group
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_ownership.yml
+      vars:
+        file_name: kafka-rest.log
+        custom_path: /kafka/logs/kafkarest/
+        group: rest-custom-group
+        user: rest-custom
+
+- name: Verify - KSQL custom user and custom Group and custom logging directory and log file presence
+  hosts: ksql
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_user.yml
+      vars:
+        user: ksql-cu+
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_group.yml
+      vars:
+        user: ksql-custom
+        group: ksql-custom-group
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_ownership.yml
+      vars:
+        file_name: ksql-streams.log
+        custom_path: /kafka/logs/ksql/
+        group: ksql-custom-group
+        user: ksql-custom
+
+- name: Verify - C3 custom user and custom Group and custom logging directory and log file presence
+  hosts: control_center
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_user.yml
+      vars:
+        user: c3-cust+
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_group.yml
+      vars:
+        user: c3-custom
+        group: c3-custom-group
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_ownership.yml
+      vars:
+        file_name: control-center-streams.log
+        custom_path: /kafka/logs/controlcenter/
+        group: c3-custom-group
+        user: c3-custom
+
+- name: Verify - log4j configuration
+  hosts: control_center:ksql:kafka_rest:kafka_connect:schema_registry
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_log4j.yml

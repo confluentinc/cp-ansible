@@ -1,0 +1,223 @@
+---
+driver:
+  name: docker
+platforms:
+  - name: ldap1
+    hostname: ldap1.confluent
+    groups:
+      - ldap_server
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: zookeeper1
+    hostname: zookeeper1.confluent
+    groups:
+      - zookeeper
+    image: geerlingguy/docker-centos8-ansible
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos8-ansible
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos8-ansible
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos8-ansible
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+    image: geerlingguy/docker-centos8-ansible
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest
+    image: geerlingguy/docker-centos8-ansible
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: geerlingguy/docker-centos8-ansible
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+    image: geerlingguy/docker-centos8-ansible
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center
+    image: geerlingguy/docker-centos8-ansible
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9021:9021"
+    networks:
+      - name: confluent
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      hash_behaviour: merge
+  playbooks:
+    converge: ../../../../all.yml
+  inventory:
+    group_vars:
+      all:
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
+
+        rbac_enabled: true
+
+        kafka_broker_custom_listeners:
+          client_listener:
+            name: CLIENT
+            port: 9093
+
+        mds_super_user: mds
+        mds_super_user_password: password
+
+        schema_registry_ldap_user: schema-registry1
+        schema_registry_ldap_password: password
+
+        kafka_connect_ldap_user: kafka-connect1
+        kafka_connect_ldap_password: password
+
+        ksql_ldap_user: ksql1
+        ksql_ldap_password: password
+
+        kafka_rest_ldap_user: kafka-rest1
+        kafka_rest_ldap_password: password
+
+        control_center_ldap_user: control-center1
+        control_center_ldap_password: password
+
+        kafka_broker_custom_properties:
+          ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+          ldap.com.sun.jndi.ldap.read.timeout: 3000
+          ldap.java.naming.provider.url: ldap://ldap1:389
+          ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
+          ldap.java.naming.security.credentials: password
+          ldap.java.naming.security.authentication: simple
+          ldap.user.search.base: OU=rbac,DC=example,DC=com
+          ldap.group.search.base: OU=rbac,DC=example,DC=com
+          ldap.user.name.attribute: uid
+          ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.group.name.attribute: cn
+          ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.user.object.class: account
+
+      ldap_server:
+        ldaps_enabled: false
+        ldaps_custom_certs: false
+
+        ldap_admin_password: ldppassword
+
+        ldap_rbac_group: rbac
+        ldap_dc: example
+        ldap_dc_extension: com
+
+        ldap_users:
+          - username: "{{schema_registry_ldap_user}}"
+            password: "{{schema_registry_ldap_password}}"
+            uid: 9998
+            guid: 98
+          - username: "{{kafka_connect_ldap_user}}"
+            password: "{{kafka_connect_ldap_password}}"
+            uid: 9997
+            guid: 97
+          - username: "{{ksql_ldap_user}}"
+            password: "{{ksql_ldap_password}}"
+            uid: 9996
+            guid: 96
+          - username: "{{control_center_ldap_user}}"
+            password: "{{control_center_ldap_password}}"
+            uid: 9995
+            guid: 95
+          - username: "{{kafka_rest_ldap_user}}"
+            password: "{{kafka_rest_ldap_password}}"
+            uid: 9994
+            guid: 94
+          - username: "{{mds_super_user}}"
+            password: "{{mds_super_user_password}}"
+            uid: 9993
+            guid: 93
+
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - lint
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    # - idempotence
+    - side_effect
+    - verify
+    - cleanup
+    - destroy

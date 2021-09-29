@@ -1,0 +1,61 @@
+---
+- name: Set Principal - Sasl Scram
+  set_fact:
+    ksql_log4j_principal: "{{ sasl_scram_users_final.ksql.principal }}"
+  when: kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-512'
+
+- name: Set Principal - Sasl Scram 256
+  set_fact:
+    ksql_log4j_principal: "{{ sasl_scram256_users_final.ksql.principal }}"
+  when: kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'SCRAM-SHA-256'
+
+- name: Set Principal - Sasl Plain
+  set_fact:
+    ksql_log4j_principal: "{{ sasl_plain_users_final.ksql.principal }}"
+  when: kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'PLAIN'
+
+- name: Set Principal - Sasl Kerberos
+  set_fact:
+    ksql_log4j_principal: "{{ ksql_kerberos_principal }}"
+  when: kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'GSSAPI'
+
+- name: Extract Common Name from Keystore - SSL Mutual Auth
+  # Examine the keystore
+  # Search lines with Entry type: "PrivateKeyEntry" and return that line and all after, ca cert is of type "trustedCertEntry"
+  # Search for first "Owner" line
+  # Extract DNAME from line
+  # Remove spaces after commas
+  # Extract just the CN
+  # Extract just the principal without any other formatting
+  # We only use the CN as many LDAP implementations cannot handle the full DN as a username
+  shell: |
+    keytool -list -keystore {{ksql_keystore_path}} \
+        -storepass {{ksql_keystore_storepass}} -v \
+        | grep PrivateKeyEntry -A1000 \
+        | grep Owner -m1 \
+        | cut -d ":" -f2 \
+        | cut -c2- \
+        | sed 's/^.*CN=//' \
+        | cut -d "," -f1
+  register: distinguished_name_from_keystore
+  when:
+    - kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'none'
+    - kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
+    - kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
+  no_log: "{{mask_secrets|bool}}"
+
+- name: Set Principal - SSL Mutual Auth
+  set_fact:
+    ksql_log4j_principal: "{{ distinguished_name_from_keystore.stdout }}"
+  when:
+    - kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | normalize_sasl_protocol == 'none'
+    - kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool
+    - kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
+
+- name: Normalize User Name
+  set_fact:
+    ksql_log4j_principal: "User:{{ ksql_log4j_principal }}"
+  when: ksql_log4j_principal is defined
+
+- debug:
+    msg: "{{ksql_log4j_principal}}"

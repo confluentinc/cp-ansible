@@ -1,0 +1,28 @@
+---
+- name: Get Component Process Command
+  shell: |
+    ps -aux | grep {{ process_search_string | default('confluent') }} | xargs -n 1
+  register: process_grep
+  changed_when: false
+
+- name: Filter out log4j java args
+  set_fact:
+    log4j_grep: "{{ process_grep.stdout_lines | select('match', '-Dlog4j.configuration.*') | list }}"
+
+- name: Assert only 1 log4j java arg
+  assert:
+    that:
+      - log4j_grep|length == 1
+    fail_msg: There should only be one log4j java arg
+    quiet: true
+
+- name: Filter out log4j configuration file path
+  set_fact:
+    log4j_config_file: "{{ log4j_grep[0] | regex_replace('-Dlog4j.configuration=file:?(.*)$', '\\1') }}"
+
+- name: Confirm log4j Configuration does not have Daily RollingFileAppender
+  shell: |
+    grep "DailyRollingFileAppender" {{log4j_config_file}}
+  register: grep
+  failed_when: grep.rc == 0
+  changed_when: false

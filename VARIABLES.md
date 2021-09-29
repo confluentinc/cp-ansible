@@ -1,0 +1,4106 @@
+# confluent.variables
+
+Below are the supported variables for the role confluent.variables
+
+***
+
+### confluent_package_version
+
+Version of Confluent Platform to install
+
+Default:  6.1.1
+
+***
+
+### jolokia_url_remote
+
+To copy from Ansible control host or download
+
+Default:  true
+
+***
+
+### jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on all components
+
+Default:  false
+
+***
+
+### jolokia_jar_path
+
+Full path to download the Jolokia Agent Jar
+
+Default:  /opt/jolokia/jolokia.jar
+
+***
+
+### jolokia_auth_mode
+
+Authentication Mode for Jolokia Agent. Possible values: none, basic. If selecting basic, you must set jolokia_user and jolokia_password
+
+Default:  none
+
+***
+
+### jolokia_user
+
+Username for Jolokia Agent when using Basic Auth
+
+Default:  admin
+
+***
+
+### jolokia_password
+
+Password for Jolokia Agent when using Basic Auth
+
+Default:  password
+
+***
+
+### jmxexporter_url_remote
+
+To copy from Ansible control host or download
+
+Default:  true
+
+***
+
+### jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on all components
+
+Default:  false
+
+***
+
+### jmxexporter_jar_path
+
+Full path to download the Prometheus Exporter Agent Jar
+
+Default:  /opt/prometheus/jmx_prometheus_javaagent.jar
+
+***
+
+### fips_enabled
+
+Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
+
+Default:  false
+
+***
+
+### custom_log4j
+
+Boolean to configure ZK, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
+
+Default:  true
+
+***
+
+### kerberos_configure
+
+Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, keberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary
+
+Default:  true
+
+***
+
+### confluent_server_enabled
+
+Boolean to install commercially licensed confluent-server instead of community version: confluent-kafka
+
+Default:  true
+
+***
+
+### health_checks_enabled
+
+Boolean to enable health checks on all components
+
+Default:  true
+
+***
+
+### zookeeper_health_checks_enabled
+
+Boolean to enable health checks on Zookeeper
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### kafka_broker_health_checks_enabled
+
+Boolean to enable health checks on Kafka
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### schema_registry_health_checks_enabled
+
+Boolean to enable health checks on Schema Registry
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### kafka_connect_health_checks_enabled
+
+Boolean to enable health checks on Kafka Connect
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### kafka_rest_health_checks_enabled
+
+Boolean to enable health checks on Rest Proxy
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### ksql_health_checks_enabled
+
+Boolean to enable health checks on ksqlDB
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### control_center_health_checks_enabled
+
+Boolean to enable health checks on Control Center
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### monitoring_interceptors_enabled
+
+Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
+
+Default:  "{{ 'control_center' in groups }}"
+
+***
+
+### installation_method
+
+The method of installation. Valid values are "package" or "archive". If "archive" is selected then services will not be installed via the use of yum or apt, but will instead be installed via expanding the target .tar.gz file from the Confluent archive into the path defined by `archive_destination_path`. Configuration files are also kept in this directory structure instead of `/etc`. SystemD service units are copied from the ardhive for each target service and overrides are created pointing at the new paths. The "package" installation method is the default behavior that utilizes yum/apt.
+
+Default:  "package"
+
+***
+
+### archive_destination_path
+
+The path the downloaded archive is expanded into. Using the default with a `confluent_package_version` of *5.5.1* results in the following installation path `/opt/confluent/confluent-5.5.1/` that contains directories such as `bin` and `share`, but may be overridden usinf the `binary_base_path` property.
+
+Default:  "/opt/confluent"
+
+***
+
+### archive_owner
+
+Owner of the downloaded archive. Not mandatory to set.
+
+Default:  ""
+
+***
+
+### archive_group
+
+Group Owner of the downloaded archive. Not mandatory to set.
+
+Default:  ""
+
+***
+
+### archive_config_base_path
+
+If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
+
+Default:  "{{ archive_destination_path }}"
+
+***
+
+### confluent_cli_download_enabled
+
+Boolean to have cp-ansible download the Confluent CLI
+
+Default:  "{{rbac_enabled or secrets_protection_enabled}}"
+
+***
+
+### confluent_cli_base_path
+
+The path the Confluent CLI archive is expanded into.
+
+Default:  /opt/confluent-cli
+
+***
+
+### confluent_cli_path
+
+Full path on hosts for Confluent CLI symlink to executable
+
+Default:  "/usr/local/bin/confluent"
+
+***
+
+### confluent_cli_version
+
+Confluent CLI version to download (e.g. "1.9.0"). By default is the latest version
+
+Default:  latest
+
+***
+
+### default_internal_replication_factor
+
+Recommended replication factor, defaults to 3. When splitting your cluster across 2 DCs with 4 or more Brokers, this should be increased to 4 to balance topic replicas.
+
+Default:  3
+
+***
+
+### sasl_protocol
+
+SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256
+
+Default:  none
+
+***
+
+### ssl_enabled
+
+Boolean to configure components with TLS Encryption. Also manages Java Keystore creation
+
+Default:  false
+
+***
+
+### ssl_mutual_auth_enabled
+
+Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka
+
+Default:  false
+
+***
+
+### self_signed
+
+Boolean to create Keystores with Self Signed Certificates, defaults to true. Alternatively can use ssl_provided_keystore_and_truststore or ssl_custom_certs
+
+Default:  "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_certs|bool else true }}"
+
+***
+
+### ssl_file_dir
+
+Directory on hosts to store all ssl files.
+
+Default:  /var/ssl/private/
+
+***
+
+### regenerate_ca
+
+Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs.
+
+Default:  false
+
+***
+
+### regenerate_keystore_and_truststore
+
+Boolean to have reruns of all.yml recreate Keystores. On first install, keystores will be created.
+
+Default:  "{{regenerate_ca}}"
+
+***
+
+### ssl_provided_keystore_and_truststore
+
+Boolean for TLS Encryption option to provide own Host Keystores.
+
+Default:  false
+
+***
+
+### ssl_keystore_filepath
+
+Full path to host specific keystore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-keystore.jks"
+
+Default:  ""
+
+***
+
+### ssl_keystore_key_password
+
+Keystore Key Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
+
+Default:  ""
+
+***
+
+### ssl_keystore_store_password
+
+Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
+
+Default:  ""
+
+***
+
+### ssl_keystore_alias
+
+Keystore source alias for host specific certificate. Only required if keystore contains more than one certificate. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "{{inventory_hostname}}"
+
+Default:  ""
+
+***
+
+### ssl_truststore_filepath
+
+Full path to host specific truststore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. Can share same keystore for all components if it contains all ca certs used to sign host certificates
+
+Default:  ""
+
+***
+
+### ssl_truststore_password
+
+Keystore Password for host specific truststore. Used with ssl_provided_keystore_and_truststore: true
+
+Default:  ""
+
+***
+
+### ssl_truststore_ca_cert_alias
+
+Keystore alias for ca certificate
+
+Default:  ""
+
+***
+
+### ssl_custom_certs
+
+Boolean for TLS Encryption option to provide own Host Certificates. Must also set ssl_ca_cert_filepath, ssl_signed_cert_filepath, ssl_key_filepath, ssl_key_password
+
+Default:  false
+
+***
+
+### ssl_ca_cert_filepath
+
+Full path to CA Certificate Bundle on ansible control node. Used with ssl_custom_certs: true
+
+Default:  ""
+
+***
+
+### ssl_signed_cert_filepath
+
+Full path to host specific signed cert on ansible control node. Used with ssl_custom_certs: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-signed.crt"
+
+Default:  ""
+
+***
+
+### ssl_key_filepath
+
+Full path to host specific key on ansible control node. Used with ssl_custom_certs: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-key.pem"
+
+Default:  ""
+
+***
+
+### ssl_key_password
+
+Password to host specific key. Do not set if key does not require password. Used with ssl_custom_certs: true.
+
+Default:  ""
+
+***
+
+### ssl_custom_certs_remote_src
+
+Boolean stating certs and keys are already on hosts. Used with ssl_custom_certs: true.
+
+Default:  false
+
+***
+
+### hostname_aliasing_enabled
+
+Enable Hostname Aliasing for host addressing. This will enable logic, on an individual host basis, to look for the variable `hostname`, followed by the reserved variable `ansible_host` and then `inventory_hostname` to resolve the appropriate FQDN of a host to use within configuration properties.
+
+Default:  false
+
+***
+
+### kafka_connect_cluster_ansible_group_names
+
+Collection of Ansible Group names for All Kafka Connect Clusters that Control Center should be aware of.
+
+Default:  "{{ ['kafka_connect'] if 'kafka_connect' in groups else [] }}"
+
+***
+
+### ksql_cluster_ansible_group_names
+
+Collection of Ansible Group names for All ksqlDB Clusters that Control Center should be aware of.
+
+Default:  "{{ ['ksql'] if 'ksql' in groups else [] }}"
+
+***
+
+### validate_hosts
+
+Boolean to Run Host Validations. Validations include OS Version compatibility and Proper Internet Connectivity
+
+Default:  true
+
+***
+
+### zookeeper_user
+
+Set this variable to customize the Linux User that the Zookeeper Service runs with. Default user is cp-kafka.
+
+Default:  "{{zookeeper_default_user}}"
+
+***
+
+### zookeeper_group
+
+Set this variable to customize the Linux Group that the Zookeeper Service user belongs to. Default group is confluent.
+
+Default:  "{{zookeeper_default_group}}"
+
+***
+
+### zookeeper_ssl_enabled
+
+Boolean to configure zookeeper with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### zookeeper_ssl_mutual_auth_enabled
+
+Deprecated- Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+
+Default:  "{{ssl_mutual_auth_enabled}}"
+
+***
+
+### zookeeper_sasl_protocol
+
+Deprecated- SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
+
+Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
+
+***
+
+### zookeeper_quorum_authentication_type
+
+Authentication to put on ZK Server to Server connections. Available options: [mtls, digest].
+
+Default:  "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
+
+***
+
+### zookeeper_client_authentication_type
+
+Authentication to put on ZK Client to Server connections. This is Kafka's connection to ZK. Available options: [mtls, digest, kerberos].
+
+Default:  "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
+
+***
+
+### zookeeper_client_port
+
+Port for Kafka to Zookeeper connections
+
+Default:  "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
+
+***
+
+### zookeeper_log_dir
+
+Set this variable to customize the directory that Zookeeper writes log files to. Default location is /var/log/kafka. NOTE- zookeeper.log_path is deprecated.
+
+Default:  "{{zookeeper.log_path}}"
+
+***
+
+### zookeeper_jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on zookeeper
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### zookeeper_jolokia_port
+
+Port to expose jolokia metrics. Beware of port collisions if colocating components on same host
+
+Default:  7770
+
+***
+
+### zookeeper_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on Zookeeper jolokia metrics
+
+Default:  "{{ zookeeper_ssl_enabled }}"
+
+***
+
+### zookeeper_jolokia_config
+
+Path on Zookeeper host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/zookeeper_jolokia.properties"
+
+***
+
+### zookeeper_jolokia_auth_mode
+
+Authentication Mode for Zookeeper's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set zookeeper_jolokia_user and zookeeper_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### zookeeper_jolokia_user
+
+Username for Zookeeper's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### zookeeper_jolokia_password
+
+Password for Zookeeper's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
+### zookeeper_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### zookeeper_jmxexporter_port
+
+Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
+
+Default:  8079
+
+***
+
+### zookeeper_jmxexporter_config_source_path
+
+Path on Ansible Controller for Zookeeper jmx config file. Only necessary to set for custom config.
+
+Default:  zookeeper.yml
+
+***
+
+### zookeeper_jmxexporter_config_path
+
+Destination path for Zookeeper jmx config file
+
+Default:  /opt/prometheus/zookeeper.yml
+
+***
+
+### zookeeper_peer_port
+
+Zookeeper peer port
+
+Default:  2888
+
+***
+
+### zookeeper_leader_port
+
+Zookeeper leader port
+
+Default:  3888
+
+***
+
+### zookeeper_copy_files
+
+Use to copy files from control node to zookeeper hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+
+Default:  []
+
+***
+
+### zookeeper_custom_properties
+
+Use to set custom zookeeper properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- zookeeper.properties is deprecated.
+
+Default:  "{{ zookeeper.properties }}"
+
+***
+
+### kafka_broker_custom_listeners
+
+Dictionary to put additional listeners to be configured within Kafka. Each listener must include a 'name' and 'port' key. Optionally they can include the keys 'ssl_enabled', 'ssl_mutual_auth_enabled', and 'sasl_protocol'
+
+Default:  {}
+
+***
+
+### kafka_broker_configure_multiple_listeners
+
+Boolean to configure more than one kafka listener. Defaults to true. NOTE- kafka_broker_configure_additional_brokers is deprecated
+
+Default:  "{{kafka_broker_configure_additional_brokers}}"
+
+***
+
+### kafka_broker_configure_control_plane_listener
+
+Boolean to configure control plane listener on separate port, which defaults to 8089. Applied only if kafka_broker_configure_multiple_listeners is true
+
+Default:  false
+
+***
+
+### kafka_broker_control_plane_listener_name
+
+Control Planer listener name.
+
+Default:  controller
+
+***
+
+### kafka_broker_user
+
+Set this variable to customize the Linux User that the Kafka Broker Service runs with. Default user is cp-kafka.
+
+Default:  "{{kafka_broker_default_user}}"
+
+***
+
+### kafka_broker_group
+
+Set this variable to customize the Linux Group that the Kafka Broker Service user belongs to. Default group is confluent.
+
+Default:  "{{kafka_broker_default_group}}"
+
+***
+
+### kafka_broker_log_dir
+
+Set this variable to customize the directory that the Kafka Broker writes log files to. Default location is /var/log/kafka. NOTE- kafka_broker.appender_log_path is deprecated.
+
+Default:  "{{kafka_broker.appender_log_path}}"
+
+***
+
+### kafka_broker_schema_validation_enabled
+
+Boolean to configure Schema Validation on Kafka
+
+Default:  true
+
+***
+
+### kafka_broker_jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on kafka
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### kafka_broker_jolokia_port
+
+Port to expose kafka jolokia metrics. Beware of port collisions if colocating components on same host
+
+Default:  7771
+
+***
+
+### kafka_broker_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on Kafka jolokia metrics
+
+Default:  "{{ ssl_enabled }}"
+
+***
+
+### kafka_broker_jolokia_config
+
+Path on Kafka host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_jolokia.properties"
+
+***
+
+### kafka_broker_jolokia_auth_mode
+
+Authentication Mode for Kafka's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set kafka_broker_jolokia_user and kafka_broker_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_broker_jolokia_user
+
+Username for Kafka's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_broker_jolokia_password
+
+Password for Kafka's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
+### kafka_broker_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on kafka
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### kafka_broker_jmxexporter_port
+
+Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
+
+Default:  8080
+
+***
+
+### kafka_broker_jmxexporter_config_source_path
+
+Path on Ansible Controller for Kafka Broker jmx config file. Only necessary to set for custom config.
+
+Default:  kafka.yml
+
+***
+
+### kafka_broker_jmxexporter_config_path
+
+Destination path for Kafka Broker jmx config file
+
+Default:  /opt/prometheus/kafka.yml
+
+***
+
+### kafka_broker_copy_files
+
+Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+
+Default:  []
+
+***
+
+### kafka_broker_default_internal_replication_factor
+
+Replication Factor for internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
+
+Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
+
+***
+
+### kafka_broker_metrics_reporter_enabled
+
+Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
+
+Default:  "{{ 'control_center' in groups }}"
+
+***
+
+### kafka_broker_custom_properties
+
+Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
+
+Default:  "{{ kafka_broker.properties }}"
+
+***
+
+### kafka_broker_rest_proxy_enabled
+
+Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
+
+Default:  "{{confluent_server_enabled and not ccloud_kafka_enabled}}"
+
+***
+
+### kafka_broker_rest_proxy_authentication_type
+
+Authentication type to add to Kafka's embedded rest proxy or Admin API. Do not set when RBAC is enabled. Options: [basic, none]
+
+Default:  none
+
+***
+
+### kafka_broker_cluster_name
+
+Use to register and identify your Kafka cluster in the MDS.
+
+Default:  ""
+
+***
+
+### schema_registry_user
+
+Set this variable to customize the Linux User that the Schema Registry Service runs with. Default user is cp-schema-registry.
+
+Default:  "{{schema_registry_default_user}}"
+
+***
+
+### schema_registry_group
+
+Set this variable to customize the Linux Group that the Schema Registry Service user belongs to. Default group is confluent.
+
+Default:  "{{schema_registry_default_group}}"
+
+***
+
+### schema_registry_listener_port
+
+Port Schema Registry API exposed over
+
+Default:  8081
+
+***
+
+### schema_registry_default_internal_replication_factor
+
+Replication Factor for schemas topic. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
+
+Default:  "{{ 3 if ccloud_kafka_enabled|bool else
+
+***
+
+### schema_registry_ssl_enabled
+
+Boolean to configure schema registry with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### schema_registry_ssl_mutual_auth_enabled
+
+Deprecated- Boolean to enable mTLS Authentication on Schema Registry
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### schema_registry_authentication_type
+
+Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
+
+Default:  "{{ 'mtls' if schema_registry_ssl_mutual_auth_enabled else 'none' }}"
+
+***
+
+### schema_registry_log_dir
+
+Set this variable to customize the directory that the Schema Registry writes log files to. Default location is /var/log/confluent/schema-registry. NOTE- schema_registry.appender_log_path is deprecated.
+
+Default:  "{{schema_registry.appender_log_path}}"
+
+***
+
+### schema_registry_jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on schema registry
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### schema_registry_jolokia_port
+
+Port to expose schema registry jolokia metrics. Beware of port collisions if colocating components on same host
+
+Default:  7772
+
+***
+
+### schema_registry_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on Schema Registry jolokia metrics
+
+Default:  "{{ schema_registry_ssl_enabled }}"
+
+***
+
+### schema_registry_jolokia_config
+
+Path on Schema Registry host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/schema-registry/schema_registry_jolokia.properties"
+
+***
+
+### schema_registry_jolokia_auth_mode
+
+Authentication Mode for Schema Registry's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### schema_registry_jolokia_user
+
+Username for Schema Registry's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### schema_registry_jolokia_password
+
+Password for Schema Registry's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
+### schema_registry_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on schema registry
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### schema_registry_jmxexporter_config_source_path
+
+Path on Ansible Controller for Schema Registry jmx config file. Only necessary to set for custom config.
+
+Default:  schema_registry.yml
+
+***
+
+### schema_registry_jmxexporter_config_path
+
+Destination path for Schema Registry jmx config file
+
+Default:  /opt/prometheus/schema_registry.yml
+
+***
+
+### schema_registry_jmxexporter_port
+
+Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
+
+Default:  8078
+
+***
+
+### schema_registry_copy_files
+
+Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+
+Default:  []
+
+***
+
+### schema_registry_custom_properties
+
+Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
+
+Default:  "{{ schema_registry.properties }}"
+
+***
+
+### schema_registry_cluster_name
+
+Use to register and identify your Schema Registry cluster in the MDS.
+
+Default:  ""
+
+***
+
+### kafka_rest_user
+
+Set this variable to customize the Linux User that the Rest Proxy Service runs with. Default user is cp-kafka-rest.
+
+Default:  "{{kafka_rest_default_user}}"
+
+***
+
+### kafka_rest_group
+
+Set this variable to customize the Linux Group that the Rest Proxy Service user belongs to. Default group is confluent.
+
+Default:  "{{kafka_rest_default_group}}"
+
+***
+
+### kafka_rest_port
+
+Port Rest Proxy API exposed over
+
+Default:  8082
+
+***
+
+### kafka_rest_ssl_enabled
+
+Boolean to configure Rest Proxy with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### kafka_rest_ssl_mutual_auth_enabled
+
+Deprecated- Boolean to enable mTLS Authentication on Rest Proxy
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### kafka_rest_authentication_type
+
+Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
+
+Default:  "{{ 'mtls' if kafka_rest_ssl_mutual_auth_enabled else 'none' }}"
+
+***
+
+### kafka_rest_log_dir
+
+Set this variable to customize the directory that the Rest Proxy writes log files to. Default location is /var/log/confluent/kafka-rest. NOTE- kafka_rest.appender_log_path is deprecated.
+
+Default:  "{{kafka_rest.appender_log_path}}"
+
+***
+
+### kafka_rest_jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on Rest Proxy
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### kafka_rest_jolokia_port
+
+Port to expose Rest Proxy jolokia metrics. Beware of port collisions if colocating components on same host
+
+Default:  7775
+
+***
+
+### kafka_rest_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on Rest Proxy jolokia metrics
+
+Default:  "{{ kafka_rest_ssl_enabled }}"
+
+***
+
+### kafka_rest_jolokia_config
+
+Path on Rest Proxy host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-rest/kafka_rest_jolokia.properties"
+
+***
+
+### kafka_rest_jolokia_auth_mode
+
+Authentication Mode for Rest Proxy's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_rest_jolokia_user
+
+Username for Rest Proxy's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_rest_jolokia_password
+
+Password for Rest Proxy's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
+### kafka_rest_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on Rest Proxy
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### kafka_rest_jmxexporter_config_source_path
+
+Path on Ansible Controller for Rest Proxy jmx config file. Only necessary to set for custom config.
+
+Default:  kafka_rest.yml
+
+***
+
+### kafka_rest_jmxexporter_config_path
+
+Destination path for Rest Proxy jmx config file
+
+Default:  /opt/prometheus/kafka_rest.yml
+
+***
+
+### kafka_rest_jmxexporter_port
+
+Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
+
+Default:  8075
+
+***
+
+### kafka_rest_copy_files
+
+Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+
+Default:  []
+
+***
+
+### kafka_rest_custom_properties
+
+Use to set custom Rest Proxy properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_rest.properties is deprecated.
+
+Default:  "{{ kafka_rest.properties }}"
+
+***
+
+### kafka_rest_monitoring_interceptors_enabled
+
+Boolean to configure Monitoring Interceptors on Rest Proxy.
+
+Default:  "{{ monitoring_interceptors_enabled }}"
+
+***
+
+### kafka_connect_service_name
+
+Service Name to define/use for Kafka Connect System.d.
+
+Default:  "{{kafka_connect_default_service_name}}"
+
+***
+
+### kafka_connect_config_filename
+
+Config/Properties Filename to use when setting up and configuring Kafka Connect
+
+Default:  "{{kafka_connect_default_config_filename}}"
+
+***
+
+### kafka_connect_user
+
+Set this variable to customize the Linux User that the Kafka Connect Service runs with. Default user is cp-kafka-connect.
+
+Default:  "{{kafka_connect_default_user}}"
+
+***
+
+### kafka_connect_group
+
+Set this variable to customize the Linux Group that the Kafka Connect Service user belongs to. Default group is confluent.
+
+Default:  "{{kafka_connect_default_group}}"
+
+***
+
+### kafka_connect_rest_port
+
+Port Connect API exposed over
+
+Default:  8083
+
+***
+
+### kafka_connect_ssl_enabled
+
+Boolean to configure Connect with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### kafka_connect_ssl_mutual_auth_enabled
+
+Deprecated- Boolean to enable mTLS Authentication on Connect
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### kafka_connect_authentication_type
+
+Authentication to put on Connect's Rest Endpoint. Available options: [mtls, basic, none].
+
+Default:  "{{ 'mtls' if kafka_connect_ssl_mutual_auth_enabled|bool else 'none' }}"
+
+***
+
+### kafka_connect_log_dir
+
+Set this variable to customize the directory that Kafka Connect writes log files to. Default location is /var/log/kafka. NOTE- kafka_connect.appender_log_path is deprecated.
+
+Default:  "{{kafka_connect.appender_log_path}}"
+
+***
+
+### kafka_connect_custom_rest_extension_classes
+
+Additional set of Connect extension classes.
+
+Default:  []
+
+***
+
+### kafka_connect_jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on Connect
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### kafka_connect_jolokia_port
+
+Port to expose Connect jolokia metrics. Beware of port collisions if colocating components on same host
+
+Default:  7773
+
+***
+
+### kafka_connect_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on Connect jolokia metrics
+
+Default:  "{{ kafka_connect_ssl_enabled }}"
+
+***
+
+### kafka_connect_jolokia_config
+
+Path on Connect host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_connect_jolokia.properties"
+
+***
+
+### kafka_connect_jolokia_auth_mode
+
+Authentication Mode for Connect's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_connect_jolokia_user
+
+Username for Connect's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_connect_jolokia_password
+
+Password for Connect's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
+### kafka_connect_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on Connect
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### kafka_connect_jmxexporter_config_source_path
+
+Path on Ansible Controller for Connect jmx config file. Only necessary to set for custom config.
+
+Default:  kafka_connect.yml
+
+***
+
+### kafka_connect_jmxexporter_config_path
+
+Destination path for Connect jmx config file
+
+Default:  /opt/prometheus/kafka_connect.yml
+
+***
+
+### kafka_connect_jmxexporter_port
+
+Port to expose connect prometheus metrics. Beware of port collisions if colocating components on same host
+
+Default:  8077
+
+***
+
+### kafka_connect_copy_files
+
+Use to copy files from control node to connect hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+
+Default:  []
+
+***
+
+### kafka_connect_group_id
+
+Connect Service Group Id. Customize when configuring multiple connect clusters in same inventory
+
+Default:  connect-cluster
+
+***
+
+### kafka_connect_default_internal_replication_factor
+
+Replication Factor for connect internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
+
+Default:  "{{ 3 if ccloud_kafka_enabled|bool else
+
+***
+
+### kafka_connect_secret_registry_enabled
+
+Boolean to enable and configure Connect Secret Registry
+
+Default:  "{{rbac_enabled}}"
+
+***
+
+### kafka_connect_secret_registry_key
+
+Connect Secret Registry Key
+
+Default:  39ff95832750c0090d84ddf5344583832efe91ef
+
+***
+
+### kafka_connect_custom_properties
+
+Use to set custom Connect properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_connect.properties is deprecated.
+
+Default:  "{{ kafka_connect.properties }}"
+
+***
+
+### kafka_connect_monitoring_interceptors_enabled
+
+Boolean to configure Monitoring Interceptors on Connect.
+
+Default:  "{{ monitoring_interceptors_enabled }}"
+
+***
+
+### kafka_connect_cluster_name
+
+Use to register and identify your Kafka Connect cluster in the MDS.
+
+Default:  ""
+
+***
+
+### ksql_user
+
+Set this variable to customize the Linux User that the ksqlDB Service runs with. Default user is cp-ksql.
+
+Default:  "{{ksql_default_user}}"
+
+***
+
+### ksql_group
+
+Set this variable to customize the Linux Group that the ksqlDB Service user belongs to. Default group is confluent.
+
+Default:  "{{ksql_default_group}}"
+
+***
+
+### ksql_listener_port
+
+Port ksqlDB API exposed over
+
+Default:  8088
+
+***
+
+### ksql_ssl_enabled
+
+Boolean to configure ksqlDB with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### ksql_ssl_mutual_auth_enabled
+
+Deprecated - Boolean to enable mTLS Authentication on ksqlDB
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### ksql_authentication_type
+
+Authentication to put on ksqlDB's Rest Endpoint. Available options: [mtls, basic, none].
+
+Default:  "{{ 'mtls' if ksql_ssl_mutual_auth_enabled|bool else 'none' }}"
+
+***
+
+### ksql_log_dir
+
+Set this variable to customize the directory that ksqlDB writes log files to. Default location is /var/log/confluent/ksql. NOTE- ksql.appender_log_path is deprecated.
+
+Default:  "{{ksql.appender_log_path}}"
+
+***
+
+### ksql_jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on ksqlDB
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### ksql_jolokia_port
+
+Port to expose ksqlDB jolokia metrics. Beware of port collisions if colocating components on same host
+
+Default:  7774
+
+***
+
+### ksql_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on ksqlDB jolokia metrics
+
+Default:  "{{ ksql_ssl_enabled }}"
+
+***
+
+### ksql_jolokia_config
+
+Path on ksqlDB host for Jolokia Configuration file
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
+
+***
+
+### ksql_jolokia_auth_mode
+
+Authentication Mode for ksqlDB's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### ksql_jolokia_user
+
+Username for ksqlDB's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### ksql_jolokia_password
+
+Password for ksqlDB's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
+### ksql_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on ksqlDB
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### ksql_jmxexporter_config_source_path
+
+Path on Ansible Controller for ksqlDB jmx config file. Only necessary to set for custom config.
+
+Default:  ksql.yml
+
+***
+
+### ksql_jmxexporter_config_path
+
+Destination path for ksqlDB jmx config file
+
+Default:  /opt/prometheus/ksql.yml
+
+***
+
+### ksql_jmxexporter_port
+
+Port to expose ksqlDB prometheus metrics. Beware of port collisions if colocating components on same host
+
+Default:  8076
+
+***
+
+### ksql_copy_files
+
+Use to copy files from control node to ksqlDB hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+
+Default:  []
+
+***
+
+### ksql_default_internal_replication_factor
+
+Replication Factor for ksqlDB internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
+
+Default:  "{{ 3 if ccloud_kafka_enabled|bool else
+
+***
+
+### ksql_service_id
+
+ksqlDB Service ID. Use when configuring multiple ksqldb clusters in the same inventory file.
+
+Default:  default_
+
+***
+
+### ksql_custom_properties
+
+Use to set custom ksqlDB properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- ksql.properties is deprecated.
+
+Default:  "{{ ksql.properties }}"
+
+***
+
+### ksql_monitoring_interceptors_enabled
+
+Boolean to configure Monitoring Interceptors on ksqlDB.
+
+Default:  "{{ monitoring_interceptors_enabled }}"
+
+***
+
+### ksql_cluster_name
+
+Use to register and identify your KSQL cluster in the MDS.
+
+Default:  ""
+
+***
+
+### ksql_log_streaming_enabled
+
+Boolean to enable ksqlDB Log Streaming.
+
+Default:  false
+
+***
+
+### control_center_user
+
+Set this variable to customize the Linux User that the Control Center Service runs with. Default user is cp-control-center.
+
+Default:  "{{control_center_default_user}}"
+
+***
+
+### control_center_group
+
+Set this variable to customize the Linux Group that the Control Center Service user belongs to. Default group is confluent.
+
+Default:  "{{control_center_default_group}}"
+
+***
+
+### control_center_port
+
+Port Control Center exposed over
+
+Default:  9021
+
+***
+
+### control_center_listener_hostname
+
+Interface on host for Control Center to listen on
+
+Default:  "0.0.0.0"
+
+***
+
+### control_center_ssl_enabled
+
+Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### control_center_authentication_type
+
+Control Center Authentication. Available options: [basic, none].
+
+Default:  none
+
+***
+
+### control_center_log_dir
+
+Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
+
+Default:  "{{control_center.appender_log_path}}"
+
+***
+
+### control_center_copy_files
+
+Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+
+Default:  []
+
+***
+
+### control_center_default_internal_replication_factor
+
+Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
+
+Default:  "{{ 3 if ccloud_kafka_enabled|bool else
+
+***
+
+### control_center_custom_properties
+
+Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
+
+Default:  "{{ control_center.properties }}"
+
+***
+
+### sasl_scram_users
+
+Dictionary containing additional sasl scram users to be created during provisioning.
+
+Default:  {}
+
+***
+
+### sasl_scram256_users
+
+Dictionary containing additional sasl scram users to be created during provisioning.
+
+Default:  {}
+
+***
+
+### sasl_plain_users
+
+Dictionary containing additional sasl plain users to be created during provisioning.
+
+Default:  {}
+
+***
+
+### schema_registry_basic_users
+
+Dictionary containing additional sasl plain users to be created during provisioning.
+
+Default:  {}
+
+***
+
+### rbac_enabled
+
+Boolean to configure Confluent Platform with RBAC enabled. Creates Rolebindings for all components to function
+
+Default:  false
+
+***
+
+### mds_port
+
+Port to expose MDS Server API on
+
+Default:  8090
+
+***
+
+### kafka_broker_rest_ssl_enabled
+
+Boolean to configure TLS encryption on the Broker Rest endpoint. NOTE- mds_ssl_enabled is now deprecated
+
+Default:  "{{mds_ssl_enabled}}"
+
+***
+
+### mds_super_user
+
+LDAP User which will be granted super user permissions to create role bindings in the MDS
+
+Default:  mds
+
+***
+
+### mds_super_user_password
+
+Password to mds_super_user LDAP User
+
+Default:  password
+
+***
+
+### kafka_broker_ldap_user
+
+LDAP User for Kafkas Embedded Rest Service to authenticate as
+
+Default:  "{{mds_super_user}}"
+
+***
+
+### kafka_broker_ldap_password
+
+Password to kafka_broker_ldap_user LDAP User
+
+Default:  "{{mds_super_user_password}}"
+
+***
+
+### schema_registry_ldap_user
+
+LDAP User for Schema Registry to authenticate as
+
+Default:  schema-registry
+
+***
+
+### schema_registry_ldap_password
+
+Password to schema_registry_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### kafka_connect_ldap_user
+
+LDAP User for Connect to authenticate as
+
+Default:  connect
+
+***
+
+### kafka_connect_ldap_password
+
+Password to kafka_connect_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### ksql_ldap_user
+
+LDAP User for ksqlDB to authenticate as
+
+Default:  ksql
+
+***
+
+### ksql_ldap_password
+
+Password to ksql_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### kafka_rest_ldap_user
+
+LDAP User for Rest Proxy to authenticate as
+
+Default:  kafka-rest
+
+***
+
+### kafka_rest_ldap_password
+
+Password to kafka_rest_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### control_center_ldap_user
+
+LDAP User for Control Center to authenticate as
+
+Default:  control-center
+
+***
+
+### control_center_ldap_password
+
+Password to control_center_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### external_mds_enabled
+
+Boolean to describe if kafka group should be configured with an External MDS Kafka Cluster. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, kafka_broker_rest_ssl_enabled
+
+Default:  false
+
+***
+
+### mds_broker_bootstrap_servers
+
+Kafka hosts and listener ports on the Kafka Cluster acting as an external MDS Server. mds_broker_listener dictionary must describe its security settings. Must be configured if external_mds_enabled: true
+
+Default:  localhost:9092
+
+***
+
+### mds_broker_listener
+
+Listener Dictionary that describes how kafka clusters connect to MDS Kafka cluster. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
+
+***
+
+### mds_bootstrap_server_urls
+
+Comma separated urls for mds servers. Only set if external_mds_enabled: true
+
+Default:  "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | resolve_hostnames(hostvars) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
+
+***
+
+### rbac_component_additional_system_admins
+
+List of users to be granted system admin Role Bindings across all components
+
+Default:  []
+
+***
+
+### kafka_broker_additional_system_admins
+
+List of users to be granted system admin Role Bindings on the Kafka Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
+
+***
+
+### schema_registry_additional_system_admins
+
+List of users to be granted system admin Role Bindings on the Schema Registry Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
+
+***
+
+### ksql_additional_system_admins
+
+List of users to be granted system admin Role Bindings on the ksqlDB Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
+
+***
+
+### kafka_connect_additional_system_admins
+
+List of users to be granted system admin Role Bindings on the Connect Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
+
+***
+
+### control_center_additional_system_admins
+
+List of users to be granted system admin Role Bindings on the Control Center Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
+
+***
+
+### secrets_protection_enabled
+
+Boolean to enable secrets protection on all components except Zookeeper
+
+Default:  false
+
+***
+
+### mask_secrets
+
+Boolean to mask secrets in playbook output
+
+Default:  true
+
+***
+
+### regenerate_masterkey
+
+Boolean to Recreate Secrets File and Masterkey. Only set to false AFTER first cp-ansible run.
+
+Default:  true
+
+***
+
+### secrets_protection_masterkey
+
+Masterkey generated by the Confluent Secret CLI. If empty and secrets protection is enabled, then a master key will be randomly generated.
+
+Default:  ""
+
+***
+
+### secrets_protection_security_file
+
+Security file generated by the Confluent Secret CLI. If empty and secrets protection is enabled, then a security file will be randomly generated.
+
+Default:  generated_ssl_files/security.properties
+
+***
+
+### kafka_broker_secrets_protection_enabled
+
+Boolean to enable secrets protection in Kafka broker.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### kafka_broker_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for Kafka.
+
+Default:  "{{kafka_broker_secrets_protection_enabled}}"
+
+***
+
+### kafka_broker_secrets_protection_encrypt_properties
+
+List of Kafka properties to encrypt. Can be used in addition to kafka_broker_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### schema_registry_secrets_protection_enabled
+
+Boolean to enable secrets protection in schema registry.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### schema_registry_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for Schema Registry.
+
+Default:  "{{schema_registry_secrets_protection_enabled}}"
+
+***
+
+### schema_registry_secrets_protection_encrypt_properties
+
+List of Schema Registry properties to encrypt. Can be used in addition to schema_registry_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### kafka_connect_secrets_protection_enabled
+
+Boolean to enable secrets protection in Connect.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### kafka_connect_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for Connect.
+
+Default:  "{{kafka_connect_secrets_protection_enabled}}"
+
+***
+
+### kafka_connect_secrets_protection_encrypt_properties
+
+List of Connect properties to encrypt. Can be used in addition to kafka_connect_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### kafka_rest_secrets_protection_enabled
+
+Boolean to enable secrets protection in Rest Proxy.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### kafka_rest_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for Rest Proxy.
+
+Default:  "{{kafka_rest_secrets_protection_enabled}}"
+
+***
+
+### kafka_rest_secrets_protection_encrypt_properties
+
+List of Rest Proxy properties to encrypt. Can be used in addition to kafka_rest_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### ksql_secrets_protection_enabled
+
+Boolean to enable secrets protection in KSQL.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### ksql_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for KSQL.
+
+Default:  "{{ksql_secrets_protection_enabled}}"
+
+***
+
+### ksql_secrets_protection_encrypt_properties
+
+List of KSQL properties to encrypt. Can be used in addition to ksql_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### control_center_secrets_protection_enabled
+
+Boolean to enable secrets protection in Control Center.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### control_center_secrets_protection_encrypt_passwords
+
+Boolean to encrypt all properties containing 'password' for Control Center.
+
+Default:  "{{control_center_secrets_protection_enabled}}"
+
+***
+
+### control_center_secrets_protection_encrypt_properties
+
+List of Control Center properties to encrypt. Can be used in addition to control_center_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### telemetry_enabled
+
+Boolean to configure Telemetry. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  false
+
+***
+
+### telemetry_api_key
+
+API Key used by Telemetry. Mandatory variable for Telemetry
+
+Default:  ""
+
+***
+
+### telemetry_api_secret
+
+API Secret used by Telemetry. Mandatory variable for Telemetry
+
+Default:  ""
+
+***
+
+### telemetry_proxy_url
+
+Proxy URL used by Telemetry. Only set if using a Proxy Server
+
+Default:  ""
+
+***
+
+### telemetry_proxy_username
+
+Username for Proxy Server used by Telemetry. Only set if Proxy Server requires authentication
+
+Default:  ""
+
+***
+
+### telemetry_proxy_password
+
+Password for Proxy Server used by Telemetry. Only set if Proxy Server requires authentication
+
+Default:  ""
+
+***
+
+### kafka_broker_telemetry_enabled
+
+Boolean to configure Telemetry on Kafka. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### kafka_broker_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Kafka. Currently only sends cp-ansible version data
+
+Default:  "{{kafka_broker_telemetry_enabled}}"
+
+***
+
+### schema_registry_telemetry_enabled
+
+Boolean to configure Telemetry on Schema Registry. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### schema_registry_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Schema Registry. Currently only sends cp-ansible version data
+
+Default:  "{{schema_registry_telemetry_enabled}}"
+
+***
+
+### kafka_connect_telemetry_enabled
+
+Boolean to configure Telemetry on Connect. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### kafka_connect_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Connect. Currently only sends cp-ansible version data
+
+Default:  "{{kafka_connect_telemetry_enabled}}"
+
+***
+
+### kafka_rest_telemetry_enabled
+
+Boolean to configure Telemetry on Rest Proxy. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### kafka_rest_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Rest Proxy. Currently only sends cp-ansible version data
+
+Default:  "{{kafka_rest_telemetry_enabled}}"
+
+***
+
+### ksql_telemetry_enabled
+
+Boolean to configure Telemetry on ksqlDB. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### ksql_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from ksqlDB. Currently only sends cp-ansible version data
+
+Default:  "{{ksql_telemetry_enabled}}"
+
+***
+
+### control_center_telemetry_enabled
+
+Boolean to configure Telemetry on Control Center. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### control_center_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
+
+Default:  "{{control_center_telemetry_enabled}}"
+
+***
+
+### audit_logs_destination_enabled
+
+Boolean to configure Kafka to set Audit Logs on an external Kafka Cluster. Must also include audit_logs_destination_bootstrap_servers and audit_logs_destination_listener.
+
+Default:  false
+
+***
+
+### audit_logs_destination_bootstrap_servers
+
+Kafka hosts and listener ports on the Audit Logs Destination Kafka Cluster. audit_logs_destination_listener dictionary must describe its security settings. Must be configured if audit_logs_destination_enabled: true
+
+Default:  localhost:9092
+
+***
+
+### audit_logs_destination_listener
+
+Listener Dictionary that describes how kafka clients connect to Audit Log Destination Kafka cluster. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol.
+
+Default: 
+
+***
+
+### mds_health_check_user
+
+User for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
+
+Default:  "{{mds_super_user}}"
+
+***
+
+### mds_health_check_password
+
+Password for authenticated MDS Health Check. Only relevant if rbac_enabled: true.
+
+Default:  "{{mds_super_user_password}}"
+
+***
+
+### kafka_broker_rest_health_check_user
+
+User for authenticated Kafka Admin API Health Check.
+
+Default:  "{{ mds_super_user if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.principal }}"
+
+***
+
+### kafka_broker_rest_health_check_password
+
+Password for authenticated Kafka Admin API Health Check.
+
+Default:  "{{ mds_super_user_password if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.password }}"
+
+***
+
+### schema_registry_health_check_user
+
+User for authenticated Schema Registry Health Check.
+
+Default:  "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registry_basic_users_final.admin.principal }}"
+
+***
+
+### schema_registry_health_check_password
+
+Password for authenticated Schema Registry Health Check.
+
+Default:  "{{ schema_registry_ldap_password if rbac_enabled|bool else schema_registry_basic_users_final.admin.password }}"
+
+***
+
+### kafka_connect_health_check_user
+
+User for authenticated Connect Health Check.
+
+Default:  "{{ kafka_connect_ldap_user if rbac_enabled|bool else kafka_connect_basic_users.admin.principal }}"
+
+***
+
+### kafka_connect_health_check_password
+
+Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{ kafka_connect_ldap_password if rbac_enabled|bool else kafka_connect_basic_users.admin.password }}"
+
+***
+
+### ksql_health_check_user
+
+User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{ ksql_ldap_user if rbac_enabled|bool else ksql_basic_users.admin.principal }}"
+
+***
+
+### ksql_health_check_password
+
+Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{ ksql_ldap_password if rbac_enabled|bool else ksql_basic_users.admin.password }}"
+
+***
+
+### kafka_rest_health_check_user
+
+User for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{ kafka_rest_ldap_user if rbac_enabled|bool else kafka_rest_basic_users.admin.principal }}"
+
+***
+
+### kafka_rest_health_check_password
+
+Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{ kafka_rest_ldap_password if rbac_enabled|bool else kafka_rest_basic_users.admin.password }}"
+
+***
+
+### control_center_health_check_user
+
+User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{ control_center_ldap_user if rbac_enabled|bool else control_center_basic_users.admin.principal }}"
+
+***
+
+### control_center_health_check_password
+
+Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{ control_center_ldap_password if rbac_enabled|bool else control_center_basic_users.admin.password }}"
+
+***
+
+### kafka_connect_replicator_group
+
+Set this variable to customize the Linux Group that the Kafka Connect Replicator Service user belongs to. Default group is confluent.
+
+Default:  "{{kafka_connect_replicator_default_group}}"
+
+***
+
+### kafka_connect_replicator_bootstrap_servers
+
+Variable to define bootstrap servers for Kafka Connect Replicator.  Mandatory for Kafka Connect Replicator setup.
+
+Default:  localhost:9092
+
+***
+
+### kafka_connect_replicator_custom_properties
+
+Use to set custom Kafka Connect Replicator properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_connect_replicator_cluster_id
+
+Set this variable to customize the Cluster ID used by Kafka Connect Replicator.
+
+Default:  replicator
+
+***
+
+### kafka_connect_replicator_offset_start
+
+Set this variable to customize the offset starting point for Kafka Connect Replicator.
+
+Default:  consumer
+
+***
+
+### kafka_connect_replicator_offsets_topic
+
+Set this variable to customize the topic that Kafka Connect Replicator stores it's offsets in.
+
+Default:  connect-offsets
+
+***
+
+### kafka_connect_replicator_status_topic
+
+Set this variable to customize the topic where Kafka Connect Replicator stores it's status.
+
+Default:  connect-status
+
+***
+
+### kafka_connect_replicator_storage_topic
+
+Set this variable to customize the topic where Kafka Connect Replicator stores it's configuration.
+
+Default:  connect-configs
+
+***
+
+### kafka_connect_replicator_white_list
+
+Set this variable with a comma seperated list of Topics for Kafka Connect Replicator to replicate from.  This is a mandatory variable.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_topic_auto_create
+
+Sets if Topics are auto created on the destintation cluster by Kafka Connect Replicator.
+
+Default:  true
+
+***
+
+### kafka_connect_replicator_health_checks_enabled
+
+Boolean to enable health checks on Kafka Connect Replicator.
+
+Default:  true
+
+***
+
+### kafka_connect_replicator_copy_files
+
+Use to copy files from control node to replicator hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to)
+
+Default:  []
+
+***
+
+### kafka_connect_replicator_port
+
+Port Rest API exposed over.
+
+Default:  8083
+
+***
+
+### kafka_connect_replicator_monitoring_interceptors_enabled
+
+Sets Kafka Connect Replicator to enable monitoring intercepotors for monitoring in Control Center.
+
+Default:  true
+
+***
+
+### kafka_connect_replicator_health_check_user
+
+User for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+
+Default:  connect
+
+***
+
+### kafka_connect_replicator_health_check_password
+
+Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
+
+Default:  password
+
+***
+
+### kafka_connect_replicator_ssl_provided_keystore_and_truststore
+
+Boolean that determines if a provided keystore and truststore are being used for Kafka Connect Replicator configuration.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_ssl_mutual_auth_enabled
+
+Boolean to enable mTLS Authentication on Kafka Connect Replicator.
+
+Default:  "{{ssl_mutual_auth_enabled}}"
+
+***
+
+### kafka_connect_replicator_ssl_enabled
+
+Boolean to enable TLS on Kafka Connect Replicator
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### kafka_connect_replicator_ssl_ca_cert_path
+
+Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_cert_path
+
+Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_key_path
+
+Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_key_password
+
+Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_truststore_file_path
+
+Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_ssl_keystore_file_path
+
+Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator.
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_sasl_scram_principal
+
+SCRAM principal for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_sasl_scram_password
+
+SCRAM password for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_sasl_scram256_principal
+
+SCRAM 256 principal for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_sasl_scram256_password
+
+SCRAM 256 password for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_sasl_plain_principal
+
+SASL PLAIN principal for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_sasl_plain_password
+
+SASL PLAIN password for Kafka Connect Replicator to authenticate with.
+
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_jolokia_enabled
+
+Boolean that defines if the Jolokia agent is enabled on Kafka Connect Replicator.
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### kafka_connect_replicator_jolokia_auth_mode
+
+Sets the auth mode for the Jolokia Agent on Kafka Connect Replicator.
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_connect_replicator_jolokia_user
+
+Username for Jolokia Agent when using Basic Auth.
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_connect_replicator_jolokia_password
+
+Password for Jolokia Agent when using Basic Auth.
+
+Default:  "{{jolokia_password}}"
+
+***
+
+### kafka_connect_replicator_jolokia_port
+
+Port for Jolokia agent for Kafka Connect Replicator.
+
+Default:  7777
+
+***
+
+### kafka_connect_replicator_jolokia_jar_path
+
+Full path to download the Jolokia Agent Jar.
+
+Default:  /opt/jolokia/jolokia.jar
+
+***
+
+### kafka_connect_replicator_log_dir
+
+Set this variable to customize the directory that Kafka Connect Replicator writes log files to.
+
+Default:  /var/log/confluent/kafka-connect-replicator
+
+***
+
+### kafka_connect_replicator_log_name
+
+Set this variable to customize the default log name that Kafka Connect Replicator writes logs to.
+
+Default:  kafka-connect-replicator.log
+
+***
+
+### kafka_connect_replicator_max_log_files
+
+Set this variable to customize the default max number of log files generated by Kafka Connect Replicator.
+
+Default:  10
+
+***
+
+### kafka_connect_replicator_log_file_size
+
+Set this variable to customize the default max size of a log file generated by Kafka Connect Replicator.
+
+Default:  100mb
+
+***
+
+### kafka_connect_replicator_consumer_bootstrap_servers
+
+Variable to define bootstrap servers for Kafka Connect Replicator Consumer.  Mandatory for Kafka Connect Replicator setup.
+
+Default:  localhost:9092
+
+***
+
+### kafka_connect_replicator_consumer_custom_properties
+
+Use to set custom Kafka Connect Replicator Consumer properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_connect_replicator_consumer_ssl_provided_keystore_and_truststore
+
+Boolean that determines if a provided keystore and truststore are being used for the Kafka Connect Replicator consumer configuration.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_consumer_ssl_ca_cert_path
+
+Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_ca_cert_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_cert_path
+
+Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_cert_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_key_path
+
+Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_key_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_key_password
+
+Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_key_password}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_truststore_file_path
+
+Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_ssl_truststore_file_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_ssl_keystore_file_path
+
+Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Consumer.
+
+Default:  "{{kafka_connect_replicator_consumer_ssl_keystore_file_path}}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram_principal
+
+SCRAM principal for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram_password
+
+SCRAM password for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram256_principal
+
+SCRAM 256 principal for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_scram256_password
+
+SCRAM 256 password for the Consumer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_plain_principal
+
+SASL PLAIN principal for the Consumer to authenticate with.
+
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_consumer_sasl_plain_password
+
+SASL PLAIN password for the Consumer to authenticate with.
+
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_producer_bootstrap_servers
+
+Variable to define bootstrap servers for Kafka Connect Replicator Producer.  Mandatory for Kafka Connect Replicator setup.
+
+Default:  localhost:9092
+
+***
+
+### kafka_connect_replicator_producer_custom_properties
+
+Use to set custom Kafka Connect Replicator Producer properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_connect_replicator_producer_ssl_provided_keystore_and_truststore
+
+Boolean that determines if a provided keystore and truststore are being used for the Kafka Connect Replicator producer configuration.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_producer_ssl_ca_cert_path
+
+Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_ca_cert_path}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_cert_path
+
+Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_cert_path}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_key_path
+
+Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_key_path}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_key_password
+
+Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_key_password}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_truststore_file_path
+
+Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_truststore_file_path}}"
+
+***
+
+### kafka_connect_replicator_producer_ssl_keystore_file_path
+
+Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Producer.
+
+Default:  "{{kafka_connect_replicator_ssl_keystore_file_path}}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram_principal
+
+SCRAM principal for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram_password
+
+SCRAM password for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram256_principal
+
+SCRAM 256 principal for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_scram256_password
+
+SCRAM 256 password for the Producer to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_plain_principal
+
+SASL PLAIN principal for the Producer to authenticate with.
+
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_producer_sasl_plain_password
+
+SASL PLAIN password for the Producer to authenticate with.
+
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_bootstrap_servers
+
+Variable to define bootstrap servers for Kafka Connect Replicator Monitoring Interceptors.
+
+Default:  localhost:9092
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_custom_properties
+
+Use to set custom Kafka Connect Replicator Monitoring Interceptor properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_provided_keystore_and_truststore
+
+Boolean that determines if a provided keystore and truststore are being used for the Kafka Connect Replicator Monitoring Interceptor configuration.
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_ca_cert_path
+
+Set to the location of your TLS CA Certificate when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_ca_cert_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_cert_path
+
+Set to the location of your TLS signed certificate when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_cert_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_key_path
+
+Set to the location of your TLS key when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_key_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_key_password
+
+Set to the password of your TLS key when configuring TLS for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_key_password}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_truststore_file_path
+
+Set to the location of your TLS TrustStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_truststore_file_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_ssl_keystore_file_path
+
+Set to the location of your TLS KeyStore when configuring TLS using Keystores and TrustStores for Kafka Connect Replicator Monitoring Interceptor.
+
+Default:  "{{kafka_connect_replicator_ssl_keystore_file_path}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_path
+
+Defines the path to the keytab required for Kerberos Authentication of the monitoring Interceptors.
+
+Default:  "{{ kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_path }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram_principal
+
+SCRAM principal for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.principal}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram_password
+
+SCRAM password for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram256_principal
+
+SCRAM 256 principal for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.principal}}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_scram256_password
+
+SCRAM 256 password for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_scram256_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_plain_principal
+
+SASL PLAIN principal for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.principal }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_sasl_plain_password
+
+SASL PLAIN password for the Monitoring Interceptor to authenticate with.
+
+Default:  "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
+
+***
+
+### deployment_strategy
+
+Deployment strategy for all components. Set to rolling to run all provisionging tasks on one host at a time, this is less destructive but can fail when security modes get updated.
+
+Default:  parallel
+
+***
+
+### zookeeper_deployment_strategy
+
+Deployment strategy for Zookeeper. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### kafka_broker_deployment_strategy
+
+Deployment strategy for Kafka. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### kafka_connect_deployment_strategy
+
+Deployment strategy for Connect. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### kafka_rest_deployment_strategy
+
+Deployment strategy for Rest Proxy. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### ksql_deployment_strategy
+
+Deployment strategy for ksqlDB. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### control_center_deployment_strategy
+
+Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### kafka_connect_replicator_deployment_strategy
+
+Kafka Connect Replicator reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Node starts up for all Components.
+
+Default:  false
+
+***
+
+### zookeeper_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Zookeeper Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_broker_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Kafka Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### schema_registry_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Schema Registry Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_connect_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Connect Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_rest_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Rest Proxy Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### ksql_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each ksqlDB Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### control_center_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Control Center Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_connect_replicator_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Kafka Connect Replicator Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### ccloud_kafka_enabled
+
+Boolean to configure component to Confluent Cloud Kafka. Must also set ccloud_kafka_bootstrap_servers, ccloud_kafka_key, and ccloud_kafka_secret. zookeeper and kafka_broker groups should not be in inventory.
+
+Default:  false
+
+***
+
+### ccloud_kafka_bootstrap_servers
+
+Bootstrap Servers to CCloud Kafka
+
+Default:  localhost:9092
+
+***
+
+### public_certificates_enabled
+
+Boolean to skip truststore creation and configuration. Signifies kafka's certificates were signed by a public certificate authority.
+
+Default:  "{{ccloud_kafka_enabled}}"
+
+***
+
+### ccloud_schema_registry_enabled
+
+Boolean to configure component to Confluent Cloud Schema Registry. Must also set ccloud_schema_registry_url, ccloud_schema_registry_key, and ccloud_schema_registry_secret. schema_registry group should not be in inventory.
+
+Default:  false
+
+***
+
+### ccloud_schema_registry_url
+
+Url to CCloud Schema Registry
+
+Default:  https://localhost:8081
+
+***
+
+# confluent.common
+
+Below are the supported variables for the role confluent.common
+
+***
+
+### repository_configuration
+
+Configures package repositories on hosts. By default will configure confluent's deb/yum repositories. Possible options: none, confluent, custom. Must also set custom_yum_repofile_filepath or custom_apt_repo_filepath if using custom. Note: vars custom_apt_repo and custom_yum_repofile are deprecated
+
+Default:  "{{'custom' if custom_apt_repo|bool or custom_yum_repofile else 'confluent'}}"
+
+***
+
+### custom_yum_repofile_filepath
+
+Full path on control node to custom yum repo file, must also set repository_configuration to custom
+
+Default:  ""
+
+***
+
+### custom_apt_repo_filepath
+
+Full path on control node to custom apt repo file, must also set repository_configuration to custom
+
+Default:  ""
+
+***
+
+### confluent_common_repository_baseurl
+
+Base URL for Confluent's RPM and Debian Package Repositories
+
+Default:  "https://packages.confluent.io"
+
+***
+
+### install_java
+
+Boolean to have cp-ansible install Java on hosts
+
+Default:  true
+
+***
+
+### redhat_java_package_name
+
+Java Package to install on RHEL/Centos hosts. Possible values java-1.8.0-openjdk or java-11-openjdk
+
+Default:  java-1.8.0-openjdk
+
+***
+
+### debian_java_package_name
+
+Java Package to install on Debian hosts. Possible values openjdk-8-jdk or openjdk-11-jdk
+
+Default:  openjdk-8-jdk
+
+***
+
+### ubuntu_java_package_name
+
+Java Package to install on Ubuntu hosts. Possible values openjdk-8-jdk or openjdk-11-jdk
+
+Default:  openjdk-8-jdk
+
+***
+
+### ubuntu_java_repository
+
+Deb Repository to use for Java Installation
+
+Default:  ppa:openjdk-r/ppa
+
+***
+
+### jolokia_version
+
+Version of Jolokia Agent Jar to Download
+
+Default:  1.6.2
+
+***
+
+### jolokia_jar_url
+
+Full URL used for Jolokia Agent Jar Download. When `jolokia_url_remote=false` this represents the path on Ansible control host.
+
+Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jvm/{{jolokia_version}}/jolokia-jvm-{{jolokia_version}}-agent.jar"
+
+***
+
+### jmxexporter_version
+
+Version of JmxExporter Agent Jar to Donwload
+
+Default:  0.12.0
+
+***
+
+### jmxexporter_jar_url
+
+Full URL used for Prometheus Exporter Jar Download. When `jolokia_url_remote=false` this represents the path on Ansible control host.
+
+Default:  "https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/{{jmxexporter_version}}/jmx_prometheus_javaagent-{{jmxexporter_version}}.jar"
+
+***
+
+### confluent_archive_file_source
+
+A path reference to a local archive file or URL. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
+
+Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_version}}/confluent{{'' if confluent_server_enabled else '-community'}}-{{confluent_package_version}}.tar.gz"
+
+***
+
+### confluent_archive_file_remote
+
+Set to true to indicate the archive file is remote (i.e. already on the target node) or a URL. Set to false if the archive file is on the control node.
+
+Default:  true
+
+***
+
+### confluent_cli_repository_baseurl
+
+Base URL for Confluent CLI packages
+
+Default:  "https://s3-us-west-2.amazonaws.com/confluent.cloud"
+
+***
+
+### confluent_cli_archive_file_source
+
+A path reference to a local archive file or URL. By default this is the URL from Confluent CLI repository.
+
+Default:  "{{confluent_cli_repository_baseurl}}/confluent-cli/archives/{{confluent_cli_version}}/{{confluent_cli_binary}}_{{(confluent_cli_version == 'latest') | ternary('', 'v')}}{{confluent_cli_version}}_{{ansible_system|lower}}_{{confluent_cli_goarch[ansible_architecture]}}.tar.gz"
+
+***
+
+### confluent_cli_archive_file_remote
+
+Set to true to indicate the CLI archive file is remote (i.e. already on the target node) or a URL. Set to false if the archive file is on the control node.
+
+Default:  true
+
+***
+
+# confluent.control_center
+
+Below are the supported variables for the role confluent.control_center
+
+***
+
+### control_center_custom_log4j
+
+Boolean to reconfigure Control Center's logging with RollingFileAppender and log cleanup
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### control_center_log4j_root_logger
+
+Root logger within Control Center's log4j config. Only honored if control_center_custom_log4j: true
+
+Default:  "INFO, main"
+
+***
+
+### control_center_max_log_files
+
+Max number of log files generated by Control Center. Only honored if control_center_custom_log4j: true
+
+Default:  10
+
+***
+
+### control_center_log_file_size
+
+Max size of a log file generated by Control Center. Only honored if control_center_custom_log4j: true
+
+Default:  100MB
+
+***
+
+### control_center_custom_java_args
+
+Custom Java Args to add to the Control Center Process
+
+Default:  ""
+
+***
+
+### control_center_rocksdb_path
+
+Full Path to the RocksDB Data Directory. If left as empty string, cp-ansible will not configure RocksDB
+
+Default:  ""
+
+***
+
+### control_center_service_overrides
+
+Overrides to the Service Section of Control Center Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_service_environment_overrides
+
+Environment Variables to be added to the Control Center Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_service_unit_overrides
+
+Overrides to the Unit Section of Control Center Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_health_check_delay
+
+Time in seconds to wait before starting Control Center Health Checks.
+
+Default:  30
+
+***
+
+# confluent.kafka_broker
+
+Below are the supported variables for the role confluent.kafka_broker
+
+***
+
+### kafka_broker_custom_log4j
+
+Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_broker_log4j_root_logger
+
+Root logger within Kafka's log4j config. Only honored if kafka_broker_custom_log4j: true
+
+Default:  "INFO, stdout, kafkaAppender"
+
+***
+
+### kafka_broker_max_log_files
+
+Max number of log files generated by Kafka Broker. Only honored if kafka_broker_custom_log4j: true
+
+Default:  10
+
+***
+
+### kafka_broker_log_file_size
+
+Max size of a log file generated by Kafka Broker. Only honored if kafka_broker_custom_log4j: true
+
+Default:  100MB
+
+***
+
+### kafka_broker_custom_java_args
+
+Custom Java Args to add to the Kafka Process
+
+Default:  ""
+
+***
+
+### kafka_broker_service_overrides
+
+Overrides to the Service Section of Kafka Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_broker_service_environment_overrides
+
+Environment Variables to be added to the Kafka Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_broker_service_unit_overrides
+
+Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_broker_health_check_delay
+
+Time in seconds to wait before starting Kafka Health Checks.
+
+Default:  20
+
+***
+
+# confluent.kafka_connect
+
+Below are the supported variables for the role confluent.kafka_connect
+
+***
+
+### kafka_connect_custom_log4j
+
+Boolean to reconfigure Kafka Connect's logging with the RollingFileAppender and log cleanup functionality.
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_connect_log4j_root_logger
+
+Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
+
+Default:  "INFO, stdout, connectAppender"
+
+***
+
+### kafka_connect_max_log_files
+
+Max number of log files generated by Kafka Connect. Only honored if kafka_connect_custom_log4j: true
+
+Default:  10
+
+***
+
+### kafka_connect_log_file_size
+
+Max size of a log file generated by Kafka Connect. Only honored if kafka_connect_custom_log4j: true
+
+Default:  100MB
+
+***
+
+### kafka_connect_custom_java_args
+
+Custom Java Args to add to the Connect Process
+
+Default:  ""
+
+***
+
+### kafka_connect_service_overrides
+
+Overrides to the Service Section of Connect Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_service_environment_overrides
+
+Environment Variables to be added to the Connect Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_service_unit_overrides
+
+Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_health_check_delay
+
+Time in seconds to wait before starting Connect Health Checks.
+
+Default:  30
+
+***
+
+# confluent.kafka_rest
+
+Below are the supported variables for the role confluent.kafka_rest
+
+***
+
+### kafka_rest_custom_log4j
+
+Boolean to reconfigure Rest Proxy's logging with RollingFileAppender and log cleanup
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_rest_log4j_root_logger
+
+Root logger within Rest Proxy's log4j config. Only honored if kafka_rest_custom_log4j: true
+
+Default:  "INFO, stdout, file"
+
+***
+
+### kafka_rest_max_log_files
+
+Max number of log files generated by Rest Proxy. Only honored if kafka_rest_custom_log4j: true
+
+Default:  10
+
+***
+
+### kafka_rest_log_file_size
+
+Max size of a log file generated by Rest Proxy. Only honored if kafka_rest_custom_log4j: true
+
+Default:  100MB
+
+***
+
+### kafka_rest_custom_java_args
+
+Custom Java Args to add to the Rest Proxy Process
+
+Default:  ""
+
+***
+
+### kafka_rest_service_overrides
+
+Overrides to the Service Section of Rest Proxy Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_rest_service_environment_overrides
+
+Environment Variables to be added to the Rest Proxy Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_rest_service_unit_overrides
+
+Overrides to the Unit Section of Rest Proxy Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_rest_health_check_delay
+
+Time in seconds to wait before starting Rest Proxy Health Checks.
+
+Default:  15
+
+***
+
+# confluent.ksql
+
+Below are the supported variables for the role confluent.ksql
+
+***
+
+### ksql_custom_log4j
+
+Boolean to reconfigure ksqlDB's logging with the RollingFileAppender and log cleanup functionality.
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### ksql_log4j_root_logger
+
+Root logger within ksqlDB's log4j config. Only honored if ksql_custom_log4j: true
+
+Default:  "INFO, stdout, main"
+
+***
+
+### ksql_max_log_files
+
+Max number of log files generated by ksqlDB. Only honored if ksql_custom_log4j: true
+
+Default:  5
+
+***
+
+### ksql_log_file_size
+
+Max size of a log file generated by ksqlDB. Only honored if ksql_custom_log4j: true
+
+Default:  10MB
+
+***
+
+### ksql_custom_java_args
+
+Custom Java Args to add to the ksqlDB Process
+
+Default:  ""
+
+***
+
+### ksql_rocksdb_path
+
+Full Path to the RocksDB Data Directory. If set as empty string, cp-ansible will not configure RocksDB
+
+Default:  /tmp/ksqldb
+
+***
+
+### ksql_service_overrides
+
+Overrides to the Service Section of ksqlDB Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### ksql_service_environment_overrides
+
+Environment Variables to be added to the ksqlDB Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### ksql_service_unit_overrides
+
+Overrides to the Unit Section of ksqlDB Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### ksql_health_check_delay
+
+Time in seconds to wait before starting ksqlDB Health Checks.
+
+Default:  20
+
+***
+
+# confluent.schema_registry
+
+Below are the supported variables for the role confluent.schema_registry
+
+***
+
+### schema_registry_custom_log4j
+
+Boolean to reconfigure Schema Registry's logging with RollingFileAppender and log cleanup
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### schema_registry_log4j_root_logger
+
+Root logger within Schema Registry's log4j config. Only honored if schema_registry_custom_log4j: true
+
+Default:  "INFO, stdout, file"
+
+***
+
+### schema_registry_max_log_files
+
+Max number of log files generated by Schema Registry. Only honored if schema_registry_custom_log4j: true
+
+Default:  10
+
+***
+
+### schema_registry_log_file_size
+
+Max size of a log file generated by Schema Registry. Only honored if schema_registry_custom_log4j: true
+
+Default:  100MB
+
+***
+
+### schema_registry_custom_java_args
+
+Custom Java Args to add to the Schema Registry Process
+
+Default:  ""
+
+***
+
+### schema_registry_service_overrides
+
+Overrides to the Service Section of Schema Registry Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### schema_registry_service_environment_overrides
+
+Environment Variables to be added to the Schema Registry Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### schema_registry_service_unit_overrides
+
+Overrides to the Unit Section of Schema Registry Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### schema_registry_health_check_delay
+
+Time in seconds to wait before starting Schema Registry Health Checks.
+
+Default:  15
+
+***
+
+# confluent.zookeeper
+
+Below are the supported variables for the role confluent.zookeeper
+
+***
+
+### zookeeper_custom_log4j
+
+Boolean to reconfigure Zookeeper's logging with RollingFileAppender and log cleanup
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### zookeeper_log4j_root_logger
+
+Root logger within Zookeeper's log4j config. Only honored if zookeeper_custom_log4j: true
+
+Default:  INFO, stdout, zkAppender
+
+***
+
+### zookeeper_max_log_files
+
+Max number of log files generated by Zookeeper. Only honored if zookeeper_custom_log4j: true
+
+Default:  10
+
+***
+
+### zookeeper_log_file_size
+
+Max size of a log file generated by Zookeeper. Only honored if zookeeper_custom_log4j: true
+
+Default:  100MB
+
+***
+
+### zookeeper_custom_java_args
+
+Custom Java Args to add to the Zookeeper Process
+
+Default:  ""
+
+***
+
+### zookeeper_service_overrides
+
+Overrides to the Service Section of Zookeeper Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### zookeeper_service_environment_overrides
+
+Environment Variables to be added to the Zookeeper Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### zookeeper_service_unit_overrides
+
+Overrides to the Unit Section of Zookeeper Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### zookeeper_health_check_delay
+
+Time in seconds to wait before starting Zookeeper Health Checks.
+
+Default:  5
+
+***
+
+# confluent.kafka_connect_replicator
+
+Below are the supported variables for the role confluent.kafka_connect_replicator
+
+***
+
+### kafka_connect_replicator_custom_log4j
+
+Boolean to reconfigure Kafka Connect Replicator's logging with the RollingFileAppender and log cleanup functionality.
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_connect_replicator_log4j_root_logger
+
+Root logger within Kafka Connect Replicator's log4j config. Only honored if kafka_connect_replicator_custom_log4j: true
+
+Default:  "INFO, replicatorAppender, stdout"
+
+***
+
+### kafka_connect_replicator_custom_java_args
+
+Custom Java Args to add to the Kafka Connect Replicator Process
+
+Default:  ""
+
+***
+
+### kafka_connect_replicator_service_overrides
+
+Overrides to the Service Section of Kafka Connect Replicator Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_replicator_service_environment_overrides
+
+Environment Variables to be added to the Kafka Connect Replicator Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_replicator_service_unit_overrides
+
+Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_connect_replicator_health_check_delay
+
+Time in seconds to wait before starting Kafka Connect Replicator Health Checks.
+
+Default:  30
+
+***
+
+# confluent.ssl
+
+Below are the supported variables for the role confluent.ssl
+
+***
+
+### ssl_key_algorithm
+
+Key Algorithm used by keytool -genkeypair command when creating Keystores. Only used with self-signed certs
+
+Default:  RSA
+
+***
+
+### ssl_key_size
+
+Key Size used by keytool -genkeypair command when creating Keystores. Only used with self-signed certs
+
+Default:  2048
+
+***
+

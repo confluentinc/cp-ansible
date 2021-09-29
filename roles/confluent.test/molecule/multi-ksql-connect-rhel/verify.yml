@@ -1,0 +1,165 @@
+---
+- name: Verify - kafka_connect1
+  hosts: kafka-connect1
+  gather_facts: false
+  tasks:
+    - name: Check line properties file
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: group.id
+        expected_value: connect-syslog
+
+    - name: Get Connectors on connect cluster1
+      uri:
+        url: "http://kafka-connect1:8083/connectors"
+        status_code: 200
+        validate_certs: false
+      register: connectors
+
+    - name: Assert Connector Created
+      assert:
+        that:
+          - connectors.json[0] == "sample-connector-1"
+        fail_msg: "Connector not created"
+        quiet: true
+
+- name: Verify - kafka_connect2
+  hosts: kafka-connect2
+  gather_facts: false
+  tasks:
+    - name: Check line properties file
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: group.id
+        expected_value: connect-elastic
+
+    - name: Get Connectors on connect cluster2
+      uri:
+        url: "http://kafka-connect2:8083/connectors"
+        status_code: 200
+        validate_certs: false
+      register: connectors
+
+    - name: Assert Connector Created
+      assert:
+        that:
+          - connectors.json[0] == "sample-connector-2"
+        fail_msg: "Connector not created"
+        quiet: true
+
+- name: Verify - kafka_connect3
+  hosts: kafka-connect3
+  gather_facts: false
+  tasks:
+    - name: Check line properties file
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: group.id
+        expected_value: connect-ssl
+
+    - name: Get Connectors on connect cluster2
+      uri:
+        url: "https://kafka-connect3:8083/connectors"
+        status_code: 200
+        validate_certs: false
+      register: connectors
+
+    - name: Assert No Connectors Created
+      assert:
+        that:
+          - connectors.json|length == 0
+        fail_msg: "Connector should not be created"
+        quiet: true
+
+- name: Verify - ksql
+  hosts: ksql1
+  gather_facts: false
+  tasks:
+    - name: Check line properties file
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/ksqldb/ksql-server.properties
+        property: ksql.service.id
+        expected_value: ksql1_
+
+- name: Verify - ksql
+  hosts: ksql2
+  gather_facts: false
+  tasks:
+    - name: Check line properties file
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/ksqldb/ksql-server.properties
+        property: ksql.service.id
+        expected_value: ksql2_
+
+- name: Verify - control_center
+  hosts: control_center
+  gather_facts: false
+  tasks:
+    - name: Check line multi ksql line
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.ksql.ks1.ssl.truststore.location
+        expected_value: /var/ssl/private/control_center.truststore.jks
+
+    - name: Check line ksql cluster2
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.ksql.ks2.url
+        expected_value: http://ksql2:8088,http://ksql3:8088
+
+    - name: Check line connect cluster2
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.connect.connect-elastic.cluster
+        expected_value: http://kafka-connect2:8083
+
+    - name: Check line connect cluster3
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.connect.connect-ssl.cluster
+        expected_value: https://kafka-connect3:8083
+
+    - name: Check advertised url default
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.ksql.ks1.advertised.url
+        expected_value: https://ksql1:8088
+
+    - name: Check advertised url
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.ksql.ks2.advertised.url
+        expected_value: http://ksql2.confluent:8088,http://ksql3.confluent:8088

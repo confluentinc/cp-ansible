@@ -1,0 +1,111 @@
+---
+### RBAC MTLS - Custom Certificates and Kerberos example
+##
+## The following is an example inventory file of the configuration required for setting up Confluent Platform with:
+# RBAC enabled, mTLS enabled, and Kerberos authentication on the Interbroker and external client listeners.
+
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: ec2-user
+    ansible_become: true
+    ansible_ssh_private_key_file: /home/ec2-user/guest.pem
+
+    ## TLS Configuration - Custom Certificates
+    ssl_enabled: true
+    ssl_custom_certs: true
+    ssl_ca_cert_filepath: "/home/ec2-user/repos/tools/generated_ssl_files/confluent-root-certificate.crt"
+    # If these three vars can't follow a pattern, or the password is different per host, move them under each host
+    ssl_signed_cert_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/{{inventory_hostname}}-server.crt"
+    ssl_key_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/{{inventory_hostname}}-server-private-key.key"
+    ssl_key_password: password
+
+    ## Kerberos Configuration
+    sasl_protocol: kerberos
+    kerberos:
+      realm: confluent.example.com
+      kdc_hostname: ip-10-0-0-10.eu-west-2.compute.internal
+      admin_hostname: ip-10-0-0-10.eu-west-2.compute.internal
+
+    ## RBAC Configuration
+    rbac_enabled: true
+
+    create_mds_certs: false
+    token_services_public_pem_file: /home/ec2-user/keys/public.pem
+    token_services_private_pem_file: /home/ec2-user/keys/tokenKeypair.pem
+
+    mds_super_user: mds
+    mds_super_user_password: password
+    kafka_broker_ldap_user: kafka_broker
+    kafka_broker_ldap_password: password
+    schema_registry_ldap_user: schema_registry
+    schema_registry_ldap_password: password
+    kafka_connect_ldap_user: connect_worker
+    kafka_connect_ldap_password: password
+    ksql_ldap_user: ksql
+    ksql_ldap_password: password
+    kafka_rest_ldap_user: rest_proxy
+    kafka_rest_ldap_password: password
+    control_center_ldap_user: control_center
+    control_center_ldap_password: password
+
+    kafka_broker_custom_listeners:
+      client:
+        name: CLIENT
+        port: 9093
+
+zookeeper:
+  vars:
+    zookeeper_kerberos_keytab_path: "/tmp/keytabs/zookeeper-{{inventory_hostname}}.keytab"
+    zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}@confluent.example.com"
+  hosts:
+    ip-10-0-0-250.eu-west-2.compute.internal:
+    ip-10-0-0-239.eu-west-2.compute.internal:
+    ip-10-0-0-19.eu-west-2.compute.internal:
+
+kafka_broker:
+  vars:
+    kafka_broker_kerberos_keytab_path: "/tmp/keytabs/kafka-{{inventory_hostname}}.keytab"
+    kafka_broker_kerberos_principal: "kafka/{{inventory_hostname}}@confluent.example.com"
+
+    # LDAP Configuration
+    kafka_broker_custom_properties:
+      ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+      ldap.com.sun.jndi.ldap.read.timeout: 3000
+      ldap.java.naming.provider.url: ldaps://ldap1:636
+      ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
+      ldap.java.naming.security.credentials: password
+      ldap.java.naming.security.authentication: simple
+      ldap.user.search.base: OU=rbac,DC=example,DC=com
+      ldap.group.search.base: OU=rbac,DC=example,DC=com
+      ldap.user.name.attribute: uid
+      ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+      ldap.group.name.attribute: cn
+      ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+      ldap.user.object.class: account
+
+  hosts:
+    ip-10-0-0-38.eu-west-2.compute.internal:
+    ip-10-0-0-160.eu-west-2.compute.internal:
+    ip-10-0-0-136.eu-west-2.compute.internal:
+
+schema_registry:
+  hosts:
+    ip-10-0-0-235.eu-west-2.compute.internal:
+
+kafka_connect:
+  hosts:
+    ip-10-0-0-29.eu-west-2.compute.internal:
+    ip-10-0-0-22.eu-west-2.compute.internal:
+
+kafka_rest:
+  hosts:
+    ip-10-0-0-74.eu-west-2.compute.internal:
+
+ksql:
+  hosts:
+    ip-10-0-0-181.eu-west-2.compute.internal:
+
+control_center:
+  hosts:
+    ip-10-0-0-237.eu-west-2.compute.internal:
