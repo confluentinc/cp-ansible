@@ -1,7 +1,7 @@
 #!/usr/bin/env groovy
 
 def config = jobConfig {
-    nodeLabel = 'docker-debian-jdk8'
+    nodeLabel = 'docker-ubuntu-20-ansible'
     slackChannel = '#ansible-eng'
     timeoutHours = 4
     runMergeCheck = false
