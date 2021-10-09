@@ -48,6 +48,8 @@
 - name: Schema Registry Group
   group:
     name: "{{schema_registry_group}}"
+  tags:
+    - privileged
 
 - name: Check if Schema Registry User Exists
   # Create user task must be skipped for non-linux users
@@ -63,6 +65,8 @@
     system: true
     group: "{{schema_registry_group}}"
   when: (getent_passwd|default({}))[schema_registry_user] is not defined
+  tags:
+    - privileged
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -74,6 +78,8 @@
     mode: 0644
     force: true
   when: installation_method == "archive"
+  tags:
+    - systemd
 
 - include_role:
     name: confluent.ssl
@@ -118,6 +124,8 @@
     user: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
   when: schema_registry_copy_files | length > 0
+  tags:
+    - configuration
 
 - name: Configure RBAC
   include_tasks: rbac.yml
@@ -130,6 +138,8 @@
     mode: 0750
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
+  tags:
+    - filesystem
 
 - name: Create Schema Registry Config with Secrets Protection
   include_role:
@@ -155,6 +165,8 @@
     group: "{{schema_registry_group}}"
   notify: restart schema-registry
   when: not schema_registry_secrets_protection_enabled|bool
+  tags:
+    - configuration
 
 - name: Create Logs Directory
   file:
@@ -163,6 +175,8 @@
     group: "{{schema_registry_group}}"
     owner: "{{schema_registry_user}}"
     mode: 0770
+  tags:
+    - filesystem
 
 - name: Update log4j Config for Log Cleanup
   include_role:
@@ -182,6 +196,8 @@
     group: "{{schema_registry_group}}"
     owner: "{{schema_registry_user}}"
     mode: 0640
+  tags:
+    - configuration
 
 - name: Create Schema Registry Jolokia Config
   template:
@@ -192,6 +208,8 @@
     group: "{{schema_registry_group}}"
   when: schema_registry_jolokia_enabled|bool
   notify: restart schema-registry
+  tags:
+    - configuration
 
 - name: Deploy JMX Exporter Config File
   copy:
@@ -201,6 +219,8 @@
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
   when: schema_registry_jmxexporter_enabled|bool
+  tags:
+    - configuration
 
 - name: Create Basic Auth Jaas File
   template:
@@ -229,6 +249,8 @@
     group: "{{schema_registry_group}}"
     state: directory
     mode: 0640
+  tags:
+    - systemd
 
 - name: Write Service Overrides
   template:
@@ -238,6 +260,8 @@
     owner: root
     group: root
   notify: restart schema-registry
+  tags:
+    - systemd
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -251,6 +275,8 @@
     name: "{{schema_registry_service_name}}"
     enabled: true
     state: started
+  tags:
+    - systemd
 
 - name: Health Check
   include_tasks: health_check.yml

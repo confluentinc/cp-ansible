@@ -47,6 +47,8 @@
 - name: Create Ksql Group
   group:
     name: "{{ksql_group}}"
+  tags:
+    - privileged
 
 - name: Check if Ksql User Exists
   # Create user task must be skipped for non-linux users
@@ -62,6 +64,8 @@
     system: true
     group: "{{ksql_group}}"
   when: (getent_passwd|default({}))[ksql_user] is not defined
+  tags:
+    - privileged
 
 - name: Set Ksql streams dir permissions
   file:
@@ -70,6 +74,8 @@
     group: "{{ksql_group}}"
     state: directory
     mode: 0750
+  tags:
+    - filesystem
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -81,6 +87,8 @@
     mode: 0644
     force: true
   when: installation_method == "archive"
+  tags:
+    - systemd
 
 - include_role:
     name: confluent.ssl
@@ -135,6 +143,8 @@
     user: "{{ksql_user}}"
     group: "{{ksql_group}}"
   when: ksql_copy_files | length > 0
+  tags:
+    - configuration
 
 - name: Configure RBAC
   include_tasks: rbac.yml
@@ -147,6 +157,8 @@
     mode: 0750
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
+  tags:
+    - filesystem
 
 - name: Create Ksql Config with Secrets Protection
   include_role:
@@ -172,6 +184,8 @@
     group: "{{ksql_group}}"
   notify: restart ksql
   when: not ksql_secrets_protection_enabled|bool
+  tags:
+    - configuration
 
 - name: Create Logs Directory
   file:
@@ -180,6 +194,8 @@
     group: "{{ksql_group}}"
     owner: "{{ksql_user}}"
     mode: 0770
+  tags:
+    - filesystem
 
 - name: Create log4j Directory
   file:
@@ -188,6 +204,8 @@
     group: "{{ksql_group}}"
     state: directory
     mode: 0750
+  tags:
+    - filesystem
 
 - name: Create Ksql log4j Config
   template:
@@ -198,6 +216,8 @@
     group: "{{ksql_group}}"
   when: ksql_custom_log4j|bool
   notify: restart ksql
+  tags:
+    - configuration
 
 - name: Create Ksql Jolokia Config
   template:
@@ -208,6 +228,8 @@
     group: "{{ksql_group}}"
   when: ksql_jolokia_enabled|bool
   notify: restart ksql
+  tags:
+    - configuration
 
 - name: Create RocksDB Directory
   file:
@@ -217,6 +239,8 @@
     mode: 0750
     state: directory
   when: ksql_rocksdb_path != ""
+  tags:
+    - filesystem
 
 - name: Set Permission to RocksDB Files
   file:
@@ -225,6 +249,8 @@
     owner: "{{ksql_user}}"
     recurse: true
   when: ksql_rocksdb_path != ""
+  tags:
+    - filesystem
 
 - name: Deploy JMX Exporter Config File
   copy:
@@ -234,6 +260,8 @@
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
   when: ksql_jmxexporter_enabled|bool
+  tags:
+    - configuration
 
 - name: Create Basic Auth Jaas File
   template:
@@ -262,6 +290,8 @@
     group: "{{ksql_group}}"
     state: directory
     mode: 0640
+  tags:
+    - systemd
 
 - name: Write Service Overrides
   template:
@@ -271,6 +301,8 @@
     owner: root
     group: root
   notify: restart ksql
+  tags:
+    - systemd
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -284,6 +316,8 @@
     name: "{{ksql_service_name}}"
     enabled: true
     state: started
+  tags:
+    - systemd
 
 - name: Health Check
   include_tasks: health_check.yml
