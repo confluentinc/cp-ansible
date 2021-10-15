@@ -99,7 +99,6 @@ class FilterModule(object):
                     properties_tmp[p] = str(properties_dict[prop].get('properties')[p])
                 final_dict.update(properties_tmp)
                 properties_tmp = {}
-        print(final_dict)
         return final_dict
 
     def split_to_dict(self, string):
