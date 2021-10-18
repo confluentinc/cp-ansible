@@ -1484,6 +1484,20 @@ Default:  ""
 
 ***
 
+### kafka_connect_producer_kafka_listener_name
+Allows you to select a custom kafka listener for Kafka Connect producers
+
+Default: internal
+
+***
+
+### kafka_connect_consumer_kafka_listener_name
+Allows you to select a custom kafka listener for Kafka Connect consumers
+
+Default: internal
+
+***
+
 ### ksql_user
 
 Set this variable to customize the Linux User that the ksqlDB Service runs with. Default user is cp-ksql.
