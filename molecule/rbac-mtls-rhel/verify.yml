@@ -139,14 +139,15 @@
         property: public.key.path
         expected_value: /var/ssl/private/public.pem
 
-    # Below tests are for connect secret registry
     - name: Get Connect Cluster Details
       uri:
         url: https://localhost:8083
         status_code: 200
         validate_certs: false
-        url_username: kafka-connect1
+        url_username: mds
         url_password: password
+        client_cert: /var/ssl/private/kafka_connect.crt
+        client_key: /var/ssl/private/kafka_connect.key
         force_basic_auth: true
       register: connect_cluster_query
 
@@ -168,6 +169,7 @@
     - name: Create secret
       shell: |
         curl -u mds:password -H 'Content-Type: application/json' \
+          --cacert /var/ssl/private/ca.crt --key /var/ssl/private/kafka_connect.key --cert /var/ssl/private/kafka_connect.crt \
           -d '{"secret": "t1"}' -k https://localhost:8083/secret/paths/conn1/keys/topic/versions
 
     - name: Create test sink file
@@ -179,7 +181,8 @@
       shell: |
         curl -k -X PUT https://localhost:8083/connectors/conn1/config \
           -H "Content-Type: application/json" -u mds:password \
-          -d '{"connector.class": "org.apache.kafka.connect.file.FileStreamSinkConnector",
+          --cacert /var/ssl/private/ca.crt --key /var/ssl/private/kafka_connect.key --cert /var/ssl/private/kafka_connect.crt \
+          -d '{"connector.class": "org.apache.kafka.connect.tools.VerifiableSinkConnector",
           "tasks.max": "1",
           "topics": "${secret:conn1:topic}",
           "file": "/tmp/file-sink-test.txt",
@@ -197,6 +200,8 @@
         validate_certs: false
         url_username: mds
         url_password: password
+        client_cert: /var/ssl/private/kafka_connect.crt
+        client_key: /var/ssl/private/kafka_connect.key
         force_basic_auth: true
       register: result
       until: result.status == 200
@@ -210,6 +215,8 @@
         validate_certs: false
         url_username: mds
         url_password: password
+        client_cert: /var/ssl/private/kafka_connect.crt
+        client_key: /var/ssl/private/kafka_connect.key
         force_basic_auth: true
       register: connector_status_response
       until: connector_status_response.json.connector.state == 'RUNNING'
@@ -223,6 +230,8 @@
         validate_certs: false
         url_username: mds
         url_password: password
+        client_cert: /var/ssl/private/kafka_connect.crt
+        client_key: /var/ssl/private/kafka_connect.key
         force_basic_auth: true
       register: connector_status_response
       until: connector_status_response.json.tasks[0].state == 'RUNNING'
