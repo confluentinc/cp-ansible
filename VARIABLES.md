@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  6.2.0
+Default:  6.2.1
 
 ***
 
@@ -808,7 +808,7 @@ Default:  8080
 
 Path on Ansible Controller for Kafka Broker jmx config file. Only necessary to set for custom config.
 
-Default:  kafka.yml
+Default:  kafka.yml.j2
 
 ***
 
@@ -2105,6 +2105,30 @@ Default:  "{{secrets_protection_enabled}}"
 Boolean to enable secrets protection in Kafka broker.
 
 Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### kafka_broker_client_secrets_protection_enabled
+
+Boolean to enable secrets protection on kafka broker client configuration.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### kafka_broker_client_secrets_protection_encrypt_passwords
+
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Kafka.
+
+Default:  "{{secrets_protection_encrypt_passwords}}"
+
+***
+
+### kafka_broker_client_secrets_protection_encrypt_properties
+
+List of Kafka client properties to encrypt. Can be used in addition to kafka_broker_client_secrets_protection_encrypt_passwords.
+
+Default:  []
 
 ***
 
@@ -4115,6 +4139,14 @@ Default:
 Time in seconds to wait before starting Kafka Health Checks.
 
 Default:  20
+
+***
+
+### kafka_broker_jmxexporter_startup_delay
+
+Time in seconds to wait before JMX exporter starts serving metrics. Any requests within the delay period will result in an empty metrics set.
+
+Default:  60
 
 ***
 
