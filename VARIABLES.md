@@ -52,6 +52,14 @@ Default:  /opt/jolokia/jolokia.jar
 
 ***
 
+### jolokia_jar_url_force
+
+Boolean to force update of Jolokia Agent Jar (must be set to true if jolokia_jar_path already exists)
+
+Default:  false
+
+***
+
 ### jolokia_auth_mode
 
 Authentication Mode for Jolokia Agent. Possible values: none, basic. If selecting basic, you must set jolokia_user and jolokia_password
@@ -97,6 +105,14 @@ Default:  false
 Full path to download the Prometheus Exporter Agent Jar
 
 Default:  /opt/prometheus/jmx_prometheus_javaagent.jar
+
+***
+
+### jmxexporter_jar_url_force
+
+Boolean to force update of Prometheus Exporter Agent Jar (must be set to true if jmxexporter_jar_path already exists)
+
+Default:  false
 
 ***
 
