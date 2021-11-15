@@ -47,6 +47,8 @@ def job = {
 
     // ansible_fqdn within certs does not match the FQDN that zookeeper verifies
     override_config['zookeeper_custom_java_args'] = '-Dzookeeper.ssl.hostnameVerification=false -Dzookeeper.ssl.quorum.hostnameVerification=false'
+    // CI/CD Nightly passes URLs that return 400s when directly querying confluent_common_repository_baseurl URL. 
+    override_config['validate_hosts'] = false
 
     def branch_name = targetBranch().toString()
 
