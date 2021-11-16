@@ -52,6 +52,8 @@ def job = {
 
     if(params.CONFLUENT_PACKAGE_BASEURL) {
         override_config['confluent_common_repository_baseurl'] = params.CONFLUENT_PACKAGE_BASEURL
+        // CI/CD Nightly passes URLs that return 400s when directly querying confluent_common_repository_baseurl URL. 
+        override_config['validate_hosts'] = false
     }
 
     if(params.CONFLUENT_PACKAGE_VERSION) {
