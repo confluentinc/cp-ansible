@@ -8,13 +8,13 @@ Below are the supported variables for the role confluent.variables
 
 Version of Confluent Platform to install
 
-Default:  6.1.3
+Default:  6.1.4
 
 ***
 
 ### mask_sensitive_logs
 
-Boolean to mask secrets in playbook output
+Boolean to mask secrets in playbook output, defaults to true
 
 Default:  "{{mask_secrets}}"
 
@@ -776,7 +776,7 @@ Default:  8080
 
 Path on Ansible Controller for Kafka Broker jmx config file. Only necessary to set for custom config.
 
-Default:  kafka.yml
+Default:  kafka.yml.j2
 
 ***
 
@@ -3670,7 +3670,7 @@ Default:  ""
 
 Base URL for Confluent's RPM and Debian Package Repositories
 
-Default:  "https://packages.confluent.io"
+Default:  "https://staging-confluent-packages.s3.us-west-2.amazonaws.com"
 
 ***
 
