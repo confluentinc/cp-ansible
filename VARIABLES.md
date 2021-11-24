@@ -270,9 +270,9 @@ Default:  "/usr/local/bin/confluent"
 
 ### confluent_cli_version
 
-Confluent CLI version to download (e.g. "1.9.0"). By default is the latest version
+Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  latest
+Default:  1.43.0
 
 ***
 
@@ -3670,7 +3670,7 @@ Default:  ""
 
 Base URL for Confluent's RPM and Debian Package Repositories
 
-Default:  "https://staging-confluent-packages.s3.us-west-2.amazonaws.com"
+Default:  "https://staging-packages.confluent.io"
 
 ***
 
