@@ -3874,6 +3874,14 @@ Default:  "https://packages.confluent.io"
 
 ***
 
+### confluent_clients_repository_baseurl
+
+Base URL for Confluent C/C++ Clients RPM and Debian Package Repositories
+
+Default:  "https://packages.confluent.io"
+
+***
+
 ### install_java
 
 Boolean to have cp-ansible install Java on hosts
