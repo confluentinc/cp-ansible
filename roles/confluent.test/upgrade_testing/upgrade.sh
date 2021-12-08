@@ -19,10 +19,6 @@ cd ..
 echo "Checking out $START_BRANCH branch"
 git checkout $START_BRANCH
 
-## Change to molecule directory on pre 7.0 branches
-
-cd roles/confluent.test/
-
 ## Run Molecule Converge on scenario
 echo "Running molecule converge on $SCENARIO_NAME"
 molecule converge -s $SCENARIO_NAME
