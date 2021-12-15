@@ -189,6 +189,9 @@ provisioner:
         control_center_ldap_user: control_center
         control_center_ldap_password: password
 
+        kafka_connect_replicator_ldap_user: replicator
+        kafka_connect_replicator_ldap_password: password
+
         rbac_component_additional_system_admins:
           - user1
 
@@ -198,8 +201,11 @@ provisioner:
           kdc_hostname: mds-kerberos1
           admin_hostname: mds-kerberos1
 
-
       mds:
+        ssl_enabled: true
+        ssl_custom_certs: true
+        sasl_protocol: plain
+
         _sasl_plain_users:
           admin:
             principal: admin
@@ -210,9 +216,9 @@ provisioner:
           kafka_connect_replicator:
             principal: kafka_connect_replicator
             password: kafka_connect_replicator-secret
-        sasl_protocol: plain
-        ssl_enabled: true
-        ssl_custom_certs: true
+        
+        kafka_broker_cluster_name: mds
+
         # Paths relative to all.yml
         ssl_ca_cert_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
         ssl_signed_cert_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
@@ -237,22 +243,29 @@ provisioner:
           ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
           ldap.user.object.class: account
 
-
-
       cluster2:
         ssl_enabled: true
         ssl_custom_certs: true
-        sasl_protocol: plain
+        sasl_protocol: kerberos
+
+        kafka_broker_cluster_name: destination_cluster
+
+        kafka_broker_custom_listeners:
+          client_listener:
+            ssl_enabled: false
+            ssl_mutual_auth_enabled: false
+            sasl_protocol: kerberos
+            name: CLIENT
+            port: 9093
 
         external_mds_enabled: true
-
         mds_broker_bootstrap_servers: mds-kafka-broker1:9093,mds-kafka-broker2:9093
         mds_bootstrap_server_urls: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
 
         mds_broker_listener:
           ssl_enabled: true
           ssl_mutual_auth_enabled: true
-          sasl_protocol: none
+          sasl_protocol: plain
 
         # Paths relative to all.yml
         ssl_ca_cert_filepath: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
@@ -272,9 +285,10 @@ provisioner:
 
         kafka_connect_replicator_listener:
           ssl_enabled: true
-          ssl_mutual_auth_enabled: false
-          sasl_protocol: kerberos
+          ssl_mutual_auth_enabled: true
+          sasl_protocol: oauth
 
+        kafka_connect_replicator_cluster_name: replicator
         kafka_connect_replicator_white_list: test-replicator-source
         kafka_connect_replicator_bootstrap_servers: kafka-broker1:9092
         kafka_connect_replicator_kerberos_principal: "replicator/kafka-connect-replicator1.confluent@{{kerberos.realm | upper}}"
@@ -282,48 +296,61 @@ provisioner:
         kafka_connect_replicator_ssl_ca_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
         kafka_connect_replicator_ssl_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
         kafka_connect_replicator_ssl_key_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        kafka_connect_replicator_truststore_storepass: confluenttruststorepass
+        kafka_connect_replicator_keystore_storepass: confluentkeystorestorepass
         kafka_connect_replicator_ssl_key_password: keypass
 
+        kakfa_connect_replicator_rbac_enabled: true
+        kafka_connect_replicator_erp_tls_enabled: false
+        kafka_connect_replicator_erp_host: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
+        kafka_connect_replicator_erp_admin_user: mds
+        kafka_connect_replicator_erp_admin_password: password
+        kafka_connect_replicator_kafka_cluster_name: destination_cluster
+        kafka_connect_replicator_erp_pem_file: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/public.pem"
+
         kafka_connect_replicator_consumer_listener:
-          ssl_enabled: true
+          ssl_enabled: false
           ssl_mutual_auth_enabled: false
-          sasl_protocol: plain
+          sasl_protocol: oauth
 
         kafka_connect_replicator_consumer_bootstrap_servers: mds-kafka-broker1:9092
-        kafka_connect_replicator_consumer_ssl_ca_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
-        kafka_connect_replicator_consumer_ssl_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
-        kafka_connect_replicator_consumer_ssl_key_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
-        kafka_connect_replicator_consumer_ssl_key_password: keypass
         kafka_connect_replicator_consumer_custom_properties:
           client.id: consumer-test
 
+        kakfa_connect_replicator_consumer_rbac_enabled: true
+        kafka_connect_replicator_consumer_erp_tls_enabled: false
+        kafka_connect_replicator_consumer_erp_host: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
+        kafka_connect_replicator_consumer_erp_admin_user: mds
+        kafka_connect_replicator_consumer_erp_admin_password: password
+        kafka_connect_replicator_consumer_kafka_cluster_name: mds
+        kafka_connect_replicator_consumer_erp_pem_file: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/public.pem"
+        
+
         kafka_connect_replicator_producer_listener:
           ssl_enabled: true
-          ssl_mutual_auth_enabled: false
-          sasl_protocol: kerberos
+          ssl_mutual_auth_enabled: true
+          sasl_protocol: oauth
 
         kafka_connect_replicator_producer_bootstrap_servers: kafka-broker1:9092
-        kafka_connect_replicator_producer_kerberos_principal: "replicator/kafka-connect-replicator1.confluent@{{kerberos.realm | upper}}"
-        kafka_connect_replicator_producer_kerberos_keytab_path: "roles/confluent.test/molecule/{{scenario_name}}/keytabs/kafka-connect-replicator1.keytab"
-        kafka_connect_replicator_producer_ssl_ca_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
-        kafka_connect_replicator_producer_ssl_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
-        kafka_connect_replicator_producer_ssl_key_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
-        kafka_connect_replicator_producer_ssl_key_password: keypass
+        # kafka_connect_replicator_producer_ssl_ca_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
+        # kafka_connect_replicator_producer_ssl_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        # kafka_connect_replicator_producer_ssl_key_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        # kafka_connect_replicator_producer_ssl_key_password: keypass
         kafka_connect_replicator_producer_custom_properties:
           client.id: producer-test
 
         kafka_connect_replicator_monitoring_interceptor_listener:
           ssl_enabled: true
-          ssl_mutual_auth_enabled: false
-          sasl_protocol: kerberos
+          ssl_mutual_auth_enabled: true
+          sasl_protocol: oauth
 
         kafka_connect_replicator_monitoring_interceptor_bootstrap_servers: kafka-broker1:9092
         kafka_connect_replicator_monitoring_interceptor_kerberos_principal: "replicator/kafka-connect-replicator1.confluent@{{kerberos.realm | upper}}"
         kafka_connect_replicator_monitoring_interceptor_kerberos_keytab_path: "roles/confluent.test/molecule/{{scenario_name}}/keytabs/kafka-connect-replicator1.keytab"
-        kafka_connect_replicator_monitoring_interceptor_ssl_ca_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
-        kafka_connect_replicator_monitoring_interceptor_ssl_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
-        kafka_connect_replicator_monitoring_interceptor_ssl_key_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
-        kafka_connect_replicator_monitoring_interceptor_ssl_key_password: keypass
+        # kafka_connect_replicator_monitoring_interceptor_ssl_ca_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/ca.crt"
+        # kafka_connect_replicator_monitoring_interceptor_ssl_cert_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        # kafka_connect_replicator_monitoring_interceptor_ssl_key_path: "roles/confluent.test/molecule/{{scenario_name}}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        # kafka_connect_replicator_monitoring_interceptor_ssl_key_password: keypass
 
       ldap_server:
         ldaps_enabled: true
@@ -372,6 +399,10 @@ provisioner:
             password: user1p
             uid: 9992
             guid: 92
+          - username: "{{kafka_connect_replicator_ldap_user}}"
+            password: "{{kafka_connect_replicator_ldap_password}}"
+            uid: 9991
+            guid: 91
 
       kerberos_server:
         realm_name: "{{ kerberos.realm | upper }}"
