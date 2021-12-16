@@ -6,7 +6,7 @@ Below are the supported variables for the role confluent.variables
 
 ### mask_sensitive_logs
 
-Boolean to mask secrets in playbook output
+Boolean to mask secrets in playbook output, defaults to true
 
 Default:  "{{mask_secrets}}"
 
@@ -262,9 +262,9 @@ Default:  "/usr/local/bin/confluent"
 
 ### confluent_cli_version
 
-Confluent CLI version to download (e.g. "1.9.0"). By default is the latest version
+Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  latest
+Default:  1.43.0
 
 ***
 
