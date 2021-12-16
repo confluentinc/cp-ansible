@@ -14,7 +14,7 @@ Default:  6.1.3
 
 ### mask_sensitive_logs
 
-Boolean to mask secrets in playbook output
+Boolean to mask secrets in playbook output, defaults to true
 
 Default:  "{{mask_secrets}}"
 
@@ -270,9 +270,9 @@ Default:  "/usr/local/bin/confluent"
 
 ### confluent_cli_version
 
-Confluent CLI version to download (e.g. "1.9.0"). By default is the latest version
+Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  latest
+Default:  1.43.0
 
 ***
 
@@ -776,7 +776,7 @@ Default:  8080
 
 Path on Ansible Controller for Kafka Broker jmx config file. Only necessary to set for custom config.
 
-Default:  kafka.yml
+Default:  kafka.yml.j2
 
 ***
 
@@ -2854,7 +2854,7 @@ Default:  ""
 
 ### kafka_connect_replicator_keystore_storepass
 
-The password for the Kafka Connect Replicator TLS keystore.  Defaults to confluentkeystorestorepass.
+The password for the Kafka Connect Replicator TLS keystore.
 
 Default:  ""
 
@@ -3046,7 +3046,7 @@ Default:  "{{ kafka_connect_replicator_truststore_storepass }}"
 
 ### kafka_connect_replicator_consumer_keystore_storepass
 
-The password for the Kafka Connect Replicator Consumer TLS keystore.
+The password for the Kafka Connect Replicator Consumer TLS keystore. Defaults to match kafka_connect_replicator_keystore_storepass.
 
 Default:  "{{  kafka_connect_replicator_keystore_storepass }}"
 
