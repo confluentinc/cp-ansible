@@ -776,7 +776,7 @@ Default:  8080
 
 Path on Ansible Controller for Kafka Broker jmx config file. Only necessary to set for custom config.
 
-Default:  kafka.yml
+Default:  kafka.yml.j2
 
 ***
 
@@ -2854,7 +2854,7 @@ Default:  ""
 
 ### kafka_connect_replicator_keystore_storepass
 
-The password for the Kafka Connect Replicator TLS keystore.  Defaults to confluentkeystorestorepass.
+The password for the Kafka Connect Replicator TLS keystore.
 
 Default:  ""
 
@@ -3046,7 +3046,7 @@ Default:  "{{ kafka_connect_replicator_truststore_storepass }}"
 
 ### kafka_connect_replicator_consumer_keystore_storepass
 
-The password for the Kafka Connect Replicator Consumer TLS keystore.
+The password for the Kafka Connect Replicator Consumer TLS keystore. Defaults to match kafka_connect_replicator_keystore_storepass.
 
 Default:  "{{  kafka_connect_replicator_keystore_storepass }}"
 
