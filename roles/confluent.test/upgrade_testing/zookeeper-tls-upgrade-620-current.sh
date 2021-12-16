@@ -13,7 +13,7 @@ export CURRENT_VERSION=true
 
 #Add tags to select specific component installation.
 export TAGS=true
-export TAG_NAME="--tags zookeeper"
+export TAG_NAME="-- --tags zookeeper"
 
 ## If upgrading from 6.2.0 or later, this should be false as upgrade playbooks no longer exist.  Upgrades are handled via reconfiguration.
 export UPGRADE_PLAYBOOK=false
