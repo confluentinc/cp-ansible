@@ -116,3 +116,4 @@ molecule destroy -s ${params.SCENARIO_NAME} || true
 }
 
 runJob config, job, post
+
