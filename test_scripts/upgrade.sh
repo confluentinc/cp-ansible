@@ -10,6 +10,13 @@ then
   export END_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 fi
 
+if [[ $START_BRANCH == 7* ]]
+then
+  export MOLECULE_DIR=platform
+else
+  export MOLECULE_DIR=confluent.test
+fi
+
 export KSQL_INVALID_VERSION=5.4
 
 ## Change to project root
@@ -34,6 +41,9 @@ cd ../..
 echo "Checkout $END_BRANCH branch"
 git checkout $END_BRANCH
 
+## With 7.0.x onwards, cp-ansible is packaged as an ansible collection and hence we need to specify collection path to enable running playbooks
+## https://docs.ansible.com/ansible/latest/reference_appendices/config.html#collections-paths
+export ANSIBLE_COLLECTIONS_PATH=../../
 
 ## With the 6.2.x release, we have removed upgrade playbooks and now handle everything via reconfiguration.  We've added an if statement so that
 ## this single script can handle all scenarios.
@@ -43,36 +53,39 @@ then
 
 ## Upgrade Zookeeper via reconfiguration
 echo "Upgrade Zookeeper"
-ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags zookeeper
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/$MOLECULE_DIR/$SCENARIO_NAME/inventory confluent.platform.all --tags zookeeper
 
 ## Upgrade Brokers via reconfiguration
 echo "Upgrade Kafka Brokers"
-ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags kafka_broker
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/$MOLECULE_DIR/$SCENARIO_NAME/inventory confluent.platform.all --tags kafka_broker
 
 ## Upgrade Schema Registry via reconfiguration
 echo "Upgrade Schema Registry"
-ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags schema_registry
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/$MOLECULE_DIR/$SCENARIO_NAME/inventory confluent.platform.all --tags schema_registry
 
 ## Upgrade Kafka Connect via reconfiguration
 echo "Upgrade Kafka Connect"
-ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags kafka_connect
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/$MOLECULE_DIR/$SCENARIO_NAME/inventory confluent.platform.all --tags kafka_connect
 
 ## Upgrade KSQL via reconfiguration
 if (( ${KSQL_INVALID_VERSION%%.*} < ${START_UPGRADE_VERSION%%.*} || ( ${KSQL_INVALID_VERSION%%.*} == ${START_UPGRADE_VERSION%%.*} && ${KSQL_INVALID_VERSION##*.} < ${START_UPGRADE_VERSION##*.} ) )) ; then
 echo "Upgrade KSQLDB"
-ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags ksql
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/$MOLECULE_DIR/$SCENARIO_NAME/inventory confluent.platform.all --tags ksql
 fi
 
 ## Upgrade Kafka Rest
 echo "Upgrade Kafka Rest"
-ansible-playbook --extra-vars "deployment_strategy: rolling" -i /.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags kafka_rest
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i /.cache/molecule/$MOLECULE_DIR/$SCENARIO_NAME/inventory confluent.platform.all --tags kafka_rest
 
 ## Upgrade Control Center via reconfiguration
 echo "Upgrade Control Center"
-ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/platform/$SCENARIO_NAME/inventory all.yml --tags control_center
+ansible-playbook --extra-vars "deployment_strategy: rolling" -i ~/.cache/molecule/$MOLECULE_DIR/$SCENARIO_NAME/inventory confluent.platform.all --tags control_center
 
 ## Upgrade Kafka Broker Log format via reconfiguration
 # echo "Upgrade Kafka Broker Log Format"
+
+## Destroy Infrastructure
+molecule destroy -s $SCENARIO_NAME
 
 else
 
@@ -116,8 +129,9 @@ then
   echo "Configure Kafka Admin API"
   ansible-playbook -i ~/.cache/molecule/confluent.test/$SCENARIO_NAME/inventory upgrade_kafka_broker_rest_configuration.yml
 fi
-fi
 
 ## Destroy Infrastructure
 cd roles/confluent.test
 molecule destroy -s $SCENARIO_NAME
+
+fi
