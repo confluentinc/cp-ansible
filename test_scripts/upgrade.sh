@@ -27,15 +27,20 @@ echo "Checking out $START_BRANCH branch"
 git checkout $START_BRANCH
 
 ## Change to molecule directory on pre 7.0 branches
-
-cd roles/confluent.test/
+if [[ $START_BRANCH != 7* ]]
+then
+  cd roles/confluent.test/
+fi
 
 ## Run Molecule Converge on scenario
 echo "Running molecule converge on $SCENARIO_NAME"
 molecule converge -s $SCENARIO_NAME
 
 ## Change to base of cp-ansible
-cd ../..
+if [[ $START_BRANCH != 7* ]]
+then
+  cd ../..
+fi
 
 ## Checkout ending branch
 echo "Checkout $END_BRANCH branch"
