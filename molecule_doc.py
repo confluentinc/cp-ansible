@@ -9,7 +9,6 @@ And writes to formatted markdown file.
 
 import os
 
-
 # Set path to molecule scenarios
 path = 'roles/confluent.test/molecule/'
 
@@ -19,16 +18,13 @@ scenario_name = []
 # Define a list to hold directory contents
 directory_contents = []
 
-
 def parse_molecule_scenario(scenario_name, docs_file):
       length = len(scenario_name)
       for l in range(length):
         sn = scenario_name[l]
-        docs_file.write("# confluent.test/molecule/" + str(sn))
+        docs_file.write("### confluent.test/molecule/" + str(sn))
         docs_file.write("\n\n")
         docs_file.write("Scenario " + str(sn) + " test's the following:")
-        docs_file.write("\n\n")
-        docs_file.write("***")
         docs_file.write("\n\n")
 
         inventory_file = open("roles/confluent.test/molecule/" + str(sn) + "/molecule.yml", "r")
@@ -37,18 +33,11 @@ def parse_molecule_scenario(scenario_name, docs_file):
         for i in range(len(lines)):
             if lines[i].startswith("### "):
                 description = lines[i][4:]
-                # colon_index = lines[i+1].index(":")
-                # variable = lines[i+1][:colon_index]
-                # default = lines[i+1][colon_index+1:]
-
-                # docs_file.write("### " + variable)
-                # docs_file.write("\n\n")
                 docs_file.write(description)
                 docs_file.write("\n\n")
-                # docs_file.write("Default: " + default)
-                # docs_file.write("\n\n")
-                # docs_file.write("***")
-                # docs_file.write("\n\n")
+                
+        docs_file.write("***")
+        docs_file.write("\n\n")
 
         inventory_file.close
 
@@ -63,10 +52,6 @@ for item in directory_contents:
     full_path = os.path.join(path, item)
     if os.path.isdir(full_path):
             scenario_name.append(item)
-
-
-print (*scenario_name)
-
 
 # Call function to write content to docs file
 
