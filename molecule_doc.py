@@ -1,8 +1,8 @@
 """
 Reads molecule inventory files with the following structure:
-### Description
-## Tested Functionality 1
-## Test Functionality 2
+### Tested Functionality 1
+### Test Functionality 2
+### etc...
 
 And writes to formatted markdown file.
 """
@@ -54,9 +54,7 @@ for item in directory_contents:
             scenario_name.append(item)
 
 # Call function to write content to docs file
-
-parse_molecule_scenario(scenario_name, docs_file)
-    
+parse_molecule_scenario(scenario_name, docs_file)  
 
 # Close docs file once writing is complete.
 docs_file.close
