@@ -12,6 +12,9 @@ import os
 # Set path to molecule scenarios
 path = 'roles/confluent.test/molecule/'
 
+# Define a list to contain tags to search against
+tags = ["###","####"]
+
 # Define a list to hold scenario names
 scenario_name = []
 
@@ -31,7 +34,7 @@ def parse_molecule_scenario(scenario_name, docs_file):
         lines = inventory_file.read().split('\n')
 
         for i in range(len(lines)):
-            if lines[i].startswith("### "):
+            if lines[i].startswith(tuple(tags)):
                 description = lines[i][4:]
                 docs_file.write(description)
                 docs_file.write("\n\n")   
@@ -43,7 +46,7 @@ def parse_molecule_scenario(scenario_name, docs_file):
         verify_lines = verify_file.read().split('\n')
 
         for i in range(len(verify_lines)):
-            if verify_lines[i].startswith("### "):
+            if verify_lines[i].startswith(tuple(tags)):
                 verify_description = verify_lines[i][4:]
                 docs_file.write(verify_description)
                 docs_file.write("\n\n") 

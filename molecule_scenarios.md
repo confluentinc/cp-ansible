@@ -370,6 +370,8 @@ JAVA 11.
 
 Control Center is not included in the Confluent Community Edition.
 
+ TEST TUPLES
+
 #### Scenario archive-community-plaintext-rhel verify test's the following:
 
 Validates that Confluent CLI is installed.
