@@ -24,7 +24,7 @@ def parse_molecule_scenario(scenario_name, docs_file):
         sn = scenario_name[l]
         docs_file.write("### confluent.test/molecule/" + str(sn))
         docs_file.write("\n\n")
-        docs_file.write("Scenario " + str(sn) + " test's the following:")
+        docs_file.write("#### Scenario " + str(sn) + " test's the following:")
         docs_file.write("\n\n")
 
         inventory_file = open("roles/confluent.test/molecule/" + str(sn) + "/molecule.yml", "r")
@@ -34,12 +34,25 @@ def parse_molecule_scenario(scenario_name, docs_file):
             if lines[i].startswith("### "):
                 description = lines[i][4:]
                 docs_file.write(description)
-                docs_file.write("\n\n")
-                
+                docs_file.write("\n\n")   
+        
+        docs_file.write("#### Scenario " + str(sn) + " verify test's the following:")
+        docs_file.write("\n\n")
+
+        verify_file = open("roles/confluent.test/molecule/" + str(sn) + "/verify.yml", "r")
+        verify_lines = verify_file.read().split('\n')
+
+        for i in range(len(verify_lines)):
+            if verify_lines[i].startswith("### "):
+                verify_description = verify_lines[i][4:]
+                docs_file.write(verify_description)
+                docs_file.write("\n\n") 
+
         docs_file.write("***")
         docs_file.write("\n\n")
 
         inventory_file.close
+        verify_file.close
 
 # Open the file to write to.
 docs_file = open("MOLECULE_SCENARIOS.md", "w")
