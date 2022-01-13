@@ -208,7 +208,7 @@ Kafka Rest API Basic Auth.
 
 Validates that each component has a unique auth user.
 
-Validates that Rest Proxy has correct auth property. 
+Validates that Rest Proxy has correct auth property.
 
 ***
 
