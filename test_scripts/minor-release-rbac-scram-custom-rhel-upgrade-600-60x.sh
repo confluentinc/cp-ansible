@@ -12,9 +12,6 @@ export START_UPGRADE_VERSION=6.0
 export END_BRANCH=6.0.4-post
 export CURRENT_VERSION=false
 
-## If upgrading from 6.2.0 or later, this should be false as upgrade playbooks no longer exist.  Upgrades are handled via reconfiguration.
-export UPGRADE_PLAYBOOK=true
-
 ## Set to true if testing 6.0.0 or later.  Will run admin API upgrade.
 export ADMIN_API=true
 
