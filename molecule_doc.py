@@ -30,6 +30,7 @@ def parse_molecule_scenario(scenario_name, docs_file):
         docs_file.write("#### Scenario " + str(sn) + " test's the following:")
         docs_file.write("\n\n")
 
+        # Read Inventory file and check for tags and write them
         inventory_file = open("roles/confluent.test/molecule/" + str(sn) + "/molecule.yml", "r")
         lines = inventory_file.read().split('\n')
 
@@ -42,6 +43,7 @@ def parse_molecule_scenario(scenario_name, docs_file):
         docs_file.write("#### Scenario " + str(sn) + " verify test's the following:")
         docs_file.write("\n\n")
 
+        # Read Verify file and check for tags and write them
         verify_file = open("roles/confluent.test/molecule/" + str(sn) + "/verify.yml", "r")
         verify_lines = verify_file.read().split('\n')
 
@@ -49,7 +51,7 @@ def parse_molecule_scenario(scenario_name, docs_file):
             if verify_lines[i].startswith(tuple(tags)):
                 verify_description = verify_lines[i][4:]
                 docs_file.write(verify_description)
-                docs_file.write("\n\n") 
+                docs_file.write("\n\n")
 
         docs_file.write("***")
         docs_file.write("\n\n")
