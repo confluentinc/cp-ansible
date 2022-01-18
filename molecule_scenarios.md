@@ -52,22 +52,6 @@ Validates that SCRAM is enabled on all components.
 
 ***
 
-### confluent.test/molecule/mtls-java11-debian
-
-#### Scenario mtls-java11-debian test's the following:
-
-Installation of Confluent Platform on Debian9.
-
-MTLS enabled.
-
-Java 11.
-
-#### Scenario mtls-java11-debian verify test's the following:
-
-Validates that Java 11 is in use.
-
-***
-
 ### confluent.test/molecule/kerberos-customcerts-rhel
 
 #### Scenario kerberos-customcerts-rhel test's the following:
@@ -161,6 +145,22 @@ Customer Zookeeper Root.
 Validates authorization mechanism as SASL.
 
 Validates that SCRAM is enabled on the Kafka Broker and Schema Registry.
+
+***
+
+### confluent.test/molecule/mtls-java8-ubuntu
+
+#### Scenario mtls-java8-ubuntu test's the following:
+
+Installation of Confluent Platform on Ubuntu1804.
+
+MTLS enabled.
+
+Java 8.
+
+#### Scenario mtls-java8-ubuntu verify test's the following:
+
+Validates that Java 11 is in use.
 
 ***
 
@@ -280,7 +280,7 @@ MTLS enabled.
 
 #### Scenario mtls-ubuntu verify test's the following:
 
-Validates that Java 11 is in use.
+Validates that protocol is set to SSl across all components.
 
 ***
 
@@ -299,8 +299,6 @@ SASL SCRAM enabled on all components except Zookeeper.
 Validates Zookeeper sasl mechanism.
 
 Validates Kafka Broker and Schema Registry is set to SCRAM.
-
-
 
 ***
 
@@ -344,9 +342,11 @@ Custom log dirs for all components.
 
 #### Scenario archive-plain-ubuntu verify test's the following:
 
-Validates that SASL SSL protocol is set across all components.
+Validates that protocol is set to sasl plain.
 
-Validates that custom log4j configuration is in place.
+Validates that protocol is set to SASL SSL.
+
+Validates log4j config.
 
 ***
 
@@ -448,19 +448,35 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 ***
 
-### confluent.test/molecule/mtls-java11-rhel
+### confluent.test/molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004
 
-#### Scenario mtls-java11-rhel test's the following:
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004 test's the following:
 
-Installation of Confluent Platform on CentOS7.
+Installation of Confluent Platform on Ubuntu2004.
 
-MTLS enabled.
+RBAC Enabled.
 
-Java 11.
+Customer RBAC system admins.
 
-#### Scenario mtls-java11-rhel verify test's the following:
+Kerberos enabled on Cluster1(mds).
 
-Validates that Java 11 is in use.
+MTLS Customer certs enabled on cluster2.
+
+Replicator Configured with Kerberos and MTLS.
+
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004 verify test's the following:
+
+Validates that the Console Consumer can consume data from cluster2, proving that data has been replicated from cluster1 (MDS).
+
+Validates that Replicator is using MTLS with RBAC to Produce data to Cluster2.
+
+Validates that Replicator is using Kerberos with RBAC to Consume from Cluster1 (MDS).
+
+Validates that client ID's are set correctly on Replicator.
+
+Validates that Replicator logging path is valid.
+
+Validates client packages.
 
 ***
 
@@ -479,6 +495,28 @@ Kafka Broker Customer Listener.
 #### Scenario rbac-mtls-rhel8 verify test's the following:
 
 Validates TLS keysizes across all components.
+
+***
+
+### confluent.test/molecule/archive-plain-debian10
+
+#### Scenario archive-plain-debian10 test's the following:
+
+Archive installation of Confluent Platform on Debian 9.
+
+SASL Protocol Plain.
+
+SSL Enabled.
+
+Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
+
+Custom log dirs for all components.
+
+#### Scenario archive-plain-debian10 verify test's the following:
+
+Validates that SASL SSL protocol is set across all components.
+
+Validates that custom log4j configuration is in place.
 
 ***
 
@@ -507,6 +545,38 @@ Validates that two KSQL clusters are running.
 Validates that Control Center can connect to each Kafka Connect Cluster.
 
 Validates that Control Center Can connect to each KSQL cluster.
+
+***
+
+### confluent.test/molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10
+
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10 test's the following:
+
+Installation of Confluent Platform on CentOS7.
+
+RBAC Enabled.
+
+Customer RBAC system admins.
+
+Kerberos enabled on Cluster1(mds).
+
+MTLS Customer certs enabled on cluster2.
+
+Replicator Configured with Kerberos and MTLS.
+
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10 verify test's the following:
+
+Validates that the Console Consumer can consume data from cluster2, proving that data has been replicated from cluster1 (MDS).
+
+Validates that Replicator is using MTLS with RBAC to Produce data to Cluster2.
+
+Validates that Replicator is using Kerberos with RBAC to Consume from Cluster1 (MDS).
+
+Validates that client ID's are set correctly on Replicator.
+
+Validates that Replicator logging path is valid.
+
+Validates client packages.
 
 ***
 
@@ -740,6 +810,30 @@ Validates that TLS is configured properly.
 
 ***
 
+### confluent.test/molecule/archive-plain-ubuntu2004
+
+#### Scenario archive-plain-ubuntu2004 test's the following:
+
+Archive Installation of Confluent Platform on Ubuntu2004.
+
+SASL Plain protocol.
+
+SSL Enabled.
+
+Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
+
+Custom log dirs for all components.
+
+#### Scenario archive-plain-ubuntu2004 verify test's the following:
+
+Validates that protocol is set to sasl plain.
+
+Validates that protocol is set to SASL SSL.
+
+Validates log4j config.
+
+***
+
 ### confluent.test/molecule/zookeeper-tls-rhel
 
 #### Scenario zookeeper-tls-rhel test's the following:
@@ -804,6 +898,22 @@ Validates that back slashes are not lost with secrets protection.
 
 ***
 
+### confluent.test/molecule/mtls-java8-debian
+
+#### Scenario mtls-java8-debian test's the following:
+
+Installation of Confluent Platform on Debian9.
+
+MTLS enabled.
+
+Java 8.
+
+#### Scenario mtls-java8-debian verify test's the following:
+
+Validates that Java 11 is in use.
+
+***
+
 ### confluent.test/molecule/rbac-scram-custom-rhel
 
 #### Scenario rbac-scram-custom-rhel test's the following:
@@ -833,6 +943,22 @@ Validates that Confluent Balancer is enabled.
 Validates total number of clusters for user2.
 
 Validates truststore across all components.
+
+***
+
+### confluent.test/molecule/mtls-java8-rhel
+
+#### Scenario mtls-java8-rhel test's the following:
+
+Installation of Confluent Platform on CentOS7.
+
+MTLS enabled.
+
+Java 8.
+
+#### Scenario mtls-java8-rhel verify test's the following:
+
+Validates that Java 11 is in use.
 
 ***
 
@@ -925,22 +1051,6 @@ Validates that MTLS is enabled.
 Validates mapping rules for ACLs.
 
 Validates ACL users.
-
-***
-
-### confluent.test/molecule/mtls-java11-ubuntu
-
-#### Scenario mtls-java11-ubuntu test's the following:
-
-Installation of Confluent Platform on Ubuntu1804.
-
-MTLS enabled.
-
-Java 11.
-
-#### Scenario mtls-java11-ubuntu verify test's the following:
-
-Validates that Java 11 is in use.
 
 ***
 
