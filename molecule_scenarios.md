@@ -1,4 +1,4 @@
-### confluent.test/molecule/plain-customcerts-rhel
+### molecule/plain-customcerts-rhel
 
 #### Scenario plain-customcerts-rhel test's the following:
 
@@ -16,7 +16,7 @@ Validates that SASL mechanism is set to PLAIN on all components.
 
 ***
 
-### confluent.test/molecule/confluent-kafka-kerberos-customcerts-rhel
+### molecule/confluent-kafka-kerberos-customcerts-rhel
 
 #### Scenario confluent-kafka-kerberos-customcerts-rhel test's the following:
 
@@ -38,7 +38,7 @@ Validates that Confluent Community Packages are used.
 
 ***
 
-### confluent.test/molecule/scram-rhel
+### molecule/scram-rhel
 
 #### Scenario scram-rhel test's the following:
 
@@ -52,7 +52,7 @@ Validates that SCRAM is enabled on all components.
 
 ***
 
-### confluent.test/molecule/kerberos-customcerts-rhel
+### molecule/kerberos-customcerts-rhel
 
 #### Scenario kerberos-customcerts-rhel test's the following:
 
@@ -70,7 +70,7 @@ Validates that SASL SSL Protocol is enabled across all components.
 
 ***
 
-### confluent.test/molecule/rbac-plain-provided-debian
+### molecule/rbac-plain-provided-debian
 
 #### Scenario rbac-plain-provided-debian test's the following:
 
@@ -98,7 +98,7 @@ Validates truststore is present across components.
 
 ***
 
-### confluent.test/molecule/rbac-mds-mtls-custom-rhel
+### molecule/rbac-mds-mtls-custom-rhel
 
 #### Scenario rbac-mds-mtls-custom-rhel test's the following:
 
@@ -128,7 +128,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 ***
 
-### confluent.test/molecule/zookeeper-digest-rhel
+### molecule/zookeeper-digest-rhel
 
 #### Scenario zookeeper-digest-rhel test's the following:
 
@@ -148,7 +148,7 @@ Validates that SCRAM is enabled on the Kafka Broker and Schema Registry.
 
 ***
 
-### confluent.test/molecule/mtls-java8-ubuntu
+### molecule/mtls-java8-ubuntu
 
 #### Scenario mtls-java8-ubuntu test's the following:
 
@@ -164,7 +164,7 @@ Validates that Java 11 is in use.
 
 ***
 
-### confluent.test/molecule/rbac-mds-mtls-custom-kerberos-rhel
+### molecule/rbac-mds-mtls-custom-kerberos-rhel
 
 #### Scenario rbac-mds-mtls-custom-kerberos-rhel test's the following:
 
@@ -196,7 +196,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 ***
 
-### confluent.test/molecule/plaintext-basic-rhel
+### molecule/plaintext-basic-rhel
 
 #### Scenario plaintext-basic-rhel test's the following:
 
@@ -212,7 +212,7 @@ Validates that Rest Proxy has correct auth property.
 
 ***
 
-### confluent.test/molecule/rbac-mds-kerberos-mtls-custom-rhel
+### molecule/rbac-mds-kerberos-mtls-custom-rhel
 
 #### Scenario rbac-mds-kerberos-mtls-custom-rhel test's the following:
 
@@ -248,7 +248,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 ***
 
-### confluent.test/molecule/plain-erp-tls-rhel
+### molecule/plain-erp-tls-rhel
 
 #### Scenario plain-erp-tls-rhel test's the following:
 
@@ -270,7 +270,7 @@ Validates that Control Center has truststore in place.
 
 ***
 
-### confluent.test/molecule/mtls-ubuntu
+### molecule/mtls-ubuntu
 
 #### Scenario mtls-ubuntu test's the following:
 
@@ -284,7 +284,7 @@ Validates that protocol is set to SSl across all components.
 
 ***
 
-### confluent.test/molecule/zookeeper-kerberos-rhel
+### molecule/zookeeper-kerberos-rhel
 
 #### Scenario zookeeper-kerberos-rhel test's the following:
 
@@ -302,7 +302,7 @@ Validates Kafka Broker and Schema Registry is set to SCRAM.
 
 ***
 
-### confluent.test/molecule/custom-user-plaintext-rhel
+### molecule/custom-user-plaintext-rhel
 
 #### Scenario custom-user-plaintext-rhel test's the following:
 
@@ -326,7 +326,7 @@ Validates that each component is running with the correct custom logging path.
 
 ***
 
-### confluent.test/molecule/archive-plain-ubuntu
+### molecule/archive-plain-ubuntu
 
 #### Scenario archive-plain-ubuntu test's the following:
 
@@ -350,7 +350,7 @@ Validates log4j config.
 
 ***
 
-### confluent.test/molecule/rbac-mds-scram-custom-rhel
+### molecule/rbac-mds-scram-custom-rhel
 
 #### Scenario rbac-mds-scram-custom-rhel test's the following:
 
@@ -378,7 +378,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 ***
 
-### confluent.test/molecule/mtls-customcerts-rhel
+### molecule/mtls-customcerts-rhel
 
 #### Scenario mtls-customcerts-rhel test's the following:
 
@@ -394,7 +394,7 @@ Validates the ERP returns values over MTLS.
 
 ***
 
-### confluent.test/molecule/archive-plain-rhel
+### molecule/archive-plain-rhel
 
 #### Scenario archive-plain-rhel test's the following:
 
@@ -422,7 +422,7 @@ Validates that FIPS security is enabled on the Brokers.
 
 ***
 
-### confluent.test/molecule/rbac-mds-kerberos-debian
+### molecule/rbac-mds-kerberos-debian
 
 #### Scenario rbac-mds-kerberos-debian test's the following:
 
@@ -448,7 +448,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 ***
 
-### confluent.test/molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004
+### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004
 
 #### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004 test's the following:
 
@@ -480,7 +480,7 @@ Validates client packages.
 
 ***
 
-### confluent.test/molecule/rbac-mtls-rhel8
+### molecule/rbac-mtls-rhel8
 
 #### Scenario rbac-mtls-rhel8 test's the following:
 
@@ -498,7 +498,7 @@ Validates TLS keysizes across all components.
 
 ***
 
-### confluent.test/molecule/archive-plain-debian10
+### molecule/archive-plain-debian10
 
 #### Scenario archive-plain-debian10 test's the following:
 
@@ -520,7 +520,7 @@ Validates that custom log4j configuration is in place.
 
 ***
 
-### confluent.test/molecule/multi-ksql-connect-rhel
+### molecule/multi-ksql-connect-rhel
 
 #### Scenario multi-ksql-connect-rhel test's the following:
 
@@ -548,7 +548,7 @@ Validates that Control Center Can connect to each KSQL cluster.
 
 ***
 
-### confluent.test/molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10
+### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10
 
 #### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10 test's the following:
 
@@ -580,7 +580,7 @@ Validates client packages.
 
 ***
 
-### confluent.test/molecule/rbac-mtls-rhel
+### molecule/rbac-mtls-rhel
 
 #### Scenario rbac-mtls-rhel test's the following:
 
@@ -610,7 +610,7 @@ Validates Cluster Registry.
 
 ***
 
-### confluent.test/molecule/zookeeper-mtls-rhel
+### molecule/zookeeper-mtls-rhel
 
 #### Scenario zookeeper-mtls-rhel test's the following:
 
@@ -636,7 +636,7 @@ Validates that Secrets protection is applied to the correct properties.
 
 ***
 
-### confluent.test/molecule/ccloud
+### molecule/ccloud
 
 #### Scenario ccloud test's the following:
 
@@ -658,7 +658,7 @@ Validates that all components connect to Confluent Cloud.
 
 ***
 
-### confluent.test/molecule/kafka-connect-replicator-mtls-scram-rhel
+### molecule/kafka-connect-replicator-mtls-scram-rhel
 
 #### Scenario kafka-connect-replicator-mtls-scram-rhel test's the following:
 
@@ -688,7 +688,7 @@ Validates that client ID's are set correctly on Replicator.
 
 ***
 
-### confluent.test/molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-rhel
+### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-rhel
 
 #### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-rhel test's the following:
 
@@ -732,7 +732,7 @@ Validates that Replicator logging path is valid.
 
 ***
 
-### confluent.test/molecule/kafka-connect-replicator-plain-kerberos-rhel
+### molecule/kafka-connect-replicator-plain-kerberos-rhel
 
 #### Scenario kafka-connect-replicator-plain-kerberos-rhel test's the following:
 
@@ -762,7 +762,7 @@ Validates that client ID's are set correctly on Replicator.
 
 ***
 
-### confluent.test/molecule/plaintext-rhel
+### molecule/plaintext-rhel
 
 #### Scenario plaintext-rhel test's the following:
 
@@ -786,7 +786,7 @@ Validates that JMX exporter was copied and is running.
 
 ***
 
-### confluent.test/molecule/archive-scram-rhel
+### molecule/archive-scram-rhel
 
 #### Scenario archive-scram-rhel test's the following:
 
@@ -810,7 +810,7 @@ Validates that TLS is configured properly.
 
 ***
 
-### confluent.test/molecule/archive-plain-ubuntu2004
+### molecule/archive-plain-ubuntu2004
 
 #### Scenario archive-plain-ubuntu2004 test's the following:
 
@@ -834,7 +834,7 @@ Validates log4j config.
 
 ***
 
-### confluent.test/molecule/zookeeper-tls-rhel
+### molecule/zookeeper-tls-rhel
 
 #### Scenario zookeeper-tls-rhel test's the following:
 
@@ -858,7 +858,7 @@ Validates that other components are using SCRAM for auth.
 
 ***
 
-### confluent.test/molecule/kerberos-rhel
+### molecule/kerberos-rhel
 
 #### Scenario kerberos-rhel test's the following:
 
@@ -874,7 +874,7 @@ Validates that SASL SSL Plaintext is enabled across all components.
 
 ***
 
-### confluent.test/molecule/mtls-custombundle-rhel
+### molecule/mtls-custombundle-rhel
 
 #### Scenario mtls-custombundle-rhel test's the following:
 
@@ -898,7 +898,7 @@ Validates that back slashes are not lost with secrets protection.
 
 ***
 
-### confluent.test/molecule/mtls-java8-debian
+### molecule/mtls-java8-debian
 
 #### Scenario mtls-java8-debian test's the following:
 
@@ -914,7 +914,7 @@ Validates that Java 11 is in use.
 
 ***
 
-### confluent.test/molecule/rbac-scram-custom-rhel
+### molecule/rbac-scram-custom-rhel
 
 #### Scenario rbac-scram-custom-rhel test's the following:
 
@@ -946,7 +946,7 @@ Validates truststore across all components.
 
 ***
 
-### confluent.test/molecule/mtls-java8-rhel
+### molecule/mtls-java8-rhel
 
 #### Scenario mtls-java8-rhel test's the following:
 
@@ -962,7 +962,7 @@ Validates that Java 11 is in use.
 
 ***
 
-### confluent.test/molecule/provided-rhel
+### molecule/provided-rhel
 
 #### Scenario provided-rhel test's the following:
 
@@ -978,7 +978,7 @@ Validates that keystores are in place across all components.
 
 ***
 
-### confluent.test/molecule/rbac-mds-plain-custom-rhel
+### molecule/rbac-mds-plain-custom-rhel
 
 #### Scenario rbac-mds-plain-custom-rhel test's the following:
 
@@ -1006,7 +1006,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 ***
 
-### confluent.test/molecule/zookeeper-mtls-secrets-rhel
+### molecule/zookeeper-mtls-secrets-rhel
 
 #### Scenario zookeeper-mtls-secrets-rhel test's the following:
 
@@ -1034,7 +1034,7 @@ Validates that Secrets protection is applied to the correct properties.
 
 ***
 
-### confluent.test/molecule/mtls-ubuntu-acl
+### molecule/mtls-ubuntu-acl
 
 #### Scenario mtls-ubuntu-acl test's the following:
 
@@ -1054,7 +1054,7 @@ Validates ACL users.
 
 ***
 
-### confluent.test/molecule/cp-kafka-plain-rhel
+### molecule/cp-kafka-plain-rhel
 
 #### Scenario cp-kafka-plain-rhel test's the following:
 
@@ -1068,7 +1068,7 @@ Validates that SASL Plaintext protocol is set.
 
 ***
 
-### confluent.test/molecule/rbac-mtls-provided-ubuntu
+### molecule/rbac-mtls-provided-ubuntu
 
 #### Scenario rbac-mtls-provided-ubuntu test's the following:
 
@@ -1094,7 +1094,7 @@ Validates that TLS CN is being registered as super user.
 
 ***
 
-### confluent.test/molecule/mtls-debian
+### molecule/mtls-debian
 
 #### Scenario mtls-debian test's the following:
 
@@ -1128,7 +1128,7 @@ Validates that CLI is present.
 
 ***
 
-### confluent.test/molecule/archive-community-plaintext-rhel
+### molecule/archive-community-plaintext-rhel
 
 #### Scenario archive-community-plaintext-rhel test's the following:
 
@@ -1148,7 +1148,7 @@ Validates that Confluent CLI is installed.
 
 ***
 
-### confluent.test/molecule/archive-plain-debian
+### molecule/archive-plain-debian
 
 #### Scenario archive-plain-debian test's the following:
 
@@ -1170,7 +1170,7 @@ Validates that custom log4j configuration is in place.
 
 ***
 
-### confluent.test/molecule/rbac-kerberos-debian
+### molecule/rbac-kerberos-debian
 
 #### Scenario rbac-kerberos-debian test's the following:
 
@@ -1196,7 +1196,7 @@ Validates that all components are pointing to the MDS for authorization.
 
 ***
 
-### confluent.test/molecule/plain-rhel
+### molecule/plain-rhel
 
 #### Scenario plain-rhel test's the following:
 
