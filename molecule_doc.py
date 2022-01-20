@@ -10,7 +10,7 @@ And writes to formatted markdown file.
 import os
 
 # Set path to molecule scenarios
-path = 'roles/confluent.test/molecule/'
+path = 'molecule/'
 
 # Define a list to contain tags to search against
 tags = ["###","####"]
@@ -25,13 +25,13 @@ def parse_molecule_scenario(scenario_name, docs_file):
       length = len(scenario_name)
       for l in range(length):
         sn = scenario_name[l]
-        docs_file.write("### confluent.test/molecule/" + str(sn))
+        docs_file.write("### molecule/" + str(sn))
         docs_file.write("\n\n")
         docs_file.write("#### Scenario " + str(sn) + " test's the following:")
         docs_file.write("\n\n")
 
         # Read Inventory file and check for tags and write them
-        inventory_file = open("roles/confluent.test/molecule/" + str(sn) + "/molecule.yml", "r")
+        inventory_file = open(path + str(sn) + "/molecule.yml", "r")
         lines = inventory_file.read().split('\n')
 
         for i in range(len(lines)):
@@ -44,7 +44,7 @@ def parse_molecule_scenario(scenario_name, docs_file):
         docs_file.write("\n\n")
 
         # Read Verify file and check for tags and write them
-        verify_file = open("roles/confluent.test/molecule/" + str(sn) + "/verify.yml", "r")
+        verify_file = open(path + str(sn) + "/verify.yml", "r")
         verify_lines = verify_file.read().split('\n')
 
         for i in range(len(verify_lines)):
