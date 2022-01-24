@@ -35,7 +35,7 @@ def molecule_scenario_name = choice(name: 'SCENARIO_NAME',
 )
 
 def config = jobConfig {
-    nodeLabel = 'docker-oraclejdk8'
+    nodeLabel = 'docker-ubuntu-20-ansible'
     slackChannel = '#ansible-eng'
     timeoutHours = 4
     runMergeCheck = false
@@ -52,6 +52,8 @@ def job = {
 
     if(params.CONFLUENT_PACKAGE_BASEURL) {
         override_config['confluent_common_repository_baseurl'] = params.CONFLUENT_PACKAGE_BASEURL
+        // CI/CD Nightly passes URLs that return 400s when directly querying confluent_common_repository_baseurl URL. 
+        override_config['validate_hosts'] = false
     }
 
     if(params.CONFLUENT_PACKAGE_VERSION) {
