@@ -140,6 +140,14 @@ Default:  true
 
 ***
 
+### disk_ratio
+
+Variable to define minimum free disk space ratio for installation.
+
+Default:  0.3
+
+***
+
 ### confluent_server_enabled
 
 Boolean to install commercially licensed confluent-server instead of community version: confluent-kafka
