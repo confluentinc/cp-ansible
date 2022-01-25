@@ -144,7 +144,7 @@ Default:  true
 
 Variable to define minimum free disk space ratio for installation.
 
-Default:  0.3
+Default:  0.7
 
 ***
 
