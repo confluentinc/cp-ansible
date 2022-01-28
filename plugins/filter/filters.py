@@ -215,11 +215,6 @@ class FilterModule(object):
             final_dict[config_prefix + 'ssl.keystore.password'] = str(keystore_storepass)
             final_dict[config_prefix + 'ssl.key.password'] = str(keystore_keypass)
 
-        if listener_dict.get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
-            final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
-            final_dict[config_prefix + 'ssl.keystore.password'] = str(keystore_storepass)
-            final_dict[config_prefix + 'ssl.key.password'] = str(keystore_keypass)
-
         if bouncy_castle_keystore:
             final_dict[config_prefix + 'ssl.keymanager.algorithm'] = 'PKIX'
             final_dict[config_prefix + 'ssl.trustmanager.algorithm'] = 'PKIX'
