@@ -140,7 +140,7 @@ Default:  true
 
 ***
 
-### free_disk_space
+### required_disk_space_mb
 
 Variable to define minimum free disk space in MB for installation.
 
