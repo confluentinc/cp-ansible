@@ -140,11 +140,11 @@ Default:  true
 
 ***
 
-### disk_ratio
+### free_disk_space
 
-Variable to define minimum free disk space ratio for installation.
+Variable to define minimum free disk space in MB for installation.
 
-Default:  0.7
+Default:  1000
 
 ***
 
