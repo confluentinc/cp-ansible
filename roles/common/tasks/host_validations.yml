@@ -78,3 +78,32 @@
   tags:
   - validate
   - validate_tmp_access
+
+- name: Retrieve SSL key hash
+  shell: openssl rsa -noout -modulus -in {{ ssl_key_filepath }} | openssl md5
+  register: key_hash
+  delegate_to: localhost
+  when: ssl_custom_certs|bool
+  tags: 
+  - validate
+  - validate_ssl_keys_certs
+
+- name: Retrieve SSL cert hash
+  shell: openssl x509 -noout -modulus -in {{ ssl_signed_cert_filepath }} | openssl md5
+  register: cert_hash
+  delegate_to: localhost
+  when: ssl_custom_certs|bool
+  tags: 
+  - validate
+  - validate_ssl_keys_certs
+
+- name: Assert SSL key hash matches SSL cert hash
+  assert:
+    that: key_hash.stdout == cert_hash.stdout
+    fail_msg: >-
+      "The MD5 value of the custom ssl key does not match the MD5 value of the custom certificate, indicating that the keys do no match
+      and are incompatible.  Please review your keys and certs and confirm they are from the same source."
+  when: ssl_custom_certs|bool
+  tags:
+  - validate
+  - validate_ssl_keys_certs
