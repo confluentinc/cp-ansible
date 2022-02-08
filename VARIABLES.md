@@ -140,6 +140,14 @@ Default:  true
 
 ***
 
+### required_disk_space_mb
+
+Variable to define minimum free disk space in MB for installation.
+
+Default:  1000
+
+***
+
 ### confluent_server_enabled
 
 Boolean to install commercially licensed confluent-server instead of community version: confluent-kafka
