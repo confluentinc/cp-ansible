@@ -8,7 +8,7 @@ Below are the supported variables for the role confluent.variables
 
 Version of Confluent Platform to install
 
-Default:  6.2.1
+Default:  6.2.2
 
 ***
 
@@ -49,6 +49,14 @@ Default:  false
 Full path to download the Jolokia Agent Jar
 
 Default:  /opt/jolokia/jolokia.jar
+
+***
+
+### jolokia_jar_url_force
+
+Boolean to force update of Jolokia Agent Jar (must be set to true if jolokia_jar_path already exists)
+
+Default:  false
 
 ***
 
@@ -97,6 +105,14 @@ Default:  false
 Full path to download the Prometheus Exporter Agent Jar
 
 Default:  /opt/prometheus/jmx_prometheus_javaagent.jar
+
+***
+
+### jmxexporter_jar_url_force
+
+Boolean to force update of Prometheus Exporter Agent Jar (must be set to true if jmxexporter_jar_path already exists)
+
+Default:  false
 
 ***
 

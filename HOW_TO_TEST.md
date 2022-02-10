@@ -48,7 +48,7 @@ Now the molecule command will run a container, but function as it should.
 
 ## Using Molecule
 
-The following is a list of the most common commands used with Molecule.  
+The following is a list of the most common commands used with Molecule.  For a complete list of scenarios and test functionality please review [MOLECULE_SCENARIOS.md](MOLECULE_SCENARIOS.md).
 
 ### Running a role
 
@@ -83,9 +83,11 @@ Simply run:
 
 ```molecule destroy -s <scenario name>```
 
-## Creating Scenarios
+## Creating and Modifying Scenarios
 
 Within ```roles/confluent.test/molecule``` you can find a series of directories, which can be referred to as scenarios. Use a scenario as an inventory file, you can configure docker containers, ansible groups, variables, etc. When developing new features for the role you can create a new scenario simply by duplicating the default one and customizing. Edit the verify.yml to have test assertions for your scenario.
+
+Be sure to update the scenario documentation section and run the molecule_doc.py script before submitting your PR.  This will update the relevant documentation.
 
 More details on building scenarios can be found [here](https://molecule.readthedocs.io/en/latest/getting-started.html?highlight=scenarios#molecule-scenarios).
 
