@@ -1530,7 +1530,7 @@ Default:  ""
 
 Default KSQLDB config prefix
 
-Default:  "{{ config_prefix }}/{{(confluent_package_version is version('5.5.0', '>=')) | ternary('ksqldb' , 'ksql')}}"
+Default:  "{{ config_prefix }}/ksqldb"
 
 ***
 
