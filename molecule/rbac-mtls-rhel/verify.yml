@@ -4,6 +4,7 @@
 ### Validates that secrets protection is masking the correct properties.
 ### Validates Kafka Connect secrets registry.
 ### Validates Cluster Registry.
+### Validates the filter resolve_principal with different ssl.mapping.rule
 
 - name: Verify - Zookeeper
   hosts: zookeeper
@@ -38,6 +39,14 @@
         property: ldap.java.naming.provider.url
         expected_value: ldap://ldap1:389
 
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: ssl.principal.mapping.rules
+        expected_value: RULE:.*O=(.*?),OU=TEST.*$/$1/
+
     - name: Get super.users
       shell: grep "super.users" /etc/kafka/server.properties
       register: super_users_grep
@@ -47,6 +56,7 @@
         that:
           - "'User:dom' in super_users_grep.stdout"
           - "'User:jeff' in super_users_grep.stdout"
+          - "'User:CONFLUENT' in super_users_grep.stdout"
         fail_msg: "Super Users property: {{super_users_grep.stdout}} does not contain User:dom and User:jeff"
 
     - include_role:
@@ -188,6 +198,7 @@
         status_code: 200
         client_cert: /var/ssl/private/kafka_connect.crt
         client_key: /var/ssl/private/kafka_connect.key
+        ca_path: /var/ssl/private/ca.crt
         validate_certs: false
         url_username: mds
         url_password: password
@@ -208,6 +219,7 @@
         url_password: password
         client_cert: /var/ssl/private/kafka_connect.crt
         client_key: /var/ssl/private/kafka_connect.key
+        ca_path: /var/ssl/private/ca.crt
         force_basic_auth: true
       register: connector_status_response
       until: connector_status_response.json.connector.state == 'RUNNING'
@@ -311,13 +323,6 @@
     ksql_name: Test-Ksql
     schema_registry_name: Test-Schema
   tasks:
-    - name: Get Kafka Cluster Id
-      import_role:
-        name: common
-        tasks_from: rbac_setup.yml
-      vars:
-        copy_certs: false
-
     - name: Retrieve Cluster Registry details
       uri:
         url: "{{mds_http_protocol}}://{{ groups['kafka_broker'][0] }}:{{mds_port}}/security/1.0/registry/clusters"
@@ -359,3 +364,46 @@
           - schema_registry_name == "{{cluster_name_query_json[3]['clusterName']}}"
         fail_msg: "Schema Registry Cluster ID set to {{cluster_name_query_json[3]['clusterName']}} not {{schema_registry_name}}"
         quiet: true
+
+- name: Validate SSL mapping rule
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - import_role:
+            name: confluent.variables
+
+    - name: Validate mapping rule with Upper case single match
+      assert:
+        that:
+          - dname == "{{ common_names|resolve_principal(rules) }}"
+      vars:
+        rules: "^CN=(.*?), OU=(.*?)$/$1/U"
+        common_names: "CN=kafka-server1, OU=KAFKA"
+        dname: KAFKA-SERVER1
+
+    - name: Validate mapping rule with multiple match
+      assert:
+        that:
+          - dname == "{{ common_names|resolve_principal(rules) }}"
+      vars:
+        rules: "RULE:^CN=(.*?), OU=(.*?), O=(.*?), L=(.*?), ST=(.*?), C=(.*?)$/$1@$2/"
+        common_names: "CN=kafka1, OU=SME, O=mycp, L=Fulton, ST=MD, C=US"
+        dname: kafka1@SME
+
+    - name: Validate mapping rule with lowercase single match
+      assert:
+        that:
+          - dname == "{{ common_names|resolve_principal(rules) }}"
+      vars:
+        rules: "RULE:^cn=(.*?),ou=(.*?),dc=(.*?),dc=(.*?)$/$1/L"
+        common_names: "cn=kafka1,ou=SME,dc=mycp,dc=com"
+        dname: kafka1
+
+    - name: Validate multiple mapping rule
+      assert:
+        that:
+          - dname == "{{ common_names|resolve_principal(rules) }}"
+      vars:
+        rules: "RULE:^cn=(.*?),ou=(.*?),dc=(.*?),dc=(.*?)$/$1/LRULE:^CN=(.*?), OU=(.*?), O=(.*?), L=(.*?), ST=(.*?), C=(.*?)$/$1@$2/"
+        common_names: "cn=kafka1,ou=SME,dc=mycp,dc=com"
+        dname: kafka1

@@ -1,3 +1,6 @@
+import re
+
+
 class FilterModule(object):
     def filters(self):
         return {
@@ -19,7 +22,8 @@ class FilterModule(object):
             'listener_properties': self.listener_properties,
             'client_properties': self.client_properties,
             'c3_connect_properties': self.c3_connect_properties,
-            'c3_ksql_properties': self.c3_ksql_properties
+            'c3_ksql_properties': self.c3_ksql_properties,
+            'resolve_principal': self.resolve_principal
         }
 
     def normalize_sasl_protocol(self, protocol):
@@ -311,3 +315,48 @@ class FilterModule(object):
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.key.password'] = str(keystore_keypass)
 
         return final_dict
+
+    def resolve_principal(self, common_names:str, rules:str):
+        """
+        This filter is to extract principle from the keystore based on the provided rule. This filter should be
+        used when we have ssl.principal.mapping.rules variable set to some value.
+        reference - https://cwiki.apache.org/confluence/display/KAFKA/KIP-371%3A+Add+a+configuration+to+build+custom+SSL+principal+name
+        :param common_names:
+        :param rules: Rules to map with against given common names
+        :return:
+        | Common Name                                       |   Mapping Pattern                                         | Mapping Replacement   |  Mapped Name  |
+        | CN=kafka-server1, OU=KAFKA                        | ^CN=(.*?), OU=(.*?)$                                      | $1                    | kafka-server1 |
+        | CN=kafka1, OU=SME, O=mycp, L=Fulton, ST=MD, C=US  | ^CN=(.*?), OU=(.*?), O=(.*?), L=(.*?), ST=(.*?), C=(.*?)$ | $1@$2                 | kafka1@SME    |
+        | cn=kafka1,ou=SME,dc=mycp,dc=com                   | ^cn=(.*?),ou=(.*?),dc=(.*?),dc=(.*?)$                     | $1                    | kafka1        |
+
+        """
+
+        # Get all common names
+        common_names = common_names.split("\n")
+        # Get the default mapping value which is string representation of certificate
+        principal_mapping_value = common_names[0]
+        # Get all the rules and apply one by one on given Dname
+        list_of_rules = rules.split("RULE:")
+        list_of_rules = [i for i in list_of_rules if i]
+
+        for rule_str in list_of_rules:
+            mapping_pattern, mapping_value, *case = rule_str.split('/')
+            for common_name in common_names:
+                matched = re.match(mapping_pattern, common_name)
+                if bool(matched):
+                    index =1
+                    for match_str in matched.groups():
+                        mapping_value = mapping_value.replace(f"${index}", match_str)
+                        index = index+1
+
+                    # Remove leading and trailing whitespaces
+                    mapping_value = mapping_value.strip()
+                    principal_mapping_value = mapping_value
+
+                    if case[0] == 'L':
+                        principal_mapping_value = mapping_value.lower()
+                    elif case[0] == 'U':
+                        principal_mapping_value = mapping_value.upper()
+                    break
+
+        return principal_mapping_value
