@@ -8,7 +8,7 @@
   vars:
     redhat_supported_versions: ['7', '8']
   when: ansible_os_family == "RedHat"
-  tags: 
+  tags:
   - validate
   - validate_os_version
 
@@ -21,7 +21,7 @@
   vars:
     ubuntu_supported_versions: ['16', '18', '20']
   when: ansible_distribution == "Ubuntu"
-  tags: 
+  tags:
   - validate
   - validate_os_version
 
@@ -34,7 +34,7 @@
   vars:
     debian_supported_versions: ['9', '10']
   when: ansible_distribution == "Debian"
-  tags: 
+  tags:
   - validate
   - validate_os_vesion
 
@@ -50,7 +50,7 @@
     ( installation_method == 'archive' and confluent_common_repository_baseurl in confluent_archive_file_source )
   ignore_errors: true
   register: internet_access_check
-  tags: 
+  tags:
   - validate
   - validate_internet_access
 
@@ -65,7 +65,7 @@
   stat:
     path: "/tmp"
   register: path_exists
-  tags: 
+  tags:
   - validate
   - validate_tmp_access
 
@@ -78,6 +78,35 @@
   tags:
   - validate
   - validate_tmp_access
+
+- name: Retrieve SSL key hash
+  shell: openssl rsa -noout -modulus -in {{ ssl_key_filepath }} | openssl md5
+  register: key_hash
+  delegate_to: localhost
+  when: ssl_custom_certs|bool
+  tags:
+  - validate
+  - validate_ssl_keys_certs
+
+- name: Retrieve SSL cert hash
+  shell: openssl x509 -noout -modulus -in {{ ssl_signed_cert_filepath }} | openssl md5
+  register: cert_hash
+  delegate_to: localhost
+  when: ssl_custom_certs|bool
+  tags:
+  - validate
+  - validate_ssl_keys_certs
+
+- name: Assert SSL key hash matches SSL cert hash
+  assert:
+    that: key_hash.stdout == cert_hash.stdout
+    fail_msg: >-
+      "The MD5 value of the custom ssl key does not match the MD5 value of the custom certificate, indicating that the keys do no match
+      and are incompatible.  Please review your keys and certs and confirm they are from the same source."
+  when: ssl_custom_certs|bool
+  tags:
+  - validate
+  - validate_ssl_keys_certs
   
   - name: Validate enough free disk space for package installation
   assert:
