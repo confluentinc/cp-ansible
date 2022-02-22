@@ -148,6 +148,70 @@ Default:  1000
 
 ***
 
+### required_total_memory_mb_zookeeper
+
+Variable to define the minimum amount of memory in MB required to run zookeeper.  Calculated as default heap size plus 1GB for OS.
+
+Default:  2000
+
+***
+
+### required_total_memory_mb_kafka_broker
+
+Variable to define the minimum amount of memory in MB required to run kafka Broker. Calculated as default heap size plus 1GB for OS.
+
+Default:  7000
+
+***
+
+### required_total_memory_mb_kafka_connect
+
+Variable to define the minimum amount of memory in MB required to run kafka Connect. Calculated as default heap size plus 1GB for OS.
+
+Default:  3000
+
+***
+
+### required_total_memory_mb_schema_registry
+
+Variable to define the minimum amount of memory in MB required to run Schema Registry. Calculated as default heap size plus 1GB for OS.
+
+Default:  2000
+
+***
+
+### required_total_memory_mb_ksql
+
+Variable to define the minimum amount of memory in MB required to run KSQL. Calculated as default heap size plus 1GB for OS.
+
+Default:  4000
+
+***
+
+### required_total_memory_mb_kafka_rest
+
+Variable to define the minimum amount of memory in MB required to run Rest Proxy. Calculated as default heap size plus 1GB for OS.
+
+Default:  3000
+
+***
+
+### required_total_memory_mb_control_center
+
+Variable to define the minimum amount of memory in MB required to run Control Center. Calculated as default heap size plus 1GB for OS.
+
+Default:  7000
+
+***
+
+### required_total_memory_mb_kafka_connect_replicator
+
+Variable to define the minimum amount of memory in MB required to run Kafka Connect Replicator. Calculated as default heap size plus 1GB for OS.
+
+Default:  3000
+
+***
+
 ### confluent_server_enabled
 
 Boolean to install commercially licensed confluent-server instead of community version: confluent-kafka
