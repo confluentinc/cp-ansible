@@ -163,6 +163,18 @@
   tags:
     - filesystem
 
+- name: Create Kafka Rest Config
+  template:
+    src: kafka-rest.properties.j2
+    dest: "{{kafka_rest.config_file}}"
+    mode: 0640
+    owner: "{{kafka_rest_user}}"
+    group: "{{kafka_rest_group}}"
+  notify: restart kafka-rest
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
 - name: Create Kafka Rest Config with Secrets Protection
   include_role:
     name: common
@@ -175,21 +187,13 @@
     secrets_file: "{{ kafka_rest_secrets_protection_file }}"
     secrets_file_owner: "{{ kafka_rest_user }}"
     secrets_file_group: "{{ kafka_rest_group }}"
+    ca_cert_path: "{{ kafka_rest_ca_cert_path if kafka_rest_ssl_enabled|bool else '' }}"
     handler: restart kafka-rest
-  when: kafka_rest_secrets_protection_enabled|bool
-
-- name: Create Kafka Rest Config
-  template:
-    src: kafka-rest.properties.j2
-    dest: "{{kafka_rest.config_file}}"
-    mode: 0640
-    owner: "{{kafka_rest_user}}"
-    group: "{{kafka_rest_group}}"
-  notify: restart kafka-rest
-  when: not kafka_rest_secrets_protection_enabled|bool
-  diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
+  when:
+    - kafka_rest_secrets_protection_enabled|bool
+    - rbac_enabled|bool
 
 - name: Create Logs Directory
   file:
