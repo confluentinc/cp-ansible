@@ -48,6 +48,8 @@
 - name: Create Zookeeper Group
   group:
     name: "{{zookeeper_group}}"
+  tags:
+    - privileged
 
 - name: Check if Zookeeper User Exists
   # Create user task must be skipped for non-linux users
@@ -63,6 +65,8 @@
     system: true
     group: "{{zookeeper_group}}"
   when: (getent_passwd|default({}))[zookeeper_user] is not defined
+  tags:
+    - privileged
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -74,6 +78,8 @@
     mode: 0644
     force: true
   when: installation_method == "archive"
+  tags:
+    - systemd
 
 - include_role:
     name: ssl
@@ -114,6 +120,8 @@
     user: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
   when: zookeeper_copy_files | length > 0
+  tags:
+    - configuration
 
 - name: Set Zookeeper Data Dir Ownership
   file:
@@ -122,6 +130,8 @@
     group: "{{zookeeper_group}}"
     state: directory
     mode: 0750
+  tags:
+    - filesystem
 
 - name: Set Ownership of Data Dir Files
   file:
@@ -129,6 +139,8 @@
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
     recurse: true
+  tags:
+    - filesystem
 
 - name: Set Zookeeper Transaction Log Data Dir Ownership
   file:
@@ -138,6 +150,8 @@
     state: directory
     mode: 0750
   when: zookeeper_final_properties.dataLogDir is defined
+  tags:
+    - filesystem
 
 - name: Set Ownership of Transaction Log Data Dir Files
   file:
@@ -146,6 +160,8 @@
     group: "{{zookeeper_group}}"
     recurse: true
   when: zookeeper_final_properties.dataLogDir is defined
+  tags:
+    - filesystem
 
 - name: Create Zookeeper myid File
   template:
@@ -154,6 +170,8 @@
     mode: 0640
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
+  tags:
+    - configuration
 
 - name: Create Zookeeper Config directory
   file:
@@ -162,6 +180,8 @@
     mode: 0750
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
+  tags:
+    - filesystem
 
 - name: Create Zookeeper Config
   template:
@@ -173,6 +193,8 @@
   register: zookeeper_config
   notify: restart zookeeper
   diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
 
 - name: Create Log Directory
   file:
@@ -181,6 +203,8 @@
     group: "{{zookeeper_group}}"
     owner: "{{zookeeper_user}}"
     mode: 0770
+  tags:
+    - filesystem
 
 - name: Create log4j Directory
   file:
@@ -189,6 +213,8 @@
     group: "{{zookeeper_group}}"
     state: directory
     mode: 0750
+  tags:
+    - filesystem
 
 - name: Create Zookeeper log4j config
   template:
@@ -199,6 +225,8 @@
     group: "{{zookeeper_group}}"
   when: zookeeper_custom_log4j|bool
   notify: restart zookeeper
+  tags:
+    - configuration
 
 - name: Create Zookeeper Jolokia Config
   template:
@@ -210,6 +238,8 @@
   when: zookeeper_jolokia_enabled|bool
   notify: restart zookeeper
   diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
 
 - name: Create Zookeeper Jaas config
   template:
@@ -220,6 +250,8 @@
     group: "{{zookeeper_group}}"
   when: zookeeper_client_authentication_type in ['kerberos', 'digest'] or zookeeper_quorum_authentication_type in ['kerberos', 'digest']
   notify: restart zookeeper
+  tags:
+    - configuration
 
 - name: Deploy JMX Exporter Config File
   copy:
@@ -229,6 +261,8 @@
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
   when: zookeeper_jmxexporter_enabled|bool
+  tags:
+    - configuration
 
 - name: Create Service Override Directory
   file:
@@ -237,6 +271,8 @@
     group: "{{zookeeper_group}}"
     state: directory
     mode: 0640
+  tags:
+    - systemd
 
 - name: Write Service Overrides
   template:
@@ -247,6 +283,8 @@
     group: root
   notify: restart zookeeper
   diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - systemd
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -260,9 +298,11 @@
     name: "{{zookeeper_service_name}}"
     enabled: true
     state: started
+  tags:
+    - systemd
 
 - name: Zookeeper Health Check
-  include: health_check.yml
+  include_tasks: health_check.yml
   when:
     - zookeeper_health_checks_enabled|bool
     - not ansible_check_mode

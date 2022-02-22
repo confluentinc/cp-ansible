@@ -8,7 +8,7 @@
   vars:
     redhat_supported_versions: ['7', '8']
   when: ansible_os_family == "RedHat"
-  tags: 
+  tags:
   - validate
   - validate_os_version
 
@@ -21,7 +21,7 @@
   vars:
     ubuntu_supported_versions: ['16', '18', '20']
   when: ansible_distribution == "Ubuntu"
-  tags: 
+  tags:
   - validate
   - validate_os_version
 
@@ -34,7 +34,7 @@
   vars:
     debian_supported_versions: ['9', '10']
   when: ansible_distribution == "Debian"
-  tags: 
+  tags:
   - validate
   - validate_os_vesion
 
@@ -50,7 +50,7 @@
     ( installation_method == 'archive' and confluent_common_repository_baseurl in confluent_archive_file_source )
   ignore_errors: true
   register: internet_access_check
-  tags: 
+  tags:
   - validate
   - validate_internet_access
 
@@ -65,7 +65,7 @@
   stat:
     path: "/tmp"
   register: path_exists
-  tags: 
+  tags:
   - validate
   - validate_tmp_access
 
@@ -82,10 +82,142 @@
 - name: Validate disk space usage
   Debug:
     msg:  >- 
-      "Not enough free disk space for package installation.  Minimum space required is {{ required_disk_space_mb }}MB, please free up more disk space 
-      to continue installation. To skip host validations, set validate_hosts to false."
+      "Not enough free disk space for package installation.  Minimum space required is {{ required_disk_space_mb }}MB, please free up more disk space
+       to continue installation. To skip host validations, set validate_hosts to false."
   when: (item.size_available < required_disk_space_mb|float)
   with_items: "{{ ansible_mounts }}"
   tags:
     - validate
-    - validate_disk_usage
+    - validate_disk_usage 
+
+- name: Retrieve SSL key hash
+  shell: openssl rsa -noout -modulus -in {{ ssl_key_filepath }} | openssl md5
+  register: key_hash
+  delegate_to: localhost
+  when: ssl_custom_certs|bool
+  tags:
+  - validate
+  - validate_ssl_keys_certs
+
+- name: Retrieve SSL cert hash
+  shell: openssl x509 -noout -modulus -in {{ ssl_signed_cert_filepath }} | openssl md5
+  register: cert_hash
+  delegate_to: localhost
+  when: ssl_custom_certs|bool
+  tags:
+  - validate
+  - validate_ssl_keys_certs
+
+- name: Assert SSL key hash matches SSL cert hash
+  assert:
+    that: key_hash.stdout == cert_hash.stdout
+    fail_msg: >-
+      "The MD5 value of the custom ssl key does not match the MD5 value of the custom certificate, indicating that the keys do no match
+      and are incompatible.  Please review your keys and certs and confirm they are from the same source."
+  when: ssl_custom_certs|bool
+  tags:
+  - validate
+  - validate_ssl_keys_certs
+  
+- name: Validate enough free disk space for package installation
+  assert:
+    that: item.size_available > {{ required_disk_space_mb }}|float
+    fail_msg: >-
+      "Not enough free disk space for package installation.  Minimum space required is {{ required_disk_space_mb }}MB, please free up more disk space
+>>>>>>> public/7.1.x
+
+- name: Validate enough free memory for Zookeeper hosts
+  assert:
+    that: ansible_memfree_mb > {{ required_total_memory_mb_zookeeper }}|float
+    fail_msg: >-
+      "Not enough memory to run Zookeeper.  Minimum memory required is {{ required_total_memory_mb_zookeeper }}MB, please add more memory to host
+      or choose a different host to install Zookeeper to continue installation."
+  when: groups['zookeeper'] is defined and inventory_hostname in groups['zookeeper']
+  tags:
+    - validate
+    - validate_memory_usage
+    - validate_memory_usage_zookeeper
+
+- name: Validate enough free memory for Kafka Broker hosts
+  assert:
+    that: ansible_memfree_mb > {{ required_total_memory_mb_kafka_broker }}|float
+    fail_msg: >-
+      "Not enough memory to run Kafka Broker.  Minimum memory required is {{ required_total_memory_mb_kafka_broker }}MB, please add more memory to host
+      or choose a different host to install Kafka Broker to continue installation."
+  when: groups['kafka_broker'] is defined and inventory_hostname in groups['kafka_broker']
+  tags:
+    - validate
+    - validate_memory_usage
+    - validate_memory_usage_kafka_broker
+
+- name: Validate enough free memory for Kafka Connect hosts
+  assert:
+    that: ansible_memfree_mb > {{ required_total_memory_mb_kafka_connect }}|float
+    fail_msg: >-
+      "Not enough memory to run Kafka Connect.  Minimum memory required is {{ required_total_memory_mb_kafka_connect }}MB, please add more memory to host
+      or choose a different host to install Kafka Connect to continue installation."
+  when: groups['kafka_connect'] is defined and inventory_hostname in groups['kafka_connect']
+  tags:
+    - validate
+    - validate_memory_usage
+    - validate_memory_usage_kafka_connect
+
+- name: Validate enough free memory for Schema Registry hosts
+  assert:
+    that: ansible_memfree_mb > {{ required_total_memory_mb_schema_registry }}|float
+    fail_msg: >-
+      "Not enough memory to run Schema Registry.  Minimum memory required is {{ required_total_memory_mb_schema_registry }}MB, please add more memory to host
+      or choose a different host to install Kafka Connect to continue installation."
+  when: groups['schema_registry'] is defined and inventory_hostname in groups['schema_registry']
+  tags:
+    - validate
+    - validate_memory_usage
+    - validate_memory_usage_schema_registry
+
+- name: Validate enough free memory for KSQL hosts
+  assert:
+    that: ansible_memfree_mb > {{ required_total_memory_mb_ksql }}|float
+    fail_msg: >-
+      "Not enough memory to run KSQL.  Minimum memory required is {{ required_total_memory_mb_ksql }}MB, please add more memory to host
+      or choose a different host to install Kafka Connect to continue installation."
+  when: groups['ksql'] is defined and inventory_hostname in groups['ksql']
+  tags:
+    - validate
+    - validate_memory_usage
+    - validate_memory_usage_ksql
+
+- name: Validate enough free memory for Rest Proxy hosts
+  assert:
+    that: ansible_memfree_mb > {{ required_total_memory_mb_kafka_rest }}|float
+    fail_msg: >-
+      "Not enough memory to run Kafka Rest Proxy.  Minimum memory required is {{ required_total_memory_mb_kafka_rest }}MB, please add more memory to host
+      or choose a different host to install Rest Proxy to continue installation."
+  when: groups['kafka_rest'] is defined and inventory_hostname in groups['kafka_rest']
+  tags:
+    - validate
+    - validate_memory_usage
+    - validate_memory_usage_kafka_rest_proxy
+
+- name: Validate enough free memory for Control Center hosts
+  assert:
+    that: ansible_memfree_mb > {{ required_total_memory_mb_control_center }}|float
+    fail_msg: >-
+      "Not enough memory to run Control Center.  Minimum memory required is {{ required_total_memory_mb_control_center }}MB, please add more memory to host
+      or choose a different host to install Control Center to continue installation."
+  when: groups['control_center'] is defined and inventory_hostname in groups['control_center']
+  tags:
+    - validate
+    - validate_memory_usage
+    - validate_memory_usage_control_center
+
+- name: Validate enough free memory for Kafka Connect Replicator hosts
+  assert:
+    that: ansible_memfree_mb > {{ required_total_memory_mb_kafka_connect_replicator }}|float
+    fail_msg: >-
+      "Not enough memory to run Kafka Connect Replicator.  Minimum memory required is {{ required_total_memory_mb_kafka_connect_replicator }}MB, please add more memory to host
+      or choose a different host to install Kafka Connect Replicator to continue installation."
+  when: groups['kafka_connect_replicator'] is defined and inventory_hostname in groups['kafka_connect_replicator']
+  tags:
+    - validate
+    - validate_memory_usage
+    - validate_memory_usage_kafka_connect_replicator
