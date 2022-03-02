@@ -160,7 +160,7 @@ Java 8.
 
 #### Scenario mtls-java8-ubuntu verify test's the following:
 
-Validates that Java 11 is in use.
+Validates that Java 8 is in use.
 
 ***
 
@@ -406,7 +406,7 @@ Custom MDS Port.
 
 SSL Enabled.
 
-FIPS Enabled.
+FIPS Disabled.
 
 Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
 
@@ -910,7 +910,7 @@ Java 8.
 
 #### Scenario mtls-java8-debian verify test's the following:
 
-Validates that Java 11 is in use.
+Validates that Java 8 is in use.
 
 ***
 
@@ -958,7 +958,7 @@ Java 8.
 
 #### Scenario mtls-java8-rhel verify test's the following:
 
-Validates that Java 11 is in use.
+Validates that Java 8 is in use.
 
 ***
 
