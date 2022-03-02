@@ -87,6 +87,9 @@ def job = {
                     'group_vars': [
                         'all': override_config
                     ]
+                ],
+                'env':[
+                    "ANSIBLE_SKIP_TAGS": "validate_memory_usage,validate_disk_usage"
                 ]
             ]
         ]
