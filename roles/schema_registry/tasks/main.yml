@@ -141,6 +141,18 @@
   tags:
     - filesystem
 
+- name: Create Schema Registry Config
+  template:
+    src: schema-registry.properties.j2
+    dest: "{{schema_registry.config_file}}"
+    mode: 0640
+    owner: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  notify: restart schema-registry
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
 - name: Create Schema Registry Config with Secrets Protection
   include_role:
     name: common
@@ -153,21 +165,14 @@
     secrets_file: "{{schema_registry_secrets_protection_file}}"
     secrets_file_owner: "{{schema_registry_user}}"
     secrets_file_group: "{{schema_registry_group}}"
+    ca_cert_path: "{{ schema_registry_ca_cert_path if schema_registry_ssl_enabled|bool else '' }}"
     handler: restart schema-registry
-  when: schema_registry_secrets_protection_enabled|bool
-
-- name: Create Schema Registry Config
-  template:
-    src: schema-registry.properties.j2
-    dest: "{{schema_registry.config_file}}"
-    mode: 0640
-    owner: "{{schema_registry_user}}"
-    group: "{{schema_registry_group}}"
-  notify: restart schema-registry
-  when: not schema_registry_secrets_protection_enabled|bool
-  diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
+  when:
+    - schema_registry_secrets_protection_enabled|bool
+    - rbac_enabled|bool
+
 
 - name: Create Logs Directory
   file:

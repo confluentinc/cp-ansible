@@ -160,6 +160,18 @@
   tags:
     - filesystem
 
+- name: Create Ksql Config
+  template:
+    src: ksql-server.properties.j2
+    dest: "{{ksql.config_file}}"
+    mode: 0640
+    owner: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+  notify: restart ksql
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
 - name: Create Ksql Config with Secrets Protection
   include_role:
     name: common
@@ -172,21 +184,13 @@
     secrets_file: "{{ ksql_secrets_protection_file }}"
     secrets_file_owner: "{{ ksql_user }}"
     secrets_file_group: "{{ ksql_group }}"
+    ca_cert_path: "{{ ksql_ca_cert_path if ksql_ssl_enabled|bool else '' }}"
     handler: restart ksql
-  when: ksql_secrets_protection_enabled|bool
-
-- name: Create Ksql Config
-  template:
-    src: ksql-server.properties.j2
-    dest: "{{ksql.config_file}}"
-    mode: 0640
-    owner: "{{ksql_user}}"
-    group: "{{ksql_group}}"
-  notify: restart ksql
-  when: not ksql_secrets_protection_enabled|bool
-  diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
+  when:
+    - ksql_secrets_protection_enabled|bool
+    - rbac_enabled|bool
 
 - name: Create Logs Directory
   file:

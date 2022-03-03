@@ -151,6 +151,18 @@
   tags:
     - filesystem
 
+- name: Create Kafka Connect Config
+  template:
+    src: connect-distributed.properties.j2
+    dest: "{{kafka_connect.config_file}}"
+    mode: 0640
+    owner: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+  notify: restart connect distributed
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
 - name: Create Kafka Connect Config with Secrets Protection
   include_role:
     name: common
@@ -163,21 +175,13 @@
     secrets_file: "{{ kafka_connect_secrets_protection_file }}"
     secrets_file_owner: "{{ kafka_connect_user }}"
     secrets_file_group: "{{ kafka_connect_group }}"
+    ca_cert_path: "{{ kafka_connect_ca_cert_path if kafka_connect_ssl_enabled|bool else '' }}"
     handler: restart connect distributed
-  when: kafka_connect_secrets_protection_enabled|bool
-
-- name: Create Kafka Connect Config
-  template:
-    src: connect-distributed.properties.j2
-    dest: "{{kafka_connect.config_file}}"
-    mode: 0640
-    owner: "{{kafka_connect_user}}"
-    group: "{{kafka_connect_group}}"
-  notify: restart connect distributed
-  when: not kafka_connect_secrets_protection_enabled|bool
-  diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
+  when:
+    - kafka_connect_secrets_protection_enabled|bool
+    - rbac_enabled|bool
 
 - name: Install Connect Plugins
   include_tasks: connect_plugins.yml
