@@ -1852,6 +1852,14 @@ Default:  "{{mds_super_user_password}}"
 
 ***
 
+### mds_advertised_listener_hostname
+
+Unique advertised hostname for Metadata Server
+
+Default:  ""
+
+***
+
 ### schema_registry_ldap_user
 
 LDAP User for Schema Registry to authenticate as
