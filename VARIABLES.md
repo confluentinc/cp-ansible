@@ -228,11 +228,11 @@ Default:  ""
 
 ***
 
-### archive_config_base_path
+### config_base_path
 
 If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
 
-Default:  "{{ archive_destination_path }}"
+Default:  {{ (archive_destination_path | regex_replace('\\/$','')) if installation_method == 'archive' else '' }}
 
 ***
 
@@ -496,7 +496,7 @@ Default:  "{{ zookeeper_ssl_enabled }}"
 
 Path on Zookeeper host for Jolokia Configuration file
 
-Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/zookeeper_jolokia.properties"
+Default:  "{{ (config_base_path, '/etc/kafka/zookeeper_jolokia.properties' ) | join_path }}"
 
 ***
 
@@ -632,7 +632,7 @@ Default:  "{{ ssl_enabled }}"
 
 Path on Kafka host for Jolokia Configuration file
 
-Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_jolokia.properties"
+Default:  "{{ (config_base_path,'/etc/kafka/kafka_jolokia.properties') | join_path }}"
 
 ***
 
@@ -784,7 +784,7 @@ Default:  "{{ schema_registry_ssl_enabled }}"
 
 Path on Schema Registry host for Jolokia Configuration file
 
-Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/schema-registry/schema_registry_jolokia.properties"
+Default:  "{{ (config_base_path,'/etc/schema-registry/schema_registry_jolokia.properties') | join_path }}"
 
 ***
 
@@ -912,7 +912,7 @@ Default:  "{{ kafka_rest_ssl_enabled }}"
 
 Path on Rest Proxy host for Jolokia Configuration file
 
-Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka-rest/kafka_rest_jolokia.properties"
+Default:  "{{ (config_base_path,'/etc/kafka-rest/kafka_rest_jolokia.properties') | join_path }}"
 
 ***
 
@@ -1056,7 +1056,7 @@ Default:  "{{ kafka_connect_ssl_enabled }}"
 
 Path on Connect host for Jolokia Configuration file
 
-Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/etc/kafka/kafka_connect_jolokia.properties"
+Default:  "{{ (config_base_path,'/etc/kafka/kafka_connect_jolokia.properties') | join_path }}"
 
 ***
 
@@ -1224,7 +1224,7 @@ Default:  "{{ ksql_ssl_enabled }}"
 
 Path on ksqlDB host for Jolokia Configuration file
 
-Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}{{(confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')}}"
+Default:  "{{ (config_base_path,((confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')) | join_path }}"
 
 ***
 
@@ -1544,7 +1544,7 @@ Default:  localhost:9092
 
 Listener Dictionary that describes how kafka clusters connect to MDS Kafka cluster. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
-Default: 
+Default:
 
 ***
 
@@ -2220,7 +2220,7 @@ Default:  ""
 
 Overrides to the Service Section of Control Center Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2228,7 +2228,7 @@ Default:
 
 Environment Variables to be added to the Control Center Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2236,7 +2236,7 @@ Default:
 
 Overrides to the Unit Section of Control Center Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2266,7 +2266,7 @@ Default:  ""
 
 Overrides to the Service Section of Kafka Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2274,7 +2274,7 @@ Default:
 
 Environment Variables to be added to the Kafka Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2282,7 +2282,7 @@ Default:
 
 Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2312,7 +2312,7 @@ Default:  ""
 
 Overrides to the Service Section of Connect Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2320,7 +2320,7 @@ Default:
 
 Environment Variables to be added to the Connect Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2328,7 +2328,7 @@ Default:
 
 Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2358,7 +2358,7 @@ Default:  ""
 
 Overrides to the Service Section of Rest Proxy Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2366,7 +2366,7 @@ Default:
 
 Environment Variables to be added to the Rest Proxy Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2374,7 +2374,7 @@ Default:
 
 Overrides to the Unit Section of Rest Proxy Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2412,7 +2412,7 @@ Default:  /tmp/ksqldb
 
 Overrides to the Service Section of ksqlDB Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2420,7 +2420,7 @@ Default:
 
 Environment Variables to be added to the ksqlDB Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2428,7 +2428,7 @@ Default:
 
 Overrides to the Unit Section of ksqlDB Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2458,7 +2458,7 @@ Default:  ""
 
 Overrides to the Service Section of Schema Registry Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2466,7 +2466,7 @@ Default:
 
 Environment Variables to be added to the Schema Registry Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2474,7 +2474,7 @@ Default:
 
 Overrides to the Unit Section of Schema Registry Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2504,7 +2504,7 @@ Default:  ""
 
 Overrides to the Service Section of Zookeeper Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2512,7 +2512,7 @@ Default:
 
 Environment Variables to be added to the Zookeeper Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -2520,7 +2520,7 @@ Default:
 
 Overrides to the Unit Section of Zookeeper Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
