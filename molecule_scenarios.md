@@ -596,6 +596,8 @@ Kafka Broker Customer Listener.
 
 RBAC Additional System Admin.
 
+Provided SSL Principal Mapping rule
+
 #### Scenario rbac-mtls-rhel verify test's the following:
 
 Validates TLS version across all components.
@@ -607,6 +609,8 @@ Validates that secrets protection is masking the correct properties.
 Validates Kafka Connect secrets registry.
 
 Validates Cluster Registry.
+
+Validates the filter resolve_principal with different ssl.mapping.rule
 
 ***
 
@@ -882,8 +886,6 @@ Installation of Confluent Platform Edition on CentOS7.
 
 MTLS Enabled with custom certificates.
 
-Secrets Protection Enabled.
-
 Tests custom filtering properties for Secrets Protection.
 
 TLS is disabled for Zookeeper.
@@ -891,10 +893,6 @@ TLS is disabled for Zookeeper.
 #### Scenario mtls-custombundle-rhel verify test's the following:
 
 Validates that Keystore is present.
-
-Validates that secrets protection has masked correct properties.
-
-Validates that back slashes are not lost with secrets protection.
 
 ***
 
