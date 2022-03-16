@@ -14,9 +14,8 @@ def parse_variable_file(role_name, docs_file):
     docs_file.write("***")
     docs_file.write("\n\n")
 
-    variables_file = open("roles/" + role_name + "/defaults/main.yml", "r")
+    variables_file = open("../roles/" + role_name + "/defaults/main.yml", "r")
     lines = variables_file.read().split('\n')
-
     for i in range(len(lines)):
         if lines[i].startswith("### "):
             description = lines[i][4:]
@@ -33,12 +32,13 @@ def parse_variable_file(role_name, docs_file):
             docs_file.write("***")
             docs_file.write("\n\n")
 
-    variables_file.close
+    variables_file.close()
 
 
-docs_file = open("VARIABLES.md", "w")
+if __name__ == "__main__":
+    docs_file = open("VARIABLES.md", "w")
 
-for role_name in ["variables", "common", "control_center", "kafka_broker", "kafka_connect", "kafka_rest", "ksql", "schema_registry", "zookeeper", "kafka_connect_replicator", "ssl"]:
-    parse_variable_file(role_name, docs_file)
+    for role_name in ["variables", "common", "control_center", "kafka_broker", "kafka_connect", "kafka_rest", "ksql", "schema_registry", "zookeeper", "kafka_connect_replicator", "ssl"]:
+        parse_variable_file(role_name, docs_file)
 
-docs_file.close
+    docs_file.close()

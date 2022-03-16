@@ -334,9 +334,9 @@ Default:  "{{ archive_destination_path }}"
 
 ### config_prefix
 
-The configuration prefix to use, by default /etc
+The configuration prefix to use, by default /etc. Note - Only valid to customize when installation_method: archive
 
-Default:  "/etc/"
+Default:  "/etc"
 
 ***
 
@@ -368,7 +368,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  1.43.0
+Default:  2.3.1
 
 ***
 
@@ -577,9 +577,20 @@ Default:  "{{ ['ksql'] if 'ksql' in groups else [] }}"
 Boolean to Run Host Validations. Validations include OS Version compatibility and Proper Internet Connectivity
 
 Default:  true
+
+***
+
+### skip_restarts
+
+Boolean used for disabling of systemd service restarts when rootless install is executed
+
+Default:  false
+
+***
+
 ### zookeeper_config_prefix
 
-Default Zookeeper config prefix
+Default Zookeeper config prefix. Note - Only valid to customize when installation_method: archive
 
 Default:  "{{ config_prefix }}/kafka"
 
@@ -785,9 +796,17 @@ Default:  "{{ zookeeper.properties }}"
 
 ***
 
+### zookeeper_skip_restarts
+
+Boolean used for disabling of systemd service restarts when rootless install is executed
+
+Default:  "{{ skip_restarts }}"
+
+***
+
 ### kafka_broker_config_prefix
 
-Default Kafka config prefix
+Default Kafka config prefix. Only valid to customize when installation_method: archive
 
 Default:  "{{ config_prefix }}/kafka"
 
@@ -1001,9 +1020,17 @@ Default:  ""
 
 ***
 
+### kafka_broker_skip_restarts
+
+Boolean used for disabling of systemd service restarts when rootless install is executed
+
+Default:  "{{ skip_restarts }}"
+
+***
+
 ### schema_registry_config_prefix
 
-Default Schema Registry config prefix
+Default Schema Registry config prefix. Only valid to customize when installation_method: archive
 
 Default:  "{{ config_prefix }}/schema-registry"
 
@@ -1185,9 +1212,17 @@ Default:  ""
 
 ***
 
+### schema_registry_skip_restarts
+
+Boolean used for disabling of systemd service restarts when rootless install is executed
+
+Default:  "{{ skip_restarts }}"
+
+***
+
 ### kafka_rest_config_prefix
 
-Default Kafka Rest config prefix
+Default Kafka Rest config prefix. Only valid to customize when installation_method: archive
 
 Default:  "{{ config_prefix }}/kafka-rest"
 
@@ -1361,6 +1396,14 @@ Default:  "{{ monitoring_interceptors_enabled }}"
 
 ***
 
+### kafka_rest_skip_restarts
+
+Boolean used for disabling of systemd service restarts when rootless install is executed
+
+Default:  "{{ skip_restarts }}"
+
+***
+
 ### kafka_connect_service_name
 
 Service Name to define/use for Kafka Connect System.d.
@@ -1374,9 +1417,12 @@ Default:  "{{kafka_connect_default_service_name}}"
 Config/Properties Filename to use when setting up and configuring Kafka Connect
 
 Default:  "{{kafka_connect_default_config_filename}}"
+
+***
+
 ### kafka_connect_config_prefix
 
-Default Kafka Connect config prefix
+Default Kafka Connect config prefix. Only valid to customize when installation_method: archive
 
 Default:  "{{ config_prefix }}/kafka"
 
@@ -1598,9 +1644,17 @@ Default:  ""
 
 ***
 
+### kafka_connect_skip_restarts
+
+Boolean used for disabling of systemd service restarts when rootless install is executed
+
+Default:  "{{ skip_restarts }}"
+
+***
+
 ### ksql_config_prefix
 
-Default KSQLDB config prefix
+Default KSQLDB config prefix. Only valid to customize when installation_method: archive
 
 Default:  "{{ config_prefix }}/ksqldb"
 
@@ -1806,9 +1860,17 @@ Default:  false
 
 ***
 
+### ksql_skip_restarts
+
+Boolean used for disabling of systemd service restarts when rootless install is executed
+
+Default:  "{{ skip_restarts }}"
+
+***
+
 ### control_center_config_prefix
 
-Default Control Center config prefix
+Default Control Center config prefix. Only valid to customize when installation_method: archive
 
 Default:  "{{ config_prefix }}/confluent-control-center"
 
@@ -1891,6 +1953,14 @@ Default:  "{{ 3 if ccloud_kafka_enabled|bool else
 Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
 
 Default:  "{{ control_center.properties }}"
+
+***
+
+### control_center_skip_restarts
+
+Boolean used for disabling of systemd service restarts when rootless install is executed
+
+Default:  "{{ skip_restarts }}"
 
 ***
 
@@ -2224,7 +2294,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### secrets_protection_enabled
 
-Boolean to enable secrets protection on all components except Zookeeper
+Boolean to enable secrets protection on all components except Zookeeper. Starting form CP 7.1.0 Secrets protection. This works only with RBAC.
 
 Default:  false
 
@@ -2752,9 +2822,17 @@ Default:  "{{ control_center_ldap_password if rbac_enabled|bool else control_cen
 
 ### kafka_connect_replicator_config_prefix
 
-Default Kafka Connect Replicator config prefix
+Default Kafka Connect Replicator config prefix. Note - Only valid to customize when installation_method: archive
 
 Default:  "{{ config_prefix }}/kafka-connect-replicator"
+
+***
+
+### kafka_connect_replicator_skip_restarts
+
+Boolean used for disabling of systemd service restarts when rootless install is executed
+
+Default:  "{{ skip_restarts }}"
 
 ***
 
@@ -3974,6 +4052,14 @@ Default:  localhost:9092
 
 ***
 
+### ccloud_kafka_key
+
+CCloud Kafka Key
+
+Default:  xxxxx
+
+***
+
 ### public_certificates_enabled
 
 Boolean to skip truststore creation and configuration. Signifies kafka's certificates were signed by a public certificate authority.
@@ -3995,6 +4081,22 @@ Default:  false
 Url to CCloud Schema Registry
 
 Default:  https://localhost:8081
+
+***
+
+### ccloud_schema_registry_key
+
+CCloud Schema Registry Key
+
+Default:  xxxxx
+
+***
+
+### ccloud_schema_registry_secret
+
+CCloud Schema Registry Secret
+
+Default:  yyyyyy
 
 ***
 
