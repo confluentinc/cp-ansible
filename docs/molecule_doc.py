@@ -10,7 +10,7 @@ And writes to formatted markdown file.
 import os
 
 # Set path to molecule scenarios
-path = 'molecule/'
+path = '../molecule/'
 
 # Define a list to contain tags to search against
 tags = ["###","####"]
