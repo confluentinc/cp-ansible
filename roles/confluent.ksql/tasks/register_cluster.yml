@@ -6,7 +6,16 @@
   vars:
     copy_certs: false
 
+- name: Fetch KSQL Cluster Groups
+  set_fact: active_ksql_groups="{{ (((active_ksql_groups | default([])) + hostvars[item].group_names) | difference('ksql'+'ksql_parallel'+'ksql_serial')) | default(['ksql'], true) }}"
+  with_items: "{{ ansible_play_hosts }}"
+
 - name: Register KSQL Cluster
+  vars:
+    cluster_host_delegates: "{{ active_ksql_groups | map('extract', groups, 0)  }}"
+    cluster_group: "{{ hostvars[item].parent_ksql_cluster_group }}"
+    cluster_name: "{{ hostvars[item].ksql_cluster_name }}"
+    cluster_id: "{{ hostvars[item].parent_ksql_cluster_id }}"
   uri:
     url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/registry/clusters"
     method: POST
@@ -20,17 +29,21 @@
     body: >
       [
           {
-              "clusterName": "{{ksql_cluster_name}}",
+              "clusterName": "{{ cluster_name }}",
               "scope": {
                   "clusters": {
                       "kafka-cluster": "{{kafka_cluster_id}}",
-                      "ksql-cluster": "{{ksql_final_properties['ksql.service.id']}}"
+                      "ksql-cluster": "{{ cluster_id }}"
                   }
               },
-              "hosts": [ {% for host in groups[parent_ksql_cluster] %}{% if loop.index > 1%},{% endif %}{ "host": "{{host}}", "port": {{ksql_listener_port}} }{% endfor %}
+              "hosts": [ {% for host in groups[cluster_group] %}{% if loop.index > 1%},{% endif %}{ "host": "{{host}}", "port": {{ksql_listener_port}} }{% endfor %}
               ],
               "protocol": "{{ksql_http_protocol | upper}}"
           }
       ]
     status_code: 204
   register: output
+  when: (hostvars[item].rbac_enabled|bool) and
+        (hostvars[item].ksql_cluster_name is defined) and 
+        (hostvars[item].parent_ksql_cluster_id is defined) 
+  with_items: "{{ cluster_host_delegates }}"
