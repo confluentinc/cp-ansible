@@ -1,0 +1,139 @@
+---
+### RBAC SSL - Multiple KSQL Clusters
+##
+## The following is an example inventory file of the configuration required for setting up Confluent Platform with:
+# RBAC enabled, mTLS enabled, and Kerberos authentication on the Interbroker and external client listeners.
+
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: ec2-user
+    ansible_become: true
+    ansible_ssh_private_key_file: /home/ec2-user/guest.pem
+
+    ## TLS Configuration - Custom Certificates
+    ssl_enabled: true
+    ssl_custom_certs: true
+    ssl_ca_cert_filepath: "/home/ec2-user/repos/tools/generated_ssl_files/confluent-root-certificate.crt"
+    # If these three vars can't follow a pattern, or the password is different per host, move them under each host
+    ssl_signed_cert_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/{{inventory_hostname}}-server.crt"
+    ssl_key_filepath: "/home/ec2-user/repos/tls_generation/generated_ssl_files/{{inventory_hostname}}-server-private-key.key"
+    ssl_key_password: password
+
+    #### SASL Authentication Configuration - Choose the one that suit your requirements and configure according ####
+    ## By default there will be no SASL Authentication
+    ## For SASL/PLAIN uncomment this line:
+    # sasl_protocol: plain
+    ## For SASL/SCRAM uncomment this line:
+    # sasl_protocol: scram
+    ## For SASL/GSSAPI uncomment this line and see Kerberos Configuration properties below
+    # sasl_protocol: kerberos
+
+    ## RBAC Configuration
+    rbac_enabled: true
+
+    create_mds_certs: false
+    token_services_public_pem_file: /home/ec2-user/keys/public.pem
+    token_services_private_pem_file: /home/ec2-user/keys/tokenKeypair.pem
+
+    ## LDAP CONFIGURATION
+    kafka_broker_custom_properties:
+      ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+      ldap.com.sun.jndi.ldap.read.timeout: 3000
+      ldap.java.naming.provider.url: ldaps://ldap1:636
+      ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
+      ldap.java.naming.security.credentials: password
+      ldap.java.naming.security.authentication: simple
+      ldap.user.search.base: OU=rbac,DC=example,DC=com
+      ldap.group.search.base: OU=rbac,DC=example,DC=com
+      ldap.user.name.attribute: uid
+      ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+      ldap.group.name.attribute: cn
+      ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+      ldap.user.object.class: account
+
+    ## LDAP USERS
+    mds_super_user: mds
+    mds_super_user_password: password
+    kafka_broker_ldap_user: kafka_broker
+    kafka_broker_ldap_password: password
+    schema_registry_ldap_user: schema_registry
+    schema_registry_ldap_password: password
+    kafka_connect_ldap_user: connect_worker
+    kafka_connect_ldap_password: password
+    ksql_ldap_user: ksql
+    ksql_ldap_password: password
+    kafka_rest_ldap_user: rest_proxy
+    kafka_rest_ldap_password: password
+    control_center_ldap_user: control_center
+    control_center_ldap_password: password
+
+    ## (OPTIONAL) SYSTEM ADMINS (SYSTEM ADMIN ROLEBINDINGS)
+    # A list of users can be specified for all the componentes using 'rbac_component_additional_system_admins:'
+    # Or individual components [component]_additional_system_admins (i.e. schema_registry_additional_system_admins)
+
+zookeeper:
+  hosts:
+    demo-zk-0:
+    demo-zk-1:
+    demo-zk-2:
+
+kafka_broker:
+  hosts:
+    demo-broker-0:
+    demo-broker-1:
+    demo-broker-2:
+
+schema_registry:
+  hosts:
+    demo-sr-0:
+
+kafka_connect:
+  hosts:
+    demo-connect-0:    
+
+kafka_rest:
+  hosts:
+    demo-rest-0:
+
+#### To configure multiple ksql clusters, make use of child groups
+## Note: There can only be one ksql group (parent). So decide on other group names that are not 'ksql'
+## IMPORTANT: There are two vars that must be defined when configuring multiple ksql cluster
+## 'ksql_service_id' - This is mandatory but has a single default value, thus must be override and be unique for each cluster 
+##                     It also used as prefix of the command topics and log topic when 'ksql_log_streaming_enabled: true'
+##                     By convetion it should end with and underscore sign
+## 'ksql_cluster_name' - This is the value used to register the cluster in MDS
+##                       Proper registration will only occur if a name is given (the value exists)
+##                       uniqueness is not required but recommended
+##                       Its the 'firendly' name used in the Role Management GUIs in Control Center
+##                       Name can be changed in succesive runs but the clsuter must be unregister "manually" before hand
+ksql_wraggle:
+  vars:
+    ksql_cluster_name: ksql-wraggle
+    ksql_service_id: wraggle-ksql_
+  hosts:
+    demo-ksql-0:
+    demo-ksql-2:
+
+ksql_analytics:
+  vars:
+    ksql_cluster_name: anaytics-ksql-cluster
+    ksql_service_id: analytics-ksql_
+  hosts:
+    demo-ksql-1:
+
+ksql:
+  children:
+    ksql_wraggle:
+    ksql_analytics:
+
+control_center:
+  # ## When configuring multiple ksql clusters, the below variables are mandatory
+  # # The group names must match the group names as they are in your inventory
+  # # The group names are currently used as "cluster names" in Control Center KSQL tab
+  vars:
+    ksql_cluster_ansible_group_names:
+      - ksql_analytics
+      - ksql_wraggle
+  hosts:
+    demo-c3-0:
