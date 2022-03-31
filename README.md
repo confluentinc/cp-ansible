@@ -30,9 +30,9 @@ Use [bump2version](https://github.com/c4urself/bump2version) tool to bump versio
 ## Contributing
 
 
-If you would like to contribute to the CP-Ansible project, please refer to the [CONTRIBUTE.md](https://github.com/confluentinc/cp-ansible/blob/5.4.x/CONTRIBUTING.md)
+If you would like to contribute to the CP-Ansible project, please refer to the [CONTRIBUTE.md](CONTRIBUTING.md)
 
 
 ## License
 
-[Apache 2.0](https://github.com/confluentinc/cp-ansible/blob/5.4.x/LICENSE.md)
+[Apache 2.0](LICENSE.md)
