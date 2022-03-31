@@ -24,14 +24,14 @@ The services that can be installed from this repository are:
 
 You can find the documentation for running CP-Ansible at https://docs.confluent.io/current/installation/cp-ansible/index.html.
 
-You can find supported configuration variables in [VARIABLES.md](https://github.com/confluentinc/cp-ansible/blob/6.2.x/VARIABLES.md)
+You can find supported configuration variables in [VARIABLES.md](VARIABLES.md)
 
 ## Contributing
 
 
-If you would like to contribute to the CP-Ansible project, please refer to the [CONTRIBUTE.md](https://github.com/confluentinc/cp-ansible/blob/6.2.x/CONTRIBUTING.md)
+If you would like to contribute to the CP-Ansible project, please refer to the [CONTRIBUTE.md](CONTRIBUTING.md)
 
 
 ## License
 
-[Apache 2.0](https://github.com/confluentinc/cp-ansible/blob/6.2.x/LICENSE.md)
+[Apache 2.0](LICENSE.md)
