@@ -664,7 +664,7 @@ Default:  "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
 
 Set this variable to customize the directory that Zookeeper writes log files to. Default location is /var/log/kafka. NOTE- zookeeper.log_path is deprecated.
 
-Default:  "{{zookeeper.log_path}}"
+Default:  "{{zookeeper_default_log_dir}}"
 
 ***
 
@@ -792,7 +792,7 @@ Default:  []
 
 Use to set custom zookeeper properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- zookeeper.properties is deprecated.
 
-Default:  "{{ zookeeper.properties }}"
+Default:  {}
 
 ***
 
@@ -864,7 +864,7 @@ Default:  "{{kafka_broker_default_group}}"
 
 Set this variable to customize the directory that the Kafka Broker writes log files to. Default location is /var/log/kafka. NOTE- kafka_broker.appender_log_path is deprecated.
 
-Default:  "{{kafka_broker.appender_log_path}}"
+Default:  "{{kafka_broker_default_log_dir}}"
 
 ***
 
@@ -992,7 +992,7 @@ Default:  "{{ 'control_center' in groups }}"
 
 Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 
-Default:  "{{ kafka_broker.properties }}"
+Default:  {}
 
 ***
 
@@ -1096,7 +1096,7 @@ Default:  "{{ 'mtls' if schema_registry_ssl_mutual_auth_enabled else 'none' }}"
 
 Set this variable to customize the directory that the Schema Registry writes log files to. Default location is /var/log/confluent/schema-registry. NOTE- schema_registry.appender_log_path is deprecated.
 
-Default:  "{{schema_registry.appender_log_path}}"
+Default:  "{{schema_registry_default_log_dir}}"
 
 ***
 
@@ -1200,7 +1200,7 @@ Default:  []
 
 Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 
-Default:  "{{ schema_registry.properties }}"
+Default:  {}
 
 ***
 
@@ -1280,7 +1280,7 @@ Default:  "{{ 'mtls' if kafka_rest_ssl_mutual_auth_enabled else 'none' }}"
 
 Set this variable to customize the directory that the Rest Proxy writes log files to. Default location is /var/log/confluent/kafka-rest. NOTE- kafka_rest.appender_log_path is deprecated.
 
-Default:  "{{kafka_rest.appender_log_path}}"
+Default:  "{{kafka_rest_default_log_dir}}"
 
 ***
 
@@ -1384,7 +1384,7 @@ Default:  []
 
 Use to set custom Rest Proxy properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_rest.properties is deprecated.
 
-Default:  "{{ kafka_rest.properties }}"
+Default:  {}
 
 ***
 
@@ -1480,7 +1480,7 @@ Default:  "{{ 'mtls' if kafka_connect_ssl_mutual_auth_enabled|bool else 'none' }
 
 Set this variable to customize the directory that Kafka Connect writes log files to. Default location is /var/log/kafka. NOTE- kafka_connect.appender_log_path is deprecated.
 
-Default:  "{{kafka_connect.appender_log_path}}"
+Default:  "{{kafka_connect_default_log_dir}}"
 
 ***
 
@@ -1624,7 +1624,7 @@ Default:  39ff95832750c0090d84ddf5344583832efe91ef
 
 Use to set custom Connect properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_connect.properties is deprecated.
 
-Default:  "{{ kafka_connect.properties }}"
+Default:  {}
 
 ***
 
@@ -1712,7 +1712,7 @@ Default:  "{{ 'mtls' if ksql_ssl_mutual_auth_enabled|bool else 'none' }}"
 
 Set this variable to customize the directory that ksqlDB writes log files to. Default location is /var/log/confluent/ksql. NOTE- ksql.appender_log_path is deprecated.
 
-Default:  "{{ksql.appender_log_path}}"
+Default:  "{{ksql_default_log_dir}}"
 
 ***
 
@@ -1832,7 +1832,7 @@ Default:  default_
 
 Use to set custom ksqlDB properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- ksql.properties is deprecated.
 
-Default:  "{{ ksql.properties }}"
+Default:  {}
 
 ***
 
@@ -1928,7 +1928,7 @@ Default:  none
 
 Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
 
-Default:  "{{control_center.appender_log_path}}"
+Default:  "{{control_center_default_log_dir}}"
 
 ***
 
@@ -1952,7 +1952,7 @@ Default:  "{{ 3 if ccloud_kafka_enabled|bool else
 
 Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
 
-Default:  "{{ control_center.properties }}"
+Default:  {}
 
 ***
 
