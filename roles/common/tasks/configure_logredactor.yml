@@ -1,0 +1,44 @@
+---
+- name: Get the logger definition to check if redactor added
+  ansible.builtin.shell: grep {{ item.logger_name }} {{ log4j_file }}
+  register: output
+  failed_when: output.rc == 2
+
+- name: Add redactor in the logger if not already added
+  ansible.builtin.replace:
+    path: "{{log4j_file}}"
+    regexp: '{{ item.logger_name }}=(.*)'
+    replace: '{{ item.logger_name }}=\1, {{ item.redactor_name }}'
+  when: not ( output | regex_search("{{ item.redactor_name }}") )
+
+- name: Check if the redactor has been configured
+  ansible.builtin.shell: grep "log4j.appender.{{ item.redactor_name }}=io.confluent.log4j.redactor.RedactorAppender" {{ log4j_file }}
+  register: output
+  failed_when: output.rc == 2
+
+- name: Declaring the redactor configuration if refresh interval not defined
+  set_fact:
+    redactor_appender_configuration: |-
+
+      log4j.appender.{{ item.redactor_name }}=io.confluent.log4j.redactor.RedactorAppender
+      log4j.appender.{{ item.redactor_name }}.appenderRefs={{ item.appenderRefs }}
+      log4j.appender.{{ item.redactor_name }}.policy=io.confluent.log4j.redactor.RedactorPolicy
+      log4j.appender.{{ item.redactor_name }}.policy.rules={{ logredactor_rule_var }}
+  when: logredactor_policy_refresh_interval_var == ""
+
+- name: Declaring the redactor configuration if refresh interval is defined
+  set_fact:
+    redactor_appender_configuration: |-
+
+      log4j.appender.{{ item.redactor_name }}=io.confluent.log4j.redactor.RedactorAppender
+      log4j.appender.{{ item.redactor_name }}.appenderRefs={{ item.appenderRefs }}
+      log4j.appender.{{ item.redactor_name }}.policy=io.confluent.log4j.redactor.RedactorPolicy
+      log4j.appender.{{ item.redactor_name }}.policy.rules={{ logredactor_rule_var }}
+      log4j.appender.{{ item.redactor_name }}.policy.refreshInterval={{ logredactor_policy_refresh_interval_var }}
+  when: logredactor_policy_refresh_interval_var != ""
+
+- name: Configure redactor if not already configured
+  ansible.builtin.lineinfile:
+    path: "{{log4j_file}}"
+    line: "{{ redactor_appender_configuration }}"
+  when: output.rc == 1
