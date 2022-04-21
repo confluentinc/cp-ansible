@@ -205,6 +205,27 @@
   tags:
     - configuration
 
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ schema_registry_logredactor_rule_path_local }}"
+    dest: "{{ schema_registry_logredactor_rule_path }}"
+    mode: 0644
+  when: (schema_registry_custom_log4j|bool) and (schema_registry_logredactor_enabled|bool) and (schema_registry_logredactor_rule_url == '')
+
+- name: Configure logredactor
+  include_role:
+    name: common
+    tasks_from: configure_logredactor.yml
+  vars:
+    log4j_file: "{{schema_registry.log4j_file}}"
+    logredactor_rule_var: "{% if schema_registry_logredactor_rule_url == '' %}{{schema_registry_logredactor_rule_path}}{% else %}{{schema_registry_logredactor_rule_url}}{% endif %}"
+    logredactor_policy_refresh_interval_var: "{{schema_registry_logredactor_policy_refresh_interval}}"
+  with_items: "{{ schema_registry_logredactor_logger_specs_list }}"
+  when: (schema_registry_custom_log4j|bool) and (schema_registry_logredactor_enabled|bool)
+
+- name: Restart schema registry
+  include_tasks: tasks/restart_and_wait.yml
+
 - name: Create Schema Registry Jolokia Config
   template:
     src: schema_registry_jolokia.properties.j2

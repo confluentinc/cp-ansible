@@ -237,6 +237,27 @@
   tags:
     - filesystem
 
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ control_center_logredactor_rule_path_local }}"
+    dest: "{{ control_center_logredactor_rule_path }}"
+    mode: 0644
+  when: (control_center_custom_log4j|bool) and (control_center_logredactor_enabled|bool) and (control_center_logredactor_rule_url == '')
+
+- name: Configure logredactor
+  include_role:
+    name: common
+    tasks_from: configure_logredactor.yml
+  vars:
+    log4j_file: "{{control_center.log4j_file}}"
+    logredactor_rule_var: "{% if control_center_logredactor_rule_url == '' %}{{control_center_logredactor_rule_path}}{% else %}{{control_center_logredactor_rule_url}}{% endif %}"
+    logredactor_policy_refresh_interval_var: "{{control_center_logredactor_policy_refresh_interval}}"
+  with_items: "{{ control_center_logredactor_logger_specs_list }}"
+  when: (control_center_custom_log4j|bool) and (control_center_logredactor_enabled|bool)
+
+- name: Restart control center
+  include_tasks: tasks/restart_and_wait.yml
+
 - name: Create RocksDB Directory
   file:
     path: "{{control_center_rocksdb_path}}"

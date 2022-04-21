@@ -226,6 +226,27 @@
   tags:
     - configuration
 
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ kafka_rest_logredactor_rule_path_local }}"
+    dest: "{{ kafka_rest_logredactor_rule_path }}"
+    mode: 0644
+  when: (kafka_rest_custom_log4j|bool) and (kafka_rest_logredactor_enabled|bool) and (kafka_rest_logredactor_rule_url == '')
+
+- name: Configure logredactor
+  include_role:
+    name: common
+    tasks_from: configure_logredactor.yml
+  vars:
+    log4j_file: "{{kafka_rest.log4j_file}}"
+    logredactor_rule_var: "{% if kafka_rest_logredactor_rule_url == '' %}{{kafka_rest_logredactor_rule_path}}{% else %}{{kafka_rest_logredactor_rule_url}}{% endif %}"
+    logredactor_policy_refresh_interval_var: "{{kafka_rest_logredactor_policy_refresh_interval}}"
+  with_items: "{{ kafka_rest_logredactor_logger_specs_list }}"
+  when: (kafka_rest_custom_log4j|bool) and (kafka_rest_logredactor_enabled|bool)
+
+- name: Restart kafka rest
+  include_tasks: tasks/restart_and_wait.yml
+
 - name: Create Kafka Rest Jolokia Config
   template:
     src: kafka_rest_jolokia.properties.j2

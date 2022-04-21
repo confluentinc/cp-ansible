@@ -253,6 +253,27 @@
   tags:
     - filesystem
 
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ kafka_broker_logredactor_rule_path_local }}"
+    dest: "{{ kafka_broker_logredactor_rule_path }}"
+    mode: 0644
+  when: (kafka_broker_custom_log4j|bool) and (kafka_broker_logredactor_enabled|bool) and (kafka_broker_logredactor_rule_url == '')
+
+- name: Configure logredactor
+  include_role:
+    name: common
+    tasks_from: configure_logredactor.yml
+  vars:
+    log4j_file: "{{kafka_broker.log4j_file}}"
+    logredactor_rule_var: "{% if kafka_broker_logredactor_rule_url == '' %}{{kafka_broker_logredactor_rule_path}}{% else %}{{kafka_broker_logredactor_rule_url}}{% endif %}"
+    logredactor_policy_refresh_interval_var: "{{kafka_broker_logredactor_policy_refresh_interval}}"
+  with_items: "{{ kafka_broker_logredactor_logger_specs_list }}"
+  when: (kafka_broker_custom_log4j|bool) and (kafka_broker_logredactor_enabled|bool)
+
+- name: Restart kafka broker
+  include_tasks: tasks/restart_and_wait.yml
+
 - name: Create Kafka Broker Jolokia Config
   template:
     src: kafka_jolokia.properties.j2

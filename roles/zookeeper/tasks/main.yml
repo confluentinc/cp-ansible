@@ -228,6 +228,27 @@
   tags:
     - configuration
 
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ zookeeper_logredactor_rule_path_local }}"
+    dest: "{{ zookeeper_logredactor_rule_path }}"
+    mode: 0644
+  when: (zookeeper_custom_log4j|bool) and (zookeeper_logredactor_enabled|bool) and (zookeeper_logredactor_rule_url == '')
+
+- name: Configure logredactor
+  include_role:
+    name: common
+    tasks_from: configure_logredactor.yml
+  vars:
+    log4j_file: "{{zookeeper.log4j_file}}"
+    logredactor_rule_var: "{% if zookeeper_logredactor_rule_url == '' %}{{zookeeper_logredactor_rule_path}}{% else %}{{zookeeper_logredactor_rule_url}}{% endif %}"
+    logredactor_policy_refresh_interval_var: "{{zookeeper_logredactor_policy_refresh_interval}}"
+  with_items: "{{ zookeeper_logredactor_logger_specs_list }}"
+  when: (zookeeper_custom_log4j|bool) and (zookeeper_logredactor_enabled|bool)
+
+- name: Restart zookeeper
+  include_tasks: tasks/restart_and_wait.yml
+
 - name: Create Zookeeper Jolokia Config
   template:
     src: zookeeper_jolokia.properties.j2
