@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.1.0
+Default:  7.2.0
 
 ***
 
@@ -2294,7 +2294,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### secrets_protection_enabled
 
-Boolean to enable secrets protection on all components except Zookeeper. Starting form CP 7.1.0 Secrets protection. This works only with RBAC.
+Boolean to enable secrets protection on all components except Zookeeper. Starting form CP 7.2.0 Secrets protection. This works only with RBAC.
 
 Default:  false
 
