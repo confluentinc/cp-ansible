@@ -5226,54 +5226,6 @@ Default:  "INFO, replicatorAppender, stdout"
 
 ***
 
-### kafka_connect_replicator_logredactor_enabled
-
-Boolean to enable logredactor for kafka_connect_replicator. Defaults to logredactor_enabled. Works only when kafka_connect_replicator_custom_log4j is set to true
-
-Default:  "{{ logredactor_enabled }}"
-
-***
-
-### kafka_connect_replicator_logredactor_rule_path_local
-
-Location of the kafka_connect_replicator logredactor rules file on the control node. This'll be copied to kafka_connect_replicator_logredactor_rule_path on the kafka_connect_replicator node. 
-
-Default:  "{{ logredactor_rule_path_local }}"
-
-***
-
-### kafka_connect_replicator_logredactor_rule_path
-
-Full path and name of the rules file on kafka_connect_replicator node. This is the location which will be referenced in the log4j property file when defining the redactor appender.
-
-Default:  "{{ logredactor_rule_path }}"
-
-***
-
-### kafka_connect_replicator_logredactor_rule_url
-
-URL address that contains or redirects to the redaction rules. If not "", this will be used to fetch rules. kafka_connect_replicator_logredactor_rule_path will be ignored.
-
-Default:  "{{ logredactor_rule_url }}"
-
-***
-
-### kafka_connect_replicator_logredactor_policy_refresh_interval
-
-If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If "", the policy rules will only be read once at startup.
-
-Default:  "{{ logredactor_policy_refresh_interval }}"
-
-***
-
-### kafka_connect_replicator_logredactor_logger_specs_list
-
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition.  
-
-Default: 
-
-***
-
 ### kafka_connect_replicator_custom_java_args
 
 Custom Java Args to add to the Kafka Connect Replicator Process
