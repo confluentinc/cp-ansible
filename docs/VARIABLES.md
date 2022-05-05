@@ -344,7 +344,7 @@ Default:  "/etc"
 
 Boolean to have cp-ansible download the Confluent CLI
 
-Default:  "{{rbac_enabled or secrets_protection_enabled}}"
+Default:  "{{rbac_enabled}}"
 
 ***
 
