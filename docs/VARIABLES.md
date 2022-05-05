@@ -144,7 +144,7 @@ Default:  false
 
 Location of the logredactor rules file on the control node. Ensure that the rules files exist here if logredactor enabled. This'll be copied to logredactor_host_rule_path for all components. Not required if logredactor_rule_url is specified.
 
-Default:  ../../../rules.json
+Default:  ""
 
 ***
 
@@ -152,7 +152,7 @@ Default:  ../../../rules.json
 
 Full path and name of the rules file on all components. This is the location which will be referenced in the log4j property file on the redactor appender. Not required if logredactor_rule_url is specified. Ensure that the path/directory exists.
 
-Default:  /etc/kafka/rules.json
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/{{ config_prefix }}/rules.json"
 
 ***
 
@@ -166,9 +166,9 @@ Default:  ""
 
 ### logredactor_policy_refresh_interval
 
-If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. Default is "" i.e. policy rules read only at startup. Can be specified as logredactor_policy_refresh_interval: 7000
+If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. Default is 0 and it means that the policy rules will be checked only at startup. Can be specified as logredactor_policy_refresh_interval: 7000
 
-Default:  ""
+Default:  0
 
 ***
 
