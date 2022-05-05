@@ -136,7 +136,7 @@ Default:  true
 
 Boolean to enable logredactor for all components. Works only when enabled along with custom_log4j. If enabled, ensure correct value of logredactor_rule_path/url
 
-Default:  false
+Default:  true
 
 ***
 
@@ -4370,7 +4370,7 @@ Default:  "{{ logredactor_rule_url }}"
 
 ### control_center_logredactor_policy_refresh_interval
 
-If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If "", the policy rules will only be read once at startup.
+If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If set to 0 (default), the policy rules will only be read once at startup.
 
 Default:  "{{ logredactor_policy_refresh_interval }}"
 
@@ -4504,7 +4504,7 @@ Default:  "{{ logredactor_rule_url }}"
 
 ### kafka_broker_logredactor_policy_refresh_interval
 
-If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If "", the policy rules will only be read once at startup.
+If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If set to 0 (default), the policy rules will only be read once at startup.
 
 Default:  "{{ logredactor_policy_refresh_interval }}"
 
@@ -4638,7 +4638,7 @@ Default:  "{{ logredactor_rule_url }}"
 
 ### kafka_connect_logredactor_policy_refresh_interval
 
-If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If "", the policy rules will only be read once at startup.
+If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If set to 0 (default), the policy rules will only be read once at startup.
 
 Default:  "{{ logredactor_policy_refresh_interval }}"
 
@@ -4764,7 +4764,7 @@ Default:  "{{ logredactor_rule_url }}"
 
 ### kafka_rest_logredactor_policy_refresh_interval
 
-If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If "", the policy rules will only be read once at startup.
+If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If set to 0 (default), the policy rules will only be read once at startup.
 
 Default:  "{{ logredactor_policy_refresh_interval }}"
 
@@ -4890,7 +4890,7 @@ Default:  "{{ logredactor_rule_url }}"
 
 ### ksql_logredactor_policy_refresh_interval
 
-If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If "", the policy rules will only be read once at startup.
+If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If set to 0 (default), the policy rules will only be read once at startup.
 
 Default:  "{{ logredactor_policy_refresh_interval }}"
 
@@ -5024,9 +5024,9 @@ Default:  "{{ logredactor_rule_url }}"
 
 ### schema_registry_logredactor_policy_refresh_interval
 
-If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If "", the policy rules will only be read once at startup.
+If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If set to 0 (default), the policy rules will only be read once at startup.
 
-Default:  "{{ logredactor_policy_refresh_interval }}"
+Default:  0
 
 ***
 
@@ -5150,9 +5150,9 @@ Default:  "{{ logredactor_rule_url }}"
 
 ### zookeeper_logredactor_policy_refresh_interval
 
-If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If "", the policy rules will only be read once at startup.
+If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If set to 0 (default), the policy rules will only be read once at startup.
 
-Default:  "{{ logredactor_policy_refresh_interval }}"
+Default:  7000
 
 ***
 
