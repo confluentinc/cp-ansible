@@ -136,7 +136,7 @@ Default:  true
 
 Boolean to enable logredactor for all components. Works only when enabled along with custom_log4j. If enabled, ensure correct value of logredactor_rule_path/url
 
-Default:  true
+Default:  false
 
 ***
 
@@ -150,7 +150,7 @@ Default:  ""
 
 ### logredactor_rule_path
 
-Full path and name of the rules file on all components. This is the location which will be referenced in the log4j property file on the redactor appender. Not required if logredactor_rule_url is specified. Ensure that the path/directory exists.
+Full path and name of the rules file on all components. This is the location which will be referenced in the log4j property file on the redactor appender. Not required if logredactor_rule_url is specified.
 
 Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/{{ config_prefix }}/rules.json"
 
@@ -5026,7 +5026,7 @@ Default:  "{{ logredactor_rule_url }}"
 
 If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If set to 0 (default), the policy rules will only be read once at startup.
 
-Default:  0
+Default:  "{{ logredactor_policy_refresh_interval }}"
 
 ***
 
@@ -5152,7 +5152,7 @@ Default:  "{{ logredactor_rule_url }}"
 
 If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. If set to 0 (default), the policy rules will only be read once at startup.
 
-Default:  7000
+Default:  "{{ logredactor_policy_refresh_interval }}"
 
 ***
 
