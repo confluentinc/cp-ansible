@@ -158,7 +158,7 @@ Default:  "{{ archive_config_base_path if installation_method == 'archive' else 
 
 ### logredactor_rule_url
 
-URL address that contains or redirects to the redaction rules. If not "", this will be used to fetch rules. logredactor_rule_path will be ignored.
+URL that contains or redirects to the redaction rules. If not "", this will be used to fetch rules and logredactor_rule_path will be ignored.
 
 Default:  ""
 
@@ -4362,7 +4362,7 @@ Default:  "{{ logredactor_rule_path }}"
 
 ### control_center_logredactor_rule_url
 
-URL address that contains or redirects to the redaction rules. If not "", this will be used to fetch rules. control_center_logredactor_rule_path will be ignored.
+URL that contains or redirects to the redaction rules. If not "", this will be used to fetch rules and control_center_logredactor_rule_path will be ignored.
 
 Default:  "{{ logredactor_rule_url }}"
 
@@ -4378,7 +4378,7 @@ Default:  "{{ logredactor_policy_refresh_interval }}"
 
 ### control_center_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition.  
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
 Default: 
 
@@ -4496,7 +4496,7 @@ Default:  "{{ logredactor_rule_path }}"
 
 ### kafka_broker_logredactor_rule_url
 
-URL address that contains or redirects to the redaction rules. If not "", this will be used to fetch rules. kafka_broker_logredactor_rule_path will be ignored.
+URL that contains or redirects to the redaction rules. If not "", this will be used to fetch rules and kafka_broker_logredactor_rule_path will be ignored.
 
 Default:  "{{ logredactor_rule_url }}"
 
@@ -4512,7 +4512,7 @@ Default:  "{{ logredactor_policy_refresh_interval }}"
 
 ### kafka_broker_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition.  
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
 Default: 
 
@@ -4630,7 +4630,7 @@ Default:  "{{ logredactor_rule_path }}"
 
 ### kafka_connect_logredactor_rule_url
 
-URL address that contains or redirects to the redaction rules. If not "", this will be used to fetch rules. kafka_connect_logredactor_rule_path will be ignored.
+URL that contains or redirects to the redaction rules. If not "", this will be used to fetch rules and kafka_connect_logredactor_rule_path will be ignored.
 
 Default:  "{{ logredactor_rule_url }}"
 
@@ -4646,7 +4646,7 @@ Default:  "{{ logredactor_policy_refresh_interval }}"
 
 ### kafka_connect_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition.  
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
 Default: 
 
@@ -4756,7 +4756,7 @@ Default:  "{{ logredactor_rule_path }}"
 
 ### kafka_rest_logredactor_rule_url
 
-URL address that contains or redirects to the redaction rules. If not "", this will be used to fetch rules. kafka_rest_logredactor_rule_path will be ignored.
+URL that contains or redirects to the redaction rules. If not "", this will be used to fetch rules and kafka_rest_logredactor_rule_path will be ignored.
 
 Default:  "{{ logredactor_rule_url }}"
 
@@ -4772,7 +4772,7 @@ Default:  "{{ logredactor_policy_refresh_interval }}"
 
 ### kafka_rest_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition.  
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
 Default: 
 
@@ -4882,7 +4882,7 @@ Default:  "{{ logredactor_rule_path }}"
 
 ### ksql_logredactor_rule_url
 
-URL address that contains or redirects to the redaction rules. If not "", this will be used to fetch rules. ksql_logredactor_rule_path will be ignored.
+URL that contains or redirects to the redaction rules. If not "", this will be used to fetch rules and ksql_logredactor_rule_path will be ignored.
 
 Default:  "{{ logredactor_rule_url }}"
 
@@ -4898,7 +4898,7 @@ Default:  "{{ logredactor_policy_refresh_interval }}"
 
 ### ksql_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition.  
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
 Default: 
 
@@ -5016,7 +5016,7 @@ Default:  "{{ logredactor_rule_path }}"
 
 ### schema_registry_logredactor_rule_url
 
-URL address that contains or redirects to the redaction rules. If not "", this will be used to fetch rules. schema_registry_logredactor_rule_path will be ignored.
+URL that contains or redirects to the redaction rules. If not "", this will be used to fetch rules and schema_registry_logredactor_rule_path will be ignored.
 
 Default:  "{{ logredactor_rule_url }}"
 
@@ -5032,7 +5032,7 @@ Default:  "{{ logredactor_policy_refresh_interval }}"
 
 ### schema_registry_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition.  
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
 Default: 
 
@@ -5142,7 +5142,7 @@ Default:  "{{ logredactor_rule_path }}"
 
 ### zookeeper_logredactor_rule_url
 
-URL address that contains or redirects to the redaction rules. If not "", this will be used to fetch rules. zookeeper_logredactor_rule_path will be ignored.
+URL that contains or redirects to the redaction rules. If not "", this will be used to fetch rules and zookeeper_logredactor_rule_path will be ignored.
 
 Default:  "{{ logredactor_rule_url }}"
 
@@ -5158,7 +5158,7 @@ Default:  "{{ logredactor_policy_refresh_interval }}"
 
 ### zookeeper_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition.  
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
 Default: 
 
