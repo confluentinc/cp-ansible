@@ -1,4 +1,8 @@
 ---
+- name: Register redactor name
+  set_fact:
+    redactor_name: redactor_{{ item.logger_name | replace ('.', '_') }}
+
 - name: Get the logger definition to check if redactor added
   ansible.builtin.shell: grep ^{{ item.logger_name }} {{ log4j_file }}
   register: output
@@ -8,11 +12,11 @@
   ansible.builtin.replace:
     path: "{{log4j_file}}"
     regexp: '{{ item.logger_name }}=(.*)'
-    replace: '{{ item.logger_name }}=\1, {{ item.redactor_name }}'
-  when: not ( output | regex_search("{{ item.redactor_name }}") )
+    replace: '{{ item.logger_name }}=\1, {{ redactor_name }}'
+  when: not ( output | regex_search("{{ redactor_name }}") )
 
 - name: Check if the redactor has been configured
-  ansible.builtin.shell: grep "log4j.appender.{{ item.redactor_name }}=io.confluent.log4j.redactor.RedactorAppender" {{ log4j_file }}
+  ansible.builtin.shell: grep "log4j.appender.{{ redactor_name }}=io.confluent.log4j.redactor.RedactorAppender" {{ log4j_file }}
   register: output
   failed_when: output.rc > 1
 
@@ -20,10 +24,11 @@
   set_fact:
     redactor_appender_configuration: |-
 
-      log4j.appender.{{ item.redactor_name }}=io.confluent.log4j.redactor.RedactorAppender
-      log4j.appender.{{ item.redactor_name }}.appenderRefs={{ item.appenderRefs }}
-      log4j.appender.{{ item.redactor_name }}.policy=io.confluent.log4j.redactor.RedactorPolicy
-      log4j.appender.{{ item.redactor_name }}.policy.rules={{ logredactor_rule_var }}{% if logredactor_policy_refresh_interval_var != '0' %}\nlog4j.appender.{{ item.redactor_name }}.policy.refreshInterval={{ logredactor_policy_refresh_interval_var }}{% endif %}
+      log4j.appender.{{ redactor_name }}=io.confluent.log4j.redactor.RedactorAppender
+      log4j.appender.{{ redactor_name }}.appenderRefs={{ item.appenderRefs }}
+      log4j.appender.{{ redactor_name }}.policy=io.confluent.log4j.redactor.RedactorPolicy
+      log4j.appender.{{ redactor_name }}.policy.rules={{ logredactor_rule_var }}
+      {% if logredactor_policy_refresh_interval_var != '0' and logredactor_policy_refresh_interval_var != 0 %}log4j.appender.{{ redactor_name }}.policy.refreshInterval={{ logredactor_policy_refresh_interval_var }}{% endif %}
 
 - name: Configure redactor if not already configured
   ansible.builtin.lineinfile:
