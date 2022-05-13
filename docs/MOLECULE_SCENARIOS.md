@@ -412,6 +412,8 @@ Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-
 
 Custom log dirs for all components.
 
+Logredactor enabled for all components.
+
 #### Scenario archive-plain-rhel verify test's the following:
 
 Validates that SASL SSL protocol is set across all components.
@@ -419,6 +421,8 @@ Validates that SASL SSL protocol is set across all components.
 Validates that custom log4j configuration is in place.
 
 Validates that FIPS security is enabled on the Brokers.
+
+Validates that logredactor is functioning properly for all components as per the rule file.
 
 ***
 
@@ -590,7 +594,7 @@ RBAC enabled.
 
 MTLS enabled.
 
-Secrets protection enabled.
+Secrets protection disabled
 
 Kafka Broker Customer Listener.
 

@@ -204,6 +204,7 @@
     mode: 0770
   tags:
     - filesystem
+    - log
 
 - name: Update log4j Config for Log Cleanup
   include_role:
@@ -216,6 +217,8 @@
     log4j_root_logger: "{{kafka_rest_log4j_root_logger}}"
     handler: "restart kafka-rest"
   when: kafka_rest_custom_log4j|bool
+  tags:
+    - log
 
 - name: Set Permissions on Log4j Conf
   file:
@@ -225,6 +228,46 @@
     mode: 0640
   tags:
     - configuration
+    - log
+
+- name: Create logredactor rule file directory
+  file:
+    path: "{{ kafka_rest_logredactor_rule_path | dirname }}"
+    state: directory
+    mode: 0755
+  when: (kafka_rest_custom_log4j|bool) and (kafka_rest_logredactor_enabled|bool) and (kafka_rest_logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ kafka_rest_logredactor_rule_path_local }}"
+    dest: "{{ kafka_rest_logredactor_rule_path }}"
+    mode: 0644
+  when: (kafka_rest_custom_log4j|bool) and (kafka_rest_logredactor_enabled|bool) and (kafka_rest_logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Configure logredactor
+  include_role:
+    name: common
+    tasks_from: configure_logredactor.yml
+  vars:
+    log4j_file: "{{kafka_rest.log4j_file}}"
+    logredactor_rule_var: "{% if kafka_rest_logredactor_rule_url == '' %}{{kafka_rest_logredactor_rule_path}}{% else %}{{kafka_rest_logredactor_rule_url}}{% endif %}"
+    logredactor_policy_refresh_interval_var: "{{kafka_rest_logredactor_policy_refresh_interval}}"
+  with_items: "{{ kafka_rest_logredactor_logger_specs_list }}"
+  when: (kafka_rest_custom_log4j|bool) and (kafka_rest_logredactor_enabled|bool)
+  tags:
+    - log
+
+- name: Restart kafka rest
+  ansible.builtin.debug: 
+    msg: "restarting kafka rest"
+  notify: restart kafka-rest
+  when: (kafka_rest_custom_log4j|bool) and (kafka_rest_logredactor_enabled|bool)
+  tags:
+    - log
 
 - name: Create Kafka Rest Jolokia Config
   template:

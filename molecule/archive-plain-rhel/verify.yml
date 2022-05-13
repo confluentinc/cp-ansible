@@ -2,6 +2,7 @@
 ### Validates that SASL SSL protocol is set across all components.
 ### Validates that custom log4j configuration is in place.
 ### Validates that FIPS security is enabled on the Brokers.
+### Validates that logredactor is functioning properly for all components as per the rule file.
 
 - name: Verify - kafka_broker
   hosts: kafka_broker
@@ -90,3 +91,28 @@
     - import_role:
         name: confluent.test
         tasks_from: check_log4j.yml
+
+- name: Verify logredactor
+  hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:kafka_rest:control_center
+  gather_facts: false
+  tasks:
+    - name: Create a mapping of component and log file
+      set_fact:
+        component_log_file_mapping:
+          zookeeper: "{{zookeeper_log_dir}}/zookeeper-server.log"
+          kafka-broker: "{{kafka_broker_log_dir}}/server.log"
+          schema-registry: "{{schema_registry_log_dir}}/schema-registry.log"
+          kafka-connect: "{{kafka_connect_log_dir}}/connect.log"
+          ksql: "{{ksql_log_dir}}/ksql.log"
+          kafka-rest: "{{kafka_rest_log_dir}}/kafka-rest.log"
+          control-center: "{{control_center_log_dir}}/control-center.log"
+
+    - name: Parse out the component name
+      set_fact:
+        component: "{{inventory_hostname[:-1]}}"
+
+    - name: Confirm presence of redacted word in log file
+      shell: |
+        grep -m 1 "<he-who-must-not-be-named>" {{component_log_file_mapping[component]}}
+      register: output
+      failed_when: (output.rc == 1) or (output.rc == 2)
