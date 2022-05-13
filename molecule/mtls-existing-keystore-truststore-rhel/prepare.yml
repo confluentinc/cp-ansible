@@ -1,0 +1,24 @@
+---
+- name: Create Custom Certs
+  import_playbook: ../certificates.yml
+
+- name: Copy keystore and truststore to the host nodes
+  hosts: zookeeper:kafka_broker:schema_registry:kafka_rest:kafka_connect:ksql:control_center
+  tasks:
+    - name: Create a directory if it does not exist
+      ansible.builtin.file:
+        path: /var/ssl/private
+        state: directory
+        mode: '0755'
+    - set_fact:
+        keystore_path: "{{ '/var/ssl/private/' + inventory_hostname[:-1] | replace ('-', '_') + '.keystore.jks' }}"
+    - set_fact:
+        truststore_path: "{{ '/var/ssl/private/' + inventory_hostname[:-1] | replace ('-', '_') + '.truststore.jks' }}"
+    - name: Copy truststore
+      copy:
+        src: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/truststore.jks"
+        dest: "{{ truststore_path }}"
+    - name: Copy keystore
+      copy:
+        src: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}.keystore.jks"
+        dest: "{{ keystore_path }}"
