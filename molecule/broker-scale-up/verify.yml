@@ -1,0 +1,65 @@
+---
+- name: Verify - kafka_brokers
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Get Broker's URL
+      uri:
+        url: "https://kafka-broker3:8090/kafka/v3/clusters"
+        status_code: 200
+        validate_certs: false
+      register: broker_uri
+    
+    - name: Get Brokers from broker URL
+      uri:
+        url: "{{ broker_uri.json.data[0].brokers.related }}"
+        status_code: 200
+        validate_certs: false
+      register: brokers
+    
+      #$curl -s -k "https://localhost:8090/kafka/v3/clusters/DhCVMZ01QiK2AFqbGnSuZw/brokers" | jq '(.data[] | [.host, .broker_id]) | @csv'
+    - name: Assert length of brokers list
+      assert:
+        that: brokers.json.data | length == 5
+        fail_msg: "Number of brokers are not 5"
+
+    - name: Assert kafka_broker4 in list
+      assert:
+        that:
+          - brokers.json.data[3].host == "kafka-broker4"
+        fail_msg: "Broker4 not in the list of brokers"
+
+    - name: Assert kafka_broker5 in list
+      assert:
+        that:
+          - brokers.json.data[4].host == "kafka-broker5"
+        fail_msg: "Broker5 not in the list of brokers"
+
+- name: Verify - control_center
+  hosts: control_center
+  gather_facts: false
+  tasks:
+    - name: Check line multi ksql line
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: bootstrap.servers
+        expected_value: kafka-broker1:9092,kafka-broker2:9092,kafka-broker3:9092,kafka-broker4:9092,kafka-broker5:9092
+
+    - name: Check line ksql cluster2
+      shell: grep "^{{ property }}" {{ file_path }}
+      register: bootstrap_servers
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: bootstrap.servers
+
+    - name: Check broker4 in bootstrap Server urls
+      assert:
+        that: '"kafka-broker4" in bootstrap_servers.stdout'
+ 
+    - name: Check broker5 in bootstrap Server urls
+      assert:
+        that: '"kafka-broker5" in bootstrap_servers.stdout'
+ 
