@@ -1524,6 +1524,22 @@ Default:  "{{kafka_connect_default_log_dir}}"
 
 ***
 
+### kafka_connect_producer_kafka_listener_name
+
+Allows you to select a custom kafka listener for Kafka Connect producers
+
+Default:  "{{kafka_connect_kafka_listener_name}}"
+
+***
+
+### kafka_connect_consumer_kafka_listener_name
+
+Allows you to select a custom kafka listener for Kafka Connect consumers
+
+Default:  "{{kafka_connect_kafka_listener_name}}"
+
+***
+
 ### kafka_connect_custom_rest_extension_classes
 
 Additional set of Connect extension classes.
@@ -4563,6 +4579,14 @@ Default:  20
 Time in seconds to wait before JMX exporter starts serving metrics. Any requests within the delay period will result in an empty metrics set.
 
 Default:  60
+
+***
+
+### kafka_broker_jmxexporter_bean_name_expressions_cache
+
+Whether to cache bean name expressions to rule computation (match and mismatch). Not recommended for rules matching on bean value, as only the value from the first scrape will be cached and re-used. This can increase performance when collecting a lot of mbeans.
+
+Default:  false
 
 ***
 
