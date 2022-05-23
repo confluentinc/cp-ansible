@@ -3966,6 +3966,14 @@ Default:  60
 
 ***
 
+### kafka_broker_jmxexporter_bean_name_expressions_cache
+
+Whether to cache bean name expressions to rule computation (match and mismatch). Not recommended for rules matching on bean value, as only the value from the first scrape will be cached and re-used. This can increase performance when collecting a lot of mbeans.
+
+Default:  false
+
+***
+
 # confluent.kafka_connect
 
 Below are the supported variables for the role confluent.kafka_connect
