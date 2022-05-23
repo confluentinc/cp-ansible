@@ -484,6 +484,14 @@ Default:  false
 
 ***
 
+### ssl_provided_keystore_and_truststore_remote_src
+
+Boolean for TLS Encryption option to provide user owned Keystores and Truststores already present on the host. Valid and to be used only when ssl_provided_keystore_and_truststore: true
+
+Default:  false
+
+***
+
 ### ssl_keystore_filepath
 
 Full path to host specific keystore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-keystore.jks"

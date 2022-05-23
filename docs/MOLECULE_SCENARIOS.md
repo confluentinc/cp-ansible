@@ -128,6 +128,32 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 ***
 
+### molecule/rbac-mds-mtls-existing-keystore-truststore-ubuntu
+
+#### Scenario rbac-mds-mtls-existing-keystore-truststore-ubuntu test's the following:
+
+Installs Confluent Platform Cluster on CentOS7.
+
+RBAC enabled.
+
+Provided user supplied keystore and truststore already present on the host
+
+MTLS enabled.
+
+Kafka Broker Customer Listener.
+
+RBAC Additional System Admin.
+
+#### Scenario rbac-mds-mtls-existing-keystore-truststore-ubuntu verify test's the following:
+
+Validates that keystores are present on all components.
+
+Validates that LDAPS is working.
+
+Validates that TLS CN is being registered as super user.
+
+***
+
 ### molecule/zookeeper-digest-rhel
 
 #### Scenario zookeeper-digest-rhel test's the following:
