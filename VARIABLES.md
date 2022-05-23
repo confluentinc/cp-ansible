@@ -1324,6 +1324,22 @@ Default:  "{{kafka_connect.appender_log_path}}"
 
 ***
 
+### kafka_connect_producer_kafka_listener_name
+
+Allows you to select a custom kafka listener for Kafka Connect producers
+
+Default:  "{{kafka_connect_kafka_listener_name}}"
+
+***
+
+### kafka_connect_consumer_kafka_listener_name
+
+Allows you to select a custom kafka listener for Kafka Connect consumers
+
+Default:  "{{kafka_connect_kafka_listener_name}}"
+
+***
+
 ### kafka_connect_custom_rest_extension_classes
 
 Additional set of Connect extension classes.
