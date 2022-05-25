@@ -3,43 +3,42 @@
   hosts: kafka_broker
   gather_facts: false
   tasks:
-    - name: Get Broker's URL
+    - name: Get Broker's URL from cluster info endpoint
       uri:
         url: "https://kafka-broker3:8090/kafka/v3/clusters"
         status_code: 200
         validate_certs: false
-      register: broker_uri
+      register: cluster_details
 
-    - name: Get Brokers from broker URL
+    - name: Get Brokers List by hitting broker details URL retrieved from cluster Details response
       uri:
-        url: "{{ broker_uri.json.data[0].brokers.related }}"
+        url: "{{ cluster_details.json.data[0].brokers.related }}"
         status_code: 200
         validate_certs: false
-      register: brokers
+      register: brokers_list
 
-      #$curl -s -k "https://localhost:8090/kafka/v3/clusters/DhCVMZ01QiK2AFqbGnSuZw/brokers" | jq '(.data[] | [.host, .broker_id]) | @csv'
+      # Below /brokers endpoint will give details, and we will fetch the host names of broekrs like in below jq query
+      #$curl -s -k "https://localhost:8090/kafka/v3/clusters/<cluster-id>/brokers" | jq '(.data[] | [.host, .broker_id]) | @csv'
     - name: Assert length of brokers list
       assert:
-        that: brokers.json.data | length == 5
+        that: brokers_list.json.data | length == 5
         fail_msg: "Number of brokers are not 5"
 
     - name: Assert kafka_broker4 in list
       assert:
-        that:
-          - brokers.json.data[3].host == "kafka-broker4"
+        that: brokers.json.data[3].host == "kafka-broker4"
         fail_msg: "Broker4 not in the list of brokers"
 
     - name: Assert kafka_broker5 in list
       assert:
-        that:
-          - brokers.json.data[4].host == "kafka-broker5"
+        that: brokers.json.data[4].host == "kafka-broker5"
         fail_msg: "Broker5 not in the list of brokers"
 
 - name: Verify - control_center
   hosts: control_center
   gather_facts: false
   tasks:
-    - name: Check line brokers list - Exact Match
+    - name: Check line brokers list - Exact Match should have new brokers as well
       import_role:
         name: confluent.test
         tasks_from: check_property.yml
