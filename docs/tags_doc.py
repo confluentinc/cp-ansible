@@ -14,13 +14,13 @@ import os
 # Parse all tags in cp-ansible
 def get_all_tags(directory, search_text, filePattern):
     
-    all_tags = []
+    all_tags = set()
     for path, dirs, files in os.walk(os.path.abspath(directory)):
         for filename in files:
-            filepath = os.path.join(path, filename)
-            if not filename.endswith(filePattern)  : 
+            if not filename.endswith(filePattern) : 
                 continue
-            with open(filepath) as f:
+            filepath = os.path.join(path, filename)
+            with open(filepath, "r") as f:
                 file_content = f.read()
             if search_text not in file_content:
                 continue
@@ -35,13 +35,12 @@ def get_all_tags(directory, search_text, filePattern):
                         while(i< len(list_lines) and "-" in list_lines[i]):
                             new_tag = list_lines[i].replace("-", '').strip()
                             if (len(new_tag.split()) == 1):
-                                all_tags.append(new_tag)
+                                all_tags.add(new_tag)
                             i = i+1
                     else:
-                        all_tags.append(tag)
+                        all_tags.add(tag)
     
-    unique_tags = list(set(all_tags))
-    return unique_tags
+    return all_tags
 
 # Create TAGS.md after parsing all tags in cp-ansible
 def create_docs_tag(tags):
@@ -75,13 +74,12 @@ def create_docs_tag(tags):
     docs_file.close()
 
 if __name__ == "__main__":
-    base_dir = ["../roles", "../test_roles", "../molecule", "../playbooks"]
-    tags = []
+    base_dir = ["../roles", "../playbooks"]
+    tags = set()
     
     for item in base_dir:
         tags_temp = get_all_tags(item, " tags:", ('.yaml', '.yml'))
-        tags.extend(tags_temp)
-        tags = list(set(tags))
-        tags = sorted(tags)
+        tags.update(tags_temp)
 
+    tags = sorted(tags)
     create_docs_tag(tags)
