@@ -15,6 +15,25 @@
     - ansible_fqdn
     - ansible_distribution
 
+# datadir is not supported way to provide data directories for kafka brokers
+- name: Assert that datadir is not present in the inventory
+  assert:
+    that: >
+      'kafka_broker' not in hostvars[item] or
+      hostvars[item].kafka_broker == None or
+      'datadir' not in hostvars[item].kafka_broker
+    fail_msg: |
+      "Providing 'datadir' in inventory file is no more supported way to configure data directories for kafka brokers."
+      "Please use 'log.dirs' under kafka_broker_custom_properties with comma separated directories."
+  loop: "{{ groups['kafka_broker'] }}"
+
+# To avoid a catastrophic user error where root directory permissions get recursively changed
+- name: Assert log.dirs Property not Misconfigured
+  assert:
+    that:
+      - kafka_broker_final_properties['log.dirs'].split(',')[0] != "/"
+    fail_msg: "If you have log.dirs in kafka_broker_custom_properties, make sure it's comma separated directories."
+
 - name: Stop Service and Remove Packages on Version Change
   include_role:
     name: common
@@ -145,13 +164,6 @@
   tags:
     - privileged
     - filesystem
-
-# To avoid a catastrophic user error where root directory permissions get recursively changed
-- name: Assert log.dirs Property not Misconfigured
-  assert:
-    that:
-      - kafka_broker_final_properties['log.dirs'].split(',')[0] != "/"
-    fail_msg: "Make sure datadir key is set to list of directories, NOT a string or dictionary."
 
 - name: Set Permissions on Data Dirs
   file:
