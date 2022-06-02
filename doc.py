@@ -6,6 +6,7 @@ variable: default
 And writes to formatted markdown file
 """
 
+
 def parse_variable_file(role_name, docs_file):
     docs_file.write("# " + role_name)
     docs_file.write("\n\n")
@@ -20,9 +21,9 @@ def parse_variable_file(role_name, docs_file):
     for i in range(len(lines)):
         if lines[i].startswith("### "):
             description = lines[i][4:]
-            colon_index = lines[i+1].index(":")
-            variable = lines[i+1][:colon_index]
-            default = lines[i+1][colon_index+1:]
+            colon_index = lines[i + 1].index(":")
+            variable = lines[i + 1][:colon_index]
+            default = lines[i + 1][colon_index + 1:]
 
             docs_file.write("### " + variable)
             docs_file.write("\n\n")
@@ -38,7 +39,10 @@ def parse_variable_file(role_name, docs_file):
 
 docs_file = open("VARIABLES.md", "w")
 
-for role_name in ["variables", "common", "control_center", "kafka_broker", "kafka_connect", "kafka_rest", "ksql", "schema_registry", "zookeeper", "kafka_connect_replicator", "ssl"]:
+for role_name in ["variables", "common", "control_center",
+                  "kafka_broker", "kafka_connect", "kafka_rest",
+                  "ksql", "schema_registry", "zookeeper",
+                  "kafka_connect_replicator", "ssl"]:
     parse_variable_file(role_name, docs_file)
 
 docs_file.close
