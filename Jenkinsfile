@@ -100,6 +100,8 @@ def job = {
             sh """
 docker rmi molecule_local/geerlingguy/docker-centos7-ansible || true
 
+python3 -m pip install yamllint --upgrade
+python3 -m yamllint .
 cd roles/confluent.test
 molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
             """
