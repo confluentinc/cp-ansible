@@ -3,9 +3,9 @@
   shell: |
     {{ binary_base_path }}/bin/kafka-topics --bootstrap-server {{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}} \
       --describe --under-replicated-partitions --command-config {{kafka_broker.client_config_file}}
-  register: topics
+  register: urp_topics
   # stdout_lines will have topics with URPs and stderr has WARN and ERROR level logs
-  until: topics.stdout_lines|length == 0 and 'ERROR' not in topics.stderr
+  until: urp_topics.stdout_lines|length == 0 and 'ERROR' not in urp_topics.stderr
   retries: 15
   delay: 5
   ignore_errors: true
@@ -19,9 +19,9 @@
       --describe --under-replicated-partitions --command-config {{kafka_broker.client_config_file}}
   environment:
     CONFLUENT_SECURITY_MASTER_KEY: "{{ secrets_protection_masterkey }}"
-  register: topics
+  register: urp_topics_secrets_protection
   # stdout_lines will have topics with URPs and stderr has WARN and ERROR level logs
-  until: topics.stdout_lines|length == 0 and 'ERROR' not in topics.stderr
+  until: urp_topics_secrets_protection.stdout_lines|length == 0 and 'ERROR' not in urp_topics_secrets_protection.stderr
   retries: 15
   delay: 5
   ignore_errors: true
@@ -48,7 +48,7 @@
   when:
     - rbac_enabled|bool and not external_mds_enabled|bool
     # Skip if any previous check failed
-    - not topics.failed|default(False)
+    - not urp_topics.failed|default(False) and not urp_topics_secrets_protection.failed|default(False)
     - not fips_enabled|bool
 
 - name: Wait for Embedded Rest Proxy to start
@@ -68,7 +68,7 @@
   when:
     - kafka_broker_rest_proxy_enabled|bool
     # Skip if any previous checks failed
-    - not topics.failed|default(False) and not mds_result.failed|default(False)
+    - not urp_topics.failed|default(False) and not urp_topics_secrets_protection.failed|default(False) and not mds_result.failed|default(False)
     - not fips_enabled|bool
 
 - name: Fetch Log Files and Error out
@@ -87,4 +87,4 @@
       fail:
         msg: Health checks failed. Review exported files.
   # When only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
-  when: topics.failed|default(False) or mds_result.failed|default(False) or erp_result.failed|default(False)
+  when: urp_topics.failed|default(False) or urp_topics_secrets_protection.failed|default(False) or mds_result.failed|default(False) or erp_result.failed|default(False)
