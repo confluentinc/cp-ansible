@@ -1,9 +1,53 @@
 ---
-- name: Add new connect  in in-memory Inventory
+- name: Verify - kafka_connect5 is not deployed yet
+  hosts: kafka-connect2
+  gather_facts: false
+  tasks:
+    - name: Get connectors details
+      uri: 
+        url: "http://kafka-connect2:8083/connectors?expand=status"
+        status_code: 200
+        force_basic_auth: true
+      register: connect_cluster_response
+
+    - name: Show the Status response
+      debug:
+        msg: '{{ connect_cluster_response.json["sample-connector-2"].status.tasks }}'
+
+    - set_fact:
+        hosts_all: '{{ connect_cluster_response.json["sample-connector-2"].status.tasks | map(attribute="worker_id") | list }}'
+        hosts_connect5: '{{ connect_cluster_response.json["sample-connector-2"].status.tasks | map(attribute="worker_id") | map("regex_search",".*connect5.*") | select("string") | list  }}'
+    - name: Assert that there are no hosts with connect5 name in workers list
+      assert:
+        that: "hosts_connect5 | length == 0"
+
+- name: Verify - control_center
+  hosts: control_center
+  gather_facts: false
+  tasks:
+    - name: Check line connect cluster2  Should not have connect5 setup yet
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.connect.connect-elastic.cluster
+        expected_value: http://kafka-connect2:8083
+
+    - name: Check line connect cluster3 Should not have connect4 setup yet
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.connect.connect-ssl.cluster
+        expected_value: https://kafka-connect3:8083
+
+- name: Add new connect in in-memory Inventory
   hosts: all
   gather_facts: false
   tasks:
-    - name: "Change first-run kafka_connect Group Name"
+    - name: "Change first-run's kafka_connect Group Name"
       lineinfile:
         path: "{{inventory_dir}}/ansible_inventory.yml"
         regexp: "kafka_connect:"
@@ -21,7 +65,6 @@
     
     - name: refresh Inventory
       meta: refresh_inventory
-
 
 - name: Converge
   import_playbook: confluent.platform.all
