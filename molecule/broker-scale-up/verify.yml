@@ -1,0 +1,77 @@
+---
+- name: Verify - kafka_brokers
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Get Broker's URL from cluster info endpoint
+      uri:
+        url: "https://kafka-broker3:8090/kafka/v3/clusters"
+        status_code: 200
+        validate_certs: false
+      register: cluster_details
+
+    - name: Get Brokers List by hitting broker details URL retrieved from cluster Details response
+      uri:
+        url: "{{ cluster_details.json.data[0].brokers.related }}"
+        status_code: 200
+        validate_certs: false
+      register: brokers_list
+
+      # Below /brokers endpoint will give details, and we will fetch the host names of broekrs like in below jq query
+      #$curl -s -k "https://localhost:8090/kafka/v3/clusters/<cluster-id>/brokers" | jq '(.data[] | [.host, .broker_id]) | @csv'
+    - name: Assert length of brokers list
+      assert:
+        that: brokers_list.json.data | length == 5
+        fail_msg: "Number of brokers are not 5"
+
+    - name: Assert kafka_broker4 in list
+      assert:
+        that: brokers_list.json.data[3].host == "kafka-broker4"
+        fail_msg: "Broker4 not in the list of brokers"
+
+    - name: Assert kafka_broker5 in list
+      assert:
+        that: brokers_list.json.data[4].host == "kafka-broker5"
+        fail_msg: "Broker5 not in the list of brokers"
+
+- name: Verify Brokers added via zookeeper
+  gather_facts: false
+  hosts: kafka-broker5
+  tasks:
+    - name: Run zookeeper shell to get broker ID's
+      shell: >
+          /usr/bin/zookeeper-shell zookeeper1:2182  -zk-tls-config-file  /etc/kafka/zookeeper-tls-client.properties ls /brokers/ids
+      register: zk_output
+    - name: Verify broker4 and broker5 in the output
+      assert:
+        that:
+          - '" 4" in zk_output.stdout'
+          - '" 5" in zk_output.stdout'
+
+- name: Verify - control_center
+  hosts: control_center
+  gather_facts: false
+  tasks:
+    - name: Check line brokers list - Exact Match should have new brokers as well
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: bootstrap.servers
+        expected_value: kafka-broker1:9092,kafka-broker2:9092,kafka-broker3:9092,kafka-broker4:9092,kafka-broker5:9092
+
+    - name: Grep newly added broker names in proeprty file
+      shell: grep "^{{ property }}" {{ file_path }}
+      register: bootstrap_servers
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: bootstrap.servers
+
+    - name: Check broker4 in bootstrap Server urls
+      assert:
+        that: '"kafka-broker4" in bootstrap_servers.stdout'
+
+    - name: Check broker5 in bootstrap Server urls
+      assert:
+        that: '"kafka-broker5" in bootstrap_servers.stdout'
