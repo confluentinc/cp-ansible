@@ -108,6 +108,10 @@ mkdir -p ansible_collections/confluent
 cp -r $WORKSPACE ansible_collections/confluent/platform
 cd ansible_collections/confluent/platform
 
+python3 -m pip install yamllint --upgrade
+python3 -m yamllint .
+cd roles/confluent.test
+
 molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
             """
         }
