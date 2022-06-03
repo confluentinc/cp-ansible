@@ -329,6 +329,7 @@ Default:  ""
 If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
 
 Default:  {{ (archive_destination_path | regex_replace('\\/$','')) if installation_method == 'archive' else '' }}
+<<<<<<< HEAD:docs/VARIABLES.md
 
 ***
 
@@ -337,6 +338,8 @@ Default:  {{ (archive_destination_path | regex_replace('\\/$','')) if installati
 The configuration prefix to use, by default /etc. Note - Only valid to customize when installation_method: archive
 
 Default:  "/etc"
+=======
+>>>>>>> 7.0.x:VARIABLES.md
 
 ***
 
