@@ -86,7 +86,6 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
-      - syslog
     image: geerlingguy/docker-centos7-ansible
     dockerfile: ../Dockerfile.j2
     command: ""
@@ -99,7 +98,6 @@ platforms:
     hostname: kafka-connect2.confluent
     groups:
       - kafka_connect
-      - syslog
     image: geerlingguy/docker-centos7-ansible
     dockerfile: ../Dockerfile.j2
     command: ""
@@ -112,7 +110,6 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-      - ks1
     image: geerlingguy/docker-centos7-ansible
     dockerfile: ../Dockerfile.j2
     command: ""
@@ -125,7 +122,6 @@ platforms:
     hostname: ksql2.confluent
     groups:
       - ksql
-      - ks1
     image: geerlingguy/docker-centos7-ansible
     dockerfile: ../Dockerfile.j2
     command: ""
@@ -152,23 +148,16 @@ provisioner:
   playbooks:
     converge: converge.yml
   inventory:
-    host_vars:
-      # ksql1 will not have an advertised listener, validating the defaulting logic
-      ksql2:
-        ksql_advertised_listener_hostname: ksql2.confluent
-
     group_vars:
       all:
         ssl_enabled: true
         ssl_mutual_auth_enabled: true
         # Enable SBT to test whether cluster is getting balanced or not.
-         kafka_broker_custom_properties:
-           confluent.balancer.enable: "true"
+        kafka_broker_custom_properties:
+          confluent.balancer.enable: "true"
 
       # connect clusters
-      syslog:
-        kafka_connect_group_id: connect-syslog
-        # Create Connectors not working w ssl on molecule
+      kafka_connect:
         kafka_connect_ssl_enabled: false
         kafka_connect_ssl_mutual_auth_enabled: false
         kafka_connect_connectors:
@@ -178,16 +167,9 @@ provisioner:
               tasks.max: "1"
               file: "/etc/kafka/connect-distributed.properties"
               topics: "test_topic"
+              key.converter: "org.apache.kafka.connect.json.JsonConverter"
+              value.converter: "org.apache.kafka.connect.json.JsonConverter"
 
-      # ksql clusters
-      ks1:
-        ksql_service_id: ksql1_
-
-      control_center:
-        ksql_cluster_ansible_group_names:
-          - ks1
-        kafka_connect_cluster_ansible_group_names:
-          - syslog
 scenario:
   prepare_sequence:
     - create

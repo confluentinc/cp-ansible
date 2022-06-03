@@ -1,8 +1,70 @@
 ---
+- name: Verify New brokers are not yet there in the Cluster
+  hosts: kafka-broker3
+  gather_facts: false
+  tasks:
+    - name: Get Broker's URL from cluster info endpoint
+      uri:
+        url: "https://kafka-broker3:8090/kafka/v3/clusters"
+        status_code: 200
+        validate_certs: false
+      register: cluster_details
+
+    - name: Get Brokers List by hitting broker details URL retrieved from cluster Details response
+      uri:
+        url: "{{ cluster_details.json.data[0].brokers.related }}"
+        status_code: 200
+        validate_certs: false
+      register: brokers_list
+
+      # Below /brokers endpoint will give details, and we will fetch the host names of broekrs like in below jq query
+      #$curl -s -k "https://localhost:8090/kafka/v3/clusters/<cluster-id>/brokers" | jq '(.data[] | [.host, .broker_id]) | @csv'
+    - name: Assert length of brokers list
+      assert:
+        that: brokers_list.json.data | length == 3
+        fail_msg: "Number of brokers are not 3"
+
+    - name: Run zookeeper shell to get broker ID's
+      shell: >
+          /usr/bin/zookeeper-shell zookeeper1:2182  -zk-tls-config-file  /etc/kafka/zookeeper-tls-client.properties ls /brokers/ids
+      register: zk_output
+    - name: Verify broker4 and broker5 not in the output
+      assert:
+        that:
+          - 'not " 4" in zk_output.stdout'
+          - 'not " 5" in zk_output.stdout'
+
+- name: Verify New brokers are not there in control-center properties
+  hosts: control_center
+  gather_facts: false
+  tasks:
+    - name: Check line brokers list - Exact Match should have new brokers as well
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: bootstrap.servers
+        expected_value: kafka-broker1:9092,kafka-broker2:9092,kafka-broker3:9092
+
+    - name: Grep newly added broker names in proeprty file
+      shell: grep "^{{ property }}" {{ file_path }}
+      register: bootstrap_servers
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: bootstrap.servers
+
+    - name: Check broker4 should not be available in bootstrap Server urls
+      assert:
+        that: 'not "kafka-broker4" in bootstrap_servers.stdout'
+
+    - name: Check broker5 should not be available in bootstrap Server urls
+      assert:
+        that: 'not "kafka-broker5" in bootstrap_servers.stdout'
+
 - name: Add new brokers Nodes into in-memory inventory to scale-up
   hosts: all
   gather_facts: false
-  tasks:
     - name: "Add new Broker Node kafka-broker4"
       add_host:
         hostname: kafka-broker4
