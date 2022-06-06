@@ -1,3 +1,8 @@
+### connect-scale-up verify
+## Verifies whether 2 newly added nodes are
+## - Added to the cluster
+## - Added to corresponsing logical Connect clusters (elastic and ssl)
+## - Added to the property file of control center
 ---
 - name: Verify - kafka_connect1
   hosts: kafka-connect1
@@ -85,16 +90,13 @@
         validate_certs: false
         client_cert: /var/ssl/private/kafka_connect.crt
         client_key: /var/ssl/private/kafka_connect.key
-
       register: connectors
-
-    - name: Assert Connector Created
+    - name: Assert Connector should have not been Created
       assert:
         that:
           - connectors.json|length == 0
         fail_msg: "Connector not created"
         quiet: true
-
 
 - name: Verify - kafka_connect5
   hosts: kafka-connect5
@@ -108,34 +110,28 @@
         file_path: /etc/kafka/connect-distributed.properties
         property: group.id
         expected_value: connect-elastic
-
     - name: Get Connectors on connect cluster5
       uri:
         url: "http://kafka-connect5:8083/connectors"
         status_code: 200
         validate_certs: false
       register: connectors
-
     - name: Assert Connector Created
       assert:
         that:
           - connectors.json[0] == "sample-connector-2"
         fail_msg: "Connector not created"
         quiet: true
-
     - name: Get connectors details
       uri:
         url: "http://kafka-connect5:8083/connectors?expand=status"
         status_code: 200
         force_basic_auth: true
       register: connect_cluster_response
-
     - name: Show the Status response
       debug:
         msg: '{{ connect_cluster_response.json["sample-connector-2"].status.tasks }}'
-
     - set_fact:
-        hosts_all: '{{ connect_cluster_response.json["sample-connector-2"].status.tasks | map(attribute="worker_id") | list }}'
         hosts_connect5: '{{ connect_cluster_response.json["sample-connector-2"].status.tasks | map(attribute="worker_id") | map("regex_search",".*connect5.*") | select("string") | list  }}'
     - name: Assert that there are hosts with connect5 name in workers list
       assert:
@@ -145,25 +141,7 @@
   hosts: control_center
   gather_facts: false
   tasks:
-    - name: Check line multi ksql line
-      import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
-        property: confluent.controlcenter.ksql.ksql.ssl.truststore.location
-        expected_value: /var/ssl/private/control_center.truststore.jks
-
-    - name: Check line ksql cluster2
-      import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
-        property: confluent.controlcenter.ksql.ksql.url
-        expected_value: https://ksql1:8088,https://ksql2:8088,https://ksql3:8088
-
-    - name: Check line connect cluster2
+    - name: Check line connect cluster elastic
       import_role:
         name: confluent.test
         tasks_from: check_property.yml
@@ -172,7 +150,7 @@
         property: confluent.controlcenter.connect.connect-elastic.cluster
         expected_value: http://kafka-connect2:8083,http://kafka-connect5:8083
 
-    - name: Check line connect cluster3
+    - name: Check line connect cluster ssl
       import_role:
         name: confluent.test
         tasks_from: check_property.yml
