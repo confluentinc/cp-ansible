@@ -590,7 +590,7 @@ RBAC enabled.
 
 MTLS enabled.
 
-Secrets protection enabled.
+Secrets protection disabled
 
 Kafka Broker Customer Listener.
 
