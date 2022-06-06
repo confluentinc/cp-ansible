@@ -368,8 +368,7 @@ Default:  ""
 
 If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
 
-Default:  {{ (archive_destination_path | regex_replace('\\/$','')) if installation_method == 'archive' else '' }}
-<<<<<<< HEAD:docs/VARIABLES.md
+Default:  "{{ (archive_destination_path | regex_replace('\\/$','')) if installation_method == 'archive' else '/' }}"
 
 ***
 
@@ -378,8 +377,6 @@ Default:  {{ (archive_destination_path | regex_replace('\\/$','')) if installati
 The configuration prefix to use, by default /etc. Note - Only valid to customize when installation_method: archive
 
 Default:  "/etc"
-=======
->>>>>>> 7.0.x:VARIABLES.md
 
 ***
 
@@ -755,7 +752,7 @@ Default:  "{{ zookeeper_ssl_enabled }}"
 
 Path on Zookeeper host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path, '/etc/kafka/zookeeper_jolokia.properties' ) | path_join }}"
+Default:  "{{ (config_base_path, 'etc/kafka/zookeeper_jolokia.properties' ) | community.general.path_join }}"
 
 ***
 
@@ -955,7 +952,7 @@ Default:  "{{ ssl_enabled }}"
 
 Path on Kafka host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,'/etc/kafka/kafka_jolokia.properties') | path_join }}"
+Default:  "{{ (config_base_path,'etc/kafka/kafka_jolokia.properties') | community.general.path_join }}"
 
 ***
 
@@ -1179,7 +1176,7 @@ Default:  "{{ schema_registry_ssl_enabled }}"
 
 Path on Schema Registry host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,'/etc/schema-registry/schema_registry_jolokia.properties') | path_join }}"
+Default:  "{{ (config_base_path,'etc/schema-registry/schema_registry_jolokia.properties') | community.general.path_join }}"
 
 ***
 
@@ -1363,7 +1360,7 @@ Default:  "{{ kafka_rest_ssl_enabled }}"
 
 Path on Rest Proxy host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,'/etc/kafka-rest/kafka_rest_jolokia.properties') | path_join }}"
+Default:  "{{ (config_base_path,'etc/kafka-rest/kafka_rest_jolokia.properties') | community.general.path_join }}"
 
 ***
 
@@ -1587,7 +1584,7 @@ Default:  "{{ kafka_connect_ssl_enabled }}"
 
 Path on Connect host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,'/etc/kafka/kafka_connect_jolokia.properties') | path_join }}"
+Default:  "{{ (config_base_path,'etc/kafka/kafka_connect_jolokia.properties') | community.general.path_join }}"
 
 ***
 
@@ -1811,7 +1808,7 @@ Default:  "{{ ksql_ssl_enabled }}"
 
 Path on ksqlDB host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,((confluent_package_version is version('5.5.0', '>=')) | ternary('/etc/ksqldb/ksql_jolokia.properties' , '/etc/ksql/ksql_jolokia.properties')) | path_join }}"
+Default:  "{{ (config_base_path,((confluent_package_version is version('5.5.0', '>=')) | ternary('etc/ksqldb/ksql_jolokia.properties' , 'etc/ksql/ksql_jolokia.properties'))) | community.general.path_join }}"
 
 ***
 
