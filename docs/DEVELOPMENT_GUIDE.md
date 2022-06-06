@@ -81,7 +81,7 @@ What this means is all the variables defined in the `variables` role are accessi
 ksql_log4j_root_logger: "INFO, stdout, main"
 ```
 
-This log4j variable is only needed in the ksql’s log4j tasks.
+This log4j variable is only needed in the ksql's log4j tasks.
 
 2. Is the variable needed by multiple components and should be customizable by users? Yes -> Define variable in `variables/defaults/main.yml` Ex:
 
@@ -176,7 +176,7 @@ Because properties are fully customizable, it is important to use the final prop
 
 ## Custom Filters
 
-Ansible itself has a robust set of filters, but at times they do not fit cp-ansible’s needs. We have defined additional filters at `plugins/filter/filters.py`. In the below example we combine a custom filter `get_sasl_mechanisms` and one of the standard ansible filters to set a variable:
+Ansible itself has a robust set of filters, but at times they do not fit cp-ansible's needs. We have defined additional filters at `plugins/filter/filters.py`. In the below example we combine a custom filter `get_sasl_mechanisms` and one of the standard ansible filters to set a variable:
 
 ```
 kafka_broker_sasl_enabled_mechanisms: "{{ kafka_broker_listeners | confluent.platform.get_sasl_mechanisms(sasl_protocol) | difference(['none']) | unique }}"
