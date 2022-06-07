@@ -42,14 +42,14 @@ def get_all_tags(directory, search_text, filePattern):
     
     return all_tags
 
-# Create TAGS.md after parsing all tags in cp-ansible
+# Create TAGS2.md after parsing all tags in cp-ansible
 def create_docs_tag(tags):
     tags_doc = ""
-    if os.path.isfile("./TAGS.md"):
-        with open("./TAGS.md") as f:
+    if os.path.isfile("./TAGS2.md"):
+        with open("./TAGS2.md") as f:
             tags_doc = f.read()
 
-    docs_file = open("./TAGS.md", "a")
+    docs_file = open("./TAGS2.md", "a")
 
     intro_text = ("# Refer to this doc to get an overview of all tags used inside the cp-ansible project"
         "\n\nRefer https://docs.ansible.com/ansible/latest/user_guide/playbooks_tags.html to know more about ansible tags"
@@ -73,13 +73,48 @@ def create_docs_tag(tags):
         docs_file.write("***")
     docs_file.close()
 
-if __name__ == "__main__":
-    base_dir = ["../roles", "../playbooks"]
-    tags = set()
-    
-    for item in base_dir:
-        tags_temp = get_all_tags(item, " tags:", ('.yaml', '.yml'))
-        tags.update(tags_temp)
+import subprocess
+import re
 
-    tags = sorted(tags)
-    create_docs_tag(tags)
+def test():
+    all_tags = set()
+    command = "cd ../; ansible-playbook confluent.platform.all --list-tag | grep TAGS:"
+    ans = subprocess.run(command, stdout=subprocess.PIPE, text=True, shell=True)
+    lines = ans.stdout
+    list_lines = lines.split("\n")
+    i = 0
+    print(len(list_lines))
+    while(i< len(list_lines)):
+        try:
+            found = re.search('TAGS: \[(.*)\]', list_lines[i]).group(1)
+        except AttributeError:
+            found = ''
+        
+        print(found)
+        list_tags = found.split(",")
+        print(list_tags)
+        j = 0
+        while (j< len(list_tags)):
+            tag = list_tags[j].strip()
+            j = j+1
+            if (tag == ""):
+                continue
+            all_tags.add(tag)
+            # j = j+1
+        i = i+1
+    
+    all_tags = sorted(all_tags)
+    return all_tags
+
+if __name__ == "__main__":
+    all_tags = test()
+    print(all_tags)
+    # base_dir = ["../roles", "../playbooks"]
+    # tags = set()
+    
+    # for item in base_dir:
+    #     tags_temp = get_all_tags(item, " tags:", ('.yaml', '.yml'))
+    #     tags.update(tags_temp)
+
+    # tags = sorted(tags)
+    # create_docs_tag(tags)
