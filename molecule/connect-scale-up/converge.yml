@@ -1,0 +1,60 @@
+---
+- name: Verify - kafka_connect5 is not deployed yet
+  hosts: kafka-connect2
+  gather_facts: false
+  tasks:
+    - name: Get connectors details
+      uri:
+        url: "http://kafka-connect2:8083/connectors?expand=status"
+        status_code: 200
+        force_basic_auth: true
+      register: connect_cluster_response
+    - set_fact:
+        hosts_connect5: '{{ connect_cluster_response.json["sample-connector-2"].status.tasks | map(attribute="worker_id") | map("regex_search",".*connect5.*") | select("string") | list  }}'
+    - name: Assert that there are no hosts with connect5 name in workers list
+      assert:
+        that: "hosts_connect5 | length == 0"
+        fail_msg: "There should not be 5 hosts in connect cluster"
+
+- name: Verify - control_center
+  hosts: control_center
+  gather_facts: false
+  tasks:
+    - name: Check line connect cluster2 should not have connect5 setup yet
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.connect.connect-cluster2.cluster
+        expected_value: http://kafka-connect2:8083
+
+    - name: Check line connect cluster named ssl should not have connect4 setup yet
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.connect.connect-ssl.cluster
+        expected_value: https://kafka-connect3:8083
+
+- name: Add new connect Nodes into in-memory inventory to scale-up
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Add new Connect Node kafka-broker4
+      add_host:
+        hostname: kafka-connect4
+        groups:
+          - kafka_connect
+          - ssl
+
+    - name: Add new Connect Node kafka-connect5
+      add_host:
+        hostname: kafka-connect5
+        groups:
+          - kafka_connect
+          - cluster2
+
+- name: Converge
+  import_playbook: confluent.platform.all
