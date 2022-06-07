@@ -1,0 +1,203 @@
+### connect-scale-up
+## Tests Scale up of kafka Connect cluster
+## Brings up a connect cluster with 3 nodes in Create/Prepare phase, then in converge phase it adds 2 more nodes of connect to the clusters.
+##
+---
+platforms:
+  - name: zookeeper1
+    hostname: zookeeper1.confluent
+    groups:
+      - zookeeper
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+      - cluster1
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect2
+    hostname: kafka-connect2.confluent
+    groups:
+      - kafka_connect
+      - cluster2
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect3
+    hostname: kafka-connect3.confluent
+    groups:
+      - kafka_connect
+      - ssl
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect4
+    hostname: kafka-connect4.confluent
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect5
+    hostname: kafka-connect5.confluent
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9021:9021"
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    converge: converge.yml
+  inventory:
+    group_vars:
+      all:
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
+
+      # connect clusters
+      ssl:
+        kafka_connect_group_id: connect-ssl
+      cluster1:
+        kafka_connect_group_id: connect-cluster1
+        # Create Connectors not working w ssl on molecule
+        kafka_connect_ssl_enabled: false
+        kafka_connect_ssl_mutual_auth_enabled: false
+        kafka_connect_connectors:
+          - name: sample-connector-1
+            config:
+              connector.class: "org.apache.kafka.connect.tools.VerifiableSinkConnector"
+              tasks.max: "5"
+              file: "/etc/kafka/connect-distributed.properties"
+              topics: "test_topic"
+              key.converter: "org.apache.kafka.connect.json.JsonConverter"
+              value.converter: "org.apache.kafka.connect.json.JsonConverter"
+      cluster2:
+        kafka_connect_group_id: connect-cluster2
+        # Create Connectors not working w ssl
+        kafka_connect_ssl_enabled: false
+        kafka_connect_ssl_mutual_auth_enabled: false
+        kafka_connect_connectors:
+          - name: sample-connector-2
+            config:
+              connector.class: "org.apache.kafka.connect.tools.VerifiableSinkConnector"
+              tasks.max: "5"
+              file: "/etc/kafka/connect-distributed.properties"
+              topics: "test_topic"
+              key.converter: "org.apache.kafka.connect.json.JsonConverter"
+              value.converter: "org.apache.kafka.connect.json.JsonConverter"
+
+      control_center:
+        kafka_connect_cluster_ansible_group_names:
+          - cluster1
+          - cluster2
+          - ssl
+scenario:
+  create_sequence:
+    - create
+    - prepare
+  converge_sequence:
+    - converge

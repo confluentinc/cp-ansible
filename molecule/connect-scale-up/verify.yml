@@ -1,0 +1,161 @@
+### connect-scale-up verify
+## Verifies whether 2 newly added nodes are
+## - Added to the cluster
+## - Added to corresponsing logical Connect clusters (cluster2 and ssl)
+## - Added to the property file of control center
+---
+- name: Verify - kafka_connect1
+  hosts: kafka-connect1
+  gather_facts: false
+  tasks:
+    - name: Check line properties file
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: group.id
+        expected_value: connect-cluster1
+
+    - name: Get Connectors on connect cluster1
+      uri:
+        url: "http://kafka-connect1:8083/connectors"
+        status_code: 200
+        validate_certs: false
+      register: connectors
+
+    - name: Assert Connector Created
+      assert:
+        that:
+          - connectors.json[0] == "sample-connector-1"
+        fail_msg: "Connector not created"
+        quiet: true
+
+- name: Verify - kafka_connect2
+  hosts: kafka-connect2
+  gather_facts: false
+  tasks:
+    - name: Check line properties file
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: group.id
+        expected_value: connect-cluster2
+
+    - name: Get Connectors on connect cluster2
+      uri:
+        url: "http://kafka-connect2:8083/connectors"
+        status_code: 200
+        validate_certs: false
+      register: connectors
+
+    - name: Assert Connector Created
+      assert:
+        that:
+          - connectors.json[0] == "sample-connector-2"
+        fail_msg: "Connector not created"
+        quiet: true
+
+- name: Verify - kafka_connect3
+  hosts: kafka-connect3
+  gather_facts: false
+  tasks:
+    - name: Check line properties file
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: group.id
+        expected_value: connect-ssl
+
+- name: Verify - kafka_connect4
+  hosts: kafka-connect4
+  gather_facts: false
+  tasks:
+    - name: Check line properties file
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: group.id
+        expected_value: connect-ssl
+    - name: Get Connectors on connect cluster4
+      uri:
+        url: "https://kafka-connect4:8083/connectors"
+        status_code: 200
+        validate_certs: false
+        client_cert: /var/ssl/private/kafka_connect.crt
+        client_key: /var/ssl/private/kafka_connect.key
+      register: connectors
+    - name: Assert Connector should have not been Created
+      assert:
+        that:
+          - connectors.json|length == 0
+        fail_msg: "Connector not created"
+        quiet: true
+
+- name: Verify - kafka_connect5
+  hosts: kafka-connect5
+  gather_facts: false
+  tasks:
+    - name: Check line properties file
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: group.id
+        expected_value: connect-cluster2
+    - name: Get Connectors on connect cluster5
+      uri:
+        url: "http://kafka-connect5:8083/connectors"
+        status_code: 200
+        validate_certs: false
+      register: connectors
+    - name: Assert Connector Created
+      assert:
+        that:
+          - connectors.json[0] == "sample-connector-2"
+        fail_msg: "Connector not created"
+        quiet: true
+    - name: Get connectors details
+      uri:
+        url: "http://kafka-connect5:8083/connectors?expand=status"
+        status_code: 200
+        force_basic_auth: true
+      register: connect_cluster_response
+    - name: Show the Status response
+      debug:
+        msg: '{{ connect_cluster_response.json["sample-connector-2"].status.tasks }}'
+    - set_fact:
+        hosts_connect5: '{{ connect_cluster_response.json["sample-connector-2"].status.tasks | map(attribute="worker_id") | map("regex_search",".*connect5.*") | select("string") | list  }}'
+    - name: Assert that there are hosts with connect5 name in workers list
+      assert:
+        that: "hosts_connect5 | length > 0"
+        fail_msg: "There should be at least one host with name kafka-connect5"
+
+- name: Verify - control_center
+  hosts: control_center
+  gather_facts: false
+  tasks:
+    - name: Check line connect cluster cluster2
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.connect.connect-cluster2.cluster
+        expected_value: http://kafka-connect2:8083,http://kafka-connect5:8083
+
+    - name: Check line connect cluster ssl
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.connect.connect-ssl.cluster
+        expected_value: https://kafka-connect3:8083,https://kafka-connect4:8083
