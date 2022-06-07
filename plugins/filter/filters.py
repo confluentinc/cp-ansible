@@ -1,5 +1,3 @@
-import re
-
 from __future__ import (absolute_import, division, print_function)
 import re
 
@@ -355,10 +353,10 @@ class FilterModule(object):
         :param common_names:
         :param rules: Rules to map with against given common names
         :return:
-        | Common Name                                       |   Mapping Pattern                                         | Mapping Replacement   |  Mapped Name  |
-        | CN=kafka-server1, OU=KAFKA                        | ^CN=(.*?), OU=(.*?)$                                      | $1                    | kafka-server1 |
-        | CN=kafka1, OU=SME, O=mycp, L=Fulton, ST=MD, C=US  | ^CN=(.*?), OU=(.*?), O=(.*?), L=(.*?), ST=(.*?), C=(.*?)$ | $1@$2                 | kafka1@SME    |
-        | cn=kafka1,ou=SME,dc=mycp,dc=com                   | ^cn=(.*?),ou=(.*?),dc=(.*?),dc=(.*?)$                     | $1                    | kafka1        |
+        | Common Name                                       |   Mapping Pattern                                         | Mapping Replacement |  Mapped Name  |
+        | CN=kafka-server1, OU=KAFKA                        | ^CN=(.*?), OU=(.*?)$                                      | $1                  | kafka-server1 |
+        | CN=kafka1, OU=SME, O=mycp, L=Fulton, ST=MD, C=US  | ^CN=(.*?), OU=(.*?), O=(.*?), L=(.*?), ST=(.*?), C=(.*?)$ | $1@$2               | kafka1@SME    |
+        | cn=kafka1,ou=SME,dc=mycp,dc=com                   | ^cn=(.*?),ou=(.*?),dc=(.*?),dc=(.*?)$                     | $1                  | kafka1        |
 
         """
 
@@ -375,10 +373,10 @@ class FilterModule(object):
             for common_name in common_names:
                 matched = re.match(mapping_pattern, common_name)
                 if bool(matched):
-                    index =1
+                    index = 1
                     for match_str in matched.groups():
                         mapping_value = mapping_value.replace(f"${index}", match_str)
-                        index = index+1
+                        index = index + 1
 
                     # Remove leading and trailing whitespaces
                     mapping_value = mapping_value.strip()
