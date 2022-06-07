@@ -114,6 +114,9 @@ cd ansible_collections/confluent/platform
 python3 -m pip install yamllint --upgrade
 python3 -m yamllint .
 
+pip3 install pylint voluptuous
+ansible-test sanity
+
 molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
             """
         }
