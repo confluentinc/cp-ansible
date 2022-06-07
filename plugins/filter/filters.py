@@ -345,7 +345,7 @@ class FilterModule(object):
 
         return final_dict
 
-    def resolve_principal(self, common_names:str, rules:str):
+    def resolve_principal(self, common_names: str, rules: str):
         """
         This filter is to extract principle from the keystore based on the provided rule. This filter should be
         used when we have ssl.principal.mapping.rules variable set to some value.
