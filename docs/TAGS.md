@@ -1,7 +1,7 @@
 # Refer to this doc to get an overview of all tags used inside the cp-ansible project
 
 Refer https://docs.ansible.com/ansible/latest/user_guide/playbooks_tags.html to know more about ansible tags
-While running cp-ansible, you can use --tags option to run any specific tag or use --skip-tags to skip any specific tag. E.g.
+While running cp-ansible, you can use --tags or --skip-tags to run or skip any specific tag. E.g.
 ansible-playbook -i hosts.yml confluent.platform.all --tags 'tag-name'
 ansible-playbook -i hosts.yml confluent.platform.all --skip-tags 'tag-name'
 
