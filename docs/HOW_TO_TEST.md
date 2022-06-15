@@ -26,11 +26,7 @@ cd ansible_collections/confluent/platform
 
 ## Using Molecule
 
-<<<<<<< HEAD
-We have an extensive set of integration test in the form of Molecule Scenarios within the `molecule/` directory at the base of this repo. To list these scenarios, simply run:
-=======
 The following is a list of the most common commands used with Molecule.  For a complete list of scenarios and test functionality please review [MOLECULE_SCENARIOS.md](MOLECULE_SCENARIOS.md).
->>>>>>> 6.2.x
 
 ```
 ls molecule
