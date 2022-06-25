@@ -11,30 +11,33 @@
     fail_msg: "Confluent CLI architecture not supported"
     quiet: true
 
+- name: Directory name for the Confluent CLI version
+  set_fact:
+    confluent_cli_dir: "v{{ confluent_cli_version|replace('.', '_') }}"
+
 - name: Confluent CLI create base path
   file:
-    path: "{{item}}"
+    path: "{{confluent_cli_base_path}}/{{confluent_cli_dir}}"
     state: directory
     mode: '0755'
-  loop:
-    - "{{confluent_cli_base_path}}"
-    - "{{confluent_cli_base_path}}/{{confluent_cli_binary}}"
+    recurse: true
 
 - name: Expand remote Confluent CLI archive
   unarchive:
     src: "{{ confluent_cli_archive_file_source }}"
     remote_src: "{{ confluent_cli_archive_file_remote }}"
-    dest: "{{confluent_cli_base_path}}"
+    dest: "{{confluent_cli_base_path}}/{{confluent_cli_dir}}"
     group: "{{ omit if archive_group == '' else archive_group }}"
     owner: "{{ omit if archive_owner == '' else archive_owner }}"
     mode: 0755
-    creates: "{{confluent_cli_base_path}}/{{confluent_cli_binary}}/{{confluent_cli_binary}}"
+    extra_opts: [--strip-components=1]
+    creates: "{{confluent_cli_base_path}}/{{confluent_cli_dir}}/{{confluent_cli_binary}}"
   when: confluent_cli_custom_download_url is not defined
 
 - name: Download Confluent CLI - Custom URL
   get_url:
     url: "{{ confluent_cli_custom_download_url }}"
-    dest: "{{confluent_cli_base_path}}/{{confluent_cli_binary}}/{{confluent_cli_binary}}"
+    dest: "{{confluent_cli_base_path}}/{{confluent_cli_dir}}/{{confluent_cli_binary}}"
     mode: 0755
   register: cli_download_result
   until: cli_download_result is success
@@ -42,9 +45,14 @@
   delay: 5
   when: confluent_cli_custom_download_url is defined
 
+- name: Delete any existing symlink for confluent cli
+  file:
+    path: "{{confluent_cli_path}}"
+    state: absent
+
 - name: "Confluent CLI create symlink in {{confluent_cli_path}}"
   file:
-    src: "{{confluent_cli_base_path}}/{{confluent_cli_binary}}/{{confluent_cli_binary}}"
+    src: "{{confluent_cli_base_path}}/{{confluent_cli_dir}}/{{confluent_cli_binary}}"
     dest: "{{confluent_cli_path}}"
     state: link
     force: true
