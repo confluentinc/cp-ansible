@@ -324,11 +324,19 @@ Default:  ""
 
 ***
 
+### archive_config_base_path
+
+If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
+
+Default:  "{{ archive_destination_path }}"
+
+***
+
 ### config_base_path
 
 If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
 
-Default:  "{{ (archive_destination_path | regex_replace('\\/$','')) if installation_method == 'archive' else '/' }}"
+Default:  "{{ (archive_config_base_path | regex_replace('\\/$','')) if installation_method == 'archive' else '/' }}"
 
 ***
 
