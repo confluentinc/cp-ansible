@@ -416,7 +416,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  2.3.1
+Default:  2.19.0
 
 ***
 
@@ -1040,7 +1040,7 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, defaul
 
 Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
-Default:  "{{ 'control_center' in groups }}"
+Default:  "{{ confluent_server_enabled and 'control_center' in groups }}"
 
 ***
 
@@ -4544,7 +4544,7 @@ Default:  "{{ custom_log4j }}"
 
 Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
 
-Default:  "INFO, stdout, connectAppender"
+Default:  "INFO, stdout, connectAppender, redactor"
 
 ***
 
