@@ -1200,6 +1200,22 @@ Validates that Confluent CLI is installed.
 
 ***
 
+### molecule/oauthbearer-rhel
+
+#### Scenario oauthbearer-rhel test's the following:
+
+Installation of Confluent Community Edition on CentOS7.
+
+SASL OAUTHBEARER Auth.
+
+#### Scenario oauthbearer-rhel verify test's the following:
+
+Validates that SASL OAUTHBEARER protocol is set.
+
+Validates that properties for callback handlers are not set.
+
+***
+
 ### molecule/archive-plain-debian
 
 #### Scenario archive-plain-debian test's the following:
