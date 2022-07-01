@@ -892,6 +892,14 @@ Default:  "{{ kafka_broker.properties }}"
 
 ***
 
+### kafka_broker_custom_client_properties
+
+Use to add custom properties to variable kafka_broker_client_properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
 ### kafka_broker_rest_proxy_enabled
 
 Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
