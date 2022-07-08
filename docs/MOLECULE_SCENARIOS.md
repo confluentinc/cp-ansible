@@ -38,6 +38,22 @@ Validates that Confluent Community Packages are used.
 
 ***
 
+### molecule/broker-scale-up
+
+#### Scenario broker-scale-up test's the following:
+
+Installation of Confluent Platform on CentOS7.
+
+MTLS enabled.
+
+Installs Three unique Kafka Connect Clusters with unique connectors.
+
+Installs two unique KSQL Clusters.
+
+#### Scenario broker-scale-up verify test's the following:
+
+***
+
 ### molecule/scram-rhel
 
 #### Scenario scram-rhel test's the following:
@@ -644,6 +660,18 @@ Validates the filter resolve_principal with different ssl.mapping.rule
 
 ***
 
+### molecule/connect-scale-up
+
+#### Scenario connect-scale-up test's the following:
+
+connect-scale-up
+
+#### Scenario connect-scale-up verify test's the following:
+
+connect-scale-up verify
+
+***
+
 ### molecule/zookeeper-mtls-rhel
 
 #### Scenario zookeeper-mtls-rhel test's the following:
@@ -990,6 +1018,32 @@ Validates that Java 8 is in use.
 
 ***
 
+### molecule/ksql-scale-up
+
+#### Scenario ksql-scale-up test's the following:
+
+Installation of Confluent Platform on CentOS7.
+
+MTLS enabled.
+
+Installs two unique KSQL Clusters, each having 1 node.
+
+Scales it later to 4 nodes, adding 1 node to each of the KSQL clusters
+
+#### Scenario ksql-scale-up verify test's the following:
+
+Validates that 2 new ksql nodes are added properly
+
+Validates that two KSQL clusters are running
+
+Validates that ksql3 is added to KSQL cluster
+
+Validates that ksql4 is added to KSQL cluster
+
+Validates that Control Center Can connect to each KSQL cluster
+
+***
+
 ### molecule/provided-rhel
 
 #### Scenario provided-rhel test's the following:
@@ -1195,6 +1249,8 @@ Custom log dirs for all components.
 Validates that SASL SSL protocol is set across all components
 
 Validates that custom log4j configuration is in place.
+
+Validates that Confluent CLI is installed.
 
 ***
 
