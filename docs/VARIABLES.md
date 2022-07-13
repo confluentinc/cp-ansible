@@ -676,6 +676,14 @@ Default:  "{{ssl_enabled}}"
 
 ***
 
+### zookeeper_upgrade_ssl_enabled
+
+Boolean to upgrade cluster from non ssl to ssl. Used in the playbook non_ssl_to_ssl
+
+Default:  false
+
+***
+
 ### zookeeper_ssl_mutual_auth_enabled
 
 Deprecated- Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
