@@ -6,6 +6,21 @@
     - import_role:
         name: variables
 
+- name: Run CA if self signed certs
+  hosts: zookeeper:kafka_broker:schema_registry:kafka_connect:ksql:control_center:kafka_rest:kafka_connect_replicator
+  gather_facts: false
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Create Certificate Authority and Copy to Ansible Host
+      include_tasks: tasks/certificate_authority.yml
+      tags: certificate_authority
+      run_once: true
+      when: >
+        self_signed|bool
+
 - name: Generate keystores and truststores for kafka broker
   hosts: kafka_broker
   tags: always
@@ -68,6 +83,7 @@
     - set_fact:
         deployment_strategy: rolling
         zookeeper_upgrade_ssl_enabled: true
+        ssl_mutual_auth_enabled: true
         zookeeper_client_authentication_type: mtls
         zookeeper_quorum_authentication_type: none
         zookeeper_custom_properties:
@@ -83,7 +99,8 @@
   tasks:
     - set_fact:
         deployment_strategy: rolling
-        zookeeper_ssl_enabled: true
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
         zookeeper_client_authentication_type: mtls
         zookeeper_quorum_authentication_type: none
 
@@ -98,6 +115,7 @@
     - set_fact:
         deployment_strategy: rolling
         ssl_enabled: true
+        ssl_mutual_auth_enabled: true
 
 - import_playbook: schema_registry.yml
 
