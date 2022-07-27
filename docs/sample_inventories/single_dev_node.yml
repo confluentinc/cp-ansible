@@ -1,0 +1,427 @@
+---
+### Single Dev Node
+##
+## The following is an example inventory file of the configuration required for setting up Confluent Platform with:
+# Single host Confluent Platform components, Firewall samples, offline HTTP notes, LDAP verification and setup, and lots of notes and ASCII Art!
+
+
+# ███████╗██╗███╗   ██╗ ██████╗ ██╗     ███████╗    ██████╗ ███████╗██╗   ██╗    ███╗   ██╗ ██████╗ ██████╗ ███████╗
+# ██╔════╝██║████╗  ██║██╔════╝ ██║     ██╔════╝    ██╔══██╗██╔════╝██║   ██║    ████╗  ██║██╔═══██╗██╔══██╗██╔════╝
+# ███████╗██║██╔██╗ ██║██║  ███╗██║     █████╗      ██║  ██║█████╗  ██║   ██║    ██╔██╗ ██║██║   ██║██║  ██║█████╗
+# ╚════██║██║██║╚██╗██║██║   ██║██║     ██╔══╝      ██║  ██║██╔══╝  ╚██╗ ██╔╝    ██║╚██╗██║██║   ██║██║  ██║██╔══╝
+# ███████║██║██║ ╚████║╚██████╔╝███████╗███████╗    ██████╔╝███████╗ ╚████╔╝     ██║ ╚████║╚██████╔╝██████╔╝███████╗
+# ╚══════╝╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝    ╚═════╝ ╚══════╝  ╚═══╝      ╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚══════╝
+#
+
+## CP Ansible setup
+#
+#
+## Install HTTP on a host (if needed to host connectors or Jolokia or JMX files)
+# sudo yum install httpd -y
+# sudo firewall-cmd --permanent --add-service=http
+# sudo firewall-cmd --reload
+# sudo systemctl start httpd
+# sudo systemctl status httpd
+# sudo systemctl enable httpd
+# sudo mkdir -p /var/www/html/confluent
+# sudo chown -R $USER:$GROUP /var/www/html/confluent
+# sudo chmod -R 755 /var/www
+#
+## Open Ports for Confluent Platform
+#  https://docs.confluent.io/current/installation/cp-ansible/ansible-requirements.html
+#  Kafka brokers: inter-broker communication	9091
+#  Kafka brokers: client communication	9092
+#  Confluent Control Center	9021
+#  Connect REST API	8083
+#  ksqlDB REST API	8088
+#  REST Proxy	8082
+#  Schema Registry REST API	8081
+#  ZooKeeper	2181, 2888, 3888
+#  Metadata Service (MDS) if using RBAC	8090
+#
+#  Open Ports
+#    ansible zookeeper -i sample_inventories/single_dev_node.yaml -f 1 -m shell -a "firewall-cmd --zone=public --permanent --add-port 2181/tcp --add-port 2182/tcp --add-port 2888/tcp --add-port 3888/tcp --add-port 7771/tcp" -f 9  --ask-pass --ask-become-pass
+#    ansible kafka_broker -i sample_inventories/single_dev_node.yaml -f 1 -m shell -a "firewall-cmd --zone=public --permanent --add-port 9091/tcp --add-port 9092/tcp --add-port 8090/tcp --add-port 8080/tcp --add-port 7771/tcp" -f 9  --ask-pass --ask-become-pass
+#    ansible control_center -i sample_inventories/single_dev_node.yaml -f 1 -m shell -a "firewall-cmd --zone=public --permanent --add-port 9021/tcp" -f 9  --ask-pass --ask-become-pass
+#    ansible kafka_connect -i sample_inventories/single_dev_node.yaml -f 1 -m shell -a "firewall-cmd --zone=public --permanent --add-port 8083/tcp" -f 9  --ask-pass --ask-become-pass
+#    ansible ksql -i sample_inventories/single_dev_node.yaml -f 1 -m shell -a "firewall-cmd --zone=public --permanent --add-port 8088/tcp" -f 9  --ask-pass --ask-become-pass
+#    ansible kafka_rest -i sample_inventories/single_dev_node.yaml -f 1 -m shell -a "firewall-cmd --zone=public --permanent --add-port 8082/tcp" -f 9  --ask-pass --ask-become-pass
+#    ansible schema_registry -i sample_inventories/single_dev_node.yaml -f 1 -m shell -a "firewall-cmd --zone=public --permanent --add-port 8081/tcp" -f 9  --ask-pass --ask-become-pass
+#    ansible all -i sample_inventories/single_dev_node.yaml -f 1 -m shell -a "firewall-cmd --reload" -f 9  --ask-pass --ask-become-pass
+#  Verify
+#     ansible all -i sample_inventories/single_dev_node.yaml -f 1 -m shell -a "firewall-cmd --list-all | grep ' port'" -f 9  --ask-pass --ask-become-pass
+#  Syslog on Connect
+#    ansible kafka_connect -i sample_inventories/single_dev_node.yaml -f 1 -m shell -a "firewall-cmd --zone=public --permanent --add-port 1514/tcp --add-port 1515/tcp" -f 9  --ask-pass --ask-become-pass
+#  Restart Connect
+#    ansible kafka_connect -i sample_inventories/single_dev_node.yaml -f 1 -m service -a "name=confluent-kafka-connect state=restarted"  --ask-pass --ask-become-pass
+# Register RHEL 8
+#    ansible all -i sample_inventories/single_dev_node.yaml -m shell -a 'subscription-manager register --username someUserName --password "PASSWORDHERE"'  --ask-pass --ask-become-pass
+#    Grab pool id from a fips-node:  subscription-manager list --available
+#    ansible all -i sample_inventories/single_dev_node.yaml -m shell -a 'subscription-manager attach --pool POOLID'  --ask-pass --ask-become-pass
+#
+## Ansible 2.9
+# Slow role the Ansible install to verify the SSL is working as expected.
+# Install Zookeeper components
+#    ansible-playbook -t zookeeper -i sample_inventories/single_dev_node.yaml playbooks/all.yml  --ask-pass --ask-become-pass
+# Install Kafka Broker components (lots of debug output)
+#    ansible-playbook -t kafka_broker -i sample_inventories/single_dev_node.yaml playbooks/all.yml  --ask-pass --ask-become-pass
+# Install all the Confluent Platform components
+#    ansible-playbook -i sample_inventories/single_dev_node.yaml playbooks/all.yml  --ask-pass --ask-become-pass
+#
+## Ansible 2.11
+# Slow role the Ansible install to verify the SSL is working as expected.
+# Install Zookeeper components
+#    ansible-playbook -i sample_inventories/single_dev_node.yaml confluent.platform.all --tags zookeeper
+# Install Kafka Broker components (lots of debug output)
+#    ansible-playbook -i sample_inventories/single_dev_node.yaml confluent.platform.all  --tags kafka_broker
+# Install all the supporting Confluent Platform components
+#    ansible-playbook -i sample_inventories/single_dev_node.yaml confluent.platform.all --tags=schema_registry
+#    ansible-playbook -i sample_inventories/single_dev_node.yaml confluent.platform.all --tags=kafka_rest
+#    ansible-playbook -i sample_inventories/single_dev_node.yaml confluent.platform.all --tags=kafka_connect
+#    ansible-playbook -i sample_inventories/single_dev_node.yaml confluent.platform.all --tags=ksql
+# Install Control Center
+#    ansible-playbook -i sample_inventories/single_dev_node.yaml confluent.platform.all --tags=control_center
+
+
+
+
+all:
+  vars:
+    #confluent_license:
+
+    # Allow install on AWS Linux
+    validate_hosts: false
+
+    # Hack for older Ansible variables
+    ansible_ssh_host: ec2-1-2-3-4.us-east-2.compute.amazonaws.com
+
+    required_total_memory_mb_kafka_broker: 2000
+    required_total_memory_mb_control_center: 2000
+
+    ## SE Linux does not allow us to write some things to /tmp, so we need to offer other locations
+    # you will need to configure permissions and existance.
+    ksql_custom_properties:
+      ksql.streams.state.dir: /var/lib/kafka/streams
+      confluent.support.metrics.enabled: false
+    # ... maybe these too
+    # ksql_custom_properties:
+    #   ksql.streams.state.dir: /data_1/confluent/streams
+    # ksql_service_environment_overrides:
+    #   KSQL_OPTS: "-Djava.io.tmpdir=/data_1/tmp"
+    #   ROCKSDB_SHAREDLIB_DIR: "/data_1/tmp/ksqldb"
+
+    ## Uncomment to debug Zookeeper SSL connections. Beware, lots of logs
+    # zookeeper_custom_java_args: "-Djavax.net.debug=all"
+
+    ## Try RPMs
+    # installation_method: archive
+    ansible_connection: ssh
+    ansible_user: ec2-user
+    ansible_become: true
+    ansible_become_method: sudo
+    ansible_ssh_private_key_file: /Volumes/Projects/cp_development/shh_private.pem
+    # If password is needed for sudo add between "" on the next line
+    #ansible_become_pass:
+    # Recommended to run ansible with `--ask-pass` instead of entering the password above
+
+    ## Secrets Protection
+    # Documentation: https://docs.confluent.io/platform/current/security/secrets.html
+    # confluent secret master-key generate --passphrase @secretstest_secret.passphrase --local-secrets-file secretstest_secret.properties
+    # secrets_protection_enabled: true
+    # secrets_protection_masterkey: "Kg6eBQSflIh8iM3qryR+A0K0dK28CGcSrjXYoktO+k8="
+    # secrets_protection_security_file: /Volumes/Projects/github/cp-ansible/sample_inventories/secretstest_secret.properties
+    #kafka_broker_secrets_protection_encrypt_passwords: true
+    #kafka_broker_secrets_protection_encrypt_properties: [listener.name.internalplain.plain.sasl.jaas.config,kafka.rest.client.sasl.jaas.config,listener.name.internal.scram-sha-512.sasl.jaas.config]
+
+
+    ssl_enabled: true
+    mds_ssl_enabled: true
+    ssl_mutual_auth_enabled: false
+
+    #### SSL Configuration ####
+    # Prerequisite: Must install rng-tools since standard FIPS installations do not have enough randomness
+    # Note: if the SSL connections are flaky, check for HBSS blocking access to the files
+    #
+    # Must supply a Full chain for the certs provided. This must include the ROOT(s) and all the intermediates from
+    # the provided cert up to the ROOT(s). Failure to supply a full keychain will break BouncyCastle verification
+    # and SSL will fail which will bring down the broker.
+    ssl_custom_certs: false
+    # ssl_ca_cert_filepath: "/Volumes/Projects/homeLab/certificate/full-trust-bundle.cert"
+    # ssl_signed_cert_filepath: "/Volumes/Projects/homeLab/certificate/full-trust-bundle.cert" # Must be a full chain of certs
+    # ssl_key_filepath: "/Volumes/Projects/homeLab/certificate/server1.key"
+    #ssl_key_password: {{enter_password}}
+
+    #### Keystore/Truststore Configuration ####
+    # keystore_storepass: secureKeystore
+    # truststore_storepass: secureTruststore
+    # kafka_broker_keystore_storepass: secureKeystore
+    # kafka_broker_truststore_storepass: secureTruststore
+    # #kafka_broker_keystore_storepass: "{{ keystore_storepass }}"
+    # #kafka_broker_truststore_storepass: "{{ truststore_storepass }}"
+    # schema_registry_keystore_storepass: "{{ keystore_storepass }}"
+    # schema_registry_truststore_storepass: "{{ truststore_storepass }}"
+    # kafka_connect_keystore_storepass: "{{ keystore_storepass }}"
+    # kafka_connect_truststore_storepass: "{{ truststore_storepass }}"
+    # ksql_keystore_storepass: "{{ keystore_storepass }}"
+    # ksql_truststore_storepass: "{{ truststore_storepass }}"
+    # control_center_keystore_storepass: "{{ keystore_storepass }}"
+    # control_center_truststore_storepass: "{{ truststore_storepass }}"
+
+    #### Certificate Regeneration ####
+    regenerate_ca: true
+    regenerate_keystore_and_truststore: true
+
+    #### Zookeeper TLS Configuration ####
+    ## Zookeeper can also have TLS Encryption and mTLS Authentication
+    ## For backwards compatibility both will be turned off by default, even if ssl_enabled is set to true
+    ## To enable TLS encryption and mTLS authentication uncomment these respectively
+    zookeeper_ssl_enabled: false
+    zookeeper_ssl_mutual_auth_enabled: false
+
+    #### Monitoring Configuration ####
+    ## Jolokia
+    jolokia_enabled: false
+    # Set to false to copy from Ansible Control Node
+    jolokia_url_remote: false
+    jolokia_jar_url: jolokia-jvm-1.6.2-agent.jar
+    ## JMX Exporter
+    ## To enable, uncomment this line:
+    jmxexporter_enabled: false
+    jmxexporter_url_remote: false
+    jmxexporter_jar_url: jmx_prometheus_javaagent-0.12.0.jar
+
+    #### Custom Yum Repo File (Rhel/Centos) ####
+    #confluent_common_repository_baseurl: "https://packages.confluent.io"
+    #confluent_common_repository_redhat_dist_baseurl: "{{confluent_common_repository_redhat_baseurl}}/{{confluent_repo_version}}/7"
+
+    #### Fips Security ####
+    ## Fips only works with `ssl_enabled: true` and `confluent_server_enabled: true`
+    ## We require some Kafka listeners to NOT be SSL, so we set the `enable.fips` for Kafka to false
+    ## since the playbook is still set to true, the BouncyCastle keystores and settings will be configured
+    ## for FIPS. Kafka then reads in the BouncyCastle configuration and uses FIPS connections.
+    fips_enabled: false
+    kafka_broker_custom_properties:
+      enable.fips: false
+    confluent.server: true
+
+    #### RBAC ####
+    ## Generate the PUBLIC PEM if you only have the PRIVATE PEM
+    ## openssl rsa -in /Volumes/Projects/homeLab/certificate/server1.key -outform PEM -pubout -out /Volumes/Projects/homeLab/certificate/server1.public.pem
+    rbac_enabled: false
+    # sasl_protocol: plain
+    #token_services_public_pem_file: /Volumes/Projects/homeLab/certificate/server1.public.pem
+    #token_services_private_pem_file: "{{ ssl_key_filepath }}"
+
+    ## LDAP Users
+    ## Note: Below users must already exist in your LDAP environment.  See kafka_broker vars, for LDAP connection details.
+    ## Being lazy and setting all the Confluent users to the same admin user
+    # mds_super_user: admin
+    # mds_super_user_password: admin-secret
+    # kafka_broker_ldap_user: admin
+    # kafka_broker_ldap_password: admin-secret
+    # schema_registry_ldap_user: admin
+    # schema_registry_ldap_password: admin-secret
+    # kafka_connect_ldap_user: admin
+    # kafka_connect_ldap_password: admin-secret
+    # ksql_ldap_user: admin
+    # ksql_ldap_password: admin-secret
+    # kafka_rest_ldap_user: admin
+    # kafka_rest_ldap_password: admin-secret
+    # control_center_ldap_user: admin
+    # control_center_ldap_password: admin-secret
+
+    schema_registry_basic_users_final:
+      admin:
+        principal: admin
+        password: admin-secret
+
+    #### Configuring Multiple Listeners ####
+    ## CP-Ansible will configure two listeners on the broker: an internal listener for the broker to communicate and an external for the components and other clients.
+    ## If you only need one listener uncomment this line:
+    # kafka_broker_configure_multiple_listeners: false
+    ## By default both of these listeners will follow whatever you set for ssl_enabled and sasl_protocol.
+    ## To configure different security settings on the internal and external listeners set the following variables:
+    # kafka_broker_custom_listeners:
+    #   mtls_listener:
+    #     name: MTLS
+    #     port: 9096
+    #     ssl_enabled: true
+    #     ssl_mutual_auth_enabled: true
+    #     sasl_protocol: none
+    #   ldaps_listener:
+    #     name: LDAPS
+    #     port: 9097
+    #     ssl_enabled: true
+    #     ssl_mutual_auth_enabled: false
+    #     sasl_protocol: plain
+    #   ldap_listener:
+    #     name: ldap
+    #     port: 9098
+    #     ssl_enabled: false
+    #     ssl_mutual_auth_enabled: false
+    #     sasl_protocol: plain
+
+####
+# ███████╗ ██████╗  ██████╗ ██╗  ██╗███████╗███████╗██████╗ ███████╗██████╗
+# ╚══███╔╝██╔═══██╗██╔═══██╗██║ ██╔╝██╔════╝██╔════╝██╔══██╗██╔════╝██╔══██╗
+#   ███╔╝ ██║   ██║██║   ██║█████╔╝ █████╗  █████╗  ██████╔╝█████╗  ██████╔╝
+#  ███╔╝  ██║   ██║██║   ██║██╔═██╗ ██╔══╝  ██╔══╝  ██╔═══╝ ██╔══╝  ██╔══██╗
+# ███████╗╚██████╔╝╚██████╔╝██║  ██╗███████╗███████╗██║     ███████╗██║  ██║
+# ╚══════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝
+zookeeper:
+  hosts:
+    ec2-1-2-3-4.us-east-2.compute.amazonaws.com:
+      zookeeper_id: 1
+
+
+####
+# ██╗  ██╗ █████╗ ███████╗██╗  ██╗ █████╗
+# ██║ ██╔╝██╔══██╗██╔════╝██║ ██╔╝██╔══██╗
+# █████╔╝ ███████║█████╗  █████╔╝ ███████║
+# ██╔═██╗ ██╔══██║██╔══╝  ██╔═██╗ ██╔══██║
+# ██║  ██╗██║  ██║██║     ██║  ██╗██║  ██║
+# ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝
+kafka_broker:
+  vars:
+    kafka_broker_custom_properties:
+      confluent.support.metrics.enable: false
+
+      ## ██╗     ██████╗  █████╗ ██████╗
+      ## ██║     ██╔══██╗██╔══██╗██╔══██╗
+      ## ██║     ██║  ██║███████║██████╔╝
+      ## ██║     ██║  ██║██╔══██║██╔═══╝
+      ## ███████╗██████╔╝██║  ██║██║
+      ## ╚══════╝╚═════╝ ╚═╝  ╚═╝╚═╝
+      ##
+      ## Test connection with ldapsearch
+      # ldapsearch -H ldap://ldap.server1.dev:389 \
+      #   -b "dc=server1,dc=dev" \
+      #   -D "cn=ldap-lookup,ou=ServiceAccount,dc=server1,dc=dev" \
+      #   -w lookupPassword \
+      #   "(&(gidNumber=507)(objectClass=posixAccount))"
+      #
+      ## ** Active Directory Note **
+      #  LDAP over port 3269 is actually querying LDAP using Global Catalog.
+      #  3268 is GC plain text. 3269 is GC over SSL which is encrypted by default.
+      #  389 is AD plain text. 636 is AD over SSL which is encrypted by default.
+      #  You likely want the Global Catalog, use the 3268/3269 ports.
+      #
+      #  Active Directory has had some issues when using a primary group in the LDAP
+      #  filter. Therefore, make a LDAP filter with a group that is not the primary group.
+      #
+      ## Sample Record
+      # Alice, Users, server1.dev
+      #  dn: cn=Alice,ou=Users,dc=server1,dc=dev
+      #  sn: Alice
+      #  cn:: IEFsaWNl
+      #  uid: alice
+      #  uidNumber: 1016
+      #  homeDirectory: /home/users/alice
+      #  objectClass: inetOrgPerson
+      #  objectClass: posixAccount
+      #  objectClass: top
+      #  gidNumber: 507
+
+      # # Connection Details for LDAP
+      # ldap.java.naming.provider.url: ldap://ldap.server1.dev:389
+      # ## Not using this for test server  # ldap.java.naming.security.protocol: SSL
+      # ldap.ssl.keystore.location: "{{ kafka_broker_pkcs12_keystore_path }}"
+      # ldap.ssl.keystore.password: "{{ keystore_storepass }}"
+      # ldap.ssl.truststore.location: "{{ kafka_broker_pkcs12_truststore_path }}"
+      # ldap.ssl.truststore.password: "{{ truststore_storepass }}"
+
+      # # LDAP Bind Details
+      # ldap.java.naming.security.principal: cn=ldap-lookup,ou=ServiceAccount,dc=server1,dc=dev
+      # ldap.java.naming.security.authentication: simple
+      # ldap.java.naming.security.credentials: "lookupPassword"
+
+      # # LDAP Search Details
+      # ldap.search.mode: USERS
+      # ldap.user.search.scope: 2
+      # ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+      # ldap.com.sun.jndi.ldap.read.timeout: 90000
+      # ldap.refresh.interval.ms: 60000
+      # ldap.retry.backoff.ms: 1000
+      # ldap.retry.backoff.max.ms: 5000
+      # ldap.retry.timeout.ms: 3600000
+      # ldap.user.search.base: dc=server1,dc=dev
+      # ldap.user.search.filter: "(&(gidNumber=507)(objectClass=posixAccount))"
+
+      # # LDAP Mapping to Confluent Metadata Service
+      # ldap.user.name.attribute: sn
+      # ldap.user.object.class: posixAccount
+      # ldap.user.memberof.attribute.pattern: (?i)CN=(.*?),.*
+
+      # # LDAP Enabled Listener (e.g. ldaps_listener)
+      # listener.name.ldap.sasl.enabled.mechanisms: PLAIN
+      # listener.name.ldap.plain.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required;
+      # listener.name.ldap.plain.sasl.server.callback.handler.class: io.confluent.security.auth.provider.ldap.LdapAuthenticateCallbackHandler
+
+      # # LDAP MTLS mapping Rules
+      # listener.name.mtls.ssl.principal.mapping.rules: RULE:^CN=([a-zA-Z0.9.]*).*$/$1/L , DEFAULT
+  hosts:
+    ec2-1-2-3-4.us-east-2.compute.amazonaws.com:
+      broker_id: 1
+      kafka_broker:
+        properties:
+          offsets.topic.replication.factor: 1
+          transaction.state.log.replication.factor: 1
+          transaction.state.log.min.isr: 1
+          confluent.license.topic.replication.factor: 1
+          confluent.metadata.topic.replication.factor: 1
+          confluent.telemetry.enabled: false
+          confluent.balancer.enable: false
+          metric.reporters: io.confluent.metrics.reporter.ConfluentMetricsReporter
+          confluent.metrics.reporter.topic.replicas: 1
+
+
+####
+# ███████╗ ██████╗██╗  ██╗███████╗███╗   ███╗ █████╗     ██████╗ ███████╗ ██████╗ ██╗███████╗████████╗██████╗ ██╗   ██╗
+# ██╔════╝██╔════╝██║  ██║██╔════╝████╗ ████║██╔══██╗    ██╔══██╗██╔════╝██╔════╝ ██║██╔════╝╚══██╔══╝██╔══██╗╚██╗ ██╔╝
+# ███████╗██║     ███████║█████╗  ██╔████╔██║███████║    ██████╔╝█████╗  ██║  ███╗██║███████╗   ██║   ██████╔╝ ╚████╔╝
+# ╚════██║██║     ██╔══██║██╔══╝  ██║╚██╔╝██║██╔══██║    ██╔══██╗██╔══╝  ██║   ██║██║╚════██║   ██║   ██╔══██╗  ╚██╔╝
+# ███████║╚██████╗██║  ██║███████╗██║ ╚═╝ ██║██║  ██║    ██║  ██║███████╗╚██████╔╝██║███████║   ██║   ██║  ██║   ██║
+# ╚══════╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝╚═╝  ╚═╝    ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝
+#
+schema_registry:
+  hosts:
+    ec2-1-2-3-4.us-east-2.compute.amazonaws.com:
+
+
+####
+# ██╗  ██╗ █████╗ ███████╗██╗  ██╗ █████╗      ██████╗ ██████╗ ███╗   ██╗███╗   ██╗███████╗ ██████╗████████╗
+# ██║ ██╔╝██╔══██╗██╔════╝██║ ██╔╝██╔══██╗    ██╔════╝██╔═══██╗████╗  ██║████╗  ██║██╔════╝██╔════╝╚══██╔══╝
+# █████╔╝ ███████║█████╗  █████╔╝ ███████║    ██║     ██║   ██║██╔██╗ ██║██╔██╗ ██║█████╗  ██║        ██║
+# ██╔═██╗ ██╔══██║██╔══╝  ██╔═██╗ ██╔══██║    ██║     ██║   ██║██║╚██╗██║██║╚██╗██║██╔══╝  ██║        ██║
+# ██║  ██╗██║  ██║██║     ██║  ██╗██║  ██║    ╚██████╗╚██████╔╝██║ ╚████║██║ ╚████║███████╗╚██████╗   ██║
+# ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝     ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═══╝╚══════╝ ╚═════╝   ╚═╝
+
+kafka_connect:
+  hosts:
+    ec2-1-2-3-4.us-east-2.compute.amazonaws.com:
+
+
+####
+# ██╗  ██╗███████╗ ██████╗ ██╗     ██████╗ ██████╗
+# ██║ ██╔╝██╔════╝██╔═══██╗██║     ██╔══██╗██╔══██╗
+# █████╔╝ ███████╗██║   ██║██║     ██║  ██║██████╔╝
+# ██╔═██╗ ╚════██║██║▄▄ ██║██║     ██║  ██║██╔══██╗
+# ██║  ██╗███████║╚██████╔╝███████╗██████╔╝██████╔╝
+# ╚═╝  ╚═╝╚══════╝ ╚══▀▀═╝ ╚══════╝╚═════╝ ╚═════╝
+
+ksql:
+  hosts:
+    ec2-1-2-3-4.us-east-2.compute.amazonaws.com:
+
+
+####
+#  ██████╗ ██████╗ ███╗   ██╗████████╗██████╗  ██████╗ ██╗          ██████╗███████╗███╗   ██╗████████╗███████╗██████╗
+# ██╔════╝██╔═══██╗████╗  ██║╚══██╔══╝██╔══██╗██╔═══██╗██║         ██╔════╝██╔════╝████╗  ██║╚══██╔══╝██╔════╝██╔══██╗
+# ██║     ██║   ██║██╔██╗ ██║   ██║   ██████╔╝██║   ██║██║         ██║     █████╗  ██╔██╗ ██║   ██║   █████╗  ██████╔╝
+# ██║     ██║   ██║██║╚██╗██║   ██║   ██╔══██╗██║   ██║██║         ██║     ██╔══╝  ██║╚██╗██║   ██║   ██╔══╝  ██╔══██╗
+# ╚██████╗╚██████╔╝██║ ╚████║   ██║   ██║  ██║╚██████╔╝███████╗    ╚██████╗███████╗██║ ╚████║   ██║   ███████╗██║  ██║
+#  ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚══════╝     ╚═════╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
+
+control_center:
+  hosts:
+    ec2-1-2-3-4.us-east-2.compute.amazonaws.com:
