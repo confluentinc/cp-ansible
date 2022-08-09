@@ -508,6 +508,14 @@ Default:  true
 
 ***
 
+### user_login_shell
+
+Variable to set the user login shell for all custom user created per component by cp-ansible.
+
+Default:  /sbin/nologin
+
+***
+
 ### zookeeper_user
 
 Set this variable to customize the Linux User that the Zookeeper Service runs with. Default user is cp-kafka.
