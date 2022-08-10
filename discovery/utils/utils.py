@@ -346,6 +346,7 @@ class FileUtils:
         # Check if config file exists. We return an empty dictionary if there isn't any config
         file_path = f"service/config/{file_name}"
         if not exists(file_path):
+            logger.error(f"Cannot find config file {file_name}. Returning an empty config.")
             return dict()
 
         with open(file_path, "r") as stream:
@@ -356,24 +357,28 @@ class FileUtils:
 
     @staticmethod
     def get_kafka_broker_configs(name):
-        return FileUtils.__read_service_configuration_file("kafka_broker.yml").get(name, None)
+        return FileUtils.__read_service_configuration_file("kafka_broker.yml").get(name, [])
 
     @staticmethod
     def get_zookeeper_configs(name):
-        return FileUtils.__read_service_configuration_file("zookeeper.yml").get(name, None)
+        return FileUtils.__read_service_configuration_file("zookeeper.yml").get(name, [])
 
     @staticmethod
     def get_schema_registry_configs(name):
-        return FileUtils.__read_service_configuration_file("schema_registry.yml").get(name, None)
+        return FileUtils.__read_service_configuration_file("schema_registry.yml").get(name, [])
 
     @staticmethod
     def get_kafka_rest_configs(name):
-        return FileUtils.__read_service_configuration_file("kafka_rest.yml").get(name, None)
+        return FileUtils.__read_service_configuration_file("kafka_rest.yml").get(name, [])
 
     @staticmethod
     def get_ksql_configs(name):
-        return FileUtils.__read_service_configuration_file("ksql.yml").get(name, None)
+        return FileUtils.__read_service_configuration_file("ksql.yml").get(name, [])
 
     @staticmethod
     def get_control_center_configs(name):
-        return FileUtils.__read_service_configuration_file("control_center.yml").get(name, None)
+        return FileUtils.__read_service_configuration_file("control_center.yml").get(name, [])
+
+    @staticmethod
+    def get_kafka_connect_configs(name):
+        return FileUtils.__read_service_configuration_file("kafka_connect.yml").get(name, [])

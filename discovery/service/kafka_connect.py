@@ -8,18 +8,18 @@ from discovery.utils.utils import InputContext, Logger, FileUtils
 logger = Logger.get_logger()
 
 
-class KafkaRestServicePropertyBuilder:
+class KafkaConnectServicePropertyBuilder:
 
     @staticmethod
     def build_properties(input_context: InputContext, inventory: CPInventoryManager):
         from discovery.service import get_service_builder_class
         obj = get_service_builder_class(modules=sys.modules[__name__],
-                                        default_class_name="KafkaRestServicePropertyBaseBuilder",
+                                        default_class_name="KafkaConnectServicePropertyBaseBuilder",
                                         version=input_context.from_version)
         obj(input_context, inventory).build_properties()
 
 
-class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
+class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
     inventory = None
     input_context = None
 
@@ -31,7 +31,7 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def build_properties(self):
 
         # Get the hosts for given service
-        service = ConfluentServices.KAFKA_REST
+        service = ConfluentServices.KAFKA_CONNECT
         hosts = self.get_service_host(service, self.inventory)
         if not hosts:
             logger.error(f"Could not find any host with service {service.value.get('name')} ")
@@ -58,16 +58,16 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.update_inventory(self.inventory, response)
 
     def __build_service_properties(self, service_properties):
-        for key, value in vars(KafkaRestServicePropertyBaseBuilder).items():
-            if callable(getattr(KafkaRestServicePropertyBaseBuilder, key)) and key.startswith("_build"):
-                func = getattr(KafkaRestServicePropertyBaseBuilder, key)
-                logger.debug(f"Calling KafkaRest property builder.. {func.__name__}")
+        for key, value in vars(KafkaConnectServicePropertyBaseBuilder).items():
+            if callable(getattr(KafkaConnectServicePropertyBaseBuilder, key)) and key.startswith("_build"):
+                func = getattr(KafkaConnectServicePropertyBaseBuilder, key)
+                logger.debug(f"Calling KafkaConnect property builder.. {func.__name__}")
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 
     def __build_custom_properties(self, service_properties: dict, mapped_properties: set):
-        group = "kafka_rest_custom_properties"
-        skip_properties = set(FileUtils.get_kafka_rest_configs("skip_properties"))
+        group = "kafka_connect_custom_properties"
+        skip_properties = set(FileUtils.get_kafka_connect_configs("skip_properties"))
         self.build_custom_properties(inventory=self.inventory,
                                      group=group,
                                      skip_properties=skip_properties,
@@ -77,36 +77,68 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def __build_runtime_properties(self, service_properties: dict):
         pass
 
+    def _build_service_replication_factor(self, service_prop: dict)->tuple:
+        key = "config.storage.replication.factor"
+        self.mapped_service_properties.add(key)
+        return "all", {"kafka_connect_default_internal_replication_factor": int(service_prop.get(key))}
+
+    def _build_config_storage_topic(self, service_prop:dict)->tuple:
+        key = "config.storage.topic"
+        self.mapped_service_properties.add(key)
+        value = service_prop.get(key)
+        return "all", {"kafka_connect_group_id": value.rstrip("-configs")}
+
+    def _build_monitoring_interceptor_propperty(self, service_prop:dict)->tuple:
+        key = "confluent.monitoring.interceptor.topic"
+        self.mapped_service_properties.add(key)
+        return "all", { "kafka_connect_monitoring_interceptors_enabled": key in service_prop}
+
+    def _build_connect_group_id(self, service_prop:dict)->tuple:
+        key = "group.id"
+        self.mapped_service_properties.add(key)
+        return "all", {"kafka_connect_group_id": service_prop.get(key)}
+
     def _build_service_protocol_port(self, service_prop: dict) -> tuple:
         key = "listeners"
         self.mapped_service_properties.add(key)
         from urllib.parse import urlparse
         parsed_uri = urlparse(service_prop.get(key))
         return "all", {
-            "kafka_rest_http_protocol": parsed_uri.scheme,
-            "kafka_rest_port": parsed_uri.port
+            "kafka_connect_http_protocol": parsed_uri.scheme,
+            "kafka_connect_rest_port": parsed_uri.port
         }
 
+    def _build_advertised_protocol_port(self, service_prop:dict)->tuple:
+        key1 = "rest.advertised.listener"
+        self.mapped_service_properties.add(key1)
 
-class KafkaRestServicePropertyBuilder60(KafkaRestServicePropertyBaseBuilder):
+        key2 = "rest.advertised.port"
+        self.mapped_service_properties.add(key2)
+
+        return "all", {
+            "kafka_connect_http_protocol": service_prop.get(key1),
+            "kafka_connect_rest_port": service_prop.get(key2)
+        }
+
+class KafkaConnectServicePropertyBuilder60(KafkaConnectServicePropertyBaseBuilder):
     pass
 
 
-class KafkaRestServicePropertyBuilder61(KafkaRestServicePropertyBaseBuilder):
+class KafkaConnectServicePropertyBuilder61(KafkaConnectServicePropertyBaseBuilder):
     pass
 
 
-class KafkaRestServicePropertyBuilder62(KafkaRestServicePropertyBaseBuilder):
+class KafkaConnectServicePropertyBuilder62(KafkaConnectServicePropertyBaseBuilder):
     pass
 
 
-class KafkaRestServicePropertyBuilder70(KafkaRestServicePropertyBaseBuilder):
+class KafkaConnectServicePropertyBuilder70(KafkaConnectServicePropertyBaseBuilder):
     pass
 
 
-class KafkaRestServicePropertyBuilder71(KafkaRestServicePropertyBaseBuilder):
+class KafkaConnectServicePropertyBuilder71(KafkaConnectServicePropertyBaseBuilder):
     pass
 
 
-class KafkaRestServicePropertyBuilder72(KafkaRestServicePropertyBaseBuilder):
+class KafkaConnectServicePropertyBuilder72(KafkaConnectServicePropertyBaseBuilder):
     pass
