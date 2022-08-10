@@ -64,7 +64,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         for key, value in vars(KafkaServicePropertyBaseBuilder).items():
             if callable(getattr(KafkaServicePropertyBaseBuilder, key)) and key.startswith("_build"):
                 func = getattr(KafkaServicePropertyBaseBuilder, key)
-                logger.debug(f"Calling kafka property builder.. {func.__name__}")
+                logger.debug(f"Calling KafkaBroker property builder.. {func.__name__}")
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 
@@ -72,7 +72,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         for hostname, properties in host_service_properties.items():
             key = "broker.id"
             host = self.inventory.get_host(hostname)
-            host.set_variable(key, properties.get(key))
+            host.set_variable(key, int(properties.get(key)))
             self.mapped_service_properties.add(key)
 
     def __build_custom_properties(self, service_properties: dict, mapped_properties: set):
@@ -139,16 +139,17 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         listeners = service_prop.get(key).split(",")
         for listener in listeners:
-            token = listener.split(":")
-            name = token[0]
-            port = token[-1]
+            from urllib.parse import urlparse
+            parsed_uri = urlparse(listener)
+            name = parsed_uri.scheme
+            port = parsed_uri.port
 
-            key = f"listener.name.{name.lower()}.sasl.enabled.mechanisms"
+            key = f"listener.name.{name}.sasl.enabled.mechanisms"
             self.mapped_service_properties.add(key)
 
             sasl_protocol = service_prop.get(key)
-            default_listeners[name.lower()] = {
-                "name": name,
+            default_listeners[name] = {
+                "name": name.upper(),
                 "port": port,
                 "sasl_protocol": sasl_protocol
             }

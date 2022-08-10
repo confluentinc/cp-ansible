@@ -61,7 +61,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         for key, value in vars(SchemaRegistryServicePropertyBaseBuilder).items():
             if callable(getattr(SchemaRegistryServicePropertyBaseBuilder, key)) and key.startswith("_build"):
                 func = getattr(SchemaRegistryServicePropertyBaseBuilder, key)
-                logger.debug(f"Calling kafka property builder.. {func.__name__}")
+                logger.debug(f"Calling SchemaRegistry property builder.. {func.__name__}")
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 

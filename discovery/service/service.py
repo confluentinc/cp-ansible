@@ -31,6 +31,10 @@ class AbstractPropertyBuilder(ABC):
     def __get_service_properties_file(input_context: InputContext,
                                       service: ConfluentServices,
                                       hosts: list):
+        if not hosts:
+            logger.error(f"Host list is empty for service {service.value.get('name')}")
+            return None
+
         host = hosts[0]
         service_details = SystemPropertyManager.get_service_details(input_context, service, host)
         execution_command = service_details.get(host).get("status").get("ExecStart")
@@ -45,6 +49,10 @@ class AbstractPropertyBuilder(ABC):
     def get_property_mappings(input_context: InputContext, service: ConfluentServices, hosts: list) -> dict:
 
         file = AbstractPropertyBuilder.__get_service_properties_file(input_context, service, hosts)
+        if not file:
+            logger.error(f"Could not get the service seed property file.")
+            return dict()
+
         play = dict(
             name="Ansible Play",
             hosts=hosts,
@@ -174,15 +182,16 @@ class ServicePropertyBuilder:
         return self
 
     def with_control_center_properties(self):
-        # from discovery.service.control_center import ControlCenterServicePropertyBuilder
-        # ControlCenterServicePropertyBuilder.build_properties(self.input_context, self.inventory)
-        # return self
-        pass
+        from discovery.service.control_center import ControlCenterServicePropertyBuilder
+        ControlCenterServicePropertyBuilder.build_properties(self.input_context, self.inventory)
+        return self
 
     def with_mds_properties(self):
         return self
 
     def with_connect_properties(self):
+        from discovery.service.kafka_connect import KafkaConnectServicePropertyBuilder
+        KafkaConnectServicePropertyBuilder.build_properties(self.input_context, self.inventory)
         return self
 
     def with_replicator_properties(self):
