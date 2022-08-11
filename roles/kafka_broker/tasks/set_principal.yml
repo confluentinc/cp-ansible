@@ -19,7 +19,7 @@
     kafka_broker_principal: "User:{{ kerberos_kafka_broker_primary }}"
   when: listener['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'GSSAPI'
 
-- name: Extract Common Name from Keystore - SSL Mutual Auth
+- name: Extract Distinguished Name from Keystore - SSL Mutual Auth
   # Examine the keystore
   # Search lines with Entry type: "PrivateKeyEntry" and return that line and all after, ca cert is of type "trustedCertEntry"
   # Search for first "Owner" line
@@ -27,7 +27,13 @@
   # Remove spaces after commas
   shell: |
     keytool -list -keystore {{kb_keystore_path}} \
-        -storepass {{kb_keystore_storepass}} -v \
+        -storepass {{kb_keystore_storepass}} \
+        {% if fips_enabled|bool %}
+        -storetype BCFKS \
+        -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+        -providerpath {{ (binary_base_path, 'share/java/kafka/bc-fips-*.jar') | community.general.path_join }} \
+        {% endif %}
+        -v \
         | grep PrivateKeyEntry -A1000 \
         | grep Owner -m1 \
         | cut -d ":" -f2 \
