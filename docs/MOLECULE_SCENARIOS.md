@@ -190,19 +190,19 @@ Validates that SCRAM is enabled on the Kafka Broker and Schema Registry.
 
 ***
 
-### molecule/mtls-java8-ubuntu
+### molecule/mtls-java11-ubuntu
 
-#### Scenario mtls-java8-ubuntu test's the following:
+#### Scenario mtls-java11-ubuntu test's the following:
 
 Installation of Confluent Platform on Ubuntu1804.
 
 MTLS enabled.
 
-Java 8.
+Java 11.
 
-#### Scenario mtls-java8-ubuntu verify test's the following:
+#### Scenario mtls-java11-ubuntu verify test's the following:
 
-Validates that Java 8 is in use.
+Validates that Java 11 is in use.
 
 ***
 
@@ -954,19 +954,19 @@ Validates that Keystore is present.
 
 ***
 
-### molecule/mtls-java8-debian
+### molecule/mtls-java11-debian
 
-#### Scenario mtls-java8-debian test's the following:
+#### Scenario mtls-java11-debian test's the following:
 
 Installation of Confluent Platform on Debian9.
 
 MTLS enabled.
 
-Java 8.
+Java 11.
 
-#### Scenario mtls-java8-debian verify test's the following:
+#### Scenario mtls-java11-debian verify test's the following:
 
-Validates that Java 8 is in use.
+Validates that Java 11 is in use.
 
 ***
 
@@ -1002,19 +1002,19 @@ Validates truststore across all components.
 
 ***
 
-### molecule/mtls-java8-rhel
+### molecule/mtls-java11-rhel
 
-#### Scenario mtls-java8-rhel test's the following:
+#### Scenario mtls-java11-rhel test's the following:
 
 Installation of Confluent Platform on CentOS7.
 
 MTLS enabled.
 
-Java 8.
+Java 11.
 
-#### Scenario mtls-java8-rhel verify test's the following:
+#### Scenario mtls-java11-rhel verify test's the following:
 
-Validates that Java 8 is in use.
+Validates that Java 11 is in use.
 
 ***
 
@@ -1216,7 +1216,7 @@ Validates that CLI is present.
 
 Archive Installation of Confluent Community Edition on CentOS7
 
-JAVA 11.
+JAVA 17.
 
 Custom Package Repository for Confluent Platform.
 

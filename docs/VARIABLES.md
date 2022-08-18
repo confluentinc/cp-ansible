@@ -118,7 +118,7 @@ Default:  false
 
 ### fips_enabled
 
-Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
+Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 11. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
 
 Default:  false
 
@@ -4244,25 +4244,25 @@ Default:  true
 
 ### redhat_java_package_name
 
-Java Package to install on RHEL/Centos hosts. Possible values java-1.8.0-openjdk or java-11-openjdk
+Java Package to install on RHEL/Centos hosts. Possible values java-1.8.0-openjdk or java-17-openjdk
 
-Default:  java-11-openjdk
+Default:  java-17-openjdk
 
 ***
 
 ### debian_java_package_name
 
-Java Package to install on Debian hosts. Possible values openjdk-8-jdk or openjdk-11-jdk
+Java Package to install on Debian hosts. Possible values openjdk-11-jdk or openjdk-17-jdk
 
-Default:  openjdk-11-jdk
+Default:  openjdk-17-jdk
 
 ***
 
 ### ubuntu_java_package_name
 
-Java Package to install on Ubuntu hosts. Possible values openjdk-8-jdk or openjdk-11-jdk
+Java Package to install on Ubuntu hosts. Possible values openjdk-11-jdk or openjdk-17-jdk
 
-Default:  openjdk-11-jdk
+Default:  openjdk-17-jdk
 
 ***
 

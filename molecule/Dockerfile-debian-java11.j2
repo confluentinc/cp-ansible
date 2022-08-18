@@ -1,23 +1,32 @@
 FROM {{ item.image }}
 
+RUN echo 'deb [check-valid-until=no] http://ftp.debian.org/debian stretch-backports main' | sudo tee /etc/apt/sources.list.d/stretch-backports.list
+
 RUN apt-get update && \
-    apt-get install --yes \
+    apt-get install --no-install-recommends --yes \
       apt-transport-https \
       gnupg \
-      procps \
       software-properties-common \
-      openjdk-17-jdk \
+      openjdk-11-jdk \
       rsync \
       ca-certificates \
       openssl \
       unzip \
       curl
 
+# Hack to fix cacerts on debian hosts, preventing confluenthub installs from working
+RUN /usr/bin/printf '\xfe\xed\xfe\xed\x00\x00\x00\x02\x00\x00\x00\x00\xe2\x68\x6e\x45\xfb\x43\xdf\xa4\xd9\x92\xdd\x41\xce\xb6\xb2\x1c\x63\x30\xd7\x92' > /etc/ssl/certs/java/cacerts && \
+    /var/lib/dpkg/info/ca-certificates-java.postinst configure
+
 {% set DEFAULT_PACKAGE_VER = lookup('pipe', "awk '/confluent_package_version:/ {print $2}' $MOLECULE_PROJECT_DIRECTORY/roles/variables/defaults/main.yml" ) %}
 {% set PACKAGE_VER = lookup('env', 'VERSION') | default(DEFAULT_PACKAGE_VER, true) %}
 {% set REPO_VER = PACKAGE_VER | regex_replace('^([0-9])\\.([0-9]*).*', '\\1.\\2') %}
 {% set COMMON_REPO_URL = lookup('env', 'COMMON_REPO_URL') | default('https://packages.confluent.io', true) %}
 {% set CLIENT_REPO_URL = lookup('env', 'CLIENT_REPO_URL') | default('https://packages.confluent.io', true) %}
+
+RUN wget -qO - {{ CLIENT_REPO_URL }}/clients/deb/archive.key | sudo apt-key add - && \
+    add-apt-repository "deb {{ CLIENT_REPO_URL }}/clients/deb/ stretch stable main" && \
+    apt-get update
 
 RUN wget -qO - {{ COMMON_REPO_URL }}/deb/{{ REPO_VER }}/archive.key | sudo apt-key add - && \
     add-apt-repository "deb [arch=amd64] {{ COMMON_REPO_URL }}/deb/{{ REPO_VER }} stable main" && \
