@@ -4244,7 +4244,7 @@ Default:  true
 
 ### redhat_java_package_name
 
-Java Package to install on RHEL/Centos hosts. Possible values java-1.8.0-openjdk or java-17-openjdk
+Java Package to install on RHEL/Centos hosts. Possible values java-11-openjdk or java-17-openjdk
 
 Default:  java-17-openjdk
 
