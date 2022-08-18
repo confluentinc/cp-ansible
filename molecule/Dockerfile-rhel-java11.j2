@@ -1,17 +1,21 @@
 FROM {{ item.image }}
 
-RUN apt-get update && \
-    apt-get install --yes \
-      apt-transport-https \
-      gnupg \
-      procps \
-      software-properties-common \
-      openjdk-17-jdk \
+RUN yum -y install java-11-openjdk \
       rsync \
-      ca-certificates \
       openssl \
-      unzip \
-      curl
+      rsyslog \
+      libselinux-python \
+      openldap \
+      openldap-servers \
+      compat-openldap \
+      openldap-clients \
+      openldap-devel \
+      nss-pam-ldapd \
+      libselinux-python \
+      krb5-libs \
+      krb5-server \
+      krb5-workstation \
+      unzip
 
 {% set DEFAULT_PACKAGE_VER = lookup('pipe', "awk '/confluent_package_version:/ {print $2}' $MOLECULE_PROJECT_DIRECTORY/roles/variables/defaults/main.yml" ) %}
 {% set PACKAGE_VER = lookup('env', 'VERSION') | default(DEFAULT_PACKAGE_VER, true) %}
@@ -19,16 +23,22 @@ RUN apt-get update && \
 {% set COMMON_REPO_URL = lookup('env', 'COMMON_REPO_URL') | default('https://packages.confluent.io', true) %}
 {% set CLIENT_REPO_URL = lookup('env', 'CLIENT_REPO_URL') | default('https://packages.confluent.io', true) %}
 
-RUN wget -qO - {{ CLIENT_REPO_URL }}/clients/deb/archive.key | sudo apt-key add - && \
-    add-apt-repository "deb {{ CLIENT_REPO_URL }}/clients/deb/ buster main" && \
-    apt-get update
+RUN echo $'[Confluent.clients]\n\
+name=Confluent repository (clients)\n\
+baseurl={{ CLIENT_REPO_URL }}/clients/rpm/centos/\$releasever/\$basearch\n\
+gpgcheck=1\n\
+gpgkey={{ CLIENT_REPO_URL }}/clients/rpm/archive.key\n\
+enabled=1\n\
+\n\
+[Confluent]\n\
+name=Confluent repository\n\
+baseurl={{ COMMON_REPO_URL }}/rpm/{{ REPO_VER }}\n\
+gpgcheck=1\n\
+gpgkey={{ COMMON_REPO_URL }}/rpm/{{ REPO_VER }}/archive.key\n\
+enabled=1' >> /etc/yum.repos.d/confluent.repo
 
-RUN wget -qO - {{ COMMON_REPO_URL }}/deb/{{ REPO_VER }}/archive.key | sudo apt-key add - && \
-   add-apt-repository "deb [arch=amd64] {{ COMMON_REPO_URL }}/deb/{{ REPO_VER }} stable main" && \
-    apt-get update
-
-RUN apt-get install --yes \
-      confluent-common \
+RUN yum clean all && \
+    yum -y install confluent-common \
       confluent-hub-client \
       confluent-rebalancer \
       confluent-rest-utils \
@@ -39,7 +49,9 @@ RUN apt-get install --yes \
       confluent-kafka-rest \
       confluent-ksqldb \
       confluent-schema-registry \
-      confluent-security \
       confluent-control-center-fe \
       confluent-control-center \
-      confluent-schema-registry-plugins
+      confluent-schema-registry-plugins \
+      confluent-ce-kafka-https-server \
+      confluent-ce-kafka-rest \
+      confluent-hub-client
