@@ -102,6 +102,30 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key2)
         return "all", {"ksql_default_internal_replication_factor": int(service_prop.get(key1))}
 
+    def _build_tls_properties(self, service_prop: dict) -> tuple:
+        key = "listeners"
+        ksql_listener = service_prop.get(key)
+
+        if ksql_listener.find('https') < 0:
+            return "all", {}
+
+        property_list = ["ssl.truststore.location", "ssl.truststore.password", "ssl.keystore.location",
+                            "ssl.keystore.password", "ssl.key.password"]
+        for property_key in property_list:
+            self.mapped_service_properties.add(property_key)
+
+        property_dict = dict()
+        property_dict['ssl_enabled'] = True
+        property_dict['ssl_provided_keystore_and_truststore'] = True
+        property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
+        property_dict['ssl_truststore_filepath'] = service_prop.get('ssl.truststore.location')
+        property_dict['ssl_truststore_password'] = service_prop.get('ssl.truststore.password')
+        property_dict['ssl_keystore_filepath'] = service_prop.get('ssl.keystore.location')
+        property_dict['ssl_keystore_store_password'] = service_prop.get('ssl.keystore.password')
+        property_dict['ssl_keystore_key_password'] = service_prop.get('ssl.key.password')
+
+        return "ksql", property_dict
+
 
 class KsqlServicePropertyBuilder60(KsqlServicePropertyBaseBuilder):
     pass
