@@ -87,6 +87,31 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
             "kafka_rest_port": parsed_uri.port
         }
 
+    def _build_tls_properties(self, service_prop: dict) -> tuple:
+        key = "listeners"
+        kafka_rest_listener = service_prop.get(key)
+
+        if kafka_rest_listener.find('https') < 0:
+            return "all", {}
+
+        property_list = ["ssl.keystore.location", "ssl.keystore.password", "ssl.key.password",
+                            "ssl.truststore.location", "ssl.truststore.password"]
+        for property_key in property_list:
+            self.mapped_service_properties.add(property_key)
+
+        property_dict = dict()
+        property_dict['ssl_enabled'] = True
+        property_dict['ssl_provided_keystore_and_truststore'] = True
+        property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
+        property_dict['ssl_keystore_filepath'] = service_prop.get('ssl.keystore.location')
+        property_dict['ssl_keystore_store_password'] = service_prop.get('ssl.keystore.password')
+        property_dict['ssl_keystore_key_password'] = service_prop.get('ssl.key.password')
+
+        if service_prop.get('ssl.truststore.location') is not None:
+            property_dict['ssl_truststore_filepath'] = service_prop.get('ssl.truststore.location')
+            property_dict['ssl_truststore_password'] = service_prop.get('ssl.truststore.password')
+
+        return "kafka_rest", property_dict
 
 class KafkaRestServicePropertyBuilder60(KafkaRestServicePropertyBaseBuilder):
     pass
