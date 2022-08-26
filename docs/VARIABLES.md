@@ -3260,7 +3260,7 @@ Default:  100mb
 
 ***
 
-### kakfa_connect_replicator_rbac_enabled
+### kafka_connect_replicator_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator to support RBAC. Creates Rolebindings for client to function.
 
@@ -3276,7 +3276,7 @@ Default:  false
 
 ***
 
-### kakfa_connect_replicator_consumer_rbac_enabled
+### kafka_connect_replicator_consumer_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator Consumer to support RBAC. Creates Rolebindings for client to function.
 
@@ -3292,11 +3292,11 @@ Default:  false
 
 ***
 
-### kakfa_connect_replicator_producer_rbac_enabled
+### kafka_connect_replicator_producer_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator Producer to support RBAC. Creates Rolebindings for client to function.
 
-Default:  "{{ kakfa_connect_replicator_rbac_enabled }}"
+Default:  "{{ kafka_connect_replicator_rbac_enabled }}"
 
 ***
 
@@ -3308,11 +3308,11 @@ Default:  "{{ kafka_connect_replicator_erp_tls_enabled }}"
 
 ***
 
-### kakfa_connect_replicator_monitoring_interceptor_rbac_enabled
+### kafka_connect_replicator_monitoring_interceptor_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator Monitoring Interceptor to support RBAC. Creates Rolebindings for client to function.
 
-Default:  "{{ kakfa_connect_replicator_rbac_enabled }}"
+Default:  "{{ kafka_connect_replicator_rbac_enabled }}"
 
 ***
 
