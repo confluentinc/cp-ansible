@@ -1,7 +1,7 @@
 import sys
 
 from discovery.service.service import AbstractPropertyBuilder
-from discovery.utils.constants import ConfluentServices
+from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.utils import InputContext, Logger, FileUtils
 
@@ -35,9 +35,10 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         hosts = self.get_service_host(service, self.inventory)
         if not hosts:
             logger.error(f"Could not find any host with service {service.value.get('name')} ")
+            return
 
         host_service_properties = self.get_property_mappings(self.input_context, service, hosts)
-        service_properties = host_service_properties.get(hosts[0])
+        service_properties = host_service_properties.get(hosts[0]).get(DEFAULT_KEY)
 
         # Build service user group properties
         self.__build_daemon_properties(self.input_context, service, hosts)
@@ -101,30 +102,6 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key1)
         self.mapped_service_properties.add(key2)
         return "all", {"ksql_default_internal_replication_factor": int(service_prop.get(key1))}
-
-    def _build_tls_properties(self, service_prop: dict) -> tuple:
-        key = "listeners"
-        ksql_listener = service_prop.get(key)
-
-        if ksql_listener.find('https') < 0:
-            return "all", {}
-
-        property_list = ["ssl.truststore.location", "ssl.truststore.password", "ssl.keystore.location",
-                            "ssl.keystore.password", "ssl.key.password"]
-        for property_key in property_list:
-            self.mapped_service_properties.add(property_key)
-
-        property_dict = dict()
-        property_dict['ssl_enabled'] = True
-        property_dict['ssl_provided_keystore_and_truststore'] = True
-        property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
-        property_dict['ssl_truststore_filepath'] = service_prop.get('ssl.truststore.location')
-        property_dict['ssl_truststore_password'] = service_prop.get('ssl.truststore.password')
-        property_dict['ssl_keystore_filepath'] = service_prop.get('ssl.keystore.location')
-        property_dict['ssl_keystore_store_password'] = service_prop.get('ssl.keystore.password')
-        property_dict['ssl_keystore_key_password'] = service_prop.get('ssl.key.password')
-
-        return "ksql", property_dict
 
 
 class KsqlServicePropertyBuilder60(KsqlServicePropertyBaseBuilder):

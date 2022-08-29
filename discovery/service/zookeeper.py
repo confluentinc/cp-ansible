@@ -1,7 +1,7 @@
 import sys
 
 from discovery.service.service import AbstractPropertyBuilder
-from discovery.utils.constants import ConfluentServices
+from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.utils import InputContext, Logger, FileUtils
 
@@ -38,7 +38,7 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         host_service_properties = self.get_property_mappings(self.input_context,
                                                              ConfluentServices.ZOOKEEPER,
                                                              hosts)
-        service_properties = host_service_properties.get(hosts[0])
+        service_properties = host_service_properties.get(hosts[0]).get(DEFAULT_KEY)
 
         # Build service user group properties
         self.__build_daemon_properties(self.input_context, ConfluentServices.ZOOKEEPER, hosts)
@@ -87,36 +87,6 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key)
         return 'all', {"zookeeper_client_port": int(service_prop.get(key, 2181))}
 
-    def _build_ssl_properties(self, service_properties: dict) -> tuple:
-
-        property_dict = dict()
-        property_list = ["secureClientPort", "ssl.keyStore.location", "ssl.keyStore.password", "ssl.trustStore.location", "ssl.trustStore.password"]
-       
-        for property_key in property_list:
-            self.mapped_service_properties.add(property_key)
-
-        zookeeper_ssl_enabled = bool(service_properties.get('secureClientPort', False))
-
-        if zookeeper_ssl_enabled == False:
-            return "all", {}
-
-        property_dict['ssl_enabled'] = True
-        property_dict['ssl_keystore_filepath'] = service_properties.get('ssl.keyStore.location')
-        property_dict['ssl_keystore_store_password'] = service_properties.get('ssl.keyStore.password')
-        property_dict['ssl_truststore_filepath'] = service_properties.get('ssl.trustStore.location')
-        property_dict['ssl_truststore_password'] = service_properties.get('ssl.trustStore.password')
-        property_dict['ssl_provided_keystore_and_truststore'] = True
-        property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
-
-        return "zookeeper", property_dict
-
-    # def _build_mtls_properties(self, service_properties: dict) -> tuple:
-
-    #     property_dict = dict()
-
-    #     zookeeper_client_authentication_type = service_properties.get('ssl.clientAuth')
-    #     if zookeeper_client_authentication_type == 'need':
-    #         zookeeper_ssl_mutual_auth_enabled = True
 
 class ZookeeperServicePropertyBuilder60(ZookeeperServicePropertyBaseBuilder):
     pass

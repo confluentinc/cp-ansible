@@ -5,7 +5,7 @@ import re
 from abc import ABC
 
 from discovery.system.system import SystemPropertyManager
-from discovery.utils.constants import ConfluentServices
+from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.utils import InputContext, PythonAPIUtils, load_properties_to_dict, Logger
 
@@ -39,35 +39,44 @@ class AbstractPropertyBuilder(ABC):
         service_details = SystemPropertyManager.get_service_details(input_context, service, host)
         execution_command = service_details.get(host).get("status").get("ExecStart")
 
-        match = re.search('[\w\/-]*\.properties', execution_command)
-        if match:
-            return match.group(0)
-        else:
+        # check if we have flag based configs
+        property_files = dict()
+        matches = re.findall('(--[\w\.]+\.config)*\s+([\w\/-]+\.properties)', execution_command)
+        for match in matches:
+            key, path = match
+            key = key.strip('--') if key else DEFAULT_KEY
+            property_files[key] = path
+
+        if not property_files:
             logger.error(f"Cannot find associated properties file for service {service.value.get('name')}")
+        return property_files
+
 
     @staticmethod
     def get_property_mappings(input_context: InputContext, service: ConfluentServices, hosts: list) -> dict:
 
-        file = AbstractPropertyBuilder.__get_service_properties_file(input_context, service, hosts)
-        if not file:
-            logger.error(f"Could not get the service seed property file.")
-            return dict()
-
-        play = dict(
-            name="Ansible Play",
-            hosts=hosts,
-            gather_facts='no',
-            tasks=[
-                dict(action=dict(module='slurp', args=dict(src=file)))
-            ]
-        )
-        response = PythonAPIUtils.execute_play(input_context, play)
         mappings = dict()
+        property_file_dict = AbstractPropertyBuilder.__get_service_properties_file(input_context, service, hosts)
+        if not property_file_dict:
+            logger.error(f"Could not get the service seed property file.")
+            return mappings
 
-        for host in hosts:
-            properties = base64.b64decode(response[host]._result['content']).decode('utf-8')
-            mappings[host] = load_properties_to_dict(properties)
-            logger.debug(json.dumps(mappings, indent=4))
+        for key, file in property_file_dict.items():
+            play = dict(
+                name="Ansible Play",
+                hosts=hosts,
+                gather_facts='no',
+                tasks=[
+                    dict(action=dict(module='slurp', args=dict(src=file)))
+                ]
+            )
+            response = PythonAPIUtils.execute_play(input_context, play)
+            for host in hosts:
+                properties = base64.b64decode(response[host]._result['content']).decode('utf-8')
+                host_properites = mappings.get(host, dict())
+                host_properites.update({key: load_properties_to_dict(properties)})
+                mappings[host] = host_properites
+
         return mappings
 
     @staticmethod
@@ -147,6 +156,15 @@ class AbstractPropertyBuilder(ABC):
 
         inventory.set_variable('all', group, custom_properties)
 
+    @staticmethod
+    def get_values_from_jaas_config(jaas_config: str) -> dict:
+        user_dict = dict()
+        for token in jaas_config.split():
+            if "=" in token:
+                key, value = token.split('=')
+                user_dict[key] = value
+        return user_dict
+
 
 class ServicePropertyBuilder:
     inventory = None
@@ -195,5 +213,19 @@ class ServicePropertyBuilder:
         return self
 
     def with_replicator_properties(self):
+        from discovery.service.kafka_replicator import KafkaReplicatorServicePropertyBuilder
+        KafkaReplicatorServicePropertyBuilder.build_properties(self.input_context, self.inventory)
         return self
 
+
+if __name__ == "__main__":
+    string = "/opt/confluent/confluent-7.2.0/bin/replicator --consumer.config /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator-consumer.properties --producer.config /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator-producer.properties --cluster.id replicator --replication.config /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator.properties --consumer.monitoring.config /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator-interceptors.properties --producer.monitoring.config /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator-interceptors.properties TimeoutStopSec=180 --replication.config /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator.properties"
+    # string = "path=/usr/bin/zookeeper-server-start ; argv[]=/usr/bin/zookeeper-server-start /etc/kafka/zookeeper.properties ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0"
+    # match = re.search('[\w\/-]*\.properties', string)
+    property_files = dict()
+    matches = re.findall('(--[\w\.]+\.config)*\s+([\w\/-]+\.properties)', string)
+    for item in matches:
+        key, path = item
+        key = key.strip('--') if key else 'Default'
+        property_files[key] = path
+    print(json.dumps(property_files, indent=4))

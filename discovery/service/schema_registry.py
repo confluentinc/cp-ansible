@@ -1,7 +1,7 @@
 import sys
 
 from discovery.service.service import AbstractPropertyBuilder
-from discovery.utils.constants import ConfluentServices
+from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.utils import InputContext, Logger, FileUtils
 
@@ -35,9 +35,10 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         hosts = self.get_service_host(service, self.inventory)
         if not hosts:
             logger.error(f"Could not find any host with service {service.value.get('name')} ")
+            return
 
         host_service_properties = self.get_property_mappings(self.input_context, service, hosts)
-        service_properties = host_service_properties.get(hosts[0])
+        service_properties = host_service_properties.get(hosts[0]).get(DEFAULT_KEY)
 
         # Build service user group properties
         self.__build_daemon_properties(self.input_context, service, hosts)
@@ -87,25 +88,22 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add("security.protocol")
         is_ssl = bool(f"{protocol == 'https'}")
 
-        ssl_props["ssl_enabled"] =  is_ssl
-        if is_ssl == False:
-            return "all", {}
+        ssl_props["schema_registry_ssl_enabled"] =  is_ssl
 
-        property_list = ["ssl.truststore.location", "ssl.truststore.password", "ssl.keystore.location",
-                            "ssl.keystore.password", "ssl.key.password"]
-        for property_key in property_list:
-            self.mapped_service_properties.add(property_key)
-            
-        ssl_props['ssl_provided_keystore_and_truststore'] = True
-        ssl_props['ssl_provided_keystore_and_truststore_remote_src'] = True
+        if is_ssl:
+            key = "ssl.keystore.location"
+            self.mapped_service_properties.add(key)
+            ssl_props["schema_registry_keystore_path"] = service_prop.get(key)
 
-        ssl_props["ssl_keystore_filepath"] = service_prop.get("ssl.keystore.location")
-        ssl_props["ssl_keystore_store_password"] = service_prop.get("ssl.keystore.password")
-        ssl_props["ssl_keystore_key_password"] = service_prop.get("ssl.key.password")
-        ssl_props["ssl_truststore_filepath"] = service_prop.get("ssl.truststore.location")
-        ssl_props["ssl_truststore_password"] = service_prop.get("ssl.truststore.password")
+            key = "ssl.keystore.password"
+            self.mapped_service_properties.add(key)
+            ssl_props["schema_registry_keystore_storepass"] = service_prop.get(key)
 
-        return "schema_registry", ssl_props
+            key = "ssl.key.password"
+            self.mapped_service_properties.add(key)
+            ssl_props["schema_registry_keystore_keypass"] = service_prop.get(key)
+
+        return "all", ssl_props
 
     def _build_replication_property(self, service_prop: dict) -> tuple:
         key = "kafkastore.topic.replication.factor"

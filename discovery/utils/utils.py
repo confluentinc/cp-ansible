@@ -382,3 +382,7 @@ class FileUtils:
     @staticmethod
     def get_kafka_connect_configs(name):
         return FileUtils.__read_service_configuration_file("kafka_connect.yml").get(name, [])
+
+    @staticmethod
+    def get_kafka_replicator_configs(name):
+        return FileUtils.__read_service_configuration_file("kafka_replicator.yml").get(name, [])

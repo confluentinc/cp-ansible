@@ -1,7 +1,7 @@
 import sys
 
 from discovery.service.service import AbstractPropertyBuilder
-from discovery.utils.constants import ConfluentServices
+from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.utils import InputContext, Logger, FileUtils
 
@@ -35,9 +35,10 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         hosts = self.get_service_host(service, self.inventory)
         if not hosts:
             logger.error(f"Could not find any host with service {service.value.get('name')} ")
+            return
 
         host_service_properties = self.get_property_mappings(self.input_context, service, hosts)
-        service_properties = host_service_properties.get(hosts[0])
+        service_properties = host_service_properties.get(hosts[0]).get(DEFAULT_KEY)
 
         # Build service user group properties
         self.__build_daemon_properties(self.input_context, service, hosts)
@@ -99,30 +100,6 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key3)
         self.mapped_service_properties.add(key4)
         return "all", {"control_center_default_internal_replication_factor": int(service_prop.get(key1))}
-
-    def _build_tls_properties(self, service_prop: dict) -> tuple:
-        key = "confluent.controlcenter.rest.listeners"
-        control_center_listener = service_prop.get(key)
-
-        if control_center_listener.find('https') < 0:
-            return "all", {}
-
-        property_list = ["confluent.controlcenter.rest.ssl.truststore.location", "confluent.controlcenter.rest.ssl.truststore.password", "confluent.controlcenter.rest.ssl.keystore.location",
-                            "confluent.controlcenter.rest.ssl.keystore.password", "confluent.controlcenter.rest.ssl.key.password"]
-        for property_key in property_list:
-            self.mapped_service_properties.add(property_key)
-
-        property_dict = dict()
-        property_dict['ssl_enabled'] = True
-        property_dict['ssl_provided_keystore_and_truststore'] = True
-        property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
-        property_dict['ssl_truststore_filepath'] = service_prop.get('confluent.controlcenter.rest.ssl.truststore.location')
-        property_dict['ssl_truststore_password'] = service_prop.get('confluent.controlcenter.rest.ssl.truststore.password')
-        property_dict['ssl_keystore_filepath'] = service_prop.get('confluent.controlcenter.rest.ssl.keystore.location')
-        property_dict['ssl_keystore_store_password'] = service_prop.get('confluent.controlcenter.rest.ssl.keystore.password')
-        property_dict['ssl_keystore_key_password'] = service_prop.get('confluent.controlcenter.rest.ssl.key.password')
-
-        return "control_center", property_dict
 
 
 class ControlCenterServicePropertyBuilder60(ControlCenterServicePropertyBaseBuilder):
