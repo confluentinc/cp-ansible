@@ -85,7 +85,9 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_service_port_properties(self, service_prop: dict) -> tuple:
         key = "clientPort"
         self.mapped_service_properties.add(key)
-        return 'all', {"zookeeper_client_port": int(service_prop.get(key, 2181))}
+        if service_prop.get(key) is not None:
+            return 'all', {"zookeeper_client_port": int(service_prop.get(key))}
+        return 'all', {}
 
     def _build_ssl_properties(self, service_properties: dict) -> tuple:
 
@@ -107,16 +109,16 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_truststore_password'] = service_properties.get('ssl.trustStore.password')
         property_dict['ssl_provided_keystore_and_truststore'] = True
         property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
+        property_dict['ssl_truststore_ca_cert_alias'] = ''
 
         return "zookeeper", property_dict
 
-    # def _build_mtls_properties(self, service_properties: dict) -> tuple:
+    def _build_mtls_properties(self, service_properties: dict) -> tuple:
+        zookeeper_client_authentication_type = service_properties.get('ssl.clientAuth')
+        if zookeeper_client_authentication_type == 'need':
+            return "zookeeper", {'ssl_mutual_auth_enabled': True}
 
-    #     property_dict = dict()
-
-    #     zookeeper_client_authentication_type = service_properties.get('ssl.clientAuth')
-    #     if zookeeper_client_authentication_type == 'need':
-    #         zookeeper_ssl_mutual_auth_enabled = True
+        return "all", {}
 
 class ZookeeperServicePropertyBuilder60(ZookeeperServicePropertyBaseBuilder):
     pass

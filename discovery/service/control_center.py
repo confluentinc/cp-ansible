@@ -121,9 +121,23 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_keystore_filepath'] = service_prop.get('confluent.controlcenter.rest.ssl.keystore.location')
         property_dict['ssl_keystore_store_password'] = service_prop.get('confluent.controlcenter.rest.ssl.keystore.password')
         property_dict['ssl_keystore_key_password'] = service_prop.get('confluent.controlcenter.rest.ssl.key.password')
+        property_dict['ssl_truststore_ca_cert_alias'] = ''
 
         return "control_center", property_dict
 
+    def _build_authentication_property(self, service_prop: dict) -> tuple:
+        key = 'confluent.controlcenter.rest.authentication.method'
+        self.mapped_service_properties.add(key)
+        value = service_prop.get(key)
+        if value is not None and value == 'BASIC':
+            return "all", {'control_center_authentication_type': 'basic'}
+        return "all", {}
+
+    def _build_mtls_property(self, service_prop: dict) -> tuple:
+        inventory_data = self.inventory.get_inventory_data()
+        if 'ssl_mutual_auth_enabled' in inventory_data['kafka_broker']['vars']:
+            return "control_center", {'ssl_mutual_auth_enabled': True}
+        return 'all', {}
 
 class ControlCenterServicePropertyBuilder60(ControlCenterServicePropertyBaseBuilder):
     pass

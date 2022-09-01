@@ -128,51 +128,6 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         return "all", property_dict
 
-    # def _build_default_listeners(self, service_prop: dict) -> tuple:
-
-    #     default_listeners = dict()
-    #     default_scram_users = dict()
-    #     default_scram256_users = dict()
-    #     default_plain_users = dict()
-
-    #     key = "listeners"
-    #     self.mapped_service_properties.add(key)
-
-    #     listeners = service_prop.get(key).split(",")
-    #     for listener in listeners:
-    #         from urllib.parse import urlparse
-    #         parsed_uri = urlparse(listener)
-    #         name = parsed_uri.scheme
-    #         port = parsed_uri.port
-
-    #         key = f"listener.name.{name}.sasl.enabled.mechanisms"
-    #         self.mapped_service_properties.add(key)
-
-    #         sasl_protocol = service_prop.get(key)
-    #         if sasl_protocol is None:
-    #             default_listeners[name] = {
-    #                 "name": name.upper(),
-    #                 "port": port
-    #             }
-    #         else:
-    #             default_listeners[name] = {
-    #                 "name": name.upper(),
-    #                 "port": port,
-    #                 "sasl_protocol": sasl_protocol
-    #             }
-    #             # Add the users to corresponding sasl mechanism
-    #             key = f"listener.name.{name.lower()}.{sasl_protocol.lower()}.sasl.jaas.config"
-    #             _dict = locals()[f"default_{sasl_protocol.lower()}_users"]
-    #             _dict.update(self.__get_user_dict(service_prop, key))
-    #             self.mapped_service_properties.add(key)
-
-    #     return 'all', {
-    #         "kafka_broker_default_listeners": default_listeners,
-    #         "sasl_scram_users": default_scram_users,
-    #         "sasl_scram256_users": default_scram256_users,
-    #         "sasl_plain_users": default_plain_users
-    #     }
-
     def _build_inter_broker_listener_name(self, service_prop: dict) -> tuple:
         key = "inter.broker.listener.name"
         self.mapped_service_properties.add(key)
@@ -238,6 +193,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_enabled'] = True
         property_dict['ssl_provided_keystore_and_truststore'] = True
         property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
+        property_dict['ssl_truststore_ca_cert_alias'] = ''
 
         if service_properties.get("confluent.http.server.ssl.keystore.location") is not None:
             property_dict['ssl_keystore_filepath'] = service_properties.get("confluent.http.server.ssl.keystore.location")
@@ -246,8 +202,12 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         return "kafka_broker", property_dict
 
-    def _build_mtls_properties(self, service_properties: dict) -> tuple:
-        if service_properties.get('zookeeper.ssl.keystore.location') is not None:
+    def _build_mtls_property(self, service_properties: dict) -> tuple:
+        key1 = 'zookeeper.ssl.keystore.location'
+        key2 = 'zookeeper.ssl.keystore.password'
+        self.mapped_service_properties.add(key1)
+        self.mapped_service_properties.add(key2)
+        if service_properties.get(key1) is not None:
             return "kafka_broker", {'ssl_mutual_auth_enabled': True}
         return "all", {}
 
@@ -258,6 +218,57 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if fips_enabled == 'true':
             return "all", {'fips_enabled': True}
         return "all", {}
+
+    def _build_default_listeners(self, service_prop: dict) -> tuple:
+
+        default_listeners = dict()
+        default_scram_users = dict()
+        default_scram256_users = dict()
+        default_plain_users = dict()
+
+        key = "listeners"
+        self.mapped_service_properties.add(key)
+
+        listeners = service_prop.get(key).split(",")
+        for listener in listeners:
+            from urllib.parse import urlparse
+            parsed_uri = urlparse(listener)
+            name = parsed_uri.scheme
+            port = parsed_uri.port
+
+            key1 = f"listener.name.{name}.sasl.enabled.mechanisms"
+            key2 = f"listener.name.{name}.ssl.client.auth"
+            self.mapped_service_properties.add(key1)
+            self.mapped_service_properties.add(key2)
+
+            default_listeners[name] = {
+                    "name": name.upper(),
+                    "port": port
+                }
+
+            ssl_enabled = service_prop.get(key2)
+            if ssl_enabled is not None:
+                default_listeners[name]['ssl_enabled'] = 'true'
+            
+            inventory_data = self.inventory.get_inventory_data()
+            if 'ssl_mutual_auth_enabled' in inventory_data['kafka_broker']['vars']:
+                default_listeners[name]['ssl_mutual_auth_enabled'] = 'true'
+
+            sasl_protocol = service_prop.get(key1)
+            if sasl_protocol is not None:
+                default_listeners[name]['sasl_protocol']: sasl_protocol
+                # Add the users to corresponding sasl mechanism
+                key = f"listener.name.{name.lower()}.{sasl_protocol.lower()}.sasl.jaas.config"
+                _dict = locals()[f"default_{sasl_protocol.lower()}_users"]
+                _dict.update(self.__get_user_dict(service_prop, key))
+                self.mapped_service_properties.add(key)
+
+        return 'all', {
+            "kafka_broker_default_listeners": default_listeners,
+            "sasl_scram_users": default_scram_users,
+            "sasl_scram256_users": default_scram256_users,
+            "sasl_plain_users": default_plain_users
+        }
 
 class KafkaServicePropertyBuilder60(KafkaServicePropertyBaseBuilder):
     pass

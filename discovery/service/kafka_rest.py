@@ -87,6 +87,11 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
             "kafka_rest_port": parsed_uri.port
         }
 
+    def _build_monitoring_interceptor_propperty(self, service_prop:dict)->tuple:
+        key = "confluent.monitoring.interceptor.topic"
+        self.mapped_service_properties.add(key)
+        return "all", { "kakfa_rest_monitoring_interceptors_enabled": key in service_prop}
+
     def _build_tls_properties(self, service_prop: dict) -> tuple:
         key = "listeners"
         kafka_rest_listener = service_prop.get(key)
@@ -106,12 +111,37 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_keystore_filepath'] = service_prop.get('ssl.keystore.location')
         property_dict['ssl_keystore_store_password'] = service_prop.get('ssl.keystore.password')
         property_dict['ssl_keystore_key_password'] = service_prop.get('ssl.key.password')
+        property_dict['ssl_truststore_ca_cert_alias'] = ''
 
         if service_prop.get('ssl.truststore.location') is not None:
             property_dict['ssl_truststore_filepath'] = service_prop.get('ssl.truststore.location')
             property_dict['ssl_truststore_password'] = service_prop.get('ssl.truststore.password')
 
         return "kafka_rest", property_dict
+
+    def _build_mtls_property(self, service_prop: dict) -> tuple:
+        key = 'ssl.client.auth'
+        self.mapped_service_properties.add(key)
+        value = service_prop.get(key)
+        if value is not None and value == 'true':
+            return "kafka_rest", {'ssl_mutual_auth_enabled': True}
+        return "all", {}
+
+    def _build_authentication_property(self, service_prop: dict) -> tuple:
+        key = 'authentication.method'
+        self.mapped_service_properties.add(key)
+        value = service_prop.get(key)
+        if value is not None and value == 'BASIC':
+            return "all", {'kafka_rest_authentication_type': 'basic'}
+        return "all", {}
+
+    def _build_secret_protection_property(self, service_prop: dict) -> tuple:
+        key = 'client.config.providers'
+        self.mapped_service_properties.add(key)
+        value = service_prop.get(key)
+        if value is not None and value == 'securepass':
+            return "all", {'kafka_rest_secrets_protection_enabled': True}
+        return "all", {}
 
 class KafkaRestServicePropertyBuilder60(KafkaRestServicePropertyBaseBuilder):
     pass

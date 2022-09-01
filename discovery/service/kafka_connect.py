@@ -142,8 +142,17 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_keystore_key_password'] = service_properties.get('listeners.https.ssl.key.password')
         property_dict['ssl_truststore_filepath'] = service_properties.get('listeners.https.ssl.truststore.location')
         property_dict['ssl_truststore_password'] = service_properties.get('listeners.https.ssl.truststore.password')
+        property_dict['ssl_truststore_ca_cert_alias'] = ''
     
         return "kafka_connect", property_dict
+
+    def _build_mtls_property(self, service_properties:dict) -> tuple:
+        key = 'listeners.https.ssl.client.auth'
+        self.mapped_service_properties.add(key)
+        value = service_properties.get(key)
+        if value is not None and value == 'required':
+            return "kafka_connect", {'ssl_mutual_auth_enabled': True}
+        return "all", {}
 
 class KafkaConnectServicePropertyBuilder60(KafkaConnectServicePropertyBaseBuilder):
     pass

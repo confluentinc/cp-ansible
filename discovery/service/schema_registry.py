@@ -33,6 +33,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         # Get the hosts for given service
         service = ConfluentServices.SCHEMA_REGISTRY
         hosts = self.get_service_host(service, self.inventory)
+        logger.info(hosts)
         if not hosts:
             logger.error(f"Could not find any host with service {service.value.get('name')} ")
 
@@ -104,8 +105,25 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         ssl_props["ssl_keystore_key_password"] = service_prop.get("ssl.key.password")
         ssl_props["ssl_truststore_filepath"] = service_prop.get("ssl.truststore.location")
         ssl_props["ssl_truststore_password"] = service_prop.get("ssl.truststore.password")
+        ssl_props['ssl_truststore_ca_cert_alias'] = ''
 
         return "schema_registry", ssl_props
+
+    def _build_mtls_property(self, service_prop: dict) -> tuple:
+        key = 'ssl.client.auth'
+        self.mapped_service_properties.add(key)
+        value = service_prop.get(key)
+        if value is not None and value == 'true':
+            return "schema_registry", {'ssl_mutual_auth_enabled': True}
+        return "all", {}
+
+    def _build_authentication_property(self, service_prop: dict) -> tuple:
+        key = 'authentication.method'
+        self.mapped_service_properties.add(key)
+        value = service_prop.get(key)
+        if value is not None and value == 'BASIC':
+            return "all", {'schema_registry_authentication_type': 'basic'}
+        return "all", {}
 
     def _build_replication_property(self, service_prop: dict) -> tuple:
         key = "kafkastore.topic.replication.factor"
