@@ -103,6 +103,59 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key2)
         return "all", {"ksql_default_internal_replication_factor": int(service_prop.get(key1))}
 
+    def _build_monitoring_interceptor_property(self, service_prop:dict)->tuple:
+        key = "confluent.monitoring.interceptor.topic"
+        self.mapped_service_properties.add(key)
+        return "all", { "ksql_monitoring_interceptors_enabled": key in service_prop}
+
+    def _build_ssl_properties(self, service_prop: dict) -> tuple:
+        key = "listeners"
+        ksql_listener = service_prop.get(key)
+
+        if ksql_listener.find('https') < 0:
+            return "all", {}
+
+        property_list = ["ssl.truststore.location", "ssl.truststore.password", "ssl.keystore.location",
+                            "ssl.keystore.password", "ssl.key.password"]
+        for property_key in property_list:
+            self.mapped_service_properties.add(property_key)
+
+        property_dict = dict()
+        property_dict['ssl_enabled'] = True
+        property_dict['ssl_provided_keystore_and_truststore'] = True
+        property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
+        property_dict['ssl_truststore_filepath'] = service_prop.get('ssl.truststore.location')
+        property_dict['ssl_truststore_password'] = service_prop.get('ssl.truststore.password')
+        property_dict['ssl_keystore_filepath'] = service_prop.get('ssl.keystore.location')
+        property_dict['ssl_keystore_store_password'] = service_prop.get('ssl.keystore.password')
+        property_dict['ssl_keystore_key_password'] = service_prop.get('ssl.key.password')
+        property_dict['ssl_truststore_ca_cert_alias'] = ''
+
+        return "ksql", property_dict
+
+    def _build_mtls_property(self, service_prop: dict) -> tuple:
+        key = 'ssl.client.auth'
+        self.mapped_service_properties.add(key)
+        value = service_prop.get(key)
+        if value is not None and value == 'true':
+            return "ksql", {'ssl_mutual_auth_enabled': True}
+        return "all", {}
+
+    def _build_authentication_property(self, service_prop: dict) -> tuple:
+        key = 'authentication.method'
+        self.mapped_service_properties.add(key)
+        value = service_prop.get(key)
+        if value is not None and value == 'BASIC':
+            return "all", {'ksql_authentication_type': 'basic'}
+        return "all", {}
+    
+    def _build_log_streaming_property(self, service_prop: dict) -> tuple:
+        key = 'ksql.logging.processing.topic.auto.create'
+        self.mapped_service_properties.add(key)
+        value = service_prop.get(key)
+        if value is not None and value == 'true':
+            return "all", {'ksql_log_streaming_enabled': True}
+        return "all", {}
 
 class KsqlServicePropertyBuilder60(KsqlServicePropertyBaseBuilder):
     pass

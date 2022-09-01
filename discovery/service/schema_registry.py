@@ -88,22 +88,42 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add("security.protocol")
         is_ssl = bool(f"{protocol == 'https'}")
 
-        ssl_props["schema_registry_ssl_enabled"] =  is_ssl
+        ssl_props["ssl_enabled"] =  is_ssl
+        if is_ssl == False:
+            return "all", {}
 
-        if is_ssl:
-            key = "ssl.keystore.location"
-            self.mapped_service_properties.add(key)
-            ssl_props["schema_registry_keystore_path"] = service_prop.get(key)
+        property_list = ["ssl.truststore.location", "ssl.truststore.password", "ssl.keystore.location",
+                            "ssl.keystore.password", "ssl.key.password"]
+        for property_key in property_list:
+            self.mapped_service_properties.add(property_key)
+            
+        ssl_props['ssl_provided_keystore_and_truststore'] = True
+        ssl_props['ssl_provided_keystore_and_truststore_remote_src'] = True
 
-            key = "ssl.keystore.password"
-            self.mapped_service_properties.add(key)
-            ssl_props["schema_registry_keystore_storepass"] = service_prop.get(key)
+        ssl_props["ssl_keystore_filepath"] = service_prop.get("ssl.keystore.location")
+        ssl_props["ssl_keystore_store_password"] = service_prop.get("ssl.keystore.password")
+        ssl_props["ssl_keystore_key_password"] = service_prop.get("ssl.key.password")
+        ssl_props["ssl_truststore_filepath"] = service_prop.get("ssl.truststore.location")
+        ssl_props["ssl_truststore_password"] = service_prop.get("ssl.truststore.password")
+        ssl_props['ssl_truststore_ca_cert_alias'] = ''
 
-            key = "ssl.key.password"
-            self.mapped_service_properties.add(key)
-            ssl_props["schema_registry_keystore_keypass"] = service_prop.get(key)
+        return "schema_registry", ssl_props
 
-        return "all", ssl_props
+    def _build_mtls_property(self, service_prop: dict) -> tuple:
+        key = 'ssl.client.auth'
+        self.mapped_service_properties.add(key)
+        value = service_prop.get(key)
+        if value is not None and value == 'true':
+            return "schema_registry", {'ssl_mutual_auth_enabled': True}
+        return "all", {}
+
+    def _build_authentication_property(self, service_prop: dict) -> tuple:
+        key = 'authentication.method'
+        self.mapped_service_properties.add(key)
+        value = service_prop.get(key)
+        if value is not None and value == 'BASIC':
+            return "all", {'schema_registry_authentication_type': 'basic'}
+        return "all", {}
 
     def _build_replication_property(self, service_prop: dict) -> tuple:
         key = "kafkastore.topic.replication.factor"

@@ -1,0 +1,3 @@
+
+class ConnectServicePropertyManager:
+    pass

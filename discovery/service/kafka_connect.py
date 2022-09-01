@@ -109,7 +109,7 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
             "kafka_connect_rest_port": parsed_uri.port
         }
 
-    def _build_advertised_protocol_port(self, service_prop:dict)->tuple:
+    def _build_advertised_protocol_port(self, service_prop:dict) -> tuple:
         key1 = "rest.advertised.listener"
         self.mapped_service_properties.add(key1)
 
@@ -120,6 +120,40 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
             "kafka_connect_http_protocol": service_prop.get(key1),
             "kafka_connect_rest_port": service_prop.get(key2)
         }
+
+    def _build_ssl_properties(self, service_properties:dict) -> tuple:
+        key = 'rest.advertised.listener'
+        kafka_connect_http_protocol = service_properties.get(key)
+        if kafka_connect_http_protocol != 'https':
+            return "all", {}
+        
+        property_list = ["listeners.https.ssl.keystore.location", "listeners.https.ssl.keystore.password", "listeners.https.ssl.key.password",
+                            "listeners.https.ssl.truststore.location", "listeners.https.ssl.truststore.password"]
+
+        for property_key in property_list:
+            self.mapped_service_properties.add(property_key)
+
+        property_dict = dict()
+
+        property_dict['ssl_enabled'] = True
+        property_dict['ssl_provided_keystore_and_truststore'] = True
+        property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
+        property_dict['ssl_keystore_filepath'] = service_properties.get('listeners.https.ssl.keystore.location')
+        property_dict['ssl_keystore_store_password'] = service_properties.get('listeners.https.ssl.keystore.password')
+        property_dict['ssl_keystore_key_password'] = service_properties.get('listeners.https.ssl.key.password')
+        property_dict['ssl_truststore_filepath'] = service_properties.get('listeners.https.ssl.truststore.location')
+        property_dict['ssl_truststore_password'] = service_properties.get('listeners.https.ssl.truststore.password')
+        property_dict['ssl_truststore_ca_cert_alias'] = ''
+    
+        return "kafka_connect", property_dict
+
+    def _build_mtls_property(self, service_properties:dict) -> tuple:
+        key = 'listeners.https.ssl.client.auth'
+        self.mapped_service_properties.add(key)
+        value = service_properties.get(key)
+        if value is not None and value == 'required':
+            return "kafka_connect", {'ssl_mutual_auth_enabled': True}
+        return "all", {}
 
 class KafkaConnectServicePropertyBuilder60(KafkaConnectServicePropertyBaseBuilder):
     pass

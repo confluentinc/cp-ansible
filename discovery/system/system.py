@@ -89,6 +89,8 @@ class SystemPropertyManager:
                     if services[cservice].get('status', None) == 'enabled' and \
                             services[cservice].get('state', None) == 'running':
                         service_key = ConfluentServices.get_service_key_value(cservice)
+                        # host_list = mapping.get(service_key, list())
+                        # host_list.append(host)
                         host_list = mapping.get(service_key, set())
                         host_list.add(host)
                         mapping[service_key] = list(host_list)
