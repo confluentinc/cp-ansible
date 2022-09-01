@@ -1,7 +1,7 @@
 import sys
 
 from discovery.service.service import AbstractPropertyBuilder
-from discovery.utils.constants import ConfluentServices
+from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.utils import InputContext, Logger, FileUtils
 
@@ -35,9 +35,10 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         hosts = self.get_service_host(service, self.inventory)
         if not hosts:
             logger.error(f"Could not find any host with service {service.value.get('name')} ")
+            return
 
         host_service_properties = self.get_property_mappings(self.input_context, service, hosts)
-        service_properties = host_service_properties.get(hosts[0])
+        service_properties = host_service_properties.get(hosts[0]).get(DEFAULT_KEY)
 
         # Build service user group properties
         self.__build_daemon_properties(self.input_context, service, hosts)

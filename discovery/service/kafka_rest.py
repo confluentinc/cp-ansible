@@ -1,7 +1,7 @@
 import sys
 
 from discovery.service.service import AbstractPropertyBuilder
-from discovery.utils.constants import ConfluentServices
+from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.utils import InputContext, Logger, FileUtils
 
@@ -35,9 +35,10 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         hosts = self.get_service_host(service, self.inventory)
         if not hosts:
             logger.error(f"Could not find any host with service {service.value.get('name')} ")
+            return
 
         host_service_properties = self.get_property_mappings(self.input_context, service, hosts)
-        service_properties = host_service_properties.get(hosts[0])
+        service_properties = host_service_properties.get(hosts[0]).get(DEFAULT_KEY)
 
         # Build service user group properties
         self.__build_daemon_properties(self.input_context, service, hosts)
@@ -87,12 +88,12 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
             "kafka_rest_port": parsed_uri.port
         }
 
-    def _build_monitoring_interceptor_propperty(self, service_prop:dict)->tuple:
+    def _build_monitoring_interceptor_property(self, service_prop:dict)->tuple:
         key = "confluent.monitoring.interceptor.topic"
         self.mapped_service_properties.add(key)
         return "all", { "kakfa_rest_monitoring_interceptors_enabled": key in service_prop}
 
-    def _build_tls_properties(self, service_prop: dict) -> tuple:
+    def _build_ssl_properties(self, service_prop: dict) -> tuple:
         key = "listeners"
         kafka_rest_listener = service_prop.get(key)
 

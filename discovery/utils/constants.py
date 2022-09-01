@@ -1,5 +1,6 @@
 from enum import Enum
 
+DEFAULT_KEY = "Default"
 """
         "confluent-schema-registry-plugins",
         "confluent-rest-utils",
@@ -42,7 +43,7 @@ class ConfluentServices(Enum):
         "packages": ["confluent-hub-client"]
     }
     KAFKA_REPLICATOR = {
-        "name": "confluent-kafka-connect.service",
+        "name": "kafka-connect-replicator.service",
         "group": "kafka_connect_replicator",
         "packages": ["confluent-kafka-connect-replicator", "confluent-hub-client"]
     }

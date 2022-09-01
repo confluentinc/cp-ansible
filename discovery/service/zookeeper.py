@@ -1,7 +1,7 @@
 import sys
 
 from discovery.service.service import AbstractPropertyBuilder
-from discovery.utils.constants import ConfluentServices
+from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.utils import InputContext, Logger, FileUtils
 
@@ -38,7 +38,7 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         host_service_properties = self.get_property_mappings(self.input_context,
                                                              ConfluentServices.ZOOKEEPER,
                                                              hosts)
-        service_properties = host_service_properties.get(hosts[0])
+        service_properties = host_service_properties.get(hosts[0]).get(DEFAULT_KEY)
 
         # Build service user group properties
         self.__build_daemon_properties(self.input_context, ConfluentServices.ZOOKEEPER, hosts)

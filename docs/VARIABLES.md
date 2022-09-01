@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.2.0
+Default:  7.2.1
 
 ***
 
@@ -649,6 +649,14 @@ Default:  false
 Default Zookeeper config prefix. Note - Only valid to customize when installation_method: archive
 
 Default:  "{{ config_prefix }}/kafka"
+
+***
+
+### user_login_shell
+
+Variable to set the user login shell for all custom user created per component by cp-ansible.
+
+Default:  /sbin/nologin
 
 ***
 

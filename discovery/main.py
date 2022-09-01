@@ -23,9 +23,9 @@ def build_service_properties(input_context: InputContext, inventory: CPInventory
         with_mds_properties().\
         with_schema_registry_properties().\
         with_kafka_rest_properties().\
-        with_ksql_properties(). \
-        with_connect_properties(). \
-        with_replicator_properties(). \
+        with_ksql_properties().\
+        with_connect_properties().\
+        with_replicator_properties().\
         with_control_center_properties()
 
 
