@@ -18,7 +18,11 @@ class CPInventoryManager(InventoryData):
         super().__init__()
 
     def get_inventory_data(self) -> dict:
-
+        """
+        This method changes the internal structure of inventory to make it more readable. We should not be using
+        this method to get the inventory data anywhere in the script
+        :return:
+        """
         self.reconcile_inventory()
         if not self._groups_dict_cache:
             for (group_name, group) in iteritems(self.groups):
