@@ -25,6 +25,10 @@ class AbstractPropertyBuilder(ABC):
         if group_name not in inventory.get_groups_dict() or not hosts:
             logger.debug(f"Either the service {group_name} doesn't exist in inventory or has no associated host")
 
+        if not isinstance(hosts,list):
+            logger.debug(f"Unrecognized hosts format: {hosts}")
+            return None
+
         return hosts
 
     @staticmethod

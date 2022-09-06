@@ -135,8 +135,8 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         return "all", {}
 
     def _build_mtls_property(self, service_prop: dict) -> tuple:
-        inventory_data = self.inventory.get_inventory_data()
-        if 'ssl_mutual_auth_enabled' in inventory_data['kafka_broker']['vars']:
+
+        if 'ssl_mutual_auth_enabled' in self.inventory.groups.get('kafka_broker').vars:
             return "control_center", {'ssl_mutual_auth_enabled': True}
         return 'all', {}
 

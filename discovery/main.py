@@ -17,15 +17,15 @@ def build_system_properties(input_context: InputContext, inventory: CPInventoryM
 
 def build_service_properties(input_context: InputContext, inventory: CPInventoryManager):
     service_property_builder = ServicePropertyBuilder(input_context, inventory)
-    service_property_builder.\
-        with_zookeeper_properties().\
-        with_kafka_broker_properties().\
-        with_mds_properties().\
-        with_schema_registry_properties().\
-        with_kafka_rest_properties().\
-        with_ksql_properties().\
-        with_connect_properties().\
-        with_replicator_properties().\
+    service_property_builder. \
+        with_zookeeper_properties(). \
+        with_kafka_broker_properties(). \
+        with_mds_properties(). \
+        with_schema_registry_properties(). \
+        with_kafka_rest_properties(). \
+        with_ksql_properties(). \
+        with_connect_properties(). \
+        with_replicator_properties(). \
         with_control_center_properties()
 
 
