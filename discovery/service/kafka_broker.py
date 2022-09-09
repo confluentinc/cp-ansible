@@ -70,12 +70,14 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 self.update_inventory(self.inventory, result)
 
     def __build_broker_host_properties(self, host_service_properties):
+        key = "broker.id"
+        self.mapped_service_properties.add(key)
         for hostname, properties in host_service_properties.items():
-            key = "broker.id"
-            if key in host_service_properties:
+            default_properties = properties.get(DEFAULT_KEY)
+            if key in default_properties:
                 host = self.inventory.get_host(hostname)
-                host.set_variable(key, int(properties.get(key)))
-                self.mapped_service_properties.add(key)
+                host.set_variable(key, int(default_properties.get(key)))
+
 
     def __build_custom_properties(self, service_properties: dict, mapped_properties: set):
 
@@ -225,6 +227,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         default_scram256_users = dict()
         default_scram_sha_512_users = dict()
         default_plain_users = dict()
+        default_gssapi_users = dict()
 
         key = "listeners"
         self.mapped_service_properties.add(key)
