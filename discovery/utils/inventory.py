@@ -30,12 +30,14 @@ class CPInventoryManager(InventoryData):
                     continue
                 self._groups_dict_cache[group_name] = {}
                 if group_name not in ['all', 'ungrouped']:
+                    hosts_dictionary = self._groups_dict_cache[group_name].get('hosts', dict())
                     for h in group.get_hosts():
                         host_name = h.name
                         host_vars = h.vars
                         host_vars.pop("inventory_file", None)
                         host_vars.pop("inventory_dir", None)
-                    self._groups_dict_cache[group_name]['hosts'] = {host_name: host_vars}
+                        hosts_dictionary.update({host_name: host_vars})
+                    self._groups_dict_cache[group_name]['hosts'] = hosts_dictionary
                 self._groups_dict_cache[group_name]['vars'] = group.get_vars()
 
         return self._groups_dict_cache
