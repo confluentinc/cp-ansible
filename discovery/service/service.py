@@ -88,6 +88,8 @@ class AbstractPropertyBuilder(ABC):
         env_details = dict()
         for token in env_command.split():
             # special condition for java runtime arguments
+            if token == '[unprintable]':
+                continue
             if not '=' in token and token.startswith('-X'):
                 env_details['KAFKA_HEAP_OPTS'] = f"{env_details.get('KAFKA_HEAP_OPTS', '')} {token}"
             else:

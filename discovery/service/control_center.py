@@ -140,6 +140,32 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
             return "control_center", {'ssl_mutual_auth_enabled': True}
         return 'all', {}
 
+    def _build_rbac_properties(self, service_prop: dict) -> tuple:
+        key1 = 'confluent.controlcenter.rest.authentication.method'
+        if service_prop.get(key1) is None:
+            return 'control_center', {'rbac_enabled': False}
+        property_dict = dict()
+        key2 = 'public.key.path'
+        key3 = 'confluent.metadata.bootstrap.server.urls'
+        property_dict['rbac_enabled'] = True
+        property_dict['rbac_enabled_public_pem_path'] = service_prop.get(key2)
+        property_dict['mds_bootstrap_server_urls'] = service_prop.get(key3)
+        self.mapped_service_properties.add(key1)
+        self.mapped_service_properties.add(key2)
+        self.mapped_service_properties.add(key3)
+        return 'control_center', property_dict
+
+    def _build_ldap_properties(self, service_prop: dict) -> tuple:
+        property_dict = dict()
+        key = 'confluent.metadata.basic.auth.user.info'
+        self.mapped_service_properties.add(key)
+        if service_prop.get(key) is not None:
+            metadata_user_info = service_prop.get(key)
+            property_dict['control_center_ldap_user'] = metadata_user_info.split(':')[0]
+            property_dict['control_center_ldap_password'] = metadata_user_info.split(':')[1]
+        return 'all', property_dict
+
+
 class ControlCenterServicePropertyBuilder60(ControlCenterServicePropertyBaseBuilder):
     pass
 

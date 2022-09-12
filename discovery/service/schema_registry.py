@@ -138,6 +138,28 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         *_, port = listeners.split(':')
         return "all", {"schema_registry_listener_port": int(port)}
 
+    def _build_rbac_properties(self, service_prop: dict) -> tuple:
+        key1 = 'confluent.schema.registry.authorizer.class'
+        self.mapped_service_properties.add(key1)
+        if service_prop.get(key1) is None:
+            return 'schema_registry', {'rbac_enabled': False}
+        property_dict = dict()
+        property_dict['rbac_enabled'] = True
+        property_dict['rbac_enabled_public_pem_path'] = service_prop.get('public.key.path')
+        property_dict['mds_bootstrap_server_urls'] = service_prop.get('confluent.metadata.bootstrap.server.urls')
+        self.mapped_service_properties.add('public.key.path')
+        self.mapped_service_properties.add('confluent.metadata.bootstrap.server.urls')
+        return 'schema_registry', property_dict
+
+    def _build_ldap_properties(self, service_prop: dict) -> tuple:
+        property_dict = dict()
+        key = 'confluent.metadata.basic.auth.user.info'
+        self.mapped_service_properties.add(key)
+        if service_prop.get(key) is not None:
+            metadata_user_info = service_prop.get(key)
+            property_dict['schema_registry_ldap_user'] = metadata_user_info.split(':')[0]
+            property_dict['schema_registry_ldap_password'] = metadata_user_info.split(':')[1]
+        return 'all', property_dict
 
 class SchemaRegistryServicePropertyBuilder60(SchemaRegistryServicePropertyBaseBuilder):
     pass
