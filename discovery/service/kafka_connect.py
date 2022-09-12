@@ -118,7 +118,7 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         return "all", {
             "kafka_connect_http_protocol": service_prop.get(key1),
-            "kafka_connect_rest_port": service_prop.get(key2)
+            "kafka_connect_rest_port": int(service_prop.get(key2))
         }
 
     def _build_ssl_properties(self, service_properties:dict) -> tuple:
@@ -154,6 +154,46 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if value is not None and value == 'required':
             return "kafka_connect", {'ssl_mutual_auth_enabled': True}
         return "all", {}
+
+    def _build_rbac_properties(self, service_prop: dict) -> tuple:
+        key1 = 'rest.servlet.initializor.classes'
+        if service_prop.get(key1) is None:
+            return 'kafka_connect', {'rbac_enabled': False}
+        property_dict = dict()
+        key2 = 'public.key.path'
+        key3 = 'confluent.metadata.bootstrap.server.urls'
+        property_dict['rbac_enabled'] = True
+        property_dict['rbac_enabled_public_pem_path'] = service_prop.get(key2)
+        property_dict['mds_bootstrap_server_urls'] = service_prop.get(key3)
+        self.mapped_service_properties.add(key1)
+        self.mapped_service_properties.add(key2)
+        self.mapped_service_properties.add(key3)
+        return 'kafka_connect', property_dict
+
+    def _build_ldap_properties(self, service_prop: dict) -> tuple:
+        property_dict = dict()
+        key = 'confluent.metadata.basic.auth.user.info'
+        self.mapped_service_properties.add(key)
+        if service_prop.get(key) is not None:
+            metadata_user_info = service_prop.get(key)
+            property_dict['kafka_connect_ldap_user'] = metadata_user_info.split(':')[0]
+            property_dict['kafka_connect_ldap_password'] = metadata_user_info.split(':')[1]
+        return 'all', property_dict
+
+    def _build_secret_registry_properties(self, service_prop: dict) -> tuple:
+        key1 = 'config.providers'
+        if service_prop.get(key1) is None:
+            return 'all', {'kafka_connect_secret_registry_enabled': False}
+        key2 = 'config.providers.secret.param.master.encryption.key'
+        key3 = 'config.providers.secret.param.kafkastore.topic.replication.factor'
+        property_dict = dict()
+        property_dict['kafka_connect_secret_registry_enabled'] = True
+        property_dict['kafka_connect_secret_registry_key'] = service_prop.get(key2)
+        property_dict['kafka_connect_secret_registry_default_replication_factor'] = int(service_prop.get(key3))
+        self.mapped_service_properties.add(key1)
+        self.mapped_service_properties.add(key2)
+        self.mapped_service_properties.add(key3)
+        return 'all', property_dict
 
 class KafkaConnectServicePropertyBuilder60(KafkaConnectServicePropertyBaseBuilder):
     pass

@@ -156,6 +156,31 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if value is not None and value == 'true':
             return "all", {'ksql_log_streaming_enabled': True}
         return "all", {}
+    
+    def _build_rbac_properties(self, service_prop: dict) -> tuple:
+        key1 = 'ksql.security.extension.class'
+        if service_prop.get(key1) is None:
+            return 'ksql', {'rbac_enabled': False}
+        property_dict = dict()
+        key2 = 'public.key.path'
+        key3 = 'confluent.metadata.bootstrap.server.urls'
+        property_dict['rbac_enabled'] = True
+        property_dict['rbac_enabled_public_pem_path'] = service_prop.get(key2)
+        property_dict['mds_bootstrap_server_urls'] = service_prop.get(key3)
+        self.mapped_service_properties.add(key1)
+        self.mapped_service_properties.add(key2)
+        self.mapped_service_properties.add(key3)
+        return 'ksql', property_dict
+
+    def _build_ldap_properties(self, service_prop: dict) -> tuple:
+        property_dict = dict()
+        key = 'confluent.metadata.basic.auth.user.info'
+        self.mapped_service_properties.add(key)
+        if service_prop.get(key) is not None:
+            metadata_user_info = service_prop.get(key)
+            property_dict['ksql_ldap_user'] = metadata_user_info.split(':')[0]
+            property_dict['ksql_ldap_password'] = metadata_user_info.split(':')[1]
+        return 'all', property_dict
 
 class KsqlServicePropertyBuilder60(KsqlServicePropertyBaseBuilder):
     pass
