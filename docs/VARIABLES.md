@@ -644,19 +644,19 @@ Default:  false
 
 ***
 
-### zookeeper_config_prefix
-
-Default Zookeeper config prefix. Note - Only valid to customize when installation_method: archive
-
-Default:  "{{ config_prefix }}/kafka"
-
-***
-
 ### user_login_shell
 
 Variable to set the user login shell for all custom user created per component by cp-ansible.
 
 Default:  /sbin/nologin
+
+***
+
+### zookeeper_config_prefix
+
+Default Zookeeper config prefix. Note - Only valid to customize when installation_method: archive
+
+Default:  "{{ config_prefix }}/kafka"
 
 ***
 
@@ -4234,17 +4234,17 @@ Default:  "https://packages.confluent.io"
 
 ***
 
-### install_java
+### custom_java_path
 
-Boolean to have cp-ansible install Java on hosts
+Full path on managed node to custom java path
 
-Default:  true
+Default:  ""
 
 ***
 
 ### redhat_java_package_name
 
-Java Package to install on RHEL/Centos hosts. Possible values java-11-openjdk or java-17-openjdk
+Java Package to install on RHEL/Centos hosts. Possible values java-8-openjdk, java-11-openjdk or java-17-openjdk
 
 Default:  java-17-openjdk
 
@@ -4252,7 +4252,7 @@ Default:  java-17-openjdk
 
 ### debian_java_package_name
 
-Java Package to install on Debian hosts. Possible values openjdk-11-jdk or openjdk-17-jdk
+Java Package to install on Debian hosts. Possible values openjdk-11-jdk, openjdk-8-jdk or openjdk-17-jdk
 
 Default:  openjdk-17-jdk
 
@@ -4260,7 +4260,7 @@ Default:  openjdk-17-jdk
 
 ### ubuntu_java_package_name
 
-Java Package to install on Ubuntu hosts. Possible values openjdk-11-jdk or openjdk-17-jdk
+Java Package to install on Ubuntu hosts. Possible values openjdk-8-jdk, openjdk-11-jdk or openjdk-17-jdk
 
 Default:  openjdk-17-jdk
 
