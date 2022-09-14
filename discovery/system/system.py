@@ -38,7 +38,11 @@ class SystemPropertyBuilder:
         self.inventory.set_variable('all', 'ansible_user', self.input_context.ansible_user)
         self.inventory.set_variable('all', 'ansible_become', self.input_context.ansible_become)
         self.inventory.set_variable('all', 'ansible_connection', self.input_context.ansible_connection)
-
+        self.inventory.set_variable('all', 'ansible_become_user', self.input_context.ansible_become_user)
+        self.inventory.set_variable('all', 'ansible_become_method', self.input_context.ansible_become_method)
+        self.inventory.set_variable('all', 'ansible_ssh_extra_args', self.input_context.ansible_ssh_extra_args)
+        self.inventory.set_variable('all', 'ansible_private_key', self.input_context.ansible_private_key)
+        self.inventory.set_variable('all', 'ansible_python_interpreter', self.input_context.ansible_python_interpreter)
         return self
 
     def with_installation_method(self):

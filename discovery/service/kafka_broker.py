@@ -236,6 +236,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         default_scram_sha_512_users = dict()
         default_plain_users = dict()
         default_gssapi_users = dict()
+        default_oauthbearer_users = dict()
 
         key = "listeners"
         self.mapped_service_properties.add(key)

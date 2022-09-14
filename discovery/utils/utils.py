@@ -92,6 +92,11 @@ class InputContext:
     ansible_become = False
     ansible_user = None
     ansible_hosts = None
+    ansible_become_user = None
+    ansible_become_method = 'sudo'
+    ansible_private_key = None
+    ansible_ssh_extra_args = None
+    ansible_python_interpreter = None
     output_file = None
     from_version = None
     verbosity = 0
@@ -99,16 +104,27 @@ class InputContext:
     def __init__(self,
                  ansible_hosts,
                  ansible_connection,
-                 ansible_become,
                  ansible_user,
+                 ansible_become,
+                 ansible_become_user,
+                 ansible_become_method,
+                 ansible_private_key,
                  verbosity,
+                 ansible_ssh_extra_args,
+                 ansible_python_interpretor = None,
                  from_version=None,
                  output_file=None):
+
         self.ansible_hosts = ansible_hosts
         self.ansible_connection = ansible_connection
-        self.ansible_become = ansible_become
         self.ansible_user = ansible_user
+        self.ansible_become = ansible_become
+        self.ansible_become_user = ansible_become_user
+        self.ansible_become_method = ansible_become_method
+        self.ansible_private_key = ansible_private_key
         self.from_version = from_version
+        self.ansible_ssh_extra_args = ansible_ssh_extra_args
+        self.ansible_python_interpreter = ansible_python_interpretor
         self.verbosity = verbosity
         self.output_file = output_file
 
@@ -129,12 +145,17 @@ class Arguments:
         parser.add_argument("--input", type=str, help="Input Inventory file")
         parser.add_argument("--hosts", type=str, action="extend", nargs="*", help="List of hosts")
         parser.add_argument("--verbosity", type=int, default=5, help="Verbosity of output level")
+        parser.add_argument("--ansible_connection", type=str, default=None,
+                            help="The connection plugin actually used for the task on the target host.")
 
-        parser.add_argument("--ansible_connection", type=str, help="Connection type for hosts. It can be ssh or docker")
-        parser.add_argument("--ansible_become", type=bool,
-                            help="Boolean to use user defined with -u(--ansible_user) option for ssh")
-        parser.add_argument("--ansible_user",
-                            help="User who can ssh to vm/container. Effective only when --become is set to true")
+        parser.add_argument("--ansible_user", type=str, default=None, help="The user Ansible ‘logs in’ as.")
+        parser.add_argument("--ansible_become", type=bool, default=False, help="Boolean to use privileged ")
+        parser.add_argument("--ansible_become_method", type=str, default='sudo', help="Method to become privileged")
+        parser.add_argument("--ansible_become_user", type=str, default=None,
+                            help="The user Ansible ‘becomes’ after using privilege escalation.")
+        parser.add_argument("--ansible_private_key", type=str, default=None, help="Private key for ssh login")
+        parser.add_argument("--ansible_ssh_extra_args", type=str, default=None, help="Extra arguments for ssh")
+        parser.add_argument("--ansible_python_interpreter", type=str, default=None, help="Python interpreter path")
 
         # Read arguments from command line
         return parser.parse_args()
@@ -156,7 +177,12 @@ class Arguments:
         return InputContext(ansible_hosts=hosts,
                             ansible_connection=vars.get("ansible_connection"),
                             ansible_become=vars.get("ansible_become"),
+                            ansible_become_user=vars.get("ansible_become_user"),
+                            ansible_become_method=vars.get("ansible_become_method"),
+                            ansible_private_key=vars.get("ansible_private_key"),
                             ansible_user=vars.get("ansible_user"),
+                            ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
+                            ansible_python_interpretor = vars.get("ansible_python_interpretor"),
                             verbosity=args.verbosity)
 
     @classmethod
@@ -220,7 +246,6 @@ class Arguments:
             vars = inventory.get('all').get('vars')
 
         # Override the inventory vars with command line variables.
-
         if args.ansible_become:
             vars['ansible_become'] = args.ansible_become
 
@@ -229,6 +254,18 @@ class Arguments:
 
         if args.ansible_connection:
             vars['ansible_connection'] = args.ansible_connection
+
+        if args.ansible_become_user:
+            vars['ansible_become_user'] = args.ansible_become_user
+
+        if args.ansible_become_method:
+            vars['ansible_become_method'] = args.ansible_become_method
+
+        if args.ansible_private_key:
+            vars['ansible_private_key'] = args.ansible_private_key
+
+        if args.ansible_ssh_extra_args:
+            vars['ansible_ssh_extra_args'] = args.ansible_ssh_extra_args
 
         return vars
 
@@ -280,9 +317,13 @@ class PythonAPIUtils:
     def execute_play(input_context: InputContext, play: dict):
 
         # since the API is constructed for CLI it expects certain options to always be set in the context object
-        context.CLIARGS = ImmutableDict(connection=input_context.ansible_connection, module_path=[], become_method=None,
-                                        forks=10, become=input_context.ansible_become, check=False, diff=False,
-                                        verbosity=input_context.verbosity, become_user=input_context.ansible_user)
+        context.CLIARGS = ImmutableDict(connection=input_context.ansible_connection, module_path=[], diff=False,
+                                        become=input_context.ansible_become, remote_user=input_context.ansible_user,
+                                        verbosity=input_context.verbosity, host_key_checking = False,
+                                        become_user=input_context.ansible_become_user,
+                                        private_key_file=input_context.ansible_private_key,
+                                        ssh_extra_args=input_context.ansible_ssh_extra_args, forks=10, check=False,
+                                        become_method=input_context.ansible_become_method)
 
         list_of_hosts = input_context.ansible_hosts
         sources = ','.join(list_of_hosts)
