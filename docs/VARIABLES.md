@@ -4242,6 +4242,14 @@ Default:  ""
 
 ***
 
+### install_java
+
+Boolean to have cp-ansible install Java on Hosts depending on custom_java_path provided
+
+Default:  "{{ false if custom_java_path | length > 0 else true }}"
+
+***
+
 ### redhat_java_package_name
 
 Java Package to install on RHEL/Centos hosts. Possible values java-8-openjdk, java-11-openjdk or java-17-openjdk
