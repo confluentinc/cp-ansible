@@ -4,7 +4,7 @@ Though this script tries to come up with inventory which is the closed represent
 
 ### Prerequisites
 #### Software
->Python 3.9  
+>Python 3.9+  
 >Ansible 2.11  
 
 These are dependencies for this script and should be installed on the machine where we are executing it from. This is not a requirement for managed nodes of the cluster.
@@ -30,7 +30,7 @@ all:
     ansible_become_user: root
     ansible_become_method: sudo
     ansible_ssh_extra_args: -o StrictHostKeyChecking=no
-    ansible_private_key: <path_to_private_key_to_login_to_vms>
+    ansible_ssh_private_key_file: <path_to_private_key_to_login_to_vms>
   hosts:
     - ec2-35-164-166-99.us-west-2.compute.amazonaws.com
     - ec2-35-164-166-99.us-west-2.compute.amazonaws.com
@@ -49,8 +49,8 @@ python discovery/main.py --input discovery/hosts.yml --ansible_user some_user --
 * **Can I use it for older CP versions**  
 Ideally we should be using the discovery from the branch which maps to the CP cluster. However, to onboard existing cluster, one can use the latest disvoery code and use **--from_version** parameter to specify the CP cluster version
 
-### Known Issues . Limitations
+### Known Issues and limitations
 * If passwords are encrypted using secret encryption or any other encryption algorithm, this script would not be able to decrypt it. User has to explicitly add the passwords in the generated inventory file in order to continue using the cp-ansible.
 * The input hosts file doesn't support regex for hosts parttern
-* Discovery doesn't support community edition.
+* Discovery doesn't support CP community edition.
 * At the time of running this script, the CP services should be up and running. Otherwise, the script will ignore those nodes/services

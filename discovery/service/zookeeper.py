@@ -22,6 +22,7 @@ class ZookeeperServicePropertyBuilder:
 class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
     inventory = None
     input_context = None
+    hosts = []
 
     def __init__(self, input_context: InputContext, inventory: CPInventoryManager):
         self.inventory = inventory
@@ -32,6 +33,8 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         # Get the hosts for given service
         hosts = self.get_service_host(ConfluentServices.ZOOKEEPER, self.inventory)
+        self.hosts = hosts
+
         if not hosts:
             logger.error(f"Could not find any host with service {ConfluentServices.ZOOKEEPER.value.get('name')} ")
 
@@ -110,6 +113,14 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_provided_keystore_and_truststore'] = True
         property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
         property_dict['ssl_truststore_ca_cert_alias'] = ''
+
+        aliases = self.get_keystore_alias_names(input_context=self.input_context,
+                                                keystorepass=property_dict['ssl_keystore_store_password'],
+                                                keystorepath=property_dict['ssl_keystore_filepath'],
+                                                hosts=self.hosts)
+        if aliases:
+            # Set the first alias name
+            property_dict["ssl_keystore_alias"] = aliases[0]
 
         return "zookeeper", property_dict
 
