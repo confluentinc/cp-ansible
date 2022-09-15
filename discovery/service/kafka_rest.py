@@ -22,6 +22,7 @@ class KafkaRestServicePropertyBuilder:
 class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
     inventory = None
     input_context = None
+    hosts = []
 
     def __init__(self, input_context: InputContext, inventory: CPInventoryManager):
         self.inventory = inventory
@@ -33,6 +34,8 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         # Get the hosts for given service
         service = ConfluentServices.KAFKA_REST
         hosts = self.get_service_host(service, self.inventory)
+        self.hosts = hosts
+
         if not hosts:
             logger.error(f"Could not find any host with service {service.value.get('name')} ")
             return
@@ -118,6 +121,13 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
             property_dict['ssl_truststore_filepath'] = service_prop.get('ssl.truststore.location')
             property_dict['ssl_truststore_password'] = service_prop.get('ssl.truststore.password')
 
+        aliases = self.get_keystore_alias_names(input_context=self.input_context,
+                                                keystorepass=property_dict['ssl_keystore_key_password'],
+                                                keystorepath=property_dict['ssl_keystore_filepath'],
+                                                hosts=self.hosts)
+        if aliases:
+            # Set the first alias name
+            property_dict["ssl_keystore_alias"] = aliases[0]
         return "kafka_rest", property_dict
 
     def _build_mtls_property(self, service_prop: dict) -> tuple:
@@ -153,7 +163,6 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         key3 = 'confluent.metadata.bootstrap.server.urls'
         property_dict['rbac_enabled'] = True
         property_dict['rbac_enabled_public_pem_path'] = service_prop.get(key2)
-        property_dict['mds_bootstrap_server_urls'] = service_prop.get(key3)
         self.mapped_service_properties.add(key1)
         self.mapped_service_properties.add(key2)
         self.mapped_service_properties.add(key3)

@@ -22,6 +22,7 @@ class KafkaServicePropertyBuilder:
 class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
     inventory = None
     input_context = None
+    hosts = []
 
     def __init__(self, input_context: InputContext, inventory: CPInventoryManager):
         self.inventory = inventory
@@ -33,6 +34,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         service = ConfluentServices.KAFKA_BROKER
         # Get the hosts for given service
         hosts = self.get_service_host(service, self.inventory)
+        self.hosts = hosts
         if not hosts:
             logger.error(f"Could not find any host with service {service.value.get('name')} ")
             return
@@ -77,7 +79,6 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
             if key in default_properties:
                 host = self.inventory.get_host(hostname)
                 host.set_variable(key, int(default_properties.get(key)))
-
 
     def __build_custom_properties(self, service_properties: dict, mapped_properties: set):
 
@@ -213,6 +214,14 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
             property_dict['ssl_keystore_key_password'] = service_properties.get(
                 'confluent.ssl.key.password')
 
+        aliases = self.get_keystore_alias_names(input_context=self.input_context,
+                                                keystorepass=property_dict['ssl_keystore_key_password'],
+                                                keystorepath=property_dict['ssl_keystore_filepath'],
+                                                hosts=self.hosts)
+        if aliases:
+            # Set the first alias name
+            property_dict["ssl_keystore_alias"] = aliases[0]
+
         return "kafka_broker", property_dict
 
     def _build_mtls_property(self, service_properties: dict) -> tuple:
@@ -288,14 +297,14 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         key2 = 'super.users'
         if service_prop.get(key1) != 'io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer':
             return "all", {}
-        
+
         self.mapped_service_properties.add(key1)
         self.mapped_service_properties.add(key2)
         property_dict['rbac_enabled'] = True
-        
+
         super_user_property = service_prop.get(key2)
         property_dict['create_mds_certs'] = False
-        property_dict['mds_super_user'] = super_user_property.split(";")[0].split('User:',1)[1]
+        property_dict['mds_super_user'] = super_user_property.split(";")[0].split('User:', 1)[1]
         property_dict['mds_super_user_password'] = ''
 
         key3 = 'confluent.metadata.server.advertised.listeners'
@@ -304,7 +313,8 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
             property_dict['mds_http_protocol'] = listener.split("://")[0]
             # property_dict['mds_advertised_listener_hostname'] = listener.split("://")[1].split(":")[0]
             property_dict['mds_port'] = int(listener.split("://")[1].split(":")[1])
-            property_dict['rbac_enabled_private_pem_path'] = service_prop.get('confluent.metadata.server.token.key.path')
+            property_dict['rbac_enabled_private_pem_path'] = service_prop.get(
+                'confluent.metadata.server.token.key.path')
             property_dict['external_mds_enabled'] = False
 
         self.mapped_service_properties.add('confluent.metadata.server.token.key.path')
@@ -319,10 +329,10 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         key5 = 'kafka.rest.kafka.rest.resource.extension.class'
         if service_prop.get(key5) is not None:
             property_dict['rbac_enabled_public_pem_path'] = service_prop.get('kafka.rest.public.key.path')
-            property_dict['mds_bootstrap_server_urls'] = service_prop.get('kafka.rest.confluent.metadata.bootstrap.server.urls')
             metadata_user_info = service_prop.get('kafka.rest.confluent.metadata.basic.auth.user.info')
             property_dict['kafka_broker_ldap_user'] = metadata_user_info.split(':')[0]
             property_dict['kafka_broker_ldap_password'] = metadata_user_info.split(':')[1]
+            property_dict['mds_super_user_password'] = property_dict['kafka_broker_ldap_password']
 
         self.mapped_service_properties.add(key5)
         self.mapped_service_properties.add('kafka.rest.public.key.path')

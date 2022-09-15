@@ -22,6 +22,7 @@ class SchemaRegistryServicePropertyBuilder:
 class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
     inventory = None
     input_context = None
+    hosts = []
 
     def __init__(self, input_context: InputContext, inventory: CPInventoryManager):
         self.inventory = inventory
@@ -33,6 +34,8 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         # Get the hosts for given service
         service = ConfluentServices.SCHEMA_REGISTRY
         hosts = self.get_service_host(service, self.inventory)
+        self.hosts = hosts
+
         if not hosts:
             logger.error(f"Could not find any host with service {service.value.get('name')} ")
             return
@@ -107,6 +110,14 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         ssl_props["ssl_truststore_password"] = service_prop.get("ssl.truststore.password")
         ssl_props['ssl_truststore_ca_cert_alias'] = ''
 
+        aliases = self.get_keystore_alias_names(input_context=self.input_context,
+                                                keystorepass=ssl_props['ssl_keystore_key_password'],
+                                                keystorepath=ssl_props['ssl_keystore_filepath'],
+                                                hosts=self.hosts)
+        if aliases:
+            # Set the first alias name
+            ssl_props["ssl_keystore_alias"] = aliases[0]
+
         return "schema_registry", ssl_props
 
     def _build_mtls_property(self, service_prop: dict) -> tuple:
@@ -146,7 +157,6 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict = dict()
         property_dict['rbac_enabled'] = True
         property_dict['rbac_enabled_public_pem_path'] = service_prop.get('public.key.path')
-        property_dict['mds_bootstrap_server_urls'] = service_prop.get('confluent.metadata.bootstrap.server.urls')
         self.mapped_service_properties.add('public.key.path')
         self.mapped_service_properties.add('confluent.metadata.bootstrap.server.urls')
         return 'schema_registry', property_dict

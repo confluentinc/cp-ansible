@@ -94,7 +94,7 @@ class InputContext:
     ansible_hosts = None
     ansible_become_user = None
     ansible_become_method = 'sudo'
-    ansible_private_key = None
+    ansible_ssh_private_key_file = None
     ansible_ssh_extra_args = None
     ansible_python_interpreter = None
     output_file = None
@@ -108,7 +108,7 @@ class InputContext:
                  ansible_become,
                  ansible_become_user,
                  ansible_become_method,
-                 ansible_private_key,
+                 ansible_ssh_private_key_file,
                  verbosity,
                  ansible_ssh_extra_args,
                  ansible_python_interpretor = None,
@@ -121,7 +121,7 @@ class InputContext:
         self.ansible_become = ansible_become
         self.ansible_become_user = ansible_become_user
         self.ansible_become_method = ansible_become_method
-        self.ansible_private_key = ansible_private_key
+        self.ansible_ssh_private_key_file = ansible_ssh_private_key_file
         self.from_version = from_version
         self.ansible_ssh_extra_args = ansible_ssh_extra_args
         self.ansible_python_interpreter = ansible_python_interpretor
@@ -153,7 +153,7 @@ class Arguments:
         parser.add_argument("--ansible_become_method", type=str, default='sudo', help="Method to become privileged")
         parser.add_argument("--ansible_become_user", type=str, default=None,
                             help="The user Ansible ‘becomes’ after using privilege escalation.")
-        parser.add_argument("--ansible_private_key", type=str, default=None, help="Private key for ssh login")
+        parser.add_argument("--ansible_ssh_private_key_file", type=str, default=None, help="Private key for ssh login")
         parser.add_argument("--ansible_ssh_extra_args", type=str, default=None, help="Extra arguments for ssh")
         parser.add_argument("--ansible_python_interpreter", type=str, default=None, help="Python interpreter path")
 
@@ -179,7 +179,7 @@ class Arguments:
                             ansible_become=vars.get("ansible_become"),
                             ansible_become_user=vars.get("ansible_become_user"),
                             ansible_become_method=vars.get("ansible_become_method"),
-                            ansible_private_key=vars.get("ansible_private_key"),
+                            ansible_ssh_private_key_file=vars.get("ansible_ssh_private_key_file"),
                             ansible_user=vars.get("ansible_user"),
                             ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
                             ansible_python_interpretor = vars.get("ansible_python_interpretor"),
@@ -261,8 +261,8 @@ class Arguments:
         if args.ansible_become_method:
             vars['ansible_become_method'] = args.ansible_become_method
 
-        if args.ansible_private_key:
-            vars['ansible_private_key'] = args.ansible_private_key
+        if args.ansible_ssh_private_key_file:
+            vars['ansible_ssh_private_key_file'] = args.ansible_ssh_private_key_file
 
         if args.ansible_ssh_extra_args:
             vars['ansible_ssh_extra_args'] = args.ansible_ssh_extra_args
@@ -321,7 +321,7 @@ class PythonAPIUtils:
                                         become=input_context.ansible_become, remote_user=input_context.ansible_user,
                                         verbosity=input_context.verbosity, host_key_checking = False,
                                         become_user=input_context.ansible_become_user,
-                                        private_key_file=input_context.ansible_private_key,
+                                        private_key_file=input_context.ansible_ssh_private_key_file,
                                         ssh_extra_args=input_context.ansible_ssh_extra_args, forks=10, check=False,
                                         become_method=input_context.ansible_become_method)
 
@@ -427,3 +427,4 @@ class FileUtils:
     @staticmethod
     def get_kafka_replicator_configs(name):
         return FileUtils.__read_service_configuration_file("kafka_replicator.yml").get(name, [])
+

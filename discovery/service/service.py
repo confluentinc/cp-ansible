@@ -25,7 +25,7 @@ class AbstractPropertyBuilder(ABC):
         if group_name not in inventory.get_groups_dict() or not hosts:
             logger.debug(f"Either the service {group_name} doesn't exist in inventory or has no associated host")
 
-        if not isinstance(hosts,list):
+        if not isinstance(hosts, list):
             logger.debug(f"Unrecognized hosts format: {hosts}")
             return None
 
@@ -55,7 +55,6 @@ class AbstractPropertyBuilder(ABC):
             logger.error(f"Cannot find associated properties file for service {service.value.get('name')}")
         return property_files
 
-
     @staticmethod
     def get_property_mappings(input_context: InputContext, service: ConfluentServices, hosts: list) -> dict:
 
@@ -67,7 +66,7 @@ class AbstractPropertyBuilder(ABC):
 
         for key, file in property_file_dict.items():
             play = dict(
-                name="Ansible Play",
+                name="Slurp properties file",
                 hosts=hosts,
                 gather_facts='no',
                 tasks=[
@@ -82,6 +81,32 @@ class AbstractPropertyBuilder(ABC):
                 mappings[host] = host_properites
 
         return mappings
+
+    @staticmethod
+    def get_keystore_alias_names(input_context: InputContext, hosts: list, keystorepass: str, keystorepath: str) -> str:
+
+        if not keystorepath or not keystorepass:
+            return []
+
+        play = dict(
+            name="Get keystore alias name",
+            hosts=hosts,
+            gather_facts='no',
+            tasks=[
+                dict(action=dict(module='shell',
+                                 args=f"keytool -list -v -storepass {keystorepass} -keystore "
+                                      f"{keystorepath} | grep 'Alias name' "
+                                      "| awk '{print $3}'"))
+            ]
+        )
+
+        response = PythonAPIUtils.execute_play(input_context, play)
+        if response[hosts[0]]._result['rc'] == 0:
+            stdout = response[hosts[0]]._result['stdout']
+            aliases = [y for y in (x.strip() for x in stdout.splitlines()) if y]
+            return aliases
+        else:
+            return []
 
     @staticmethod
     def parse_environment_details(env_command: str) -> dict:
@@ -151,7 +176,7 @@ class AbstractPropertyBuilder(ABC):
                                 group: str,
                                 service_properties: dict,
                                 skip_properties: set,
-                                mapped_properties:set):
+                                mapped_properties: set):
 
         custom_properties = dict()
 
@@ -222,16 +247,3 @@ class ServicePropertyBuilder:
         from discovery.service.kafka_replicator import KafkaReplicatorServicePropertyBuilder
         KafkaReplicatorServicePropertyBuilder.build_properties(self.input_context, self.inventory)
         return self
-
-
-if __name__ == "__main__":
-    string = "/opt/confluent/confluent-7.2.0/bin/replicator --consumer.config /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator-consumer.properties --producer.config /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator-producer.properties --cluster.id replicator --replication.config /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator.properties --consumer.monitoring.config /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator-interceptors.properties --producer.monitoring.config /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator-interceptors.properties TimeoutStopSec=180 --replication.config /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator.properties"
-    # string = "path=/usr/bin/zookeeper-server-start ; argv[]=/usr/bin/zookeeper-server-start /etc/kafka/zookeeper.properties ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0"
-    # match = re.search('[\w\/-]*\.properties', string)
-    property_files = dict()
-    matches = re.findall('(--[\w\.]+\.config)*\s+([\w\/-]+\.properties)', string)
-    for item in matches:
-        key, path = item
-        key = key.strip('--') if key else 'Default'
-        property_files[key] = path
-    print(json.dumps(property_files, indent=4))

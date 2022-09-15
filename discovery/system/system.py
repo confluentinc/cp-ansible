@@ -41,7 +41,7 @@ class SystemPropertyBuilder:
         self.inventory.set_variable('all', 'ansible_become_user', self.input_context.ansible_become_user)
         self.inventory.set_variable('all', 'ansible_become_method', self.input_context.ansible_become_method)
         self.inventory.set_variable('all', 'ansible_ssh_extra_args', self.input_context.ansible_ssh_extra_args)
-        self.inventory.set_variable('all', 'ansible_private_key', self.input_context.ansible_private_key)
+        self.inventory.set_variable('all', 'ansible_ssh_private_key_file', self.input_context.ansible_ssh_private_key_file)
         self.inventory.set_variable('all', 'ansible_python_interpreter', self.input_context.ansible_python_interpreter)
         return self
 
