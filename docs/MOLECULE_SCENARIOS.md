@@ -1,3 +1,19 @@
+### molecule/mtls-java11-rhel
+
+#### Scenario mtls-java11-rhel test's the following:
+
+Installation of Confluent Platform on CentOS7.
+
+MTLS enabled.
+
+Java 11.
+
+#### Scenario mtls-java11-rhel verify test's the following:
+
+Validates that Java 11 is in use.
+
+***
+
 ### molecule/archive-community-plaintext-rhel
 
 #### Scenario archive-community-plaintext-rhel test's the following:
@@ -46,7 +62,7 @@ Validates that Confluent CLI is installed.
 
 #### Scenario archive-plain-debian10 test's the following:
 
-Archive installation of Confluent Platform on Debian 9.
+Archive installation of Confluent Platform on Debian 10.
 
 SASL Protocol Plain.
 
@@ -630,7 +646,7 @@ Validates that keystores are in place across all components.
 
 #### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10 test's the following:
 
-Installation of Confluent Platform on CentOS7.
+Installation of Confluent Platform on Debian10.
 
 RBAC Enabled.
 
@@ -944,7 +960,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 #### Scenario rbac-mtls-provided-ubuntu test's the following:
 
-Installs Confluent Platform Cluster on centos8.
+Installs Confluent Platform Cluster on Ubuntu1804.
 
 RBAC enabled.
 
@@ -1238,7 +1254,7 @@ Validates that Control Center Can connect to each KSQL cluster
 
 #### Scenario rbac-mds-mtls-existing-keystore-truststore-ubuntu test's the following:
 
-Installs Confluent Platform Cluster on centos8.
+Installs Confluent Platform Cluster on Ubuntu1804.
 
 RBAC enabled.
 
@@ -1276,22 +1292,6 @@ Validates that Java 11 is in use.
 
 ***
 
-### molecule/mtls-java11-rhel
-
-#### Scenario mtls-java11-rhel test's the following:
-
-Installation of Confluent Platform on CentOS7.
-
-MTLS enabled.
-
-Java 8.
-
-#### Scenario mtls-java11-rhel verify test's the following:
-
-Validates that Java 11 is in use.
-
-***
-
 ### molecule/mtls-java8-ubuntu
 
 #### Scenario mtls-java8-ubuntu test's the following:
@@ -1300,7 +1300,7 @@ Installation of Confluent Platform on Ubuntu1804.
 
 MTLS enabled.
 
-Java 11.
+Java 8.
 
 #### Scenario mtls-java8-ubuntu verify test's the following:
 
