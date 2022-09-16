@@ -126,13 +126,19 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_keystore_key_password'] = service_prop.get('confluent.controlcenter.rest.ssl.key.password')
         property_dict['ssl_truststore_ca_cert_alias'] = ''
 
-        aliases = self.get_keystore_alias_names(input_context=self.input_context,
-                                                keystorepass=property_dict['ssl_keystore_key_password'],
+        keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
+                                                keystorepass=property_dict['ssl_keystore_store_password'],
                                                 keystorepath=property_dict['ssl_keystore_filepath'],
                                                 hosts=self.hosts)
-        if aliases:
+        truststore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
+                                        keystorepass=property_dict['ssl_truststore_password'],
+                                        keystorepath=property_dict['ssl_truststore_filepath'],
+                                        hosts=self.hosts)
+        if keystore_aliases:
             # Set the first alias name
-            property_dict["ssl_keystore_alias"] = aliases[0]
+            property_dict["ssl_keystore_alias"] = keystore_aliases[0]
+        if truststore_aliases:
+            property_dict["ssl_truststore_ca_cert_alias"] = truststore_aliases[0]
 
         return "control_center", property_dict
 
