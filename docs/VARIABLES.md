@@ -118,7 +118,7 @@ Default:  false
 
 ### fips_enabled
 
-Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 11. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
+Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8 or 11. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
 
 Default:  false
 
