@@ -28,23 +28,23 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.inventory = inventory
         self.input_context = input_context
         self.mapped_service_properties = set()
+        self.service = ConfluentServices.SCHEMA_REGISTRY
 
     def build_properties(self):
 
         # Get the hosts for given service
-        service = ConfluentServices.SCHEMA_REGISTRY
-        hosts = self.get_service_host(service, self.inventory)
+        hosts = self.get_service_host(self.service, self.inventory)
         self.hosts = hosts
 
         if not hosts:
-            logger.error(f"Could not find any host with service {service.value.get('name')} ")
+            logger.error(f"Could not find any host with service {self.service.value.get('name')} ")
             return
 
-        host_service_properties = self.get_property_mappings(self.input_context, service, hosts)
+        host_service_properties = self.get_property_mappings(self.input_context, self.service, hosts)
         service_properties = host_service_properties.get(hosts[0]).get(DEFAULT_KEY)
 
         # Build service user group properties
-        self.__build_daemon_properties(self.input_context, service, hosts)
+        self.__build_daemon_properties(self.input_context, self.service, hosts)
 
         # Build service properties
         self.__build_service_properties(service_properties)
@@ -53,7 +53,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.__build_custom_properties(service_properties, self.mapped_service_properties)
 
         # Build Command line properties
-        self.__build_runtime_properties(service_properties)
+        self.__build_runtime_properties(hosts)
 
     def __build_daemon_properties(self, input_context: InputContext, service: ConfluentServices, hosts: list):
 
@@ -74,13 +74,16 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         group = "schema_registry_custom_properties"
         skip_properties = set(FileUtils.get_schema_registry_configs("skip_properties"))
         self.build_custom_properties(inventory=self.inventory,
-                                     group= group,
+                                     group=group,
                                      skip_properties=skip_properties,
                                      mapped_properties=mapped_properties,
                                      service_properties=service_properties)
 
-    def __build_runtime_properties(self, service_properties: dict):
-        pass
+    def __build_runtime_properties(self, hosts: list):
+        # Build Java runtime overrides
+        data = (
+        'all', {'schema_registry_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
+        self.update_inventory(self.inventory, data)
 
     def _build_ssl_properties(self, service_prop: dict) -> tuple:
 
@@ -91,15 +94,15 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add("security.protocol")
         is_ssl = bool(f"{protocol == 'https'}")
 
-        ssl_props["ssl_enabled"] =  is_ssl
+        ssl_props["ssl_enabled"] = is_ssl
         if is_ssl == False:
             return "all", {}
 
         property_list = ["ssl.truststore.location", "ssl.truststore.password", "ssl.keystore.location",
-                            "ssl.keystore.password", "ssl.key.password"]
+                         "ssl.keystore.password", "ssl.key.password"]
         for property_key in property_list:
             self.mapped_service_properties.add(property_key)
-            
+
         ssl_props['ssl_provided_keystore_and_truststore'] = True
         ssl_props['ssl_provided_keystore_and_truststore_remote_src'] = True
 
@@ -111,13 +114,13 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         ssl_props['ssl_truststore_ca_cert_alias'] = ''
 
         keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
-                                                keystorepass=ssl_props['ssl_keystore_store_password'],
-                                                keystorepath=ssl_props['ssl_keystore_filepath'],
-                                                hosts=self.hosts)
+                                                         keystorepass=ssl_props['ssl_keystore_store_password'],
+                                                         keystorepath=ssl_props['ssl_keystore_filepath'],
+                                                         hosts=self.hosts)
         truststore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
-                                        keystorepass=ssl_props['ssl_truststore_password'],
-                                        keystorepath=ssl_props['ssl_truststore_filepath'],
-                                        hosts=self.hosts)
+                                                           keystorepass=ssl_props['ssl_truststore_password'],
+                                                           keystorepath=ssl_props['ssl_truststore_filepath'],
+                                                           hosts=self.hosts)
         if keystore_aliases:
             # Set the first alias name
             ssl_props["ssl_keystore_alias"] = keystore_aliases[0]
@@ -176,6 +179,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
             property_dict['schema_registry_ldap_user'] = metadata_user_info.split(':')[0]
             property_dict['schema_registry_ldap_password'] = metadata_user_info.split(':')[1]
         return 'all', property_dict
+
 
 class SchemaRegistryServicePropertyBuilder60(SchemaRegistryServicePropertyBaseBuilder):
     pass

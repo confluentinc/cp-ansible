@@ -99,7 +99,7 @@ class InputContext:
     ansible_python_interpreter = None
     output_file = None
     from_version = None
-    verbosity = 0
+    log_level = 0
 
     def __init__(self,
                  ansible_hosts,
@@ -109,12 +109,11 @@ class InputContext:
                  ansible_become_user,
                  ansible_become_method,
                  ansible_ssh_private_key_file,
-                 verbosity,
+                 log_level,
                  ansible_ssh_extra_args,
-                 ansible_python_interpretor = None,
+                 ansible_python_interpretor=None,
                  from_version=None,
                  output_file=None):
-
         self.ansible_hosts = ansible_hosts
         self.ansible_connection = ansible_connection
         self.ansible_user = ansible_user
@@ -125,7 +124,7 @@ class InputContext:
         self.from_version = from_version
         self.ansible_ssh_extra_args = ansible_ssh_extra_args
         self.ansible_python_interpreter = ansible_python_interpretor
-        self.verbosity = verbosity
+        self.log_level = log_level
         self.output_file = output_file
 
 
@@ -140,11 +139,12 @@ class Arguments:
         # Adding optional argument
         '''
         connection='docker', module_path=[], forks=10, become=None,
-        become_method=None, become_user=null, check=False, diff=False, verbosity=0
+        become_method=None, become_user=null, check=False, diff=False, log_level=0
         '''
         parser.add_argument("--input", type=str, help="Input Inventory file")
         parser.add_argument("--hosts", type=str, action="extend", nargs="*", help="List of hosts")
-        parser.add_argument("--verbosity", type=int, default=5, help="Verbosity of output level")
+        parser.add_argument("--log_level", type=int, default=2,
+                            help="Log level. CRITICAL(5) ERROR(4) WARNING(3) INFO(2) DEBUG(1) NOTSET(0)")
         parser.add_argument("--ansible_connection", type=str, default=None,
                             help="The connection plugin actually used for the task on the target host.")
 
@@ -163,9 +163,9 @@ class Arguments:
     @classmethod
     def validate_args(cls, args):
 
-        # Set the default verbosity to INFO level
-        verbosity = args.verbosity if args.verbosity > 0 and args.verbosity < 6 else 4
-        logger.setLevel((6 - verbosity) * 10)
+        # Set the default log_level to INFO level
+        log_level = args.log_level if args.log_level > 0 and args.log_level < 6 else 4
+        logger.setLevel(log_level * 10)
 
         cls.__validate_hosts(cls.get_hosts(args))
         cls.__validate_variables(cls.get_vars(args))
@@ -182,8 +182,8 @@ class Arguments:
                             ansible_ssh_private_key_file=vars.get("ansible_ssh_private_key_file"),
                             ansible_user=vars.get("ansible_user"),
                             ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
-                            ansible_python_interpretor = vars.get("ansible_python_interpretor"),
-                            verbosity=args.verbosity)
+                            ansible_python_interpretor=vars.get("ansible_python_interpretor"),
+                            log_level=args.log_level)
 
     @classmethod
     def __validate_hosts(cls, hosts):
@@ -319,7 +319,7 @@ class PythonAPIUtils:
         # since the API is constructed for CLI it expects certain options to always be set in the context object
         context.CLIARGS = ImmutableDict(connection=input_context.ansible_connection, module_path=[], diff=False,
                                         become=input_context.ansible_become, remote_user=input_context.ansible_user,
-                                        verbosity=input_context.verbosity, host_key_checking = False,
+                                        log_level=input_context.log_level, host_key_checking=False,
                                         become_user=input_context.ansible_become_user,
                                         private_key_file=input_context.ansible_ssh_private_key_file,
                                         ssh_extra_args=input_context.ansible_ssh_extra_args, forks=10, check=False,
@@ -427,4 +427,3 @@ class FileUtils:
     @staticmethod
     def get_kafka_replicator_configs(name):
         return FileUtils.__read_service_configuration_file("kafka_replicator.yml").get(name, [])
-

@@ -28,22 +28,22 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.inventory = inventory
         self.input_context = input_context
         self.mapped_service_properties = set()
+        self.service = ConfluentServices.KAFKA_CONNECT
 
     def build_properties(self):
 
         # Get the hosts for given service
-        service = ConfluentServices.KAFKA_CONNECT
-        hosts = self.get_service_host(service, self.inventory)
+        hosts = self.get_service_host(self.service, self.inventory)
         self.hosts = hosts
         if not hosts:
-            logger.error(f"Could not find any host with service {service.value.get('name')} ")
+            logger.error(f"Could not find any host with service {self.service.value.get('name')} ")
             return
 
-        host_service_properties = self.get_property_mappings(self.input_context, service, hosts)
+        host_service_properties = self.get_property_mappings(self.input_context, self.service, hosts)
         service_properties = host_service_properties.get(hosts[0]).get(DEFAULT_KEY)
 
         # Build service user group properties
-        self.__build_daemon_properties(self.input_context, service, hosts)
+        self.__build_daemon_properties(self.input_context, self.service, hosts)
 
         # Build service properties
         self.__build_service_properties(service_properties)
@@ -52,7 +52,7 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.__build_custom_properties(service_properties, self.mapped_service_properties)
 
         # Build Command line properties
-        self.__build_runtime_properties(service_properties)
+        self.__build_runtime_properties(hosts)
 
     def __build_daemon_properties(self, input_context: InputContext, service: ConfluentServices, hosts: list):
 
@@ -77,26 +77,29 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
                                      mapped_properties=mapped_properties,
                                      service_properties=service_properties)
 
-    def __build_runtime_properties(self, service_properties: dict):
-        pass
+    def __build_runtime_properties(self, hosts: list):
+        # Build Java runtime overrides
+        data = (
+        'all', {'kafka_connect_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
+        self.update_inventory(self.inventory, data)
 
-    def _build_service_replication_factor(self, service_prop: dict)->tuple:
+    def _build_service_replication_factor(self, service_prop: dict) -> tuple:
         key = "config.storage.replication.factor"
         self.mapped_service_properties.add(key)
         return "all", {"kafka_connect_default_internal_replication_factor": int(service_prop.get(key))}
 
-    def _build_config_storage_topic(self, service_prop:dict)->tuple:
+    def _build_config_storage_topic(self, service_prop: dict) -> tuple:
         key = "config.storage.topic"
         self.mapped_service_properties.add(key)
         value = service_prop.get(key)
         return "all", {"kafka_connect_group_id": value.rstrip("-configs")}
 
-    def _build_monitoring_interceptor_propperty(self, service_prop:dict)->tuple:
+    def _build_monitoring_interceptor_propperty(self, service_prop: dict) -> tuple:
         key = "confluent.monitoring.interceptor.topic"
         self.mapped_service_properties.add(key)
-        return "all", { "kafka_connect_monitoring_interceptors_enabled": key in service_prop}
+        return "all", {"kafka_connect_monitoring_interceptors_enabled": key in service_prop}
 
-    def _build_connect_group_id(self, service_prop:dict)->tuple:
+    def _build_connect_group_id(self, service_prop: dict) -> tuple:
         key = "group.id"
         self.mapped_service_properties.add(key)
         return "all", {"kafka_connect_group_id": service_prop.get(key)}
@@ -111,7 +114,7 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
             "kafka_connect_rest_port": parsed_uri.port
         }
 
-    def _build_advertised_protocol_port(self, service_prop:dict) -> tuple:
+    def _build_advertised_protocol_port(self, service_prop: dict) -> tuple:
         key1 = "rest.advertised.listener"
         self.mapped_service_properties.add(key1)
 
@@ -123,14 +126,15 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
             "kafka_connect_rest_port": int(service_prop.get(key2))
         }
 
-    def _build_ssl_properties(self, service_properties:dict) -> tuple:
+    def _build_ssl_properties(self, service_properties: dict) -> tuple:
         key = 'rest.advertised.listener'
         kafka_connect_http_protocol = service_properties.get(key)
         if kafka_connect_http_protocol != 'https':
             return "all", {}
-        
-        property_list = ["listeners.https.ssl.keystore.location", "listeners.https.ssl.keystore.password", "listeners.https.ssl.key.password",
-                            "listeners.https.ssl.truststore.location", "listeners.https.ssl.truststore.password"]
+
+        property_list = ["listeners.https.ssl.keystore.location", "listeners.https.ssl.keystore.password",
+                         "listeners.https.ssl.key.password",
+                         "listeners.https.ssl.truststore.location", "listeners.https.ssl.truststore.password"]
 
         for property_key in property_list:
             self.mapped_service_properties.add(property_key)
@@ -148,13 +152,13 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_truststore_ca_cert_alias'] = ''
 
         keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
-                                                keystorepass=property_dict['ssl_keystore_store_password'],
-                                                keystorepath=property_dict['ssl_keystore_filepath'],
-                                                hosts=self.hosts)
+                                                         keystorepass=property_dict['ssl_keystore_store_password'],
+                                                         keystorepath=property_dict['ssl_keystore_filepath'],
+                                                         hosts=self.hosts)
         truststore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
-                                        keystorepass=property_dict['ssl_truststore_password'],
-                                        keystorepath=property_dict['ssl_truststore_filepath'],
-                                        hosts=self.hosts)
+                                                           keystorepass=property_dict['ssl_truststore_password'],
+                                                           keystorepath=property_dict['ssl_truststore_filepath'],
+                                                           hosts=self.hosts)
         if keystore_aliases:
             # Set the first alias name
             property_dict["ssl_keystore_alias"] = keystore_aliases[0]
@@ -163,7 +167,7 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         return "kafka_connect", property_dict
 
-    def _build_mtls_property(self, service_properties:dict) -> tuple:
+    def _build_mtls_property(self, service_properties: dict) -> tuple:
         key = 'listeners.https.ssl.client.auth'
         self.mapped_service_properties.add(key)
         value = service_properties.get(key)
@@ -209,6 +213,7 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key2)
         self.mapped_service_properties.add(key3)
         return 'all', property_dict
+
 
 class KafkaConnectServicePropertyBuilder60(KafkaConnectServicePropertyBaseBuilder):
     pass

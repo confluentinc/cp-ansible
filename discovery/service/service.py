@@ -1,6 +1,5 @@
 import abc
 import base64
-import json
 import re
 from abc import ABC
 
@@ -30,6 +29,14 @@ class AbstractPropertyBuilder(ABC):
             return None
 
         return hosts
+
+    @staticmethod
+    def get_jvm_arguments(input_context: InputContext, service: ConfluentServices, hosts: list):
+        # Build Java runtime overrides
+        service_facts = SystemPropertyManager.get_service_details(input_context, service, hosts[0])
+        env_details = service_facts.get(hosts[0]).get("status").get("Environment")
+        runtime_props = env_details.split()
+        return [i for i in runtime_props if i.startswith(("KAFKA_HEAP_OPTS", "KAFKA_OPTS"))]
 
     @staticmethod
     def __get_service_properties_file(input_context: InputContext,

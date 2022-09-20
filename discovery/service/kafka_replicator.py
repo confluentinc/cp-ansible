@@ -33,22 +33,22 @@ class KafkaReplicatorServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.inventory = inventory
         self.input_context = input_context
         self.mapped_service_properties = set()
+        self.service = ConfluentServices.KAFKA_REPLICATOR
 
     def build_properties(self):
 
         # Get the hosts for given service
-        service = ConfluentServices.KAFKA_REPLICATOR
-        hosts = self.get_service_host(service, self.inventory)
+        hosts = self.get_service_host(self.service, self.inventory)
         if not hosts:
-            logger.error(f"Could not find any host with service {service.value.get('name')} ")
+            logger.error(f"Could not find any host with service {self.service.value.get('name')} ")
             return
 
-        host_service_properties = self.get_property_mappings(self.input_context, service, hosts)
+        host_service_properties = self.get_property_mappings(self.input_context, self.service, hosts)
 
         service_properties = host_service_properties.get(hosts[0])
 
         # Build service user group properties
-        self.__build_daemon_properties(self.input_context, service, hosts)
+        self.__build_daemon_properties(self.input_context, self.service, hosts)
 
         # Build service properties
         self.__build_service_properties(service_properties)
@@ -57,7 +57,7 @@ class KafkaReplicatorServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.__build_custom_properties(service_properties, self.mapped_service_properties)
 
         # Build Command line properties
-        self.__build_runtime_properties(service_properties)
+        self.__build_runtime_properties(hosts)
 
     def __build_daemon_properties(self, input_context: InputContext, service: ConfluentServices, hosts: list):
 
@@ -121,8 +121,12 @@ class KafkaReplicatorServicePropertyBaseBuilder(AbstractPropertyBuilder):
                                      service_properties=service_properties.get(self.CONSUMER_MONITORING_CONFIG) |
                                                         service_properties.get(self.PRODUCER_MONITORING_CONFIG))
 
-    def __build_runtime_properties(self, service_properties: dict):
-        pass
+    def __build_runtime_properties(self, hosts: list):
+        # Build Java runtime overrides
+        data = ('all', {
+            'kafka_connect_replicator_custom_java_args': self.get_jvm_arguments(self.input_context, self.service,
+                                                                                hosts)})
+        self.update_inventory(self.inventory, data)
 
     def _build_consumer_listener_properties(self, service_prop: dict):
         consumer_properties = service_prop.get(self.CONSUMER_CONFIG)
@@ -163,12 +167,12 @@ class KafkaReplicatorServicePropertyBaseBuilder(AbstractPropertyBuilder):
         kerberos_props = dict()
         if kerberos_details:
             kerberos_props["kerberos_kafka_broker_primary"] = kerberos_details.get("service_name")
-            kerberos_props["kafka_connect_replicator_keytab_path"] =  kerberos_details.get("key_tab")
+            kerberos_props["kafka_connect_replicator_keytab_path"] = kerberos_details.get("key_tab")
             kerberos_props["kafka_connect_replicator_kerberos_principal"] = kerberos_details.get("kerberos_principal")
 
         return "all", kerberos_props
 
-    def __get_kerberos_key_principal(self, properties:dict)->dict:
+    def __get_kerberos_key_principal(self, properties: dict) -> dict:
         key = "sasl.mechanism"
         sasl_mechanism = properties.get(key)
         self.mapped_service_properties.add(key)
@@ -195,14 +199,14 @@ class KafkaReplicatorServicePropertyBaseBuilder(AbstractPropertyBuilder):
         value = replication_props.get(key)
         return "all", {"kafka_replicator_group_id": value.rstrip("-configs")}
 
-    def _build_replicator_group_id(self, service_prop: dict)->tuple:
+    def _build_replicator_group_id(self, service_prop: dict) -> tuple:
         replication_props = service_prop.get(self.REPLICATION_CONFIG)
         key = "config.storage.topic"
         self.mapped_service_properties.add(key)
         value = replication_props.get(key)
-        return "all", {"kafka_connect_replicator_group_id": value }
+        return "all", {"kafka_connect_replicator_group_id": value}
 
-    def build_replicator_ssl_config(self, service_prop: dict)->tuple:
+    def build_replicator_ssl_config(self, service_prop: dict) -> tuple:
         replication_props = service_prop.get(self.REPLICATION_CONFIG)
         ssl_props = dict()
 
@@ -230,7 +234,7 @@ class KafkaReplicatorServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         return "all", ssl_props
 
-    def _build_replicator_offset_config(self, service_prop:dict)->tuple:
+    def _build_replicator_offset_config(self, service_prop: dict) -> tuple:
         replication_props = service_prop.get(self.REPLICATION_CONFIG)
         offset_dict = dict()
         key = "offset.start"
@@ -243,7 +247,7 @@ class KafkaReplicatorServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         return "all", offset_dict
 
-    def _build_rest_advertised_config(self, service_prop:dict)->tuple:
+    def _build_rest_advertised_config(self, service_prop: dict) -> tuple:
         replication_props = service_prop.get(self.REPLICATION_CONFIG)
         rest_dict = dict()
 
