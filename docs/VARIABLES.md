@@ -4236,7 +4236,7 @@ Default:  "https://packages.confluent.io"
 
 ### custom_java_path
 
-Full path on managed node to custom java path
+Full pre-existing Java path on custom nodes. CP-Ansible will use the provided path and will skip installing java as part of execution.```
 
 Default:  ""
 
