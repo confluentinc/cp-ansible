@@ -4,8 +4,9 @@ Though this script tries to come up with inventory which is the closed represent
 
 ### Prerequisites
 #### Software
->Python 3.9+  
->Ansible 2.11  
+> Python 3.9+  
+> Ansible 2.11  
+> PyYaml 6.0  
 
 These are dependencies for this script and should be installed on the machine where we are executing it from. This is not a requirement for managed nodes of the cluster.
 #### Hosts
@@ -16,8 +17,7 @@ Discovery uses set of Python and Ansible scripts to build a cp-ansible compatibl
 
 ```shell
 cd <some_path>/ansible_collections/confluent/platform
-export PYTHONPATH=.
-python discovery/main.py --input discovery/hosts.yml [optional arguments] 
+PYTHONPATH=. python discovery/main.py --input discovery/hosts.yml [optional arguments] 
 ```
 #### Sample input file (hosts.yml)
 ```yaml

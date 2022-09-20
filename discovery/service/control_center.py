@@ -28,22 +28,22 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.inventory = inventory
         self.input_context = input_context
         self.mapped_service_properties = set()
+        self.service = ConfluentServices.CONTROL_CENTER
 
     def build_properties(self):
 
         # Get the hosts for given service
-        service = ConfluentServices.CONTROL_CENTER
-        hosts = self.get_service_host(service, self.inventory)
+        hosts = self.get_service_host(self.service, self.inventory)
         self.hosts = hosts
         if not hosts:
-            logger.error(f"Could not find any host with service {service.value.get('name')} ")
+            logger.error(f"Could not find any host with service {self.service.value.get('name')} ")
             return
 
-        host_service_properties = self.get_property_mappings(self.input_context, service, hosts)
+        host_service_properties = self.get_property_mappings(self.input_context, self.service, hosts)
         service_properties = host_service_properties.get(hosts[0]).get(DEFAULT_KEY)
 
         # Build service user group properties
-        self.__build_daemon_properties(self.input_context, service, hosts)
+        self.__build_daemon_properties(self.input_context, self.service, hosts)
 
         # Build service properties
         self.__build_service_properties(service_properties)
@@ -52,7 +52,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.__build_custom_properties(service_properties, self.mapped_service_properties)
 
         # Build Command line properties
-        self.__build_runtime_properties(service_properties)
+        self.__build_runtime_properties(hosts)
 
     def __build_daemon_properties(self, input_context: InputContext, service: ConfluentServices, hosts: list):
 
@@ -78,8 +78,10 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
                                      mapped_properties=mapped_properties,
                                      service_properties=service_properties)
 
-    def __build_runtime_properties(self, service_properties: dict):
-        pass
+    def __build_runtime_properties(self, hosts: list):
+        data = ('all',
+                {'control_center_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
+        self.update_inventory(self.inventory, data)
 
     def _build_service_protocol_port(self, service_prop: dict) -> tuple:
         key = "confluent.controlcenter.rest.listeners"
@@ -110,8 +112,11 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if control_center_listener.find('https') < 0:
             return "all", {}
 
-        property_list = ["confluent.controlcenter.rest.ssl.truststore.location", "confluent.controlcenter.rest.ssl.truststore.password", "confluent.controlcenter.rest.ssl.keystore.location",
-                            "confluent.controlcenter.rest.ssl.keystore.password", "confluent.controlcenter.rest.ssl.key.password"]
+        property_list = ["confluent.controlcenter.rest.ssl.truststore.location",
+                         "confluent.controlcenter.rest.ssl.truststore.password",
+                         "confluent.controlcenter.rest.ssl.keystore.location",
+                         "confluent.controlcenter.rest.ssl.keystore.password",
+                         "confluent.controlcenter.rest.ssl.key.password"]
         for property_key in property_list:
             self.mapped_service_properties.add(property_key)
 
@@ -119,21 +124,24 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_enabled'] = True
         property_dict['ssl_provided_keystore_and_truststore'] = True
         property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
-        property_dict['ssl_truststore_filepath'] = service_prop.get('confluent.controlcenter.rest.ssl.truststore.location')
-        property_dict['ssl_truststore_password'] = service_prop.get('confluent.controlcenter.rest.ssl.truststore.password')
+        property_dict['ssl_truststore_filepath'] = service_prop.get(
+            'confluent.controlcenter.rest.ssl.truststore.location')
+        property_dict['ssl_truststore_password'] = service_prop.get(
+            'confluent.controlcenter.rest.ssl.truststore.password')
         property_dict['ssl_keystore_filepath'] = service_prop.get('confluent.controlcenter.rest.ssl.keystore.location')
-        property_dict['ssl_keystore_store_password'] = service_prop.get('confluent.controlcenter.rest.ssl.keystore.password')
+        property_dict['ssl_keystore_store_password'] = service_prop.get(
+            'confluent.controlcenter.rest.ssl.keystore.password')
         property_dict['ssl_keystore_key_password'] = service_prop.get('confluent.controlcenter.rest.ssl.key.password')
         property_dict['ssl_truststore_ca_cert_alias'] = ''
 
         keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
-                                                keystorepass=property_dict['ssl_keystore_store_password'],
-                                                keystorepath=property_dict['ssl_keystore_filepath'],
-                                                hosts=self.hosts)
+                                                         keystorepass=property_dict['ssl_keystore_store_password'],
+                                                         keystorepath=property_dict['ssl_keystore_filepath'],
+                                                         hosts=self.hosts)
         truststore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
-                                        keystorepass=property_dict['ssl_truststore_password'],
-                                        keystorepath=property_dict['ssl_truststore_filepath'],
-                                        hosts=self.hosts)
+                                                           keystorepass=property_dict['ssl_truststore_password'],
+                                                           keystorepath=property_dict['ssl_truststore_filepath'],
+                                                           hosts=self.hosts)
         if keystore_aliases:
             # Set the first alias name
             property_dict["ssl_keystore_alias"] = keystore_aliases[0]
