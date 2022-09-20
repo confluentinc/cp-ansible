@@ -372,6 +372,14 @@ Default:  false
 
 ***
 
+### ssl_keystore_and_truststore_custom_password
+
+Boolean to provide custom password for keystores and truststore. Enabled with ssl_provided_keystore_and_truststore, but can be enabled independently to set the custom password for generated keystores and truststores when using custom or self-signed certificates
+
+Default:  "{{ssl_provided_keystore_and_truststore}}"
+
+***
+
 ### ssl_keystore_filepath
 
 Full path to host specific keystore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-keystore.jks"
@@ -382,7 +390,7 @@ Default:  ""
 
 ### ssl_keystore_key_password
 
-Keystore Key Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
+Keystore Key Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords. Not to be confused with ssl_key_password when using custom certs
 
 Default:  ""
 
@@ -390,7 +398,7 @@ Default:  ""
 
 ### ssl_keystore_store_password
 
-Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
+Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true or ssl_keystore_and_truststore_custom_password: true. May set per host if keystores have unique passwords
 
 Default:  ""
 
@@ -414,7 +422,7 @@ Default:  ""
 
 ### ssl_truststore_password
 
-Keystore Password for host specific truststore. Used with ssl_provided_keystore_and_truststore: true
+Keystore Password for host specific truststore. Used with ssl_provided_keystore_and_truststore: true or ssl_keystore_and_truststore_custom_password: true.
 
 Default:  ""
 
