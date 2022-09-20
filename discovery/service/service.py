@@ -33,10 +33,10 @@ class AbstractPropertyBuilder(ABC):
     @staticmethod
     def get_jvm_arguments(input_context: InputContext, service: ConfluentServices, hosts: list):
         # Build Java runtime overrides
-        service_facts = SystemPropertyManager.get_service_details(input_context, service, hosts[0])
-        env_details = service_facts.get(hosts[0]).get("status").get("Environment")
-        runtime_props = env_details.split()
-        return [i for i in runtime_props if i.startswith(("KAFKA_HEAP_OPTS", "KAFKA_OPTS"))]
+        service_facts = AbstractPropertyBuilder.get_service_facts(input_context, service, hosts)
+        environment = service_facts.get("Environment", None)
+        env_details = AbstractPropertyBuilder.parse_environment_details(environment)
+        return env_details.get("KAFKA_OPTS", "")
 
     @staticmethod
     def __get_service_properties_file(input_context: InputContext,
@@ -131,7 +131,7 @@ class AbstractPropertyBuilder(ABC):
         return env_details
 
     @staticmethod
-    def get_service_details(input_context: InputContext, service: ConfluentServices, hosts: list) -> dict:
+    def get_service_facts(input_context: InputContext, service: ConfluentServices, hosts: list) -> dict:
         # Get the service details
         from discovery.system.system import SystemPropertyManager
         response = SystemPropertyManager.get_service_details(input_context, service, [hosts[0]])
@@ -145,7 +145,7 @@ class AbstractPropertyBuilder(ABC):
 
     @staticmethod
     def get_service_user_group(input_context: InputContext, service: ConfluentServices, hosts: list) -> tuple:
-        service_facts = AbstractPropertyBuilder.get_service_details(input_context, service, hosts)
+        service_facts = AbstractPropertyBuilder.get_service_facts(input_context, service, hosts)
 
         user = service_facts.get("User", None)
         group = service_facts.get("Group", None)

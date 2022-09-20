@@ -69,7 +69,7 @@ class KafkaReplicatorServicePropertyBaseBuilder(AbstractPropertyBuilder):
         for key, value in vars(KafkaReplicatorServicePropertyBaseBuilder).items():
             if callable(getattr(KafkaReplicatorServicePropertyBaseBuilder, key)) and key.startswith("_build"):
                 func = getattr(KafkaReplicatorServicePropertyBaseBuilder, key)
-                logger.debug(f"Calling KafkaReplicator property builder.. {func.__name__}")
+                logger.info(f"Calling KafkaReplicator property builder.. {func.__name__}")
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 

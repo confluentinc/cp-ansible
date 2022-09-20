@@ -64,7 +64,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         for key, value in vars(ControlCenterServicePropertyBaseBuilder).items():
             if callable(getattr(ControlCenterServicePropertyBaseBuilder, key)) and key.startswith("_build"):
                 func = getattr(ControlCenterServicePropertyBaseBuilder, key)
-                logger.debug(f"Calling ControlCenter property builder.. {func.__name__}")
+                logger.info(f"Calling ControlCenter property builder.. {func.__name__}")
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 
@@ -160,7 +160,9 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
     def _build_mtls_property(self, service_prop: dict) -> tuple:
 
-        if 'ssl_mutual_auth_enabled' in self.inventory.groups.get('kafka_broker').vars:
+        broker_group = ConfluentServices.KAFKA_BROKER.value.get('group')
+        if broker_group in self.inventory.groups and \
+                'ssl_mutual_auth_enabled' in self.inventory.groups.get(broker_group).vars:
             return "control_center", {'ssl_mutual_auth_enabled': True}
         return 'all', {}
 

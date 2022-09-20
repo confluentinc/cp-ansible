@@ -42,8 +42,7 @@ def main():
     build_service_properties(input_context, inventory)
 
     # Write final inventory file
-    data = inventory.get_inventory_data()
-    inventory.put_inventory_data(data)
+    inventory.generate_final_inventory()
 
 
 if __name__ == "__main__":
