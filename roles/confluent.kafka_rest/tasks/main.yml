@@ -128,6 +128,17 @@
     mode: 0755
   when: rbac_enabled|bool
 
+- name: Check if MDS public pem file exists on Ansible Controller
+  stat:
+    path: "{{ token_services_public_pem_file }}"
+  register: krest_public_pem_file
+  delegate_to: localhost
+
+- name: Debug
+  ansible.builtin.debug:
+    msg: WARNING - The file {{token_services_public_pem_file}} doesn't exist on the control node
+  when: not krest_public_pem_file.stat.exists|bool
+
 - name: Copy in MDS Public Pem File
   copy:
     src: "{{token_services_public_pem_file}}"
@@ -137,7 +148,7 @@
     group: "{{kafka_rest_group}}"
   when:
     - rbac_enabled|bool
-    - copy_certs | default(True)
+    - krest_public_pem_file.stat.exists|bool
   diff: "{{ not mask_sensitive_diff|bool }}"
 
 - name: Create Kafka Rest Config directory
