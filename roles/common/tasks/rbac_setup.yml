@@ -44,10 +44,20 @@
     path: "{{ ssl_file_dir_final }}"
     state: directory
     mode: 0755
-  when: copy_certs | default(True)
   tags:
     - privileged
     - filesystem
+
+- name: Check if MDS public pem file exists on Ansible Controller
+  stat:
+    path: "{{ token_services_public_pem_file }}"
+  register: public_pem_file
+  delegate_to: localhost
+
+- name: Debug
+  ansible.builtin.debug:
+    msg: WARNING - The file {{token_services_public_pem_file}} doesn't exist on the control node
+  when: not public_pem_file.stat.exists|bool
 
 - name: Copy in MDS Public Pem File
   copy:
@@ -56,5 +66,7 @@
     mode: 0640
     owner: "{{user}}"
     group: "{{group}}"
-  when: copy_certs | default(True)
+  when:
+    - public_pem_file.stat.exists|bool
+    - copy_certs | default(True)
   diff: "{{ not mask_sensitive_diff|bool }}"
