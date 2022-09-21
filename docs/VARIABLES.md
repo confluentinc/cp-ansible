@@ -500,6 +500,14 @@ Default:  false
 
 ***
 
+### ssl_keystore_and_truststore_custom_password
+
+Boolean to provide custom password for keystores and truststore. Enabled with ssl_provided_keystore_and_truststore, but can be enabled independently to set the custom password for generated keystores and truststores when using custom or self-signed certificates
+
+Default:  "{{ssl_provided_keystore_and_truststore}}"
+
+***
+
 ### ssl_keystore_filepath
 
 Full path to host specific keystore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-keystore.jks"
@@ -510,7 +518,7 @@ Default:  ""
 
 ### ssl_keystore_key_password
 
-Keystore Key Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
+Keystore Key Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords. Not to be confused with ssl_key_password when using custom certs
 
 Default:  ""
 
@@ -518,7 +526,7 @@ Default:  ""
 
 ### ssl_keystore_store_password
 
-Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
+Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true or ssl_keystore_and_truststore_custom_password: true. May set per host if keystores have unique passwords
 
 Default:  ""
 
@@ -542,7 +550,7 @@ Default:  ""
 
 ### ssl_truststore_password
 
-Keystore Password for host specific truststore. Used with ssl_provided_keystore_and_truststore: true
+Keystore Password for host specific truststore. Used with ssl_provided_keystore_and_truststore: true or ssl_keystore_and_truststore_custom_password: true.
 
 Default:  ""
 
@@ -644,19 +652,19 @@ Default:  false
 
 ***
 
-### zookeeper_config_prefix
-
-Default Zookeeper config prefix. Note - Only valid to customize when installation_method: archive
-
-Default:  "{{ config_prefix }}/kafka"
-
-***
-
 ### user_login_shell
 
 Variable to set the user login shell for all custom user created per component by cp-ansible.
 
 Default:  /sbin/nologin
+
+***
+
+### zookeeper_config_prefix
+
+Default Zookeeper config prefix. Note - Only valid to customize when installation_method: archive
+
+Default:  "{{ config_prefix }}/kafka"
 
 ***
 
@@ -768,7 +776,7 @@ Default:  "{{ zookeeper_ssl_enabled }}"
 
 Path on Zookeeper host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path, 'etc/kafka/zookeeper_jolokia.properties' ) | community.general.path_join }}"
+Default:  "{{ (config_base_path, 'etc/kafka/zookeeper_jolokia.properties' ) | path_join }}"
 
 ***
 
@@ -968,7 +976,7 @@ Default:  "{{ ssl_enabled }}"
 
 Path on Kafka host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,'etc/kafka/kafka_jolokia.properties') | community.general.path_join }}"
+Default:  "{{ (config_base_path,'etc/kafka/kafka_jolokia.properties') | path_join }}"
 
 ***
 
@@ -1200,7 +1208,7 @@ Default:  "{{ schema_registry_ssl_enabled }}"
 
 Path on Schema Registry host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,'etc/schema-registry/schema_registry_jolokia.properties') | community.general.path_join }}"
+Default:  "{{ (config_base_path,'etc/schema-registry/schema_registry_jolokia.properties') | path_join }}"
 
 ***
 
@@ -1384,7 +1392,7 @@ Default:  "{{ kafka_rest_ssl_enabled }}"
 
 Path on Rest Proxy host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,'etc/kafka-rest/kafka_rest_jolokia.properties') | community.general.path_join }}"
+Default:  "{{ (config_base_path,'etc/kafka-rest/kafka_rest_jolokia.properties') | path_join }}"
 
 ***
 
@@ -1608,7 +1616,7 @@ Default:  "{{ kafka_connect_ssl_enabled }}"
 
 Path on Connect host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,'etc/kafka/kafka_connect_jolokia.properties') | community.general.path_join }}"
+Default:  "{{ (config_base_path,'etc/kafka/kafka_connect_jolokia.properties') | path_join }}"
 
 ***
 
@@ -1832,7 +1840,7 @@ Default:  "{{ ksql_ssl_enabled }}"
 
 Path on ksqlDB host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,((confluent_package_version is version('5.5.0', '>=')) | ternary('etc/ksqldb/ksql_jolokia.properties' , 'etc/ksql/ksql_jolokia.properties'))) | community.general.path_join }}"
+Default:  "{{ (config_base_path,((confluent_package_version is version('5.5.0', '>=')) | ternary('etc/ksqldb/ksql_jolokia.properties' , 'etc/ksql/ksql_jolokia.properties'))) | path_join }}"
 
 ***
 
@@ -3268,7 +3276,7 @@ Default:  100mb
 
 ***
 
-### kakfa_connect_replicator_rbac_enabled
+### kafka_connect_replicator_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator to support RBAC. Creates Rolebindings for client to function.
 
@@ -3284,7 +3292,7 @@ Default:  false
 
 ***
 
-### kakfa_connect_replicator_consumer_rbac_enabled
+### kafka_connect_replicator_consumer_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator Consumer to support RBAC. Creates Rolebindings for client to function.
 
@@ -3300,11 +3308,11 @@ Default:  false
 
 ***
 
-### kakfa_connect_replicator_producer_rbac_enabled
+### kafka_connect_replicator_producer_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator Producer to support RBAC. Creates Rolebindings for client to function.
 
-Default:  "{{ kakfa_connect_replicator_rbac_enabled }}"
+Default:  "{{ kafka_connect_replicator_rbac_enabled }}"
 
 ***
 
@@ -3316,11 +3324,11 @@ Default:  "{{ kafka_connect_replicator_erp_tls_enabled }}"
 
 ***
 
-### kakfa_connect_replicator_monitoring_interceptor_rbac_enabled
+### kafka_connect_replicator_monitoring_interceptor_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator Monitoring Interceptor to support RBAC. Creates Rolebindings for client to function.
 
-Default:  "{{ kakfa_connect_replicator_rbac_enabled }}"
+Default:  "{{ kafka_connect_replicator_rbac_enabled }}"
 
 ***
 
