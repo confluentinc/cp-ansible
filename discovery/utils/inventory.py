@@ -1,3 +1,4 @@
+import collections
 import os
 
 import yaml
@@ -16,6 +17,10 @@ class CPInventoryManager(InventoryData):
     def __init__(self, input_context: InputContext = None):
         self.input_context = input_context
         super().__init__()
+
+    def generate_final_inventory(self):
+        data = self.get_inventory_data()
+        self.put_inventory_data(data)
 
     def get_inventory_data(self) -> dict:
         """
@@ -52,19 +57,31 @@ class CPInventoryManager(InventoryData):
         return data
 
 
-if __name__ == "__main__":
-    inventory = CPInventoryManager()
-    inventory.add_group('kafka_broker')
-    inventory.add_host('kafka-host1', 'kafka_broker')
-    inventory.add_host('kafka-host2', 'kafka_broker')
-    inventory.set_variable('kafka_broker', 'memory_limit', '30mb')
+class InventorySanitizer:
 
-    kafka_custom_properties = {
-        "broker": {
-            "name": "BROKER",
-            "port": 9091
-        }
-    }
-    inventory.set_variable('all', 'kafka_broker_custom_listeners', kafka_custom_properties)
-    data = inventory.get_inventory_data()
-    print(inventory.put_inventory_data(data))
+    @staticmethod
+    def sanatize(inventory_data: dict) -> dict:
+        pass
+
+    @staticmethod
+    def sort(invnetory_data: dict):
+        from discovery.utils.constants import ConfluentServices
+        group_list = [
+            'all',
+            ConfluentServices.ZOOKEEPER.value.get('group'),
+            ConfluentServices.KAFKA_BROKER.value.get('group'),
+            ConfluentServices.SCHEMA_REGISTRY.value.get('group'),
+            ConfluentServices.KAFKA_REST.value.get('group'),
+            ConfluentServices.KAFKA_CONNECT.value.get('group'),
+            ConfluentServices.KSQL.value.get('group'),
+            ConfluentServices.KAFKA_REPLICATOR.value.get('group'),
+            ConfluentServices.CONTROL_CENTER.value.get('group'),
+        ]
+
+        ordered_dict = collections.OrderedDict(invnetory_data)
+
+        for group in group_list:
+            if group in ordered_dict.keys():
+                ordered_dict.move_to_end(group)
+
+        return ordered_dict

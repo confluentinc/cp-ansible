@@ -65,7 +65,7 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         for key, value in vars(KsqlServicePropertyBaseBuilder).items():
             if callable(getattr(KsqlServicePropertyBaseBuilder, key)) and key.startswith("_build"):
                 func = getattr(KsqlServicePropertyBaseBuilder, key)
-                logger.debug(f"Calling Ksql property builder.. {func.__name__}")
+                logger.info(f"Calling Ksql property builder.. {func.__name__}")
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 

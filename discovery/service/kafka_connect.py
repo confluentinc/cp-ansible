@@ -64,7 +64,7 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         for key, value in vars(KafkaConnectServicePropertyBaseBuilder).items():
             if callable(getattr(KafkaConnectServicePropertyBaseBuilder, key)) and key.startswith("_build"):
                 func = getattr(KafkaConnectServicePropertyBaseBuilder, key)
-                logger.debug(f"Calling KafkaConnect property builder.. {func.__name__}")
+                logger.info(f"Calling KafkaConnect property builder.. {func.__name__}")
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 

@@ -65,7 +65,7 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         for key, value in vars(KafkaRestServicePropertyBaseBuilder).items():
             if callable(getattr(KafkaRestServicePropertyBaseBuilder, key)) and key.startswith("_build"):
                 func = getattr(KafkaRestServicePropertyBaseBuilder, key)
-                logger.debug(f"Calling KafkaRest property builder.. {func.__name__}")
+                logger.info(f"Calling KafkaRest property builder.. {func.__name__}")
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 

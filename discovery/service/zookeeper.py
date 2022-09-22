@@ -64,7 +64,7 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         for key, value in vars(ZookeeperServicePropertyBaseBuilder).items():
             if callable(getattr(ZookeeperServicePropertyBaseBuilder, key)) and key.startswith("_build"):
                 func = getattr(ZookeeperServicePropertyBaseBuilder, key)
-                logger.debug(f"Calling Zookeeper property builder.. {func.__name__}")
+                logger.info(f"Calling Zookeeper property builder.. {func.__name__}")
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 
