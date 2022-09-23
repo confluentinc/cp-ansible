@@ -39,7 +39,7 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if not hosts:
             logger.error(f"Could not find any host with service {self.service.value.get('name')} ")
 
-        host_service_properties = self.get_property_mappings(self.input_context,self.service,hosts)
+        host_service_properties = self.get_property_mappings(self.input_context, self.service, hosts)
         service_properties = host_service_properties.get(hosts[0]).get(DEFAULT_KEY)
 
         # Build service user group properties
@@ -49,7 +49,7 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.__build_service_properties(service_properties)
 
         # Add custom properties
-        self.__build_custom_properties(service_properties, self.mapped_service_properties)
+        self.__build_custom_properties(host_service_properties, self.mapped_service_properties)
 
         # Build Command line properties
         self.__build_runtime_properties(hosts)
@@ -68,15 +68,19 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 
-    def __build_custom_properties(self, service_properties: dict, mapped_properties: set):
+    def __build_custom_properties(self, host_service_properties: dict, mapped_properties: set):
 
-        group = "zookeeper_custom_properties"
+        custom_group = "zookeeper_custom_properties"
         skip_properties = set(FileUtils.get_zookeeper_configs("skip_properties"))
-        self.build_custom_properties(inventory=self.inventory,
-                                     group= group,
-                                     skip_properties=skip_properties,
-                                     mapped_properties=mapped_properties,
-                                     service_properties=service_properties)
+
+        # Get host server properties dictionary
+        _host_service_properties = dict()
+        for host in host_service_properties.keys():
+            _host_service_properties[host] = host_service_properties.get(host).get(DEFAULT_KEY)
+        self.build_custom_properties(inventory=self.inventory, group=self.service.value.get('group'),
+                                     custom_properties_group_name=custom_group,
+                                     host_service_properties=_host_service_properties, skip_properties=skip_properties,
+                                     mapped_properties=mapped_properties)
 
     def __build_runtime_properties(self, hosts: list):
         # Build Java runtime overrides
@@ -96,7 +100,8 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_ssl_properties(self, service_properties: dict) -> tuple:
 
         property_dict = dict()
-        property_list = ["secureClientPort", "ssl.keyStore.location", "ssl.keyStore.password", "ssl.trustStore.location", "ssl.trustStore.password"]
+        property_list = ["secureClientPort", "ssl.keyStore.location", "ssl.keyStore.password",
+                         "ssl.trustStore.location", "ssl.trustStore.password"]
 
         for property_key in property_list:
             self.mapped_service_properties.add(property_key)
@@ -116,13 +121,13 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_truststore_ca_cert_alias'] = ''
 
         keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
-                                                keystorepass=property_dict['ssl_keystore_store_password'],
-                                                keystorepath=property_dict['ssl_keystore_filepath'],
-                                                hosts=self.hosts)
+                                                         keystorepass=property_dict['ssl_keystore_store_password'],
+                                                         keystorepath=property_dict['ssl_keystore_filepath'],
+                                                         hosts=self.hosts)
         truststore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
-                                        keystorepass=property_dict['ssl_truststore_password'],
-                                        keystorepath=property_dict['ssl_truststore_filepath'],
-                                        hosts=self.hosts)
+                                                           keystorepass=property_dict['ssl_truststore_password'],
+                                                           keystorepath=property_dict['ssl_truststore_filepath'],
+                                                           hosts=self.hosts)
         if keystore_aliases:
             # Set the first alias name
             property_dict["ssl_keystore_alias"] = keystore_aliases[0]
@@ -137,6 +142,7 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
             return "zookeeper", {'ssl_mutual_auth_enabled': True}
 
         return "all", {}
+
 
 class ZookeeperServicePropertyBuilder60(ZookeeperServicePropertyBaseBuilder):
     pass

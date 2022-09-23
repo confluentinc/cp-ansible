@@ -31,12 +31,30 @@ class AbstractPropertyBuilder(ABC):
         return hosts
 
     @staticmethod
+    def get_secret_protection_key(input_context: InputContext, service: ConfluentServices, hosts: list):
+        env_details = AbstractPropertyBuilder._get_env_details(input_context, service, hosts)
+        return env_details.get("CONFLUENT_SECURITY_MASTER_KEY", None)
+
+    @staticmethod
     def get_jvm_arguments(input_context: InputContext, service: ConfluentServices, hosts: list):
         # Build Java runtime overrides
+        env_details = AbstractPropertyBuilder._get_env_details(input_context, service, hosts)
+        heap_ops = env_details.get('KAFKA_HEAP_OPTS', None)
+        kafka_ops= env_details.get('KAFKA_OPTS', None)
+        jvm_str = ""
+        if heap_ops:
+            jvm_str = f"{jvm_str} {heap_ops}"
+
+        if kafka_ops:
+            jvm_str = f"{jvm_str} {kafka_ops}"
+
+        return jvm_str
+
+    @staticmethod
+    def _get_env_details(input_context: InputContext, service: ConfluentServices, hosts: list):
         service_facts = AbstractPropertyBuilder.get_service_facts(input_context, service, hosts)
         environment = service_facts.get("Environment", None)
-        env_details = AbstractPropertyBuilder.parse_environment_details(environment)
-        return env_details.get("KAFKA_OPTS", "")
+        return AbstractPropertyBuilder.parse_environment_details(environment)
 
     @staticmethod
     def __get_service_properties_file(input_context: InputContext,
@@ -179,20 +197,41 @@ class AbstractPropertyBuilder(ABC):
             inventory.set_variable(group_name, key, value)
 
     @staticmethod
-    def build_custom_properties(inventory: CPInventoryManager,
-                                group: str,
-                                service_properties: dict,
-                                skip_properties: set,
-                                mapped_properties: set):
+    def build_custom_properties(inventory: CPInventoryManager, group: str, custom_properties_group_name: str,
+                                host_service_properties: dict, skip_properties: set, mapped_properties: set):
 
-        custom_properties = dict()
+        host_custom_properties = dict()
+        for host in host_service_properties:
+            temp = dict()
+            for key, value in host_service_properties[host].items():
+                if key not in mapped_properties and key not in skip_properties:
+                    temp[key] = value
+            host_custom_properties[host] = temp
 
-        inventory.set_variable('all', group, service_properties)
-        for key, value in service_properties.items():
-            if key not in mapped_properties and key not in skip_properties:
-                custom_properties[key] = value
+        # Get common custom properties for all hosts
+        common_custom_properties = dict()
+        common_keys = host_custom_properties.get(next(iter(host_custom_properties)), dict()).keys()
+        for host in host_custom_properties.keys():
+            common_keys & host_custom_properties.get(host).keys()
 
-        inventory.set_variable('all', group, custom_properties)
+        # Populate the common custom properties for group
+        for key in common_keys:
+            # check if values are same for all hosts
+            temp = set()
+            for host in host_custom_properties.keys():
+                temp.add(host_custom_properties.get(host).get(key))
+            if len(temp) == 1:
+                common_custom_properties[key] = temp.pop()
+
+        # Set the common custom properties
+        inventory.set_variable(group, custom_properties_group_name, common_custom_properties)
+
+        # Get the host specific properties
+        for host, properties in host_custom_properties.items():
+            for key, value in properties.items():
+                if key not in common_custom_properties.keys():
+                    _host = inventory.get_host(host)
+                    _host.set_variable(key, value)
 
     @staticmethod
     def get_values_from_jaas_config(jaas_config: str) -> dict:

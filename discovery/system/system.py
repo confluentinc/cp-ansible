@@ -63,7 +63,7 @@ class SystemPropertyManager:
         if not mappings:
             logger.error(f"Could not get the service mappings. Please see the logs for details.")
 
-        logger.info("Host service mappings:\n{json.dumps(mappings)}")
+        logger.info(f"Host service mappings:\n{json.dumps(mappings)}")
         return mappings
 
     @classmethod

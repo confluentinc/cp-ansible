@@ -47,13 +47,13 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.__build_daemon_properties(self.input_context, self.service, hosts)
 
         # Build broker id mappings
-        self.__build_broker_host_properties(host_service_properties)
+        # self.__build_broker_host_properties(host_service_properties)
 
         # Build service properties
         self.__build_service_properties(service_properties)
 
         # Add custom properties
-        self.__build_custom_properties(service_properties, self.mapped_service_properties)
+        self.__build_custom_properties(host_service_properties, self.mapped_service_properties)
 
         # Build Command line properties
         self.__build_runtime_properties(hosts)
@@ -81,20 +81,24 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 host = self.inventory.get_host(hostname)
                 host.set_variable(key, int(default_properties.get(key)))
 
-    def __build_custom_properties(self, service_properties: dict, mapped_properties: set):
+    def __build_custom_properties(self, host_service_properties: dict, mapped_properties: set):
 
-        group = "kafka_broker_custom_properties"
+        custom_group = "kafka_broker_custom_properties"
         skip_properties = set(FileUtils.get_kafka_broker_configs("skip_properties"))
-        self.build_custom_properties(inventory=self.inventory,
-                                     group=group,
-                                     skip_properties=skip_properties,
-                                     mapped_properties=mapped_properties,
-                                     service_properties=service_properties)
+
+        _host_service_properties = dict()
+        for host in host_service_properties.keys():
+            _host_service_properties[host] = host_service_properties.get(host).get(DEFAULT_KEY)
+        self.build_custom_properties(inventory=self.inventory, group=self.service.value.get('group'),
+                                     custom_properties_group_name=custom_group,
+                                     host_service_properties=_host_service_properties, skip_properties=skip_properties,
+                                     mapped_properties=mapped_properties)
+
 
     def __build_runtime_properties(self, hosts):
         # Build Java runtime overrides
         data = (
-        'all', {'kafka_broker_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
+            'all', {'kafka_broker_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
         self.update_inventory(self.inventory, data)
 
     def __get_user_dict(self, service_prop: dict, key: str) -> dict:
@@ -248,7 +252,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key)
         return "all", {'fips_enabled': bool(service_properties.get(key, False))}
 
-    def _build_default_listeners(self, service_prop: dict) -> tuple:
+    def _build_custom_listeners(self, service_prop: dict) -> tuple:
         custom_listeners = dict()
         default_scram_users = dict()
         default_scram256_users = dict()
@@ -350,6 +354,16 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add('kafka.rest.confluent.metadata.basic.auth.user.info')
 
         return "all", property_dict
+
+    def _build_secret_protection_key(self, service_prop: dict) -> tuple:
+        master_key = self.get_secret_protection_key(self.input_context, self.service, self.hosts)
+        if master_key:
+            return 'all', {
+                'secrets_protection_enabled': True,
+                'secrets_protection_masterkey': master_key
+            }
+        else:
+            return 'all', {}
 
 
 class KafkaServicePropertyLegacyBuilder(KafkaServicePropertyBaseBuilder):

@@ -54,7 +54,7 @@ class KafkaReplicatorServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.__build_service_properties(service_properties)
 
         # Add custom properties of Kafka broker
-        self.__build_custom_properties(service_properties, self.mapped_service_properties)
+        self.__build_custom_properties(host_service_properties, self.mapped_service_properties)
 
         # Build Command line properties
         self.__build_runtime_properties(hosts)
@@ -73,53 +73,66 @@ class KafkaReplicatorServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 
-    def __build_custom_properties(self, service_properties: dict, mapped_properties: set):
+    def __build_custom_properties(self, host_service_properties: dict, mapped_properties: set):
         skip_properties = set(FileUtils.get_kafka_replicator_configs("skip_properties"))
-        self.__build_custom_properties_replication(service_properties, mapped_properties, skip_properties)
-        self.__build_custom_properties_consumer(service_properties, mapped_properties, skip_properties)
-        self.__build_custom_properties_producer(service_properties, mapped_properties, skip_properties)
-        self.__build_custom_properties_monitoring(service_properties, mapped_properties, skip_properties)
+        self.__build_custom_properties_replication(host_service_properties, mapped_properties, skip_properties)
+        self.__build_custom_properties_consumer(host_service_properties, mapped_properties, skip_properties)
+        self.__build_custom_properties_producer(host_service_properties, mapped_properties, skip_properties)
+        self.__build_custom_properties_monitoring(host_service_properties, mapped_properties, skip_properties)
 
-    def __build_custom_properties_replication(self, service_properties: dict,
+    def __build_custom_properties_replication(self, host_service_properties: dict,
                                               mapped_properties: set,
                                               skip_properties: set):
-        group = "kafka_connect_replicator_custom_properties"
-        self.build_custom_properties(inventory=self.inventory,
-                                     group=group,
-                                     skip_properties=skip_properties,
-                                     mapped_properties=mapped_properties,
-                                     service_properties=service_properties.get(self.REPLICATION_CONFIG))
+        custom_group = "kafka_connect_replicator_custom_properties"
 
-    def __build_custom_properties_consumer(self, service_properties: dict,
+        _host_service_properties = dict()
+        for host in host_service_properties.keys():
+            _host_service_properties[host] = host_service_properties.get(host).get(self.REPLICATION_CONFIG)
+        self.build_custom_properties(inventory=self.inventory, group=self.service.value.get('group'),
+                                     custom_properties_group_name=custom_group,
+                                     host_service_properties=_host_service_properties, skip_properties=skip_properties,
+                                     mapped_properties=mapped_properties)
+
+    def __build_custom_properties_consumer(self, host_service_properties: dict,
                                            mapped_properties: set,
                                            skip_properties: set):
-        group = "kafka_connect_replicator_consumer_custom_properties"
-        self.build_custom_properties(inventory=self.inventory,
-                                     group=group,
-                                     skip_properties=skip_properties,
-                                     mapped_properties=mapped_properties,
-                                     service_properties=service_properties.get(self.CONSUMER_CONFIG))
+        custom_group = "kafka_connect_replicator_consumer_custom_properties"
 
-    def __build_custom_properties_producer(self, service_properties: dict,
+        _host_service_properties = dict()
+        for host in host_service_properties.keys():
+            _host_service_properties[host] = host_service_properties.get(host).get(self.CONSUMER_CONFIG)
+        self.build_custom_properties(inventory=self.inventory, group=self.service.value.get('group'),
+                                     custom_properties_group_name=custom_group,
+                                     host_service_properties=_host_service_properties, skip_properties=skip_properties,
+                                     mapped_properties=mapped_properties)
+
+    def __build_custom_properties_producer(self, host_service_properties: dict,
                                            mapped_properties: set,
                                            skip_properties: set):
-        group = "kafka_connect_replicator_producer_custom_properties"
-        self.build_custom_properties(inventory=self.inventory,
-                                     group=group,
-                                     skip_properties=skip_properties,
-                                     mapped_properties=mapped_properties,
-                                     service_properties=service_properties.get(self.PRODUCER_CONFIG))
+        custom_group = "kafka_connect_replicator_producer_custom_properties"
 
-    def __build_custom_properties_monitoring(self, service_properties: dict,
+        _host_service_properties = dict()
+        for host in host_service_properties.keys():
+            _host_service_properties[host] = host_service_properties.get(host).get(self.PRODUCER_CONFIG)
+        self.build_custom_properties(inventory=self.inventory, group=self.service.value.get('group'),
+                                     custom_properties_group_name=custom_group,
+                                     host_service_properties=_host_service_properties, skip_properties=skip_properties,
+                                     mapped_properties=mapped_properties)
+
+    def __build_custom_properties_monitoring(self, host_service_properties: dict,
                                              mapped_properties: set,
                                              skip_properties: set):
-        group = "kafka_connect_replicator_monitoring_interceptor_custom_properties"
-        self.build_custom_properties(inventory=self.inventory,
-                                     group=group,
-                                     skip_properties=skip_properties,
-                                     mapped_properties=mapped_properties,
-                                     service_properties=service_properties.get(self.CONSUMER_MONITORING_CONFIG) |
-                                                        service_properties.get(self.PRODUCER_MONITORING_CONFIG))
+        custom_group = "kafka_connect_replicator_monitoring_interceptor_custom_properties"
+
+        _host_service_properties = dict()
+        for host in host_service_properties.keys():
+            _host_service_properties[host] = host_service_properties.get(host).get(
+                self.CONSUMER_MONITORING_CONFIG) | host_service_properties.get(host).get(
+                self.PRODUCER_MONITORING_CONFIG)
+        self.build_custom_properties(inventory=self.inventory, group=self.service.value.get('group'),
+                                     custom_properties_group_name=custom_group,
+                                     host_service_properties=_host_service_properties, skip_properties=skip_properties,
+                                     mapped_properties=mapped_properties)
 
     def __build_runtime_properties(self, hosts: list):
         # Build Java runtime overrides

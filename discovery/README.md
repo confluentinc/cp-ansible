@@ -54,3 +54,4 @@ Ideally we should be using the discovery from the branch which maps to the CP cl
 * The input hosts file doesn't support regex for hosts parttern
 * Discovery doesn't support CP community edition.
 * At the time of running this script, the CP services should be up and running. Otherwise, the script will ignore those nodes/services
+* If secrets protection is enabled on cluster, Discovery scripts can populate the master key. However, all passwords should be filled by the user before using the play
