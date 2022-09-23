@@ -50,7 +50,7 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.__build_service_properties(service_properties)
 
         # Add custom properties of Kafka broker
-        self.__build_custom_properties(service_properties, self.mapped_service_properties)
+        self.__build_custom_properties(host_service_properties, self.mapped_service_properties)
 
         # Build Command line properties
         self.__build_runtime_properties(hosts)
@@ -69,14 +69,17 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 
-    def __build_custom_properties(self, service_properties: dict, mapped_properties: set):
-        group = "kafka_rest_custom_properties"
+    def __build_custom_properties(self, host_service_properties: dict, mapped_properties: set):
+        custom_group = "kafka_rest_custom_properties"
         skip_properties = set(FileUtils.get_kafka_rest_configs("skip_properties"))
-        self.build_custom_properties(inventory=self.inventory,
-                                     group=group,
-                                     skip_properties=skip_properties,
-                                     mapped_properties=mapped_properties,
-                                     service_properties=service_properties)
+
+        _host_service_properties = dict()
+        for host in host_service_properties.keys():
+            _host_service_properties[host] = host_service_properties.get(host).get(DEFAULT_KEY)
+        self.build_custom_properties(inventory=self.inventory, group=self.service.value.get('group'),
+                                     custom_properties_group_name=custom_group,
+                                     host_service_properties=_host_service_properties, skip_properties=skip_properties,
+                                     mapped_properties=mapped_properties)
 
     def __build_runtime_properties(self, hosts: list):
         # Build Java runtime overrides
