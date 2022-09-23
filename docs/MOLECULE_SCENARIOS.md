@@ -1,14 +1,30 @@
-### molecule/mtls-java11-rhel
+### molecule/mtls-java11-debian
 
-#### Scenario mtls-java11-rhel test's the following:
+#### Scenario mtls-java11-debian test's the following:
 
-Installation of Confluent Platform on CentOS7.
+Installation of Confluent Platform on Debian9.
 
 MTLS enabled.
 
 Java 11.
 
-#### Scenario mtls-java11-rhel verify test's the following:
+#### Scenario mtls-java11-debian verify test's the following:
+
+Validates that Java 11 is in use.
+
+***
+
+### molecule/mtls-java8-ubuntu
+
+#### Scenario mtls-java8-ubuntu test's the following:
+
+Installation of Confluent Platform on Ubuntu1604.
+
+MTLS enabled.
+
+Java 8.
+
+#### Scenario mtls-java8-ubuntu verify test's the following:
 
 Validates that Java 11 is in use.
 
@@ -54,6 +70,8 @@ Validates that SASL SSL protocol is set across all components
 
 Validates that custom log4j configuration is in place.
 
+Validates that Java 17 is in Use
+
 Validates that Confluent CLI is installed.
 
 ***
@@ -77,6 +95,8 @@ Custom log dirs for all components.
 Validates that SASL SSL protocol is set across all components.
 
 Validates that custom log4j configuration is in place.
+
+Validates that Java 17 is in Use
 
 ***
 
@@ -426,33 +446,7 @@ Validates that Schema Validation is working.
 
 Validates that CLI is present.
 
-***
-
-### molecule/broker-scale-up
-
-#### Scenario broker-scale-up test's the following:
-
-Installation of Confluent Platform on centos8.
-
-MTLS enabled.
-
-Installs Three unique Kafka Connect Clusters with unique connectors.
-
-Installs two unique KSQL Clusters.
-
-#### Scenario broker-scale-up verify test's the following:
-
-***
-
-### molecule/connect-scale-up
-
-#### Scenario connect-scale-up test's the following:
-
-connect-scale-up
-
-#### Scenario connect-scale-up verify test's the following:
-
-connect-scale-up verify
+Validates that Java 17 is in Use
 
 ***
 
@@ -599,6 +593,8 @@ Kafka Rest API Basic Auth.
 Validates that each component has a unique auth user.
 
 Validates that Rest Proxy has correct auth property.
+
+Validates that Java 17 is in Use
 
 ***
 
@@ -764,6 +760,8 @@ Kafka broker custom listener.
 
 RBAC additional system admin user.
 
+Java 8
+
 #### Scenario rbac-kerberos-debian verify test's the following:
 
 Validates that protocol set to GSSAPI.
@@ -799,6 +797,8 @@ Validates that GSSAPI protocol is set on Cluster2.
 Validates that MDS is HTTP on Cluster1 (MDS).
 
 Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
+
+Validates that Java 17 is in Use
 
 ***
 
@@ -1060,6 +1060,8 @@ Validates that secrets protection is enabled on correct properties.
 
 Validates truststore is present across components.
 
+Validates that Java 17 is in Use
+
 ***
 
 ### molecule/rbac-scram-custom-rhel
@@ -1224,6 +1226,34 @@ Validates that other components are using SCRAM for auth.
 
 ***
 
+### molecule/broker-scale-up
+
+#### Scenario broker-scale-up test's the following:
+
+Installation of Confluent Platform on centos8.
+
+MTLS enabled.
+
+Installs Three unique Kafka Connect Clusters with unique connectors.
+
+Installs two unique KSQL Clusters.
+
+#### Scenario broker-scale-up verify test's the following:
+
+***
+
+### molecule/connect-scale-up
+
+#### Scenario connect-scale-up test's the following:
+
+connect-scale-up
+
+#### Scenario connect-scale-up verify test's the following:
+
+connect-scale-up verify
+
+***
+
 ### molecule/ksql-scale-up
 
 #### Scenario ksql-scale-up test's the following:
@@ -1235,6 +1265,8 @@ MTLS enabled.
 Installs two unique KSQL Clusters, each having 1 node.
 
 Scales it later to 4 nodes, adding 1 node to each of the KSQL clusters
+
+Use Java 8
 
 #### Scenario ksql-scale-up verify test's the following:
 
@@ -1266,6 +1298,8 @@ Kafka Broker Customer Listener.
 
 RBAC Additional System Admin.
 
+Use Java 11 package
+
 #### Scenario rbac-mds-mtls-existing-keystore-truststore-ubuntu verify test's the following:
 
 Validates that keystores are present on all components.
@@ -1276,33 +1310,17 @@ Validates that TLS CN is being registered as super user.
 
 ***
 
-### molecule/mtls-java11-debian
+### molecule/mtls-java11-rhel
 
-#### Scenario mtls-java11-debian test's the following:
+#### Scenario mtls-java11-rhel test's the following:
 
-Installation of Confluent Platform on Debian9.
+Installation of Confluent Platform on CentOS7.
 
 MTLS enabled.
 
 Java 11.
 
-#### Scenario mtls-java11-debian verify test's the following:
-
-Validates that Java 11 is in use.
-
-***
-
-### molecule/mtls-java8-ubuntu
-
-#### Scenario mtls-java8-ubuntu test's the following:
-
-Installation of Confluent Platform on Ubuntu1804.
-
-MTLS enabled.
-
-Java 8.
-
-#### Scenario mtls-java8-ubuntu verify test's the following:
+#### Scenario mtls-java11-rhel verify test's the following:
 
 Validates that Java 11 is in use.
 

@@ -118,7 +118,7 @@ Default:  false
 
 ### fips_enabled
 
-Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8 or 11. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
+Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 11. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
 
 Default:  false
 
@@ -4244,7 +4244,7 @@ Default:  "https://packages.confluent.io"
 
 ### custom_java_path
 
-Full pre-existing Java path on custom nodes. CP-Ansible will use the provided path and will skip installing java as part of execution.```
+Full path on managed node to custom java path
 
 Default:  ""
 
@@ -4287,6 +4287,14 @@ Default:  openjdk-17-jdk
 Deb Repository to use for Java Installation
 
 Default:  ppa:openjdk-r/ppa
+
+***
+
+### add_sid_repo
+
+Boolean to add Sid Repo for JAVA Buster
+
+Default:  false
 
 ***
 
