@@ -117,22 +117,22 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_enabled'] = True
         property_dict['ssl_provided_keystore_and_truststore'] = True
         property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
-        property_dict['ssl_keystore_filepath'] = service_prop.get('ssl.keystore.location')
+        property_dict['kafka_rest_keystore_path'] = service_prop.get('ssl.keystore.location')
         property_dict['ssl_keystore_store_password'] = service_prop.get('ssl.keystore.password')
         property_dict['ssl_keystore_key_password'] = service_prop.get('ssl.key.password')
         property_dict['ssl_truststore_ca_cert_alias'] = ''
 
         if service_prop.get('ssl.truststore.location') is not None:
-            property_dict['ssl_truststore_filepath'] = service_prop.get('ssl.truststore.location')
+            property_dict['kafka_rest_truststore_path'] = service_prop.get('ssl.truststore.location')
             property_dict['ssl_truststore_password'] = service_prop.get('ssl.truststore.password')
 
         keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                          keystorepass=property_dict['ssl_keystore_store_password'],
-                                                         keystorepath=property_dict['ssl_keystore_filepath'],
+                                                         keystorepath=property_dict['kafka_rest_keystore_path'],
                                                          hosts=self.hosts)
         truststore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                            keystorepass=property_dict['ssl_truststore_password'],
-                                                           keystorepath=property_dict['ssl_truststore_filepath'],
+                                                           keystorepath=property_dict['kafka_rest_truststore_path'],
                                                            hosts=self.hosts)
         if keystore_aliases:
             # Set the first alias name
@@ -191,25 +191,25 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         return 'all', property_dict
 
 
-class KafkaRestServicePropertyBuilder60(KafkaRestServicePropertyBaseBuilder):
+class KafkaRestServicePropertyBaseBuilder60(KafkaRestServicePropertyBaseBuilder):
     pass
 
 
-class KafkaRestServicePropertyBuilder61(KafkaRestServicePropertyBaseBuilder):
+class KafkaRestServicePropertyBaseBuilder61(KafkaRestServicePropertyBaseBuilder):
     pass
 
 
-class KafkaRestServicePropertyBuilder62(KafkaRestServicePropertyBaseBuilder):
+class KafkaRestServicePropertyBaseBuilder62(KafkaRestServicePropertyBaseBuilder):
     pass
 
 
-class KafkaRestServicePropertyBuilder70(KafkaRestServicePropertyBaseBuilder):
+class KafkaRestServicePropertyBaseBuilder70(KafkaRestServicePropertyBaseBuilder):
     pass
 
 
-class KafkaRestServicePropertyBuilder71(KafkaRestServicePropertyBaseBuilder):
+class KafkaRestServicePropertyBaseBuilder71(KafkaRestServicePropertyBaseBuilder):
     pass
 
 
-class KafkaRestServicePropertyBuilder72(KafkaRestServicePropertyBaseBuilder):
+class KafkaRestServicePropertyBaseBuilder72(KafkaRestServicePropertyBaseBuilder):
     pass

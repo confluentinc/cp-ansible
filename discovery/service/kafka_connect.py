@@ -148,20 +148,20 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_enabled'] = True
         property_dict['ssl_provided_keystore_and_truststore'] = True
         property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
-        property_dict['ssl_keystore_filepath'] = service_properties.get('listeners.https.ssl.keystore.location')
+        property_dict['kafka_connect_keystore_path'] = service_properties.get('listeners.https.ssl.keystore.location')
         property_dict['ssl_keystore_store_password'] = service_properties.get('listeners.https.ssl.keystore.password')
         property_dict['ssl_keystore_key_password'] = service_properties.get('listeners.https.ssl.key.password')
-        property_dict['ssl_truststore_filepath'] = service_properties.get('listeners.https.ssl.truststore.location')
+        property_dict['kafka_connect_truststore_path'] = service_properties.get('listeners.https.ssl.truststore.location')
         property_dict['ssl_truststore_password'] = service_properties.get('listeners.https.ssl.truststore.password')
         property_dict['ssl_truststore_ca_cert_alias'] = ''
 
         keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                          keystorepass=property_dict['ssl_keystore_store_password'],
-                                                         keystorepath=property_dict['ssl_keystore_filepath'],
+                                                         keystorepath=property_dict['kafka_connect_keystore_path'],
                                                          hosts=self.hosts)
         truststore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                            keystorepass=property_dict['ssl_truststore_password'],
-                                                           keystorepath=property_dict['ssl_truststore_filepath'],
+                                                           keystorepath=property_dict['kafka_connect_truststore_path'],
                                                            hosts=self.hosts)
         if keystore_aliases:
             # Set the first alias name
@@ -219,25 +219,25 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         return 'all', property_dict
 
 
-class KafkaConnectServicePropertyBuilder60(KafkaConnectServicePropertyBaseBuilder):
+class KafkaConnectServicePropertyBaseBuilder60(KafkaConnectServicePropertyBaseBuilder):
     pass
 
 
-class KafkaConnectServicePropertyBuilder61(KafkaConnectServicePropertyBaseBuilder):
+class KafkaConnectServicePropertyBaseBuilder61(KafkaConnectServicePropertyBaseBuilder):
     pass
 
 
-class KafkaConnectServicePropertyBuilder62(KafkaConnectServicePropertyBaseBuilder):
+class KafkaConnectServicePropertyBaseBuilder62(KafkaConnectServicePropertyBaseBuilder):
     pass
 
 
-class KafkaConnectServicePropertyBuilder70(KafkaConnectServicePropertyBaseBuilder):
+class KafkaConnectServicePropertyBaseBuilder70(KafkaConnectServicePropertyBaseBuilder):
     pass
 
 
-class KafkaConnectServicePropertyBuilder71(KafkaConnectServicePropertyBaseBuilder):
+class KafkaConnectServicePropertyBaseBuilder71(KafkaConnectServicePropertyBaseBuilder):
     pass
 
 
-class KafkaConnectServicePropertyBuilder72(KafkaConnectServicePropertyBaseBuilder):
+class KafkaConnectServicePropertyBaseBuilder72(KafkaConnectServicePropertyBaseBuilder):
     pass

@@ -199,7 +199,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key1)
         self.mapped_service_properties.add(key2)
 
-        property_dict['ssl_truststore_filepath'] = service_properties.get(key1)
+        property_dict['kafka_broker_pkcs12_truststore_path'] = service_properties.get(key1)
         property_dict['ssl_truststore_password'] = service_properties.get(key2)
         property_dict['ssl_enabled'] = True
         property_dict['ssl_provided_keystore_and_truststore'] = True
@@ -207,7 +207,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_truststore_ca_cert_alias'] = ''
 
         if service_properties.get("confluent.http.server.ssl.keystore.location") is not None:
-            property_dict['ssl_keystore_filepath'] = service_properties.get(
+            property_dict['kafka_broker_pkcs12_keystore_path'] = service_properties.get(
                 "confluent.http.server.ssl.keystore.location")
             property_dict['ssl_keystore_store_password'] = service_properties.get(
                 'confluent.http.server.ssl.keystore.password')
@@ -215,7 +215,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 'confluent.http.server.ssl.key.password')
 
         if service_properties.get("confluent.ssl.keystore.location") is not None:
-            property_dict['ssl_keystore_filepath'] = service_properties.get(
+            property_dict['kafka_broker_pkcs12_keystore_path'] = service_properties.get(
                 "confluent.ssl.keystore.location")
             property_dict['ssl_keystore_store_password'] = service_properties.get(
                 'confluent.ssl.keystore.password')
@@ -224,11 +224,11 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                          keystorepass=property_dict['ssl_keystore_store_password'],
-                                                         keystorepath=property_dict['ssl_keystore_filepath'],
+                                                         keystorepath=property_dict['kafka_broker_pkcs12_keystore_path'],
                                                          hosts=self.hosts)
         truststore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                            keystorepass=property_dict['ssl_truststore_password'],
-                                                           keystorepath=property_dict['ssl_truststore_filepath'],
+                                                           keystorepath=property_dict['kafka_broker_pkcs12_truststore_path'],
                                                            hosts=self.hosts)
         if keystore_aliases:
             # Set the first alias name
@@ -366,29 +366,25 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
             return 'all', {}
 
 
-class KafkaServicePropertyLegacyBuilder(KafkaServicePropertyBaseBuilder):
+class KafkaServicePropertyBaseBuilder60(KafkaServicePropertyBaseBuilder):
     pass
 
 
-class KafkaServicePropertyBuilder60(KafkaServicePropertyLegacyBuilder):
+class KafkaServicePropertyBaseBuilder61(KafkaServicePropertyBaseBuilder):
     pass
 
 
-class KafkaServicePropertyBuilder61(KafkaServicePropertyLegacyBuilder):
+class KafkaServicePropertyBaseBuilder62(KafkaServicePropertyBaseBuilder):
     pass
 
 
-class KafkaServicePropertyBuilder62(KafkaServicePropertyLegacyBuilder):
+class KafkaServicePropertyBaseBuilder70(KafkaServicePropertyBaseBuilder):
     pass
 
 
-class KafkaServicePropertyBuilder70(KafkaServicePropertyLegacyBuilder):
+class KafkaServicePropertyBaseBuilder71(KafkaServicePropertyBaseBuilder):
     pass
 
 
-class KafkaServicePropertyBuilder71(KafkaServicePropertyLegacyBuilder):
-    pass
-
-
-class KafkaServicePropertyBuilder72(KafkaServicePropertyLegacyBuilder):
+class KafkaServicePropertyBaseBuilder72(KafkaServicePropertyBaseBuilder):
     pass

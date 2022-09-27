@@ -289,25 +289,25 @@ class KafkaReplicatorServicePropertyBaseBuilder(AbstractPropertyBuilder):
         return "all", topic_dict
 
 
-class KafkaReplicatorServicePropertyBuilder60(KafkaReplicatorServicePropertyBaseBuilder):
+class KafkaReplicatorServicePropertyBaseBuilder60(KafkaReplicatorServicePropertyBaseBuilder):
     pass
 
 
-class KafkaReplicatorServicePropertyBuilder61(KafkaReplicatorServicePropertyBaseBuilder):
+class KafkaReplicatorServicePropertyBaseBuilder61(KafkaReplicatorServicePropertyBaseBuilder):
     pass
 
 
-class KafkaReplicatorServicePropertyBuilder62(KafkaReplicatorServicePropertyBaseBuilder):
+class KafkaReplicatorServicePropertyBaseBuilder62(KafkaReplicatorServicePropertyBaseBuilder):
     pass
 
 
-class KafkaReplicatorServicePropertyBuilder70(KafkaReplicatorServicePropertyBaseBuilder):
+class KafkaReplicatorServicePropertyBaseBuilder70(KafkaReplicatorServicePropertyBaseBuilder):
     pass
 
 
-class KafkaReplicatorServicePropertyBuilder71(KafkaReplicatorServicePropertyBaseBuilder):
+class KafkaReplicatorServicePropertyBaseBuilder71(KafkaReplicatorServicePropertyBaseBuilder):
     pass
 
 
-class KafkaReplicatorServicePropertyBuilder72(KafkaReplicatorServicePropertyBaseBuilder):
+class KafkaReplicatorServicePropertyBaseBuilder72(KafkaReplicatorServicePropertyBaseBuilder):
     pass

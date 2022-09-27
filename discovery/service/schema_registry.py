@@ -110,20 +110,20 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         ssl_props['ssl_provided_keystore_and_truststore'] = True
         ssl_props['ssl_provided_keystore_and_truststore_remote_src'] = True
 
-        ssl_props["ssl_keystore_filepath"] = service_prop.get("ssl.keystore.location")
+        ssl_props["schema_registry_keystore_path"] = service_prop.get("ssl.keystore.location")
         ssl_props["ssl_keystore_store_password"] = service_prop.get("ssl.keystore.password")
         ssl_props["ssl_keystore_key_password"] = service_prop.get("ssl.key.password")
-        ssl_props["ssl_truststore_filepath"] = service_prop.get("ssl.truststore.location")
+        ssl_props["schema_registry_truststore_path"] = service_prop.get("ssl.truststore.location")
         ssl_props["ssl_truststore_password"] = service_prop.get("ssl.truststore.password")
         ssl_props['ssl_truststore_ca_cert_alias'] = ''
 
         keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                          keystorepass=ssl_props['ssl_keystore_store_password'],
-                                                         keystorepath=ssl_props['ssl_keystore_filepath'],
+                                                         keystorepath=ssl_props['schema_registry_keystore_path'],
                                                          hosts=self.hosts)
         truststore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                            keystorepass=ssl_props['ssl_truststore_password'],
-                                                           keystorepath=ssl_props['ssl_truststore_filepath'],
+                                                           keystorepath=ssl_props['schema_registry_truststore_path'],
                                                            hosts=self.hosts)
         if keystore_aliases:
             # Set the first alias name
@@ -185,25 +185,25 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         return 'all', property_dict
 
 
-class SchemaRegistryServicePropertyBuilder60(SchemaRegistryServicePropertyBaseBuilder):
+class SchemaRegistryServicePropertyBaseBuilder60(SchemaRegistryServicePropertyBaseBuilder):
     pass
 
 
-class SchemaRegistryServicePropertyBuilder61(SchemaRegistryServicePropertyBaseBuilder):
+class SchemaRegistryServicePropertyBaseBuilder61(SchemaRegistryServicePropertyBaseBuilder):
     pass
 
 
-class SchemaRegistryServicePropertyBuilder62(SchemaRegistryServicePropertyBaseBuilder):
+class SchemaRegistryServicePropertyBaseBuilder62(SchemaRegistryServicePropertyBaseBuilder):
     pass
 
 
-class SchemaRegistryServicePropertyBuilder70(SchemaRegistryServicePropertyBaseBuilder):
+class SchemaRegistryServicePropertyBaseBuilder70(SchemaRegistryServicePropertyBaseBuilder):
     pass
 
 
-class SchemaRegistryServicePropertyBuilder71(SchemaRegistryServicePropertyBaseBuilder):
+class SchemaRegistryServicePropertyBaseBuilder71(SchemaRegistryServicePropertyBaseBuilder):
     pass
 
 
-class SchemaRegistryServicePropertyBuilder72(SchemaRegistryServicePropertyBaseBuilder):
+class SchemaRegistryServicePropertyBaseBuilder72(SchemaRegistryServicePropertyBaseBuilder):
     pass

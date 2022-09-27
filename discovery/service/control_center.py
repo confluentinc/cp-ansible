@@ -127,11 +127,11 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_enabled'] = True
         property_dict['ssl_provided_keystore_and_truststore'] = True
         property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
-        property_dict['ssl_truststore_filepath'] = service_prop.get(
+        property_dict['control_center_truststore_path'] = service_prop.get(
             'confluent.controlcenter.rest.ssl.truststore.location')
         property_dict['ssl_truststore_password'] = service_prop.get(
             'confluent.controlcenter.rest.ssl.truststore.password')
-        property_dict['ssl_keystore_filepath'] = service_prop.get('confluent.controlcenter.rest.ssl.keystore.location')
+        property_dict['control_center_keystore_path'] = service_prop.get('confluent.controlcenter.rest.ssl.keystore.location')
         property_dict['ssl_keystore_store_password'] = service_prop.get(
             'confluent.controlcenter.rest.ssl.keystore.password')
         property_dict['ssl_keystore_key_password'] = service_prop.get('confluent.controlcenter.rest.ssl.key.password')
@@ -139,11 +139,11 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                          keystorepass=property_dict['ssl_keystore_store_password'],
-                                                         keystorepath=property_dict['ssl_keystore_filepath'],
+                                                         keystorepath=property_dict['control_center_keystore_path'],
                                                          hosts=self.hosts)
         truststore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                            keystorepass=property_dict['ssl_truststore_password'],
-                                                           keystorepath=property_dict['ssl_truststore_filepath'],
+                                                           keystorepath=property_dict['control_center_truststore_path'],
                                                            hosts=self.hosts)
         if keystore_aliases:
             # Set the first alias name
@@ -194,25 +194,25 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         return 'all', property_dict
 
 
-class ControlCenterServicePropertyBuilder60(ControlCenterServicePropertyBaseBuilder):
+class ControlCenterServicePropertyBaseBuilder60(ControlCenterServicePropertyBaseBuilder):
     pass
 
 
-class ControlCenterServicePropertyBuilder61(ControlCenterServicePropertyBaseBuilder):
+class ControlCenterServicePropertyBaseBuilder61(ControlCenterServicePropertyBaseBuilder):
     pass
 
 
-class ControlCenterServicePropertyBuilder62(ControlCenterServicePropertyBaseBuilder):
+class ControlCenterServicePropertyBaseBuilder62(ControlCenterServicePropertyBaseBuilder):
     pass
 
 
-class ControlCenterServicePropertyBuilder70(ControlCenterServicePropertyBaseBuilder):
+class ControlCenterServicePropertyBaseBuilder70(ControlCenterServicePropertyBaseBuilder):
     pass
 
 
-class ControlCenterServicePropertyBuilder71(ControlCenterServicePropertyBaseBuilder):
+class ControlCenterServicePropertyBaseBuilder71(ControlCenterServicePropertyBaseBuilder):
     pass
 
 
-class ControlCenterServicePropertyBuilder72(ControlCenterServicePropertyBaseBuilder):
+class ControlCenterServicePropertyBaseBuilder72(ControlCenterServicePropertyBaseBuilder):
     pass

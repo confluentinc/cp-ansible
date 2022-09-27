@@ -112,9 +112,9 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
             return "all", {}
 
         property_dict['ssl_enabled'] = True
-        property_dict['ssl_keystore_filepath'] = service_properties.get('ssl.keyStore.location')
+        property_dict['zookeeper_keystore_path'] = service_properties.get('ssl.keyStore.location')
         property_dict['ssl_keystore_store_password'] = service_properties.get('ssl.keyStore.password')
-        property_dict['ssl_truststore_filepath'] = service_properties.get('ssl.trustStore.location')
+        property_dict['zookeeper_truststore_path'] = service_properties.get('ssl.trustStore.location')
         property_dict['ssl_truststore_password'] = service_properties.get('ssl.trustStore.password')
         property_dict['ssl_provided_keystore_and_truststore'] = True
         property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
@@ -122,11 +122,11 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                          keystorepass=property_dict['ssl_keystore_store_password'],
-                                                         keystorepath=property_dict['ssl_keystore_filepath'],
+                                                         keystorepath=property_dict['zookeeper_keystore_path'],
                                                          hosts=self.hosts)
         truststore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                            keystorepass=property_dict['ssl_truststore_password'],
-                                                           keystorepath=property_dict['ssl_truststore_filepath'],
+                                                           keystorepath=property_dict['zookeeper_truststore_path'],
                                                            hosts=self.hosts)
         if keystore_aliases:
             # Set the first alias name
@@ -144,25 +144,25 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         return "all", {}
 
 
-class ZookeeperServicePropertyBuilder60(ZookeeperServicePropertyBaseBuilder):
+class ZookeeperServicePropertyBaseBuilder60(ZookeeperServicePropertyBaseBuilder):
     pass
 
 
-class ZookeeperServicePropertyBuilder61(ZookeeperServicePropertyBaseBuilder):
+class ZookeeperServicePropertyBaseBuilder61(ZookeeperServicePropertyBaseBuilder):
     pass
 
 
-class ZookeeperServicePropertyBuilder62(ZookeeperServicePropertyBaseBuilder):
+class ZookeeperServicePropertyBaseBuilder62(ZookeeperServicePropertyBaseBuilder):
     pass
 
 
-class ZookeeperServicePropertyBuilder70(ZookeeperServicePropertyBaseBuilder):
+class ZookeeperServicePropertyBaseBuilder70(ZookeeperServicePropertyBaseBuilder):
     pass
 
 
-class ZookeeperServicePropertyBuilder71(ZookeeperServicePropertyBaseBuilder):
+class ZookeeperServicePropertyBaseBuilder71(ZookeeperServicePropertyBaseBuilder):
     pass
 
 
-class ZookeeperServicePropertyBuilder72(ZookeeperServicePropertyBaseBuilder):
+class ZookeeperServicePropertyBaseBuilder72(ZookeeperServicePropertyBaseBuilder):
     pass
