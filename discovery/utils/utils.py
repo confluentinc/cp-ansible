@@ -183,6 +183,7 @@ class Arguments:
                             ansible_user=vars.get("ansible_user"),
                             ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
                             ansible_python_interpretor=vars.get("ansible_python_interpretor"),
+                            from_version = vars.get("from_version"),
                             log_level=args.log_level)
 
     @classmethod
@@ -216,7 +217,7 @@ class Arguments:
                 return
 
             for version in versions:
-                if not isinstance(version, int):
+                if not version.isnumeric():
                     logger.error(f"Major, minor and patch versions should be of numbers.")
                     vars["from_version"] = None
 
