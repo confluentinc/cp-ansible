@@ -3730,6 +3730,14 @@ Default:  ppa:openjdk-r/ppa
 
 ***
 
+### add_sid_repo
+
+Boolean to add Sid Repo for JAVA Buster
+
+Default:  false
+
+***
+
 ### jolokia_version
 
 Version of Jolokia Agent Jar to Download
