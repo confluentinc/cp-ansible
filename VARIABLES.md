@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.0.5
+Default:  7.0.6
 
 ***
 
@@ -3991,6 +3991,14 @@ Default:  openjdk-11-jdk
 Deb Repository to use for Java Installation
 
 Default:  ppa:openjdk-r/ppa
+
+***
+
+### add_sid_repo
+
+Boolean to add Sid Repo for JAVA Buster
+
+Default:  false
 
 ***
 
