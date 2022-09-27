@@ -15,7 +15,7 @@ def get_service_builder_class(modules, default_class_name:str, version: str = No
         for name, obj in members:
             if class_name == name:
                 return obj
-        logger.warning(f"Cannot find kafka property builder specific class for version {version}")
+        logger.warning(f"Cannot find {default_class_name} specific class for version {version}")
 
     for name, obj in members:
         if name == default_class_name:
