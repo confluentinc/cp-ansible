@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.1.3
+Default:  7.1.4
 
 ***
 
@@ -604,19 +604,19 @@ Default:  false
 
 ***
 
-### zookeeper_config_prefix
-
-Default Zookeeper config prefix. Note - Only valid to customize when installation_method: archive
-
-Default:  "{{ config_prefix }}/kafka"
-
-***
-
 ### user_login_shell
 
 Variable to set the user login shell for all custom user created per component by cp-ansible.
 
 Default:  /sbin/nologin
+
+***
+
+### zookeeper_config_prefix
+
+Default Zookeeper config prefix. Note - Only valid to customize when installation_method: archive
+
+Default:  "{{ config_prefix }}/kafka"
 
 ***
 
@@ -4231,6 +4231,14 @@ Default:  openjdk-11-jdk
 Deb Repository to use for Java Installation
 
 Default:  ppa:openjdk-r/ppa
+
+***
+
+### add_sid_repo
+
+Boolean to add Sid Repo for JAVA Buster
+
+Default:  false
 
 ***
 
