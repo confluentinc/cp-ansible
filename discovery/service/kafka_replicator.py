@@ -7,16 +7,19 @@ from discovery.utils.utils import InputContext, Logger, FileUtils
 
 logger = Logger.get_logger()
 
+class_name = ""
 
 class KafkaReplicatorServicePropertyBuilder:
 
     @staticmethod
     def build_properties(input_context: InputContext, inventory: CPInventoryManager):
         from discovery.service import get_service_builder_class
-        obj = get_service_builder_class(modules=sys.modules[__name__],
+        builder_class = get_service_builder_class(modules=sys.modules[__name__],
                                         default_class_name="KafkaReplicatorServicePropertyBaseBuilder",
                                         version=input_context.from_version)
-        obj(input_context, inventory).build_properties()
+        global class_name
+        class_name = builder_class
+        builder_class(input_context, inventory).build_properties()
 
 
 class KafkaReplicatorServicePropertyBaseBuilder(AbstractPropertyBuilder):
@@ -66,9 +69,9 @@ class KafkaReplicatorServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.update_inventory(self.inventory, response)
 
     def __build_service_properties(self, service_properties):
-        for key, value in vars(KafkaReplicatorServicePropertyBaseBuilder).items():
-            if callable(getattr(KafkaReplicatorServicePropertyBaseBuilder, key)) and key.startswith("_build"):
-                func = getattr(KafkaReplicatorServicePropertyBaseBuilder, key)
+        for key, value in vars(class_name).items():
+            if callable(getattr(class_name, key)) and key.startswith("_build"):
+                func = getattr(class_name, key)
                 logger.info(f"Calling KafkaReplicator property builder.. {func.__name__}")
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
