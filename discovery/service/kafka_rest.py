@@ -193,6 +193,10 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
             property_dict['kafka_rest_ldap_password'] = metadata_user_info.split(':')[1]
         return 'all', property_dict
 
+    def _build_telemetry_properties(self, service_prop: dict) -> tuple:
+        property_dict = self.build_telemetry_properties(service_prop)
+        return 'kafka_rest', property_dict
+
 
 class KafkaRestServicePropertyBaseBuilder60(KafkaRestServicePropertyBaseBuilder):
     pass

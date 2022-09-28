@@ -187,6 +187,10 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
             property_dict['schema_registry_ldap_password'] = metadata_user_info.split(':')[1]
         return 'all', property_dict
 
+    def _build_telemetry_properties(self, service_prop: dict) -> tuple:
+        property_dict = self.build_telemetry_properties(service_prop)
+        return 'schema_registry', property_dict
+
 
 class SchemaRegistryServicePropertyBaseBuilder60(SchemaRegistryServicePropertyBaseBuilder):
     pass
