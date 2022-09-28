@@ -364,9 +364,14 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
             return 'all', {
                 'secrets_protection_enabled': True,
                 'secrets_protection_masterkey': master_key
+                # regenerate_masterkey
             }
         else:
             return 'all', {}
+
+    def _build_telemetry_properties(self, service_prop: dict) -> tuple:
+        property_dict = self.build_telemetry_properties(service_prop)
+        return 'kafka_broker', property_dict
 
 
 class KafkaServicePropertyBaseBuilder60(KafkaServicePropertyBaseBuilder):

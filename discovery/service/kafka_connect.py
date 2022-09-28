@@ -221,6 +221,10 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key3)
         return 'all', property_dict
 
+    def _build_telemetry_properties(self, service_prop: dict) -> tuple:
+        property_dict = self.build_telemetry_properties(service_prop)
+        return 'kafka_connect', property_dict
+
 
 class KafkaConnectServicePropertyBaseBuilder60(KafkaConnectServicePropertyBaseBuilder):
     pass

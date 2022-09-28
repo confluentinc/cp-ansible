@@ -139,6 +139,20 @@ class AbstractPropertyBuilder(ABC):
             return []
 
     @staticmethod
+    def build_telemetry_properties(service_prop: dict) -> dict:
+        property_dict = dict()
+        key = 'confluent.telemetry.enabled'
+        if service_prop.get(key) is not None and service_prop.get(key) == 'true':
+            property_dict['telemetry_enabled'] = True
+            property_dict['telemetry_api_key'] = service_prop.get('confluent.telemetry.api.key')
+            property_dict['telemetry_api_secret'] = service_prop.get('confluent.telemetry.api.secret')
+            if service_prop.get('confluent.telemetry.proxy.url') is not None:
+                property_dict['telemetry_proxy_url'] = service_prop.get('confluent.telemetry.proxy.url')
+                property_dict['telemetry_proxy_username'] = service_prop.get('confluent.telemetry.proxy.username')
+                property_dict['telemetry_proxy_password'] = service_prop.get('confluent.telemetry.proxy.password')
+        return property_dict
+
+    @staticmethod
     def parse_environment_details(env_command: str) -> dict:
         env_details = dict()
         for token in env_command.split():

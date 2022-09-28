@@ -210,6 +210,10 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         rocksdb_path = self.get_rocksdb_path(self.input_context, self.service, self.hosts)
         return 'ksql', {"ksql_rocksdb_path": rocksdb_path}
 
+    def _build_telemetry_properties(self, service_prop: dict) -> tuple:
+        property_dict = self.build_telemetry_properties(service_prop)
+        return 'ksql', property_dict
+
 
 class KsqlServicePropertyBaseBuilder60(KsqlServicePropertyBaseBuilder):
     pass
