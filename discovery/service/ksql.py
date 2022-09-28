@@ -206,6 +206,10 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
             property_dict['ksql_ldap_password'] = metadata_user_info.split(':')[1]
         return 'all', property_dict
 
+    def _build_rocksdb_path(self, service_prop: dict) -> tuple:
+        rocksdb_path = self.get_rocksdb_path(self.input_context, self.service, self.hosts)
+        return 'ksql', {"ksql_rocksdb_path": rocksdb_path}
+
 
 class KsqlServicePropertyBaseBuilder60(KsqlServicePropertyBaseBuilder):
     pass

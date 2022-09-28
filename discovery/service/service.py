@@ -36,6 +36,11 @@ class AbstractPropertyBuilder(ABC):
         return env_details.get("CONFLUENT_SECURITY_MASTER_KEY", None)
 
     @staticmethod
+    def get_rocksdb_path(input_context: InputContext, service: ConfluentServices, hosts: list):
+        env_details = AbstractPropertyBuilder._get_env_details(input_context, service, hosts)
+        return env_details.get("ROCKSDB_SHAREDLIB_DIR", "")
+
+    @staticmethod
     def get_jvm_arguments(input_context: InputContext, service: ConfluentServices, hosts: list):
         # Build Java runtime overrides
         env_details = AbstractPropertyBuilder._get_env_details(input_context, service, hosts)

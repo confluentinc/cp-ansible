@@ -196,6 +196,10 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
             property_dict['control_center_ldap_password'] = metadata_user_info.split(':')[1]
         return 'all', property_dict
 
+    def _build_rocksdb_path(self, service_prop: dict) -> tuple:
+        rocksdb_path = self.get_rocksdb_path(self.input_context, self.service, self.hosts)
+        return 'control_center', {"control_center_rocksdb_path": rocksdb_path}
+
 
 class ControlCenterServicePropertyBaseBuilder60(ControlCenterServicePropertyBaseBuilder):
     pass
