@@ -4,6 +4,48 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.2.2
+======
+* e95187504 Rename group index
+* 77606eacf Resolve index in Assert SSL key hash matches SSL cert hash
+* 0931bab28 Resolve zookeeper_ssl failure
+* 5186ccfe2 Resolve SSL Key test failure
+* 44757230f Fix Zookeeper ssl Test failure on 7.2.x
+* e97adaa77 fix ansible version compare
+* 7b2574205 Fix pint merge issue of double when
+* ed7723ed9 Remove all occurence of create_certs
+* fbe0c84d0 Make ansi-takeover work for 6x
+* fb3610297 Prevent pem file copy when not req
+* 766e79ffc Remove all occurence of copy_certs
+* 4290d68ab Remove all occurence of create_certs
+* b9bb78f0f Make ansi-takeover work for 6x
+* 6b7b482c3 support replicator for takeover
+* 21c2ae013 Update ansible version check
+* 08678ce52 Skip restart message based on restart var
+* e670dc111 Fix release version for archive-scram-rhel
+* c770f8dc6 Add Sid Repo variable for Debain 1
+* 1fec0f5d3 remove trailing space
+* d291750d0 Allow creation of keystore and truststore with custom password when using custom or self-signed certs
+* 02460ef9d Separate trustore/keystore creation with custom certificates by service when running multiple services in the same host, in particular for multiple connect workers in the same host
+* d60859d0d Fixed Kafka Connect children registration with MDS
+* d9cc8dfd6 Remove all instances of community.general
+* 42731bf5a fix test when entry undefined
+* 5dbd3b94a Check Internet Access thru proxy if any
+* ce8d47286 accept ssl key file in ansible-vault format
+* 4b4056471 Fix typo kakfa to kafka
+* add023f14 Resolve rbac-mtls-rhel Test Failure
+* c51705d5c zookeeper_skip_restart prints message -> restarting zokeeper<-
+* 905564842 Single Dev Node with Notes
+* 71fc26ee4 Resolve mtls-java11-rhel Test Failure
+* 8f9881796 Resolve mtls-java11-ubuntu Test Failure
+* 58f201950 Remove Deprecated Properties from Kafka Broker
+* 5cfb910bb mention docker version requirement
+* 4a5699f04 Extract DNAME from BCFKS keystore
+* ffaf38bce Remove duplicate var definition
+* e229ea7d2 Document user_login_shell
+* 5203d5b98 Define user login shell for all components user
+* 4d7344880 Improve decryption logic
+
 
 v7.2.1
 ======
