@@ -4,6 +4,24 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.2.2
+======
+
+Notable enhancements
+-------------
+
+ - Improved validation of certificates, accepts ssl key file in ansible-vault format
+ - Optimise the process of copying mds pem file to host nodes, and other security improvements.
+ - Minor code cleanup and refactoring.
+ - Making Java SID Repo as optional.
+ - Isolate truststore, keystore ceration when multiple kafka connect services run on same host.
+ - Allow creation of keystore and truststore with custom password when using custom or self-signed certs
+ - Imporved Validations, Internet access check now considers whether proxy is set or not.
+ - Fix typo kakfa to kafka
+ - New Sample inventory with single node.
+ - Cleanup Kafka Broker Custom properties
+ - Enhanced RBAC support with FIPS
+
 
 v7.2.1
 ======
