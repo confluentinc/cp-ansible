@@ -53,6 +53,7 @@
   tags:
     - validate
     - validate_internet_access
+  environment: "{ {% if 'http_proxy' in proxy_env %} 'http_proxy': '{{ proxy_env.http_proxy }}', 'https_proxy': '{{ proxy_env.http_proxy }}' {% endif %} }"
 
 - name: Fail Provisioning because No Network Connectivity
   fail:
@@ -90,33 +91,80 @@
     - validate
     - validate_disk_usage
 
-- name: Retrieve SSL key hash
-  shell: openssl rsa -noout -modulus -in {{ ssl_key_filepath }} | openssl md5
+- name: Install OpenSSL
+  yum:
+    name:
+      - openssl
+    state: present
+  when: ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+
+- name: Retrieve SSL key hash on Local Host
+  shell:
+    cmd: openssl rsa -noout -modulus | openssl md5
+    stdin: "{{ lookup('file', ssl_key_filepath) }}"
   register: key_hash
   delegate_to: localhost
   changed_when: false
-  when: ssl_custom_certs|bool
+  when:
+    - ssl_custom_certs|bool and not ssl_custom_certs_remote_src|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
   tags:
     - validate
     - validate_ssl_keys_certs
+  loop: "{{group_names}}"
 
-- name: Retrieve SSL cert hash
-  shell: openssl x509 -noout -modulus -in {{ ssl_signed_cert_filepath }} | openssl md5
+- name: Retrieve SSL key hash on Remote Host
+  shell: openssl rsa -noout -modulus -in {{ ssl_key_filepath }} | openssl md5
+  register: key_hash
+  changed_when: false
+  when:
+    - ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
+  tags:
+    - validate
+    - validate_ssl_keys_certs
+  loop: "{{group_names}}"
+
+- name: Retrieve SSL cert hash on Local Host
+  shell:
+    cmd: openssl x509 -noout -modulus | openssl md5
+    stdin: "{{ lookup('file', ssl_signed_cert_filepath) }}"
   register: cert_hash
   delegate_to: localhost
   changed_when: false
-  when: ssl_custom_certs|bool
+  when:
+    - ssl_custom_certs|bool and not ssl_custom_certs_remote_src|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
   tags:
     - validate
     - validate_ssl_keys_certs
+  loop: "{{group_names}}"
+
+- name: Retrieve SSL cert hash on Remote Host
+  shell:  openssl x509 -noout -modulus -in {{ ssl_signed_cert_filepath }} | openssl md5
+  register: cert_hash
+  changed_when: false
+  when:
+    - ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
+  tags:
+    - validate
+    - validate_ssl_keys_certs
+  loop: "{{group_names}}"
+
+- name: debug
+  debug:
+    msg: "{{key_hash}}"
 
 - name: Assert SSL key hash matches SSL cert hash
   assert:
-    that: key_hash['results'][group_idx].stdout == cert_hash['results'][group_idx].stdout
+    that: key_hash['results'][group_idx].stdout == cert_hash['results'][group_idx].stdout and not key_hash['results'][group_idx].stderr|length > 0
     fail_msg: >-
       "The MD5 value of the custom ssl key does not match the MD5 value of the custom certificate, indicating that the keys do no match
       and are incompatible.  Please review your keys and certs and confirm they are from the same source."
-  when: ssl_custom_certs|bool
+  when:
+    - ssl_custom_certs|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
   tags:
     - validate
     - validate_ssl_keys_certs
