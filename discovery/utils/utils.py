@@ -96,10 +96,10 @@ class InputContext:
     ansible_become_method = 'sudo'
     ansible_ssh_private_key_file = None
     ansible_ssh_extra_args = None
-    ansible_python_interpreter = None
+    ansible_python_interpreter = 'auto'
     output_file = None
     from_version = None
-    log_level = 0
+    verbosity = 0
 
     def __init__(self,
                  ansible_hosts,
@@ -109,11 +109,12 @@ class InputContext:
                  ansible_become_user,
                  ansible_become_method,
                  ansible_ssh_private_key_file,
-                 log_level,
+                 verbosity,
                  ansible_ssh_extra_args,
                  ansible_python_interpretor=None,
                  from_version=None,
                  output_file=None):
+
         self.ansible_hosts = ansible_hosts
         self.ansible_connection = ansible_connection
         self.ansible_user = ansible_user
@@ -124,7 +125,7 @@ class InputContext:
         self.from_version = from_version
         self.ansible_ssh_extra_args = ansible_ssh_extra_args
         self.ansible_python_interpreter = ansible_python_interpretor
-        self.log_level = log_level
+        self.verbosity = verbosity
         self.output_file = output_file
 
 
@@ -137,14 +138,10 @@ class Arguments:
         parser = argparse.ArgumentParser()
 
         # Adding optional argument
-        '''
-        connection='docker', module_path=[], forks=10, become=None,
-        become_method=None, become_user=null, check=False, diff=False, log_level=0
-        '''
         parser.add_argument("--input", type=str, help="Input Inventory file")
         parser.add_argument("--hosts", type=str, action="extend", nargs="*", help="List of hosts")
-        parser.add_argument("--log_level", type=int, default=2,
-                            help="Log level. CRITICAL(5) ERROR(4) WARNING(3) INFO(2) DEBUG(1) NOTSET(0)")
+        parser.add_argument("--from_version", type=str, help="Target cp cluster version")
+        parser.add_argument("--verbosity", type=int, default=0, help="Log level")
         parser.add_argument("--ansible_connection", type=str, default=None,
                             help="The connection plugin actually used for the task on the target host.")
 
@@ -155,7 +152,7 @@ class Arguments:
                             help="The user Ansible ‘becomes’ after using privilege escalation.")
         parser.add_argument("--ansible_ssh_private_key_file", type=str, default=None, help="Private key for ssh login")
         parser.add_argument("--ansible_ssh_extra_args", type=str, default=None, help="Extra arguments for ssh")
-        parser.add_argument("--ansible_python_interpreter", type=str, default=None, help="Python interpreter path")
+        parser.add_argument("--ansible_python_interpreter", type=str, default='auto', help="Python interpreter path")
 
         # Read arguments from command line
         return parser.parse_args()
@@ -163,9 +160,9 @@ class Arguments:
     @classmethod
     def validate_args(cls, args):
 
-        # Set the default log_level to INFO level
-        log_level = args.log_level if args.log_level > 0 and args.log_level < 6 else 4
-        logger.setLevel(log_level * 10)
+        # Set the default verbosity to INFO level
+        verbosity = args.verbosity if args.verbosity >= 0 and args.verbosity <= 4 else 4
+        logger.setLevel((5 - verbosity) * 10)
 
         cls.__validate_hosts(cls.get_hosts(args))
         cls.__validate_variables(cls.get_vars(args))
@@ -183,8 +180,8 @@ class Arguments:
                             ansible_user=vars.get("ansible_user"),
                             ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
                             ansible_python_interpretor=vars.get("ansible_python_interpretor"),
-                            from_version = vars.get("from_version"),
-                            log_level=args.log_level)
+                            verbosity=args.verbosity,
+                            from_version=vars.get("from_version"))
 
     @classmethod
     def __validate_hosts(cls, hosts):
@@ -217,7 +214,7 @@ class Arguments:
                 return
 
             for version in versions:
-                if not version.isnumeric():
+                if not isinstance(version, int):
                     logger.error(f"Major, minor and patch versions should be of numbers.")
                     vars["from_version"] = None
 
@@ -267,6 +264,9 @@ class Arguments:
 
         if args.ansible_ssh_extra_args:
             vars['ansible_ssh_extra_args'] = args.ansible_ssh_extra_args
+
+        if args.from_version:
+            vars['from_version'] = args.from_version
 
         return vars
 
@@ -320,7 +320,7 @@ class PythonAPIUtils:
         # since the API is constructed for CLI it expects certain options to always be set in the context object
         context.CLIARGS = ImmutableDict(connection=input_context.ansible_connection, module_path=[], diff=False,
                                         become=input_context.ansible_become, remote_user=input_context.ansible_user,
-                                        log_level=input_context.log_level, host_key_checking=False,
+                                        verbosity=input_context.verbosity, host_key_checking=False,
                                         become_user=input_context.ansible_become_user,
                                         private_key_file=input_context.ansible_ssh_private_key_file,
                                         ssh_extra_args=input_context.ansible_ssh_extra_args, forks=10, check=False,
