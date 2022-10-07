@@ -12,7 +12,8 @@ def build_system_properties(input_context: InputContext, inventory: CPInventoryM
     system_property_builder. \
         with_service_host_mappings(). \
         with_ansible_variables(). \
-        with_installation_method()
+        with_installation_method(). \
+        with_archive_properties()
 
 
 def build_service_properties(input_context: InputContext, inventory: CPInventoryManager):
