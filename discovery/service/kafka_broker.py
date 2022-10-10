@@ -8,6 +8,7 @@ from discovery.utils.utils import InputContext, Logger, FileUtils
 logger = Logger.get_logger()
 
 class_name = ""
+gl_host_service_properties = ""
 
 class KafkaServicePropertyBuilder:
 
@@ -43,6 +44,8 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
             return
 
         host_service_properties = self.get_property_mappings(self.input_context, self.service, hosts)
+        global gl_host_service_properties 
+        gl_host_service_properties = host_service_properties
         service_properties = host_service_properties.get(hosts[0]).get(DEFAULT_KEY)
         service_facts = AbstractPropertyBuilder.get_service_facts(self.input_context, self.service, hosts)
 
@@ -225,19 +228,21 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
             property_dict['ssl_keystore_key_password'] = service_properties.get(
                 'confluent.ssl.key.password')
 
-        keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
-                                                         keystorepass=property_dict['ssl_keystore_store_password'],
-                                                         keystorepath=property_dict['kafka_broker_pkcs12_keystore_path'],
-                                                         hosts=self.hosts)
-        truststore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
+        if 'kafka_broker_pkcs12_keystore_path' in property_dict:
+            keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
+                                                            keystorepass=property_dict['ssl_keystore_store_password'],
+                                                            keystorepath=property_dict['kafka_broker_pkcs12_keystore_path'],
+                                                            hosts=self.hosts)
+            if keystore_aliases:
+                # Set the first alias name
+                property_dict["ssl_keystore_alias"] = keystore_aliases[0]
+        if 'kafka_broker_pkcs12_truststore_path' in property_dict:
+            truststore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                            keystorepass=property_dict['ssl_truststore_password'],
                                                            keystorepath=property_dict['kafka_broker_pkcs12_truststore_path'],
                                                            hosts=self.hosts)
-        if keystore_aliases:
-            # Set the first alias name
-            property_dict["ssl_keystore_alias"] = keystore_aliases[0]
-        if truststore_aliases:
-            property_dict["ssl_truststore_ca_cert_alias"] = truststore_aliases[0]
+            if truststore_aliases:
+                property_dict["ssl_truststore_ca_cert_alias"] = truststore_aliases[0]
 
         return "kafka_broker", property_dict
 
@@ -363,8 +368,8 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if master_key:
             return 'all', {
                 'secrets_protection_enabled': True,
-                'secrets_protection_masterkey': master_key
-                # regenerate_masterkey
+                'secrets_protection_masterkey': master_key,
+                'regenerate_masterkey': False
             }
         else:
             return 'all', {}
@@ -372,6 +377,20 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_telemetry_properties(self, service_prop: dict) -> tuple:
         property_dict = self.build_telemetry_properties(service_prop)
         return 'kafka_broker', property_dict
+
+    def _build_audit_log_properties(self, service_prop:dict) -> tuple:
+        global gl_host_service_properties
+        key = "confluent.security.event.logger.exporter.kafka.bootstrap.servers"
+        self.mapped_service_properties.add(key)
+        for hostname, properties in gl_host_service_properties.items():
+            default_properties = properties.get(DEFAULT_KEY)
+            if key in default_properties:
+                host = self.inventory.get_host(hostname)
+                host.set_variable('audit_logs_destination_enabled', True)
+                host.set_variable('audit_logs_destination_bootstrap_servers', default_properties.get(key))
+                cluster_name, principal_name  = self.get_audit_log_properties(input_context=self.input_context, hosts=hostname, mds_user='mds', mds_password='password')
+                host.set_variable('audit_logs_destination_kafka_cluster_name', cluster_name)
+                host.set_variable('audit_logs_destination_principal', principal_name)
 
 
 class KafkaServicePropertyBaseBuilder60(KafkaServicePropertyBaseBuilder):
