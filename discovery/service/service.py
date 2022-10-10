@@ -2,6 +2,8 @@ import abc
 import base64
 import re
 from abc import ABC
+import string
+import json
 
 from discovery.system.system import SystemPropertyManager
 from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
@@ -137,6 +139,66 @@ class AbstractPropertyBuilder(ABC):
             return aliases
         else:
             return []
+
+    @staticmethod
+    def get_audit_log_properties(input_context: InputContext, hosts: string, mds_user: str, mds_password: str) -> str:
+        # returns list of all clusters in the registry
+        play1 = dict(
+            name="Get list of clusters",
+            hosts=hosts,
+            gather_facts='no',
+            tasks=[
+                dict(action=dict(module='shell',
+                                 args=f"curl -ku '{mds_user}:{mds_password}' "
+                                      f"https://localhost:8090/security/1.0/registry/clusters"))
+            ]
+        )
+
+        response = PythonAPIUtils.execute_play(input_context, play1)
+        if len(response)==0:
+            return "", ""
+        cluster_list = ""
+        if response[hosts]._result['rc'] == 0:
+            cluster_list = response[hosts]._result['stdout']
+        if cluster_list == "":
+            return "", ""
+        try:
+            res = json.loads(cluster_list)
+        except:
+            res = ""
+
+        for cluster in res:
+            cluster_name = cluster['clusterName']
+            payload = f'{{"clusterName":"{cluster_name}"}}'
+            # Look up the Principals who have the given role ResourceOwner on the specified resource (Topic:confluent-audit-log-events) for the given cluster.
+            play2 = dict(
+                name="Check rolebinding to get principal name",
+                hosts=hosts,
+                gather_facts='no',
+                tasks=[
+                    dict(action=dict(module='shell',
+                                    args=f"curl -ku '{mds_user}:{mds_password}' "
+                                        f"https://localhost:8090/security/1.0/lookup/role/ResourceOwner/resource/Topic/name/confluent-audit-log-events "
+                                        f"-H 'Content-Type: application/json' "
+                                        f"-d '{payload}'"))
+                ]
+            )
+            response2 = PythonAPIUtils.execute_play(input_context, play2)
+            if len(response2)==0:
+                continue
+            if response2[hosts]._result['rc'] == 0:
+                stdout = response2[hosts]._result['stdout']
+                try:
+                    role = json.loads(stdout)
+                except:
+                    role = []
+                if len(role) == 0:
+                    continue
+                principal_name = role[0].split(";")[0].split("User:")[1]
+                # If a principal exists for this cluster, this is the destination kafka cluster for audit logs
+                return cluster, principal_name
+
+        return "", ""
 
     @staticmethod
     def build_telemetry_properties(service_prop: dict) -> dict:
