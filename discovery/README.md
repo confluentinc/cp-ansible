@@ -38,9 +38,9 @@ all:
     - ec2-54-191-208-245.us-west-2.compute.amazonaws.com
     - ec2-35-164-166-99.us-west-2.compute.amazonaws.com
 ```
-#### Sample output file (inventory.yml)
 
 #### Command Line options
+To get the verbose output from script and Ansible you can set the verbosity level between 0 to 4. Where 4 means more verbose.  
 We can override all input parameters from command line as well.
 ```shell
 python discovery/main.py --input discovery/hosts.yml --ansible_user some_user --ansible_connection docker 

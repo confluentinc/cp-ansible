@@ -5,6 +5,7 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 import json
+import re
 
 from discovery.utils.constants import ConfluentServices
 from discovery.utils.inventory import CPInventoryManager
@@ -46,11 +47,30 @@ class SystemPropertyBuilder:
         return self
 
     def with_installation_method(self):
-        mappings = SystemPropertyManager.get_package_facts(self.input_context, self.input_context.ansible_hosts[0])
-        installation_method = 'package' if mappings else 'archive'
+        host = self.input_context.ansible_hosts[0]
+        mappings = SystemPropertyManager.get_package_facts(self.input_context, host)
+        installation_method = 'package' if mappings.get(host, None) else 'archive'
         self.inventory.set_variable('all', 'installation_method', installation_method)
 
         return self
+
+    def with_archive_properties(self):
+        if self.inventory.groups.get('all').vars.get('installation_method') != 'archive':
+            return
+
+        service_facts = SystemPropertyManager.get_service_facts(self.input_context)
+        if not service_facts:
+            logger.error(f"Cannot find any CP service up and running. Cannot proceed for archive property details")
+            return
+
+        host = service_facts.get(ConfluentServices.KAFKA_BROKER.name)[0]
+        service_details = SystemPropertyManager.get_service_details(self.input_context, ConfluentServices.KAFKA_BROKER, [host])
+        exec_start = service_details.get(host).get('status', {}).get('ExecStart', '')
+        pattern = '.*path=(.*?)[\w\-\d\.]*\/bin'
+        match = re.search(pattern, exec_start)
+
+        if match:
+            self.inventory.set_variable('all', 'archive_destination_path', match[1].rstrip("/"))
 
 
 class SystemPropertyManager:
@@ -104,7 +124,7 @@ class SystemPropertyManager:
 
         hosts = hosts if hosts is not None else input_context.ansible_hosts
         play = dict(
-            name="Ansible Play",
+            name="Get service details",
             hosts=hosts,
             gather_facts='no',
             tasks=[
@@ -145,7 +165,7 @@ class SystemPropertyManager:
 
         hosts = hosts if hosts is not None else input_context.ansible_hosts
         play = dict(
-            name="Ansible Play",
+            name="Get host package facts",
             hosts=hosts,
             gather_facts='yes',
             tasks=[
