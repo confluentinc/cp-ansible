@@ -28,6 +28,14 @@ Default:  true
 
 ***
 
+### fetch_logs_path
+
+Path on component to store logs collected during fetch_logs playbook
+
+Default: /tmp
+
+***
+
 ### jolokia_url_remote
 
 To copy from Ansible control host or download
