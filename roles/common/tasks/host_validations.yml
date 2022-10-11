@@ -102,11 +102,23 @@
   shell:
     cmd: openssl rsa -noout -modulus | openssl md5
     stdin: "{{ lookup('file', ssl_key_filepath) }}"
-  register: key_hash
+  register: key_hash_local
   delegate_to: localhost
   changed_when: false
   when:
     - ssl_custom_certs|bool and not ssl_custom_certs_remote_src|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
+  tags:
+    - validate
+    - validate_ssl_keys_certs
+  loop: "{{group_names}}"
+
+- name: Register content of key file
+  slurp:
+    src: "{{ ssl_key_filepath }}"
+  register: remote_key
+  when:
+    - ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
     - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
   tags:
     - validate
@@ -114,8 +126,10 @@
   loop: "{{group_names}}"
 
 - name: Retrieve SSL key hash on Remote Host
-  shell: openssl rsa -noout -modulus -in {{ ssl_key_filepath }} | openssl md5
-  register: key_hash
+  shell:
+    cmd: openssl rsa -noout -modulus | openssl md5
+    stdin: "{{ remote_key['results'][group_idx].content | b64decode }}"
+  register: key_hash_remote
   changed_when: false
   when:
     - ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
@@ -124,12 +138,14 @@
     - validate
     - validate_ssl_keys_certs
   loop: "{{group_names}}"
+  loop_control:
+    index_var: group_idx
 
 - name: Retrieve SSL cert hash on Local Host
   shell:
     cmd: openssl x509 -noout -modulus | openssl md5
     stdin: "{{ lookup('file', ssl_signed_cert_filepath) }}"
-  register: cert_hash
+  register: cert_hash_local
   delegate_to: localhost
   changed_when: false
   when:
@@ -140,10 +156,10 @@
     - validate_ssl_keys_certs
   loop: "{{group_names}}"
 
-- name: Retrieve SSL cert hash on Remote Host
-  shell:  openssl x509 -noout -modulus -in {{ ssl_signed_cert_filepath }} | openssl md5
-  register: cert_hash
-  changed_when: false
+- name: Register content of cert file
+  slurp:
+    src: "{{ ssl_signed_cert_filepath }}"
+  register: remote_cert
   when:
     - ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
     - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
@@ -152,9 +168,29 @@
     - validate_ssl_keys_certs
   loop: "{{group_names}}"
 
-- name: debug
-  debug:
-    msg: "{{key_hash}}"
+- name: Retrieve SSL cert hash on Remote Host
+  shell:
+    cmd: openssl x509 -noout -modulus | openssl md5
+    stdin: "{{ remote_cert['results'][group_idx].content | b64decode }}"
+  register: cert_hash_remote
+  changed_when: false
+  when:
+    - ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
+  tags:
+    - validate
+    - validate_ssl_keys_certs
+  loop: "{{group_names}}"
+  loop_control:
+    index_var: group_idx
+
+- name: get key hash
+  set_fact:
+    key_hash: "{{key_hash_remote if ssl_custom_certs_remote_src|bool else key_hash_local}}"
+
+- name: get cert hash
+  set_fact:
+    cert_hash: "{{cert_hash_remote if ssl_custom_certs_remote_src|bool else cert_hash_local}}"
 
 - name: Assert SSL key hash matches SSL cert hash
   assert:
