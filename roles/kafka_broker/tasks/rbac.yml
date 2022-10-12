@@ -21,13 +21,22 @@
 # Take super.users property, split into list, remove empty string from list, and add in mds_super_user
 - name: Initialize Super Users List
   set_fact:
-    super_users: "{{ (kafka_broker_final_properties['super.users'] | default('')).split(';') | difference(['']) }} + [ 'User:{{ mds_super_user }}' ]"
+    super_users: "{{ (kafka_broker_final_properties['super.users'] | default('')).split(';') | difference(['']) }}"
+    mds_super_users: [ "User:{{ mds_super_user }}" ]
 
 # Loop over each brokers principal and add to list
 - name: Add Each Broker's Principal to Super Users List
   set_fact:
-    super_users: "{{super_users}}  + [ '{{ hostvars[item]['kafka_broker_principal'] }}' ]"
-  loop: "{{ groups['kafka_broker'] }}"
+    broker_principals: |-
+      [
+      {% for host in groups.kafka_broker %}
+        "{{ hostvars[host]['kafka_broker_principal'] }}",
+      {% endfor %}
+      ]
+
+- name: Combine and form super users list
+  set_fact:
+    super_users: "{{ super_users + mds_super_users + broker_principals }}"
 
 - name: Remove Duplicates and Convert to String
   set_fact:
