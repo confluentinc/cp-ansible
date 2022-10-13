@@ -46,8 +46,11 @@ class AbstractPropertyBuilder(ABC):
     def get_jvm_arguments(input_context: InputContext, service: ConfluentServices, hosts: list):
         # Build Java runtime overrides
         env_details = AbstractPropertyBuilder._get_env_details(input_context, service, hosts)
-        heap_ops = env_details.get('KAFKA_HEAP_OPTS', None)
-        kafka_ops= env_details.get('KAFKA_OPTS', None)
+        heap_ops = env_details.get('KAFKA_HEAP_OPTS', '')
+        kafka_ops= env_details.get('KAFKA_OPTS', '')
+        # Remove java agent configurations. These will be populated by other configs.
+        kafka_ops = re.sub('-javaagent.*?( |$)', '', kafka_ops).strip()
+
         jvm_str = ""
         if heap_ops:
             jvm_str = f"{jvm_str} {heap_ops}"
@@ -217,16 +220,12 @@ class AbstractPropertyBuilder(ABC):
     @staticmethod
     def parse_environment_details(env_command: str) -> dict:
         env_details = dict()
-        for token in env_command.split():
-            # special condition for java runtime arguments
-            if token == '[unprintable]':
-                continue
-            if not '=' in token and token.startswith('-X'):
-                env_details['KAFKA_HEAP_OPTS'] = f"{env_details.get('KAFKA_HEAP_OPTS', '')} {token}"
-            else:
-                key, value = token.split('=', 1)
-                env_details[key] = value
-
+        tokens = ['KAFKA_HEAP_OPTS', 'KAFKA_OPTS', 'KAFKA_LOG4J_OPTS', 'LOG_DIR']
+        for token in tokens:
+            pattern = f"{token}=(.*?) ([A-Z]{{3}}|$)"
+            match = re.search(pattern, env_command)
+            if match:
+                env_details[token] = match.group(1).rstrip()
         return env_details
 
     @staticmethod
@@ -257,7 +256,7 @@ class AbstractPropertyBuilder(ABC):
         description = service_facts.get("Description", None)
 
         service_group = service.value.get("group")
-        return 'all', {
+        return service_group, {
             f"{service_group}_user": str(user),
             f"{service_group}_group": str(group),
             f"{service_group}_log_dir": str(env_details.get("LOG_DIR", None))
@@ -323,6 +322,25 @@ class AbstractPropertyBuilder(ABC):
                 user_dict[key] = value
         return user_dict
 
+
+    @staticmethod
+    def get_monitoring_details(input_context, service, hosts, key)->dict:
+        monitoring_props = dict()
+        env_details = AbstractPropertyBuilder._get_env_details(input_context, service, hosts)
+        ops_str= env_details.get(key, '')
+
+        if 'jolokia.jar' in ops_str:
+            monitoring_props['jolokia_enabled'] = True
+            # jolokia properies will be managed by cp-ansible plays
+
+        if 'jmx_prometheus_javaagent.jar' in ops_str:
+            monitoring_props['jmxexporter_enabled'] = True
+            pattern = f"jmx_prometheus_javaagent.jar=([0-9]+):"
+            match = re.search(pattern, ops_str)
+            if match:
+                monitoring_props['jmxexporter_port'] = int(match.group(1))
+
+        return monitoring_props
 
 class ServicePropertyBuilder:
     inventory = None
