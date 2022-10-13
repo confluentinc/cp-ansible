@@ -258,7 +258,11 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_fips_properties(self, service_properties: dict) -> tuple:
         key = 'enable.fips'
         self.mapped_service_properties.add(key)
-        return "all", {'fips_enabled': bool(service_properties.get(key, False))}
+        property_dict = dict()
+        property_dict['fips_enabled'] = bool(service_properties.get(key, False))
+        property_dict['kafka_broker_bcfks_keystore_path'] = service_properties.get('ssl.keystore.location')
+        property_dict['kafka_broker_bcfks_truststore_path'] = service_properties.get('ssl.truststore.location')
+        return "all", property_dict
 
     def _build_custom_listeners(self, service_prop: dict) -> tuple:
         custom_listeners = dict()
@@ -327,6 +331,15 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         super_user_property = service_prop.get(key2)
         property_dict['create_mds_certs'] = False
         property_dict['mds_super_user'] = super_user_property.split(";")[0].split('User:', 1)[1]
+        ldap_principal = service_prop.get('ldap.java.naming.security.principal', None)
+        if ldap_principal is not None:
+            try:
+                tmp_super_user = ldap_principal.split("uid=",1)[1].split(",")[0].strip()
+            except:
+                tmp_super_user = ""
+            if tmp_super_user != "":
+                property_dict['mds_super_user'] = tmp_super_user
+ 
         property_dict['mds_super_user_password'] = ''
 
         key3 = 'confluent.metadata.server.advertised.listeners'
