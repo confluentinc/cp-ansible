@@ -146,6 +146,19 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         return "all", {}
 
+    def _build_log4j_properties(self, service_properties: dict) -> tuple:
+        log4j_file = self.get_log_file_path(self.input_context, self.service, self.hosts, "KAFKA_LOG4J_OPTS")
+        default_log4j_file = "/etc/kafka/zookeeper-log4j.properties"
+        root_logger, file = self.get_root_logger(self.input_context, self.service, self.hosts, log4j_file, default_log4j_file)
+
+        if root_logger is None or file is None:
+            return "all", {'zookeeper_custom_log4j': False}
+
+        return "zookeeper", {
+            'log4j_file': file,
+            'zookeeper_log4j_root_logger': root_logger
+        }
+
 
 class ZookeeperServicePropertyBaseBuilder60(ZookeeperServicePropertyBaseBuilder):
     pass
