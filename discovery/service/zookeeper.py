@@ -15,8 +15,8 @@ class ZookeeperServicePropertyBuilder:
     def build_properties(input_context: InputContext, inventory: CPInventoryManager):
         from discovery.service import get_service_builder_class
         builder_class = get_service_builder_class(modules=sys.modules[__name__],
-                                        default_class_name="ZookeeperServicePropertyBaseBuilder",
-                                        version=input_context.from_version)
+                                                  default_class_name="ZookeeperServicePropertyBaseBuilder",
+                                                  version=input_context.from_version)
         global class_name
         class_name = builder_class
         builder_class(input_context, inventory).build_properties()
@@ -32,6 +32,7 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.input_context = input_context
         self.mapped_service_properties = set()
         self.service = ConfluentServices.ZOOKEEPER
+        self.group = self.service.value.get('group')
 
     def build_properties(self):
 
@@ -87,7 +88,7 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
     def __build_runtime_properties(self, hosts: list):
         # Build Java runtime overrides
-        data = ('all', {'zookeeper_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
+        data = (self.group, {'zookeeper_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
         self.update_inventory(self.inventory, data)
 
     def __get_user_dict(self, service_prop: dict, key: str) -> dict:
@@ -97,8 +98,8 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         key = "clientPort"
         self.mapped_service_properties.add(key)
         if service_prop.get(key) is not None:
-            return 'all', {"zookeeper_client_port": int(service_prop.get(key))}
-        return 'all', {}
+            return self.group, {"zookeeper_client_port": int(service_prop.get(key))}
+        return self.group, {}
 
     def _build_ssl_properties(self, service_properties: dict) -> tuple:
 
@@ -112,7 +113,7 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         zookeeper_ssl_enabled = bool(service_properties.get('secureClientPort', False))
 
         if zookeeper_ssl_enabled == False:
-            return "all", {}
+            return self.group, {}
 
         property_dict['ssl_enabled'] = True
         property_dict['zookeeper_keystore_path'] = service_properties.get('ssl.keyStore.location')
@@ -144,7 +145,17 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if zookeeper_client_authentication_type == 'need':
             return "zookeeper", {'ssl_mutual_auth_enabled': True}
 
-        return "all", {}
+        return self.group, {}
+
+    def _build_jmx_properties(self, service_properties: dict) -> tuple:
+        monitoring_details = self.get_monitoring_details(self.input_context, self.service, self.hosts, 'KAFKA_OPTS')
+        service_monitoring_details = dict()
+        group_name = self.service.value.get("group")
+
+        for key, value in monitoring_details.items():
+            service_monitoring_details[f"{group_name}_{key}"] = value
+
+        return group_name, service_monitoring_details
 
     def _build_log4j_properties(self, service_properties: dict) -> tuple:
         log4j_file = self.get_log_file_path(self.input_context, self.service, self.hosts, "KAFKA_LOG4J_OPTS")

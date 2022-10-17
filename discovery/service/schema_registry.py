@@ -15,8 +15,8 @@ class SchemaRegistryServicePropertyBuilder:
     def build_properties(input_context: InputContext, inventory: CPInventoryManager):
         from discovery.service import get_service_builder_class
         builder_class = get_service_builder_class(modules=sys.modules[__name__],
-                                        default_class_name="SchemaRegistryServicePropertyBaseBuilder",
-                                        version=input_context.from_version)
+                                                  default_class_name="SchemaRegistryServicePropertyBaseBuilder",
+                                                  version=input_context.from_version)
         global class_name
         class_name = builder_class
         builder_class(input_context, inventory).build_properties()
@@ -32,7 +32,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.input_context = input_context
         self.mapped_service_properties = set()
         self.service = ConfluentServices.SCHEMA_REGISTRY
-
+        self.group = self.service.value.get("group")
     def build_properties(self):
 
         # Get the hosts for given service
@@ -88,8 +88,8 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
     def __build_runtime_properties(self, hosts: list):
         # Build Java runtime overrides
-        data = (
-        'all', {'schema_registry_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
+        data = (self.group,
+            {'schema_registry_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
         self.update_inventory(self.inventory, data)
 
     def _build_ssl_properties(self, service_prop: dict) -> tuple:
@@ -103,7 +103,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         ssl_props["ssl_enabled"] = is_ssl
         if is_ssl == False:
-            return "all", {}
+            return self.group, {}
 
         property_list = ["ssl.truststore.location", "ssl.truststore.password", "ssl.keystore.location",
                          "ssl.keystore.password", "ssl.key.password"]
@@ -134,7 +134,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if truststore_aliases:
             ssl_props["ssl_truststore_ca_cert_alias"] = truststore_aliases[0]
 
-        return "schema_registry", ssl_props
+        return self.group, ssl_props
 
     def _build_mtls_property(self, service_prop: dict) -> tuple:
         key = 'ssl.client.auth'
@@ -142,28 +142,28 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         value = service_prop.get(key)
         if value is not None and value == 'true':
             return "schema_registry", {'ssl_mutual_auth_enabled': True}
-        return "all", {}
+        return self.group, {}
 
     def _build_authentication_property(self, service_prop: dict) -> tuple:
         key = 'authentication.method'
         self.mapped_service_properties.add(key)
         value = service_prop.get(key)
         if value is not None and value == 'BASIC':
-            return "all", {'schema_registry_authentication_type': 'basic'}
-        return "all", {}
+            return self.group, {'schema_registry_authentication_type': 'basic'}
+        return self.group, {}
 
     def _build_replication_property(self, service_prop: dict) -> tuple:
         key = "kafkastore.topic.replication.factor"
         self.mapped_service_properties.add(key)
         value = service_prop.get(key)
-        return "all", {"schema_registry_default_internal_replication_factor": int(value)}
+        return self.group, {"schema_registry_default_internal_replication_factor": int(value)}
 
     def _build_service_port_property(self, service_prop: dict) -> tuple:
         key = "listeners"
         self.mapped_service_properties.add(key)
         listeners = service_prop.get(key, "").split(',')[0]
         *_, port = listeners.split(':')
-        return "all", {"schema_registry_listener_port": int(port)}
+        return self.group, {"schema_registry_listener_port": int(port)}
 
     def _build_rbac_properties(self, service_prop: dict) -> tuple:
         key1 = 'confluent.schema.registry.authorizer.class'
@@ -175,7 +175,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['rbac_enabled_public_pem_path'] = service_prop.get('public.key.path')
         self.mapped_service_properties.add('public.key.path')
         self.mapped_service_properties.add('confluent.metadata.bootstrap.server.urls')
-        return 'schema_registry', property_dict
+        return self.group, property_dict
 
     def _build_ldap_properties(self, service_prop: dict) -> tuple:
         property_dict = dict()
@@ -185,11 +185,22 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
             metadata_user_info = service_prop.get(key)
             property_dict['schema_registry_ldap_user'] = metadata_user_info.split(':')[0]
             property_dict['schema_registry_ldap_password'] = metadata_user_info.split(':')[1]
-        return 'all', property_dict
+        return self.group, property_dict
 
     def _build_telemetry_properties(self, service_prop: dict) -> tuple:
         property_dict = self.build_telemetry_properties(service_prop)
-        return 'schema_registry', property_dict
+        return self.group, property_dict
+
+    def _build_jmx_properties(self, service_properties: dict) -> tuple:
+        monitoring_details = self.get_monitoring_details(self.input_context, self.service, self.hosts,
+                                                         'SCHEMA_REGISTRY_OPTS')
+        service_monitoring_details = dict()
+        group_name = self.service.value.get("group")
+
+        for key, value in monitoring_details.items():
+            service_monitoring_details[f"{group_name}_{key}"] = value
+
+        return group_name, service_monitoring_details
 
     def _build_log4j_properties(self, service_properties: dict) -> tuple:
         log4j_file = self.get_log_file_path(self.input_context, self.service, self.hosts, "SCHEMA_REGISTRY_LOG4J_OPTS")

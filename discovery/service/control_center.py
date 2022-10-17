@@ -9,14 +9,15 @@ logger = Logger.get_logger()
 
 class_name = ""
 
+
 class ControlCenterServicePropertyBuilder:
 
     @staticmethod
     def build_properties(input_context: InputContext, inventory: CPInventoryManager):
         from discovery.service import get_service_builder_class
         builder_class = get_service_builder_class(modules=sys.modules[__name__],
-                                        default_class_name="ControlCenterServicePropertyBaseBuilder",
-                                        version=input_context.from_version)
+                                                  default_class_name="ControlCenterServicePropertyBaseBuilder",
+                                                  version=input_context.from_version)
         global class_name
         class_name = builder_class
         builder_class(input_context, inventory).build_properties()
@@ -32,6 +33,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.input_context = input_context
         self.mapped_service_properties = set()
         self.service = ConfluentServices.CONTROL_CENTER
+        self.group = self.service.value.get("group")
 
     def build_properties(self):
 
@@ -39,7 +41,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         hosts = self.get_service_host(self.service, self.inventory)
         self.hosts = hosts
         if not hosts:
-            logger.error(f"Could not find any host with service {self.service.value.get('name')} ")
+            logger.error(f"Could not find any host with service {self.group} ")
             return
 
         host_service_properties = self.get_property_mappings(self.input_context, self.service, hosts)
@@ -85,7 +87,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
                                      mapped_properties=mapped_properties)
 
     def __build_runtime_properties(self, hosts: list):
-        data = ('all',
+        data = (self.group,
                 {'control_center_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
         self.update_inventory(self.inventory, data)
 
@@ -94,7 +96,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key)
         from urllib.parse import urlparse
         parsed_uri = urlparse(service_prop.get(key))
-        return "all", {
+        return self.group, {
             "control_center_http_protocol": parsed_uri.scheme,
             "control_center_listener_hostname": parsed_uri.hostname,
             "control_center_port": parsed_uri.port
@@ -109,14 +111,14 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key2)
         self.mapped_service_properties.add(key3)
         self.mapped_service_properties.add(key4)
-        return "all", {"control_center_default_internal_replication_factor": int(service_prop.get(key1))}
+        return self.group, {"control_center_default_internal_replication_factor": int(service_prop.get(key1))}
 
     def _build_ssl_properties(self, service_prop: dict) -> tuple:
         key = "confluent.controlcenter.rest.listeners"
         control_center_listener = service_prop.get(key)
 
         if control_center_listener.find('https') < 0:
-            return "all", {}
+            return self.group, {}
 
         property_list = ["confluent.controlcenter.rest.ssl.truststore.location",
                          "confluent.controlcenter.rest.ssl.truststore.password",
@@ -134,7 +136,8 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
             'confluent.controlcenter.rest.ssl.truststore.location')
         property_dict['ssl_truststore_password'] = service_prop.get(
             'confluent.controlcenter.rest.ssl.truststore.password')
-        property_dict['control_center_keystore_path'] = service_prop.get('confluent.controlcenter.rest.ssl.keystore.location')
+        property_dict['control_center_keystore_path'] = service_prop.get(
+            'confluent.controlcenter.rest.ssl.keystore.location')
         property_dict['ssl_keystore_store_password'] = service_prop.get(
             'confluent.controlcenter.rest.ssl.keystore.password')
         property_dict['ssl_keystore_key_password'] = service_prop.get('confluent.controlcenter.rest.ssl.key.password')
@@ -154,23 +157,23 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if truststore_aliases:
             property_dict["ssl_truststore_ca_cert_alias"] = truststore_aliases[0]
 
-        return "control_center", property_dict
+        return self.group, property_dict
 
     def _build_authentication_property(self, service_prop: dict) -> tuple:
         key = 'confluent.controlcenter.rest.authentication.method'
         self.mapped_service_properties.add(key)
         value = service_prop.get(key)
         if value is not None and value == 'BASIC':
-            return "all", {'control_center_authentication_type': 'basic'}
-        return "all", {}
+            return self.group, {'control_center_authentication_type': 'basic'}
+        return self.group, {}
 
     def _build_mtls_property(self, service_prop: dict) -> tuple:
 
         broker_group = ConfluentServices.KAFKA_BROKER.value.get('group')
         if broker_group in self.inventory.groups and \
                 'ssl_mutual_auth_enabled' in self.inventory.groups.get(broker_group).vars:
-            return "control_center", {'ssl_mutual_auth_enabled': True}
-        return 'all', {}
+            return self.group, {'ssl_mutual_auth_enabled': True}
+        return self.group, {}
 
     def _build_rbac_properties(self, service_prop: dict) -> tuple:
         key1 = 'confluent.controlcenter.rest.authentication.method'
@@ -184,7 +187,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key1)
         self.mapped_service_properties.add(key2)
         self.mapped_service_properties.add(key3)
-        return 'control_center', property_dict
+        return self.group, property_dict
 
     def _build_ldap_properties(self, service_prop: dict) -> tuple:
         property_dict = dict()
@@ -194,7 +197,8 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
             metadata_user_info = service_prop.get(key)
             property_dict['control_center_ldap_user'] = metadata_user_info.split(':')[0]
             property_dict['control_center_ldap_password'] = metadata_user_info.split(':')[1]
-        return 'all', property_dict
+
+        return self.group, property_dict
 
     def _build_rocksdb_path(self, service_prop: dict) -> tuple:
         rocksdb_path = self.get_rocksdb_path(self.input_context, self.service, self.hosts)
@@ -202,7 +206,16 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
     def _build_telemetry_properties(self, service_prop: dict) -> tuple:
         property_dict = self.build_telemetry_properties(service_prop)
-        return 'control_center', property_dict
+        return self.group, property_dict
+
+    def _build_jmx_properties(self, service_properties: dict) -> tuple:
+        monitoring_details = self.get_monitoring_details(self.input_context, self.service, self.hosts,
+                                                         'CONTROL_CENTER_OPTS')
+        service_monitoring_details = dict()
+        for key, value in monitoring_details.items():
+            service_monitoring_details[f"{self.group}_{key}"] = value
+
+        return self.group, service_monitoring_details
 
     def _build_log4j_properties(self, service_properties: dict) -> tuple:
         log4j_file = self.get_log_file_path(self.input_context, self.service, self.hosts, "CONTROL_CENTER_LOG4J_OPTS")

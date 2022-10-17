@@ -15,8 +15,8 @@ class KsqlServicePropertyBuilder:
     def build_properties(input_context: InputContext, inventory: CPInventoryManager):
         from discovery.service import get_service_builder_class
         builder_class = get_service_builder_class(modules=sys.modules[__name__],
-                                        default_class_name="KsqlServicePropertyBaseBuilder",
-                                        version=input_context.from_version)
+                                                  default_class_name="KsqlServicePropertyBaseBuilder",
+                                                  version=input_context.from_version)
         global class_name
         class_name = builder_class
         builder_class(input_context, inventory).build_properties()
@@ -32,6 +32,7 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.input_context = input_context
         self.mapped_service_properties = set()
         self.service = ConfluentServices.KSQL
+        self.group = self.service.value.get('group')
 
     def build_properties(self):
 
@@ -87,13 +88,13 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
     def __build_runtime_properties(self, hosts: list):
         # Build Java runtime overrides
-        data = ('all', {'ksql_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
+        data = (self.group, {'ksql_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
         self.update_inventory(self.inventory, data)
 
     def _build_service_id(self, service_prop: dict) -> tuple:
         key = "ksql.service.id"
         self.mapped_service_properties.add(key)
-        return "all", {"ksql_service_id": service_prop.get(key)}
+        return self.group, {"ksql_service_id": service_prop.get(key)}
 
     def _build_service_protocol_port(self, service_prop: dict) -> tuple:
         key = "listeners"
@@ -101,7 +102,7 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         from urllib.parse import urlparse
         parsed_uri = urlparse(service_prop.get(key))
 
-        return "all", {
+        return self.group, {
             "ksql_http_protocol": parsed_uri.scheme,
             "ksql_listener_port": parsed_uri.port
         }
@@ -112,19 +113,19 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         self.mapped_service_properties.add(key1)
         self.mapped_service_properties.add(key2)
-        return "all", {"ksql_default_internal_replication_factor": int(service_prop.get(key1))}
+        return self.group, {"ksql_default_internal_replication_factor": int(service_prop.get(key1))}
 
     def _build_monitoring_interceptor_property(self, service_prop: dict) -> tuple:
         key = "confluent.monitoring.interceptor.topic"
         self.mapped_service_properties.add(key)
-        return "all", {"ksql_monitoring_interceptors_enabled": key in service_prop}
+        return self.group, {"ksql_monitoring_interceptors_enabled": key in service_prop}
 
     def _build_ssl_properties(self, service_prop: dict) -> tuple:
         key = "listeners"
         ksql_listener = service_prop.get(key)
 
         if ksql_listener.find('https') < 0:
-            return "all", {}
+            return self.group, {}
 
         property_list = ["ssl.truststore.location", "ssl.truststore.password", "ssl.keystore.location",
                          "ssl.keystore.password", "ssl.key.password"]
@@ -156,7 +157,7 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if truststore_aliases:
             property_dict["ssl_truststore_ca_cert_alias"] = truststore_aliases[0]
 
-        return "ksql", property_dict
+        return self.group, property_dict
 
     def _build_mtls_property(self, service_prop: dict) -> tuple:
         key = 'ssl.client.auth'
@@ -164,23 +165,23 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         value = service_prop.get(key)
         if value is not None and value == 'true':
             return "ksql", {'ssl_mutual_auth_enabled': True}
-        return "all", {}
+        return self.group, {}
 
     def _build_authentication_property(self, service_prop: dict) -> tuple:
         key = 'authentication.method'
         self.mapped_service_properties.add(key)
         value = service_prop.get(key)
         if value is not None and value == 'BASIC':
-            return "all", {'ksql_authentication_type': 'basic'}
-        return "all", {}
+            return self.group, {'ksql_authentication_type': 'basic'}
+        return self.group, {}
 
     def _build_log_streaming_property(self, service_prop: dict) -> tuple:
         key = 'ksql.logging.processing.topic.auto.create'
         self.mapped_service_properties.add(key)
         value = service_prop.get(key)
         if value is not None and value == 'true':
-            return "all", {'ksql_log_streaming_enabled': True}
-        return "all", {}
+            return self.group, {'ksql_log_streaming_enabled': True}
+        return self.group, {}
 
     def _build_rbac_properties(self, service_prop: dict) -> tuple:
         key1 = 'ksql.security.extension.class'
@@ -194,7 +195,7 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key1)
         self.mapped_service_properties.add(key2)
         self.mapped_service_properties.add(key3)
-        return 'ksql', property_dict
+        return self.group, property_dict
 
     def _build_ldap_properties(self, service_prop: dict) -> tuple:
         property_dict = dict()
@@ -204,15 +205,25 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
             metadata_user_info = service_prop.get(key)
             property_dict['ksql_ldap_user'] = metadata_user_info.split(':')[0]
             property_dict['ksql_ldap_password'] = metadata_user_info.split(':')[1]
-        return 'all', property_dict
+        return self.group, property_dict
 
     def _build_rocksdb_path(self, service_prop: dict) -> tuple:
         rocksdb_path = self.get_rocksdb_path(self.input_context, self.service, self.hosts)
-        return 'ksql', {"ksql_rocksdb_path": rocksdb_path}
+        return self.group, {"ksql_rocksdb_path": rocksdb_path}
 
     def _build_telemetry_properties(self, service_prop: dict) -> tuple:
         property_dict = self.build_telemetry_properties(service_prop)
-        return 'ksql', property_dict
+        return self.group, property_dict
+
+    def _build_jmx_properties(self, service_properties: dict) -> tuple:
+        monitoring_details = self.get_monitoring_details(self.input_context, self.service, self.hosts, 'KSQL_OPTS')
+        service_monitoring_details = dict()
+        group_name = self.service.value.get("group")
+
+        for key, value in monitoring_details.items():
+            service_monitoring_details[f"{group_name}_{key}"] = value
+
+        return group_name, service_monitoring_details
 
     def _build_log4j_properties(self, service_properties: dict) -> tuple:
         log4j_file = self.get_log_file_path(self.input_context, self.service, self.hosts, "KSQL_LOG4J_OPTS")
