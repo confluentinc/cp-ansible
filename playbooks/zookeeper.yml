@@ -30,10 +30,16 @@
       loop:
         - ansible_os_family
 
+    - name: Check if property file Exists
+      stat:
+        path: "{{ zookeeper.config_file }}"
+      register: zk_config
+
     - name: Load zookeeper.properties
       slurp:
         src: "{{ zookeeper.config_file }}"
       register: slurped_properties
+      when: "{{ zk_config.stat.exists }}"
 
     - name: Set ssl status properties of zookeeper
       set_fact:
@@ -41,20 +47,21 @@
         zookeeper_quorum_enabled: "{{ (slurped_properties.content|b64decode).split('\n') | select('match', '^sslQuorum=true') | list | length > 0 |default(false)}}"
         zookeeper_clientssl_enabled: "{{ ((slurped_properties.content|b64decode).split('\n') | select('match', '^ssl.clientAuth=need') | list | length > 0) |default(false)}}"
         service_state: "{{ ansible_facts.services[zookeeper_service_name + '.service'].state | default('unknown') }}"
+      when: "{{ zk_config.stat.exists }}"
 
     - set_fact:
         zk_extra_properties: >-
           {{
             [{
               'clientPort': zookeeper_nonssl_port,
-              'portUnification': ('true' if zookeeper_clientssl_enabled or zookeeper_quorum_authentication_type=='mtls') |default(omit),
-              'sslQuorum': ('false' if zookeeper_quorum_enabled or zookeeper_quorum_authentication_type=='mtls') |default(omit)
+              'portUnification': ('true' if zookeeper_clientssl_enabled|default('false') or zookeeper_quorum_authentication_type=='mtls') |default(omit),
+              'sslQuorum': ('false' if zookeeper_quorum_enabled|default('false') or zookeeper_quorum_authentication_type=='mtls') |default(omit)
             }]
           }}
 
-    - name: Set properties for changes in ssl Status of zookeeper
+    - name: Save original properties for changes in ssl Status of zookeeper
       set_fact:
-        zk_ssl_flipped: "{{ zookeeper_ssl_property != zookeeper_ssl_enabled and service_state == 'running' }}"
+        zk_ssl_flipped: "{{ zookeeper_ssl_property != zookeeper_ssl_enabled and zk_config.stat.exists }}"
         zookeeper_original_custom_properties: "{{zookeeper_custom_properties}}"
         zookeeper_ssl_enabled_original: "{{ zookeeper_ssl_enabled }}"
         zookeeper_client_authentication_type_original: "{{ zookeeper_client_authentication_type }}"
