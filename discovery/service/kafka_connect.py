@@ -33,6 +33,7 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties = set()
         self.service = ConfluentServices.KAFKA_CONNECT
         self.group = self.service.value.get('group')
+
     def build_properties(self):
 
         # Get the hosts for given service
@@ -173,20 +174,20 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if truststore_aliases:
             property_dict["ssl_truststore_ca_cert_alias"] = truststore_aliases[0]
 
-        return "kafka_connect", property_dict
+        return self.group, property_dict
 
     def _build_mtls_property(self, service_properties: dict) -> tuple:
         key = 'listeners.https.ssl.client.auth'
         self.mapped_service_properties.add(key)
         value = service_properties.get(key)
         if value is not None and value == 'required':
-            return "kafka_connect", {'ssl_mutual_auth_enabled': True}
+            return self.group, {'ssl_mutual_auth_enabled': True}
         return self.group, {}
 
     def _build_rbac_properties(self, service_prop: dict) -> tuple:
         key1 = 'rest.servlet.initializor.classes'
         if service_prop.get(key1) is None:
-            return 'kafka_connect', {'rbac_enabled': False}
+            return self.group, {'rbac_enabled': False}
         property_dict = dict()
         key2 = 'public.key.path'
         key3 = 'confluent.metadata.bootstrap.server.urls'
@@ -195,7 +196,7 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key1)
         self.mapped_service_properties.add(key2)
         self.mapped_service_properties.add(key3)
-        return 'kafka_connect', property_dict
+        return self.group, property_dict
 
     def _build_ldap_properties(self, service_prop: dict) -> tuple:
         property_dict = dict()
@@ -224,7 +225,20 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
     def _build_telemetry_properties(self, service_prop: dict) -> tuple:
         property_dict = self.build_telemetry_properties(service_prop)
-        return 'kafka_connect', property_dict
+        return self.group, property_dict
+
+    def _build_log4j_properties(self, service_properties: dict) -> tuple:
+        log4j_file = self.get_log_file_path(self.input_context, self.service, self.hosts, "KAFKA_LOG4J_OPTS")
+        default_log4j_file = "/etc/kafka/connect-log4j.properties"
+        root_logger, file = self.get_root_logger(self.input_context, self.service, self.hosts, log4j_file, default_log4j_file)
+
+        if root_logger is None or file is None:
+            return self.group, {'kafka_connect_custom_log4j': False}
+
+        return self.group, {
+            'log4j_file': file,
+            'kafka_connect_log4j_root_logger': root_logger
+        }
 
     def _build_jmx_properties(self, service_properties: dict) -> tuple:
         monitoring_details = self.get_monitoring_details(self.input_context, self.service, self.hosts, 'KAFKA_OPTS')

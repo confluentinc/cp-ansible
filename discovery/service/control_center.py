@@ -178,7 +178,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_rbac_properties(self, service_prop: dict) -> tuple:
         key1 = 'confluent.controlcenter.rest.authentication.method'
         if service_prop.get(key1) is None:
-            return 'control_center', {'rbac_enabled': False}
+            return self.group, {'rbac_enabled': False}
         property_dict = dict()
         key2 = 'public.key.path'
         key3 = 'confluent.metadata.bootstrap.server.urls'
@@ -202,7 +202,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
     def _build_rocksdb_path(self, service_prop: dict) -> tuple:
         rocksdb_path = self.get_rocksdb_path(self.input_context, self.service, self.hosts)
-        return 'control_center', {"control_center_rocksdb_path": rocksdb_path}
+        return self.group, {"control_center_rocksdb_path": rocksdb_path}
 
     def _build_telemetry_properties(self, service_prop: dict) -> tuple:
         property_dict = self.build_telemetry_properties(service_prop)
@@ -217,6 +217,18 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         return self.group, service_monitoring_details
 
+    def _build_log4j_properties(self, service_properties: dict) -> tuple:
+        log4j_file = self.get_log_file_path(self.input_context, self.service, self.hosts, "CONTROL_CENTER_LOG4J_OPTS")
+        default_log4j_file = "/etc/confluent-control-center/log4j-rolling.properties"
+        root_logger, file = self.get_root_logger(self.input_context, self.service, self.hosts, log4j_file, default_log4j_file)
+
+        if root_logger is None or file is None:
+            return self.group, {'control_center_custom_log4j': False}
+
+        return self.group, {
+            'log4j_file': file,
+            'control_center_log4j_root_logger': root_logger
+        }
 
 class ControlCenterServicePropertyBaseBuilder60(ControlCenterServicePropertyBaseBuilder):
     pass

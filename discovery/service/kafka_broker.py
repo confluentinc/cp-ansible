@@ -263,8 +263,9 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key)
         property_dict = dict()
         property_dict['fips_enabled'] = bool(service_properties.get(key, False))
-        property_dict['kafka_broker_bcfks_keystore_path'] = service_properties.get('ssl.keystore.location')
-        property_dict['kafka_broker_bcfks_truststore_path'] = service_properties.get('ssl.truststore.location')
+        if property_dict['fips_enabled'] is True:
+            property_dict['kafka_broker_bcfks_keystore_path'] = service_properties.get('ssl.keystore.location')
+            property_dict['kafka_broker_bcfks_truststore_path'] = service_properties.get('ssl.truststore.location')
         return "all", property_dict
 
     def _build_custom_listeners(self, service_prop: dict) -> tuple:
@@ -377,7 +378,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add('kafka.rest.confluent.metadata.bootstrap.server.urls')
         self.mapped_service_properties.add('kafka.rest.confluent.metadata.basic.auth.user.info')
 
-        return self.group, property_dict
+        return "all", property_dict
 
     def _build_secret_protection_key(self, service_prop: dict) -> tuple:
         master_key = self.get_secret_protection_key(self.input_context, self.service, self.hosts)
@@ -392,7 +393,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
     def _build_telemetry_properties(self, service_prop: dict) -> tuple:
         property_dict = self.build_telemetry_properties(service_prop)
-        return 'kafka_broker', property_dict
+        return self.group, property_dict
 
     def _build_jmx_properties(self, service_properties: dict) -> tuple:
         monitoring_details = self.get_monitoring_details(self.input_context, self.service, self.hosts, 'KAFKA_OPTS')
@@ -414,12 +415,24 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 host = self.inventory.get_host(hostname)
                 host.set_variable('audit_logs_destination_enabled', True)
                 host.set_variable('audit_logs_destination_bootstrap_servers', default_properties.get(key))
-                cluster_name, principal_name = self.get_audit_log_properties(input_context=self.input_context,
+                cluster, principal_name = self.get_audit_log_properties(input_context=self.input_context,
                                                                              hosts=hostname, mds_user='mds',
                                                                              mds_password='password')
-                host.set_variable('audit_logs_destination_kafka_cluster_name', cluster_name)
+                host.set_variable('audit_logs_destination_kafka_cluster_name', cluster['clusterName'])
                 host.set_variable('audit_logs_destination_principal', principal_name)
 
+    def _build_log4j_properties(self, service_properties: dict) -> tuple:
+        log4j_file = self.get_log_file_path(self.input_context, self.service, self.hosts, "KAFKA_LOG4J_OPTS")
+        default_log4j_file = "/etc/kafka/log4j.properties"
+        root_logger, file = self.get_root_logger(self.input_context, self.service, self.hosts, log4j_file, default_log4j_file)
+
+        if root_logger is None or file is None:
+            return self.group, {'kafka_broker_custom_log4j': False}
+
+        return self.group, {
+            'log4j_file': file,
+            'kafka_broker_log4j_root_logger': root_logger
+        }
 
 class KafkaServicePropertyBaseBuilder60(KafkaServicePropertyBaseBuilder):
     pass

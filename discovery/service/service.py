@@ -144,6 +144,60 @@ class AbstractPropertyBuilder(ABC):
             return []
 
     @staticmethod
+    def get_log_file_path(input_context: InputContext, service: ConfluentServices, hosts: list, log4j_opts_env_var):
+        # check if overriden as env var
+        env_details = AbstractPropertyBuilder._get_env_details(input_context, service, hosts)
+        log4j_opts = env_details.get(log4j_opts_env_var, None)
+        if log4j_opts is not None:
+            if "-Dlog4j.configuration=file:" in log4j_opts:
+                log4j_path = log4j_opts.split("-Dlog4j.configuration=file:",1)[1].split(" ",1)[0]
+                return log4j_path
+
+        # if not overridden, read from java process details
+        play = dict(
+            name="Get java process details for cp component",
+            hosts=hosts,
+            gather_facts='no',
+            tasks=[
+                dict(action=dict(module='shell',
+                                 args=f"ps aux | grep java | grep log4j"))
+            ]
+        )
+        response = PythonAPIUtils.execute_play(input_context, play)
+        if len(response)==0:
+            return None
+        if response[hosts[0]]._result['rc'] == 0:
+            process_details = response[hosts[0]]._result['stdout']
+            if "-Dlog4j.configuration=file:" in process_details:
+                log4j_path = process_details.split("-Dlog4j.configuration=file:",1)[1].split(" ",1)[0]
+                return log4j_path
+
+        return None
+
+    @staticmethod
+    def get_root_logger(input_context: InputContext, service: ConfluentServices, hosts: list, log4j_file, default_log4j_file):
+        for file in [log4j_file, default_log4j_file]:
+            if file is None:
+                continue
+            play = dict(
+                name="Get root logger definition from log4j file",
+                hosts=hosts,
+                gather_facts='no',
+                tasks=[
+                    dict(action=dict(module='shell',
+                                    args=f"grep ^log4j.rootLogger {file}"))
+                ]
+            )
+            response = PythonAPIUtils.execute_play(input_context, play)
+            if len(response)==0:
+                continue
+            if response[hosts[0]]._result['rc'] == 0:
+                logger_def = response[hosts[0]]._result['stdout']
+                return logger_def.split("log4j.rootLogger=",1)[1].strip(), file
+
+        return None, None
+
+    @staticmethod
     def get_audit_log_properties(input_context: InputContext, hosts: string, mds_user: str, mds_password: str) -> str:
         # returns list of all clusters in the registry
         play1 = dict(
