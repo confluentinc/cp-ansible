@@ -173,7 +173,7 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_rbac_properties(self, service_prop: dict) -> tuple:
         key1 = 'kafka.rest.resource.extension.class'
         if service_prop.get(key1) is None:
-            return 'kafka_rest', {'rbac_enabled': False}
+            return self.group, {'rbac_enabled': False}
         property_dict = dict()
         key2 = 'public.key.path'
         key3 = 'confluent.metadata.bootstrap.server.urls'
@@ -214,9 +214,9 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         root_logger, file = self.get_root_logger(self.input_context, self.service, self.hosts, log4j_file, default_log4j_file)
 
         if root_logger is None or file is None:
-            return "all", {'kafka_rest_custom_log4j': False}
+            return self.group, {'kafka_rest_custom_log4j': False}
 
-        return "kafka_rest", {
+        return self.group, {
             'log4j_file': file,
             'kafka_rest_log4j_root_logger': root_logger
         }

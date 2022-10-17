@@ -149,7 +149,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key)
         value = service_prop.get(key)
         if value is not None and value == 'BASIC':
-            return self.group, {'schema_registry_authentication_type': 'basic'}
+            return "all", {'schema_registry_authentication_type': 'basic'}
         return self.group, {}
 
     def _build_replication_property(self, service_prop: dict) -> tuple:
@@ -163,13 +163,13 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key)
         listeners = service_prop.get(key, "").split(',')[0]
         *_, port = listeners.split(':')
-        return self.group, {"schema_registry_listener_port": int(port)}
+        return "all", {"schema_registry_listener_port": int(port)}
 
     def _build_rbac_properties(self, service_prop: dict) -> tuple:
         key1 = 'confluent.schema.registry.authorizer.class'
         self.mapped_service_properties.add(key1)
         if service_prop.get(key1) is None:
-            return 'schema_registry', {'rbac_enabled': False}
+            return self.group, {'rbac_enabled': False}
         property_dict = dict()
         property_dict['rbac_enabled'] = True
         property_dict['rbac_enabled_public_pem_path'] = service_prop.get('public.key.path')
@@ -208,9 +208,9 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         root_logger, file = self.get_root_logger(self.input_context, self.service, self.hosts, log4j_file, default_log4j_file)
 
         if root_logger is None or file is None:
-            return "all", {'schema_registry_custom_log4j': False}
+            return self.group, {'schema_registry_custom_log4j': False}
 
-        return "schema_registry", {
+        return self.group, {
             'log4j_file': file,
             'schema_registry_log4j_root_logger': root_logger
         }

@@ -163,9 +163,9 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
         root_logger, file = self.get_root_logger(self.input_context, self.service, self.hosts, log4j_file, default_log4j_file)
 
         if root_logger is None or file is None:
-            return "all", {'zookeeper_custom_log4j': False}
+            return self.group, {'zookeeper_custom_log4j': False}
 
-        return "zookeeper", {
+        return self.group, {
             'log4j_file': file,
             'zookeeper_log4j_root_logger': root_logger
         }
