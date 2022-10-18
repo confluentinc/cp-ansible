@@ -4,6 +4,14 @@ Below are the supported variables for the role confluent.variables
 
 ***
 
+### ansible_become_localhost
+
+Boolean to specify the become value for localhost, used when dealing with any file present on localhost/controller.
+
+Default:  false
+
+***
+
 ### mask_sensitive_logs
 
 Boolean to mask secrets in playbook output, defaults to true
