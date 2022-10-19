@@ -338,12 +338,12 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         ldap_principal = service_prop.get('ldap.java.naming.security.principal', None)
         if ldap_principal is not None:
             try:
-                tmp_super_user = ldap_principal.split("uid=",1)[1].split(",")[0].strip()
+                tmp_super_user = ldap_principal.split("uid=", 1)[1].split(",")[0].strip()
             except:
                 tmp_super_user = ""
             if tmp_super_user != "":
                 property_dict['mds_super_user'] = tmp_super_user
- 
+
         property_dict['mds_super_user_password'] = ''
 
         key3 = 'confluent.metadata.server.advertised.listeners'

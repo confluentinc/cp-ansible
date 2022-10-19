@@ -214,7 +214,7 @@ class Arguments:
                 return
 
             for version in versions:
-                if not isinstance(version, int):
+                if not version.isnumeric():
                     logger.error(f"Major, minor and patch versions should be of numbers.")
                     vars["from_version"] = None
 
