@@ -99,6 +99,13 @@ class ConfluentServices(Enum):
             if key == key_name:
                 return value.value.get("group")
 
+    @staticmethod
+    def get_all_group_names() -> set:
+        groups = set()
+        for key, value in ConfluentServices.__members__.items():
+            groups.add(value.value.get("group"))
+        return groups
+
 
 if __name__ == "__main__":
     print(ConfluentServices.get_key_service_mappings())

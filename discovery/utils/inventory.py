@@ -6,6 +6,7 @@ from ansible.inventory.data import InventoryData
 from ansible.module_utils.six import iteritems
 
 from discovery.utils.utils import Logger, InputContext, singleton
+from discovery.utils.constants import ConfluentServices
 
 logger = Logger.get_logger()
 
@@ -20,6 +21,7 @@ class CPInventoryManager(InventoryData):
 
     def generate_final_inventory(self):
         data = self.get_inventory_data()
+        InventorySanitizer.sanitize(data)
         self.put_inventory_data(data)
 
     def get_inventory_data(self) -> dict:
@@ -60,11 +62,62 @@ class CPInventoryManager(InventoryData):
 class InventorySanitizer:
 
     @staticmethod
-    def sanatize(inventory_data: dict) -> dict:
-        pass
+    def sanitize(inventory_data: dict) -> dict:
+        InventorySanitizer.typecast(inventory_data)
+        list_groups = ConfluentServices.get_all_group_names()
+        list_aggregator = ['ssl_enabled', 'rbac_enabled', 'rbac_enabled_public_pem_path',
+                           'ssl_keystore_alias', 'ssl_keystore_key_password', 'ssl_keystore_store_password',
+                           'ssl_mutual_auth_enabled', 'ssl_provided_keystore_and_truststore',
+                           'ssl_provided_keystore_and_truststore_remote_src', 'ssl_truststore_ca_cert_alias',
+                           'ssl_truststore_password']
+
+        # check if the given var:value is defined under vars for all component group
+        for item in list_aggregator:
+            value = None
+            aggregate = False
+            for group in list_groups:
+                aggregate = True
+                if group in inventory_data:
+                    group_vars = inventory_data[group]['vars']
+                    if item not in group_vars:
+                        aggregate = False
+                        break
+                    if value is None:
+                        value = group_vars[item]
+                    else:
+                        if group_vars[item] != value:
+                            aggregate = False
+                            break
+            # aggregate the var:value, remove from all groups and bring under all:vars:
+            if aggregate is True:
+                inventory_data['all']['vars'][item] = value
+                for group in list_groups:
+                    if group in inventory_data:
+                        del inventory_data[group]['vars'][item]
+
+    def typecast(inventory_data) -> dict:
+        for values in InventorySanitizer.nested_dict_values_iterator(inventory_data):
+            pass
+
+    def nested_dict_values_iterator(dict_obj):
+        ''' This function accepts a nested dictionary as argument
+            and iterate over all values of nested dictionaries
+        '''
+        # Iterate over all values of given dictionary
+        for key, value in dict_obj.items():
+            # Check if value is of dict type
+            if isinstance(value, dict):
+                # If value is dict then iterate over all its values
+                for v in InventorySanitizer.nested_dict_values_iterator(value):
+                    yield v
+            else:
+                # If value is not dict type then yield the value
+                if isinstance(value, str) and value.isnumeric():
+                    dict_obj[key] = int(value)
+                yield value
 
     @staticmethod
-    def sort(invnetory_data: dict):
+    def sort(inventory_data: dict):
         from discovery.utils.constants import ConfluentServices
         group_list = [
             'all',
@@ -78,7 +131,7 @@ class InventorySanitizer:
             ConfluentServices.CONTROL_CENTER.value.get('group'),
         ]
 
-        ordered_dict = collections.OrderedDict(invnetory_data)
+        ordered_dict = collections.OrderedDict(inventory_data)
 
         for group in group_list:
             if group in ordered_dict.keys():
