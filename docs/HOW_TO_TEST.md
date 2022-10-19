@@ -22,11 +22,9 @@ To install specific ansible version use below command:
 python3 -m pip install --user ansible==4.10.0
 ```
 
-**Note:** Make sure to install ansible using pip as described above and not with brew install 
-
-2. [Docker](https://docs.docker.com/get-docker/) *Note: We recommend increasing your docker memory to at least 20GB of RAM and your CPU count to 10.*
+3. [Docker](https://docs.docker.com/get-docker/) *Note: We recommend increasing your docker memory to at least 20GB of RAM and your CPU count to 10.*
 Due to some changes in Docker wrt systemd, the latest versions of Docker won't work with our molecule tests. Docker Desktop version 4.2.0 (having Docker Engine 20.10.10) or ealier should be used. 
-3. [Molecule >= 3.3](https://molecule.readthedocs.io/en/latest/installation.html#install). Use python3's pip for installation: 
+4. [Molecule >= 3.3](https://molecule.readthedocs.io/en/latest/installation.html#install). Use python3's pip for installation: 
 ```
 python3 -m pip install --user "molecule[docker,lint]"
 ```
