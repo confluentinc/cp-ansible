@@ -50,8 +50,8 @@ class CPInventoryManager(InventoryData):
         return self._groups_dict_cache
 
     def put_inventory_data(self, data):
-        # file_name = self.input_context.output_file if self.input_context.output_file else "inventory.yml"
-        file_name = 'inventory.yml'
+        file_name = self.input_context.output_file if self.input_context.output_file else "inventory.yml"
+        # file_name = 'inventory.yml'
         with open(file_name, 'w') as outfile:
             yaml.dump(data, outfile, default_flow_style=False, indent=2)
 
