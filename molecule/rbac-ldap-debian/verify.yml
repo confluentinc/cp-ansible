@@ -1,0 +1,156 @@
+---
+### Validates Metrics reporter without C3.
+### Validates that secrets protection is enabled on correct properties.
+### Validates truststore is present across components.
+### Validates that Java 17 is in Use
+
+- name: Verify Java
+  hosts: all:!ldap_server
+  gather_facts: false
+  tasks:
+    - name: Get Java Version
+      shell: java -version
+      register: version_output
+
+    - name: Assert Java Version is 17
+      assert:
+        that:
+          - version_output.stderr_lines[0] | regex_search("17\.0\.")
+        fail_msg: "Current Java Version is: {{version_output.stderr_lines[0]}}. Verify again"
+        quiet: true
+
+- name: Verify - kafka_broker
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: metric.reporters
+        expected_value: io.confluent.metrics.reporter.ConfluentMetricsReporter
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: ldap.java.naming.security.credentials
+        expected_value: ${securepass:/var/ssl/private/kafka-broker-security.properties:server.properties/ldap.java.naming.security.credentials}
+
+- name: Verify - schema_registry
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: ssl.truststore.location
+        expected_value: /var/ssl/private/schema_registry.truststore.jks
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: confluent.metadata.basic.auth.user.info
+        expected_value: ${securepass:/var/ssl/private/schema-registry-security.properties:schema-registry.properties/confluent.metadata.basic.auth.user.info}
+
+- name: Verify - kafka_rest
+  hosts: kafka_rest
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-rest/kafka-rest.properties
+        property: ssl.truststore.location
+        expected_value: /var/ssl/private/kafka_rest.truststore.jks
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-rest/kafka-rest.properties
+        property: producer.interceptor.classes
+        expected_value: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-rest/kafka-rest.properties
+        property: confluent.metadata.basic.auth.user.info
+        expected_value: ${securepass:/var/ssl/private/kafka-rest-security.properties:kafka-rest.properties/confluent.metadata.basic.auth.user.info}
+
+- name: Verify - kafka_connect
+  hosts: kafka_connect
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: ssl.truststore.location
+        expected_value: /var/ssl/private/kafka_connect.truststore.jks
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: producer.interceptor.classes
+        expected_value: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: confluent.metadata.basic.auth.user.info
+        expected_value: ${securepass:/var/ssl/private/kafka-connect-security.properties:connect-distributed.properties/confluent.metadata.basic.auth.user.info}
+
+- name: Verify - ksql
+  hosts: ksql
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/ksqldb/ksql-server.properties
+        property: ssl.truststore.location
+        expected_value: /var/ssl/private/ksql.truststore.jks
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/ksqldb/ksql-server.properties
+        property: producer.interceptor.classes
+        expected_value: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/ksqldb/ksql-server.properties
+        property: ksql.schema.registry.basic.auth.user.info
+        expected_value: ${securepass:/var/ssl/private/ksql-security.properties:ksql-server.properties/ksql.schema.registry.basic.auth.user.info}
+
+- name: Verify - Client Packages
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: common
+    - shell: grep -Fq "deb {{confluent_clients_repository_baseurl}}/clients/deb/" /etc/apt/sources.list
+      register: linecheck
+      check_mode: false
+      changed_when: false
+      failed_when: linecheck.rc != 0
