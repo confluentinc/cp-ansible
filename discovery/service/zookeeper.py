@@ -9,6 +9,7 @@ logger = Logger.get_logger()
 
 class_name = ""
 
+
 class ZookeeperServicePropertyBuilder:
 
     @staticmethod
@@ -88,7 +89,9 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
     def __build_runtime_properties(self, hosts: list):
         # Build Java runtime overrides
-        data = (self.group, {'zookeeper_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
+        data = (self.group, {
+            'zookeeper_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)
+        })
         self.update_inventory(self.inventory, data)
 
     def __get_user_dict(self, service_prop: dict, key: str) -> dict:
@@ -160,7 +163,7 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_log4j_properties(self, service_properties: dict) -> tuple:
         log4j_file = self.get_log_file_path(self.input_context, self.service, self.hosts, "KAFKA_LOG4J_OPTS")
         default_log4j_file = "/etc/kafka/zookeeper-log4j.properties"
-        root_logger, file = self.get_root_logger(self.input_context, self.service, self.hosts, log4j_file, default_log4j_file)
+        root_logger, file = self.get_root_logger(self.input_context, self.hosts, log4j_file, default_log4j_file)
 
         if root_logger is None or file is None:
             return self.group, {'zookeeper_custom_log4j': False}

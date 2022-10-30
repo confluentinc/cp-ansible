@@ -48,6 +48,8 @@ python discovery/main.py --input discovery/hosts.yml --ansible_user some_user --
 ### FQA
 * **Can I use it for older CP versions**  
 Ideally we should be using the discovery from the branch which maps to the CP cluster. However, to onboard existing cluster, one can use the latest disvoery code and use **--from_version** parameter to specify the CP cluster version
+* **Getting Permission issue while executing the script**  
+Ensure that the VM/Host exists and the user has access to /tmp directory. Sometimes deleting ~/.ansible and ~/.cache directories turns out to be a quick solution.
 
 ### Known Issues and limitations
 * If passwords are encrypted using secret encryption or any other encryption algorithm, this script would not be able to decrypt it. User has to explicitly add the passwords in the generated inventory file in order to continue using the cp-ansible.
