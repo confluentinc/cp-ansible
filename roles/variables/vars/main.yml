@@ -149,6 +149,19 @@ kafka_broker_properties:
     properties:
       # broker.id logic depends on inventory hostname being in kafka_broker host list, defaulting to 0 if non kafka host
       broker.id: "{{ broker_id | default( groups.kafka_broker.index(inventory_hostname) + 1 ) if inventory_hostname in groups.kafka_broker else 0 }}"
+  ssl:
+    enabled: "{{ zookeeper_ssl_enabled|bool or
+    kafka_broker_listeners | ssl_required(ssl_enabled) or
+    kafka_broker_rest_ssl_enabled|bool or
+    mds_broker_listener.ssl_enabled|bool or
+    mds_tls_enabled|bool or
+    ( kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_ssl_enabled ) }}"
+    properties:
+      ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
+      ssl.keystore.location: "{{kafka_broker_keystore_path}}"
+      ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
+      ssl.key.password: "{{kafka_broker_keystore_storepass}}"
   fips:
     enabled: "{{fips_enabled}}"
     properties:
@@ -196,14 +209,6 @@ kafka_broker_properties:
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups }}"
     properties:
       confluent.schema.registry.url: "{{schema_registry_url}}"
-  sr_ssl:
-    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_ssl_enabled }}"
-    properties:
-      confluent.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
-      confluent.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
-      confluent.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
-      confluent.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
-      confluent.ssl.key.password: "{{kafka_broker_keystore_keypass}}"
   sr_ssl_fips:
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_ssl_enabled and fips_enabled }}"
     properties:
