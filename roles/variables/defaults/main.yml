@@ -2,7 +2,7 @@
 # Custom filters used in this file are defined in plugins/filter/filters.py
 
 ### Version of Confluent Platform to install
-confluent_package_version: 7.0.6
+confluent_package_version: 7.1.0
 
 confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
@@ -12,9 +12,6 @@ confluent_common_repository_debian_release_version: "{{ansible_distribution_rele
 
 # Deprecated, see mask_sensitive_logs
 mask_secrets: true
-
-### Boolean to specify the become value for localhost, used when dealing with any file present on localhost/controller.
-ansible_become_localhost: false
 
 ### Boolean to mask secrets in playbook output, defaults to true
 mask_sensitive_logs: "{{mask_secrets}}"
@@ -61,6 +58,21 @@ fips_enabled: false
 ### Boolean to configure ZK, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 custom_log4j: true
 
+### Boolean to enable logredactor for all components. Works only when enabled along with custom_log4j. If enabled, ensure correct value of logredactor_rule_path/url
+logredactor_enabled: false
+
+### Location of the logredactor rules file on the control node. Ensure that the rules files exist here if logredactor enabled. This'll be copied to logredactor_host_rule_path for all components. Not required if logredactor_rule_url is specified.
+logredactor_rule_path_local: ""
+
+### Full path and name of the rules file on all components. This is the location which will be referenced in the log4j property file on the redactor appender. Not required if logredactor_rule_url is specified.
+logredactor_rule_path: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/{{ config_prefix }}/rules.json"
+
+### URL that contains or redirects to the redaction rules. If not "", this will be used to fetch rules and logredactor_rule_path will be ignored.
+logredactor_rule_url: ""
+
+### If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. Default is 0 and it means that the policy rules will be checked only at startup. Can be specified as logredactor_policy_refresh_interval: 7000
+logredactor_policy_refresh_interval: 0
+
 ### Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, keberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary
 kerberos_configure: true
 
@@ -71,6 +83,33 @@ kerberos_kafka_broker_primary: "{{ (hostvars[ groups['kafka_broker'][0] | defaul
 # TODO document the rest of the kerberos variables, also admin_hostname should default to kdc_hostname
 
 open_file_limit: 500000
+
+### Variable to define minimum free disk space in MB for installation.
+required_disk_space_mb: 1000
+
+### Variable to define the minimum amount of memory in MB required to run zookeeper.  Calculated as default heap size plus 1GB for OS.
+required_total_memory_mb_zookeeper: 2000
+
+### Variable to define the minimum amount of memory in MB required to run kafka Broker. Calculated as default heap size plus 1GB for OS.
+required_total_memory_mb_kafka_broker: 7000
+
+### Variable to define the minimum amount of memory in MB required to run kafka Connect. Calculated as default heap size plus 1GB for OS.
+required_total_memory_mb_kafka_connect: 3000
+
+### Variable to define the minimum amount of memory in MB required to run Schema Registry. Calculated as default heap size plus 1GB for OS.
+required_total_memory_mb_schema_registry: 2000
+
+### Variable to define the minimum amount of memory in MB required to run KSQL. Calculated as default heap size plus 1GB for OS.
+required_total_memory_mb_ksql: 4000
+
+### Variable to define the minimum amount of memory in MB required to run Rest Proxy. Calculated as default heap size plus 1GB for OS.
+required_total_memory_mb_kafka_rest: 3000
+
+### Variable to define the minimum amount of memory in MB required to run Control Center. Calculated as default heap size plus 1GB for OS.
+required_total_memory_mb_control_center: 7000
+
+### Variable to define the minimum amount of memory in MB required to run Kafka Connect Replicator. Calculated as default heap size plus 1GB for OS.
+required_total_memory_mb_kafka_connect_replicator: 3000
 
 ### Boolean to install commercially licensed confluent-server instead of community version: confluent-kafka
 confluent_server_enabled: true
@@ -130,8 +169,11 @@ archive_config_base_path: "{{ archive_destination_path }}"
 ### If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
 config_base_path: "{{ (archive_config_base_path | regex_replace('\\/$','')) if installation_method == 'archive' else '/' }}"
 
+### The configuration prefix to use, by default /etc. Note - Only valid to customize when installation_method: archive
+config_prefix: "/etc"
+
 ### Boolean to have cp-ansible download the Confluent CLI
-confluent_cli_download_enabled: "{{rbac_enabled or secrets_protection_enabled}}"
+confluent_cli_download_enabled: "{{rbac_enabled}}"
 
 ### The path the Confluent CLI archive is expanded into.
 confluent_cli_base_path: /opt/confluent-cli
@@ -140,7 +182,7 @@ confluent_cli_base_path: /opt/confluent-cli
 confluent_cli_path: "/usr/local/bin/confluent"
 
 ### Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
-confluent_cli_version: 1.43.0
+confluent_cli_version: 2.19.0
 
 ### Recommended replication factor, defaults to 3. When splitting your cluster across 2 DCs with 4 or more Brokers, this should be increased to 4 to balance topic replicas.
 default_internal_replication_factor: 3
@@ -175,16 +217,16 @@ certs_updated: false
 ### Boolean for TLS Encryption option to provide own Host Keystores.
 ssl_provided_keystore_and_truststore: false
 
-### Boolean to provide custom password for keystores and truststore. Enabled with ssl_provided_keystore_and_truststore, but can be enabled independently to set the custom password for generated keystores and truststores when using custom or self-signed certificates
-ssl_keystore_and_truststore_custom_password: "{{ssl_provided_keystore_and_truststore}}"
+### Boolean for TLS Encryption option to provide user owned Keystores and Truststores already present on the host. Valid and to be used only when ssl_provided_keystore_and_truststore: true
+ssl_provided_keystore_and_truststore_remote_src: false
 
 ### Full path to host specific keystore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-keystore.jks"
 ssl_keystore_filepath: ""
 
-### Keystore Key Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords. Not to be confused with ssl_key_password when using custom certs
+### Keystore Key Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
 ssl_keystore_key_password: ""
 
-### Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true or ssl_keystore_and_truststore_custom_password: true. May set per host if keystores have unique passwords
+### Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
 ssl_keystore_store_password: ""
 
 ### Keystore source alias for host specific certificate. Only required if keystore contains more than one certificate. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "{{inventory_hostname}}"
@@ -193,7 +235,7 @@ ssl_keystore_alias: ""
 ### Full path to host specific truststore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. Can share same keystore for all components if it contains all ca certs used to sign host certificates
 ssl_truststore_filepath: ""
 
-### Keystore Password for host specific truststore. Used with ssl_provided_keystore_and_truststore: true or ssl_keystore_and_truststore_custom_password: true.
+### Keystore Password for host specific truststore. Used with ssl_provided_keystore_and_truststore: true
 ssl_truststore_password: ""
 
 ### Keystore alias for ca certificate
@@ -228,11 +270,13 @@ ksql_cluster_ansible_group_names: "{{ ['ksql'] if 'ksql' in groups else [] }}"
 
 ### Boolean to Run Host Validations. Validations include OS Version compatibility and Proper Internet Connectivity
 validate_hosts: true
-
-### Variable to set the user login shell for all custom user created per component by cp-ansible.
-user_login_shell: /sbin/nologin
+### Boolean used for disabling of systemd service restarts when rootless install is executed
+skip_restarts: false
 
 # Zookeeper Variables
+
+### Default Zookeeper config prefix. Note - Only valid to customize when installation_method: archive
+zookeeper_config_prefix: "{{ config_prefix }}/kafka"
 
 ### Set this variable to customize the Linux User that the Zookeeper Service runs with. Default user is cp-kafka.
 zookeeper_user: "{{zookeeper_default_user}}"
@@ -256,10 +300,12 @@ zookeeper_quorum_authentication_type: "{{ 'mtls' if zookeeper_ssl_enabled and zo
 zookeeper_client_authentication_type: "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
 
 ### Port for Kafka to Zookeeper connections
-zookeeper_client_port: "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
+zookeeper_nonssl_port: 2181
+zookeeper_ssl_port: 2182
+zookeeper_client_port: "{{zookeeper_ssl_port if zookeeper_ssl_enabled|bool else zookeeper_nonssl_port}}"
 
 ### Set this variable to customize the directory that Zookeeper writes log files to. Default location is /var/log/kafka. NOTE- zookeeper.log_path is deprecated.
-zookeeper_log_dir: "{{zookeeper.log_path}}"
+zookeeper_log_dir: "{{zookeeper_default_log_dir}}"
 
 ### Chroot path in Zookeeper used by Kafka. Defaults to no chroot. Must begin with a /
 zookeeper_chroot: ""
@@ -274,23 +320,16 @@ zookeeper_packages:
   - confluent-telemetry
   - "{{ zookeeper_main_package }}"
 
-zookeeper_truststore_path: "{{ ssl_file_dir_final }}/zookeeper.truststore.jks"
-zookeeper_keystore_path: "{{ ssl_file_dir_final }}/zookeeper.keystore.jks"
-zookeeper_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
-zookeeper_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+zookeeper_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/zookeeper.truststore.jks{% endif %}"
+zookeeper_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/zookeeper.keystore.jks{% endif %}"
+zookeeper_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
+zookeeper_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 zookeeper_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else zookeeper_keystore_storepass }}"
 zookeeper_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 zookeeper_cert_path: "{{ ssl_file_dir_final }}/zookeeper.crt"
 zookeeper_key_path: "{{ ssl_file_dir_final }}/zookeeper.key"
 zookeeper_export_certs: "{{ True if zookeeper_client_authentication_type == 'mtls' or zookeeper_quorum_authentication_type in ['mtls', 'digest_over_tls'] else False }}"
 zookeeper_keytab_path: /etc/security/keytabs/zookeeper.keytab
-
-zookeeper:
-  # TODO deprecate these
-  log_path: "{{zookeeper_default_log_dir}}"
-  jaas_file: "{{ (config_base_path,'etc/kafka/zookeeper_jaas.conf') | community.general.path_join }}"
-  # Deprecated way of providing custom properties
-  properties: {}
 
 ### Boolean to enable Jolokia Agent installation and configuration on zookeeper
 zookeeper_jolokia_enabled: "{{jolokia_enabled}}"
@@ -334,7 +373,7 @@ zookeeper_health_check_command: "{{ binary_base_path }}/bin/kafka-run-class
 -Dzookeeper.ssl.keyStore.password={{zookeeper_keystore_storepass}}
 -Dzookeeper.client.secure=true
 {% endif %}
-org.apache.zookeeper.client.FourLetterWordMain {{zookeeper_health_check_host | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname) }} {{zookeeper_client_port}} srvr
+org.apache.zookeeper.client.FourLetterWordMain {{zookeeper_health_check_host | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname) }} {{ zookeeper_ssl_port if zookeeper_ssl_enabled else zookeeper_nonssl_port }} srvr
 {% if zookeeper_ssl_enabled|bool %}true{% endif %}"
 
 zookeeper_current_node_hostname: "{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}"
@@ -350,10 +389,15 @@ zookeeper_copy_files: []
 
 # User provided properties, merged into the final properties dictionary with precedence
 ### Use to set custom zookeeper properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- zookeeper.properties is deprecated.
-zookeeper_custom_properties: "{{ zookeeper.properties }}"
+zookeeper_custom_properties: {}
 
+### Boolean used for disabling of systemd service restarts when rootless install is executed
+zookeeper_skip_restarts: "{{ skip_restarts }}"
 
 #### Kafka Broker Variables ####
+
+### Default Kafka config prefix. Only valid to customize when installation_method: archive
+kafka_broker_config_prefix: "{{ config_prefix }}/kafka"
 
 kafka_broker_default_listeners: "{
   'internal': {
@@ -407,7 +451,7 @@ kafka_broker_user: "{{kafka_broker_default_user}}"
 kafka_broker_group: "{{kafka_broker_default_group}}"
 
 ### Set this variable to customize the directory that the Kafka Broker writes log files to. Default location is /var/log/kafka. NOTE- kafka_broker.appender_log_path is deprecated.
-kafka_broker_log_dir: "{{kafka_broker.appender_log_path}}"
+kafka_broker_log_dir: "{{kafka_broker_default_log_dir}}"
 
 kafka_broker_packages:
   - confluent-common
@@ -427,25 +471,17 @@ kafka_broker_keystore_path: "{{kafka_broker_bcfks_keystore_path if fips_enabled|
 kafka_broker_bcfks_truststore_path: "{{ ssl_file_dir_final }}/kafka_broker.truststore.bcfks"
 kafka_broker_bcfks_keystore_path: "{{ ssl_file_dir_final }}/kafka_broker.keystore.bcfks"
 
-kafka_broker_pkcs12_truststore_path: "{{ ssl_file_dir_final }}/kafka_broker.truststore.jks"
-kafka_broker_pkcs12_keystore_path: "{{ ssl_file_dir_final }}/kafka_broker.keystore.jks"
+kafka_broker_pkcs12_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_broker.truststore.jks{% endif %}"
+kafka_broker_pkcs12_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_broker.keystore.jks{% endif %}"
 
-kafka_broker_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
-kafka_broker_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+kafka_broker_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
+kafka_broker_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_broker_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_broker_keystore_storepass }}"
 kafka_broker_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 kafka_broker_cert_path: "{{ ssl_file_dir_final }}/kafka_broker.crt"
 kafka_broker_key_path: "{{ ssl_file_dir_final }}/kafka_broker.key"
 kafka_broker_export_certs: "{{ssl_mutual_auth_enabled}}"
 kafka_broker_keytab_path: /etc/security/keytabs/kafka_broker.keytab
-
-kafka_broker:
-  # TODO deprecate these variables
-  jaas_file: "{{ (config_base_path,'etc/kafka/kafka_server_jaas.conf') | community.general.path_join }}"
-  rest_proxy_password_file: "{{ (config_base_path, 'etc/kafka/password.properties') | community.general.path_join }}"
-  appender_log_path: "{{kafka_broker_default_log_dir}}"
-  # Deprecated way of providing custom properties
-  properties: {}
 
 ### Boolean to configure Schema Validation on Kafka
 kafka_broker_schema_validation_enabled: true
@@ -496,13 +532,10 @@ kafka_broker_copy_files: []
 kafka_broker_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ### Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
-kafka_broker_metrics_reporter_enabled: "{{ 'control_center' in groups }}"
+kafka_broker_metrics_reporter_enabled: "{{ confluent_server_enabled and 'control_center' in groups }}"
 
 ### Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
-kafka_broker_custom_properties: "{{ kafka_broker.properties }}"
-
-### Use to add custom properties to variable kafka_broker_client_properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
-kafka_broker_custom_client_properties: {}
+kafka_broker_custom_properties: {}
 
 ### Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
 kafka_broker_rest_proxy_enabled: "{{confluent_server_enabled and not ccloud_kafka_enabled}}"
@@ -513,7 +546,13 @@ kafka_broker_rest_proxy_authentication_type: none
 ### Use to register and identify your Kafka cluster in the MDS.
 kafka_broker_cluster_name: ""
 
+### Boolean used for disabling of systemd service restarts when rootless install is executed
+kafka_broker_skip_restarts: "{{ skip_restarts }}"
+
 #### Schema Registry Variables ####
+
+### Default Schema Registry config prefix. Only valid to customize when installation_method: archive
+schema_registry_config_prefix: "{{ config_prefix }}/schema-registry"
 
 ### Set this variable to customize the Linux User that the Schema Registry Service runs with. Default user is cp-schema-registry.
 schema_registry_user: "{{schema_registry_default_user}}"
@@ -538,7 +577,7 @@ schema_registry_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 schema_registry_authentication_type: "{{ 'mtls' if schema_registry_ssl_mutual_auth_enabled else 'none' }}"
 
 ### Set this variable to customize the directory that the Schema Registry writes log files to. Default location is /var/log/confluent/schema-registry. NOTE- schema_registry.appender_log_path is deprecated.
-schema_registry_log_dir: "{{schema_registry.appender_log_path}}"
+schema_registry_log_dir: "{{schema_registry_default_log_dir}}"
 
 schema_registry_packages:
   - confluent-common
@@ -553,10 +592,10 @@ schema_registry_packages:
   - confluent-security
   - confluent-schema-registry-plugins
 
-schema_registry_truststore_path: "{{ ssl_file_dir_final }}/schema_registry.truststore.jks"
-schema_registry_keystore_path: "{{ ssl_file_dir_final }}/schema_registry.keystore.jks"
-schema_registry_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
-schema_registry_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+schema_registry_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/schema_registry.truststore.jks{% endif %}"
+schema_registry_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/schema_registry.keystore.jks{% endif %}"
+schema_registry_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
+schema_registry_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 schema_registry_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else schema_registry_keystore_storepass }}"
 schema_registry_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 schema_registry_cert_path: "{{ ssl_file_dir_final }}/schema_registry.crt"
@@ -564,12 +603,6 @@ schema_registry_key_path: "{{ ssl_file_dir_final }}/schema_registry.key"
 schema_registry_export_certs: "{{ True if schema_registry_authentication_type == 'mtls' else False }}"
 schema_registry_keytab_path: /etc/security/keytabs/schema_registry.keytab
 schema_registry_kafka_listener_name: internal
-schema_registry:
-  jaas_file: "{{ (config_base_path, 'etc/schema-registry/jaas.conf') | community.general.path_join }}"
-  password_file: "{{ (config_base_path, 'etc/schema-registry/password.properties') | community.general.path_join }}"
-  appender_log_path: "{{schema_registry_default_log_dir}}"
-  # Deprecated way of providing custom properties
-  properties: {}
 
 ### Boolean to enable Jolokia Agent installation and configuration on schema registry
 schema_registry_jolokia_enabled: "{{jolokia_enabled}}"
@@ -608,12 +641,18 @@ schema_registry_jmxexporter_port: 8078
 schema_registry_copy_files: []
 
 ### Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
-schema_registry_custom_properties: "{{ schema_registry.properties }}"
+schema_registry_custom_properties: {}
 
 ### Use to register and identify your Schema Registry cluster in the MDS.
 schema_registry_cluster_name: ""
 
+### Boolean used for disabling of systemd service restarts when rootless install is executed
+schema_registry_skip_restarts: "{{ skip_restarts }}"
+
 #### Kafka Rest Variables ####
+
+### Default Kafka Rest config prefix. Only valid to customize when installation_method: archive
+kafka_rest_config_prefix: "{{ config_prefix }}/kafka-rest"
 
 ### Set this variable to customize the Linux User that the Rest Proxy Service runs with. Default user is cp-kafka-rest.
 kafka_rest_user: "{{kafka_rest_default_user}}"
@@ -634,7 +673,7 @@ kafka_rest_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 kafka_rest_authentication_type: "{{ 'mtls' if kafka_rest_ssl_mutual_auth_enabled else 'none' }}"
 
 ### Set this variable to customize the directory that the Rest Proxy writes log files to. Default location is /var/log/confluent/kafka-rest. NOTE- kafka_rest.appender_log_path is deprecated.
-kafka_rest_log_dir: "{{kafka_rest.appender_log_path}}"
+kafka_rest_log_dir: "{{kafka_rest_default_log_dir}}"
 
 kafka_rest_packages:
   - confluent-common
@@ -650,10 +689,10 @@ kafka_rest_packages:
   - confluent-control-center-fe
   - confluent-control-center
 
-kafka_rest_truststore_path: "{{ ssl_file_dir_final }}/kafka_rest.truststore.jks"
-kafka_rest_keystore_path: "{{ ssl_file_dir_final }}/kafka_rest.keystore.jks"
-kafka_rest_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
-kafka_rest_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+kafka_rest_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_rest.truststore.jks{% endif %}"
+kafka_rest_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_rest.keystore.jks{% endif %}"
+kafka_rest_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
+kafka_rest_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_rest_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_rest_keystore_storepass }}"
 kafka_rest_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 kafka_rest_cert_path: "{{ ssl_file_dir_final }}/kafka_rest.crt"
@@ -661,12 +700,6 @@ kafka_rest_key_path: "{{ ssl_file_dir_final }}/kafka_rest.key"
 kafka_rest_export_certs: "{{ True if kafka_rest_authentication_type == 'mtls' else False }}"
 kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
 kafka_rest_kafka_listener_name: internal
-kafka_rest:
-  jaas_file: "{{ (config_base_path, 'etc/kafka-rest/jaas.conf') | community.general.path_join }}"
-  password_file: "{{ (config_base_path, 'etc/kafka-rest/password.properties') | community.general.path_join }}"
-  appender_log_path: "{{kafka_rest_default_log_dir}}"
-  # Deprecated way of providing custom properties
-  properties: {}
 
 ### Boolean to enable Jolokia Agent installation and configuration on Rest Proxy
 kafka_rest_jolokia_enabled: "{{jolokia_enabled}}"
@@ -705,11 +738,13 @@ kafka_rest_jmxexporter_port: 8075
 kafka_rest_copy_files: []
 
 ### Use to set custom Rest Proxy properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_rest.properties is deprecated.
-kafka_rest_custom_properties: "{{ kafka_rest.properties }}"
+kafka_rest_custom_properties: {}
 
 ### Boolean to configure Monitoring Interceptors on Rest Proxy.
 kafka_rest_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled }}"
 
+### Boolean used for disabling of systemd service restarts when rootless install is executed
+kafka_rest_skip_restarts: "{{ skip_restarts }}"
 
 # Kafka Connect Variables
 
@@ -718,6 +753,9 @@ kafka_connect_service_name: "{{kafka_connect_default_service_name}}"
 
 ### Config/Properties Filename to use when setting up and configuring Kafka Connect
 kafka_connect_config_filename: "{{kafka_connect_default_config_filename}}"
+
+### Default Kafka Connect config prefix. Only valid to customize when installation_method: archive
+kafka_connect_config_prefix: "{{ config_prefix }}/kafka"
 
 ### Set this variable to customize the Linux User that the Kafka Connect Service runs with. Default user is cp-kafka-connect.
 kafka_connect_user: "{{kafka_connect_default_user}}"
@@ -738,7 +776,7 @@ kafka_connect_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 kafka_connect_authentication_type: "{{ 'mtls' if kafka_connect_ssl_mutual_auth_enabled|bool else 'none' }}"
 
 ### Set this variable to customize the directory that Kafka Connect writes log files to. Default location is /var/log/kafka. NOTE- kafka_connect.appender_log_path is deprecated.
-kafka_connect_log_dir: "{{kafka_connect.appender_log_path}}"
+kafka_connect_log_dir: "{{kafka_connect_default_log_dir}}"
 
 kafka_connect_packages:
   - confluent-common
@@ -757,14 +795,14 @@ kafka_connect_packages:
   - confluent-control-center
   - confluent-schema-registry
 
-kafka_connect_truststore_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.truststore.jks' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.truststore.jks'}}"
-kafka_connect_keystore_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.keystore.jks' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.keystore.jks'}}"
+kafka_connect_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect.truststore.jks{% endif %}"
+kafka_connect_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect.keystore.jks{% endif %}"
 kafka_connect_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
 kafka_connect_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 kafka_connect_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_connect_keystore_storepass }}"
-kafka_connect_ca_cert_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.ca.crt' if kafka_connect_service_name != kafka_connect_default_service_name else 'ca.crt'}}"
-kafka_connect_cert_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.crt' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.crt'}}"
-kafka_connect_key_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.key' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.key'}}"
+kafka_connect_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+kafka_connect_cert_path: "{{ ssl_file_dir_final }}/kafka_connect.crt"
+kafka_connect_key_path: "{{ ssl_file_dir_final }}/kafka_connect.key"
 kafka_connect_export_certs: "{{ True if kafka_connect_authentication_type == 'mtls' else False }}"
 kafka_connect_keytab_path: /etc/security/keytabs/kafka_connect.keytab
 kafka_connect_kafka_listener_name: internal
@@ -777,13 +815,6 @@ kafka_connect_consumer_kafka_listener_name: "{{kafka_connect_kafka_listener_name
 
 ### Additional set of Connect extension classes.
 kafka_connect_custom_rest_extension_classes: []
-
-kafka_connect:
-  jaas_file: "{{ (config_base_path, 'etc/kafka/connect-jaas.conf') | community.general.path_join }}"
-  password_file: "{{ (config_base_path, 'etc/kafka/connect-password.properties') | community.general.path_join }}"
-  appender_log_path: "{{kafka_connect_default_log_dir}}"
-  # Deprecated way of providing custom properties
-  properties: {}
 
 ### Boolean to enable Jolokia Agent installation and configuration on Connect
 kafka_connect_jolokia_enabled: "{{jolokia_enabled}}"
@@ -848,7 +879,7 @@ kafka_connect_plugins_remote: []
 kafka_connect_plugins_dest: /usr/share/java
 
 ### Use to set custom Connect properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_connect.properties is deprecated.
-kafka_connect_custom_properties: "{{ kafka_connect.properties }}"
+kafka_connect_custom_properties: {}
 
 ### Boolean to configure Monitoring Interceptors on Connect.
 kafka_connect_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled }}"
@@ -856,7 +887,13 @@ kafka_connect_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabl
 ### Use to register and identify your Kafka Connect cluster in the MDS.
 kafka_connect_cluster_name: ""
 
+### Boolean used for disabling of systemd service restarts when rootless install is executed
+kafka_connect_skip_restarts: "{{ skip_restarts }}"
+
 #### KSQLDB Variables ####
+
+### Default KSQLDB config prefix. Only valid to customize when installation_method: archive
+ksql_config_prefix: "{{ config_prefix }}/ksqldb"
 
 ### Set this variable to customize the Linux User that the ksqlDB Service runs with. Default user is cp-ksql.
 ksql_user: "{{ksql_default_user}}"
@@ -877,7 +914,7 @@ ksql_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 ksql_authentication_type: "{{ 'mtls' if ksql_ssl_mutual_auth_enabled|bool else 'none' }}"
 
 ### Set this variable to customize the directory that ksqlDB writes log files to. Default location is /var/log/confluent/ksql. NOTE- ksql.appender_log_path is deprecated.
-ksql_log_dir: "{{ksql.appender_log_path}}"
+ksql_log_dir: "{{ksql_default_log_dir}}"
 
 ksql_packages:
   - confluent-common
@@ -894,10 +931,10 @@ ksql_packages:
   - confluent-control-center-fe
   - confluent-control-center
 
-ksql_truststore_path: "{{ ssl_file_dir_final }}/ksql.truststore.jks"
-ksql_keystore_path: "{{ ssl_file_dir_final }}/ksql.keystore.jks"
-ksql_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
-ksql_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+ksql_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/ksql.truststore.jks{% endif %}"
+ksql_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/ksql.keystore.jks{% endif %}"
+ksql_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
+ksql_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 ksql_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else ksql_keystore_storepass }}"
 ksql_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 ksql_cert_path: "{{ ssl_file_dir_final }}/ksql.crt"
@@ -906,11 +943,6 @@ ksql_export_certs: "{{ True if ksql_authentication_type == 'mtls' else False }}"
 ksql_keytab_path: /etc/security/keytabs/ksql.keytab
 ksql_kafka_listener_name: internal
 ksql_processing_log_kafka_listener_name: "{{kafka_broker_inter_broker_listener_name if rbac_enabled else ksql_kafka_listener_name}}"
-ksql:
-  jaas_file: "{{ (config_base_path, ('etc/ksql', ('db' if (confluent_package_version is version('5.5de.0', '>=')) else '')) | join, 'jaas.conf') | community.general.path_join }}"
-  password_file: "{{ (config_base_path, ('etc/ksql', ('db' if (confluent_package_version is version('5.5.0', '>=')) else '')) | join, 'password.properties') | community.general.path_join }}"
-  appender_log_path: "{{ksql_default_log_dir}}"
-  properties: {}
 
 ### Boolean to enable Jolokia Agent installation and configuration on ksqlDB
 ksql_jolokia_enabled: "{{jolokia_enabled}}"
@@ -956,7 +988,7 @@ ksql_default_internal_replication_factor: "{{ 3 if ccloud_kafka_enabled|bool els
 ksql_service_id: default_
 
 ### Use to set custom ksqlDB properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- ksql.properties is deprecated.
-ksql_custom_properties: "{{ ksql.properties }}"
+ksql_custom_properties: {}
 
 ### Boolean to configure Monitoring Interceptors on ksqlDB.
 ksql_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled }}"
@@ -969,8 +1001,13 @@ ksql_processing_log: "processing_log"
 ### Boolean to enable ksqlDB Log Streaming.
 ksql_log_streaming_enabled: false
 
+### Boolean used for disabling of systemd service restarts when rootless install is executed
+ksql_skip_restarts: "{{ skip_restarts }}"
 
 # Control Center Variables
+
+### Default Control Center config prefix. Only valid to customize when installation_method: archive
+control_center_config_prefix: "{{ config_prefix }}/confluent-control-center"
 
 ### Set this variable to customize the Linux User that the Control Center Service runs with. Default user is cp-control-center.
 control_center_user: "{{control_center_default_user}}"
@@ -991,7 +1028,7 @@ control_center_ssl_enabled: "{{ssl_enabled}}"
 control_center_authentication_type: none
 
 ### Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
-control_center_log_dir: "{{control_center.appender_log_path}}"
+control_center_log_dir: "{{control_center_default_log_dir}}"
 
 control_center_packages:
   - confluent-common
@@ -1007,10 +1044,10 @@ control_center_packages:
   - confluent-control-center-fe
   - confluent-control-center
 
-control_center_truststore_path: "{{ ssl_file_dir_final }}/control_center.truststore.jks"
-control_center_keystore_path: "{{ ssl_file_dir_final }}/control_center.keystore.jks"
-control_center_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
-control_center_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+control_center_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center.truststore.jks{% endif %}"
+control_center_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center.keystore.jks{% endif %}"
+control_center_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
+control_center_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
 control_center_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_keystore_storepass }}"
 control_center_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 control_center_cert_path: "{{ ssl_file_dir_final }}/control_center.crt"
@@ -1018,12 +1055,6 @@ control_center_key_path: "{{ ssl_file_dir_final }}/control_center.key"
 control_center_export_certs: "{{ssl_mutual_auth_enabled}}"
 control_center_keytab_path: /etc/security/keytabs/control_center.keytab
 control_center_kafka_listener_name: internal
-control_center:
-  jaas_file: "{{ (config_base_path, 'etc/confluent-control-center/jaas.conf') | community.general.path_join }}"
-  password_file: "{{ (config_base_path, 'etc/confluent-control-center/password.properties') | community.general.path_join }}"
-  appender_log_path: "{{control_center_default_log_dir}}"
-  # Deprecated way of providing custom properties
-  properties: {}
 
 ### Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 control_center_copy_files: []
@@ -1033,7 +1064,10 @@ control_center_default_internal_replication_factor: "{{ 3 if ccloud_kafka_enable
   [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ### Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
-control_center_custom_properties: "{{ control_center.properties }}"
+control_center_custom_properties: {}
+
+### Boolean used for disabling of systemd service restarts when rootless install is executed
+control_center_skip_restarts: "{{ skip_restarts }}"
 
 # Hash merging not working with new approach
 _sasl_scram_users: "{
@@ -1222,8 +1256,8 @@ mds_ssl_enabled: "{{ssl_enabled}}"
 kafka_broker_rest_ssl_enabled: "{{mds_ssl_enabled}}"
 
 mds_acls_enabled: "{{rbac_enabled}}"
-rbac_enabled_public_pem_path: "{{ ssl_file_dir_final }}/public.pem"
-rbac_enabled_private_pem_path: "{{ ssl_file_dir_final }}/tokenKeypair.pem"
+rbac_enabled_public_pem_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{token_services_public_pem_file}}{% else %}{{ ssl_file_dir_final }}/public.pem{% endif %}"
+rbac_enabled_private_pem_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{token_services_private_pem_file}}{% else %}{{ ssl_file_dir_final }}/tokenKeypair.pem{% endif %}"
 
 ### LDAP User which will be granted super user permissions to create role bindings in the MDS
 mds_super_user: mds
@@ -1337,7 +1371,7 @@ control_center_additional_system_admins: "{{rbac_component_additional_system_adm
 
 # Secrets Protection Variables
 
-### Boolean to enable secrets protection on all components except Zookeeper
+### Boolean to enable secrets protection on all components except Zookeeper. Starting from CP 7.1.0, secrets protection will work only with RBAC
 secrets_protection_enabled: false
 
 ### Boolean to Recreate Secrets File and Masterkey. Only set to false AFTER first cp-ansible run.
@@ -1545,6 +1579,12 @@ control_center_health_check_password: "{{ control_center_ldap_password if rbac_e
 
 # Kafka Connect Replicator Variables
 
+### Default Kafka Connect Replicator config prefix. Note - Only valid to customize when installation_method: archive
+kafka_connect_replicator_config_prefix: "{{ config_prefix }}/kafka-connect-replicator"
+
+### Boolean used for disabling of systemd service restarts when rootless install is executed
+kafka_connect_replicator_skip_restarts: "{{ skip_restarts }}"
+
 ## Set this variable to customize the Linux User that the Kafka Connect Replicator Service runs with. Default user is cp-kafka-connect-replicator.
 kafka_connect_replicator_user: "{{kafka_connect_replicator_default_user}}"
 
@@ -1731,8 +1771,8 @@ kafka_connect_replicator_truststore_storepass: ""
 kafka_connect_replicator_keystore_storepass: ""
 
 kafka_connect_replicator_keystore_keypass: "{{ ssl_keystore_key_password if kafka_connect_replicator_ssl_provided_keystore_and_truststore|bool else kafka_connect_replicator_keystore_storepass }}"
-kafka_connect_replicator_truststore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.truststore.jks"
-kafka_connect_replicator_keystore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.keystore.jks"
+kafka_connect_replicator_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator.truststore.jks{% endif %}"
+kafka_connect_replicator_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator.keystore.jks{% endif %}"
 kafka_connect_replicator_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_ca.crt"
 kafka_connect_replicator_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.crt"
 kafka_connect_replicator_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.key"
@@ -1815,8 +1855,8 @@ kafka_connect_replicator_consumer_truststore_storepass: "{{ kafka_connect_replic
 kafka_connect_replicator_consumer_keystore_storepass: "{{  kafka_connect_replicator_keystore_storepass }}"
 
 kafka_connect_replicator_consumer_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_connect_replicator_consumer_keystore_storepass }}"
-kafka_connect_replicator_consumer_truststore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.truststore.jks"
-kafka_connect_replicator_consumer_keystore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.keystore.jks"
+kafka_connect_replicator_consumer_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.truststore.jks{% endif %}"
+kafka_connect_replicator_consumer_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.keystore.jks{% endif %}"
 kafka_connect_replicator_consumer_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer_ca.crt"
 kafka_connect_replicator_consumer_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.crt"
 kafka_connect_replicator_consumer_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.key"
@@ -1897,8 +1937,8 @@ kafka_connect_replicator_producer_truststore_storepass: "{{ kafka_connect_replic
 kafka_connect_replicator_producer_keystore_storepass: "{{ kafka_connect_replicator_keystore_storepass }}"
 
 kafka_connect_replicator_producer_keystore_keypass: "{{ kafka_connect_replicator_keystore_keypass }}"
-kafka_connect_replicator_producer_truststore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.truststore.jks"
-kafka_connect_replicator_producer_keystore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.keystore.jks"
+kafka_connect_replicator_producer_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.truststore.jks{% endif %}"
+kafka_connect_replicator_producer_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.keystore.jks{% endif %}"
 kafka_connect_replicator_producer_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer_ca.crt"
 kafka_connect_replicator_producer_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.crt"
 kafka_connect_replicator_producer_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.key"
@@ -1982,8 +2022,8 @@ kafka_connect_replicator_monitoring_interceptor_truststore_storepass: "{{ kafka_
 kafka_connect_replicator_monitoring_interceptor_keystore_storepass: "{{ kafka_connect_replicator_keystore_storepass }}"
 
 kafka_connect_replicator_monitoring_interceptor_keystore_keypass: "{{ kafka_connect_replicator_keystore_keypass }}"
-kafka_connect_replicator_monitoring_interceptor_truststore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.truststore.jks"
-kafka_connect_replicator_monitoring_interceptor_keystore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.keystore.jks"
+kafka_connect_replicator_monitoring_interceptor_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.truststore.jks{% endif %}"
+kafka_connect_replicator_monitoring_interceptor_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.keystore.jks{% endif %}"
 kafka_connect_replicator_monitoring_interceptor_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor_ca.crt"
 kafka_connect_replicator_monitoring_interceptor_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.crt"
 kafka_connect_replicator_monitoring_interceptor_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.key"
@@ -2070,7 +2110,7 @@ ccloud_kafka_enabled: false
 ### Bootstrap Servers to CCloud Kafka
 ccloud_kafka_bootstrap_servers: localhost:9092
 
-## CCloud Kafka Key
+### CCloud Kafka Key
 ccloud_kafka_key: xxxxx
 
 ## CCloud Kafka Secret
@@ -2085,8 +2125,8 @@ ccloud_schema_registry_enabled: false
 ### Url to CCloud Schema Registry
 ccloud_schema_registry_url: https://localhost:8081
 
-## CCloud Schema Registry Key
+### CCloud Schema Registry Key
 ccloud_schema_registry_key: xxxxx
 
-## CCloud Schema Registry Secret
+### CCloud Schema Registry Secret
 ccloud_schema_registry_secret: yyyyyy

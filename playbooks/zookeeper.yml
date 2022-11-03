@@ -22,14 +22,67 @@
         key: zookeeper_{{install_pattern}}
       changed_when: false
 
-- name: Zookeeper Parallel Provisioning
-  hosts: zookeeper_parallel
-  gather_facts: false
-  tags: zookeeper
-  environment: "{{ proxy_env }}"
-  tasks:
-    - import_role:
-        name: zookeeper
+    - name: Gather OS Facts
+      setup:
+        filter: "{{item}}"
+        gather_subset:
+          - '!all'
+      loop:
+        - ansible_os_family
+
+    - name: Check if property file Exists
+      stat:
+        path: "{{ zookeeper.config_file }}"
+      register: zk_config
+
+    - name: Load zookeeper.properties
+      slurp:
+        src: "{{ zookeeper.config_file }}"
+      register: slurped_properties
+      when: "{{ zk_config.stat.exists }}"
+
+    - name: Set ssl status properties of zookeeper
+      set_fact:
+        zookeeper_ssl_property: "{{ (slurped_properties.content|b64decode).split('\n') | select('match', '^serverCnxnFactory=org.apache.zookeeper.server.NettyServerCnxnFactory') | list | length > 0 }}"
+        zookeeper_quorum_enabled: "{{ (slurped_properties.content|b64decode).split('\n') | select('match', '^sslQuorum=true') | list | length > 0 |default(false)}}"
+        zookeeper_clientssl_enabled: "{{ ((slurped_properties.content|b64decode).split('\n') | select('match', '^ssl.clientAuth=need') | list | length > 0) |default(false)}}"
+        service_state: "{{ ansible_facts.services[zookeeper_service_name + '.service'].state | default('unknown') }}"
+      when: "{{ zk_config.stat.exists }}"
+
+    - set_fact:
+        zk_extra_properties: >-
+          {{
+            [{
+              'clientPort': zookeeper_nonssl_port,
+              'portUnification': ('true' if zookeeper_clientssl_enabled|default('false') or zookeeper_quorum_authentication_type=='mtls') |default(omit),
+              'sslQuorum': ('false' if zookeeper_quorum_enabled|default('false') or zookeeper_quorum_authentication_type=='mtls') |default(omit)
+            }]
+          }}
+
+    - name: Save original properties for changes in ssl Status of zookeeper
+      set_fact:
+        zk_ssl_flipped: "{{ zk_config.stat.exists and zookeeper_ssl_property|default('false') != zookeeper_ssl_enabled }}"
+        zookeeper_original_custom_properties: "{{zookeeper_custom_properties}}"
+        zookeeper_ssl_enabled_original: "{{ zookeeper_ssl_enabled }}"
+        zookeeper_client_authentication_type_original: "{{ zookeeper_client_authentication_type }}"
+
+    - name: Set properties for changes in ssl Status of zookeeper
+      set_fact:
+        zk_ssl_flipped: "{{ zk_ssl_flipped }}"
+      delegate_to: "{{ item }}"
+      delegate_facts: true
+      loop: "{{ groups['kafka_broker'] }}"
+
+    - name: print Variables
+      debug:
+        msg:
+          - "{{ zookeeper_ssl_property }} on Property file and {{ zookeeper_ssl_enabled }} on inventory"
+          - "{{ zookeeper_quorum_enabled }} on Property file and {{ zookeeper_quorum_authentication_type }} on inventory"
+          - "{{ zookeeper_clientssl_enabled }} on Property file and {{ zookeeper_client_authentication_type }} on inventory"
+          - "custom property List -> {{ zookeeper_custom_properties }}"
+          - "original list -> {{ zookeeper_original_custom_properties }}"
+          - "{{ zk_ssl_flipped }}"
+          - "zookeeper_ssl_mutual_auth_enabled -> {{ zookeeper_ssl_mutual_auth_enabled }}"
 
 - name: Zookeeper Serial Ordering
   hosts: zookeeper_serial
@@ -40,6 +93,18 @@
     - import_role:
         name: zookeeper
         tasks_from: dynamic_groups.yml
+
+- name: Set ssl flipping related properties
+  hosts: zookeeper
+  gather_facts: false
+  tasks:
+    - name: Set properties if SSL status is flipped
+      set_fact:
+        zookeeper_ssl_enabled: true
+        zookeeper_client_authentication_type: "{{ 'mtls' if zookeeper_clientssl_enabled else zookeeper_client_authentication_type|default('none')}}"
+        zookeeper_quorum_authentication_type: "{{ 'mtls' if zookeeper_quorum_enabled else zookeeper_quorum_authentication_type|default('none')}}"
+        zookeeper_custom_properties: "{{ zookeeper_custom_properties| default({}) | combine(zk_extra_properties) }}"
+      when: zk_ssl_flipped | bool
 
 - name: Zookeeper Followers Provisioning
   hosts: zookeeper_follower
@@ -71,3 +136,22 @@
       pause:
         prompt: "Press Enter to Proceed to Next Node. Ctrl + C to Abort"
       when: zookeeper_pause_rolling_deployment|bool
+
+- name: Zookeeper Parallel Provisioning
+  hosts: zookeeper_parallel
+  gather_facts: false
+  tags: zookeeper
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: zookeeper
+
+- name: Reflect back to the orginal zookeeper port in properties
+  hosts: zookeeper
+  gather_facts: false
+  tasks:
+    - name: Set properties 3
+      set_fact:
+        zookeeper_custom_properties: "{{zookeeper_original_custom_properties}}"
+        zookeeper_ssl_enabled: "{{ zookeeper_ssl_enabled_original }}"
+        zookeeper_client_authentication_type: "{{ zookeeper_client_authentication_type_original }}"
