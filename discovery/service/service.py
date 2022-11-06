@@ -2,7 +2,7 @@ import abc
 import re
 from abc import ABC
 
-from discovery.api.manager import ServicePropertyManager
+from discovery.manager.manager import ServicePropertyManager
 from discovery.utils.constants import ConfluentServices
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.utils import InputContext, Logger
@@ -30,6 +30,8 @@ class AbstractPropertyBuilder(ABC):
 
     @staticmethod
     def get_property_mappings(input_context: InputContext, service: ConfluentServices, hosts: list):
+        if not hosts:
+            return dict()
         return ServicePropertyManager.get_property_mappings(input_context, service, hosts)
 
     @staticmethod

@@ -53,9 +53,6 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         # Build service user group properties
         self.__build_daemon_properties(self.input_context, self.service, hosts)
 
-        # Build broker id mappings
-        # self.__build_broker_host_properties(host_service_properties)
-
         # Build service properties
         self.__build_service_properties(service_properties)
 
@@ -79,14 +76,6 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 
-    def __build_broker_host_properties(self, host_service_properties):
-        key = "broker.id"
-        self.mapped_service_properties.add(key)
-        for hostname, properties in host_service_properties.items():
-            default_properties = properties.get(DEFAULT_KEY)
-            if key in default_properties:
-                host = self.inventory.get_host(hostname)
-                host.set_variable(key, int(default_properties.get(key)))
 
     def __build_custom_properties(self, host_service_properties: dict, mapped_properties: set):
 

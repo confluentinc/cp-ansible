@@ -7,6 +7,7 @@ Though this script tries to come up with inventory which is the closed represent
 > Python 3.9+  
 > Ansible 2.11  
 > PyYaml 6.0  
+> ansible_runner
 
 These are dependencies for this script and should be installed on the machine where we are executing it from. This is not a requirement for managed nodes of the cluster.
 #### Hosts
@@ -48,12 +49,14 @@ python discovery/main.py --input discovery/hosts.yml --ansible_user some_user --
 ### FQA
 * **Can I use it for older CP versions**  
 Ideally we should be using the discovery from the branch which maps to the CP cluster. However, to onboard existing cluster, one can use the latest disvoery code and use **--from_version** parameter to specify the CP cluster version
+
+
 * **Getting Permission issue while executing the script**  
 Ensure that the VM/Host exists and the user has access to /tmp directory. Sometimes deleting ~/.ansible and ~/.cache directories turns out to be a quick solution.
 
 ### Known Issues and limitations
 * If passwords are encrypted using secret encryption or any other encryption algorithm, this script would not be able to decrypt it. User has to explicitly add the passwords in the generated inventory file in order to continue using the cp-ansible.
-* The input hosts file doesn't support regex for hosts parttern
+* The input hosts file doesn't support regex for hosts pattern
 * Discovery doesn't support CP community edition.
 * At the time of running this script, the CP services should be up and running. Otherwise, the script will ignore those nodes/services
 * If secrets protection is enabled on cluster, Discovery scripts can populate the master key. However, all passwords should be filled by the user before using the play

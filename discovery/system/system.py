@@ -6,7 +6,7 @@ __metaclass__ = type
 
 import re
 
-from discovery.api.manager import SystemPropertyManager
+from discovery.manager.manager import SystemPropertyManager
 from discovery.utils.constants import ConfluentServices
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.utils import InputContext, Logger

@@ -43,6 +43,7 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         if not hosts:
             logger.error(f"Could not find any host with service {self.service.value.get('name')} ")
+            return
 
         host_service_properties = self.get_property_mappings(self.input_context, self.service, hosts)
         service_properties = host_service_properties.get(hosts[0]).get(DEFAULT_KEY)
