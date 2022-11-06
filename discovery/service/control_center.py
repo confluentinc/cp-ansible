@@ -220,7 +220,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_log4j_properties(self, service_properties: dict) -> tuple:
         log4j_file = self.get_log_file_path(self.input_context, self.service, self.hosts, "CONTROL_CENTER_LOG4J_OPTS")
         default_log4j_file = "/etc/confluent-control-center/log4j-rolling.properties"
-        root_logger, file = self.get_root_logger(self.input_context, self.service, self.hosts, log4j_file, default_log4j_file)
+        root_logger, file = self.get_root_logger(self.input_context, self.hosts, log4j_file, default_log4j_file)
 
         if root_logger is None or file is None:
             return self.group, {'control_center_custom_log4j': False}

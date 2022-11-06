@@ -5,14 +5,6 @@ from collections import OrderedDict
 from os.path import exists
 
 import yaml
-from ansible import context
-from ansible.executor.task_queue_manager import TaskQueueManager
-from ansible.inventory.manager import InventoryManager
-from ansible.module_utils.common.collections import ImmutableDict
-from ansible.parsing.dataloader import DataLoader
-from ansible.playbook.play import Play
-from ansible.plugins.callback import CallbackBase
-from ansible.vars.manager import VariableManager
 
 
 def singleton(class_):
@@ -114,7 +106,6 @@ class InputContext:
                  ansible_python_interpretor=None,
                  from_version=None,
                  output_file=None):
-
         self.ansible_hosts = ansible_hosts
         self.ansible_connection = ansible_connection
         self.ansible_user = ansible_user
@@ -278,106 +269,6 @@ class Arguments:
         except:
             logger.warning(f"Input inventory file '{args.input}' not provided or its incorrect")
             return None
-
-
-class ResultsCollectorJSONCallback(CallbackBase):
-    """A sample callback plugin used for performing an action as results come in.
-
-    If you want to collect all results into a single object for processing at
-    the end of the execution, look into utilizing the ``json`` callback plugin
-    or writing your own custom callback plugin.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super(ResultsCollectorJSONCallback, self).__init__(*args, **kwargs)
-        self.host_ok = {}
-        self.host_unreachable = {}
-        self.host_failed = {}
-
-    def v2_runner_on_unreachable(self, result):
-        host = result._host
-        self.host_unreachable[host.get_name()] = result
-
-    def v2_runner_on_ok(self, result, *args, **kwargs):
-        """Print a json representation of the result.
-
-        Also, store the result in an instance attribute for retrieval later
-        """
-        host = result._host
-        self.host_ok[host.get_name()] = result
-        # print(json.dumps({host.name: result._result}, indent=4))
-
-    def v2_runner_on_failed(self, result, *args, **kwargs):
-        host = result._host
-        self.host_failed[host.get_name()] = result
-
-
-class PythonAPIUtils:
-
-    @staticmethod
-    def execute_play(input_context: InputContext, play: dict):
-
-        # since the API is constructed for CLI it expects certain options to always be set in the context object
-        context.CLIARGS = ImmutableDict(connection=input_context.ansible_connection, module_path=[], diff=False,
-                                        become=input_context.ansible_become, remote_user=input_context.ansible_user,
-                                        verbosity=input_context.verbosity, host_key_checking=False,
-                                        become_user=input_context.ansible_become_user,
-                                        private_key_file=input_context.ansible_ssh_private_key_file,
-                                        ssh_extra_args=input_context.ansible_ssh_extra_args, forks=10, check=False,
-                                        become_method=input_context.ansible_become_method)
-
-        list_of_hosts = input_context.ansible_hosts
-        sources = ','.join(list_of_hosts)
-        if len(list_of_hosts) == 1:
-            sources += ','
-
-        # initialize needed objects
-        loader = DataLoader()  # Takes care of finding and reading yaml, json and ini files
-        passwords = dict(vault_pass='secret')
-
-        # Instantiate our ResultsCollectorJSONCallback for handling results as they come in.
-        # Ansible expects this to be one of its main display outlets
-        results_callback = ResultsCollectorJSONCallback()
-
-        # create inventory, use path to host config file as source or hosts in a comma separated string
-        inventory = InventoryManager(loader=loader, sources=sources)
-
-        # variable manager takes care of merging all the different sources to give you a unified
-        # view of variables available in each context
-        variable_manager = VariableManager(loader=loader, inventory=inventory)
-
-        # instantiate task queue manager, which takes care of forking and setting up
-        # all objects to iterate over host list and tasks
-        tqm = TaskQueueManager(
-            inventory=inventory,
-            variable_manager=variable_manager,
-            loader=loader,
-            passwords=passwords,
-            stdout_callback=results_callback
-        )
-        play = Play().load(play, variable_manager=variable_manager, loader=loader)
-
-        # Actually run it
-        try:
-            tqm.run(play)  # most interesting data for a play is actually sent to the callback's methods
-
-        finally:
-            tqm.cleanup()
-            if loader:
-                loader.cleanup_all_tmp_files()
-
-        return PythonAPIUtils.parse_ansible_api_response(results_callback)
-
-    @staticmethod
-    def parse_ansible_api_response(response) -> dict:
-
-        for host, msg in response.host_failed.items():
-            logger.error(f"Host {host} failed: {msg._result['msg']}")
-
-        for host, msg in response.host_unreachable.items():
-            logger.error(f"Host {host} failed: {msg._result['msg']}")
-
-        return response.host_ok
 
 
 class FileUtils:

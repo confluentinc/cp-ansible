@@ -53,9 +53,6 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         # Build service user group properties
         self.__build_daemon_properties(self.input_context, self.service, hosts)
 
-        # Build broker id mappings
-        # self.__build_broker_host_properties(host_service_properties)
-
         # Build service properties
         self.__build_service_properties(service_properties)
 
@@ -79,14 +76,6 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 
-    def __build_broker_host_properties(self, host_service_properties):
-        key = "broker.id"
-        self.mapped_service_properties.add(key)
-        for hostname, properties in host_service_properties.items():
-            default_properties = properties.get(DEFAULT_KEY)
-            if key in default_properties:
-                host = self.inventory.get_host(hostname)
-                host.set_variable(key, int(default_properties.get(key)))
 
     def __build_custom_properties(self, host_service_properties: dict, mapped_properties: set):
 
@@ -435,7 +424,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_log4j_properties(self, service_properties: dict) -> tuple:
         log4j_file = self.get_log_file_path(self.input_context, self.service, self.hosts, "KAFKA_LOG4J_OPTS")
         default_log4j_file = "/etc/kafka/log4j.properties"
-        root_logger, file = self.get_root_logger(self.input_context, self.service, self.hosts, log4j_file, default_log4j_file)
+        root_logger, file = self.get_root_logger(self.input_context, self.hosts, log4j_file, default_log4j_file)
 
         if root_logger is None or file is None:
             return self.group, {'kafka_broker_custom_log4j': False}
