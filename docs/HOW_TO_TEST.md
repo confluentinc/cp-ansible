@@ -30,7 +30,7 @@ python3 -m pip install --user "molecule[docker,lint]"
 ```
  
 Note:
-There’s this [recent issue](https://github.com/ansible-community/molecule-docker/issues/184) with latest molecule-docker version `2.1.0` which broke env var interpolation.
+There's this [recent issue](https://github.com/ansible-community/molecule-docker/issues/184) with latest molecule-docker version `2.1.0` which broke env var interpolation.
 Please downgrade it to 2.0.0 for time being until fix is available and above issue is closed.
 ```
 python3 -m pip install "molecule-docker<=2.0.0"
