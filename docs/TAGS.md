@@ -139,6 +139,12 @@ Description: To verify if supported ansible versions are being used.
 
 ***
 
+### Tag - validate_python_version
+
+Description: To verify if supported python versions are being used.
+
+***
+
 ### Tag - validate_disk_usage
 
 Description: Pre flight check. To check free space for package installation.
