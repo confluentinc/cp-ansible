@@ -3,6 +3,7 @@
 ### Validates that secrets protection is enabled on correct properties.
 ### Validates truststore is present across components.
 ### Validates that Java 17 is in Use
+### Validates LDAP authentication
 
 - name: Verify Java
   hosts: all:!ldap_server
@@ -154,3 +155,51 @@
       check_mode: false
       changed_when: false
       failed_when: linecheck.rc != 0
+
+- name: Verify - Callback handler class
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: listener.name.client.plain.sasl.server.callback.handler.class
+        expected_value: io.confluent.security.auth.provider.ldap.LdapAuthenticateCallbackHandler
+
+- name: Create LDAP Test User
+  hosts: ldap_server
+  gather_facts: false
+  tasks:
+    - include_role:
+        name: confluent.test.ldap
+        tasks_from: create_user.yml
+      vars:
+        ldap_user: "testusr"
+        ldap_user_uid: "1001"
+        ldap_user_gid: "1001"
+        ldap_user_password: "test-password"
+
+- name: Create a test kafka.properties that works with LDAP User
+  hosts: kafka_broker
+  tasks:
+    - name: Create properties file
+      copy:
+        dest: "/tmp/kafka.properties"
+        content: |
+          sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="testusr" password="test-password";
+          sasl.mechanism=PLAIN
+          security.protocol=SASL_SSL
+          ssl.truststore.location=/var/ssl/private/kafka_broker.truststore.jks
+          ssl.truststore.password=truststorepass
+
+- name: Verify - Run kafka topics command against kafka.properties
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - shell: kafka-topics --list --bootstrap-server kafka-broker1:9093 --command-config /tmp/kafka.properties
+      register: topic_result
+      check_mode: false
+      changed_when: false
+      failed_when: topic_result.rc != 0
