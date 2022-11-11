@@ -425,7 +425,7 @@ schema_registry:
 
 schema_registry_http_protocol: "{{ 'https' if schema_registry_ssl_enabled|bool else 'http' }}"
 
-_schema_registry_url: "{{schema_registry_http_protocol}}://{{ groups['schema_registry'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + schema_registry_listener_port|string + ',' + schema_registry_http_protocol + '://') }}:{{schema_registry_listener_port}}"
+_schema_registry_url: "{{schema_registry_http_protocol}}://{{ (groups.get('schema_registry') if groups.get('schema_registry') else ['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + schema_registry_listener_port|string + ',' + schema_registry_http_protocol + '://') }}:{{schema_registry_listener_port}}"
 
 schema_registry_url: "{{ ccloud_schema_registry_url if ccloud_schema_registry_enabled else _schema_registry_url }}"
 
@@ -1207,6 +1207,11 @@ kafka_connect_replicator:
   systemd_override: "{{ ('/etc/systemd/system', (kafka_connect_replicator_service_name, '.service.d') | join , 'override.conf') | path_join }}"
   log4j_file: "{{ (base_path, 'etc/kafka-connect-replicator/replicator-log4j.properties') | path_join }}"
 
+kafka_connect_replicator_rest_extension_classes:
+  - "{% if kafka_connect_replicator_rbac_enabled|bool %}io.confluent.connect.security.ConnectSecurityExtension{% endif %}"
+
+kafka_connect_replicator_final_rest_extension_classes: "{{(kafka_connect_replicator_rest_extension_classes|difference(['']) + kafka_connect_replicator_custom_rest_extension_classes) | unique}}"
+
 kafka_connect_replicator_properties:
   defaults:
     enabled: true
@@ -1224,6 +1229,10 @@ kafka_connect_replicator_properties:
       topic.whitelist: "{{kafka_connect_replicator_white_list}}"
       topic.auto.create: "{{kafka_connect_replicator_topic_auto_create}}"
       confluent.license.topic: _confluent-command
+  rest_classes:
+    enabled: "{{ kafka_connect_replicator_final_rest_extension_classes|length > 0 }}"
+    properties:
+      rest.extension.classes: "{{ kafka_connect_replicator_final_rest_extension_classes | join(',') }}"
   ssl:
     enabled: "{{kafka_connect_replicator_ssl_enabled}}"
     properties:
@@ -1235,7 +1244,6 @@ kafka_connect_replicator_properties:
   rbac:
     enabled: "{{kafka_connect_replicator_rbac_enabled}}"
     properties:
-      rest.extension.classes: io.confluent.connect.security.ConnectSecurityExtension
       rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
       public.key.path: "{{kafka_connect_replicator_rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{kafka_connect_replicator_erp_host}}"
