@@ -10,6 +10,8 @@ Version of Confluent Platform to install
 
 Default:  7.1.4
 
+***
+
 ### ansible_become_localhost
 
 Boolean to specify the become value for localhost, used when dealing with any file present on localhost/controller.
@@ -3895,6 +3897,14 @@ Default:  "{{ kafka_connect_replicator_truststore_storepass}}"
 The password for the Kafka Connect Replicator Monitoring Interceptor TLS keystore.  Defaults to match kafka_connect_replicator_keystore_storepass.
 
 Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
+
+***
+
+### kafka_connect_replicator_custom_rest_extension_classes
+
+Additional set of Kafka Connect Replicator extension classes.
+
+Default:  []
 
 ***
 
