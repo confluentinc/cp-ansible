@@ -5,6 +5,17 @@ Ansible Playbooks for Confluent Platform - Release Notes
 .. contents:: Topics
 
 
+v7.3.1
+======
+
+Notable enhancements
+-------------
+
+- Bug fixes to enable running playbook in ansible check mode.
+- Validation about python version - 3.6+
+- Bug fixes for rhel7 related to epel-release package
+
+
 v7.3.0
 ======
 

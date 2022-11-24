@@ -10,12 +10,24 @@
   copy:
     remote_src: "{{ssl_custom_certs_remote_src}}"
     src: "{{ssl_signed_cert_filepath}}"
-    dest: "{{ ssl_file_dir_final }}/{{service_name}}.chain"
+    dest: "{{ cert_path }}"
 
-- name: Extract Final Cert from Signed Cert Chain
-  shell: |
-    tac {{ ssl_file_dir_final }}/{{service_name}}.chain | awk '!flag; /-----BEGIN CERTIFICATE-----/{flag = 1};' | tac > {{cert_path}}
-  diff: "{{ not mask_sensitive_diff|bool }}"
+- name: Slurp Signed Cert
+  slurp:
+    src: "{{ cert_path }}"
+  register: slurped_signed_cert
+
+- name: Verify Cert Chain
+  community.crypto.certificate_complete_chain:
+    input_chain: "{{ slurped_signed_cert['content'] | b64decode }}"
+    root_certificates:
+      - "{{ ca_cert_path }}"
+  register: custom_cert_chain
+
+- name: Write Cert Chain
+  copy:
+    content: "{{ ''.join(custom_cert_chain.complete_chain) }}"
+    dest: "{{ ssl_file_dir_final }}/{{ service_name }}.chain"
 
 - name: Copy Key to Host
   copy:
