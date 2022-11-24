@@ -10,6 +10,9 @@ confluent_package_debian_suffix: "{{ '=' + confluent_full_package_version if con
 confluent_common_repository_redhat_release_version: "{{ ansible_distribution_major_version if ansible_os_family == 'RedHat' else ''}}"
 confluent_common_repository_debian_release_version: "{{ansible_distribution_release if ansible_os_family == 'Debian' else ''}}"
 
+### Runs kafka in Kraft mode if controller is present
+kraft_enabled: "{{ true if 'kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0 else false }}"
+
 # Deprecated, see mask_sensitive_logs
 mask_secrets: true
 
@@ -404,6 +407,17 @@ zookeeper_custom_properties: {}
 ### Boolean used for disabling of systemd service restarts when rootless install is executed
 zookeeper_skip_restarts: "{{ skip_restarts }}"
 
+### kafka controller variables
+
+### Boolean to configure controller with TLS Encryption. Also manages Java Keystore creation
+kafka_controller_ssl_enabled: "{{ssl_enabled}}"
+
+### Deprecated- Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+kafka_controller_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
+
+### Deprecated- SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
+kafka_controller_sasl_protocol: "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
+
 #### Kafka Broker Variables ####
 
 ### Default Kafka config prefix. Only valid to customize when installation_method: archive
@@ -423,7 +437,7 @@ kafka_broker_default_listeners: "{
     'ssl_enabled': {{ssl_enabled|string|lower}},
     'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
     'sasl_protocol': '{{sasl_protocol}}'
-  }{% if kafka_broker_configure_control_plane_listener|bool %},
+  }{% if kafka_broker_configure_control_plane_listener|bool and not kraft_enabled|bool %},
   'controller': {
     'name': 'CONTROLLER',
     'port': 9089,
@@ -431,6 +445,17 @@ kafka_broker_default_listeners: "{
     'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
     'sasl_protocol': '{{sasl_protocol}}'
   }{% endif %}{% endif %}
+}"
+
+kafka_controller_listeners: "{
+  {% if kraft_enabled|bool %}
+  'controller': {
+    'name': 'CONTROLLER',
+    'port': 9093,
+    'ssl_enabled': {{kafka_controller_ssl_enabled|string|lower}},
+    'ssl_mutual_auth_enabled': {{kafka_controller_ssl_mutual_auth_enabled|string|lower}},
+    'sasl_protocol': '{{kafka_controller_sasl_protocol}}'
+  }{% endif %}
 }"
 
 ### Dictionary to put additional listeners to be configured within Kafka. Each listener must include a 'name' and 'port' key. Optionally they can include the keys 'ssl_enabled', 'ssl_mutual_auth_enabled', and 'sasl_protocol'
