@@ -165,6 +165,35 @@
   tags:
     - configuration
 
+- name: get uuid
+  shell: "{{ binary_base_path }}/bin/kafka-storage random-uuid"
+  environment:
+    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
+  register: uuid_key
+  run_once: true
+  when: kraft_enabled|bool and inventory_hostname in groups.kafka_controller
+
+- name: extract uuid from meta.properties
+  slurp:
+    src: "{{ kafka_broker_final_properties['log.dirs'].split(',')[0] }}/meta.properties"
+  delegate_to: "{{ groups.kafka_controller[0] }}"
+  register: uuid_broker
+  when: kraft_enabled|bool and inventory_hostname in groups.kafka_broker
+
+- set_fact:
+    uuid_key_broker: "{{ uuid_broker['content'] | b64decode}} "
+  when: kraft_enabled|bool and inventory_hostname in groups.kafka_broker
+
+- name: get CLUSTER_ID
+  set_fact:
+    clusterid: "{{ uuid_key.stdout if inventory_hostname in groups.kafka_controller else uuid_key_broker.partition('cluster.id=')[2].partition('\n')[0] }}"
+  when: kraft_enabled|bool
+
+- name: format meta directory
+  shell: "{{ binary_base_path }}/bin/kafka-storage  format -t {{ clusterid }} -c {{ config_base_path }}/etc/kafka/server.properties --ignore-formatted"
+  register: format_meta
+  when: kraft_enabled|bool
+
 - name: Set Permissions on /var/lib/kafka
   file:
     path: /var/lib/kafka/
@@ -239,7 +268,7 @@
     mode: 0640
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
-  when: zookeeper_ssl_enabled|bool
+  when: zookeeper_ssl_enabled|bool and not kraft_enabled|bool
   tags:
     - configuration
 
@@ -369,7 +398,7 @@
     - "'Node already exists: ' + zookeeper_chroot not in create_chroot.stderr"
     - "'Created ' + zookeeper_chroot not in create_chroot.stderr"
   changed_when: "'Created ' + zookeeper_chroot in create_chroot.stderr"
-  when: zookeeper_chroot|length > 0
+  when: zookeeper_chroot|length > 0 and not kraft_enabled|bool
 
 - name: Create SCRAM Users
   shell: |
@@ -380,7 +409,9 @@
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram_users_final|dict2items }}"
   run_once: true
-  when: "'SCRAM-SHA-512' in kafka_broker_sasl_enabled_mechanisms"
+  when:
+    - "'SCRAM-SHA-512' in kafka_broker_sasl_enabled_mechanisms"
+    - and not kraft_enabled|bool
   no_log: "{{mask_secrets|bool}}"
 
 - name: Create SCRAM 256 Users
@@ -392,7 +423,9 @@
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram256_users_final|dict2items }}"
   run_once: true
-  when: "'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms"
+  when:
+    - "'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms"
+    - and not kraft_enabled|bool
   no_log: "{{ mask_sensitive_logs|bool }}"
 
 - name: Deploy JMX Exporter Config File
