@@ -128,7 +128,6 @@ kafka_broker_properties:
       socket.send.buffer.bytes: 102400
       transaction.state.log.min.isr: "{{ [ 2, kafka_broker_default_internal_replication_factor|int ] | min }}"
       transaction.state.log.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
-      zookeeper.connection.timeout.ms: 18000
       confluent.ansible.managed: 'true'
       confluent.license.topic: _confluent-command
       confluent.license.topic.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
@@ -137,17 +136,39 @@ kafka_broker_properties:
       confluent.security.event.logger.exporter.kafka.topic.replicas: "{{audit_logs_destination_bootstrap_servers.split(',')|length if audit_logs_destination_enabled and rbac_enabled else kafka_broker_default_internal_replication_factor}}"
       confluent.support.metrics.enable: "true"
       confluent.support.customer.id: anonymous
-      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
       log.dirs: "/var/lib/kafka/data"
-      listener.security.protocol.map: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
-      listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['ip'] | default('') }}:{{ listener['value']['port'] }}{% endfor %}"
-      advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname)  }}:{{ listener['value']['port'] }}{% endfor %}"
-      inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
       kafka.rest.enable: "{{kafka_broker_rest_proxy_enabled|string|lower}}"
+  controller_mode:
+    enabled: "{{kraft_enabled|bool and inventory_hostname in groups.kafka_controller}}"
+    properties:
+      process.roles: controller
+      controller.quorum.voters: "{% for inventory_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{inventory_hostname[-1]|int + 9990}}@{{inventory_hostname}}:9093{%endfor%}"
+      controller.listener.names: "{{kafka_controller_listeners['controller']['name']}}"
+      listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %}"
+      listeners: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
+      node.id: "{{ inventory_hostname[-1]|int + 9990 }}"
+  broker_on_controller:
+    enabled: "{{kraft_enabled|bool and inventory_hostname in groups.kafka_broker}}"
+    properties:
+      process.roles: broker
+      controller.quorum.voters: "{% for inventory_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{inventory_hostname[-1]|int + 9990}}@{{inventory_hostname}}:9093{%endfor%}"
+      controller.listener.names: "{{kafka_controller_listeners['controller']['name']}}"
+      listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %},{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
+      listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['ip'] | default('') }}:{{ listener['value']['port'] }}{% endfor %}"
+      inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
+  broker_on_zookeeper:
+    enabled: "{{not kraft_enabled|bool and inventory_hostname in groups.kafka_broker}}"
+    properties:
+      advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname)  }}:{{ listener['value']['port'] }}{% endfor %}"
+      listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['ip'] | default('') }}:{{ listener['value']['port'] }}{% endfor %}"
+      listener.security.protocol.map: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
+      zookeeper.connection.timeout.ms: 18000
+      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
+      inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
   broker_id:
     enabled: "{{ inventory_hostname in groups.kafka_broker }}"
     properties:
-      # broker.id logic depends on inventory hostname being in kafka_broker host list, defaulting to 0 if non kafka host
+      # broker.id logic depends on inventory hostname being in kafka_broker host list, defaulting to 0 if non kafka broker host
       broker.id: "{{ broker_id | default( groups.kafka_broker.index(inventory_hostname) + 1 ) if inventory_hostname in groups.kafka_broker else 0 }}"
   ssl:
     enabled: "{{ zookeeper_ssl_enabled|bool or
