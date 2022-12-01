@@ -1,89 +1,259 @@
 ---
-lowercaseOutputName: true
-
+startDelaySeconds: 120
+lowercaseOutputName: false
+lowercaseOutputLabelNames: false
+blacklistObjectNames:
+  - "kafka.consumer:type=*,id=*"
+  - "kafka.consumer:type=*,client-id=*"
+  - "kafka.consumer:type=*,client-id=*,topic=*"
+  - "kafka.consumer:type=*,client-id=*,topic=*,partition=*"
+  - "kafka.consumer:type=*,client-id=*,node-id=*"
+  - "kafka.producer:type=*,id=*"
+  - "kafka.producer:type=*,client-id=*"
+  - "kafka.producer:type=*,client-id=*,topic=*"
+  - "kafka.producer:type=*,client-id=*,topic=*,partition=*"
+  - "kafka.producer:type=*,client-id=*,node-id=*"
+  - "kafka.*:type=kafka-metrics-count,*"
+  # This will ignore the admin client metrics from Kafka Brokers and will blacklist certain metrics
+  # that do not make sense for ingestion.
+  # "kafka.admin.client:type=*, node-id=*, client-id=*"
+  # "kafka.admin.client:type=*, client-id=*"
+  # "kafka.admin.client:type=*, id=*"
+  - "kafka.admin.client:*"
+  - "kafka.rest:*"  
 rules:
-# Special cases and very specific rules
-- pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), topic=(.+), partition=(.*)><>Value
-  name: kafka_server_$1_$2
-  type: GAUGE
-  labels:
-    clientId: "$3"
-    topic: "$4"
-    partition: "$5"
-- pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), brokerHost=(.+), brokerPort=(.+)><>Value
-  name: kafka_server_$1_$2
-  type: GAUGE
-  labels:
-    clientId: "$3"
-    broker: "$4:$5"
-- pattern: kafka.coordinator.(\w+)<type=(.+), name=(.+)><>Value
-  name: kafka_coordinator_$1_$2_$3
-  type: GAUGE
+  # Special Overrides
+  # The following patterns have overrides to combine the brokerHost and brokerPort fields.
+  # They are not strictly necessary, but look a little nicer I guess
+  # These originally came from the Confluent Example
+  - pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), brokerHost=(.+), brokerPort=(.+)><>Value
+    name: kafka_server_$1_$2
+    type: GAUGE
+    cache: true
+    labels:
+      clientId: "$3"
+      broker: "$4:$5"
+  - pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), brokerHost=(.+), brokerPort=(.+)><>Count
+    name: kafka_server_$1_$2_count
+    type: GAUGE
+    cache: true
+    labels:
+      clientId: "$3"
+      broker: "$4:$5"
+  - pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), brokerHost=(.+), brokerPort=(.+)><>(\d+)thPercentile
+    name: kafka_server_$1_$2
+    type: GAUGE
+    cache: true
+    labels:
+      clientId: "$3"
+      broker: "$4:$5"
+      quantile: "0.$6"
+  # The following pattern is used to separate out metrics that use the same name
+  # but are measured at the individual topic granularity, as well as with an aggregate metric
+  - pattern: kafka.server<type=(.+), name=(.+), topic=(.+)><>Count
+    name: kafka_server_$1_$2_count_by_topic
+    type: GAUGE
+    cache: true
+    labels:
+      topic: "$3"
+  # The following patterns are used to separate information about client connections.
+  # The metrics use the exact same name, but have differeing label sets.
+  - pattern: kafka.server<type=socket-server-metrics, clientSoftwareName=(.+), clientSoftwareVersion=(.+), listener=(.+), networkProcessor=(.+)><>connections
+    name: kafka_server_socket_server_metrics_connections_by_client_version
+    type: GAUGE
+    cache: true
+    labels:
+      client_software_name: "$1"
+      client_software_version: "$2"
+      listener: "$3"
+      network_processor: "$4"
+  - pattern: kafka.server<type=socket-server-metrics, cipher=(.+), protocol=(.+), listener=(.+), networkProcessor=(.+)><>connections
+    name: kafka_server_socket_server_metrics_connections_by_protocol
+    type: GAUGE
+    cache: true
+    labels:
+      cipher: "$1"
+      protocol: "$2"
+      listener: "$3"
+      network_processor: "$4"
 
-# Generic per-second counters with 0-2 key/value pairs
-- pattern: kafka.(\w+)<type=(.+), name=(.+)PerSec\w*, (.+)=(.+), (.+)=(.+)><>Count
-  name: kafka_$1_$2_$3_total
-  type: COUNTER
-  labels:
-    "$4": "$5"
-    "$6": "$7"
-- pattern: kafka.(\w+)<type=(.+), name=(.+)PerSec\w*, (.+)=(.+)><>Count
-  name: kafka_$1_$2_$3_total
-  type: COUNTER
-  labels:
-    "$4": "$5"
-- pattern: kafka.(\w+)<type=(.+), name=(.+)PerSec\w*><>Count
-  name: kafka_$1_$2_$3_total
-  type: COUNTER
 
-# Generic gauges with 0-2 key/value pairs
-- pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.+), (.+)=(.+)><>Value
-  name: kafka_$1_$2_$3
-  type: GAUGE
-  labels:
-    "$4": "$5"
-    "$6": "$7"
-- pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.+)><>Value
-  name: kafka_$1_$2_$3
-  type: GAUGE
-  labels:
-    "$4": "$5"
-- pattern: kafka.(\w+)<type=(.+), name=(.+)><>Value
-  name: kafka_$1_$2_$3
-  type: GAUGE
+  # Named Count Catch-All Patterns
+  - pattern: kafka.([^<]+)<type=(.+), name=([^,]+)><>(Count)
+    name: kafka_$1_$2_$3_count
+    type: GAUGE
+    cache: true
+  - pattern: kafka.([^<]+)<type=(.+), name=([^,]+), ([^=]+)=([^,]+)><>(Count)
+    name: kafka_$1_$2_$3_count
+    type: GAUGE
+    cache: true
+    labels:
+      "$4": "$5"
+  - pattern: kafka.([^<]+)<type=(.+), name=([^,]+), ([^=]+)=([^,]+), ([^=]+)=([^,]+)><>(Count)
+    name: kafka_$1_$2_$3_count
+    type: GAUGE
+    cache: true
+    labels:
+      "$4": "$5"
+      "$6": "$7"
+  - pattern: kafka.([^<]+)<type=(.+), name=([^,]+), ([^=]+)=([^,]+), ([^=]+)=([^,]+), ([^=]+)=([^,]+)><>(Count)
+    name: kafka_$1_$2_$3_count
+    type: GAUGE
+    cache: true
+    labels:
+      "$4": "$5"
+      "$6": "$7"
+      "$8": "$9"
 
-# Emulate Prometheus 'Summary' metrics for the exported 'Histogram's.
-#
-# Note that these are missing the '_sum' metric!
-- pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.+), (.+)=(.+)><>Count
-  name: kafka_$1_$2_$3_count
-  type: COUNTER
-  labels:
-    "$4": "$5"
-    "$6": "$7"
-- pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.*), (.+)=(.+)><>(\d+)thPercentile
-  name: kafka_$1_$2_$3
-  type: GAUGE
-  labels:
-    "$4": "$5"
-    "$6": "$7"
-    quantile: "0.$8"
-- pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.+)><>Count
-  name: kafka_$1_$2_$3_count
-  type: COUNTER
-  labels:
-    "$4": "$5"
-- pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.*)><>(\d+)thPercentile
-  name: kafka_$1_$2_$3
-  type: GAUGE
-  labels:
-    "$4": "$5"
-    quantile: "0.$6"
-- pattern: kafka.(\w+)<type=(.+), name=(.+)><>Count
-  name: kafka_$1_$2_$3_count
-  type: COUNTER
-- pattern: kafka.(\w+)<type=(.+), name=(.+)><>(\d+)thPercentile
-  name: kafka_$1_$2_$3
-  type: GAUGE
-  labels:
-    quantile: "0.$4"
+  # Named Value Catch-All Patterns
+  - pattern: kafka.([^<]+)<type=(.+), name=([^,>]+)><>(Value)
+    name: kafka_$1_$2_$3
+    type: GAUGE
+    cache: true
+  - pattern: kafka.([^<]+)<type=(.+), name=([^,]+), ([^=]+)=([^,]+)><>(Value)
+    name: kafka_$1_$2_$3
+    type: GAUGE
+    cache: true
+    labels:
+      "$4": "$5"
+  - pattern: kafka.([^<]+)<type=(.+), name=([^,]+), ([^=]+)=([^,]+), ([^=]+)=([^,]+)><>(Value)
+    name: kafka_$1_$2_$3
+    type: GAUGE
+    cache: true
+    labels:
+      "$4": "$5"
+      "$6": "$7"
+  - pattern: kafka.([^<]+)<type=(.+), name=([^,]+), ([^=]+)=([^,]+), ([^=]+)=([^,]+), ([^=]+)=([^,]+)><>(Value)
+    name: kafka_$1_$2_$3
+    type: GAUGE
+    cache: true
+    labels:
+      "$4": "$5"
+      "$6": "$7"
+      "$8": "$9"
+
+  # Named Percentile Catch-All Patterns
+  - pattern: kafka.([^<]+)<type=([^,]+), name=([^,]+)><>(\d+)thPercentile
+    name: kafka_$1_$2_$3
+    type: GAUGE
+    cache: true
+    labels:
+      quantile: "0.$4"
+  - pattern: kafka.([^<]+)<type=([^,]+), name=([^,]+), (.+)=([^,]+)><>(\d+)thPercentile
+    name: kafka_$1_$2_$3
+    type: GAUGE
+    cache: true
+    labels:
+      "$4": "$5"
+      quantile: "0.$6"
+  - pattern: kafka.([^<]+)<type=([^,]+), name=([^,]+), (.+)=([^,]+), (.+)=([^,]+)><>(\d+)thPercentile
+    name: kafka_$1_$2_$3
+    type: GAUGE
+    cache: true
+    labels:
+      "$4": "$5"
+      "$6": "$7"
+      quantile: "0.$8"
+
+  # Catch-All Value Patterns
+  - pattern: kafka.([^<]+)<type=(.+)><>(Value)
+    name: kafka_$1_$2
+    type: GAUGE
+    cache: true
+  - pattern: kafka.([^<]+)<type=(.+), ([^=]+)=([^,]+)><>(Value)
+    name: kafka_$1_$2
+    type: GAUGE
+    cache: true
+    labels:
+      "$3": "$4"
+  - pattern: kafka.([^<]+)<type=(.+), ([^=]+)=([^,]+), ([^=]+)=([^,]+)><>(Value)
+    name: kafka_$1_$2
+    type: GAUGE
+    cache: true
+    labels:
+      "$3": "$4"
+      "$5": "$6"
+  - pattern: kafka.([^<]+)<type=(.+), ([^=]+)=([^,]+), ([^=]+)=([^,]+), ([^=]+)=([^,]+)><>(Value)
+    name: kafka_$1_$2
+    type: GAUGE
+    cache: true
+    labels:
+      "$3": "$4"
+      "$5": "$6"
+      "$7": "$8"
+
+
+  # Percentile Catch-All Patterns
+  - pattern: kafka.([^<]+)<type=([^,]+)><>(\d+)thPercentile
+    name: kafka_$1_$2
+    type: GAUGE
+    cache: true
+    labels:
+      quantile: "0.$3"
+  - pattern: kafka.([^<]+)<type=([^,]+), (.+)=([^,]+)><>(\d+)thPercentile
+    name: kafka_$1_$2
+    type: GAUGE
+    cache: true
+    labels:
+      "$3": "$4"
+      quantile: "0.$5"
+
+  # Attribute Named Catch-All Patterns
+  - pattern: "kafka.([^<]+)<type=([^,]+), ([^=]+)=([^,]+), ([^=]+)=([^,]+), ([^=]+)=([^,]+)><>((?!.+Rate|Max|Min|Mean|StdDev).+):"
+    name: kafka_$1_$2_$9
+    type: GAUGE
+    cache: true
+    labels:
+      "$3": "$4"
+      "$5": "$6"
+      "$7": "$8"
+  - pattern: "kafka.([^<]+)<type=([^,]+), ([^=]+)=([^,]+), ([^=]+)=([^,]+)><>((?!.+Rate|Max|Min|Mean|StdDev).+):"
+    name: kafka_$1_$2_$7
+    type: GAUGE
+    cache: true
+    labels:
+      "$3": "$4"
+      "$5": "$6"  
+  - pattern: "kafka.([^<]+)<type=([^,]+), ([^=]+)=([^,]+)><>((?!.+Rate|Max|Min|Mean|StdDev).+):"
+    name: kafka_$1_$2_$5
+    type: GAUGE
+    cache: true
+    labels:
+      "$3": "$4"
+  - pattern: "kafka.([^<]+)<type=([^,]+)><>((?!.+Rate|Max|Min|Mean|StdDev).+):"
+    name: kafka_$1_$2_$3
+    type: GAUGE
+    cache: true
+
+
+  # Confluent metrics idk deal with these later they seem fine for now but might also be
+  # getting caught up with the catch-all rules above
+  # "kafka.server:type=*, listener=*, networkProcessor=*, clientSoftwareName=*, clientSoftwareVersion=*"
+  # Additional Rules for Confluent Server Metrics
+  # 'confluent.metadata:type=*, name=*, topic=*, partition=*'
+  - pattern: confluent.([^<]+)<type=(.+), (.+)=(.+), (.+)=(.+), (.+)=(.+)><>Value
+    name: confluent_$1_$2
+    type: GAUGE
+    cache: true
+    labels:
+      "$3": "$4"
+      "$5": "$6"
+      "$7": "$8"
+  # 'confluent.metadata.service:type=*, node-id=*, client-id=*'
+  - pattern: confluent.(.+)<type=(.+), (.+)=(.+), (.+)=(.+)><>Value
+    name: confluent_$1_$2
+    type: GAUGE
+    cache: true
+    labels:
+      "$3": "$4"
+      "$5": "$6"
+  # 'confluent.metadata.service:type=*, client-id=*'
+  # 'confluent.metadata.service:type=*, id=*'
+  # 'confluent.metadata:type=*, name=*'
+  # 'confluent.license:type=*, name=*'
+  - pattern: confluent.(.+)<type=(.+), (.+)=(.+)><>Value
+    name: confluent_$1_$2
+    type: GAUGE
+    cache: true
+    labels:
+      "$3": "$4"  
