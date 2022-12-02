@@ -1,0 +1,27 @@
+---
+- name: get uuid
+  shell: "{{ binary_base_path }}/bin/kafka-storage random-uuid"
+  environment:
+    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
+  register: uuid_key
+  run_once: true
+  when: inventory_hostname in groups.kafka_controller
+
+- name: extract uuid from meta.properties
+  slurp:
+    src: "{{ kafka_broker_final_properties['log.dirs'].split(',')[0] }}/meta.properties"
+  delegate_to: "{{ groups.kafka_controller[0] }}"
+  register: uuid_broker
+  when: inventory_hostname in groups.kafka_broker
+
+- set_fact:
+    uuid_key_broker: "{{ uuid_broker['content'] | b64decode}} "
+  when: inventory_hostname in groups.kafka_broker
+
+- name: get CLUSTER_ID
+  set_fact:
+    clusterid: "{{ uuid_key.stdout if inventory_hostname in groups.kafka_controller else uuid_key_broker.partition('cluster.id=')[2].partition('\n')[0] }}"
+
+- name: format meta directory
+  shell: "{{ binary_base_path }}/bin/kafka-storage  format -t {{ clusterid }} -c {{ config_base_path }}/etc/kafka/server.properties --ignore-formatted"
+  register: format_meta

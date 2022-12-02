@@ -231,33 +231,8 @@
   tags:
     - configuration
 
-- name: get uuid
-  shell: "{{ binary_base_path }}/bin/kafka-storage random-uuid"
-  environment:
-    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
-  register: uuid_key
-  run_once: true
-  when: kraft_enabled|bool and inventory_hostname in groups.kafka_controller
-
-- name: extract uuid from meta.properties
-  slurp:
-    src: "{{ kafka_broker_final_properties['log.dirs'].split(',')[0] }}/meta.properties"
-  delegate_to: "{{ groups.kafka_controller[0] }}"
-  register: uuid_broker
-  when: kraft_enabled|bool and inventory_hostname in groups.kafka_broker
-
-- set_fact:
-    uuid_key_broker: "{{ uuid_broker['content'] | b64decode}} "
-  when: kraft_enabled|bool and inventory_hostname in groups.kafka_broker
-
-- name: get CLUSTER_ID
-  set_fact:
-    clusterid: "{{ uuid_key.stdout if inventory_hostname in groups.kafka_controller else uuid_key_broker.partition('cluster.id=')[2].partition('\n')[0] }}"
-  when: kraft_enabled|bool
-
-- name: format meta directory
-  shell: "{{ binary_base_path }}/bin/kafka-storage  format -t {{ clusterid }} -c {{ config_base_path }}/etc/kafka/server.properties --ignore-formatted"
-  register: format_meta
+- name: Include Kraft tasks
+  include_tasks: kraft_tasks.yml
   when: kraft_enabled|bool
 
 # Zookeeper shell cannot read server.properties if secrets protection is enabled. Keeping a separate file.
@@ -517,11 +492,20 @@
   tags:
     - systemd
 
-- name: Wait for health checks to complete
+- name: Wait for Broker health checks to complete
   include_tasks: health_check.yml
   when:
     - kafka_broker_health_checks_enabled|bool
     - not ansible_check_mode
+    - inventory_hostname in groups.kafka_broker
+  tags: health_check
+
+- name: Wait for Controller health checks to complete
+  include_tasks: controller_health_check.yml
+  when:
+    - kafka_broker_health_checks_enabled|bool
+    - not ansible_check_mode
+    - kraft_enabled|bool and inventory_hostname in groups.kafka_controller
   tags: health_check
 
 - name: Register Cluster
