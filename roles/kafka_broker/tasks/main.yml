@@ -361,6 +361,7 @@
   notify: restart kafka
   diff: "{{ not mask_sensitive_diff|bool }}"
 
+# This will be only used with zookeeper quorum. No Alternate in Kraft
 - name: Create Zookeeper chroot
   shell: >
     {{ binary_base_path }}/bin/zookeeper-shell {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} \
@@ -375,11 +376,12 @@
   changed_when: "'Created ' + zookeeper_chroot in create_chroot.stderr"
   when: zookeeper_chroot|length > 0
 
+# This will be only used with zookeper quorum. SCRAM won't work in Kraft
 - name: Create SCRAM Users
   shell: |
     {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
     {{ binary_base_path }}/bin/kafka-configs {% if zookeeper_ssl_enabled|bool %}--zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
-      --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
+      --bootstrap-server {{ groups['kafka_broker'][0] }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}} --alter \
       --add-config 'SCRAM-SHA-512=[password={{ item.value['password'] }}]' \
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram_users_final|dict2items }}"
@@ -388,11 +390,12 @@
     - "'SCRAM-SHA-512' in kafka_broker_sasl_enabled_mechanisms"
   no_log: "{{mask_secrets|bool}}"
 
+# This will be only used with zookeper quorum. SCRAM won't work in Kraft
 - name: Create SCRAM 256 Users
   shell: |
     {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
     {{ binary_base_path }}/bin/kafka-configs {% if zookeeper_ssl_enabled|bool %}--zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
-      --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
+      --bootstrap-server {{ groups['kafka_broker'][0] }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}} --alter \
       --add-config 'SCRAM-SHA-256=[password={{ item.value['password'] }}]' \
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram256_users_final|dict2items }}"
