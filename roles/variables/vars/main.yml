@@ -99,6 +99,21 @@ zookeeper_combined_properties: "{{ zookeeper_properties | confluent.platform.com
 
 zookeeper_final_properties: "{{ zookeeper_combined_properties | combine(zookeeper_custom_properties) }}"
 
+#### Kafka controller variables
+kafka_controller_service_name: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
+kafka_controller_main_package: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
+kafka_controller_default_group: confluent
+kafka_controller_default_user: cp-kafka
+kafka_controller_default_log_dir: /var/log/kafka
+kafka_controller:
+  server_start_file: "{{ binary_base_path }}/bin/kafka-server-start"
+  config_file: "{{ (config_base_path , 'etc/kafka/server.properties')| path_join }}"
+  client_config_file: "{{ (config_base_path , 'etc/kafka/client.properties')| path_join }}"
+  systemd_file: "{{systemd_base_dir}}/{{kafka_controller_service_name}}.service"
+  systemd_override: /etc/systemd/system/{{kafka_controller_service_name}}.service.d/override.conf
+  log4j_file: "{{ (base_path, 'etc/kafka/log4j.properties') | path_join }}"
+  jaas_file: "{{ (config_base_path, 'etc/kafka/kafka_server_jaas.conf') | path_join }}"
+  rest_proxy_password_file: "{{ (config_base_path, 'etc/kafka/password.properties') | path_join }}"
 
 #### Kafka Broker Variables ####
 kafka_broker_service_name: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
@@ -370,7 +385,7 @@ kafka_broker_properties:
                     plain_jaas_config, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'), kerberos_kafka_broker_primary,
                     sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path ) }}"
   controlplane_listener:
-    enabled: "{{ kafka_broker_configure_control_plane_listener|bool and kafka_broker_configure_multiple_listeners|bool }}"
+    enabled: "{{ kafka_broker_configure_control_plane_listener|bool and kafka_broker_configure_multiple_listeners|bool and not kraft_enabled|bool}}"
     properties:
       control.plane.listener.name: "{{(kafka_broker_listeners[kafka_broker_control_plane_listener_name]|default(kafka_broker_listeners[kafka_broker_inter_broker_listener_name]))['name']}}"
   metrics_reporter:
@@ -444,6 +459,19 @@ kafka_broker_default_client_properties: "{{ kafka_broker_listeners[kafka_broker_
                             false, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls) }}"
 
 kafka_broker_client_properties: "{{ kafka_broker_default_client_properties | combine(kafka_broker_custom_client_properties) }}"
+
+kafka_controller_combined_properties: "{{kafka_broker_properties | confluent.platform.combine_properties}}"
+
+kafka_controller_final_properties: "{{ kafka_controller_combined_properties | combine(kafka_broker_custom_properties) }}"
+
+# A set of client properties against the broker listener for kafka health checks
+kafka_controller_default_client_properties: "{{ kafka_controller_listeners['controller'] | confluent.platform.client_properties(kafka_controller_ssl_enabled, False, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
+                            '', kafka_broker_pkcs12_truststore_path, kafka_broker_truststore_storepass, False, kafka_broker_pkcs12_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
+                            false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
+                            kerberos_kafka_broker_primary, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'),
+                            false, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls) }}"
+
+kafka_controller_client_properties: "{{ kafka_controller_default_client_properties | combine(kafka_controller_custom_client_properties) }}"
 
 #### Schema Registry Variables ####
 schema_registry_service_name: confluent-schema-registry

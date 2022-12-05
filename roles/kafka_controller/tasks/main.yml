@@ -1,0 +1,460 @@
+---
+- include_role:
+    name: common
+  when: not common_role_completed|bool
+  tags: common
+
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_fqdn
+    - ansible_distribution
+
+# datadir is not supported way to provide data directories for kafka brokers
+- name: Assert that datadir is not present in the inventory
+  assert:
+    that: >
+      'kafka_controller' not in hostvars[item] or
+      hostvars[item].kafka_controller == None or
+      'datadir' not in hostvars[item].kafka_controller
+    fail_msg: |
+      "Providing 'datadir' in inventory file is no more supported way to configure data directories for kafka brokers."
+      "Please use 'log.dirs' under kafka_controller_custom_properties with comma separated directories."
+  loop: "{{ groups['kafka_controller'] }}"
+
+# To avoid a catastrophic user error where root directory permissions get recursively changed
+- name: Assert log.dirs Property not Misconfigured
+  assert:
+    that:
+      - kafka_controller_final_properties['log.dirs'].split(',')[0] != "/"
+    fail_msg: "If you have log.dirs in kafka_controller_custom_properties, make sure it's comma separated directories."
+
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ kafka_controller_service_name }}"
+  when: installation_method == "package"
+  tags: package
+
+- name: Install the Kafka Controller Packages
+  yum:
+    name: "{{ kafka_controller_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
+    state: latest
+  register: install_kafka_package_result
+  until: install_kafka_package_result is success  or ansible_check_mode
+  retries: 5
+  delay: 90
+  loop: "{{kafka_controller_packages}}"
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: package
+  notify: restart kafka
+
+- name: Install the Kafka Controller Packages
+  apt:
+    name: "{{ kafka_controller_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
+  register: install_kafka_package_result
+  until: install_kafka_package_result is success  or ansible_check_mode
+  retries: 5
+  delay: 90
+  loop: "{{kafka_controller_packages}}"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags: package
+  notify: restart kafka
+
+- name: Kafka Controller group
+  group:
+    name: "{{kafka_controller_group}}"
+  tags:
+    - privileged
+
+- name: Check if Kafka Controller User Exists
+  # Create user task must be skipped for non-linux users
+  getent:
+    database: passwd
+    key: "{{kafka_controller_user}}"
+  failed_when: false
+
+- name: Create Kafka Controller user
+  user:
+    name: "{{kafka_controller_user}}"
+    comment: Confluent Kafka
+    system: true
+    shell: "{{user_login_shell}}"
+    group: "{{kafka_controller_group}}"
+  when: (getent_passwd|default({}))[kafka_controller_user] is not defined
+  tags:
+    - privileged
+
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Kafka Controller Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{kafka_controller.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{kafka_controller.systemd_file}}"
+    mode: 0644
+    force: true
+  when: installation_method == "archive"
+  tags:
+    - systemd
+
+- include_role:
+    name: ssl
+  vars:
+    truststore_storepass: "{{kafka_controller_truststore_storepass}}"
+    truststore_path: "{{kafka_controller_pkcs12_truststore_path}}"
+    keystore_path: "{{kafka_controller_pkcs12_keystore_path}}"
+    keystore_storepass: "{{kafka_controller_keystore_storepass}}"
+    keystore_keypass: "{{kafka_controller_keystore_keypass}}"
+    service_name: kafka_controller
+    user: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+    hostnames: "{{ ([inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] + kafka_controller_listeners | confluent.platform.get_hostnames(inventory_hostname)) | unique }}"
+    ca_cert_path: "{{kafka_controller_ca_cert_path}}"
+    cert_path: "{{kafka_controller_cert_path}}"
+    key_path: "{{kafka_controller_key_path}}"
+    export_certs: "{{kafka_controller_export_certs}}"
+    create_bouncy_castle_keystore: "{{fips_enabled}}"
+    bcfks_truststore_path: "{{kafka_controller_bcfks_truststore_path}}"
+    bcfks_keystore_path: "{{kafka_controller_bcfks_keystore_path}}"
+  when: >
+    kafka_controller_listeners | confluent.platform.ssl_required(ssl_enabled) or
+    mds_broker_listener.ssl_enabled|bool or
+    mds_tls_enabled|bool or
+    ( kafka_controller_schema_validation_enabled and 'schema_registry' in groups and schema_registry_ssl_enabled )
+  tags: ssl
+
+- include_tasks: rbac.yml
+  when: rbac_enabled|bool
+
+- name: Configure Kerberos
+  include_role:
+    name: kerberos
+  vars:
+    kerberos_group: "{{kafka_controller_group}}"
+    kerberos_user: "{{kafka_controller_user}}"
+    kerberos_keytab_path: "{{kafka_controller_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{kafka_controller_keytab_path}}"
+    kerberos_handler: "restart kafka"
+  when: 
+    - "'GSSAPI' in kafka_controller_sasl_enabled_mechanisms"
+
+- name: Copy Custom Kafka Files
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{kafka_controller_copy_files}}"
+    user: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+  when: kafka_controller_copy_files | length > 0
+  tags:
+    - configuration
+
+- name: Set Permissions on /var/lib/kafka
+  file:
+    path: /var/lib/kafka/
+    owner: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+    state: directory
+    mode: 0750
+  tags:
+    - privileged
+    - filesystem
+
+- name: Set Permissions on Data Dirs
+  file:
+    path: "{{item}}"
+    owner: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+    state: directory
+    mode: 0750
+  with_items: "{{ kafka_controller_final_properties['log.dirs'].split(',') }}"
+  tags:
+    - filesystem
+
+- name: Set Permissions on Data Dir files  # noqa deprecated-command-syntax
+  # Have to use command + chown instead of the Ansible file module here as it seems
+  # like the file module can't handle files modified/deleted while running. This task
+  # can fail on a very active cluster. See https://github.com/confluentinc/cp-ansible/pull/903 for details.
+  command: chown -R {{ kafka_controller_user }}:{{ kafka_controller_group }} {{ item }}
+  changed_when: false
+  with_items: "{{ kafka_controller_final_properties['log.dirs'].split(',') }}"
+  tags:
+    - filesystem
+
+- name: Create Kafka Controller Config directory
+  file:
+    path: "{{ kafka_controller.config_file | dirname }}"
+    state: directory
+    mode: 0750
+    owner: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+  tags:
+    - filesystem
+
+
+- name: Create Kafka Controller Config
+  template:
+    src: server.properties.j2
+    dest: "{{kafka_controller.config_file}}"
+    mode: 0640
+    owner: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+  notify: restart kafka
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
+- name: Create Kafka Controller Client Config
+  template:
+    src: client.properties.j2
+    dest: "{{kafka_controller.client_config_file}}"
+    mode: 0640
+    owner: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
+- name: Include Kraft tasks
+  include_tasks: kraft_tasks.yml
+
+- name: Create Logs Directory
+  file:
+    path: "{{kafka_controller_log_dir}}"
+    state: directory
+    group: "{{kafka_controller_group}}"
+    owner: "{{kafka_controller_user}}"
+    mode: 0770
+  tags:
+    - filesystem
+    - log
+
+- name: Update Kafka log4j Config for Log Cleanup
+  include_role:
+    name: common
+    tasks_from: update_log4j.yml
+  vars:
+    log4j_file: "{{kafka_controller.log4j_file}}"
+    log4j_max_backup_index: "{{kafka_controller_max_log_files}}"
+    log4j_max_file_size: "{{kafka_controller_log_file_size}}"
+    log4j_root_logger: "{{kafka_controller_log4j_root_logger}}"
+    handler: "restart kafka"
+  when: kafka_controller_custom_log4j|bool
+  tags:
+    - configuration
+    - log
+
+- name: Set Permissions on Log4j Conf
+  file:
+    path: "{{kafka_controller.log4j_file}}"
+    group: "{{kafka_controller_group}}"
+    owner: "{{kafka_controller_user}}"
+    mode: 0640
+  tags:
+    - filesystem
+    - log
+
+- name: Create logredactor rule file directory
+  file:
+    path: "{{ logredactor_rule_path | dirname }}"
+    state: directory
+    mode: 0755
+  when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ logredactor_rule_path_local }}"
+    dest: "{{ logredactor_rule_path }}"
+    mode: 0644
+  when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Configure logredactor
+  include_role:
+    name: common
+    tasks_from: configure_logredactor.yml
+  vars:
+    log4j_file: "{{kafka_controller.log4j_file}}"
+    logredactor_rule_var: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
+    logredactor_policy_refresh_interval_var: "{{logredactor_policy_refresh_interval}}"
+  with_items: "{{ kafka_controller_logredactor_logger_specs_list }}"
+  when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool)
+  tags:
+    - log
+
+- name: Restart kafka broker
+  ansible.builtin.debug:
+    msg: "restarting kafka broker"
+  notify: restart kafka
+  when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool) and (not kafka_controller_skip_restarts|bool)
+  tags:
+    - log
+
+- name: Create Kafka Controller Jolokia Config
+  template:
+    src: kafka_jolokia.properties.j2
+    dest: "{{kafka_controller_jolokia_config}}"
+    mode: 0640
+    owner: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+  when: kafka_controller_jolokia_enabled|bool
+  notify: restart kafka
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
+- name: Create Kafka Controller Jaas Config
+  template:
+    src: kafka_server_jaas.conf.j2
+    dest: "{{kafka_controller.jaas_file}}"
+    mode: 0640
+    owner: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+  when:
+    - "'GSSAPI' in kafka_controller_sasl_enabled_mechanisms"
+  notify: restart kafka
+  tags:
+    - configuration
+
+- name: Create Kafka Controller Password File
+  template:
+    src: password.properties.j2
+    dest: "{{kafka_controller.rest_proxy_password_file}}"
+    mode: 0640
+    owner: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+  when: kafka_controller_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_controller_rest_proxy_authentication_type == 'basic'
+  notify: restart kafka
+  diff: "{{ not mask_sensitive_diff|bool }}"
+
+- name: Deploy JMX Exporter Config File
+  template:
+    src: "{{kafka_controller_jmxexporter_config_source_path}}"
+    dest: "{{kafka_controller_jmxexporter_config_path}}"
+    mode: 0640
+    owner: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+  when: kafka_controller_jmxexporter_enabled|bool
+  tags:
+    - configuration
+
+- name: Create Service Override Directory
+  file:
+    path: "{{kafka_controller.systemd_override | dirname }}"
+    owner: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+    state: directory
+    mode: 0640
+  tags:
+    - systemd
+
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{ kafka_controller.systemd_override }}"
+    mode: 0640
+    owner: root
+    group: root
+  notify: restart kafka
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - systemd
+
+- name: Create sysctl directory on Debian distributions
+  file:
+    path: /usr/lib/sysctl.d
+    state: directory
+  when: ansible_distribution == "Debian"
+  tags:
+    - sysctl
+    - privileged
+
+- name: Create sysctl directory on Debian distributions
+  file:
+    path: /usr/lib/sysctl.d
+    state: directory
+    mode: 0755
+  when: ansible_distribution == "Debian"
+  tags:
+    - sysctl
+    - privileged
+
+- name: Tune virtual memory settings
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: "{{ kafka_controller_sysctl_file }}"
+    reload: true
+  with_dict: "{{ kafka_controller_sysctl }}"
+  tags:
+    - sysctl
+    - privileged
+
+- name: Certs were Updated - Trigger Restart
+  command: /bin/true
+  notify: restart kafka
+  when: certs_updated|bool
+
+# We need to start MDS here to proceed with secrets protection
+- meta: flush_handlers
+
+# Starting confluent cli v2, secrets protection works only when rbac
+- name: Encrypt secrets
+  include_tasks: secrets_protection.yml
+  when:
+    - kafka_controller_secrets_protection_enabled|bool or kafka_controller_client_secrets_protection_enabled|bool
+    - rbac_enabled|bool
+
+- meta: flush_handlers
+
+- name: Kafka Started
+  systemd:
+    name: "{{kafka_controller_service_name}}"
+    enabled: true
+    state: started
+  tags:
+    - systemd
+
+- name: Wait for Controller health checks to complete
+  include_tasks: health_check.yml
+  when:
+    - kafka_controller_health_checks_enabled|bool
+    - not ansible_check_mode
+  tags: health_check
+
+- name: Register Cluster
+  include_tasks: register_cluster.yml
+  when: kafka_controller_cluster_name|length > 0 and rbac_enabled|bool
+
+- name: Create RBAC Rolebindings
+  include_tasks: rbac_rolebindings.yml
+  when: kafka_controller_additional_system_admins|length > 0
+
+- name: Delete temporary keys/certs when keystore and trustore is provided
+  file:
+    path: "{{item}}"
+    state: absent
+  loop:
+    - "{{kafka_controller_ca_cert_path}}"
+    - "{{kafka_controller_cert_path}}"
+    - "{{kafka_controller_key_path}}"
+  when: (ssl_provided_keystore_and_truststore | bool)
