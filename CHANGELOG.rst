@@ -4,6 +4,18 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.2.3
+======
+
+Notable enhancements
+-------------
+
+- Skip host validation for rolling deployment/upgrades
+- Bug fix to use config_prefix vars for zookeeper, kafka broker, schema registry, kafka connect
+- Improve internal handling of SSL certificates
+- Fixes for GH issues #633 #737 #738
+
+
 v7.2.2
 ======
 
