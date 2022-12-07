@@ -20,16 +20,6 @@ Default:  /tmp
 
 ***
 
-***
-
-### fetch_logs_path
-
-Path on component to store logs collected during fetch_logs playbook
-
-Default:  /tmp
-
-***
-
 ### ansible_become_localhost
 
 Boolean to specify the become value for localhost, used when dealing with any file present on localhost/controller.
