@@ -7,13 +7,31 @@ Ansible Playbooks for Confluent Platform - Release Notes
 v7.2.3
 ======
 
+New features
+-------------
+
+- Ansible Playbooks for Confluent Platform is now officially supported for Ansible 2.12 and 2.13 in addition to 2.11
+
 Notable enhancements
 -------------
 
+- Add retries to installation tasks to resolve connectivity issues
+- Introduced fetch_logs_path - Path on component to store logs
+- Dedicated playbook to restart services manually
+- New var ansible_become_localhost introduced to specify the become value for localhost - used when dealing with any file present on localhost/controller
+- Add ssl.* properties for kafka broker
+- Improved internal handling of SSL certificates using crypto module
+- Fixed proxy settings for yum repo, It now supports both https_proxy and http_proxy
+- Pip and python modules can/will now be installed on managed nodes via CP-Ansible
+- Added provision to configure Kafka Connect Replicator custom rest extension classes
+- Validation about python version - 3.6+
 - Skip host validation for rolling deployment/upgrades
-- Bug fix to use config_prefix vars for zookeeper, kafka broker, schema registry, kafka connect
-- Improve internal handling of SSL certificates
-- Fixes for GH issues #633 #737 #738
+- Bug Fixes
+   * `ANSIENG-1764 <https://confluentinc.atlassian.net/browse/ANSIENG-1764>`_ C3 fails with NPE when SR url is not structured
+   * Enable running playbook in ansible check mode
+   * `#633 <https://github.com/confluentinc/cp-ansible/issues/633>`_ Removed unnecessary C3 log dir permissions
+   * `ANSIENG-1864 <https://confluentinc.atlassian.net/browse/ANSIENG-1864>`_ For archive installations, fixed logic to use `config_prefix` variable for zookeeper, kafka broker, schema registry, kafka connect
+   * `ANSIENG-1953 <https://confluentinc.atlassian.net/browse/ANSIENG-1953>`_ Make Pip install and Upgrade pip tasks skippable using `tags: package`
 
 
 v7.2.2
@@ -28,7 +46,7 @@ Notable enhancements
  - Making Java SID Repo as optional.
  - Isolate truststore, keystore ceration when multiple kafka connect services run on same host.
  - Allow creation of keystore and truststore with custom password when using custom or self-signed certs
- - Imporved Validations, Internet access check now considers whether proxy is set or not.
+ - Improved Validations, Internet access check now considers whether proxy is set or not.
  - Fix typo kakfa to kafka
  - New Sample inventory with single node.
  - Cleanup Kafka Broker Custom properties
