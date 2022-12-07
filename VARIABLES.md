@@ -10,6 +10,8 @@ Version of Confluent Platform to install
 
 Default:  7.0.6
 
+***
+
 ### ansible_become_localhost
 
 Boolean to specify the become value for localhost, used when dealing with any file present on localhost/controller.
