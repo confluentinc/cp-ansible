@@ -10,6 +10,8 @@ Version of Confluent Platform to install
 
 Default:  6.2.7
 
+***
+
 ### ansible_become_localhost
 
 Boolean to specify the become value for localhost, used when dealing with any file present on localhost/controller.
@@ -3957,6 +3959,14 @@ Default:  openjdk-8-jdk
 Deb Repository to use for Java Installation
 
 Default:  ppa:openjdk-r/ppa
+
+***
+
+### add_sid_repo
+
+Boolean to add Sid Repo for JAVA Buster
+
+Default:  false
 
 ***
 
