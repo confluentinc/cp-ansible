@@ -1,7 +1,7 @@
 ## Introduction
 
 Ansible provides a simple way to deploy, manage, and configure the Confluent Platform services.
-This role confluent.kafka_controller is used to deploy kafka broker(s) for Confluent Platform.
+This role confluent.kafka_controller is used to deploy kafka controller(s) for Confluent Platform.
 We don't recommend using this role explicitly, we'd rather suggest to use the playbook confluent.platform.all
 
 ## Documentation
