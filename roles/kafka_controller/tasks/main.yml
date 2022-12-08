@@ -15,7 +15,7 @@
     - ansible_fqdn
     - ansible_distribution
 
-# datadir is not supported way to provide data directories for kafka brokers
+# datadir is not supported way to provide data directories for kafka controllers
 - name: Assert that datadir is not present in the inventory
   assert:
     that: >
@@ -23,7 +23,7 @@
       hostvars[item].kafka_controller == None or
       'datadir' not in hostvars[item].kafka_controller
     fail_msg: |
-      "Providing 'datadir' in inventory file is no more supported way to configure data directories for kafka brokers."
+      "Providing 'datadir' in inventory file is no more supported way to configure data directories for kafka controllers."
       "Please use 'log.dirs' under kafka_controller_custom_properties with comma separated directories."
   loop: "{{ groups['kafka_controller'] }}"
 
@@ -31,7 +31,7 @@
 - name: Assert log.dirs Property not Misconfigured
   assert:
     that:
-      - kafka_controller_final_properties['log.dirs'].split(',')[0] != "/"
+      - kafka_controller_final_properties['log.dirs'] != "/"
     fail_msg: "If you have log.dirs in kafka_controller_custom_properties, make sure it's comma separated directories."
 
 - name: Stop Service and Remove Packages on Version Change
@@ -131,7 +131,7 @@
     bcfks_truststore_path: "{{kafka_controller_bcfks_truststore_path}}"
     bcfks_keystore_path: "{{kafka_controller_bcfks_keystore_path}}"
   when: >
-    kafka_controller_listeners | confluent.platform.ssl_required(ssl_enabled) or
+    kafka_controller_listeners | confluent.platform.ssl_required(kafka_controller_ssl_enabled) or
     mds_broker_listener.ssl_enabled|bool or
     mds_tls_enabled|bool or
     ( kafka_controller_schema_validation_enabled and 'schema_registry' in groups and schema_registry_ssl_enabled )
@@ -177,12 +177,11 @@
 
 - name: Set Permissions on Data Dirs
   file:
-    path: "{{item}}"
+    path: "{{kafka_controller_final_properties['log.dirs']}}"
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
     state: directory
     mode: 0750
-  with_items: "{{ kafka_controller_final_properties['log.dirs'].split(',') }}"
   tags:
     - filesystem
 
@@ -190,9 +189,8 @@
   # Have to use command + chown instead of the Ansible file module here as it seems
   # like the file module can't handle files modified/deleted while running. This task
   # can fail on a very active cluster. See https://github.com/confluentinc/cp-ansible/pull/903 for details.
-  command: chown -R {{ kafka_controller_user }}:{{ kafka_controller_group }} {{ item }}
+  command: chown -R {{ kafka_controller_user }}:{{ kafka_controller_group }} {{ kafka_controller_final_properties['log.dirs'] }}
   changed_when: false
-  with_items: "{{ kafka_controller_final_properties['log.dirs'].split(',') }}"
   tags:
     - filesystem
 
@@ -300,9 +298,9 @@
   tags:
     - log
 
-- name: Restart kafka broker
+- name: Restart kafka controller
   ansible.builtin.debug:
-    msg: "restarting kafka broker"
+    msg: "restarting kafka controller"
   notify: restart kafka
   when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool) and (not kafka_controller_skip_restarts|bool)
   tags:
@@ -333,17 +331,6 @@
   notify: restart kafka
   tags:
     - configuration
-
-- name: Create Kafka Controller Password File
-  template:
-    src: password.properties.j2
-    dest: "{{kafka_controller.rest_proxy_password_file}}"
-    mode: 0640
-    owner: "{{kafka_controller_user}}"
-    group: "{{kafka_controller_group}}"
-  when: kafka_controller_rest_proxy_enabled
-  notify: restart kafka
-  diff: "{{ not mask_sensitive_diff|bool }}"
 
 - name: Deploy JMX Exporter Config File
   template:
