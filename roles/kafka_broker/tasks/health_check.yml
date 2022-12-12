@@ -15,7 +15,6 @@
   check_mode: false
   when:
     - not rbac_enabled|bool
-    - inventory_hostname in groups.kafka_broker
 
 - name: Get Topics with UnderReplicatedPartitions with Secrets Protection enabled
   shell: |
@@ -35,55 +34,6 @@
   when:
     - kafka_broker_client_secrets_protection_enabled|bool
     - rbac_enabled|bool
-    - inventory_hostname in groups.kafka_broker
-
-# health check for kafka controller
-- name: Add controller listener in client properties
-  shell: |
-    echo confluent.use.controller.listener=true >> {{kafka_broker.client_config_file}}
-  ignore_errors: true
-  changed_when: false
-  check_mode: false
-  when:
-    - kraft_enabled|bool and inventory_hostname in groups.kafka_controller
-
-- name: Check kafka-metadata-quorum
-  shell: |
-    {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-server {{inventory_hostname}}:9093 \
-      --command-config {{kafka_broker.client_config_file}} describe --replication
-  environment:
-    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
-  ignore_errors: false
-  changed_when: false
-  check_mode: false
-  when:
-    - kraft_enabled|bool and inventory_hostname in groups.kafka_controller
-
-- name: Register LogEndOffset
-  shell: |
-    {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-server {{inventory_hostname}}:9093 \
-      --command-config {{kafka_broker.client_config_file}} describe --replication | awk '{print $2}'
-  environment:
-    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
-  register: LEO
-  ignore_errors: false
-  changed_when: false
-  check_mode: false
-  when:
-    - kraft_enabled|bool and inventory_hostname in groups.kafka_controller
-
-- name: Check LogEndOffset values
-  assert:
-    that:
-      - "{{ item|int > 0 and LEO.stdout_lines[1:]|max|int - item|int < 1000 }}"
-    fail_msg: "UnreachableQuorumMember or Found at least one quorum voter with an offset {{ item }}, while the primary controller was at offset {{ LEO.stdout_lines[1:]|max}}
-               The max allowed offset lag is 1000"
-  loop: "{{ LEO.stdout_lines[1:] }}"
-  ignore_errors: false
-  changed_when: false
-  check_mode: false
-  when:
-    - kraft_enabled|bool and inventory_hostname in groups.kafka_controller
 
 - name: Wait for Metadata Service to start
   uri:
