@@ -5,6 +5,20 @@ Ansible Playbooks for Confluent Platform - Release Notes
 .. contents:: Topics
 
 
+v7.0.7
+======
+
+Notable enhancements
+-------------
+
+- Add retries to installation tasks to resolve connectivity issues
+- Dedicated playbook to restart services manually
+- New var ansible_become_localhost introduced to specify the become value for localhost - used when dealing with any file present on localhost/controller
+- Add ssl.* properties for kafka broker
+- Enable running playbook in ansible check mode
+- Bug Fixes
+   * `#633 <https://github.com/confluentinc/cp-ansible/issues/633>`_ Removed unnecessary C3 log dir permissions
+
 v7.0.6
 ======
 
