@@ -102,7 +102,7 @@
     service_name: kafka_rest
     user: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
     ca_cert_path: "{{kafka_rest_ca_cert_path}}"
     cert_path: "{{kafka_rest_cert_path}}"
     key_path: "{{kafka_rest_key_path}}"
@@ -175,6 +175,7 @@
     group: "{{kafka_rest_group}}"
   when:
     - rbac_enabled|bool
+    - not ( ssl_provided_keystore_and_truststore_remote_src|bool )
     - krest_public_pem_file.stat.exists|bool
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
@@ -231,6 +232,7 @@
     mode: 0770
   tags:
     - filesystem
+    - log
 
 - name: Update log4j Config for Log Cleanup
   include_role:
@@ -243,6 +245,8 @@
     log4j_root_logger: "{{kafka_rest_log4j_root_logger}}"
     handler: "restart kafka-rest"
   when: kafka_rest_custom_log4j|bool
+  tags:
+    - log
 
 - name: Set Permissions on Log4j Conf
   file:
@@ -252,6 +256,46 @@
     mode: 0640
   tags:
     - configuration
+    - log
+
+- name: Create logredactor rule file directory
+  file:
+    path: "{{ logredactor_rule_path | dirname }}"
+    state: directory
+    mode: 0755
+  when: (kafka_rest_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ logredactor_rule_path_local }}"
+    dest: "{{ logredactor_rule_path }}"
+    mode: 0644
+  when: (kafka_rest_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Configure logredactor
+  include_role:
+    name: common
+    tasks_from: configure_logredactor.yml
+  vars:
+    log4j_file: "{{kafka_rest.log4j_file}}"
+    logredactor_rule_var: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
+    logredactor_policy_refresh_interval_var: "{{logredactor_policy_refresh_interval}}"
+  with_items: "{{ kafka_rest_logredactor_logger_specs_list }}"
+  when: (kafka_rest_custom_log4j|bool) and (logredactor_enabled|bool)
+  tags:
+    - log
+
+- name: Restart kafka rest
+  ansible.builtin.debug:
+    msg: "restarting kafka rest"
+  notify: restart kafka-rest
+  when: (kafka_rest_custom_log4j|bool) and (logredactor_enabled|bool) and (not kafka_rest_skip_restarts|bool)
+  tags:
+    - log
 
 - name: Create Kafka Rest Jolokia Config
   template:
@@ -340,3 +384,13 @@
     - kafka_rest_health_checks_enabled|bool
     - not ansible_check_mode
   tags: health_check
+
+- name: Delete temporary keys/certs when keystore and trustore is provided
+  file:
+    path: "{{item}}"
+    state: absent
+  loop:
+    - "{{kafka_rest_ca_cert_path}}"
+    - "{{kafka_rest_cert_path}}"
+    - "{{kafka_rest_key_path}}"
+  when: (ssl_provided_keystore_and_truststore | bool)

@@ -4,20 +4,42 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-v7.1.4
+v7.2.2
 ======
 
 Notable enhancements
 -------------
 
- - Optimise the process of copying mds keys/certs to host nodes, and other security improvements.
- - Making SID Repo optional while installing Java.
- - Cleanup Kafka Broker Custom properties.
- - Introduced login shell for Linux users which are running the Component service.
- - Enhanced RBAC support with FIPS
+ - Improved validation of certificates, accepts ssl key file in ansible-vault format
+ - Optimise the process of copying mds pem file to host nodes, and other security improvements.
+ - Minor code cleanup and refactoring.
+ - Making Java SID Repo as optional.
  - Isolate truststore, keystore ceration when multiple kafka connect services run on same host.
  - Allow creation of keystore and truststore with custom password when using custom or self-signed certs
- - Minor code cleanup and refactoring.
+ - Imporved Validations, Internet access check now considers whether proxy is set or not.
+ - Fix typo kakfa to kafka
+ - New Sample inventory with single node.
+ - Cleanup Kafka Broker Custom properties
+ - Enhanced RBAC support with FIPS
+
+
+v7.2.1
+======
+
+New features
+-------------
+
+You can obfuscate sensitive information in Confluent Platform component logs and then create a single bundle of those logs to share with Confluent Support.
+
+Notable enhancements
+-------------
+
+You can configure CP-Ansible to use the JKS files existing on each worker node for TLS encryption. You dont need to provide the JKS files on the Ansible control node. For more information, see Configure Encryption for Confluent Platform with Ansible Playbooks.
+
+Upgrade considerations
+-------------
+
+CP-Ansible 7.2 does not support Ansible 2.9 or Python 2.x because those runtimes are end-of-life. Upgrade to Ansible 2.11+ or Python 3.6+ to use CP-Ansible 7.2 (https://docs.confluent.io/ansible/7.2.0/ansible-encrypt.html).
 
 
 v7.1.3

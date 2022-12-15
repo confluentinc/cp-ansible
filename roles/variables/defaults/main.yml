@@ -2,7 +2,7 @@
 # Custom filters used in this file are defined in plugins/filter/filters.py
 
 ### Version of Confluent Platform to install
-confluent_package_version: 7.1.4
+confluent_package_version: 7.2.2
 
 confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
@@ -12,6 +12,9 @@ confluent_common_repository_debian_release_version: "{{ansible_distribution_rele
 
 # Deprecated, see mask_sensitive_logs
 mask_secrets: true
+
+### Path on component to store logs collected during fetch_logs playbook
+fetch_logs_path: /tmp
 
 ### Boolean to specify the become value for localhost, used when dealing with any file present on localhost/controller.
 ansible_become_localhost: false
@@ -60,6 +63,21 @@ fips_enabled: false
 
 ### Boolean to configure ZK, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 custom_log4j: true
+
+### Boolean to enable logredactor for all components. Works only when enabled along with custom_log4j. If enabled, ensure correct value of logredactor_rule_path/url
+logredactor_enabled: false
+
+### Location of the logredactor rules file on the control node. Ensure that the rules files exist here if logredactor enabled. This'll be copied to logredactor_host_rule_path for all components. Not required if logredactor_rule_url is specified.
+logredactor_rule_path_local: ""
+
+### Full path and name of the rules file on all components. This is the location which will be referenced in the log4j property file on the redactor appender. Not required if logredactor_rule_url is specified.
+logredactor_rule_path: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/{{ config_prefix }}/rules.json"
+
+### URL that contains or redirects to the redaction rules. If not "", this will be used to fetch rules and logredactor_rule_path will be ignored.
+logredactor_rule_url: ""
+
+### If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. Default is 0 and it means that the policy rules will be checked only at startup. Can be specified as logredactor_policy_refresh_interval: 7000
+logredactor_policy_refresh_interval: 0
 
 ### Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, keberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary
 kerberos_configure: true
@@ -170,7 +188,7 @@ confluent_cli_base_path: /opt/confluent-cli
 confluent_cli_path: "/usr/local/bin/confluent"
 
 ### Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
-confluent_cli_version: 2.3.1
+confluent_cli_version: 2.19.0
 
 ### Recommended replication factor, defaults to 3. When splitting your cluster across 2 DCs with 4 or more Brokers, this should be increased to 4 to balance topic replicas.
 default_internal_replication_factor: 3
@@ -204,6 +222,9 @@ certs_updated: false
 
 ### Boolean for TLS Encryption option to provide own Host Keystores.
 ssl_provided_keystore_and_truststore: false
+
+### Boolean for TLS Encryption option to provide user owned Keystores and Truststores already present on the host. Valid and to be used only when ssl_provided_keystore_and_truststore: true
+ssl_provided_keystore_and_truststore_remote_src: false
 
 ### Boolean to provide custom password for keystores and truststore. Enabled with ssl_provided_keystore_and_truststore, but can be enabled independently to set the custom password for generated keystores and truststores when using custom or self-signed certificates
 ssl_keystore_and_truststore_custom_password: "{{ssl_provided_keystore_and_truststore}}"
@@ -309,8 +330,8 @@ zookeeper_packages:
   - confluent-telemetry
   - "{{ zookeeper_main_package }}"
 
-zookeeper_truststore_path: "{{ ssl_file_dir_final }}/zookeeper.truststore.jks"
-zookeeper_keystore_path: "{{ ssl_file_dir_final }}/zookeeper.keystore.jks"
+zookeeper_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/zookeeper.truststore.jks{% endif %}"
+zookeeper_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/zookeeper.keystore.jks{% endif %}"
 zookeeper_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
 zookeeper_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
 zookeeper_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else zookeeper_keystore_storepass }}"
@@ -330,7 +351,7 @@ zookeeper_jolokia_port: 7770
 zookeeper_jolokia_ssl_enabled: "{{ zookeeper_ssl_enabled }}"
 
 ### Path on Zookeeper host for Jolokia Configuration file
-zookeeper_jolokia_config: "{{ (config_base_path, zookeeper_config_prefix_path, 'zookeeper_jolokia.properties') | community.general.path_join }}"
+zookeeper_jolokia_config: "{{ (config_base_path, zookeeper_config_prefix_path, 'zookeeper_jolokia.properties') | path_join }}"
 
 ### Authentication Mode for Zookeeper's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set zookeeper_jolokia_user and zookeeper_jolokia_password
 zookeeper_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -460,8 +481,8 @@ kafka_broker_keystore_path: "{{kafka_broker_bcfks_keystore_path if fips_enabled|
 kafka_broker_bcfks_truststore_path: "{{ ssl_file_dir_final }}/kafka_broker.truststore.bcfks"
 kafka_broker_bcfks_keystore_path: "{{ ssl_file_dir_final }}/kafka_broker.keystore.bcfks"
 
-kafka_broker_pkcs12_truststore_path: "{{ ssl_file_dir_final }}/kafka_broker.truststore.jks"
-kafka_broker_pkcs12_keystore_path: "{{ ssl_file_dir_final }}/kafka_broker.keystore.jks"
+kafka_broker_pkcs12_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_broker.truststore.jks{% endif %}"
+kafka_broker_pkcs12_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_broker.keystore.jks{% endif %}"
 
 kafka_broker_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
 kafka_broker_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
@@ -485,7 +506,7 @@ kafka_broker_jolokia_port: 7771
 kafka_broker_jolokia_ssl_enabled: "{{ ssl_enabled }}"
 
 ### Path on Kafka host for Jolokia Configuration file
-kafka_broker_jolokia_config: "{{ (config_base_path, kafka_broker_config_prefix_path, 'kafka_jolokia.properties') | community.general.path_join }}"
+kafka_broker_jolokia_config: "{{ (config_base_path, kafka_broker_config_prefix_path, 'kafka_jolokia.properties') | path_join }}"
 
 ### Authentication Mode for Kafka's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set kafka_broker_jolokia_user and kafka_broker_jolokia_password
 kafka_broker_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -521,7 +542,7 @@ kafka_broker_copy_files: []
 kafka_broker_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ### Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
-kafka_broker_metrics_reporter_enabled: "{{ 'control_center' in groups }}"
+kafka_broker_metrics_reporter_enabled: "{{ confluent_server_enabled and 'control_center' in groups }}"
 
 ### Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 kafka_broker_custom_properties: {}
@@ -584,8 +605,8 @@ schema_registry_packages:
   - confluent-security
   - confluent-schema-registry-plugins
 
-schema_registry_truststore_path: "{{ ssl_file_dir_final }}/schema_registry.truststore.jks"
-schema_registry_keystore_path: "{{ ssl_file_dir_final }}/schema_registry.keystore.jks"
+schema_registry_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/schema_registry.truststore.jks{% endif %}"
+schema_registry_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/schema_registry.keystore.jks{% endif %}"
 schema_registry_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
 schema_registry_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
 schema_registry_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else schema_registry_keystore_storepass }}"
@@ -606,7 +627,7 @@ schema_registry_jolokia_port: 7772
 schema_registry_jolokia_ssl_enabled: "{{ schema_registry_ssl_enabled }}"
 
 ### Path on Schema Registry host for Jolokia Configuration file
-schema_registry_jolokia_config: "{{ (config_base_path, schema_registry_config_prefix_path, 'schema_registry_jolokia.properties') | community.general.path_join }}"
+schema_registry_jolokia_config: "{{ (config_base_path, schema_registry_config_prefix_path, 'schema_registry_jolokia.properties') | path_join }}"
 
 ### Authentication Mode for Schema Registry's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 schema_registry_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -681,8 +702,8 @@ kafka_rest_packages:
   - confluent-control-center-fe
   - confluent-control-center
 
-kafka_rest_truststore_path: "{{ ssl_file_dir_final }}/kafka_rest.truststore.jks"
-kafka_rest_keystore_path: "{{ ssl_file_dir_final }}/kafka_rest.keystore.jks"
+kafka_rest_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_rest.truststore.jks{% endif %}"
+kafka_rest_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_rest.keystore.jks{% endif %}"
 kafka_rest_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
 kafka_rest_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
 kafka_rest_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_rest_keystore_storepass }}"
@@ -703,7 +724,7 @@ kafka_rest_jolokia_port: 7775
 kafka_rest_jolokia_ssl_enabled: "{{ kafka_rest_ssl_enabled }}"
 
 ### Path on Rest Proxy host for Jolokia Configuration file
-kafka_rest_jolokia_config: "{{ (config_base_path, kafka_rest_config_prefix_path, 'kafka_rest_jolokia.properties') | community.general.path_join }}"
+kafka_rest_jolokia_config: "{{ (config_base_path, kafka_rest_config_prefix_path, 'kafka_rest_jolokia.properties') | path_join }}"
 
 ### Authentication Mode for Rest Proxy's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 kafka_rest_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -787,10 +808,10 @@ kafka_connect_packages:
   - confluent-control-center
   - confluent-schema-registry
 
-kafka_connect_truststore_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.truststore.jks' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.truststore.jks'}}"
-kafka_connect_keystore_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.keystore.jks' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.keystore.jks'}}"
-kafka_connect_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
-kafka_connect_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
+kafka_connect_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.truststore.jks' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.truststore.jks'}}{% endif %}"
+kafka_connect_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.keystore.jks' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.keystore.jks'}}{% endif %}"
+kafka_connect_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+kafka_connect_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
 kafka_connect_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_connect_keystore_storepass }}"
 kafka_connect_ca_cert_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.ca.crt' if kafka_connect_service_name != kafka_connect_default_service_name else 'ca.crt'}}"
 kafka_connect_cert_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.crt' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.crt'}}"
@@ -818,7 +839,7 @@ kafka_connect_jolokia_port: 7773
 kafka_connect_jolokia_ssl_enabled: "{{ kafka_connect_ssl_enabled }}"
 
 ### Path on Connect host for Jolokia Configuration file
-kafka_connect_jolokia_config: "{{ (config_base_path, kafka_connect_config_prefix_path, 'kafka_connect_jolokia.properties') | community.general.path_join }}"
+kafka_connect_jolokia_config: "{{ (config_base_path, kafka_connect_config_prefix_path, 'kafka_connect_jolokia.properties') | path_join }}"
 
 ### Authentication Mode for Connect's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 kafka_connect_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -861,7 +882,7 @@ kafka_connect_secret_registry_default_replication_factor:  "{{ 3 if ccloud_kafka
   [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 kafka_connect_plugins_path:
-  - "{{ (binary_base_path, 'share/java') | community.general.path_join }}"
+  - "{{ (binary_base_path, 'share/java') | path_join }}"
 
 
 kafka_connect_confluent_hub_plugins: []
@@ -923,8 +944,8 @@ ksql_packages:
   - confluent-control-center-fe
   - confluent-control-center
 
-ksql_truststore_path: "{{ ssl_file_dir_final }}/ksql.truststore.jks"
-ksql_keystore_path: "{{ ssl_file_dir_final }}/ksql.keystore.jks"
+ksql_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/ksql.truststore.jks{% endif %}"
+ksql_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/ksql.keystore.jks{% endif %}"
 ksql_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
 ksql_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
 ksql_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else ksql_keystore_storepass }}"
@@ -946,7 +967,7 @@ ksql_jolokia_port: 7774
 ksql_jolokia_ssl_enabled: "{{ ksql_ssl_enabled }}"
 
 ### Path on ksqlDB host for Jolokia Configuration file
-ksql_jolokia_config: "{{ (config_base_path,((confluent_package_version is version('5.5.0', '>=')) | ternary('etc/ksqldb/ksql_jolokia.properties' , 'etc/ksql/ksql_jolokia.properties'))) | community.general.path_join }}"
+ksql_jolokia_config: "{{ (config_base_path,((confluent_package_version is version('5.5.0', '>=')) | ternary('etc/ksqldb/ksql_jolokia.properties' , 'etc/ksql/ksql_jolokia.properties'))) | path_join }}"
 
 ### Authentication Mode for ksqlDB's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 ksql_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -1036,8 +1057,8 @@ control_center_packages:
   - confluent-control-center-fe
   - confluent-control-center
 
-control_center_truststore_path: "{{ ssl_file_dir_final }}/control_center.truststore.jks"
-control_center_keystore_path: "{{ ssl_file_dir_final }}/control_center.keystore.jks"
+control_center_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center.truststore.jks{% endif %}"
+control_center_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center.keystore.jks{% endif %}"
 control_center_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
 control_center_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
 control_center_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_keystore_storepass }}"
@@ -1248,8 +1269,8 @@ mds_ssl_enabled: "{{ssl_enabled}}"
 kafka_broker_rest_ssl_enabled: "{{mds_ssl_enabled}}"
 
 mds_acls_enabled: "{{rbac_enabled}}"
-rbac_enabled_public_pem_path: "{{ ssl_file_dir_final }}/public.pem"
-rbac_enabled_private_pem_path: "{{ ssl_file_dir_final }}/tokenKeypair.pem"
+rbac_enabled_public_pem_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{token_services_public_pem_file}}{% else %}{{ ssl_file_dir_final }}/public.pem{% endif %}"
+rbac_enabled_private_pem_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{token_services_private_pem_file}}{% else %}{{ ssl_file_dir_final }}/tokenKeypair.pem{% endif %}"
 
 ### LDAP User which will be granted super user permissions to create role bindings in the MDS
 mds_super_user: mds
@@ -1698,7 +1719,7 @@ kafka_connect_replicator_jolokia_password: "{{jolokia_password}}"
 ### Port for Jolokia agent for Kafka Connect Replicator.
 kafka_connect_replicator_jolokia_port: 7777
 
-kafka_connect_replicator_jolokia_config: "{{ (config_base_path, kafka_connect_replicator_config_prefix_path, 'confluent-replicator-jolokia.properties') | community.general.path_join }}"
+kafka_connect_replicator_jolokia_config: "{{ (config_base_path, kafka_connect_replicator_config_prefix_path, 'confluent-replicator-jolokia.properties') | path_join }}"
 
 ### Full path to download the Jolokia Agent Jar.
 kafka_connect_replicator_jolokia_jar_path: /opt/jolokia/jolokia.jar
@@ -1716,25 +1737,25 @@ kafka_connect_replicator_max_log_files: 10
 kafka_connect_replicator_log_file_size: 100mb
 
 ### Boolean to configure Kafka Connect Replicator to support RBAC. Creates Rolebindings for client to function.
-kakfa_connect_replicator_rbac_enabled: false
+kafka_connect_replicator_rbac_enabled: false
 
 ### Boolean to configure Kafka Connect Replicator to support connecting to ERP with TLS.
 kafka_connect_replicator_erp_tls_enabled: false
 
 ### Boolean to configure Kafka Connect Replicator Consumer to support RBAC. Creates Rolebindings for client to function.
-kakfa_connect_replicator_consumer_rbac_enabled: false
+kafka_connect_replicator_consumer_rbac_enabled: false
 
 ### Boolean to configure Kafka Connect Replicator Consumer to support connecting to ERP with TLS.
 kafka_connect_replicator_consumer_erp_tls_enabled: false
 
 ### Boolean to configure Kafka Connect Replicator Producer to support RBAC. Creates Rolebindings for client to function.
-kakfa_connect_replicator_producer_rbac_enabled: "{{ kakfa_connect_replicator_rbac_enabled }}"
+kafka_connect_replicator_producer_rbac_enabled: "{{ kafka_connect_replicator_rbac_enabled }}"
 
 ### Boolean to configure Kafka Connect Replicator Producer to support connecting to ERP with TLS.
 kafka_connect_replicator_producer_erp_tls_enabled: "{{ kafka_connect_replicator_erp_tls_enabled }}"
 
 ### Boolean to configure Kafka Connect Replicator Monitoring Interceptor to support RBAC. Creates Rolebindings for client to function.
-kakfa_connect_replicator_monitoring_interceptor_rbac_enabled: "{{ kakfa_connect_replicator_rbac_enabled }}"
+kafka_connect_replicator_monitoring_interceptor_rbac_enabled: "{{ kafka_connect_replicator_rbac_enabled }}"
 
 ### Boolean to configure Kafka Connect Replicator Monitoring Interceptor to support connecting to ERP with TLS.
 kafka_connect_replicator_monitoring_interceptor_erp_tls_enabled: "{{ kafka_connect_replicator_erp_tls_enabled }}"
@@ -1763,8 +1784,8 @@ kafka_connect_replicator_truststore_storepass: ""
 kafka_connect_replicator_keystore_storepass: ""
 
 kafka_connect_replicator_keystore_keypass: "{{ ssl_keystore_key_password if kafka_connect_replicator_ssl_provided_keystore_and_truststore|bool else kafka_connect_replicator_keystore_storepass }}"
-kafka_connect_replicator_truststore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.truststore.jks"
-kafka_connect_replicator_keystore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.keystore.jks"
+kafka_connect_replicator_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator.truststore.jks{% endif %}"
+kafka_connect_replicator_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator.keystore.jks{% endif %}"
 kafka_connect_replicator_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_ca.crt"
 kafka_connect_replicator_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.crt"
 kafka_connect_replicator_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.key"
@@ -1847,8 +1868,8 @@ kafka_connect_replicator_consumer_truststore_storepass: "{{ kafka_connect_replic
 kafka_connect_replicator_consumer_keystore_storepass: "{{  kafka_connect_replicator_keystore_storepass }}"
 
 kafka_connect_replicator_consumer_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_connect_replicator_consumer_keystore_storepass }}"
-kafka_connect_replicator_consumer_truststore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.truststore.jks"
-kafka_connect_replicator_consumer_keystore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.keystore.jks"
+kafka_connect_replicator_consumer_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.truststore.jks{% endif %}"
+kafka_connect_replicator_consumer_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.keystore.jks{% endif %}"
 kafka_connect_replicator_consumer_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer_ca.crt"
 kafka_connect_replicator_consumer_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.crt"
 kafka_connect_replicator_consumer_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.key"
@@ -1929,8 +1950,8 @@ kafka_connect_replicator_producer_truststore_storepass: "{{ kafka_connect_replic
 kafka_connect_replicator_producer_keystore_storepass: "{{ kafka_connect_replicator_keystore_storepass }}"
 
 kafka_connect_replicator_producer_keystore_keypass: "{{ kafka_connect_replicator_keystore_keypass }}"
-kafka_connect_replicator_producer_truststore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.truststore.jks"
-kafka_connect_replicator_producer_keystore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.keystore.jks"
+kafka_connect_replicator_producer_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.truststore.jks{% endif %}"
+kafka_connect_replicator_producer_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.keystore.jks{% endif %}"
 kafka_connect_replicator_producer_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer_ca.crt"
 kafka_connect_replicator_producer_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.crt"
 kafka_connect_replicator_producer_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.key"
@@ -2014,8 +2035,8 @@ kafka_connect_replicator_monitoring_interceptor_truststore_storepass: "{{ kafka_
 kafka_connect_replicator_monitoring_interceptor_keystore_storepass: "{{ kafka_connect_replicator_keystore_storepass }}"
 
 kafka_connect_replicator_monitoring_interceptor_keystore_keypass: "{{ kafka_connect_replicator_keystore_keypass }}"
-kafka_connect_replicator_monitoring_interceptor_truststore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.truststore.jks"
-kafka_connect_replicator_monitoring_interceptor_keystore_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.keystore.jks"
+kafka_connect_replicator_monitoring_interceptor_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.truststore.jks{% endif %}"
+kafka_connect_replicator_monitoring_interceptor_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.keystore.jks{% endif %}"
 kafka_connect_replicator_monitoring_interceptor_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor_ca.crt"
 kafka_connect_replicator_monitoring_interceptor_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.crt"
 kafka_connect_replicator_monitoring_interceptor_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.key"

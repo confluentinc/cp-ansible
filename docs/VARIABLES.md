@@ -8,7 +8,15 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.1.4
+Default:  7.2.2
+
+***
+
+### fetch_logs_path
+
+Path on component to store logs collected during fetch_logs playbook
+
+Default:  /tmp
 
 ***
 
@@ -137,6 +145,46 @@ Default:  false
 Boolean to configure ZK, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 
 Default:  true
+
+***
+
+### logredactor_enabled
+
+Boolean to enable logredactor for all components. Works only when enabled along with custom_log4j. If enabled, ensure correct value of logredactor_rule_path/url
+
+Default:  false
+
+***
+
+### logredactor_rule_path_local
+
+Location of the logredactor rules file on the control node. Ensure that the rules files exist here if logredactor enabled. This'll be copied to logredactor_host_rule_path for all components. Not required if logredactor_rule_url is specified.
+
+Default:  ""
+
+***
+
+### logredactor_rule_path
+
+Full path and name of the rules file on all components. This is the location which will be referenced in the log4j property file on the redactor appender. Not required if logredactor_rule_url is specified.
+
+Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/{{ config_prefix }}/rules.json"
+
+***
+
+### logredactor_rule_url
+
+URL that contains or redirects to the redaction rules. If not "", this will be used to fetch rules and logredactor_rule_path will be ignored.
+
+Default:  ""
+
+***
+
+### logredactor_policy_refresh_interval
+
+If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. Default is 0 and it means that the policy rules will be checked only at startup. Can be specified as logredactor_policy_refresh_interval: 7000
+
+Default:  0
 
 ***
 
@@ -384,7 +432,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  2.3.1
+Default:  2.19.0
 
 ***
 
@@ -455,6 +503,14 @@ Default:  "{{regenerate_ca}}"
 ### ssl_provided_keystore_and_truststore
 
 Boolean for TLS Encryption option to provide own Host Keystores.
+
+Default:  false
+
+***
+
+### ssl_provided_keystore_and_truststore_remote_src
+
+Boolean for TLS Encryption option to provide user owned Keystores and Truststores already present on the host. Valid and to be used only when ssl_provided_keystore_and_truststore: true
 
 Default:  false
 
@@ -736,7 +792,7 @@ Default:  "{{ zookeeper_ssl_enabled }}"
 
 Path on Zookeeper host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path, zookeeper_config_prefix_path, 'zookeeper_jolokia.properties') | community.general.path_join }}"
+Default:  "{{ (config_base_path, zookeeper_config_prefix_path, 'zookeeper_jolokia.properties') | path_join }}"
 
 ***
 
@@ -936,7 +992,7 @@ Default:  "{{ ssl_enabled }}"
 
 Path on Kafka host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path, kafka_broker_config_prefix_path, 'kafka_jolokia.properties') | community.general.path_join }}"
+Default:  "{{ (config_base_path, kafka_broker_config_prefix_path, 'kafka_jolokia.properties') | path_join }}"
 
 ***
 
@@ -1016,7 +1072,7 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, defaul
 
 Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
-Default:  "{{ 'control_center' in groups }}"
+Default:  "{{ confluent_server_enabled and 'control_center' in groups }}"
 
 ***
 
@@ -1168,7 +1224,7 @@ Default:  "{{ schema_registry_ssl_enabled }}"
 
 Path on Schema Registry host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path, schema_registry_config_prefix_path, 'schema_registry_jolokia.properties') | community.general.path_join }}"
+Default:  "{{ (config_base_path, schema_registry_config_prefix_path, 'schema_registry_jolokia.properties') | path_join }}"
 
 ***
 
@@ -1352,7 +1408,7 @@ Default:  "{{ kafka_rest_ssl_enabled }}"
 
 Path on Rest Proxy host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path, kafka_rest_config_prefix_path, 'kafka_rest_jolokia.properties') | community.general.path_join }}"
+Default:  "{{ (config_base_path, kafka_rest_config_prefix_path, 'kafka_rest_jolokia.properties') | path_join }}"
 
 ***
 
@@ -1576,7 +1632,7 @@ Default:  "{{ kafka_connect_ssl_enabled }}"
 
 Path on Connect host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path, kafka_connect_config_prefix_path, 'kafka_connect_jolokia.properties') | community.general.path_join }}"
+Default:  "{{ (config_base_path, kafka_connect_config_prefix_path, 'kafka_connect_jolokia.properties') | path_join }}"
 
 ***
 
@@ -1800,7 +1856,7 @@ Default:  "{{ ksql_ssl_enabled }}"
 
 Path on ksqlDB host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,((confluent_package_version is version('5.5.0', '>=')) | ternary('etc/ksqldb/ksql_jolokia.properties' , 'etc/ksql/ksql_jolokia.properties'))) | community.general.path_join }}"
+Default:  "{{ (config_base_path,((confluent_package_version is version('5.5.0', '>=')) | ternary('etc/ksqldb/ksql_jolokia.properties' , 'etc/ksql/ksql_jolokia.properties'))) | path_join }}"
 
 ***
 
@@ -3236,7 +3292,7 @@ Default:  100mb
 
 ***
 
-### kakfa_connect_replicator_rbac_enabled
+### kafka_connect_replicator_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator to support RBAC. Creates Rolebindings for client to function.
 
@@ -3252,7 +3308,7 @@ Default:  false
 
 ***
 
-### kakfa_connect_replicator_consumer_rbac_enabled
+### kafka_connect_replicator_consumer_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator Consumer to support RBAC. Creates Rolebindings for client to function.
 
@@ -3268,11 +3324,11 @@ Default:  false
 
 ***
 
-### kakfa_connect_replicator_producer_rbac_enabled
+### kafka_connect_replicator_producer_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator Producer to support RBAC. Creates Rolebindings for client to function.
 
-Default:  "{{ kakfa_connect_replicator_rbac_enabled }}"
+Default:  "{{ kafka_connect_replicator_rbac_enabled }}"
 
 ***
 
@@ -3284,11 +3340,11 @@ Default:  "{{ kafka_connect_replicator_erp_tls_enabled }}"
 
 ***
 
-### kakfa_connect_replicator_monitoring_interceptor_rbac_enabled
+### kafka_connect_replicator_monitoring_interceptor_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator Monitoring Interceptor to support RBAC. Creates Rolebindings for client to function.
 
-Default:  "{{ kakfa_connect_replicator_rbac_enabled }}"
+Default:  "{{ kafka_connect_replicator_rbac_enabled }}"
 
 ***
 
@@ -4368,6 +4424,14 @@ Default:  100MB
 
 ***
 
+### control_center_logredactor_logger_specs_list
+
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+
+Default: 
+
+***
+
 ### control_center_custom_java_args
 
 Custom Java Args to add to the Control Center Process
@@ -4454,6 +4518,14 @@ Default:  100MB
 
 ***
 
+### kafka_broker_logredactor_logger_specs_list
+
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+
+Default: 
+
+***
+
 ### kafka_broker_custom_java_args
 
 Custom Java Args to add to the Kafka Process
@@ -4528,7 +4600,7 @@ Default:  "{{ custom_log4j }}"
 
 Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
 
-Default:  "INFO, stdout, connectAppender"
+Default:  "INFO, stdout, connectAppender, redactor"
 
 ***
 
@@ -4545,6 +4617,14 @@ Default:  10
 Max size of a log file generated by Kafka Connect. Only honored if kafka_connect_custom_log4j: true
 
 Default:  100MB
+
+***
+
+### kafka_connect_logredactor_logger_specs_list
+
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+
+Default: 
 
 ***
 
@@ -4626,6 +4706,14 @@ Default:  100MB
 
 ***
 
+### kafka_rest_logredactor_logger_specs_list
+
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+
+Default: 
+
+***
+
 ### kafka_rest_custom_java_args
 
 Custom Java Args to add to the Rest Proxy Process
@@ -4701,6 +4789,14 @@ Default:  5
 Max size of a log file generated by ksqlDB. Only honored if ksql_custom_log4j: true
 
 Default:  10MB
+
+***
+
+### ksql_logredactor_logger_specs_list
+
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+
+Default: 
 
 ***
 
@@ -4790,6 +4886,14 @@ Default:  100MB
 
 ***
 
+### schema_registry_logredactor_logger_specs_list
+
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+
+Default: 
+
+***
+
 ### schema_registry_custom_java_args
 
 Custom Java Args to add to the Schema Registry Process
@@ -4865,6 +4969,14 @@ Default:  10
 Max size of a log file generated by Zookeeper. Only honored if zookeeper_custom_log4j: true
 
 Default:  100MB
+
+***
+
+### zookeeper_logredactor_logger_specs_list
+
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+
+Default: 
 
 ***
 

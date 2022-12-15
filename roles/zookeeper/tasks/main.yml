@@ -103,7 +103,7 @@
     service_name: zookeeper
     user: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
     ca_cert_path: "{{zookeeper_ca_cert_path}}"
     cert_path: "{{zookeeper_cert_path}}"
     key_path: "{{zookeeper_key_path}}"
@@ -216,6 +216,7 @@
     mode: 0770
   tags:
     - filesystem
+    - log
 
 - name: Create log4j Directory
   file:
@@ -226,6 +227,7 @@
     mode: 0750
   tags:
     - filesystem
+    - log
 
 - name: Create Zookeeper log4j config
   template:
@@ -238,6 +240,46 @@
   notify: restart zookeeper
   tags:
     - configuration
+    - log
+
+- name: Create logredactor rule file directory
+  file:
+    path: "{{ logredactor_rule_path | dirname }}"
+    state: directory
+    mode: 0755
+  when: (zookeeper_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ logredactor_rule_path_local }}"
+    dest: "{{ logredactor_rule_path }}"
+    mode: 0644
+  when: (zookeeper_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Configure logredactor
+  include_role:
+    name: common
+    tasks_from: configure_logredactor.yml
+  vars:
+    log4j_file: "{{zookeeper.log4j_file}}"
+    logredactor_rule_var: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
+    logredactor_policy_refresh_interval_var: "{{logredactor_policy_refresh_interval}}"
+  with_items: "{{ zookeeper_logredactor_logger_specs_list }}"
+  when: (zookeeper_custom_log4j|bool) and (logredactor_enabled|bool)
+  tags:
+    - log
+
+- name: Restart zookeeper
+  ansible.builtin.debug:
+    msg: "restarting zookeeper"
+  notify: restart zookeeper
+  when: (zookeeper_custom_log4j|bool) and (logredactor_enabled|bool) and (not zookeeper_skip_restarts|default(false)|bool)
+  tags:
+    - log
 
 - name: Create Zookeeper Jolokia Config
   template:
@@ -319,3 +361,13 @@
     - zookeeper_health_checks_enabled|bool
     - not ansible_check_mode
   tags: health_check
+
+- name: Delete temporary keys/certs when keystore and trustore is provided
+  file:
+    path: "{{item}}"
+    state: absent
+  loop:
+    - "{{zookeeper_ca_cert_path}}"
+    - "{{zookeeper_cert_path}}"
+    - "{{zookeeper_key_path}}"
+  when: (ssl_provided_keystore_and_truststore | bool)

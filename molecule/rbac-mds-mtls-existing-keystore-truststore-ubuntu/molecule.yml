@@ -1,0 +1,300 @@
+---
+### Installs Confluent Platform Cluster on CentOS7.
+### RBAC enabled.
+### Provided user supplied keystore and truststore already present on the host
+### MTLS enabled.
+### Kafka Broker Customer Listener.
+### RBAC Additional System Admin.
+
+driver:
+  name: docker
+platforms:
+  - name: ldap1
+    hostname: ldap1.confluent
+    groups:
+      - ldap_server
+    image: geerlingguy/docker-centos7-ansible
+    dockerfile: ../Dockerfile.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: zookeeper1
+    hostname: zookeeper1.confluent
+    groups:
+      - zookeeper
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9021:9021"
+    networks:
+      - name: confluent
+provisioner:
+  inventory:
+    group_vars:
+      all:
+        scenario_name: rbac-mds-mtls-existing-keystore-truststore-ubuntu
+
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
+
+        ssl_provided_keystore_and_truststore: true
+        ssl_provided_keystore_and_truststore_remote_src: true
+
+        rbac_enabled: true
+        create_mds_certs: false
+
+        mds_super_user: mds
+        mds_super_user_password: password
+
+        schema_registry_ldap_user: schema_registry
+        schema_registry_ldap_password: password
+
+        kafka_connect_ldap_user: kafka_connect
+        kafka_connect_ldap_password: password
+
+        ksql_ldap_user: ksql
+        ksql_ldap_password: password
+
+        kafka_rest_ldap_user: kafka_rest
+        kafka_rest_ldap_password: password
+
+        control_center_ldap_user: control_center
+        control_center_ldap_password: password
+
+        rbac_component_additional_system_admins:
+          - user1
+
+      kafka_broker:
+        ldap_config: |
+          ldap.java.naming.factory.initial=com.sun.jndi.ldap.LdapCtxFactory
+          ldap.com.sun.jndi.ldap.read.timeout=3000
+          ldap.java.naming.provider.url=ldaps://ldap1:636
+          ldap.java.naming.security.protocol=SSL
+          ldap.ssl.truststore.location=/var/ssl/private/kafka_broker.truststore.jks
+          ldap.ssl.truststore.password=truststorepass
+          ldap.java.naming.security.principal=uid=mds,OU=rbac,DC=example,DC=com
+          ldap.java.naming.security.credentials=password
+          ldap.java.naming.security.authentication=simple
+          ldap.user.search.base=OU=rbac,DC=example,DC=com
+          ldap.group.search.base=OU=rbac,DC=example,DC=com
+          ldap.user.name.attribute=uid
+          ldap.user.memberof.attribute.pattern=CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.group.name.attribute=cn
+          ldap.group.member.attribute.pattern=CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.user.object.class=account
+
+        ssl_keystore_filepath: "/var/ssl/private/kafka_broker.keystore.jks"
+        ssl_keystore_key_password: keystorepass
+        ssl_keystore_store_password: keystorepass
+        ssl_truststore_filepath: "/var/ssl/private/kafka_broker.truststore.jks"
+        ssl_truststore_password: truststorepass
+        ssl_truststore_ca_cert_alias: CARoot
+        token_services_public_pem_file: "/var/ssl/private/public.pem"
+        token_services_private_pem_file: "/var/ssl/private/tokenKeypair.pem"
+
+      ldap_server:
+        ldaps_enabled: true
+        ldaps_custom_certs: true
+        ssl_custom_certs: true
+        ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+
+        ldap_admin_password: ldppassword
+
+        ldap_rbac_group: rbac
+        ldap_dc: example
+        ldap_dc_extension: com
+
+        ldap_users:
+          - username: "{{schema_registry_ldap_user}}"
+            password: "{{schema_registry_ldap_password}}"
+            uid: 9998
+            guid: 98
+          - username: "{{kafka_connect_ldap_user}}"
+            password: "{{kafka_connect_ldap_password}}"
+            uid: 9997
+            guid: 97
+          - username: "{{ksql_ldap_user}}"
+            password: "{{ksql_ldap_password}}"
+            uid: 9996
+            guid: 96
+          - username: "{{control_center_ldap_user}}"
+            password: "{{control_center_ldap_password}}"
+            uid: 9995
+            guid: 95
+          - username: "{{kafka_rest_ldap_user}}"
+            password: "{{kafka_rest_ldap_password}}"
+            uid: 9994
+            guid: 94
+          - username: "{{mds_super_user}}"
+            password: "{{mds_super_user_password}}"
+            uid: 9993
+            guid: 93
+          - username: user1
+            password: user1p
+            uid: 9992
+            guid: 92
+
+      zookeeper:
+        ssl_keystore_filepath: "/var/ssl/private/zookeeper.keystore.jks"
+        ssl_keystore_key_password: keystorepass
+        ssl_keystore_store_password: keystorepass
+        ssl_truststore_filepath: "/var/ssl/private/zookeeper.truststore.jks"
+        ssl_truststore_password: truststorepass
+        ssl_truststore_ca_cert_alias: CARoot
+        token_services_public_pem_file: "/var/ssl/private/public.pem"
+        token_services_private_pem_file: "/var/ssl/private/tokenKeypair.pem"
+
+      schema_registry:
+        ssl_keystore_filepath: "/var/ssl/private/schema_registry.keystore.jks"
+        ssl_keystore_key_password: keystorepass
+        ssl_keystore_store_password: keystorepass
+        ssl_truststore_filepath: "/var/ssl/private/schema_registry.truststore.jks"
+        ssl_truststore_password: truststorepass
+        ssl_truststore_ca_cert_alias: CARoot
+        token_services_public_pem_file: "/var/ssl/private/public.pem"
+        token_services_private_pem_file: "/var/ssl/private/tokenKeypair.pem"
+
+      kafka_rest:
+        ssl_keystore_filepath: "/var/ssl/private/kafka_rest.keystore.jks"
+        ssl_keystore_key_password: keystorepass
+        ssl_keystore_store_password: keystorepass
+        ssl_truststore_filepath: "/var/ssl/private/kafka_rest.truststore.jks"
+        ssl_truststore_password: truststorepass
+        ssl_truststore_ca_cert_alias: CARoot
+        token_services_public_pem_file: "/var/ssl/private/public.pem"
+        token_services_private_pem_file: "/var/ssl/private/tokenKeypair.pem"
+
+      kafka_connect:
+        ssl_keystore_filepath: "/var/ssl/private/kafka_connect.keystore.jks"
+        ssl_keystore_key_password: keystorepass
+        ssl_keystore_store_password: keystorepass
+        ssl_truststore_filepath: "/var/ssl/private/kafka_connect.truststore.jks"
+        ssl_truststore_password: truststorepass
+        ssl_truststore_ca_cert_alias: CARoot
+        token_services_public_pem_file: "/var/ssl/private/public.pem"
+        token_services_private_pem_file: "/var/ssl/private/tokenKeypair.pem"
+
+      ksql:
+        ssl_keystore_filepath: "/var/ssl/private/ksql.keystore.jks"
+        ssl_keystore_key_password: keystorepass
+        ssl_keystore_store_password: keystorepass
+        ssl_truststore_filepath: "/var/ssl/private/ksql.truststore.jks"
+        ssl_truststore_password: truststorepass
+        ssl_truststore_ca_cert_alias: CARoot
+        token_services_public_pem_file: "/var/ssl/private/public.pem"
+        token_services_private_pem_file: "/var/ssl/private/tokenKeypair.pem"
+
+      control_center:
+        ssl_keystore_filepath: "/var/ssl/private/control_center.keystore.jks"
+        ssl_keystore_key_password: keystorepass
+        ssl_keystore_store_password: keystorepass
+        ssl_truststore_filepath: "/var/ssl/private/control_center.truststore.jks"
+        ssl_truststore_password: truststorepass
+        ssl_truststore_ca_cert_alias: CARoot
+        token_services_public_pem_file: "/var/ssl/private/public.pem"
+        token_services_private_pem_file: "/var/ssl/private/tokenKeypair.pem"

@@ -121,7 +121,7 @@
     service_name: control_center
     user: "{{control_center_user}}"
     group: "{{control_center_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
     ca_cert_path: "{{control_center_ca_cert_path}}"
     cert_path: "{{control_center_cert_path}}"
     key_path: "{{control_center_key_path}}"
@@ -215,6 +215,7 @@
     mode: 0770
   tags:
     - filesystem
+    - log
 
 - name: Update log4j Config for Log Cleanup
   include_role:
@@ -227,6 +228,8 @@
     log4j_root_logger: "{{control_center_log4j_root_logger}}"
     handler: "restart control center"
   when: control_center_custom_log4j|bool
+  tags:
+    - log
 
 - name: Set Permissions on Log4j Conf
   file:
@@ -236,6 +239,46 @@
     mode: 0640
   tags:
     - filesystem
+    - log
+
+- name: Create logredactor rule file directory
+  file:
+    path: "{{ logredactor_rule_path | dirname }}"
+    state: directory
+    mode: 0755
+  when: (control_center_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ logredactor_rule_path_local }}"
+    dest: "{{ logredactor_rule_path }}"
+    mode: 0644
+  when: (control_center_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Configure logredactor
+  include_role:
+    name: common
+    tasks_from: configure_logredactor.yml
+  vars:
+    log4j_file: "{{control_center.log4j_file}}"
+    logredactor_rule_var: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
+    logredactor_policy_refresh_interval_var: "{{logredactor_policy_refresh_interval}}"
+  with_items: "{{ control_center_logredactor_logger_specs_list }}"
+  when: (control_center_custom_log4j|bool) and (logredactor_enabled|bool)
+  tags:
+    - log
+
+- name: Restart control center
+  ansible.builtin.debug:
+    msg: "restarting control center"
+  notify: restart control center
+  when: (control_center_custom_log4j|bool) and (logredactor_enabled|bool) and (not control_center_skip_restarts|bool)
+  tags:
+    - log
 
 - name: Create RocksDB Directory
   file:
@@ -321,3 +364,13 @@
     - control_center_health_checks_enabled|bool
     - not ansible_check_mode
   tags: health_check
+
+- name: Delete temporary keys/certs when keystore and trustore is provided
+  file:
+    path: "{{item}}"
+    state: absent
+  loop:
+    - "{{control_center_ca_cert_path}}"
+    - "{{control_center_cert_path}}"
+    - "{{control_center_key_path}}"
+  when: (ssl_provided_keystore_and_truststore | bool)
