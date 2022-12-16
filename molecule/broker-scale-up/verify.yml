@@ -39,15 +39,37 @@
   hosts: kafka-broker5
   tasks:
     - name: Run zookeeper shell to get broker ID's
-      # Kraft:TODO: get cluster ID from different method for kraft based scenarios
       shell: >
           /usr/bin/zookeeper-shell zookeeper1:2182  -zk-tls-config-file  /etc/kafka/zookeeper-tls-client.properties ls /brokers/ids
       register: zk_output
+      when: not ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0)
+
     - name: Verify broker4 and broker5 in the output
       assert:
         that:
           - '" 4" in zk_output.stdout'
           - '" 5" in zk_output.stdout'
+      when: not ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0)
+
+    - name: Get broker ID's
+      shell: >
+          kafka-metadata-quorum --command-config /etc/kafka/client.properties --bootstrap-server kafka-broker1:9091 describe --status | grep CurrentObservers | awk '{print $NF}'
+      register: zk_output
+      when: ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0)
+
+    - set_fact:
+        broker_list: "{{ zk_output.stdout }}"
+      when: ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0)
+
+    - name: Verify broker4 and broker5 not in the output
+      assert:
+        that:
+          - "1 in broker_list"
+          - "2 in broker_list"
+          - "3 in broker_list"
+          - "not 4 in broker_list"
+          - "not 5 in broker_list"
+      when: ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0)
 
 - name: Verify - control_center
   hosts: control_center
