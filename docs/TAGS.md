@@ -93,7 +93,13 @@ Description: To generate secrets protection masterkey if secrets protection enab
 
 ### Tag - package
 
-Description: This is applied to all package installation related tasks. Skip this if you don't want to reinstall.
+Description: This is applied to all package installation related tasks (common and CP packages). Skip this if you don't want to reinstall.
+
+***
+
+### Tag - cp_package
+
+Description: Applied to all confluent packages installation tasks. This could be used when someone just wants to upgrade CP packages.
 
 ***
 
