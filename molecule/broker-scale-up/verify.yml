@@ -38,38 +38,37 @@
   gather_facts: false
   hosts: kafka-broker5
   tasks:
+    - set_fact:
+        kraft_mode: "{{ ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) }}"
+
     - name: Run zookeeper shell to get broker ID's
       shell: >
           /usr/bin/zookeeper-shell zookeeper1:2182  -zk-tls-config-file  /etc/kafka/zookeeper-tls-client.properties ls /brokers/ids
       register: zk_output
-      when: not ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0)
+      when: not kraft_mode|bool
 
     - name: Verify broker4 and broker5 in the output
       assert:
         that:
           - '" 4" in zk_output.stdout'
           - '" 5" in zk_output.stdout'
-      when: not ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0)
+      when: not kraft_mode|bool
 
     - name: Get broker ID's
       shell: >
           kafka-metadata-quorum --command-config /etc/kafka/client.properties --bootstrap-server kafka-broker1:9091 describe --status | grep CurrentObservers | awk '{print $NF}'
-      register: zk_output
-      when: ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0)
-
-    - set_fact:
-        broker_list: "{{ zk_output.stdout }}"
-      when: ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0)
+      register: quorum_output
+      when: kraft_mode|bool
 
     - name: Verify broker4 and broker5 not in the output
       assert:
         that:
-          - "1 in broker_list"
-          - "2 in broker_list"
-          - "3 in broker_list"
-          - "4 in broker_list"
-          - "5 in broker_list"
-      when: ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0)
+          - "1 in {{ quorum_output.stdout }}"
+          - "2 in {{ quorum_output.stdout }}"
+          - "3 in {{ quorum_output.stdout }}"
+          - "4 in {{ quorum_output.stdout }}"
+          - "5 in {{ quorum_output.stdout }}"
+      when: kraft_mode|bool
 
 - name: Verify - control_center
   hosts: control_center
