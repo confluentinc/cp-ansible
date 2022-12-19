@@ -8,7 +8,9 @@ Below are the supported variables for the role confluent.variables
 
 Version of Confluent Platform to install
 
-Default:  6.2.7
+Default:  6.2.8
+
+***
 
 ### ansible_become_localhost
 
@@ -3957,6 +3959,14 @@ Default:  openjdk-8-jdk
 Deb Repository to use for Java Installation
 
 Default:  ppa:openjdk-r/ppa
+
+***
+
+### add_sid_repo
+
+Boolean to add Sid Repo for JAVA Buster
+
+Default:  false
 
 ***
 
