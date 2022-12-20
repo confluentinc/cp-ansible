@@ -10,17 +10,11 @@ v7.1.5
 Notable enhancements
 -------------
 
-- Added retries to installation tasks to resolve connectivity issues
-- New var ansible_become_localhost introduced to specify the become value for localhost - used when dealing with any file present on localhost/controller
 - Dedicated playbook to restart services manually
 - Added provision to configure Kafka Connect Replicator custom rest extension classes
-- Skip host validation for rolling deployment/upgrades
-- Add ssl.* properties for kafka broker
 - Enable running playbook in ansible check mode
-- Bug Fixes
-   * `#633 <https://github.com/confluentinc/cp-ansible/issues/633>`_ Removed unnecessary C3 log dir permissions
-   * `ANSIENG-1864 <https://confluentinc.atlassian.net/browse/ANSIENG-1864>`_ For archive installations, fixed logic to use `config_prefix` variable for zookeeper, kafka broker, schema registry, kafka connect
-
+- For archive installations, fixed logic to use `config_prefix` variable for zookeeper, kafka broker, schema registry, kafka connect
+- Introduced new tag `cp_package` for installing/ upgrading confluent packages
 
 v7.1.4
 ======
