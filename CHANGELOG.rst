@@ -4,6 +4,27 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.2.3
+======
+
+New features
+-------------
+
+- Ansible Playbooks for Confluent Platform is now officially supported for Ansible 2.12 and 2.13 in addition to 2.11
+
+Notable enhancements
+-------------
+
+- Introduced fetch_logs_path - Path on component to store logs
+- Dedicated playbook to restart services manually
+- Fixed proxy settings for yum repo, It now supports both https_proxy and http_proxy
+- Pip and python modules can/will now be installed on managed nodes via CP-Ansible
+- Added provision to configure Kafka Connect Replicator custom rest extension classes
+- Enable running playbook in ansible check mode
+- For archive installations, fixed logic to use `config_prefix` variable for zookeeper, kafka broker, schema registry, kafka connect
+- Make Pip install and Upgrade pip tasks skippable using `tags: package`
+
+
 v7.2.2
 ======
 
@@ -16,11 +37,10 @@ Notable enhancements
  - Making Java SID Repo as optional.
  - Isolate truststore, keystore ceration when multiple kafka connect services run on same host.
  - Allow creation of keystore and truststore with custom password when using custom or self-signed certs
- - Imporved Validations, Internet access check now considers whether proxy is set or not.
+ - Improved Validations, Internet access check now considers whether proxy is set or not.
  - Fix typo kakfa to kafka
  - New Sample inventory with single node.
  - Cleanup Kafka Broker Custom properties
- - Enhanced RBAC support with FIPS
 
 
 v7.2.1
