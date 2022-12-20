@@ -12,14 +12,6 @@ Default:  7.3.0
 
 ***
 
-### kraft_enabled
-
-Runs kafka in Kraft mode if controller is present
-
-Default:  "{{ true if 'kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0 else false }}"
-
-***
-
 ### fetch_logs_path
 
 Path on component to store logs collected during fetch_logs playbook
@@ -977,14 +969,6 @@ Default:  "{{kafka_controller_default_group}}"
 Set this variable to customize the directory that the Kafka controller writes log files to. Default location is /var/log/kafka.
 
 Default:  "{{kafka_controller_default_log_dir}}"
-
-***
-
-### kafka_controller_schema_validation_enabled
-
-Boolean to configure Schema Validation on Kafka
-
-Default:  true
 
 ***
 

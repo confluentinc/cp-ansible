@@ -13,6 +13,9 @@ base_path: "{{ ((config_base_path,('confluent-',confluent_package_version) | joi
 
 binary_base_path: "{{ ((config_base_path,('confluent-',confluent_package_version) | join) | path_join) if installation_method == 'archive' else '/usr' }}"
 
+### Runs kafka in Kraft mode if controller is present
+kraft_enabled: "{{ true if 'kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0 else false }}"
+
 #### Config prefix paths ####
 zookeeper_config_prefix_path: "{{ zookeeper_config_prefix.strip('/') }}"
 kafka_controller_config_prefix_path: "{{ kafka_controller_config_prefix.strip('/') }}"
@@ -158,8 +161,7 @@ kafka_controller_properties:
     enabled: "{{
     kafka_controller_listeners | confluent.platform.ssl_required(kafka_controller_ssl_enabled) or
     mds_broker_listener.ssl_enabled|bool or
-    mds_tls_enabled|bool or
-    ( kafka_controller_schema_validation_enabled and 'schema_registry' in groups and schema_registry_ssl_enabled ) }}"
+    mds_tls_enabled|bool }}"
     properties:
       ssl.truststore.location: "{{kafka_controller_truststore_path}}"
       ssl.truststore.password: "{{kafka_controller_truststore_storepass}}"
@@ -189,28 +191,6 @@ kafka_controller_properties:
     enabled: "{{ 'GSSAPI' in kafka_controller_sasl_enabled_mechanisms }}"
     properties:
       sasl.kerberos.service.name: "{{kerberos_kafka_controller_primary}}"
-  sr:
-    enabled: "{{ kafka_controller_schema_validation_enabled and 'schema_registry' in groups }}"
-    properties:
-      confluent.schema.registry.url: "{{schema_registry_url}}"
-  sr_ssl_fips:
-    enabled: "{{ kafka_controller_schema_validation_enabled and 'schema_registry' in groups and schema_registry_ssl_enabled and fips_enabled }}"
-    properties:
-      confluent.ssl.keymanager.algorithm: PKIX
-      confluent.ssl.trustmanager.algorithm: PKIX
-      confluent.ssl.keystore.type: BCFKS
-      confluent.ssl.truststore.type: BCFKS
-  sr_rbac:
-    enabled: "{{ kafka_controller_schema_validation_enabled and 'schema_registry' in groups and rbac_enabled }}"
-    properties:
-      confluent.basic.auth.credentials.source: USER_INFO
-      confluent.basic.auth.user.info: "{{schema_registry_ldap_user | default('sr') }}:{{schema_registry_ldap_password | default('pass')}}"
-  sr_basic:
-    # Should not turn on basic auth if rbac is enabled
-    enabled: "{{ kafka_controller_schema_validation_enabled and 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
-    properties:
-      confluent.basic.auth.credentials.source: USER_INFO
-      confluent.basic.auth.user.info: "{{schema_registry_basic_users_final.admin.principal}}:{{schema_registry_basic_users_final.admin.password}}"
   rbac:
     enabled: "{{ rbac_enabled }}"
     properties:
