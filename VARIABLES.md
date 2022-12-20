@@ -8,7 +8,9 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.0.6
+Default:  7.0.7
+
+***
 
 ### ansible_become_localhost
 
