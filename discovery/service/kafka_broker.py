@@ -434,6 +434,53 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
             'kafka_broker_log4j_root_logger': root_logger
         }
 
+    def _build_kerberos_properties(self, service_prop: dict) -> tuple:
+        key1 = 'listener.name.broker.gssapi.sasl.jaas.config'
+        key2 = 'listener.name.internal.gssapi.sasl.jaas.config'
+        key3 = 'kafka.rest.client.sasl.jaas.config'
+        self.mapped_service_properties.add(key1)
+        self.mapped_service_properties.add(key2)
+        self.mapped_service_properties.add(key3)
+
+        sasl_config = ""
+        if service_prop.get(key1) is not None:
+            sasl_config = service_prop.get(key1)
+        elif service_prop.get(key2) is not None:
+            sasl_config = service_prop.get(key2)
+        elif service_prop.get(key3) is not None:
+            sasl_config = service_prop.get(key3)
+        else:
+            return "all", {}
+
+        try:
+            keytab = sasl_config.split('keyTab="')[1].split('"')[0]
+            principal = sasl_config.split('principal="')[1].split('"')[0]
+        except:
+            keytab = ""
+            principal = ""
+        if keytab != "" or principal != "":
+            return self.group, {
+                'sasl_protocol': 'kerberos',
+                'kafka_broker_kerberos_principal': principal,
+                'kafka_broker_kerberos_keytab_path': keytab
+            }
+        return 'all', {}
+
+    def _build_kerberos_configurations(self, service_prop: dict) -> tuple:
+        property_dict = dict()
+        if self.inventory.groups.get('kafka_broker').vars.get('sasl_protocol') == 'kerberos':
+            kerberos_config_file = '/etc/krb5.conf'
+            realm, kdc, admin = self.get_kerberos_configurations(self.input_context, self.hosts, kerberos_config_file)
+            kerberos_config = {
+                'realm': realm,
+                'kdc_hostname': kdc,
+                'admin_hostname': admin
+            }
+            property_dict['kerberos_configure'] = False
+            property_dict['kerberos'] = kerberos_config
+        return "all", property_dict
+
+
 class KafkaServicePropertyBaseBuilder60(KafkaServicePropertyBaseBuilder):
     pass
 

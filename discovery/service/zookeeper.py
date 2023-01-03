@@ -174,6 +174,20 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
             'zookeeper_log4j_root_logger': root_logger
         }
 
+    def _build_kerberos_properties(self, service_prop: dict) -> tuple:
+        jaas_file = self.get_jaas_file_path(self.input_context, self.service, self.hosts)
+        if jaas_file is None:
+            jaas_file = 'etc/kafka/zookeeper_jaas.conf'
+
+        principal, keytab_path = self.get_kerberos_properties(self.input_context, self.hosts, jaas_file)
+        if principal == "" and keytab_path == "":
+            return 'all', {}
+        return self.group, {
+            'sasl_protocol': 'kerberos',
+            'zookeeper_kerberos_principal': principal,
+            'zookeeper_kerberos_keytab_path': keytab_path
+        }
+
 
 class ZookeeperServicePropertyBaseBuilder60(ZookeeperServicePropertyBaseBuilder):
     pass

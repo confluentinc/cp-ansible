@@ -215,6 +215,26 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
             'schema_registry_log4j_root_logger': root_logger
         }
 
+    def _build_kerberos_properties(self, service_prop: dict) -> tuple:
+        key = 'kafkastore.sasl.jaas.config'
+        self.mapped_service_properties.add(key)
+        if service_prop.get(key) is None:
+            return 'all', {}
+        sasl_config = service_prop.get(key)
+        try:
+            keytab = sasl_config.split('keyTab="')[1].split('"')[0]
+            principal = sasl_config.split('principal="')[1].split('"')[0]
+        except:
+            keytab = ""
+            principal = ""
+        if keytab != "" or principal != "":
+            return self.group, {
+                'sasl_protocol': 'kerberos',
+                'schema_registry_kerberos_principal': principal,
+                'schema_registry_kerberos_keytab_path': keytab
+            }
+        return 'all', {}
+
 
 class SchemaRegistryServicePropertyBaseBuilder60(SchemaRegistryServicePropertyBaseBuilder):
     pass

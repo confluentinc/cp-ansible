@@ -274,6 +274,17 @@ class ServicePropertyManager:
             return []
 
     @staticmethod
+    def get_jaas_file_path(input_context: InputContext, service: ConfluentServices, hosts: list):
+        # check if overriden as env var
+        env_details = ServicePropertyManager.get_env_details(input_context, service, hosts)
+        kafka_opts = env_details.get('KAFKA_OPTS', None)
+        if kafka_opts is not None:
+            if "-Djava.security.auth.login.config=" in kafka_opts:
+                jaas_file_path = kafka_opts.split('-Djava.security.auth.login.config=')[1].split(' ')[0]
+                return jaas_file_path
+        return None
+
+    @staticmethod
     def get_log_file_path(input_context: InputContext, service: ConfluentServices, hosts: list, log4j_opts_env_var):
         # check if overriden as env var
         env_details = ServicePropertyManager.get_env_details(input_context, service, hosts)
@@ -323,6 +334,90 @@ class ServicePropertyManager:
         service_facts = SystemPropertyManager.get_service_details(input_context, service, hosts)
         environment = service_facts.get("Environment", None)
         return ServicePropertyManager.parse_environment_details(environment)
+
+    @staticmethod
+    def get_kerberos_configurations(input_context: InputContext, hosts: list, kerberos_config_file):
+        realm, kdc, admin = "", "", ""
+
+        runner_utils = AnsibleRunnerUtils()
+        ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
+        ansible_runner.run(
+            host_pattern=host_pattern,
+            inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
+            module="shell",
+            module_args=f"grep default_realm {kerberos_config_file}",
+            event_handler=runner_utils.my_event_handler
+        )
+        response1 = runner_utils.result_ok
+        if len(response1) != 0 and response1[hosts[0]]['rc'] == 0:
+            std_out = response1[hosts[0]]['stdout']
+            realm = std_out.split('default_realm')[1].strip().split('=')[1].strip()
+
+        runner_utils = AnsibleRunnerUtils()
+        ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
+        ansible_runner.run(
+            host_pattern=host_pattern,
+            inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
+            module="shell",
+            module_args=f"grep kdc {kerberos_config_file} | grep 88",
+            event_handler=runner_utils.my_event_handler
+        )
+        response2 = runner_utils.result_ok
+        if len(response2) != 0 and response2[hosts[0]]['rc'] == 0:
+            std_out = response2[hosts[0]]['stdout']
+            kdc = std_out.split('kdc')[1].strip().split('=')[1].strip().split(':88')[0]
+
+        runner_utils = AnsibleRunnerUtils()
+        ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
+        ansible_runner.run(
+            host_pattern=host_pattern,
+            inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
+            module="shell",
+            module_args=f"grep admin_server {kerberos_config_file}",
+            event_handler=runner_utils.my_event_handler
+        )
+        response3 = runner_utils.result_ok
+        if len(response3) != 0 and response3[hosts[0]]['rc'] == 0:
+            std_out = response3[hosts[0]]['stdout']
+            admin = std_out.split('admin_server')[1].strip().split('=')[1].strip().split(':749')[0]
+
+        return realm, kdc, admin
+
+    @staticmethod
+    def get_kerberos_properties(input_context: InputContext, hosts: list, jaas_file):
+        principal, keytab_path = "", ""
+
+        runner_utils = AnsibleRunnerUtils()
+        ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
+        ansible_runner.run(
+            host_pattern=host_pattern,
+            inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
+            module="shell",
+            module_args=f"grep keyTab= {jaas_file}",
+            event_handler=runner_utils.my_event_handler
+        )
+        response1 = runner_utils.result_ok
+        if len(response1) != 0 and response1[hosts[0]]['rc'] == 0:
+            std_out = response1[hosts[0]]['stdout']
+            if 'keyTab="' in std_out:
+                keytab_path = std_out.split('keyTab="')[1].split('"')[0]
+
+        runner_utils = AnsibleRunnerUtils()
+        ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
+        ansible_runner.run(
+            host_pattern=host_pattern,
+            inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
+            module="shell",
+            module_args=f"grep principal= {jaas_file}",
+            event_handler=runner_utils.my_event_handler
+        )
+        response2 = runner_utils.result_ok
+        if len(response2) != 0 and response2[hosts[0]]['rc'] == 0:
+            std_out = response2[hosts[0]]['stdout']
+            if 'principal="' in std_out:
+                principal = std_out.split('principal="')[1].split('"')[0]
+
+        return principal, keytab_path
 
     @staticmethod
     def get_root_logger(input_context: InputContext, hosts: list, log4j_file, default_log4j_file):
