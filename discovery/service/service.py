@@ -21,12 +21,24 @@ class AbstractPropertyBuilder(ABC):
         return ServicePropertyManager.get_keystore_alias_names(input_context, hosts, keystorepass, keystorepath)
 
     @staticmethod
+    def get_kerberos_properties(input_context: InputContext, hosts: list, jaas_file):
+        return ServicePropertyManager.get_kerberos_properties(input_context, hosts, jaas_file)
+
+    @staticmethod
+    def get_kerberos_configurations(input_context: InputContext, hosts: list, kerberos_config_file):
+        return ServicePropertyManager.get_kerberos_configurations(input_context, hosts, kerberos_config_file)
+
+    @staticmethod
     def get_root_logger(input_context: InputContext, hosts: list, log4j_file, default_log4j_file):
         return ServicePropertyManager.get_root_logger(input_context, hosts, log4j_file, default_log4j_file)
 
     @staticmethod
     def get_log_file_path(input_context: InputContext, service: ConfluentServices, hosts: list, log4j_opts_env_var):
         return ServicePropertyManager.get_log_file_path(input_context, service, hosts, log4j_opts_env_var)
+
+    @staticmethod
+    def get_jaas_file_path(input_context: InputContext, service: ConfluentServices, hosts: list):
+        return ServicePropertyManager.get_jaas_file_path(input_context, service, hosts)
 
     @staticmethod
     def get_property_mappings(input_context: InputContext, service: ConfluentServices, hosts: list):

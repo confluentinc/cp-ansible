@@ -221,6 +221,35 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
             'kafka_rest_log4j_root_logger': root_logger
         }
 
+    def _build_kerberos_properties(self, service_prop: dict) -> tuple:
+        key1 = 'client.sasl.jaas.config'
+        key2 = 'client.confluent.monitoring.interceptor.sasl.jaas.config'
+        self.mapped_service_properties.add(key1)
+        self.mapped_service_properties.add(key2)
+
+        sasl_config = ""
+        if service_prop.get(key1) is not None:
+            sasl_config = service_prop.get(key1)
+        elif service_prop.get(key2) is not None:
+            sasl_config = service_prop.get(key2)
+        else:
+            return "all", {}
+
+        try:
+            keytab = sasl_config.split('keyTab="')[1].split('"')[0]
+            principal = sasl_config.split('principal="')[1].split('"')[0]
+        except:
+            keytab = ""
+            principal = ""
+        if keytab != "" or principal != "":
+            return self.group, {
+                'sasl_protocol': 'kerberos',
+                'kafka_rest_kerberos_principal': principal,
+                'kafka_rest_kerberos_keytab_path': keytab
+            }
+        return 'all', {}
+
+
 class KafkaRestServicePropertyBaseBuilder60(KafkaRestServicePropertyBaseBuilder):
     pass
 
