@@ -5,15 +5,35 @@ CP-Ansible's tests use the [Molecule](https://molecule.readthedocs.io/en/latest/
 ## Prerequisites
 
 1. Python3
-2. [Ansible >= 2.11](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible-with-pip). Use python3's pip for ansible installation to make sure ansible is not configured with Python2.7:
+2. [Ansible >= 4.x](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible-with-pip) 
+
+Supports below Ansible versions -
+- Ansible 4.x [bundles ansible core 2.11]
+- Ansible 5.x [bundles ansible core 2.12]
+- Ansible 6.x [bundles ansible core 2.13]
+
+Use python3's pip for ansible installation to make sure ansible is not configured with Python2.7:
 ```
 python3 -m pip install --user ansible
 ```
-2. [Docker](https://docs.docker.com/get-docker/) *Note: We recommend increasing your docker memory to at least 20GB of RAM and your CPU count to 10.*
+
+To install specific ansible version use below command:
+```
+python3 -m pip install --user ansible==4.10.0
+```
+
+3. [Docker](https://docs.docker.com/get-docker/) *Note: We recommend increasing your docker memory to at least 20GB of RAM and your CPU count to 10.*
 Due to some changes in Docker wrt systemd, the latest versions of Docker won't work with our molecule tests. Docker Desktop version 4.2.0 (having Docker Engine 20.10.10) or ealier should be used. 
-3. [Molecule >= 3.3](https://molecule.readthedocs.io/en/latest/installation.html#install). Use python3's pip for installation: 
+4. [Molecule >= 3.3](https://molecule.readthedocs.io/en/latest/installation.html#install). Use python3's pip for installation: 
 ```
 python3 -m pip install --user "molecule[docker,lint]"
+```
+ 
+Note:
+There's this [recent issue](https://github.com/ansible-community/molecule-docker/issues/184) with latest molecule-docker version `2.1.0` which broke env var interpolation.
+Please downgrade it to 2.0.0 for time being until fix is available and above issue is closed.
+```
+python3 -m pip install "molecule-docker<=2.0.0"
 ```
 
 ## Cloning CP-Ansible

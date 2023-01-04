@@ -2,7 +2,7 @@
 # Custom filters used in this file are defined in plugins/filter/filters.py
 
 ### Version of Confluent Platform to install
-confluent_package_version: 7.2.1
+confluent_package_version: 7.3.0
 
 confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
@@ -12,6 +12,12 @@ confluent_common_repository_debian_release_version: "{{ansible_distribution_rele
 
 # Deprecated, see mask_sensitive_logs
 mask_secrets: true
+
+### Path on component to store logs collected during fetch_logs playbook
+fetch_logs_path: /tmp
+
+### Boolean to specify the become value for localhost, used when dealing with any file present on localhost/controller.
+ansible_become_localhost: false
 
 ### Boolean to mask secrets in playbook output, defaults to true
 mask_sensitive_logs: "{{mask_secrets}}"
@@ -52,7 +58,7 @@ jmxexporter_jar_path: /opt/prometheus/jmx_prometheus_javaagent.jar
 ### Boolean to force update of Prometheus Exporter Agent Jar (must be set to true if jmxexporter_jar_path already exists)
 jmxexporter_jar_url_force: false
 
-### Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
+### Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8 or 11. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
 fips_enabled: false
 
 ### Boolean to configure ZK, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
@@ -176,7 +182,7 @@ confluent_cli_base_path: /opt/confluent-cli
 confluent_cli_path: "/usr/local/bin/confluent"
 
 ### Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
-confluent_cli_version: 2.19.0
+confluent_cli_version: 2.28.1
 
 ### Recommended replication factor, defaults to 3. When splitting your cluster across 2 DCs with 4 or more Brokers, this should be increased to 4 to balance topic replicas.
 default_internal_replication_factor: 3
@@ -214,13 +220,16 @@ ssl_provided_keystore_and_truststore: false
 ### Boolean for TLS Encryption option to provide user owned Keystores and Truststores already present on the host. Valid and to be used only when ssl_provided_keystore_and_truststore: true
 ssl_provided_keystore_and_truststore_remote_src: false
 
+### Boolean to provide custom password for keystores and truststore. Enabled with ssl_provided_keystore_and_truststore, but can be enabled independently to set the custom password for generated keystores and truststores when using custom or self-signed certificates
+ssl_keystore_and_truststore_custom_password: "{{ssl_provided_keystore_and_truststore}}"
+
 ### Full path to host specific keystore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-keystore.jks"
 ssl_keystore_filepath: ""
 
-### Keystore Key Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
+### Keystore Key Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords. Not to be confused with ssl_key_password when using custom certs
 ssl_keystore_key_password: ""
 
-### Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
+### Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true or ssl_keystore_and_truststore_custom_password: true. May set per host if keystores have unique passwords
 ssl_keystore_store_password: ""
 
 ### Keystore source alias for host specific certificate. Only required if keystore contains more than one certificate. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "{{inventory_hostname}}"
@@ -229,7 +238,7 @@ ssl_keystore_alias: ""
 ### Full path to host specific truststore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. Can share same keystore for all components if it contains all ca certs used to sign host certificates
 ssl_truststore_filepath: ""
 
-### Keystore Password for host specific truststore. Used with ssl_provided_keystore_and_truststore: true
+### Keystore Password for host specific truststore. Used with ssl_provided_keystore_and_truststore: true or ssl_keystore_and_truststore_custom_password: true.
 ssl_truststore_password: ""
 
 ### Keystore alias for ca certificate
@@ -317,8 +326,8 @@ zookeeper_packages:
 
 zookeeper_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/zookeeper.truststore.jks{% endif %}"
 zookeeper_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/zookeeper.keystore.jks{% endif %}"
-zookeeper_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
-zookeeper_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
+zookeeper_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+zookeeper_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
 zookeeper_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else zookeeper_keystore_storepass }}"
 zookeeper_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 zookeeper_cert_path: "{{ ssl_file_dir_final }}/zookeeper.crt"
@@ -336,7 +345,7 @@ zookeeper_jolokia_port: 7770
 zookeeper_jolokia_ssl_enabled: "{{ zookeeper_ssl_enabled }}"
 
 ### Path on Zookeeper host for Jolokia Configuration file
-zookeeper_jolokia_config: "{{ (config_base_path, 'etc/kafka/zookeeper_jolokia.properties' ) | community.general.path_join }}"
+zookeeper_jolokia_config: "{{ (config_base_path, zookeeper_config_prefix_path, 'zookeeper_jolokia.properties') | path_join }}"
 
 ### Authentication Mode for Zookeeper's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set zookeeper_jolokia_user and zookeeper_jolokia_password
 zookeeper_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -469,8 +478,8 @@ kafka_broker_bcfks_keystore_path: "{{ ssl_file_dir_final }}/kafka_broker.keystor
 kafka_broker_pkcs12_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_broker.truststore.jks{% endif %}"
 kafka_broker_pkcs12_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_broker.keystore.jks{% endif %}"
 
-kafka_broker_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
-kafka_broker_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
+kafka_broker_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+kafka_broker_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
 kafka_broker_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_broker_keystore_storepass }}"
 kafka_broker_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 kafka_broker_cert_path: "{{ ssl_file_dir_final }}/kafka_broker.crt"
@@ -491,7 +500,7 @@ kafka_broker_jolokia_port: 7771
 kafka_broker_jolokia_ssl_enabled: "{{ ssl_enabled }}"
 
 ### Path on Kafka host for Jolokia Configuration file
-kafka_broker_jolokia_config: "{{ (config_base_path,'etc/kafka/kafka_jolokia.properties') | community.general.path_join }}"
+kafka_broker_jolokia_config: "{{ (config_base_path, kafka_broker_config_prefix_path, 'kafka_jolokia.properties') | path_join }}"
 
 ### Authentication Mode for Kafka's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set kafka_broker_jolokia_user and kafka_broker_jolokia_password
 kafka_broker_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -588,8 +597,8 @@ schema_registry_packages:
 
 schema_registry_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/schema_registry.truststore.jks{% endif %}"
 schema_registry_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/schema_registry.keystore.jks{% endif %}"
-schema_registry_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
-schema_registry_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
+schema_registry_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+schema_registry_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
 schema_registry_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else schema_registry_keystore_storepass }}"
 schema_registry_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 schema_registry_cert_path: "{{ ssl_file_dir_final }}/schema_registry.crt"
@@ -608,7 +617,7 @@ schema_registry_jolokia_port: 7772
 schema_registry_jolokia_ssl_enabled: "{{ schema_registry_ssl_enabled }}"
 
 ### Path on Schema Registry host for Jolokia Configuration file
-schema_registry_jolokia_config: "{{ (config_base_path,'etc/schema-registry/schema_registry_jolokia.properties') | community.general.path_join }}"
+schema_registry_jolokia_config: "{{ (config_base_path, schema_registry_config_prefix_path, 'schema_registry_jolokia.properties') | path_join }}"
 
 ### Authentication Mode for Schema Registry's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 schema_registry_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -685,8 +694,8 @@ kafka_rest_packages:
 
 kafka_rest_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_rest.truststore.jks{% endif %}"
 kafka_rest_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_rest.keystore.jks{% endif %}"
-kafka_rest_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
-kafka_rest_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
+kafka_rest_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+kafka_rest_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
 kafka_rest_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_rest_keystore_storepass }}"
 kafka_rest_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 kafka_rest_cert_path: "{{ ssl_file_dir_final }}/kafka_rest.crt"
@@ -705,7 +714,7 @@ kafka_rest_jolokia_port: 7775
 kafka_rest_jolokia_ssl_enabled: "{{ kafka_rest_ssl_enabled }}"
 
 ### Path on Rest Proxy host for Jolokia Configuration file
-kafka_rest_jolokia_config: "{{ (config_base_path,'etc/kafka-rest/kafka_rest_jolokia.properties') | community.general.path_join }}"
+kafka_rest_jolokia_config: "{{ (config_base_path, kafka_rest_config_prefix_path, 'kafka_rest_jolokia.properties') | path_join }}"
 
 ### Authentication Mode for Rest Proxy's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 kafka_rest_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -789,14 +798,14 @@ kafka_connect_packages:
   - confluent-control-center
   - confluent-schema-registry
 
-kafka_connect_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect.truststore.jks{% endif %}"
-kafka_connect_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_connect.keystore.jks{% endif %}"
-kafka_connect_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
-kafka_connect_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
+kafka_connect_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.truststore.jks' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.truststore.jks'}}{% endif %}"
+kafka_connect_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.keystore.jks' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.keystore.jks'}}{% endif %}"
+kafka_connect_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+kafka_connect_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
 kafka_connect_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_connect_keystore_storepass }}"
-kafka_connect_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
-kafka_connect_cert_path: "{{ ssl_file_dir_final }}/kafka_connect.crt"
-kafka_connect_key_path: "{{ ssl_file_dir_final }}/kafka_connect.key"
+kafka_connect_ca_cert_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.ca.crt' if kafka_connect_service_name != kafka_connect_default_service_name else 'ca.crt'}}"
+kafka_connect_cert_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.crt' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.crt'}}"
+kafka_connect_key_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.key' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.key'}}"
 kafka_connect_export_certs: "{{ True if kafka_connect_authentication_type == 'mtls' else False }}"
 kafka_connect_keytab_path: /etc/security/keytabs/kafka_connect.keytab
 kafka_connect_kafka_listener_name: internal
@@ -820,7 +829,7 @@ kafka_connect_jolokia_port: 7773
 kafka_connect_jolokia_ssl_enabled: "{{ kafka_connect_ssl_enabled }}"
 
 ### Path on Connect host for Jolokia Configuration file
-kafka_connect_jolokia_config: "{{ (config_base_path,'etc/kafka/kafka_connect_jolokia.properties') | community.general.path_join }}"
+kafka_connect_jolokia_config: "{{ (config_base_path, kafka_connect_config_prefix_path, 'kafka_connect_jolokia.properties') | path_join }}"
 
 ### Authentication Mode for Connect's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 kafka_connect_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -863,7 +872,7 @@ kafka_connect_secret_registry_default_replication_factor:  "{{ 3 if ccloud_kafka
   [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 kafka_connect_plugins_path:
-  - "{{ (binary_base_path, 'share/java') | community.general.path_join }}"
+  - "{{ (binary_base_path, 'share/java') | path_join }}"
 
 
 kafka_connect_confluent_hub_plugins: []
@@ -927,8 +936,8 @@ ksql_packages:
 
 ksql_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/ksql.truststore.jks{% endif %}"
 ksql_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/ksql.keystore.jks{% endif %}"
-ksql_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
-ksql_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
+ksql_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+ksql_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
 ksql_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else ksql_keystore_storepass }}"
 ksql_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 ksql_cert_path: "{{ ssl_file_dir_final }}/ksql.crt"
@@ -948,7 +957,7 @@ ksql_jolokia_port: 7774
 ksql_jolokia_ssl_enabled: "{{ ksql_ssl_enabled }}"
 
 ### Path on ksqlDB host for Jolokia Configuration file
-ksql_jolokia_config: "{{ (config_base_path,((confluent_package_version is version('5.5.0', '>=')) | ternary('etc/ksqldb/ksql_jolokia.properties' , 'etc/ksql/ksql_jolokia.properties'))) | community.general.path_join }}"
+ksql_jolokia_config: "{{ (config_base_path,((confluent_package_version is version('5.5.0', '>=')) | ternary('etc/ksqldb/ksql_jolokia.properties' , 'etc/ksql/ksql_jolokia.properties'))) | path_join }}"
 
 ### Authentication Mode for ksqlDB's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set schema_registry_jolokia_user and schema_registry_jolokia_password
 ksql_jolokia_auth_mode: "{{jolokia_auth_mode}}"
@@ -1040,8 +1049,8 @@ control_center_packages:
 
 control_center_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center.truststore.jks{% endif %}"
 control_center_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center.keystore.jks{% endif %}"
-control_center_truststore_storepass: "{{ ssl_truststore_password if ssl_provided_keystore_and_truststore|bool else 'confluenttruststorepass'}}"
-control_center_keystore_storepass: "{{ ssl_keystore_store_password if ssl_provided_keystore_and_truststore|bool else 'confluentkeystorestorepass'}}"
+control_center_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+control_center_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
 control_center_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_keystore_storepass }}"
 control_center_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 control_center_cert_path: "{{ ssl_file_dir_final }}/control_center.crt"
@@ -1344,23 +1353,23 @@ token_services_private_pem_file: generated_ssl_files/tokenKeypair.pem
 ### To regenerate MDS Token Pem files on subsequent runs of the playbook, set this to true.
 regenerate_token_pem: false
 
-### List of users to be granted system admin Role Bindings across all components
+### List of principals to be granted system admin Role Bindings across all components
 rbac_component_additional_system_admins: []
 
-### List of users to be granted system admin Role Bindings on the Kafka Cluster
+### List of principals to be granted system admin Role Bindings on the Kafka Cluster
 kafka_broker_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
-### List of users to be granted system admin Role Bindings on the Schema Registry Cluster
+### List of principals to be granted system admin Role Bindings on the Schema Registry Cluster
 schema_registry_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
-### List of users to be granted system admin Role Bindings on the ksqlDB Cluster
+### List of principals to be granted system admin Role Bindings on the ksqlDB Cluster
 ksql_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
-### List of users to be granted system admin Role Bindings on the Connect Cluster
+### List of principals to be granted system admin Role Bindings on the Connect Cluster
 kafka_connect_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
 # TODO Investigate proper rolebinding for c3 system admins
-### List of users to be granted system admin Role Bindings on the Control Center Cluster
+### List of principals to be granted system admin Role Bindings on the Control Center Cluster
 control_center_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
 # Secrets Protection Variables
@@ -1700,7 +1709,7 @@ kafka_connect_replicator_jolokia_password: "{{jolokia_password}}"
 ### Port for Jolokia agent for Kafka Connect Replicator.
 kafka_connect_replicator_jolokia_port: 7777
 
-kafka_connect_replicator_jolokia_config: "{{ (config_base_path ,'etc/kafka-connect-replicator/confluent-replicator-jolokia.properties' ) | community.general.path_join }}"
+kafka_connect_replicator_jolokia_config: "{{ (config_base_path, kafka_connect_replicator_config_prefix_path, 'confluent-replicator-jolokia.properties') | path_join }}"
 
 ### Full path to download the Jolokia Agent Jar.
 kafka_connect_replicator_jolokia_jar_path: /opt/jolokia/jolokia.jar
@@ -1718,25 +1727,25 @@ kafka_connect_replicator_max_log_files: 10
 kafka_connect_replicator_log_file_size: 100mb
 
 ### Boolean to configure Kafka Connect Replicator to support RBAC. Creates Rolebindings for client to function.
-kakfa_connect_replicator_rbac_enabled: false
+kafka_connect_replicator_rbac_enabled: false
 
 ### Boolean to configure Kafka Connect Replicator to support connecting to ERP with TLS.
 kafka_connect_replicator_erp_tls_enabled: false
 
 ### Boolean to configure Kafka Connect Replicator Consumer to support RBAC. Creates Rolebindings for client to function.
-kakfa_connect_replicator_consumer_rbac_enabled: false
+kafka_connect_replicator_consumer_rbac_enabled: false
 
 ### Boolean to configure Kafka Connect Replicator Consumer to support connecting to ERP with TLS.
 kafka_connect_replicator_consumer_erp_tls_enabled: false
 
 ### Boolean to configure Kafka Connect Replicator Producer to support RBAC. Creates Rolebindings for client to function.
-kakfa_connect_replicator_producer_rbac_enabled: "{{ kakfa_connect_replicator_rbac_enabled }}"
+kafka_connect_replicator_producer_rbac_enabled: "{{ kafka_connect_replicator_rbac_enabled }}"
 
 ### Boolean to configure Kafka Connect Replicator Producer to support connecting to ERP with TLS.
 kafka_connect_replicator_producer_erp_tls_enabled: "{{ kafka_connect_replicator_erp_tls_enabled }}"
 
 ### Boolean to configure Kafka Connect Replicator Monitoring Interceptor to support RBAC. Creates Rolebindings for client to function.
-kakfa_connect_replicator_monitoring_interceptor_rbac_enabled: "{{ kakfa_connect_replicator_rbac_enabled }}"
+kafka_connect_replicator_monitoring_interceptor_rbac_enabled: "{{ kafka_connect_replicator_rbac_enabled }}"
 
 ### Boolean to configure Kafka Connect Replicator Monitoring Interceptor to support connecting to ERP with TLS.
 kafka_connect_replicator_monitoring_interceptor_erp_tls_enabled: "{{ kafka_connect_replicator_erp_tls_enabled }}"
@@ -2023,6 +2032,9 @@ kafka_connect_replicator_monitoring_interceptor_cert_path: "{{ ssl_file_dir_fina
 kafka_connect_replicator_monitoring_interceptor_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.key"
 kafka_connect_replicator_monitoring_interceptor_export_certs: kafka_connect_replicator_monitoring_interceptor_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
 kafka_connect_replicator_monitoring_interceptor_keytab_path: /etc/security/keytabs/kafka_connect_replicator_monitoring_interceptor.keytab
+
+### Additional set of Kafka Connect Replicator extension classes.
+kafka_connect_replicator_custom_rest_extension_classes: []
 
 
 ### Deployment strategy for all components. Set to rolling to run all provisionging tasks on one host at a time, this is less destructive but can fail when security modes get updated.

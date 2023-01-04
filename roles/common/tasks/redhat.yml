@@ -1,19 +1,41 @@
 ---
+- name: Ensure Custom Repo file is not in repos when repository_configuration is Confluent
+  file:
+    state: absent
+    path: /etc/yum.repos.d/custom-confluent.repo
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+
 - name: Add Confluent Repo file
   template:
     src: confluent.repo.j2
     dest: /etc/yum.repos.d/confluent.repo
     mode: 0644
   register: confluent_repo_result
+  until: confluent_repo_result is success
+  retries: 5
+  delay: 90
   when:
     - repository_configuration == 'confluent'
     - installation_method == "package"
+
+- name: Ensure Confluent Repo file is not in repos when repository_configuration is Custom
+  file:
+    state: absent
+    path: /etc/yum.repos.d/confluent.repo
+  when:
+    - repository_configuration == 'custom'
 
 - name: Add Custom Repo file
   copy:
     src: "{{custom_yum_repofile_filepath}}"
     dest: /etc/yum.repos.d/custom-confluent.repo
     mode: 0644
+  register: custom_repo_result
+  until: custom_repo_result is success
+  retries: 5
+  delay: 90
   when: repository_configuration == 'custom'
 
 # Not using handler because of https://github.com/ansible/ansible/issues/41313
@@ -21,16 +43,23 @@
   command: yum clean all
   args:
     warn: false
+  register: yum_clean_result
+  until: yum_clean_result is success
+  retries: 5
+  delay: 90
   when: >
     confluent_repo_result.changed|default(False) or
     repository_configuration == 'custom'
+
+- name: Custom Java Install
+  include_tasks: custom_java_install.yml
 
 - name: Install Java
   yum:
     name: "{{redhat_java_package_name}}"
     state: present
   register: java_install_result
-  until: java_install_result is success
+  until: java_install_result is success  or ansible_check_mode
   retries: 10
   delay: 5
   when: install_java|bool
@@ -41,4 +70,33 @@
     name:
       - openssl
       - unzip
+  tags: package
+
+- name: Get Java Version
+  shell: java -version
+  register: version_output
+  check_mode: false
+  changed_when: false
+
+- name: Print Java Version
+  debug:
+    msg: "Current Java Version is: {{version_output.stderr_lines[0]}}"
+
+- name: Install pip
+  yum:
+    name:
+      - python3-pip
+    state: present
+  become: true
+  tags: package
+
+- name: Upgrade pip
+  ansible.builtin.pip:
+    name: pip
+    extra_args: --upgrade
+  tags: package
+
+- name: Install pip packages
+  ansible.builtin.pip:
+    name: "{{pip_packages}}"
   tags: package

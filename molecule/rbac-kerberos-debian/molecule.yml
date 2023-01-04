@@ -4,6 +4,7 @@
 ### Kerberos enabled.
 ### Kafka broker custom listener.
 ### RBAC additional system admin user.
+### Java 8
 
 driver:
   name: docker
@@ -33,12 +34,12 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: zookeeper1
-    hostname: zookeeper1.confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
     image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    dockerfile: ../Dockerfile-debian-java8.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -50,7 +51,7 @@ platforms:
     groups:
       - kafka_broker
     image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    dockerfile: ../Dockerfile-debian-java8.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -62,7 +63,7 @@ platforms:
     groups:
       - kafka_broker
     image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    dockerfile: ../Dockerfile-debian-java8.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -74,7 +75,7 @@ platforms:
     groups:
       - kafka_broker
     image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    dockerfile: ../Dockerfile-debian-java8.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -86,7 +87,7 @@ platforms:
     groups:
       - schema_registry
     image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    dockerfile: ../Dockerfile-debian-java8.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -98,7 +99,7 @@ platforms:
     groups:
       - kafka_rest
     image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    dockerfile: ../Dockerfile-debian-java8.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -110,7 +111,7 @@ platforms:
     groups:
       - kafka_connect
     image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    dockerfile: ../Dockerfile-debian-java8.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -122,7 +123,7 @@ platforms:
     groups:
       - ksql
     image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    dockerfile: ../Dockerfile-debian-java8.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -134,7 +135,7 @@ platforms:
     groups:
       - control_center
     image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    dockerfile: ../Dockerfile-debian-java8.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -154,6 +155,7 @@ provisioner:
 
         rbac_enabled: true
         jolokia_enabled: false
+        debian_java_package_name: openjdk-8-jdk
 
         kafka_broker_custom_listeners:
           client_listener:
@@ -161,7 +163,8 @@ provisioner:
             port: 9093
 
         rbac_component_additional_system_admins:
-          - user1
+          - User:user1
+          - Group:group1
 
         mds_super_user: mds
         mds_super_user_password: password
@@ -205,9 +208,9 @@ provisioner:
           ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
           ldap.user.object.class: account
 
-      zookeeper:
-        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
+      ${CONTROLLER_HOSTGROUP:-zookeeper}:
+        ${CONTROLLER_HOSTGROUP:-zookeeper}_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        ${CONTROLLER_HOSTGROUP:-zookeeper}_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
 
       kafka_broker:
         kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
@@ -224,8 +227,8 @@ provisioner:
         keytab_output_directory: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs"
 
         kerberos_principals:
-          - principal: "zookeeper/zookeeper1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
+          - principal: "${CONTROLLER_HOSTGROUP:-zookeeper}/${KRAFT_CONTROLLER:-zookeeper}1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/${CONTROLLER_HOSTGROUP:-zookeeper}-${KRAFT_CONTROLLER:-zookeeper}1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker2.confluent@{{kerberos.realm | upper}}"

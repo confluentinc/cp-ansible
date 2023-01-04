@@ -3,10 +3,20 @@
   import_role:
     name: common
     tasks_from: rbac_setup.yml
+  when: rbac_enabled
   vars:
     copy_certs: false
 
+- name: Fetch Kafka Connect Cluster Groups
+  set_fact: active_kafka_connect_groups="{{ (((active_kafka_connect_groups | default([])) + hostvars[item].group_names) | difference('kafka_connect'+'kafka_connect_parallel'+'kafka_connect_serial')) | default(['kafka_connect'], true) }}"
+  with_items: "{{ ansible_play_hosts }}"
+
 - name: Register Kafka Connect Cluster
+  vars:
+    cluster_host_delegates: "{{ active_kafka_connect_groups | map('extract', groups, 0)| list }}"
+    cluster_group: "{{ hostvars[item].parent_kafka_connect_cluster_group }}"
+    cluster_name: "{{ hostvars[item].kafka_connect_cluster_name }}"
+    cluster_id: "{{ hostvars[item].parent_kafka_connect_cluster_id }}"
   uri:
     url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/registry/clusters"
     method: POST
@@ -20,18 +30,21 @@
     body: >
       [
           {
-              "clusterName": "{{kafka_connect_cluster_name}}",
+              "clusterName": "{{cluster_name}}",
               "scope": {
                   "clusters": {
                       "kafka-cluster": "{{kafka_cluster_id}}",
-                      "connect-cluster": "{{kafka_connect_final_properties['group.id']}}"
+                      "connect-cluster": "{{cluster_id}}"
                   }
               },
-              "hosts": [ {% for host in groups['kafka_connect'] %}{% if loop.index > 1%},{% endif %}{ "host": "{{host}}", "port": {{kafka_connect_rest_port}} }{% endfor %}
-              ],
+              "hosts": [ {% for inv_host in groups[cluster_group] %}{% if loop.index > 1%},{% endif %}{ "host": "{{hostvars[inv_host]|confluent.platform.resolve_hostname}}", "port": {% if hostvars[inv_host].kafka_connect_rest_port is defined %} {{hostvars[inv_host].kafka_connect_rest_port}} {% else %} {{kafka_connect_rest_port}} {% endif %} }{% endfor %} ],
               "protocol": "{{kafka_connect_http_protocol | upper}}"
           }
       ]
     status_code: 204
-  run_once: true
   register: output
+  when:
+    - hostvars[item].get("rbac_enabled", false)|bool
+    - hostvars[item].kafka_connect_cluster_name is defined
+    - hostvars[item].parent_kafka_connect_cluster_id is defined
+  with_items: "{{ cluster_host_delegates }}"

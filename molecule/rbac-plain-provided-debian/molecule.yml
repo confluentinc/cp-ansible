@@ -6,6 +6,7 @@
 ### Kafka Broker Customer Listener.
 ### Secrets protection enabled.
 ### Control Center disabled, metrics reporters enabled.
+### LdapAuthenticateCallbackHandler for AuthN
 
 driver:
   name: docker
@@ -22,10 +23,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: zookeeper1
-    hostname: zookeeper1.confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
     command: ""
@@ -34,10 +35,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: zookeeper2
-    hostname: zookeeper2.confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}2
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
     groups:
-      - zookeeper
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
     command: ""
@@ -46,10 +47,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: zookeeper3
-    hostname: zookeeper3.confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}3
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}3.confluent
     groups:
-      - zookeeper
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
     command: ""
@@ -176,11 +177,14 @@ provisioner:
         ssl_truststore_ca_cert_alias: CARoot
 
         rbac_enabled: true
+        custom_java_path: /opt/jdk17 # Use custom Java 17
 
         kafka_broker_custom_listeners:
           client_listener:
             name: CLIENT
             port: 9093
+            ssl_enabed: true
+            sasl_protocol: plain
 
         mds_super_user: mds
         mds_super_user_password: password
@@ -201,7 +205,7 @@ provisioner:
         control_center_ldap_password: password
 
         rbac_component_additional_system_admins:
-          - user1
+          - User:user1
 
         kafka_broker_custom_properties:
           ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
@@ -217,6 +221,10 @@ provisioner:
           ldap.group.name.attribute: cn
           ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
           ldap.user.object.class: account
+
+          # interbroker listener need to include user/password in this jaasconfig
+          listener.name.client.plain.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required;
+          listener.name.client.plain.sasl.server.callback.handler.class: io.confluent.security.auth.provider.ldap.LdapAuthenticateCallbackHandler
 
         kafka_broker_metrics_reporter_enabled: true
         monitoring_interceptors_enabled: true

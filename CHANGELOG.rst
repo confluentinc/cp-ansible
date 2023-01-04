@@ -5,6 +5,44 @@ Ansible Playbooks for Confluent Platform - Release Notes
 .. contents:: Topics
 
 
+v7.3.1
+======
+
+Notable enhancements
+-------------
+
+- Bug fixes to enable running playbook in ansible check mode.
+- Validation about python version - 3.6+
+- Bug fixes for rhel7 related to epel-release package
+
+
+v7.3.0
+======
+
+New features
+-------------
+
+- CP-Ansible playbooks are Red Hat certified now and are available on Automation Hub starting 7.0.X
+- Confluent Platform and CP-Ansible now supports JDK 17, in addition to JDK 8 and JDK 11. CP-Ansible support is now available for custom Java installations too.
+- Day 2 Operations - upgrade from non-RBAC to RBAC using CP-Ansible is guarded with zero downtime and officially supported.
+- Ansible Playbooks for Confluent Platform is now officially supported for Ansible 2.12 and 2.13 in addition to 2.11.
+
+Notable enhancements
+-------------
+
+- Default confluent cli version has been updated to 2.28.1 from 2.19
+- New var ansible_become_localhost introduced to specify the become value for localhost - used when dealing with any file present on localhost/controller
+- Dedicated playbook to restart services manually
+- rbac_component_additional_system_admins now supports assignment of principals and not just users
+- Pip and python modules can/will now be installed on managed nodes via CP-Ansible
+
+Upgrade considerations
+-------------
+
+- Upgrades to CP 7.3 can be taken up with CP-Ansible using Ansible 2.12 and 2.13 too.
+- Variable rbac_component_additional_system_admins now can be updated in inventory file for assignment of principals. Backward compatible.
+
+
 v7.2.1
 ======
 

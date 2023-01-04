@@ -21,27 +21,41 @@
   vars:
     service_name: "{{ kafka_connect_service_name }}"
   when: installation_method == "package"
-  tags: package
+  tags:
+    - package
+    - cp_package
 
 - name: Install the Kafka Connect Packages
   yum:
     name: "{{ kafka_connect_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
+  register: install_kafka_connect_package_result
+  until: install_kafka_connect_package_result is success  or ansible_check_mode
+  retries: 5
+  delay: 90
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
   ignore_errors: "{{ ansible_check_mode }}"
-  tags: package
+  tags:
+    - package
+    - cp_package
   notify: restart connect distributed
 
 - name: Install the Kafka Connect Packages
   apt:
     name: "{{ kafka_connect_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
+  register: install_kafka_connect_package_result
+  until: install_kafka_connect_package_result is success  or ansible_check_mode
+  retries: 5
+  delay: 90
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
   ignore_errors: "{{ ansible_check_mode }}"
-  tags: package
+  tags:
+    - package
+    - cp_package
   notify: restart connect distributed
 
 - name: Create Kafka Connect Group
@@ -99,10 +113,10 @@
     keystore_path: "{{kafka_connect_keystore_path}}"
     keystore_storepass: "{{kafka_connect_keystore_storepass}}"
     keystore_keypass: "{{kafka_connect_keystore_keypass}}"
-    service_name: kafka_connect
+    service_name: "{{ kafka_connect_service_name if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect' }}"
     user: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
     ca_cert_path: "{{kafka_connect_ca_cert_path}}"
     cert_path: "{{kafka_connect_cert_path}}"
     key_path: "{{kafka_connect_key_path}}"
@@ -258,7 +272,7 @@
   ansible.builtin.debug:
     msg: "restarting kafka connect"
   notify: restart connect distributed
-  when: (kafka_connect_custom_log4j|bool) and (logredactor_enabled|bool)
+  when: (kafka_connect_custom_log4j|bool) and (logredactor_enabled|bool) and (not kafka_connect_skip_restarts|bool)
   tags:
     - log
 
@@ -350,9 +364,21 @@
     - not ansible_check_mode
   tags: health_check
 
+# Set a host fact with the direct cluster parent group
+# Host of the same cluster have the same group.id
+- name: Set parent Cluster
+  vars:
+    keywords:
+      - kafka_connect
+      - kafka_connect_parallel
+      - kafka_connect_serial
+  set_fact:
+    parent_kafka_connect_cluster_group: "{{ (group_names | difference(keywords))[0] | default('kafka_connect') }}"
+    parent_kafka_connect_cluster_id: "{{ kafka_connect_final_properties['group.id'] }}"
+
 - name: Register Cluster
   include_tasks: register_cluster.yml
-  when: kafka_connect_cluster_name|length > 0 and rbac_enabled|bool
+  run_once: true
 
 - name: Deploy Connectors
   include_tasks: deploy_connectors.yml

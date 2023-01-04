@@ -8,7 +8,33 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.2.1
+Default:  7.3.0
+
+***
+
+### fetch_logs_path
+
+Path on component to store logs collected during fetch_logs playbook
+
+Default:  /tmp
+
+***
+
+***
+
+### fetch_logs_path
+
+Path on component to store logs collected during fetch_logs playbook
+
+Default:  /tmp
+
+***
+
+### ansible_become_localhost
+
+Boolean to specify the become value for localhost, used when dealing with any file present on localhost/controller.
+
+Default:  false
 
 ***
 
@@ -118,7 +144,7 @@ Default:  false
 
 ### fips_enabled
 
-Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
+Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8 or 11. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
 
 Default:  false
 
@@ -416,7 +442,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  2.19.0
+Default:  2.28.1
 
 ***
 
@@ -500,6 +526,14 @@ Default:  false
 
 ***
 
+### ssl_keystore_and_truststore_custom_password
+
+Boolean to provide custom password for keystores and truststore. Enabled with ssl_provided_keystore_and_truststore, but can be enabled independently to set the custom password for generated keystores and truststores when using custom or self-signed certificates
+
+Default:  "{{ssl_provided_keystore_and_truststore}}"
+
+***
+
 ### ssl_keystore_filepath
 
 Full path to host specific keystore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-keystore.jks"
@@ -510,7 +544,7 @@ Default:  ""
 
 ### ssl_keystore_key_password
 
-Keystore Key Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
+Keystore Key Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords. Not to be confused with ssl_key_password when using custom certs
 
 Default:  ""
 
@@ -518,7 +552,7 @@ Default:  ""
 
 ### ssl_keystore_store_password
 
-Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true. May set per host if keystores have unique passwords
+Keystore Password for host specific keystore. Used with ssl_provided_keystore_and_truststore: true or ssl_keystore_and_truststore_custom_password: true. May set per host if keystores have unique passwords
 
 Default:  ""
 
@@ -542,7 +576,7 @@ Default:  ""
 
 ### ssl_truststore_password
 
-Keystore Password for host specific truststore. Used with ssl_provided_keystore_and_truststore: true
+Keystore Password for host specific truststore. Used with ssl_provided_keystore_and_truststore: true or ssl_keystore_and_truststore_custom_password: true.
 
 Default:  ""
 
@@ -644,19 +678,19 @@ Default:  false
 
 ***
 
-### zookeeper_config_prefix
-
-Default Zookeeper config prefix. Note - Only valid to customize when installation_method: archive
-
-Default:  "{{ config_prefix }}/kafka"
-
-***
-
 ### user_login_shell
 
 Variable to set the user login shell for all custom user created per component by cp-ansible.
 
 Default:  /sbin/nologin
+
+***
+
+### zookeeper_config_prefix
+
+Default Zookeeper config prefix. Note - Only valid to customize when installation_method: archive
+
+Default:  "{{ config_prefix }}/kafka"
 
 ***
 
@@ -768,7 +802,7 @@ Default:  "{{ zookeeper_ssl_enabled }}"
 
 Path on Zookeeper host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path, 'etc/kafka/zookeeper_jolokia.properties' ) | community.general.path_join }}"
+Default:  "{{ (config_base_path, zookeeper_config_prefix_path, 'zookeeper_jolokia.properties') | path_join }}"
 
 ***
 
@@ -968,7 +1002,7 @@ Default:  "{{ ssl_enabled }}"
 
 Path on Kafka host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,'etc/kafka/kafka_jolokia.properties') | community.general.path_join }}"
+Default:  "{{ (config_base_path, kafka_broker_config_prefix_path, 'kafka_jolokia.properties') | path_join }}"
 
 ***
 
@@ -1200,7 +1234,7 @@ Default:  "{{ schema_registry_ssl_enabled }}"
 
 Path on Schema Registry host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,'etc/schema-registry/schema_registry_jolokia.properties') | community.general.path_join }}"
+Default:  "{{ (config_base_path, schema_registry_config_prefix_path, 'schema_registry_jolokia.properties') | path_join }}"
 
 ***
 
@@ -1384,7 +1418,7 @@ Default:  "{{ kafka_rest_ssl_enabled }}"
 
 Path on Rest Proxy host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,'etc/kafka-rest/kafka_rest_jolokia.properties') | community.general.path_join }}"
+Default:  "{{ (config_base_path, kafka_rest_config_prefix_path, 'kafka_rest_jolokia.properties') | path_join }}"
 
 ***
 
@@ -1608,7 +1642,7 @@ Default:  "{{ kafka_connect_ssl_enabled }}"
 
 Path on Connect host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,'etc/kafka/kafka_connect_jolokia.properties') | community.general.path_join }}"
+Default:  "{{ (config_base_path, kafka_connect_config_prefix_path, 'kafka_connect_jolokia.properties') | path_join }}"
 
 ***
 
@@ -1832,7 +1866,7 @@ Default:  "{{ ksql_ssl_enabled }}"
 
 Path on ksqlDB host for Jolokia Configuration file
 
-Default:  "{{ (config_base_path,((confluent_package_version is version('5.5.0', '>=')) | ternary('etc/ksqldb/ksql_jolokia.properties' , 'etc/ksql/ksql_jolokia.properties'))) | community.general.path_join }}"
+Default:  "{{ (config_base_path,((confluent_package_version is version('5.5.0', '>=')) | ternary('etc/ksqldb/ksql_jolokia.properties' , 'etc/ksql/ksql_jolokia.properties'))) | path_join }}"
 
 ***
 
@@ -2334,7 +2368,7 @@ Default:  false
 
 ### rbac_component_additional_system_admins
 
-List of users to be granted system admin Role Bindings across all components
+List of principals to be granted system admin Role Bindings across all components
 
 Default:  []
 
@@ -2342,7 +2376,7 @@ Default:  []
 
 ### kafka_broker_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the Kafka Cluster
+List of principals to be granted system admin Role Bindings on the Kafka Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -2350,7 +2384,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### schema_registry_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the Schema Registry Cluster
+List of principals to be granted system admin Role Bindings on the Schema Registry Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -2358,7 +2392,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### ksql_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the ksqlDB Cluster
+List of principals to be granted system admin Role Bindings on the ksqlDB Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -2366,7 +2400,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### kafka_connect_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the Connect Cluster
+List of principals to be granted system admin Role Bindings on the Connect Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -2374,7 +2408,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### control_center_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the Control Center Cluster
+List of principals to be granted system admin Role Bindings on the Control Center Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -3268,7 +3302,7 @@ Default:  100mb
 
 ***
 
-### kakfa_connect_replicator_rbac_enabled
+### kafka_connect_replicator_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator to support RBAC. Creates Rolebindings for client to function.
 
@@ -3284,7 +3318,7 @@ Default:  false
 
 ***
 
-### kakfa_connect_replicator_consumer_rbac_enabled
+### kafka_connect_replicator_consumer_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator Consumer to support RBAC. Creates Rolebindings for client to function.
 
@@ -3300,11 +3334,11 @@ Default:  false
 
 ***
 
-### kakfa_connect_replicator_producer_rbac_enabled
+### kafka_connect_replicator_producer_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator Producer to support RBAC. Creates Rolebindings for client to function.
 
-Default:  "{{ kakfa_connect_replicator_rbac_enabled }}"
+Default:  "{{ kafka_connect_replicator_rbac_enabled }}"
 
 ***
 
@@ -3316,11 +3350,11 @@ Default:  "{{ kafka_connect_replicator_erp_tls_enabled }}"
 
 ***
 
-### kakfa_connect_replicator_monitoring_interceptor_rbac_enabled
+### kafka_connect_replicator_monitoring_interceptor_rbac_enabled
 
 Boolean to configure Kafka Connect Replicator Monitoring Interceptor to support RBAC. Creates Rolebindings for client to function.
 
-Default:  "{{ kakfa_connect_replicator_rbac_enabled }}"
+Default:  "{{ kafka_connect_replicator_rbac_enabled }}"
 
 ***
 
@@ -3932,6 +3966,14 @@ Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
 
 ***
 
+### kafka_connect_replicator_custom_rest_extension_classes
+
+Additional set of Kafka Connect Replicator extension classes.
+
+Default:  []
+
+***
+
 ### deployment_strategy
 
 Deployment strategy for all components. Set to rolling to run all provisionging tasks on one host at a time, this is less destructive but can fail when security modes get updated.
@@ -4234,35 +4276,43 @@ Default:  "https://packages.confluent.io"
 
 ***
 
+### custom_java_path
+
+Full pre-existing Java path on custom nodes. CP-Ansible will use the provided path and will skip installing java as part of execution
+
+Default:  ""
+
+***
+
 ### install_java
 
-Boolean to have cp-ansible install Java on hosts
+Boolean to have cp-ansible install Java on Hosts depending on custom_java_path provided
 
-Default:  true
+Default:  "{{ false if custom_java_path | length > 0 else true }}"
 
 ***
 
 ### redhat_java_package_name
 
-Java Package to install on RHEL/Centos hosts. Possible values java-1.8.0-openjdk or java-11-openjdk
+Java Package to install on RHEL/Centos hosts. Possible values java-8-openjdk, java-11-openjdk or java-17-openjdk
 
-Default:  java-11-openjdk
+Default:  java-17-openjdk
 
 ***
 
 ### debian_java_package_name
 
-Java Package to install on Debian hosts. Possible values openjdk-8-jdk or openjdk-11-jdk
+Java Package to install on Debian hosts. Possible values openjdk-11-jdk, openjdk-8-jdk or openjdk-17-jdk
 
-Default:  openjdk-11-jdk
+Default:  openjdk-17-jdk
 
 ***
 
 ### ubuntu_java_package_name
 
-Java Package to install on Ubuntu hosts. Possible values openjdk-8-jdk or openjdk-11-jdk
+Java Package to install on Ubuntu hosts. Possible values openjdk-8-jdk, openjdk-11-jdk or openjdk-17-jdk
 
-Default:  openjdk-11-jdk
+Default:  openjdk-17-jdk
 
 ***
 
@@ -4271,6 +4321,14 @@ Default:  openjdk-11-jdk
 Deb Repository to use for Java Installation
 
 Default:  ppa:openjdk-r/ppa
+
+***
+
+### add_sid_repo
+
+Boolean to add Sid Repo for JAVA Buster
+
+Default:  false
 
 ***
 
