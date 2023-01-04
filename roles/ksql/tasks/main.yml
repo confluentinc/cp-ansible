@@ -21,27 +21,41 @@
   vars:
     service_name: "{{ ksql_service_name }}"
   when: installation_method == "package"
-  tags: package
+  tags:
+    - package
+    - cp_package
 
 - name: Install the Ksql Packages
   yum:
     name: "{{ ksql_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
+  register: install_ksql_package_result
+  until: install_ksql_package_result is success or ansible_check_mode
+  retries: 5
+  delay: 90
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
   ignore_errors: "{{ ansible_check_mode }}"
-  tags: package
+  tags:
+    - package
+    - cp_package
   notify: restart ksql
 
 - name: Install the Ksql Packages
   apt:
     name: "{{ ksql_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
+  register: install_ksql_package_result
+  until: install_ksql_package_result is success or ansible_check_mode
+  retries: 5
+  delay: 90
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
   ignore_errors: "{{ ansible_check_mode }}"
-  tags: package
+  tags:
+    - package
+    - cp_package
   notify: restart ksql
 
 - name: Create Ksql Group
@@ -102,7 +116,7 @@
     service_name: ksql
     user: "{{ksql_user}}"
     group: "{{ksql_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
     ca_cert_path: "{{ksql_ca_cert_path}}"
     cert_path: "{{ksql_cert_path}}"
     key_path: "{{ksql_key_path}}"
@@ -263,7 +277,7 @@
   ansible.builtin.debug:
     msg: "restarting ksql"
   notify: restart ksql
-  when: (ksql_custom_log4j|bool) and (logredactor_enabled|bool)
+  when: (ksql_custom_log4j|bool) and (logredactor_enabled|bool) and (not ksql_skip_restarts|bool)
   tags:
     - log
 

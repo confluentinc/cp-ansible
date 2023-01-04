@@ -21,28 +21,42 @@
   vars:
     service_name: "{{ schema_registry_service_name }}"
   when: installation_method == "package"
-  tags: package
+  tags:
+    - package
+    - cp_package
 
 # Install Packages
 - name: Install the Schema Registry Packages
   yum:
     name: "{{ schema_registry_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
+  register: install_schema_registry_package_result
+  until: install_schema_registry_package_result is success or ansible_check_mode
+  retries: 5
+  delay: 90
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
   ignore_errors: "{{ ansible_check_mode }}"
-  tags: package
+  tags:
+    - package
+    - cp_package
   notify: restart schema-registry
 
 - name: Install the Schema Registry Packages
   apt:
     name: "{{ schema_registry_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
+  register: install_schema_registry_package_result
+  until: install_schema_registry_package_result is success or ansible_check_mode
+  retries: 5
+  delay: 90
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
   ignore_errors: "{{ ansible_check_mode }}"
-  tags: package
+  tags:
+    - package
+    - cp_package
   notify: restart schema-registry
 
 - name: Schema Registry Group
@@ -93,7 +107,7 @@
     service_name: schema_registry
     user: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
     ca_cert_path: "{{schema_registry_ca_cert_path}}"
     cert_path: "{{schema_registry_cert_path}}"
     key_path: "{{schema_registry_key_path}}"
@@ -245,7 +259,7 @@
   ansible.builtin.debug:
     msg: "restarting schema registry"
   notify: restart schema-registry
-  when: (schema_registry_custom_log4j|bool) and (logredactor_enabled|bool)
+  when: (schema_registry_custom_log4j|bool) and (logredactor_enabled|bool) and (not schema_registry_skip_restarts|bool)
   tags:
     - log
 

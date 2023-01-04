@@ -1,5 +1,5 @@
 ---
-### Installs two Confluent Platform Clusters on CentOS7.
+### Installs two Confluent Platform Clusters on centos8.
 ### RBAC enabled.
 ### Remote MDS from Cluster2 to Cluster1 (MDS).
 ### Custom TLS certificates.
@@ -42,8 +42,8 @@ platforms:
     groups:
       - zookeeper
       - mds
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -55,8 +55,8 @@ platforms:
     groups:
       - kafka_broker
       - mds
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -68,8 +68,8 @@ platforms:
     groups:
       - kafka_broker
       - mds
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -77,13 +77,13 @@ platforms:
     networks:
       - name: confluent
   # Cluster 2 goups, groupnames will be changed during converge phase
-  - name: zookeeper1
-    hostname: zookeeper1.confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper2
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}2
       - cluster2
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -95,8 +95,8 @@ platforms:
     groups:
       - kafka_broker2
       - cluster2
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -108,8 +108,8 @@ platforms:
     groups:
       - kafka_broker2
       - cluster2
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -121,8 +121,8 @@ platforms:
     groups:
       - kafka_broker2
       - cluster2
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -134,8 +134,8 @@ platforms:
     groups:
       - schema_registry2
       - cluster2
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -147,8 +147,8 @@ platforms:
     groups:
       - kafka_rest2
       - cluster2
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -160,8 +160,8 @@ platforms:
     groups:
       - kafka_connect2
       - cluster2
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -173,8 +173,8 @@ platforms:
     groups:
       - ksql2
       - cluster2
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -186,8 +186,8 @@ platforms:
     groups:
       - control_center2
       - cluster2
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -239,7 +239,7 @@ provisioner:
         control_center_ldap_password: password
 
         rbac_component_additional_system_admins:
-          - user1
+          - User:user1
 
         kerberos_kafka_broker_primary: kafka
         kerberos:
@@ -247,9 +247,7 @@ provisioner:
           kdc_hostname: mds-kerberos1
           admin_hostname: mds-kerberos1
 
-        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
         kafka_broker_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
 
       mds:
@@ -273,10 +271,14 @@ provisioner:
           ldap.group.name.attribute: cn
           ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
           ldap.user.object.class: account
+        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
 
       cluster2:
         ssl_enabled: true
         ssl_mutual_auth_enabled: true
+        ${CONTROLLER_HOSTGROUP:-zookeeper}_kerberos_principal: "${CONTROLLER_HOSTGROUP:-zookeeper}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        ${CONTROLLER_HOSTGROUP:-zookeeper}_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/${CONTROLLER_HOSTGROUP:-zookeeper}-{{inventory_hostname}}.keytab"
 
         kafka_broker_cluster_name: audit_logs
 
@@ -370,8 +372,8 @@ provisioner:
             keytab_path: "keytabs/kafka_broker-mds-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker2.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-mds-kafka-broker2.keytab"
-          - principal: "zookeeper/zookeeper1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
+          - principal: "${CONTROLLER_HOSTGROUP:-zookeeper}/${KRAFT_CONTROLLER:-zookeeper}1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/${CONTROLLER_HOSTGROUP:-zookeeper}-${KRAFT_CONTROLLER:-zookeeper}1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker2.confluent@{{kerberos.realm | upper}}"

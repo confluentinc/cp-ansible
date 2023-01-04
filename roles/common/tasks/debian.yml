@@ -10,22 +10,42 @@
   apt:
     name: gnupg2
     update_cache: true
+  register: install_gnupg_result
+  until: install_gnupg_result is success or ansible_check_mode
+  retries: 5
+  delay: 90
   tags: package
 
 - name: Install apt-transport-https
-  apt:
-    name: apt-transport-https
-  tags: package
+  shell: apt-get install apt-transport-https -y --force-yes
+  args:
+    warn: false
+  register: install_apt_transport_result
+  until: install_apt_transport_result is success  or ansible_check_mode
+  retries: 5
+  delay: 90
 
 - name: Add Confluent Apt Key
   apt_key:
     url: "{{confluent_common_repository_debian_key_url}}"
     state: present
+  register: apt_add_key_result
+  until: apt_add_key_result is success
+  retries: 5
+  delay: 90
   when:
     - repository_configuration == 'confluent'
     - installation_method == "package"
   tags:
     - privileged
+
+- name: Ensure Custom Apt Repo is not in repos when repository_configuration is Confluent
+  file:
+    state: absent
+    path: /etc/apt/sources.list.d/custom_confluent.list
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
 
 - name: Add Confluent Apt Repo
   apt_repository:
@@ -33,8 +53,8 @@
     state: present
   register: apt_add_result
   until: apt_add_result is success
-  retries: 10
-  delay: 5
+  retries: 5
+  delay: 90
   when:
     - repository_configuration == 'confluent'
     - installation_method == "package"
@@ -59,16 +79,36 @@
     - repository_configuration == 'confluent'
     - installation_method == "package"
 
+- name: Ensure Confluent Apt Repo is not in repos when repository_configuration is custom
+  apt_repository:
+    repo: "{{confluent_common_repository_debian_repository}}"
+    state: absent
+  when:
+    - repository_configuration == 'custom'
+
+- name: Ensure Confluent Clients Apt Repo is not in repos when repository_configuration is custom
+  apt_repository:
+    repo: "{{confluent_common_repository_debian_clients_repository}}"
+    state: absent
+  when:
+    - repository_configuration == 'custom'
+
 - name: Add Custom Apt Repo
   copy:
     src: "{{custom_apt_repo_filepath}}"
     dest: /etc/apt/sources.list.d/custom_confluent.list
-    mode: 0644
+  register: apt_custom_add_result
+  until: apt_custom_add_result is success
+  retries: 5
+  delay: 90
   when: repository_configuration == 'custom'
   notify:
     - apt-get update
 
 - meta: flush_handlers
+
+- name: Custom Java Install
+  include_tasks: custom_java_install.yml
 
 - name: Copy in repo skip valid check
   copy:
@@ -129,6 +169,7 @@
     - install_java|bool
     - repository_configuration == 'confluent'
     - ansible_distribution_release == "buster"
+    - add_sid_repo|bool
 
 - meta: flush_handlers
 
@@ -138,7 +179,7 @@
     state: present
     default_release: jessie-backports
   register: java_install_result
-  until: java_install_result is success
+  until: java_install_result is success  or ansible_check_mode
   retries: 10
   delay: 5
   when:
@@ -153,7 +194,7 @@
     state: present
     default_release: stretch-backports
   register: java_install_result
-  until: java_install_result is success
+  until: java_install_result is success  or ansible_check_mode
   retries: 10
   delay: 5
   when:
@@ -180,7 +221,7 @@
     name: "{{ debian_java_package_name }}"
     state: present
   register: java_install_result
-  until: java_install_result is success
+  until: java_install_result is success  or ansible_check_mode
   retries: 10
   delay: 5
   when:
@@ -195,4 +236,33 @@
       - openssl
       - unzip
       - curl
+  tags: package
+
+- name: Get Java Version
+  shell: java -version
+  register: version_output
+  check_mode: false
+  changed_when: false
+
+- name: Print Java Version
+  debug:
+    msg: "Current Java Version is: {{version_output.stderr_lines[0]}}"
+
+- name: Install pip
+  apt:
+    name:
+      - python3-pip
+    state: present
+  become: true
+  tags: package
+
+- name: Upgrade pip
+  ansible.builtin.pip:
+    name: pip
+    extra_args: --upgrade
+  tags: package
+
+- name: Install pip packages
+  ansible.builtin.pip:
+    name: "{{pip_packages}}"
   tags: package

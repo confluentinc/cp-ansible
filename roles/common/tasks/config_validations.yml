@@ -1,0 +1,116 @@
+---
+- name: Retrieve SSL public key hash from private key on Local Host
+  shell:
+    cmd: openssl pkey -pubout | openssl md5
+    stdin: "{{ lookup('file', ssl_key_filepath) }}"
+  register: key_hash_local
+  delegate_to: localhost
+  changed_when: false
+  when:
+    - ssl_custom_certs|bool and not ssl_custom_certs_remote_src|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
+  tags:
+    - validate
+    - validate_ssl_keys_certs
+  loop: "{{group_names}}"
+
+- name: Register content of key file
+  slurp:
+    src: "{{ ssl_key_filepath }}"
+  register: remote_key
+  when:
+    - ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
+  tags:
+    - validate
+    - validate_ssl_keys_certs
+  loop: "{{group_names}}"
+
+- name: Retrieve SSL public key Hash from private key on Remote Host
+  shell:
+    cmd: openssl pkey -pubout | openssl md5
+    stdin: "{{ remote_key['results'][group_idx].content | b64decode }}"
+  register: key_hash_remote
+  changed_when: false
+  when:
+    - ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
+  tags:
+    - validate
+    - validate_ssl_keys_certs
+  loop: "{{group_names}}"
+  loop_control:
+    index_var: group_idx
+
+- name: Retrieve SSL public key hash from X509 certificate on Local Host
+  shell:
+    cmd: openssl x509 -noout -pubkey | openssl md5
+    stdin: "{{ lookup('file', ssl_signed_cert_filepath) }}"
+  register: cert_hash_local
+  delegate_to: localhost
+  changed_when: false
+  when:
+    - ssl_custom_certs|bool and not ssl_custom_certs_remote_src|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
+  tags:
+    - validate
+    - validate_ssl_keys_certs
+  loop: "{{group_names}}"
+
+- name: Register content of cert file
+  slurp:
+    src: "{{ ssl_signed_cert_filepath }}"
+  register: remote_cert
+  when:
+    - ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
+  tags:
+    - validate
+    - validate_ssl_keys_certs
+  loop: "{{group_names}}"
+
+- name: Retrieve SSL public key hash from X509 certificate on Remote Host
+  shell:
+    cmd: openssl x509 -noout -pubkey | openssl md5
+    stdin: "{{ remote_cert['results'][group_idx].content | b64decode }}"
+  register: cert_hash_remote
+  changed_when: false
+  when:
+    - ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
+  tags:
+    - validate
+    - validate_ssl_keys_certs
+  loop: "{{group_names}}"
+  loop_control:
+    index_var: group_idx
+
+- name: get public key hash from private key
+  set_fact:
+    key_hash: "{{key_hash_remote if ssl_custom_certs_remote_src|bool else key_hash_local}}"
+  tags:
+    - validate
+    - validate_ssl_keys_certs
+
+- name: get public key hash from X509 cert
+  set_fact:
+    cert_hash: "{{cert_hash_remote if ssl_custom_certs_remote_src|bool else cert_hash_local}}"
+  tags:
+    - validate
+    - validate_ssl_keys_certs
+
+- name: Assert SSL public key hash from private key matches public key hash from Cert
+  assert:
+    that: key_hash['results'][group_idx].stdout == cert_hash['results'][group_idx].stdout and not key_hash['results'][group_idx].stderr|length > 0
+    fail_msg: >-
+      "The MD5 value of the custom ssl key does not match the MD5 value of the custom certificate, indicating that the keys do no match
+      and are incompatible.  Please review your keys and certs and confirm they are from the same source."
+  when:
+    - ssl_custom_certs|bool
+    - lookup('vars', item + '_ssl_enabled', default=ssl_enabled)|bool
+  tags:
+    - validate
+    - validate_ssl_keys_certs
+  loop: "{{group_names}}"
+  loop_control:
+    index_var: group_idx

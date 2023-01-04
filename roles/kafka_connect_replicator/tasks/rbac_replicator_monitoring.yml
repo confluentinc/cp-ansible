@@ -4,7 +4,20 @@
     path: /var/ssl/private/kafka_connect_replicator_monitoring_interceptor
     state: directory
     mode: 0755
-  when: copy_certs | default(True)
+
+- name: Check if MDS pem file exists on Ansible Controller
+  stat:
+    path: "{{ kafka_connect_replicator_monitoring_interceptor_erp_pem_file }}"
+  register: replicator_pem_file
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: "{{ ansible_become_localhost }}"
+
+- name: Debug
+  ansible.builtin.debug:
+    msg: WARNING - The file {{kafka_connect_replicator_monitoring_interceptor_erp_pem_file}} doesn't exist on the control node
+  when: not replicator_pem_file.stat.exists|bool
 
 - name: Copy in MDS Public Pem File
   copy:
@@ -13,7 +26,7 @@
     mode: 0640
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
-  when: copy_certs | default(True)
+  when: replicator_pem_file.stat.exists|bool
   diff: "{{ not mask_sensitive_diff|bool }}"
 
 - name: Grant connect user the DeveloperWrite role on Monitoring Interceptor Topic

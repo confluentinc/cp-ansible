@@ -21,27 +21,41 @@
   vars:
     service_name: "{{ kafka_rest_service_name }}"
   when: installation_method == "package"
-  tags: package
+  tags:
+    - package
+    - cp_package
 
 - name: Install the Kafka Rest Packages
   yum:
     name: "{{ kafka_rest_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
+  register: install_kafka_rest_package_result
+  until: install_kafka_rest_package_result is success or ansible_check_mode
+  retries: 5
+  delay: 90
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
   ignore_errors: "{{ ansible_check_mode }}"
-  tags: package
+  tags:
+    - package
+    - cp_package
   notify: restart kafka-rest
 
 - name: Install the Kafka Rest Packages
   apt:
     name: "{{ kafka_rest_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
+  register: install_kafka_rest_package_result
+  until: install_kafka_rest_package_result is success or ansible_check_mode
+  retries: 5
+  delay: 90
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
   ignore_errors: "{{ ansible_check_mode }}"
-  tags: package
+  tags:
+    - package
+    - cp_package
   notify: restart kafka-rest
 
 - name: Create Kafka Rest Group
@@ -92,7 +106,7 @@
     service_name: kafka_rest
     user: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
     ca_cert_path: "{{kafka_rest_ca_cert_path}}"
     cert_path: "{{kafka_rest_cert_path}}"
     key_path: "{{kafka_rest_key_path}}"
@@ -142,6 +156,20 @@
     - filesystem
     - privileged
 
+- name: Check if MDS public pem file exists on Ansible Controller
+  stat:
+    path: "{{ token_services_public_pem_file }}"
+  register: krest_public_pem_file
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: "{{ ansible_become_localhost }}"
+
+- name: Debug
+  ansible.builtin.debug:
+    msg: WARNING - The file {{token_services_public_pem_file}} doesn't exist on the control node
+  when: not krest_public_pem_file.stat.exists|bool
+
 - name: Copy in MDS Public Pem File
   copy:
     src: "{{token_services_public_pem_file}}"
@@ -152,6 +180,7 @@
   when:
     - rbac_enabled|bool
     - not ( ssl_provided_keystore_and_truststore_remote_src|bool )
+    - krest_public_pem_file.stat.exists|bool
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
@@ -268,7 +297,7 @@
   ansible.builtin.debug:
     msg: "restarting kafka rest"
   notify: restart kafka-rest
-  when: (kafka_rest_custom_log4j|bool) and (logredactor_enabled|bool)
+  when: (kafka_rest_custom_log4j|bool) and (logredactor_enabled|bool) and (not kafka_rest_skip_restarts|bool)
   tags:
     - log
 

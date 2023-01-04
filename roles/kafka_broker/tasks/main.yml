@@ -41,27 +41,41 @@
   vars:
     service_name: "{{ kafka_broker_service_name }}"
   when: installation_method == "package"
-  tags: package
+  tags:
+    - package
+    - cp_package
 
 - name: Install the Kafka Broker Packages
   yum:
     name: "{{ kafka_broker_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
     state: latest
+  register: install_kafka_package_result
+  until: install_kafka_package_result is success  or ansible_check_mode
+  retries: 5
+  delay: 90
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
   ignore_errors: "{{ ansible_check_mode }}"
-  tags: package
+  tags:
+    - package
+    - cp_package
   notify: restart kafka
 
 - name: Install the Kafka Broker Packages
   apt:
     name: "{{ kafka_broker_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
+  register: install_kafka_package_result
+  until: install_kafka_package_result is success  or ansible_check_mode
+  retries: 5
+  delay: 90
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
   ignore_errors: "{{ ansible_check_mode }}"
-  tags: package
+  tags:
+    - package
+    - cp_package
   notify: restart kafka
 
 - name: Kafka Broker group
@@ -112,7 +126,7 @@
     service_name: kafka_broker
     user: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
-    hostnames: "{{ ([inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] + kafka_broker_listeners | confluent.platform.get_hostnames(inventory_hostname)) | unique }}"
+    hostnames: "{{ ([inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] + kafka_broker_listeners | confluent.platform.get_hostnames(inventory_hostname)) | unique }}"
     ca_cert_path: "{{kafka_broker_ca_cert_path}}"
     cert_path: "{{kafka_broker_cert_path}}"
     key_path: "{{kafka_broker_key_path}}"
@@ -304,7 +318,7 @@
   ansible.builtin.debug:
     msg: "restarting kafka broker"
   notify: restart kafka
-  when: (kafka_broker_custom_log4j|bool) and (logredactor_enabled|bool)
+  when: (kafka_broker_custom_log4j|bool) and (logredactor_enabled|bool) and (not kafka_broker_skip_restarts|bool)
   tags:
     - log
 
