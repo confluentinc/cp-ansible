@@ -152,11 +152,13 @@ kafka_controller_properties:
       listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %}"
       listeners: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
       node.id: "{{ node_id|default(groups.kafka_controller.index(inventory_hostname)|int + 9991) if inventory_hostname in groups.kafka_controller else 0}}"
-  kraft_sasl_plain:
-    enabled: "{{kafka_controller_sasl_protocol=='plain'}}"
-    properties:
-      listener.name.controller.plain.sasl.jaas.config: "{{plain_jaas_config}}"
-      sasl.mechanism.controller.protocol: PLAIN
+  controller_listener_properties:
+    enabled: true
+    properties: "{{ kafka_controller_listeners['controller'] | confluent.platform.client_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
+                            'confluent.metadata.', kafka_controller_truststore_path, kafka_controller_truststore_storepass, False, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
+                            false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, '', '', '', '',
+                            kerberos_kafka_controller_primary, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
+                            false, kafka_controller_ldap_user, kafka_controller_ldap_password, mds_bootstrap_server_urls) }}"
   ssl:
     enabled: "{{ kafka_controller_listeners | confluent.platform.ssl_required(kafka_controller_ssl_enabled) }}"
     properties:
@@ -193,7 +195,7 @@ kafka_controller_properties:
     properties:
       authorizer.class.name: io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer
       # ZK_ACL will not work with Kraft, refer https://cwiki.apache.org/confluence/display/KAFKA/KIP-801%3A+Implement+an+Authorizer+that+stores+metadata+in+__cluster_metadata for details
-      confluent.authorizer.access.rule.providers: CONFLUENT,ZK_ACL
+      confluent.authorizer.access.rule.providers: CONFLUENT,KRAFT_ACL
       super.users: "User:{{ mds_super_user|default('mds') }}"
   listeners:
     enabled: true
@@ -313,11 +315,13 @@ kafka_broker_properties:
       zookeeper.connection.timeout.ms: 18000
       zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
-  kraft_sasl_plain:
-    enabled: "{{kraft_enabled|bool and kafka_controller_sasl_protocol=='plain'}}"
-    properties:
-      listener.name.controller.plain.sasl.jaas.config: "{{plain_jaas_config}}"
-      sasl.mechanism.controller.protocol: PLAIN
+  controller_listener_properties:
+    enabled: "{{kraft_enabled}}"
+    properties: "{{ kafka_controller_listeners['controller'] | confluent.platform.client_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
+                            'confluent.metadata.', kafka_controller_truststore_path, kafka_controller_truststore_storepass, False, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
+                            false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, '', '', '', '',
+                            kerberos_kafka_controller_primary, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
+                            false, kafka_controller_ldap_user, kafka_controller_ldap_password, mds_bootstrap_server_urls) }}"
   broker_id:
     enabled: "{{ inventory_hostname in groups.kafka_broker }}"
     properties:
@@ -405,7 +409,7 @@ kafka_broker_properties:
     enabled: "{{ rbac_enabled }}"
     properties:
       authorizer.class.name: io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer
-      confluent.authorizer.access.rule.providers: CONFLUENT,ZK_ACL
+      confluent.authorizer.access.rule.providers: CONFLUENT,{{ "ZK_ACL" if not kraft_enabled|bool else "KRAFT_ACL" }}
       super.users: "User:{{ mds_super_user|default('mds') }}"
   rbac_mds:
     enabled: "{{ rbac_enabled and not external_mds_enabled }}"
