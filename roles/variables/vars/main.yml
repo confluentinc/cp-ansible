@@ -152,13 +152,11 @@ kafka_controller_properties:
       listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %}"
       listeners: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
       node.id: "{{ node_id|default(groups.kafka_controller.index(inventory_hostname)|int + 9991) if inventory_hostname in groups.kafka_controller else 0}}"
-  controller_listener_properties:
-    enabled: true
-    properties: "{{ kafka_controller_listeners['controller'] | confluent.platform.client_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
-                            'confluent.metadata.', kafka_controller_truststore_path, kafka_controller_truststore_storepass, False, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
-                            false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, '', '', '', '',
-                            kerberos_kafka_controller_primary, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
-                            false, kafka_controller_ldap_user, kafka_controller_ldap_password, mds_bootstrap_server_urls) }}"
+  kraft_sasl_plain:
+    enabled: "{{kafka_controller_sasl_protocol=='plain'}}"
+    properties:
+      listener.name.controller.plain.sasl.jaas.config: "{{plain_jaas_config}}"
+      sasl.mechanism.controller.protocol: PLAIN
   ssl:
     enabled: "{{ kafka_controller_listeners | confluent.platform.ssl_required(kafka_controller_ssl_enabled) }}"
     properties:
@@ -315,13 +313,11 @@ kafka_broker_properties:
       zookeeper.connection.timeout.ms: 18000
       zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
-  controller_listener_properties:
-    enabled: "{{kraft_enabled}}"
-    properties: "{{ kafka_controller_listeners['controller'] | confluent.platform.client_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
-                            'confluent.metadata.', kafka_controller_truststore_path, kafka_controller_truststore_storepass, False, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
-                            false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, '', '', '', '',
-                            kerberos_kafka_controller_primary, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
-                            false, kafka_controller_ldap_user, kafka_controller_ldap_password, mds_bootstrap_server_urls) }}"
+  kraft_sasl_plain:
+    enabled: "{{kraft_enabled|bool and kafka_controller_sasl_protocol=='plain'}}"
+    properties:
+      listener.name.controller.plain.sasl.jaas.config: "{{plain_jaas_config}}"
+      sasl.mechanism.controller.protocol: PLAIN
   broker_id:
     enabled: "{{ inventory_hostname in groups.kafka_broker }}"
     properties:
