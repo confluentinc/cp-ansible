@@ -9,6 +9,7 @@ logger = Logger.get_logger()
 
 class_name = ""
 
+
 class KsqlServicePropertyBuilder:
 
     @staticmethod
@@ -100,7 +101,8 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         key = "listeners"
         self.mapped_service_properties.add(key)
         from urllib.parse import urlparse
-        parsed_uri = urlparse(service_prop.get(key))
+        listener = service_prop.get(key).split(',')[0]
+        parsed_uri = urlparse(listener)
 
         return self.group, {
             "ksql_http_protocol": parsed_uri.scheme,
@@ -110,10 +112,12 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_ksql_internal_replication_property(self, service_prop: dict) -> tuple:
         key1 = "ksql.internal.topic.replicas"
         key2 = "ksql.streams.replication.factor"
-
         self.mapped_service_properties.add(key1)
         self.mapped_service_properties.add(key2)
-        return self.group, {"ksql_default_internal_replication_factor": int(service_prop.get(key1))}
+        value = service_prop.get(key1)
+        if value is not None:
+            return self.group, {"ksql_default_internal_replication_factor": int(value)}
+        return self.group, {}
 
     def _build_monitoring_interceptor_property(self, service_prop: dict) -> tuple:
         key = "confluent.monitoring.interceptor.topic"
@@ -255,7 +259,7 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
         try:
             keytab = sasl_config.split('keyTab="')[1].split('"')[0]
             principal = sasl_config.split('principal="')[1].split('"')[0]
-        except:
+        except IndexError as e:
             keytab = ""
             principal = ""
         if keytab != "" or principal != "":

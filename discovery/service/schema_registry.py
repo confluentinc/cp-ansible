@@ -9,6 +9,7 @@ logger = Logger.get_logger()
 
 class_name = ""
 
+
 class SchemaRegistryServicePropertyBuilder:
 
     @staticmethod
@@ -33,6 +34,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties = set()
         self.service = ConfluentServices.SCHEMA_REGISTRY
         self.group = self.service.value.get("group")
+
     def build_properties(self):
 
         # Get the hosts for given service
@@ -85,11 +87,10 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
                                      host_service_properties=_host_service_properties, skip_properties=skip_properties,
                                      mapped_properties=mapped_properties)
 
-
     def __build_runtime_properties(self, hosts: list):
         # Build Java runtime overrides
         data = (self.group,
-            {'schema_registry_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
+                {'schema_registry_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
         self.update_inventory(self.inventory, data)
 
     def _build_ssl_properties(self, service_prop: dict) -> tuple:
@@ -102,7 +103,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         is_ssl = bool(f"{protocol == 'https'}")
 
         ssl_props["ssl_enabled"] = is_ssl
-        if is_ssl == False:
+        if not is_ssl:
             return self.group, {}
 
         property_list = ["ssl.truststore.location", "ssl.truststore.password", "ssl.keystore.location",
@@ -156,7 +157,9 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         key = "kafkastore.topic.replication.factor"
         self.mapped_service_properties.add(key)
         value = service_prop.get(key)
-        return self.group, {"schema_registry_default_internal_replication_factor": int(value)}
+        if value is not None:
+            return self.group, {"schema_registry_default_internal_replication_factor": int(value)}
+        return self.group, {}
 
     def _build_service_port_property(self, service_prop: dict) -> tuple:
         key = "listeners"
@@ -224,7 +227,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         try:
             keytab = sasl_config.split('keyTab="')[1].split('"')[0]
             principal = sasl_config.split('principal="')[1].split('"')[0]
-        except:
+        except IndexError as e:
             keytab = ""
             principal = ""
         if keytab != "" or principal != "":

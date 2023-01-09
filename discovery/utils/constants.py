@@ -62,7 +62,7 @@ class ConfluentServices(Enum):
     CONTROL_CENTER = {
         "name": "confluent-control-center.service",
         "group": "control_center",
-        "packages": ["confluent-control-center-fe","confluent-control-center"]
+        "packages": ["confluent-control-center-fe", "confluent-control-center"]
     }
 
     @staticmethod

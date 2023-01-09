@@ -95,7 +95,8 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         key = "confluent.controlcenter.rest.listeners"
         self.mapped_service_properties.add(key)
         from urllib.parse import urlparse
-        parsed_uri = urlparse(service_prop.get(key))
+        listener = service_prop.get(key).split(',')[0]
+        parsed_uri = urlparse(listener)
         return self.group, {
             "control_center_http_protocol": parsed_uri.scheme,
             "control_center_listener_hostname": parsed_uri.hostname,
@@ -171,7 +172,8 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         broker_group = ConfluentServices.KAFKA_BROKER.value.get('group')
         if broker_group in self.inventory.groups and \
-                'ssl_mutual_auth_enabled' in self.inventory.groups.get(broker_group).vars:
+                'ssl_mutual_auth_enabled' in self.inventory.groups.get(broker_group).vars and \
+                self.inventory.groups.get(broker_group).vars.get('ssl_mutual_auth_enabled') is True:
             return self.group, {'ssl_mutual_auth_enabled': True}
         return self.group, {}
 
@@ -247,7 +249,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         try:
             keytab = sasl_config.split('keyTab="')[1].split('"')[0]
             principal = sasl_config.split('principal="')[1].split('"')[0]
-        except:
+        except IndexError as e:
             keytab = ""
             principal = ""
         if keytab != "" or principal != "":

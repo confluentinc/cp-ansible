@@ -56,12 +56,13 @@ class SystemPropertyBuilder:
         return self
 
     def with_archive_properties(self):
-        if self.inventory.groups.get('all').vars.get('installation_method') != 'archive':
+        if 'installation_method' in self.inventory.groups.get('all').vars and \
+                self.inventory.groups.get('all').vars.get('installation_method') != 'archive':
             return
 
         service_facts = SystemPropertyManager.get_service_facts(self.input_context)
         if not service_facts:
-            logger.error(f"Cannot find any CP service up and running. Cannot proceed for archive property details")
+            logger.error("Cannot find any CP service up and running. Cannot proceed for archive property details")
             return
 
         host = service_facts.get(ConfluentServices.KAFKA_BROKER.name)[0]

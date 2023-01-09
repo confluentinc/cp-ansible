@@ -10,6 +10,7 @@ logger = Logger.get_logger()
 class_name = ""
 gl_host_service_properties = ""
 
+
 class KafkaServicePropertyBuilder:
 
     @staticmethod
@@ -76,7 +77,6 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 result = func(self, service_properties)
                 self.update_inventory(self.inventory, result)
 
-
     def __build_custom_properties(self, host_service_properties: dict, mapped_properties: set):
 
         custom_group = "kafka_broker_custom_properties"
@@ -89,7 +89,6 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
                                      custom_properties_group_name=custom_group,
                                      host_service_properties=_host_service_properties, skip_properties=skip_properties,
                                      mapped_properties=mapped_properties)
-
 
     def __build_runtime_properties(self, hosts):
         # Build Java runtime overrides
@@ -124,12 +123,13 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key)
         self.mapped_service_properties.add("confluent.license.topic.replication.factor")
         self.mapped_service_properties.add("confluent.metadata.topic.replication.factor")
-        property_dict["kafka_broker_default_internal_replication_factor"] = int(value)
+        if value is not None:
+            property_dict["kafka_broker_default_internal_replication_factor"] = int(value)
 
         # Check for audit logs replication factor
         key = "confluent.security.event.logger.exporter.kafka.topic.replicas"
         audit_replication = service_properties.get(key)
-        if value != audit_replication:
+        if value is not None and audit_replication is not None and value != audit_replication:
             property_dict["audit_logs_destination_enabled"] = True
             self.mapped_service_properties.add(key)
 
@@ -220,9 +220,9 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         if 'kafka_broker_pkcs12_keystore_path' in property_dict:
             keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
-                                                            keystorepass=property_dict['ssl_keystore_store_password'],
-                                                            keystorepath=property_dict['kafka_broker_pkcs12_keystore_path'],
-                                                            hosts=self.hosts)
+                                                             keystorepass=property_dict['ssl_keystore_store_password'],
+                                                             keystorepath=property_dict['kafka_broker_pkcs12_keystore_path'],
+                                                             hosts=self.hosts)
 
             if keystore_aliases:
                 # Set the first alias name
@@ -290,7 +290,8 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
             if ssl_enabled is not None:
                 custom_listeners[name]['ssl_enabled'] = True
 
-            if 'ssl_mutual_auth_enabled' in self.inventory.groups.get('kafka_broker').vars:
+            if 'ssl_mutual_auth_enabled' in self.inventory.groups.get('kafka_broker').vars and \
+                    self.inventory.groups.get('kafka_broker').vars.get('ssl_mutual_auth_enabled') is True:
                 custom_listeners[name]['ssl_mutual_auth_enabled'] = True
 
             sasl_protocol = service_prop.get(key1)
@@ -336,7 +337,9 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         return self.group, property_dict
 
     def _build_mds_properties(self, service_prop: dict) -> tuple:
-        if 'rbac_enabled' not in self.inventory.groups.get('kafka_broker').vars:
+        if ('rbac_enabled' not in self.inventory.groups.get('kafka_broker').vars) or \
+                ('rbac_enabled' in self.inventory.groups.get('kafka_broker').vars and
+                    self.inventory.groups.get('kafka_broker').vars.get('rbac_enabled') is False):
             return "all", {}
         key1 = 'super.users'
         property_dict = dict()
@@ -347,7 +350,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if ldap_principal is not None:
             try:
                 tmp_super_user = ldap_principal.split("uid=", 1)[1].split(",")[0].strip()
-            except:
+            except IndexError as e:
                 tmp_super_user = ""
             if tmp_super_user != "":
                 property_dict['mds_super_user'] = tmp_super_user
@@ -359,7 +362,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
             listener = service_prop.get(key2)
             property_dict['mds_http_protocol'] = listener.split("://")[0]
             # property_dict['mds_advertised_listener_hostname'] = listener.split("://")[1].split(":")[0]
-            property_dict['mds_port'] = int(listener.split("://")[1].split(":")[1])
+            property_dict['mds_port'] = int(listener.split("://")[1].split(":")[1].split(",")[0])
             property_dict['rbac_enabled_private_pem_path'] = service_prop.get(
                 'confluent.metadata.server.token.key.path')
             property_dict['external_mds_enabled'] = False
@@ -376,7 +379,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         key4 = 'kafka.rest.kafka.rest.resource.extension.class'
         if service_prop.get(key4) is not None:
             metadata_user_info = service_prop.get('kafka.rest.confluent.metadata.basic.auth.user.info')
-            property_dict['mds_super_user_password'] = metadata_user_info.split(':')[1] #set to same as kafka_broker_ldap_password
+            property_dict['mds_super_user_password'] = metadata_user_info.split(':')[1]  # set to same as kafka_broker_ldap_password
 
         return "all", property_dict
 
@@ -405,7 +408,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         return group_name, service_monitoring_details
 
-    def _build_audit_log_properties(self, service_prop:dict) -> tuple:
+    def _build_audit_log_properties(self, service_prop: dict) -> tuple:
         global gl_host_service_properties
         key = "confluent.security.event.logger.exporter.kafka.bootstrap.servers"
         self.mapped_service_properties.add(key)
@@ -416,8 +419,8 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 host.set_variable('audit_logs_destination_enabled', True)
                 host.set_variable('audit_logs_destination_bootstrap_servers', default_properties.get(key))
                 cluster, principal_name = self.get_audit_log_properties(input_context=self.input_context,
-                                                                             hosts=hostname, mds_user='mds',
-                                                                             mds_password='password')
+                                                                        hosts=hostname, mds_user='mds',
+                                                                        mds_password='password')
                 host.set_variable('audit_logs_destination_kafka_cluster_name', cluster['clusterName'])
                 host.set_variable('audit_logs_destination_principal', principal_name)
 
@@ -455,7 +458,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         try:
             keytab = sasl_config.split('keyTab="')[1].split('"')[0]
             principal = sasl_config.split('principal="')[1].split('"')[0]
-        except:
+        except IndexError as e:
             keytab = ""
             principal = ""
         if keytab != "" or principal != "":
@@ -468,7 +471,8 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
     def _build_kerberos_configurations(self, service_prop: dict) -> tuple:
         property_dict = dict()
-        if self.inventory.groups.get('kafka_broker').vars.get('sasl_protocol') == 'kerberos':
+        if 'sasl_protocol' in self.inventory.groups.get('kafka_broker').vars and \
+                self.inventory.groups.get('kafka_broker').vars.get('sasl_protocol') == 'kerberos':
             kerberos_config_file = '/etc/krb5.conf'
             realm, kdc, admin = self.get_kerberos_configurations(self.input_context, self.hosts, kerberos_config_file)
             kerberos_config = {

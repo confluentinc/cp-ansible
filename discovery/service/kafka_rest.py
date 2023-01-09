@@ -9,6 +9,7 @@ logger = Logger.get_logger()
 
 class_name = ""
 
+
 class KafkaRestServicePropertyBuilder:
 
     @staticmethod
@@ -94,7 +95,8 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         key = "listeners"
         self.mapped_service_properties.add(key)
         from urllib.parse import urlparse
-        parsed_uri = urlparse(service_prop.get(key))
+        listener = service_prop.get(key).split(',')[0]
+        parsed_uri = urlparse(listener)
         return self.group, {
             "kafka_rest_http_protocol": parsed_uri.scheme,
             "kafka_rest_port": parsed_uri.port
@@ -238,7 +240,7 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         try:
             keytab = sasl_config.split('keyTab="')[1].split('"')[0]
             principal = sasl_config.split('principal="')[1].split('"')[0]
-        except:
+        except IndexError as e:
             keytab = ""
             principal = ""
         if keytab != "" or principal != "":

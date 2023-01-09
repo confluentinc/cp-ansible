@@ -103,7 +103,7 @@ class SystemPropertyManager:
                         mapping[service_key] = list(host_list)
 
         if not mapping:
-            logger.error(f"Could not get the service mappings. Please see the logs for details.")
+            logger.error("Could not get the service mappings. Please see the logs for details.")
 
         logger.info(f"Host service mappings:\n{json.dumps(mapping)}")
         return mapping
@@ -222,7 +222,7 @@ class ServicePropertyManager:
         mappings = dict()
         seed_properties_file = ServicePropertyManager.__get_service_properties_file(input_context, service, hosts)
         if not seed_properties_file:
-            logger.error(f"Could not get the service seed property file.")
+            logger.error("Could not get the service seed property file.")
             return mappings
 
         for key, file in seed_properties_file.items():
@@ -253,21 +253,21 @@ class ServicePropertyManager:
         if not keystorepath or not keystorepass:
             return []
 
-        runner_utils = AnsibleRunnerUtils('ansible_facts')
-        hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_input_context(input_context)
+        runner_utils = AnsibleRunnerUtils()
+        ansilble_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
         ansible_runner.run(
             host_pattern=host_pattern,
-            inventory=AnsibleRunnerUtils.get_inventory_dict(input_context),
+            inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
             module="shell",
             module_args=f"keytool -list -v -storepass {keystorepass} -keystore "
-                        f"{keystorepath} | grep 'Alias name' "
+                        f"{keystorepath} | grep -m1 'Alias name' "
                         "| awk '{print $3}'",
             event_handler=runner_utils.my_event_handler
         )
 
         response = runner_utils.result_ok
-        if response[hosts[0]]['rc'] == 0:
-            stdout = response[hosts[0]]['stdout']
+        if len(response) != 0 and response[list(hosts)[0]]['rc'] == 0:
+            stdout = response[list(hosts)[0]]['stdout']
             aliases = [y for y in (x.strip() for x in stdout.splitlines()) if y]
             return aliases
         else:
@@ -473,7 +473,7 @@ class ServicePropertyManager:
             return "", ""
         try:
             res = json.loads(cluster_list)
-        except:
+        except Exception as e:
             res = ""
 
         for cluster in res:
@@ -504,7 +504,7 @@ class ServicePropertyManager:
                 stdout = response2[hosts]['stdout']
                 try:
                     role = json.loads(stdout)
-                except:
+                except Exception as e:
                     role = []
                 if len(role) == 0:
                     continue
