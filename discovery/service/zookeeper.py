@@ -116,7 +116,7 @@ class ZookeeperServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         zookeeper_ssl_enabled = bool(service_properties.get('secureClientPort', False))
 
-        if zookeeper_ssl_enabled == False:
+        if not zookeeper_ssl_enabled:
             return self.group, {}
 
         property_dict['ssl_enabled'] = True

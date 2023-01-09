@@ -6,7 +6,7 @@ from discovery.utils.utils import Logger
 logger = Logger.get_logger()
 
 
-def get_service_builder_class(modules, default_class_name:str, version: str = None) -> AbstractPropertyBuilder:
+def get_service_builder_class(modules, default_class_name: str, version: str = None) -> AbstractPropertyBuilder:
 
     members = inspect.getmembers(modules, inspect.isclass)
     if version:

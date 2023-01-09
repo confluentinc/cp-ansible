@@ -9,14 +9,15 @@ logger = Logger.get_logger()
 
 class_name = ""
 
+
 class KafkaReplicatorServicePropertyBuilder:
 
     @staticmethod
     def build_properties(input_context: InputContext, inventory: CPInventoryManager):
         from discovery.service import get_service_builder_class
         builder_class = get_service_builder_class(modules=sys.modules[__name__],
-                                        default_class_name="KafkaReplicatorServicePropertyBaseBuilder",
-                                        version=input_context.from_version)
+                                                  default_class_name="KafkaReplicatorServicePropertyBaseBuilder",
+                                                  version=input_context.from_version)
         global class_name
         class_name = builder_class
         builder_class(input_context, inventory).build_properties()

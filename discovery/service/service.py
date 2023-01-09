@@ -133,7 +133,7 @@ class AbstractPropertyBuilder(ABC):
         return service_group, {
             f"{service_group}_user": str(user),
             f"{service_group}_group": str(group),
-            f"{service_group}_log_dir": str(env_details.get("LOG_DIR", None))
+            f"{service_group}_log_dir": str(env_details.get("LOG_DIR", ''))
         }
 
     @staticmethod
@@ -141,7 +141,7 @@ class AbstractPropertyBuilder(ABC):
 
         # Check for the data
         if not data or type(data) is not tuple:
-            logger.error(f"The properties to add in inventory is either null or not type of a tuple")
+            logger.error("The properties to add in inventory is either null or not type of a tuple")
             return
 
         group_name = data[0]
@@ -208,7 +208,7 @@ class AbstractPropertyBuilder(ABC):
 
         if 'jmx_prometheus_javaagent.jar' in ops_str:
             monitoring_props['jmxexporter_enabled'] = True
-            pattern = f"jmx_prometheus_javaagent.jar=([0-9]+):"
+            pattern = "jmx_prometheus_javaagent.jar=([0-9]+):"
             match = re.search(pattern, ops_str)
             if match:
                 monitoring_props['jmxexporter_port'] = int(match.group(1))

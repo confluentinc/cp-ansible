@@ -9,6 +9,7 @@ logger = Logger.get_logger()
 
 class_name = ""
 
+
 class KafkaConnectServicePropertyBuilder:
 
     @staticmethod
@@ -84,23 +85,27 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
                                      host_service_properties=_host_service_properties, skip_properties=skip_properties,
                                      mapped_properties=mapped_properties)
 
-
     def __build_runtime_properties(self, hosts: list):
         # Build Java runtime overrides
-        data = (
-        self.group, {'kafka_connect_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
+        data = (self.group,
+                {'kafka_connect_custom_java_args': self.get_jvm_arguments(self.input_context, self.service, hosts)})
         self.update_inventory(self.inventory, data)
 
     def _build_service_replication_factor(self, service_prop: dict) -> tuple:
         key = "config.storage.replication.factor"
         self.mapped_service_properties.add(key)
-        return self.group, {"kafka_connect_default_internal_replication_factor": int(service_prop.get(key))}
+        value = service_prop.get(key)
+        if value is not None:
+            return self.group, {"kafka_connect_default_internal_replication_factor": int(value)}
+        return self.group, {}
 
     def _build_config_storage_topic(self, service_prop: dict) -> tuple:
         key = "config.storage.topic"
         self.mapped_service_properties.add(key)
         value = service_prop.get(key)
-        return self.group, {"kafka_connect_group_id": value.rstrip("-configs")}
+        if value is not None:
+            return self.group, {"kafka_connect_group_id": value.rstrip("-configs")}
+        return self.group, {}
 
     def _build_monitoring_interceptor_propperty(self, service_prop: dict) -> tuple:
         key = "confluent.monitoring.interceptor.topic"
@@ -116,7 +121,8 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         key = "listeners"
         self.mapped_service_properties.add(key)
         from urllib.parse import urlparse
-        parsed_uri = urlparse(service_prop.get(key))
+        listener = service_prop.get(key).split(',')[0]
+        parsed_uri = urlparse(listener)
         return self.group, {
             "kafka_connect_http_protocol": parsed_uri.scheme,
             "kafka_connect_rest_port": parsed_uri.port
@@ -126,7 +132,7 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         key1 = "rest.advertised.listener"
         self.mapped_service_properties.add(key1)
 
-        key2 = "rest.advertised.port"
+        key2 = "rest.port"
         self.mapped_service_properties.add(key2)
 
         return self.group, {
@@ -217,7 +223,8 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict = dict()
         property_dict['kafka_connect_secret_registry_enabled'] = True
         property_dict['kafka_connect_secret_registry_key'] = service_prop.get(key2)
-        property_dict['kafka_connect_secret_registry_default_replication_factor'] = int(service_prop.get(key3))
+        if service_prop.get(key3) is not None:
+            property_dict['kafka_connect_secret_registry_default_replication_factor'] = int(service_prop.get(key3))
         self.mapped_service_properties.add(key1)
         self.mapped_service_properties.add(key2)
         self.mapped_service_properties.add(key3)
@@ -271,7 +278,7 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
         try:
             keytab = sasl_config.split('keyTab="')[1].split('"')[0]
             principal = sasl_config.split('principal="')[1].split('"')[0]
-        except:
+        except IndexError as e:
             keytab = ""
             principal = ""
         if keytab != "" or principal != "":

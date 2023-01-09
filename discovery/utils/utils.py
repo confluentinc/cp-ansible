@@ -3,6 +3,7 @@ import logging
 import sys
 from collections import OrderedDict
 from os.path import exists
+from jproperties import Properties
 
 import yaml
 
@@ -18,19 +19,18 @@ def singleton(class_):
     return get_instance
 
 
-def load_properties_to_dict(content, sep='=', comment_char='#'):
+def load_properties_to_dict(content):
     """
     Read the file passed as parameter as a properties file.
     """
+    configs = Properties()
+    configs.load(content)
+    prop_view = configs.items()
     props = {}
-    content = content.split("\n")
-    for line in content:
-        l = line.strip()
-        if l and not l.startswith(comment_char):
-            key_value = l.split(sep)
-            key = key_value[0].strip()
-            value = sep.join(key_value[1:]).strip().strip('"')
-            props[key] = value
+    for item in prop_view:
+        key = item[0]
+        val = item[1][0]
+        props[key] = val
     return props
 
 
@@ -200,13 +200,13 @@ class Arguments:
         if from_version:
             versions = from_version.split('.')
             if not versions or len(versions) > 3 or len(versions) < 2:
-                logger.error(f"Invalid version for from_version. It should be in form of x.y.z or z.y")
+                logger.error("Invalid version for from_version. It should be in form of x.y.z or z.y")
                 vars["from_version"] = None
                 return
 
             for version in versions:
                 if not version.isnumeric():
-                    logger.error(f"Major, minor and patch versions should be of numbers.")
+                    logger.error("Major, minor and patch versions should be of numbers.")
                     vars["from_version"] = None
 
     @classmethod
@@ -266,7 +266,7 @@ class Arguments:
         # Parse the input inventory file if present
         try:
             return yaml.safe_load(open(args.input))
-        except:
+        except Exception as e:
             logger.warning(f"Input inventory file '{args.input}' not provided or its incorrect")
             return None
 
