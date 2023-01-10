@@ -67,7 +67,7 @@ TIMEOUT_WAITING_FOR_TASK_STATUS = 30  # seconds
 
 def get_current_connectors(connect_url):
     try:
-        res = open_url(connect_url)
+        res = open_url(connect_url, validate_certs=False)
         return json.loads(res.read())
     except urllib_error.HTTPError as e:
         if e.code != 404:
@@ -77,7 +77,7 @@ def get_current_connectors(connect_url):
 
 def remove_connector(connect_url, name):
     url = "{}/{}".format(connect_url, name)
-    r = open_url(method='DELETE', url=url)
+    r = open_url(method='DELETE', url=url, validate_certs=False)
     return r.getcode() == 200
 
 
@@ -86,7 +86,7 @@ def create_new_connector(connect_url, name, config):
     data = json.dumps({'name': name, 'config': config})
     headers = {'Content-Type': 'application/json'}
     try:
-        r = open_url(method='POST', url=connect_url, data=data, headers=headers)
+        r = open_url(method='POST', url=connect_url, data=data, headers=headers, validate_certs=False)
     except urllib_error.HTTPError as e:
         message = "error while updating configuration ({})".format(e)
         return False, False, message
@@ -117,7 +117,7 @@ def get_connector_status(connect_url, connector_name):
     time.sleep(WAIT_TIME_BEFORE_GET_STATUS)
     status_url = "{}/{}/status".format(connect_url, connector_name)
 
-    res = open_url(status_url)
+    res = open_url(status_url, validate_certs=False)
     current_status = json.loads(res.read())
 
     connector_status = current_status['connector']['state']
@@ -134,7 +134,7 @@ def get_connector_status(connect_url, connector_name):
         if time_waited > TIMEOUT_WAITING_FOR_TASK_STATUS:
             return False, "timeout getting task status"
 
-        res = open_url(status_url)
+        res = open_url(status_url, validate_certs=False)
         current_status = json.loads(res.read())
         nb_tasks = len(current_status['tasks'])
 
@@ -153,7 +153,7 @@ def update_existing_connector(connect_url, name, config):
     url = "{}/{}/config".format(connect_url, name)
     restart_url = "{}/{}/restart".format(connect_url, name)
 
-    res = open_url(url)
+    res = open_url(url, validate_certs=False)
     current_config = json.loads(res.read())
 
     existing_config = config.copy()
@@ -171,7 +171,7 @@ def update_existing_connector(connect_url, name, config):
     headers = {'Content-Type': 'application/json'}
     r = None
     try:
-        r = open_url(method='PUT', url=url, data=data, headers=headers)
+        r = open_url(method='PUT', url=url, data=data, headers=headers, validate_certs=False)
     except urllib_error.HTTPError as e:
         message = "error while updating configuration ({})".format(e)
         success = False
@@ -186,7 +186,7 @@ def update_existing_connector(connect_url, name, config):
     message = "connector configuration updated"
     success = True
     try:
-        r = open_url(method='POST', url=restart_url)
+        r = open_url(method='POST', url=restart_url, validate_certs=False)
     except urllib_error.HTTPError:
         pass
     finally:
