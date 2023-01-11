@@ -4,11 +4,11 @@ Though this script tries to come up with inventory which is the closed represent
 
 ### Prerequisites
 #### Software
-> Python 3.9+  
-> Ansible 2.11  
-> PyYaml 6.0  
-> ansible_runner (pip)
-> jproperties (pip)
+- Python 3.9+  
+- Ansible 2.11  
+- PyYaml 6.0  
+- ansible_runner (pip)
+- jproperties (pip)
 
 These are dependencies for this script and should be installed on the machine where we are executing it from. This is not a requirement for managed nodes of the cluster.
 #### Hosts
