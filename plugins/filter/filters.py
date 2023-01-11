@@ -35,7 +35,7 @@ class FilterModule(object):
             else 'SCRAM-SHA-512' if protocol.upper() == 'SCRAM' \
             else 'SCRAM-SHA-256' if protocol.lower() == 'scram256' \
             else 'PLAIN' if protocol.upper() == 'PLAIN' \
-            else 'OAUTHBEARER' if protocol.upper() == 'OAUTH' \
+            else 'OAUTHBEARER' if protocol.upper() == 'OAUTH' or protocol.upper() == 'OAUTHBEARER' \
             else 'none'
         return normalized
 
@@ -211,12 +211,13 @@ class FilterModule(object):
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER':
                 final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'OAUTHBEARER'
-                final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.server.callback.handler.class'] =\
-                    'io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler'
-                final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.login.callback.handler.class'] =\
-                    'io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler'
-                final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
-                    'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
+                if listeners_dict[listener].get('sasl_protocol', default_sasl_protocol).upper() == 'OAUTH':
+                    final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.server.callback.handler.class'] =\
+                        'io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler'
+                    final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.login.callback.handler.class'] =\
+                        'io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler'
+                    final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
+                        'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
 
         return final_dict
 
