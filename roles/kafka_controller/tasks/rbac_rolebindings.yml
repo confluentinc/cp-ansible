@@ -5,6 +5,30 @@
     user: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
 
+- name: Grant role System Admin to Kafka Controller users/groups
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{kafka_controller_ldap_user | default('kafka_controller')}}/roles/SystemAdmin"
+    method: POST
+    validate_certs: false
+    force_basic_auth: true
+    url_username: "{{mds_super_user}}"
+    url_password: "{{mds_super_user_password}}"
+    headers:
+      Content-Type: application/json
+    body_format: json
+    body: >
+      {
+        "clusters": {
+          "kafka-cluster": "{{kafka_cluster_id}}"
+        }
+      }
+    status_code: 204
+  register: kc_mds_result
+  until: kc_mds_result.status == 204
+  retries: 30
+  delay: 5
+  when: not ansible_check_mode
+
 - name: Grant role System Admin to Additional Kafka Controller users/groups
   uri:
     url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/{% if 'User' not in item and 'Group' not in item %}User:{% endif %}{{item}}/roles/SystemAdmin"
@@ -23,8 +47,8 @@
         }
       }
     status_code: 204
-  register: kb_mds_result
-  until: kb_mds_result.status == 204
+  register: kc_mds_result
+  until: kc_mds_result.status == 204
   retries: 30
   delay: 5
   loop: "{{kafka_controller_additional_system_admins}}"
@@ -54,8 +78,8 @@
         }]
       }
     status_code: 204
-  register: kb_mds_result
-  until: kb_mds_result.status == 204
+  register: kc_mds_result
+  until: kc_mds_result.status == 204
   retries: 30
   delay: 5
   when: audit_logs_destination_enabled|bool and not ansible_check_mode
@@ -84,8 +108,8 @@
         }]
       }
     status_code: 204
-  register: kb_mds_result
-  until: kb_mds_result.status == 204
+  register: kc_mds_result
+  until: kc_mds_result.status == 204
   retries: 30
   delay: 5
   when: audit_logs_destination_enabled|bool and not ansible_check_mode

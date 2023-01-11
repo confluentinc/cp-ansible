@@ -156,6 +156,12 @@ kafka_controller_properties:
     enabled: "{{kafka_controller_sasl_protocol=='plain'}}"
     properties:
       sasl.mechanism.controller.protocol: PLAIN
+  kraft_rbac:
+    enabled: "{{ rbac_enabled and external_mds_enabled }}"
+    properties:
+      sasl.mechanism.controller.protocol: OAUTHBEARER
+      sasl.jaas.config: |-
+        org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username="{{kafka_controller_ldap_user | default('kafka_controller')}}" password="{{kafka_controller_ldap_password | default('password')}}" metadataServerUrls="{{mds_bootstrap_server_urls}}";
   ssl:
     enabled: "{{ kafka_controller_listeners | confluent.platform.ssl_required(kafka_controller_ssl_enabled) }}"
     properties:
@@ -187,13 +193,6 @@ kafka_controller_properties:
     enabled: "{{ 'GSSAPI' in kafka_controller_sasl_enabled_mechanisms }}"
     properties:
       sasl.kerberos.service.name: "{{kerberos_kafka_controller_primary}}"
-  kraft_rbac:
-    enabled: "{{kafka_controller_listeners['controller']['sasl_protocol'] | confluent.platform.normalize_sasl_protocol == 'OAUTHBEARER'}}"
-    properties:
-      sasl.mechanism.controller.protocol: OAUTHBEARER
-      sasl.enabled.mechanisms: OAUTHBEARER,PLAIN
-      sasl.jaas.config: |-
-        org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username="{{kafka_controller_ldap_user | default('kafka_controller')}}" password="{{kafka_controller_ldap_password | default('password')}}" metadataServerUrls="{{mds_bootstrap_server_urls}}";
   rbac:
     enabled: "{{rbac_enabled}}"
     properties:
@@ -336,11 +335,11 @@ kafka_broker_properties:
       sasl.mechanism.controller.protocol: PLAIN
       listener.name.controller.plain.sasl.jaas.config: "{{plain_jaas_config}}"
   kraft_rbac:
-    enabled: "{{kraft_enabled|bool and kafka_controller_listeners['controller']['sasl_protocol'] | confluent.platform.normalize_sasl_protocol == 'OAUTHBEARER'}}"
+    enabled: "{{kraft_enabled|bool and rbac_enabled and external_mds_enabled }}"
     properties:
+      listener.name.controller.oauthbearer.sasl.jaas.config: org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username="{{kafka_controller_ldap_user | default('kafka_controller')}}" password="{{kafka_controller_ldap_password | default('password')}}" metadataServerUrls="https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090";
+      listener.name.controller.oauthbearer.sasl.login.callback.handler.class: io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler
       sasl.mechanism.controller.protocol: OAUTHBEARER
-      listener.name.controller.oauthbearer.sasl.jaas.config: |-
-        org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username="{{kafka_controller_ldap_user | default('kafka_controller')}}" password="{{kafka_controller_ldap_password | default('password')}}" metadataServerUrls="{{mds_bootstrap_server_urls}}";
   broker_id:
     enabled: "{{ inventory_hostname in groups.kafka_broker }}"
     properties:
