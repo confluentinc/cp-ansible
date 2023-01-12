@@ -122,6 +122,8 @@ Secrets protection enabled.
 
 Control Center disabled, metrics reporters enabled.
 
+LdapAuthenticateCallbackHandler for AuthN
+
 #### Scenario rbac-plain-provided-debian verify test's the following:
 
 Validates Metrics reporter without C3.
@@ -131,6 +133,8 @@ Validates that secrets protection is enabled on correct properties.
 Validates truststore is present across components.
 
 Validates that Java 17 is in Use
+
+Validates LDAP authentication
 
 ***
 
@@ -680,7 +684,7 @@ RBAC enabled.
 
 MTLS enabled.
 
-Secrets protection disabled
+Secrets protection enabled
 
 Kafka Broker Customer Listener.
 
@@ -868,30 +872,6 @@ Validates that client ID's are set correctly on Replicator.
 
 ***
 
-### molecule/plaintext-rhel
-
-#### Scenario plaintext-rhel test's the following:
-
-Installation of Confluent Platform on centos8.
-
-Copying local JMX agent.
-
-Copying local files.
-
-#### Scenario plaintext-rhel verify test's the following:
-
-Validates Package version installed.
-
-Validates log4j configuration.
-
-Validates all components are running with plaintext.
-
-Validates that copied files are present.
-
-Validates that JMX exporter was copied and is running.
-
-***
-
 ### molecule/archive-scram-rhel
 
 #### Scenario archive-scram-rhel test's the following:
@@ -901,8 +881,6 @@ Archive Installation of Confluent Platform on centos8.
 SASL SCRAM protocol.
 
 TLS Enabled.
-
-Secrets Protection.
 
 Custom Archive owner.
 
@@ -952,8 +930,6 @@ TLS enabled.
 
 Customer zookeeper root.
 
-Secrets Protection enabled.
-
 Jolokia has TLS disabled.
 
 #### Scenario zookeeper-tls-rhel verify test's the following:
@@ -961,6 +937,32 @@ Jolokia has TLS disabled.
 Validates that Zookeeper is using TLS.
 
 Validates that other components are using SCRAM for auth.
+
+***
+
+### molecule/plaintext-rhel-customrepo
+
+#### Scenario plaintext-rhel-customrepo test's the following:
+
+Installation of Confluent Platform on centos8.
+
+Copying local JMX agent.
+
+Copying local files.
+
+Custom yum Repository
+
+#### Scenario plaintext-rhel-customrepo verify test's the following:
+
+Validates Package version installed.
+
+Validates log4j configuration.
+
+Validates all components are running with plaintext.
+
+Validates that copied files are present.
+
+Validates that JMX exporter was copied and is running.
 
 ***
 
