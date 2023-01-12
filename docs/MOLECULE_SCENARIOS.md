@@ -46,7 +46,10 @@ SSL Enabled.
 
 Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
 
-Custom log dirs for all components.
+
+LdapAuthenticateCallbackHandler for AuthN
+
+#### Scenario rbac-plain-provided-debian verify test's the following:
 
 #### Scenario archive-plain-debian verify test's the following:
 
@@ -56,7 +59,13 @@ Validates that custom log4j configuration is in place.
 
 Validates that Java 17 is in Use
 
-Validates that Confluent CLI is installed.
+Validates LDAP authentication
+
+***
+
+### molecule/rbac-mds-mtls-custom-rhel
+
+#### Scenario rbac-mds-mtls-custom-rhel test's the following:
 
 ***
 
@@ -610,7 +619,7 @@ Validates that Control Center has truststore in place.
 
 ***
 
-### molecule/plain-rhel
+Secrets protection enabled
 
 #### Scenario plain-rhel test's the following:
 
@@ -832,35 +841,7 @@ Validates that all components are pointing to the MDS for authorization.
 
 ***
 
-### molecule/rbac-mds-kerberos-debian
-
-#### Scenario rbac-mds-kerberos-debian test's the following:
-
-Installs two Confluent Platform Clusters on Debian9.
-
-RBAC enabled.
-
-Remote MDS from Cluster2 to Cluster1 (MDS).
-
-Custom TLS certificates.
-
-Kafka Broker Customer Listener
-
-RBAC Additional System Admin.
-
-#### Scenario rbac-mds-kerberos-debian verify test's the following:
-
-Validates that GSSAPI protocol is set on Cluster2.
-
-Validates that MDS is HTTP on Cluster1 (MDS).
-
-Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
-
-Validates that Java 17 is in Use
-
-***
-
-### molecule/rbac-mds-kerberos-mtls-custom-rhel
+### molecule/archive-scram-rhel
 
 #### Scenario rbac-mds-kerberos-mtls-custom-rhel test's the following:
 
@@ -870,9 +851,7 @@ RBAC enabled.
 
 Remote MDS from Cluster2 to Cluster1 (MDS).
 
-Custom TLS certificates.
-
-Kafka Broker Customer Listener.
+Custom Archive owner.
 
 RBAC Additional System Admin.
 
@@ -940,9 +919,7 @@ Remote MDS from Cluster2 to Cluster1 (MDS).
 
 Custom TLS certificates.
 
-MTLS enabled on both clusters.
-
-Kafka Broker Customer Listener.
+Jolokia has TLS disabled.
 
 RBAC Additional System Admin.
 
@@ -952,7 +929,33 @@ Validates that Audit logs are working on topic creation.
 
 Validates that keystores are in place.
 
-Validates that MDS is HTTP on Cluster1 (MDS).
+### molecule/plaintext-rhel-customrepo
+
+#### Scenario plaintext-rhel-customrepo test's the following:
+
+Installation of Confluent Platform on centos8.
+
+Copying local JMX agent.
+
+Copying local files.
+
+Custom yum Repository
+
+#### Scenario plaintext-rhel-customrepo verify test's the following:
+
+Validates Package version installed.
+
+Validates log4j configuration.
+
+Validates all components are running with plaintext.
+
+Validates that copied files are present.
+
+Validates that JMX exporter was copied and is running.
+
+***
+
+### molecule/kerberos-rhel
 
 Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
