@@ -1,0 +1,231 @@
+---
+- name: Remove CP installation
+  gather_facts: no
+  become: true
+  hosts: all
+  tasks:
+    - name: Confirm Deletion
+      pause:
+        prompt: "This Play deletes everything installed on the host(s), Be cautios before running this. Press Enter to Proceed to Next Node. Ctrl + C to Abort"
+
+    - import_role:
+        name: variables
+
+    - name: Find all confluent named services Installed
+      ansible.builtin.find:
+        paths: /usr/lib/systemd/system/
+        file_type: file
+        use_regex: yes
+        patterns: ['^confluent.*$']
+      register: confluent_services
+
+    - name: Initialise List of Default users
+      set_fact:
+        cp_default_users:
+          - "{{ jolokia_user }}"
+          - 'cp-ce-kafka-http-server'
+          - 'cp-kafka'
+          - 'cp-schema-registry'
+          - 'cp-control-center'
+          - 'cp-kafka-rest'
+          - 'cp-ce-kafka-rest'
+          - 'cp-metadata-service'
+          - 'cp-kafka-connect'
+
+    - name: Initialise SSL cert List with common items
+      set_fact:
+        ssl_common_items:
+          - 'ca.crt'
+          - 'tokenKeyPair.pem'
+          - 'public.pem'
+
+    - name: Set data directories to delete
+      set_fact:
+        data_dirs: "{{ (kafka_broker_final_properties['log.dirs'].split(',') | map('dirname')) + ['/var/lib/zookeeper/', '/var/lib/confluent/'] }}"
+        kafka_broker_client_secrets_protection_file: "{{ kafka_broker_secrets_protection_file | default('kafka-broker-client-secrets-protection.properties') }}"
+
+        cp_default_config_dirs:
+          - "{{ (config_base_path, kafka_rest_config_prefix_path) | path_join }}"
+          - "{{ (config_base_path, 'confluent-metadata-service') | path_join }}"
+          - "{{ (config_base_path, 'confluent-rebalancer') | path_join }}"
+
+    - name: Find Installed Confluent Service files
+      set_fact:
+        cp_services: "{{ confluent_services.files | map(attribute='path') | map('basename') }}"
+
+    - name: Set common extention names in ssl files
+      set_fact:
+        ssl_extentions: [ ".crt", ".key", ".chain", ".keystore.jks", ".truststore.jks", ".keystore.bcfks", ".truststore.bcfks" ]
+
+    - set_fact:
+        ssl_items: "{{ ssl_common_items + [item] | product(ssl_extentions) | map('join') | list }}"
+        cp_packages: "{{ cp_packages | default([]) + [ lookup('vars', item + '_packages', default='')  ]  }}"
+        config_dirs: "{{ config_dirs | default(cp_default_config_dirs) + [ lookup('vars', item + '_config_prefix_path', default='') ] }}"
+        logs_dir: "{{ logs_dir | default([]) + [ lookup('vars', item + '_log_dir', default='') ] }}"
+        cp_users: "{{ cp_users|default(cp_default_users) + [ lookup('vars', item+ '_user', default='') ] }}"
+        cp_groups: "{{ cp_groups|default([]) + [ lookup('vars', item+ '_group', default='') ] }}"
+        keytabs_filenames: "{{ keytabs_filenames|default([])  + [ ('/etc/security/keytabs/', item, '.keytab') | join ] }}"
+        cp_services: "{{ cp_services|default([]) + [ lookup('vars', item+'_service_name', default='') ] }}"
+        secrets_protection_files: "{{ secrets_protection_files|default([kafka_broker_client_secrets_protection_file]) + [ lookup('vars', item+'_secrets_protection_file', default=(item|replace('_','-')+'-secrets-protection.properties')) ] }}"
+      with_items: "{{ group_names }}"
+
+    - set_fact:
+        data_dirs: "{{ data_dirs + [ control_center_rocksdb_path|default('') ] }}"
+      when: inventory_hostname in groups.control_center
+
+    - set_fact:
+        data_dirs: "{{ data_dirs + [ ksql_rocksdb_path| default('/tmp/ksqldb'), ksql_final_properties['ksql.streams.state.dir'] ] }}"
+      when: inventory_hostname in groups.ksql
+
+    - name: List Package names to be deleted
+      debug:
+        msg: "{{ cp_packages | flatten| unique }}"
+    - name: List Keytab file names to be deleted
+      debug:
+        msg: "{{ keytabs_filenames }}"
+    - name: List Linux Groups to be deleted
+      debug:
+        msg: "{{ cp_groups | select() }}"
+    - name: List Linux Users to be deleted
+      debug:
+        msg: "{{ cp_users  | select() }}"
+    - name: List Services to be disabled and deleted
+      debug:
+        msg: "{{ cp_services | select() }}"
+    - name: List Data and config Directories to be deleted
+      debug:
+        msg:
+          - "{{ logs_dir | select() }}"
+          - "{{ ssl_items | select() }}"
+          - "{{ secrets_protection_files | select() }}"
+          - "{{ config_dirs | select() }}"
+          - "{{ data_dirs | select() }}"
+
+    - name: Re-confirm
+      pause:
+        prompt: "Do you still want to proceed? Press Enter to Proceed to Next Node. Ctrl + C to Abort"
+
+    - name: Gather OS Facts
+      setup:
+        filter: "{{item}}"
+        gather_subset:
+          - '!all'
+      loop:
+        - ansible_os_family
+        - ansible_fqdn
+
+    - name: Stop all services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop: "{{ cp_services | select() }}"
+      ignore_errors: True
+
+    - name: Remove service overrides
+      ansible.builtin.file:
+        path: /usr/lib/systemd/system/{{ item }}.service
+        state: absent
+      loop: "{{ cp_services | select() }}"
+
+    - name: Remove override directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/{{ item }}.service.d
+        state: absent
+      loop: "{{ cp_services | select() }}"
+
+    - name: Remove all Data directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ data_dirs | select() }}"
+      when: data_dirs is defined
+
+    - name: Remove Complete ssl directory
+      ansible.builtin.file:
+        path: "{{ (ssl_file_dir }}"
+        state: absent
+      when: delete_ssl_dir is defined and delete_ssl_dir|bool
+
+    - name: Remove Certs
+      ansible.builtin.file:
+        path: "{{ (ssl_file_dir , item ) | path_join }}"
+        state: absent
+      loop: "{{ ssl_items | select() }}"
+      when: not delete_ssl_dir is defined
+
+    - name: Remove Secrets Protection File
+      ansible.builtin.file:
+        path: "{{ (ssl_file_dir , item ) | path_join }}"
+        state: absent
+      loop: "{{ secrets_protection_files | select() }}"
+      when: not delete_ssl_dir is defined
+
+    - name: Remove logs Dirs
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ logs_dir | select() }}"
+
+    - name: Remove config Dirs
+      ansible.builtin.file:
+        path: "{{ (config_base_path, item) | path_join }}"
+        state: absent
+      loop: "{{ config_dirs | select() }}"
+
+    - name: Remove keytabs
+      ansible.builtin.file:
+        path: /etc/security/keytabs/{{ item }}.keytab
+        state: absent
+      loop: "{{ keytabs_filenames | select() }}"
+
+    - name: Remove all else
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ custom_dirs }}"
+      when: custom_dirs is defined
+
+    - name: Uninstall the RedHat packages installed by cp-ansible Playbook
+      yum:
+        name: "{{item}}{{confluent_package_redhat_suffix}}"
+        state: absent
+      loop: "{{ cp_packages | select() | flatten| unique }}"
+      when:
+        - ansible_os_family == "RedHat"
+        - installation_method == "package"
+      tags: package
+
+    - name: Unnstall all the Debian packages installed by cp-ansible Playbook
+      apt:
+        name: "{{item}}{{confluent_package_debian_suffix}}"
+        state: absent
+      loop: "{{ cp_packages | select() | flatten| unique }}"
+      when:
+        - ansible_os_family == "Debian"
+        - installation_method == "package"
+      tags: package
+
+    - name: Remove Users
+      user:
+        name: "{{item}}"
+        state: absent
+          #        group: "{{ cp_groups[0] }}"
+      loop: "{{ cp_users }}"
+
+    - name: Remove Group
+      group:
+        state: absent
+        name: "{{ item }}"
+      loop: "{{ cp_groups }}"
+    - name: remove archive
+      ansible.builtin.file:
+        path: "{{ archive_destination_path }}"
+        state: absent
+      when: installation_method == 'archive'
+
+    - name: Just force systemd to reread configs
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Just force systemd to reread configs
+      shell: "systemctl reset-failed"
