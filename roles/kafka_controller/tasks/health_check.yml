@@ -1,14 +1,6 @@
 ---
 # health check for kafka controller
-- name: Add controller listener in client properties
-  shell: |
-    echo confluent.use.controller.listener=true >> {{kafka_controller.client_config_file}}
-  ignore_errors: true
-  changed_when: false
-  check_mode: false
-  when: confluent_server_enabled|bool
-
-- name: Check kafka-metadata-quorum
+- name: Check Kafka Metadata Quorum
   shell: |
     {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-server {{inventory_hostname}}:9093 \
       --command-config {{kafka_controller.client_config_file}} describe --replication
@@ -17,19 +9,18 @@
   ignore_errors: false
   changed_when: false
   check_mode: false
-  when: confluent_server_enabled|bool # metadata-quorum doesn't work on community kafka
 
+#Registers LEO of controllers only if Metadata Quorum passed in the above task
 - name: Register LogEndOffset
   shell: |
     {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-server {{inventory_hostname}}:9093 \
-      --command-config {{kafka_controller.client_config_file}} describe --replication | awk '{print $2}'
+      --command-config {{kafka_controller.client_config_file}} describe --replication |  grep -v Observer | awk '{print $2}'
   environment:
     KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
   register: LEO
   ignore_errors: false
   changed_when: false
   check_mode: false
-  when: confluent_server_enabled|bool
 
 - name: Check LogEndOffset values
   assert:
@@ -41,4 +32,3 @@
   ignore_errors: false
   changed_when: false
   check_mode: false
-  when: confluent_server_enabled|bool
