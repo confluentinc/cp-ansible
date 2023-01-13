@@ -121,20 +121,20 @@
         - ansible_os_family
         - ansible_fqdn
 
-    - name: Stop all services
+    - name: Stop all CP services
       ansible.builtin.systemd:
         name: "{{ item }}"
         state: stopped
       loop: "{{ cp_services | select() }}"
       ignore_errors: True
 
-    - name: Remove service overrides
+    - name: Remove Service overrides
       ansible.builtin.file:
         path: /usr/lib/systemd/system/{{ item }}.service
         state: absent
       loop: "{{ cp_services | select() }}"
 
-    - name: Remove override directory
+    - name: Remove Service override directory
       ansible.builtin.file:
         path: /etc/systemd/system/{{ item }}.service.d
         state: absent
@@ -147,13 +147,15 @@
       loop: "{{ data_dirs | select() }}"
       when: data_dirs is defined
 
+# Optionally we can chose to delete entire ssl file. provide -e delete_ssl_dir=true
+# This may not be a good idea if keystore/trustStore or certs are remote
     - name: Remove Complete ssl directory
       ansible.builtin.file:
         path: "{{ (ssl_file_dir }}"
         state: absent
       when: delete_ssl_dir is defined and delete_ssl_dir|bool
 
-    - name: Remove Certs
+    - name: Remove Certs and KS/TS files
       ansible.builtin.file:
         path: "{{ (ssl_file_dir , item ) | path_join }}"
         state: absent
@@ -179,13 +181,14 @@
         state: absent
       loop: "{{ config_dirs | select() }}"
 
-    - name: Remove keytabs
+    - name: Remove keytabs Files
       ansible.builtin.file:
         path: /etc/security/keytabs/{{ item }}.keytab
         state: absent
       loop: "{{ keytabs_filenames | select() }}"
 
-    - name: Remove all else
+# Custom directories can also be passed to this play via en variable custom_dirs
+    - name: Remove all custom provided directories
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
@@ -212,14 +215,14 @@
         - installation_method == "package"
       tags: package
 
-    - name: Remove Users
+    - name: Remove Linux Users
       user:
         name: "{{item}}"
         state: absent
           #        group: "{{ cp_groups[0] }}"
       loop: "{{ cp_users }}"
 
-    - name: Remove Group
+    - name: Remove Linux Group
       group:
         state: absent
         name: "{{ item }}"
@@ -230,9 +233,9 @@
         state: absent
       when: installation_method == 'archive'
 
-    - name: Just force systemd to reread configs
+    - name: Force systemd to reread configs
       ansible.builtin.systemd:
         daemon_reload: yes
 
-    - name: Just force systemd to reread configs
+    - name: Force systemd to reread configs
       shell: "systemctl reset-failed"
