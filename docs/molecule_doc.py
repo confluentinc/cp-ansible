@@ -74,6 +74,7 @@ for item in directory_contents:
     if os.path.isdir(full_path):
         scenario_name.append(item)
 
+scenario_name.sort()
 # Call function to write content to docs file
 parse_molecule_scenario(scenario_name, docs_file)
 
