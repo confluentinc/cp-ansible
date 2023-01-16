@@ -4,6 +4,41 @@
 ### Validates that FIPS security is enabled on the Brokers.
 ### Validates that logredactor is functioning properly for all components as per the rule file.
 
+- name: Verify - kafka_controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /opt/confluent/etc/controller/server.properties
+        property: controller.quorum.voters
+        expected_value: "{{ kafka_controller_quorum_voters }}"
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /opt/confluent/etc/controller/server.properties
+        property: process.roles
+        expected_value: controller
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /opt/confluent/etc/controller/server.properties
+        property: listeners
+        expected_value: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /opt/confluent/etc/controller/server.properties
+        property: listener.name.controller.sasl.enabled.mechanisms
+        expected_value: PLAIN
+
 - name: Verify - kafka_broker
   hosts: kafka_broker
   gather_facts: false
@@ -101,13 +136,17 @@
         tasks_from: check_log4j.yml
 
 - name: Verify logredactor
-  hosts: zookeeper:kafka_broker:schema_registry:ksql:kafka_rest:control_center
+  hosts: zookeeper:kafka_controller:kafka_broker:schema_registry:ksql:kafka_rest:control_center
   gather_facts: false
   tasks:
+    - import_role:
+        name: variables
+
     - name: Create a mapping of component and log file
       set_fact:
         component_log_file_mapping:
           zookeeper: "{{zookeeper_log_dir}}/zookeeper-server.log"
+          controller: "{{kafka_controller_log_dir}}/server.log"
           kafka-broker: "{{kafka_broker_log_dir}}/server.log"
           schema-registry: "{{schema_registry_log_dir}}/schema-registry.log"
           kafka-connect: "{{kafka_connect_log_dir}}/connect.log"
