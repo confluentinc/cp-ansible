@@ -4,6 +4,18 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.1.5
+======
+
+Notable enhancements
+-------------
+
+- Dedicated playbook to restart services manually
+- Added provision to configure Kafka Connect Replicator custom rest extension classes
+- Enable running playbook in ansible check mode
+- For archive installations, fixed logic to use `config_prefix` variable for zookeeper, kafka broker, schema registry, kafka connect
+- Introduced new tag `cp_package` for installing/ upgrading confluent packages
+
 v7.1.4
 ======
 
