@@ -1,0 +1,34 @@
+---
+# health check for kafka controller
+- name: Check Kafka Metadata Quorum
+  shell: |
+    {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-server {{inventory_hostname}}:9093 \
+      --command-config {{kafka_controller.client_config_file}} describe --replication
+  environment:
+    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
+  ignore_errors: false
+  changed_when: false
+  check_mode: false
+
+#Registers LEO of controllers only if Metadata Quorum passed in the above task
+- name: Register LogEndOffset
+  shell: |
+    {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-server {{inventory_hostname}}:9093 \
+      --command-config {{kafka_controller.client_config_file}} describe --replication |  grep -v Observer | awk '{print $2}'
+  environment:
+    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
+  register: LEO
+  ignore_errors: false
+  changed_when: false
+  check_mode: false
+
+- name: Check LogEndOffset values
+  assert:
+    that:
+      - "{{ item|int > 0 and LEO.stdout_lines[1:]|max|int - item|int < 1000 }}"
+    fail_msg: "UnreachableQuorumMember or Found at least one quorum voter with an offset {{ item }}, while the primary controller was at offset {{ LEO.stdout_lines[1:]|max}}
+               The max allowed offset lag is 1000"
+  loop: "{{ LEO.stdout_lines[1:] }}"
+  ignore_errors: false
+  changed_when: false
+  check_mode: false

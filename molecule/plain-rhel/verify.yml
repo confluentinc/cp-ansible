@@ -39,10 +39,41 @@
         property: log4j.rootLogger
         expected_value: "INFO, zkAppender"
 
+- name: Verify - kafka_controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: controller.quorum.voters
+        expected_value: "{{ kafka_controller_quorum_voters }}"
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: process.roles
+        expected_value: controller
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: listeners
+        expected_value: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
+
 - name: Verify - kafka_broker
   hosts: kafka_broker
   gather_facts: false
   tasks:
+    - set_fact:
+        kraft_mode: "{{ ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) }}"
+
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
@@ -58,6 +89,7 @@
         file_path: /etc/kafka/server.properties
         property: control.plane.listener.name
         expected_value: CONTROLLER
+      when: not kraft_mode|bool
 
     - import_role:
         name: confluent.test
@@ -81,6 +113,7 @@
         file_path: /etc/kafka/server.properties
         property: listener.name.controller.sasl.enabled.mechanisms
         expected_value: PLAIN
+      when: not kraft_mode|bool
 
     - import_role:
         name: confluent.test

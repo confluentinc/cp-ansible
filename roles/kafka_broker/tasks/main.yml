@@ -15,7 +15,7 @@
     - ansible_fqdn
     - ansible_distribution
 
-# datadir is not supported way to provide data directories for kafka brokers
+# datadir is no longer supported method to provide data directories for kafka brokers
 - name: Assert that datadir is not present in the inventory
   assert:
     that: >
@@ -23,7 +23,7 @@
       hostvars[item].kafka_broker == None or
       'datadir' not in hostvars[item].kafka_broker
     fail_msg: |
-      "Providing 'datadir' in inventory file is no more supported way to configure data directories for kafka brokers."
+      "The 'datadir' configuration property is now obsolete for configuration of kafka broker data directories."
       "Please use 'log.dirs' under kafka_broker_custom_properties with comma separated directories."
   loop: "{{ groups['kafka_broker'] }}"
 
@@ -235,6 +235,10 @@
   tags:
     - configuration
 
+- name: Include Kraft tasks
+  include_tasks: kraft_tasks.yml
+  when: kraft_enabled|bool
+
 # Zookeeper shell cannot read server.properties if secrets protection is enabled. Keeping a separate file.
 - name: Create Zookeeper TLS Client Config
   template:
@@ -361,6 +365,7 @@
   notify: restart kafka
   diff: "{{ not mask_sensitive_diff|bool }}"
 
+# Only runs with zookeeper
 - name: Create Zookeeper chroot
   shell: >
     {{ binary_base_path }}/bin/zookeeper-shell {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} \
@@ -375,6 +380,7 @@
   changed_when: "'Created ' + zookeeper_chroot in create_chroot.stderr"
   when: zookeeper_chroot|length > 0
 
+# Only supported when zookeeper is enabled
 - name: Create SCRAM Users
   shell: |
     {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
@@ -384,9 +390,11 @@
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram_users_final|dict2items }}"
   run_once: true
-  when: "'SCRAM-SHA-512' in kafka_broker_sasl_enabled_mechanisms"
+  when:
+    - "'SCRAM-SHA-512' in kafka_broker_sasl_enabled_mechanisms"
   no_log: "{{mask_secrets|bool}}"
 
+# Only supported when zookeeper is enabled
 - name: Create SCRAM 256 Users
   shell: |
     {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
@@ -396,7 +404,8 @@
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram256_users_final|dict2items }}"
   run_once: true
-  when: "'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms"
+  when:
+    - "'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms"
   no_log: "{{ mask_sensitive_logs|bool }}"
 
 - name: Deploy JMX Exporter Config File
@@ -431,15 +440,6 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - systemd
-
-- name: Create sysctl directory on Debian distributions
-  file:
-    path: /usr/lib/sysctl.d
-    state: directory
-  when: ansible_distribution == "Debian"
-  tags:
-    - sysctl
-    - privileged
 
 - name: Create sysctl directory on Debian distributions
   file:
@@ -488,7 +488,7 @@
   tags:
     - systemd
 
-- name: Wait for health checks to complete
+- name: Wait for Broker health checks to complete
   include_tasks: health_check.yml
   when:
     - kafka_broker_health_checks_enabled|bool

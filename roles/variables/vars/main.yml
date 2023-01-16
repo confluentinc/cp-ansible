@@ -13,8 +13,12 @@ base_path: "{{ ((config_base_path,('confluent-',archive_version) | join) | path_
 
 binary_base_path: "{{ ((config_base_path,('confluent-',archive_version) | join) | path_join) if installation_method == 'archive' else '/usr' }}"
 
+### Runs kafka in Kraft mode if controller is present
+kraft_enabled: "{{ true if 'kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0 else false }}"
+
 #### Config prefix paths ####
 zookeeper_config_prefix_path: "{{ zookeeper_config_prefix.strip('/') }}"
+kafka_controller_config_prefix_path: "{{ kafka_controller_config_prefix.strip('/') }}"
 kafka_broker_config_prefix_path: "{{ kafka_broker_config_prefix.strip('/') }}"
 schema_registry_config_prefix_path: "{{ schema_registry_config_prefix.strip('/') }}"
 kafka_rest_config_prefix_path: "{{ kafka_rest_config_prefix.strip('/') }}"
@@ -104,6 +108,149 @@ zookeeper_combined_properties: "{{ zookeeper_properties | confluent.platform.com
 
 zookeeper_final_properties: "{{ zookeeper_combined_properties | combine(zookeeper_custom_properties) }}"
 
+#### Kafka controller variables
+kafka_controller_service_name: "confluent-kcontroller"
+kafka_controller_main_package: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
+kafka_controller_default_group: confluent
+kafka_controller_default_user: cp-kafka
+kafka_controller_default_log_dir: /var/log/controller
+kafka_controller:
+  server_start_file: "{{ binary_base_path }}/bin/kafka-server-start"
+  config_file: "{{ (config_base_path, kafka_controller_config_prefix_path, 'server.properties') | path_join }}"
+  client_config_file: "{{ (config_base_path, kafka_controller_config_prefix_path, 'client.properties') | path_join }}"
+  systemd_file: "{{systemd_base_dir}}/{{kafka_controller_service_name}}.service"
+  systemd_override: /etc/systemd/system/{{kafka_controller_service_name}}.service.d/override.conf
+  log4j_file: "{{ (base_path, 'etc/kafka/log4j.properties') | path_join }}"
+  jaas_file: "{{ (config_base_path, kafka_controller_config_prefix_path, 'kafka_server_jaas.conf') | path_join }}"
+
+kafka_controller_properties:
+  defaults:
+    enabled: true
+    properties:
+      group.initial.rebalance.delay.ms: 3000
+      log.retention.check.interval.ms: 300000
+      log.retention.hours: 168
+      log.segment.bytes: 1073741824
+      num.io.threads: 16
+      num.network.threads: 8
+      num.partitions: 1
+      num.recovery.threads.per.data.dir: 2
+      offsets.topic.replication.factor: "{{kafka_controller_default_internal_replication_factor}}"
+      socket.receive.buffer.bytes: 102400
+      socket.request.max.bytes: 104857600
+      socket.send.buffer.bytes: 102400
+      transaction.state.log.min.isr: "{{ [ 2, kafka_controller_default_internal_replication_factor|int ] | min }}"
+      transaction.state.log.replication.factor: "{{kafka_controller_default_internal_replication_factor}}"
+      confluent.ansible.managed: 'true'
+      confluent.license.topic: _confluent-command
+      confluent.license.topic.replication.factor: "{{kafka_controller_default_internal_replication_factor}}"
+      confluent.metadata.topic.replication.factor: "{{kafka_controller_default_internal_replication_factor}}"
+      confluent.balancer.topic.replication.factor: "{{kafka_controller_default_internal_replication_factor}}"
+      confluent.security.event.logger.exporter.kafka.topic.replicas: "{{audit_logs_destination_bootstrap_servers.split(',')|length if audit_logs_destination_enabled and rbac_enabled else kafka_controller_default_internal_replication_factor}}"
+      confluent.support.metrics.enable: "true"
+      confluent.support.customer.id: anonymous
+      log.dirs: "/var/lib/controller/data"
+      kafka.rest.enable: "{{kafka_controller_rest_proxy_enabled|string|lower}}"
+      process.roles: controller
+      controller.quorum.voters: "{{ kafka_controller_quorum_voters }}"
+      controller.listener.names: "{{kafka_controller_listeners['controller']['name']}}"
+      listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %}"
+      listeners: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
+      node.id: "{{ node_id|default(groups.kafka_controller.index(inventory_hostname)|int + 9991) if inventory_hostname in groups.kafka_controller else 0}}"
+  kraft_sasl_plain:
+    enabled: "{{kafka_controller_sasl_protocol=='plain'}}"
+    properties:
+      listener.name.controller.plain.sasl.jaas.config: "{{plain_jaas_config}}"
+      sasl.mechanism.controller.protocol: PLAIN
+  ssl:
+    enabled: "{{ kafka_controller_listeners | confluent.platform.ssl_required(kafka_controller_ssl_enabled) }}"
+    properties:
+      ssl.truststore.location: "{{kafka_controller_truststore_path}}"
+      ssl.truststore.password: "{{kafka_controller_truststore_storepass}}"
+      ssl.keystore.location: "{{kafka_controller_keystore_path}}"
+      ssl.keystore.password: "{{kafka_controller_keystore_storepass}}"
+      ssl.key.password: "{{kafka_controller_keystore_storepass}}"
+  fips:
+    enabled: "{{fips_enabled}}"
+    properties:
+      enable.fips: 'true'
+      security.providers: io.confluent.kafka.security.fips.provider.BcFipsProviderCreator,io.confluent.kafka.security.fips.provider.BcFipsJsseProviderCreator
+      ssl.keymanager.algorithm: PKIX
+      ssl.trustmanager.algorithm: PKIX
+      ssl.keystore.type: BCFKS
+      ssl.truststore.type: BCFKS
+      ssl.truststore.location: "{{kafka_controller_truststore_path}}"
+      ssl.truststore.password: "{{kafka_controller_truststore_storepass}}"
+      ssl.keystore.location: "{{kafka_controller_keystore_path}}"
+      ssl.keystore.password: "{{kafka_controller_keystore_storepass}}"
+      ssl.key.password: "{{kafka_controller_keystore_storepass}}"
+      ssl.enabled.protocols: TLSv1.2
+  sasl_enabled:
+    enabled: "{{ kafka_controller_sasl_enabled_mechanisms|length > 0 }}"
+    properties:
+      sasl.enabled.mechanisms: "{% for mechanism in kafka_controller_sasl_enabled_mechanisms %}{% if loop.index > 1%},{% endif %}{{ mechanism|upper }}{% endfor %}"
+  sasl_gssapi:
+    enabled: "{{ 'GSSAPI' in kafka_controller_sasl_enabled_mechanisms }}"
+    properties:
+      sasl.kerberos.service.name: "{{kerberos_kafka_controller_primary}}"
+  rbac:
+    enabled: false
+    properties:
+      authorizer.class.name: io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer
+      # ZK_ACL will not work with Kraft, refer https://cwiki.apache.org/confluence/display/KAFKA/KIP-801%3A+Implement+an+Authorizer+that+stores+metadata+in+__cluster_metadata for details
+      confluent.authorizer.access.rule.providers: CONFLUENT,ZK_ACL
+      super.users: "User:{{ mds_super_user|default('mds') }}"
+  listeners:
+    enabled: true
+    properties: "{{ kafka_controller_listeners | confluent.platform.listener_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
+                    kafka_controller_truststore_path, kafka_controller_truststore_storepass, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
+                    plain_jaas_config, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'), kerberos_kafka_controller_primary,
+                    '', '', '', '', rbac_enabled_public_pem_path ) }}"
+  metrics_reporter:
+    enabled: "{{ kafka_controller_metrics_reporter_enabled|bool }}"
+    properties:
+      metric.reporters: io.confluent.metrics.reporter.ConfluentMetricsReporter
+      confluent.metrics.reporter.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners['internal']['port']|string + ',') }}:{{kafka_broker_listeners['internal']['port']}}"
+      confluent.metrics.reporter.topic.replicas: "{{kafka_broker_default_internal_replication_factor}}"
+  metrics_reporter_client:
+    enabled: "{{ kafka_controller_metrics_reporter_enabled|bool }}"
+    properties: "{{ kafka_broker_listeners['internal'] | confluent.platform.client_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
+                    'confluent.metrics.reporter.', kafka_controller_truststore_path, kafka_controller_truststore_storepass, False, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
+                    false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, '', '', '','',
+                    kerberos_kafka_controller_primary, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
+                    false, kafka_controller_ldap_user, kafka_controller_ldap_password, mds_bootstrap_server_urls) }}"
+  telemetry:
+    enabled: "{{kafka_controller_telemetry_enabled}}"
+    properties:
+      confluent.telemetry.enabled: 'true'
+      confluent.telemetry.api.key: "{{telemetry_api_key}}"
+      confluent.telemetry.api.secret: "{{telemetry_api_secret}}"
+  telemetry_proxy:
+    enabled: "{{kafka_controller_telemetry_enabled and telemetry_proxy_url != ''}}"
+    properties:
+      confluent.telemetry.proxy.url: "{{telemetry_proxy_url}}"
+  telemetry_proxy_auth:
+    enabled: "{{kafka_controller_telemetry_enabled and telemetry_proxy_username != ''}}"
+    properties:
+      confluent.telemetry.proxy.username: "{{telemetry_proxy_username}}"
+      confluent.telemetry.proxy.password: "{{telemetry_proxy_password}}"
+  telemetry_labels:
+    enabled: "{{kafka_controller_telemetry_ansible_labels_enabled}}"
+    properties:
+      confluent.telemetry.labels.confluent.ansible.playbooks.version: "{{confluent_ansible_branch}}"
+
+kafka_controller_combined_properties: "{{kafka_controller_properties | confluent.platform.combine_properties}}"
+
+kafka_controller_final_properties: "{{ kafka_controller_combined_properties | combine(kafka_controller_custom_properties) }}"
+
+# A set of client properties against the controller listener for kafka health checks
+kafka_controller_default_client_properties: "{{ kafka_controller_listeners['controller'] | confluent.platform.client_properties(kafka_controller_ssl_enabled, False, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
+                            '', kafka_controller_pkcs12_truststore_path, kafka_controller_truststore_storepass, False, kafka_controller_pkcs12_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
+                            false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, '', '', '', '',
+                            kerberos_kafka_controller_primary, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
+                            false, kafka_controller_ldap_user, kafka_controller_ldap_password, mds_bootstrap_server_urls) }}"
+
+kafka_controller_client_properties: "{{ kafka_controller_default_client_properties | combine(kafka_controller_custom_client_properties) }}"
 
 #### Kafka Broker Variables ####
 kafka_broker_service_name: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
@@ -143,7 +290,7 @@ kafka_broker_properties:
       socket.send.buffer.bytes: 102400
       transaction.state.log.min.isr: "{{ [ 2, kafka_broker_default_internal_replication_factor|int ] | min }}"
       transaction.state.log.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
-      zookeeper.connection.timeout.ms: 18000
+      advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname)  }}:{{ listener['value']['port'] }}{% endfor %}"
       confluent.ansible.managed: 'true'
       confluent.license.topic: _confluent-command
       confluent.license.topic.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
@@ -152,17 +299,34 @@ kafka_broker_properties:
       confluent.security.event.logger.exporter.kafka.topic.replicas: "{{audit_logs_destination_bootstrap_servers.split(',')|length if audit_logs_destination_enabled and rbac_enabled else kafka_broker_default_internal_replication_factor}}"
       confluent.support.metrics.enable: "true"
       confluent.support.customer.id: anonymous
-      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
       log.dirs: "/var/lib/kafka/data"
-      listener.security.protocol.map: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
-      listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['ip'] | default('') }}:{{ listener['value']['port'] }}{% endfor %}"
-      advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname)  }}:{{ listener['value']['port'] }}{% endfor %}"
-      inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
       kafka.rest.enable: "{{kafka_broker_rest_proxy_enabled|string|lower}}"
+  broker_on_controller:
+    enabled: "{{kraft_enabled|bool}}"
+    properties:
+      process.roles: broker
+      controller.quorum.voters: "{{ kafka_controller_quorum_voters }}"
+      controller.listener.names: "{{kafka_controller_listeners['controller']['name']}}"
+      listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %},{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
+      listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['ip'] | default('') }}:{{ listener['value']['port'] }}{% endfor %}"
+      inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
+  broker_on_zookeeper:
+    enabled: "{{not kraft_enabled|bool}}"
+    properties:
+      listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['ip'] | default('') }}:{{ listener['value']['port'] }}{% endfor %}"
+      listener.security.protocol.map: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
+      zookeeper.connection.timeout.ms: 18000
+      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
+      inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
+  kraft_sasl_plain:
+    enabled: "{{kraft_enabled|bool and kafka_controller_sasl_protocol=='plain'}}"
+    properties:
+      listener.name.controller.plain.sasl.jaas.config: "{{plain_jaas_config}}"
+      sasl.mechanism.controller.protocol: PLAIN
   broker_id:
     enabled: "{{ inventory_hostname in groups.kafka_broker }}"
     properties:
-      # broker.id logic depends on inventory hostname being in kafka_broker host list, defaulting to 0 if non kafka host
+      # broker.id logic depends on inventory hostname being in kafka_broker host list, defaulting to 0 if non kafka broker host
       broker.id: "{{ broker_id | default( groups.kafka_broker.index(inventory_hostname) + 1 ) if inventory_hostname in groups.kafka_broker else 0 }}"
   ssl:
     enabled: "{{ zookeeper_ssl_enabled|bool or
@@ -203,21 +367,21 @@ kafka_broker_properties:
   sasl_gssapi:
     enabled: "{{ 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms }}"
     properties:
-      sasl.kerberos.service.name: "{{kerberos_kafka_broker_primary}}"
+      sasl.kerberos.service.name: "{{kerberos_kafka_controller_primary if kraft_enabled|bool else kerberos_kafka_broker_primary}}"
   zk_ssl:
-    enabled: "{{ zookeeper_ssl_enabled }}"
+    enabled: "{{ zookeeper_ssl_enabled and not kraft_enabled|bool}}"
     properties:
       zookeeper.ssl.client.enable: 'true'
       zookeeper.clientCnxnSocket: org.apache.zookeeper.ClientCnxnSocketNetty
       zookeeper.ssl.truststore.location: "{{kafka_broker_pkcs12_truststore_path}}"
       zookeeper.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   zk_mtls:
-    enabled: "{{ zookeeper_client_authentication_type == 'mtls' }}"
+    enabled: "{{ zookeeper_client_authentication_type == 'mtls' and not kraft_enabled|bool }}"
     properties:
       zookeeper.ssl.keystore.location: "{{kafka_broker_pkcs12_keystore_path}}"
       zookeeper.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
   zk_acls:
-    enabled: "{{ zookeeper_client_authentication_type in ['kerberos', 'digest'] }}"
+    enabled: "{{ zookeeper_client_authentication_type in ['kerberos', 'digest'] and not kraft_enabled|bool }}"
     properties:
       zookeeper.set.acl: 'true'
   sr:
@@ -349,7 +513,7 @@ kafka_broker_properties:
                     plain_jaas_config, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'), kerberos_kafka_broker_primary,
                     sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path ) }}"
   controlplane_listener:
-    enabled: "{{ kafka_broker_configure_control_plane_listener|bool and kafka_broker_configure_multiple_listeners|bool }}"
+    enabled: "{{ kafka_broker_configure_control_plane_listener|bool and kafka_broker_configure_multiple_listeners|bool and not kraft_enabled|bool}}"
     properties:
       control.plane.listener.name: "{{(kafka_broker_listeners[kafka_broker_control_plane_listener_name]|default(kafka_broker_listeners[kafka_broker_inter_broker_listener_name]))['name']}}"
   metrics_reporter:
