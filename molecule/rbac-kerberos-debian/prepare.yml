@@ -4,3 +4,26 @@
 
 - name: Provision Kerberos Server
   import_playbook: ../kerberos.yml
+
+- name: Copy kerberos client configuration file
+  hosts: zookeeper:kafka_broker:schema_registry:kafka_rest:kafka_connect:ksql:control_center:kafka_connect_replicator
+  tasks:
+    - name: Create a directory if it does not exist
+      ansible.builtin.file:
+        path: "{{ kerberos_client_config_file_dest | dirname }}"
+        state: directory
+        mode: '0755'
+
+    - name: Include vars from test role kerberos
+      ansible.builtin.include_vars:
+        file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/../../test_roles/confluent.test.kerberos/defaults/main.yml"
+
+    - name: Include vars from role kerberos
+      ansible.builtin.include_vars:
+        file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/../../roles/kerberos/defaults/main.yml"
+
+    - name: Copy kerberos client config file
+      template:
+        src: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/../../roles/kerberos/templates/krb5.conf.j2"
+        dest: "{{ kerberos_client_config_file_dest }}"
+        mode: 0755
