@@ -364,7 +364,7 @@ Validates that SASL SSL Protocol is enabled across all components.
 
 Installation of Confluent Platform on centos7.
 
-Kerberos enabled.
+Kerberos enabled with custom client config path
 
 #### Scenario kerberos-rhel verify test's the following:
 
@@ -829,6 +829,8 @@ Installation of Confluent Platform on Debian9.
 RBAC enabled.
 
 Kerberos enabled.
+
+Provided kerberos client config (kerberos_configure:false) file with custom location
 
 Kafka broker custom listener.
 
