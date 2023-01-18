@@ -144,6 +144,7 @@ class Arguments:
         parser.add_argument("--ansible_ssh_private_key_file", type=str, default=None, help="Private key for ssh login")
         parser.add_argument("--ansible_ssh_extra_args", type=str, default=None, help="Extra arguments for ssh")
         parser.add_argument("--ansible_python_interpreter", type=str, default='auto', help="Python interpreter path")
+        parser.add_argument("--output_file", type=str, default='inventory.yml', help="Generated output inventory file")
 
         # Read arguments from command line
         return parser.parse_args()
@@ -172,6 +173,7 @@ class Arguments:
                             ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
                             ansible_python_interpretor=vars.get("ansible_python_interpretor"),
                             verbosity=args.verbosity,
+                            output_file=args.output_file,
                             from_version=vars.get("from_version"))
 
     @classmethod
