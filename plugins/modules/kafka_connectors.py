@@ -88,7 +88,7 @@ def create_new_connector(connect_url, name, config):
     try:
         r = open_url(method='POST', url=connect_url, data=data, headers=headers, validate_certs=False)
     except urllib_error.HTTPError as e:
-        message = "error while updating configuration ({})".format(e)
+        message = "error while adding new connector configuration ({})".format(e)
         return False, False, message
 
     success = r.getcode() in (200, 201, 409)
