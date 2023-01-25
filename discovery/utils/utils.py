@@ -132,7 +132,7 @@ class Arguments:
         parser.add_argument("--input", type=str, help="Input Inventory file")
         parser.add_argument("--hosts", type=str, action="extend", nargs="*", help="List of hosts")
         parser.add_argument("--from_version", type=str, help="Target cp cluster version")
-        parser.add_argument("--verbosity", type=int, default=0, help="Log level")
+        parser.add_argument("--verbosity", type=int, help="Log level")
         parser.add_argument("--ansible_connection", type=str, default=None,
                             help="The connection plugin actually used for the task on the target host.")
 
@@ -153,7 +153,7 @@ class Arguments:
     def validate_args(cls, args):
 
         # Set the default verbosity to INFO level
-        verbosity = args.verbosity if args.verbosity >= 0 and args.verbosity <= 4 else 4
+        verbosity = args.verbosity if args.verbosity and args.verbosity >= 0 and args.verbosity <= 4 else 3
         logger.setLevel((5 - verbosity) * 10)
 
         cls.__validate_hosts(cls.get_hosts(args))
