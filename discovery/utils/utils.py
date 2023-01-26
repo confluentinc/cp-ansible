@@ -136,11 +136,11 @@ class Arguments:
         parser.add_argument("--ansible_connection", type=str, default=None,
                             help="The connection plugin actually used for the task on the target host.")
 
-        parser.add_argument("--ansible_user", type=str, default=None, help="The user Ansible ‘logs in’ as.")
+        parser.add_argument("--ansible_user", type=str, default=None, help="The user Ansible 'logs in' as.")
         parser.add_argument("--ansible_become", type=bool, default=False, help="Boolean to use privileged ")
         parser.add_argument("--ansible_become_method", type=str, default='sudo', help="Method to become privileged")
         parser.add_argument("--ansible_become_user", type=str, default=None,
-                            help="The user Ansible ‘becomes’ after using privilege escalation.")
+                            help="The user Ansible 'becomes' after using privilege escalation.")
         parser.add_argument("--ansible_ssh_private_key_file", type=str, default=None, help="Private key for ssh login")
         parser.add_argument("--ansible_ssh_extra_args", type=str, default=None, help="Extra arguments for ssh")
         parser.add_argument("--ansible_python_interpreter", type=str, default='auto', help="Python interpreter path")
@@ -172,7 +172,6 @@ class Arguments:
                             ansible_user=vars.get("ansible_user"),
                             ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
                             ansible_python_interpretor=vars.get("ansible_python_interpretor"),
-                            verbosity=args.verbosity,
                             output_file=args.output_file,
                             from_version=vars.get("from_version"))
 
@@ -260,6 +259,9 @@ class Arguments:
 
         if args.from_version:
             vars['from_version'] = args.from_version
+
+        if args.ansible_python_interpreter:
+            vars['ansible_python_interpreter'] = args.ansible_python_interpreter
 
         return vars
 
