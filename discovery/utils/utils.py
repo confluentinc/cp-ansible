@@ -103,7 +103,7 @@ class InputContext:
                  ansible_ssh_private_key_file,
                  verbosity,
                  ansible_ssh_extra_args,
-                 ansible_python_interpretor=None,
+                 ansible_python_interpreter=None,
                  from_version=None,
                  output_file=None):
         self.ansible_hosts = ansible_hosts
@@ -115,7 +115,7 @@ class InputContext:
         self.ansible_ssh_private_key_file = ansible_ssh_private_key_file
         self.from_version = from_version
         self.ansible_ssh_extra_args = ansible_ssh_extra_args
-        self.ansible_python_interpreter = ansible_python_interpretor
+        self.ansible_python_interpreter = ansible_python_interpreter
         self.verbosity = verbosity
         self.output_file = output_file
 
@@ -129,22 +129,22 @@ class Arguments:
         parser = argparse.ArgumentParser()
 
         # Adding optional argument
-        parser.add_argument("--input", type=str, help="Input Inventory file")
+        parser.add_argument("--input", type=str, required=True, help="Input Inventory file")
         parser.add_argument("--hosts", type=str, action="extend", nargs="*", help="List of hosts")
         parser.add_argument("--from_version", type=str, help="Target cp cluster version")
-        parser.add_argument("--verbosity", type=int, default=0, help="Log level")
+        parser.add_argument("--verbosity", type=int, help="Log level")
         parser.add_argument("--ansible_connection", type=str, default=None,
                             help="The connection plugin actually used for the task on the target host.")
 
-        parser.add_argument("--ansible_user", type=str, default=None, help="The user Ansible ‘logs in’ as.")
-        parser.add_argument("--ansible_become", type=bool, default=False, help="Boolean to use privileged ")
-        parser.add_argument("--ansible_become_method", type=str, default='sudo', help="Method to become privileged")
+        parser.add_argument("--ansible_user", type=str, default=None, help="The user Ansible 'logs in' as.")
+        parser.add_argument("--ansible_become", type=lambda x: (str(x).lower() == 'true'), help="Boolean to use privileged")
+        parser.add_argument("--ansible_become_method", type=str, help="Method to become privileged")
         parser.add_argument("--ansible_become_user", type=str, default=None,
-                            help="The user Ansible ‘becomes’ after using privilege escalation.")
+                            help="The user Ansible 'becomes' after using privilege escalation.")
         parser.add_argument("--ansible_ssh_private_key_file", type=str, default=None, help="Private key for ssh login")
         parser.add_argument("--ansible_ssh_extra_args", type=str, default=None, help="Extra arguments for ssh")
-        parser.add_argument("--ansible_python_interpreter", type=str, default='auto', help="Python interpreter path")
-        parser.add_argument("--output_file", type=str, default='inventory.yml', help="Generated output inventory file")
+        parser.add_argument("--ansible_python_interpreter", type=str, help="Python interpreter path")
+        parser.add_argument("--output_file", type=str, help="Generated output inventory file")
 
         # Read arguments from command line
         return parser.parse_args()
@@ -152,12 +152,14 @@ class Arguments:
     @classmethod
     def validate_args(cls, args):
 
-        # Set the default verbosity to INFO level
-        verbosity = args.verbosity if args.verbosity >= 0 and args.verbosity <= 4 else 4
-        logger.setLevel((5 - verbosity) * 10)
-
         cls.__validate_hosts(cls.get_hosts(args))
-        cls.__validate_variables(cls.get_vars(args))
+        vars = cls.get_vars(args)
+        cls.__validate_variables(vars)
+
+        # Set the default verbosity to INFO level
+        log_level = vars.get("verbosity")
+        verbosity = log_level if log_level and log_level >= 0 and log_level <= 4 else 3
+        logger.setLevel((5 - verbosity) * 10)
 
     @classmethod
     def get_input_context(cls, args) -> InputContext:
@@ -171,9 +173,9 @@ class Arguments:
                             ansible_ssh_private_key_file=vars.get("ansible_ssh_private_key_file"),
                             ansible_user=vars.get("ansible_user"),
                             ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
-                            ansible_python_interpretor=vars.get("ansible_python_interpretor"),
-                            verbosity=args.verbosity,
-                            output_file=args.output_file,
+                            ansible_python_interpreter=vars.get("ansible_python_interpreter"),
+                            output_file=vars.get("output_file"),
+                            verbosity=vars.get("verbosity"),
                             from_version=vars.get("from_version"))
 
     @classmethod
@@ -237,7 +239,7 @@ class Arguments:
             vars = inventory.get('all').get('vars')
 
         # Override the inventory vars with command line variables.
-        if args.ansible_become:
+        if args.ansible_become is not None:
             vars['ansible_become'] = args.ansible_become
 
         if args.ansible_user:
@@ -260,6 +262,23 @@ class Arguments:
 
         if args.from_version:
             vars['from_version'] = args.from_version
+
+        if args.verbosity:
+            vars['verbosity'] = args.verbosity
+
+        if args.output_file:
+            vars['output_file'] = args.output_file
+
+        if args.ansible_python_interpreter:
+            vars['ansible_python_interpreter'] = args.ansible_python_interpreter
+
+        # set default values of some variables explicitly
+        if vars.get('ansible_python_interpreter') is None:
+            vars['ansible_python_interpreter'] = 'auto'
+        if vars.get('ansible_become_method') is None:
+            vars['ansible_become_method'] = 'sudo'
+        if vars.get('ansible_become') is None:
+            vars['ansible_become'] = False
 
         return vars
 
