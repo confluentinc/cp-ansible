@@ -4,7 +4,7 @@ Though this script tries to come up with inventory which is the closed represent
 
 ### Prerequisites
 #### Software
-- Python 3.9+  
+- Python 3.8+  
 - Ansible 2.11  
 - PyYaml 6.0  
 - ansible_runner (pip)
