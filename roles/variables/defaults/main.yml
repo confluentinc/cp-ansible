@@ -86,6 +86,8 @@ kerberos_configure: true
 kerberos_kafka_broker_primary: "{{ (hostvars[ groups['kafka_broker'][0] | default('kafka') ] | default({})) ['kafka_broker_kerberos_principal'] | default('kafka/host@EXAMPLE>COM') | regex_replace('/.*') }}"
 
 
+kerberos_keytabs_dir: /etc/security/keytabs
+
 # TODO document the rest of the kerberos variables, also admin_hostname should default to kdc_hostname
 
 open_file_limit: 500000
@@ -146,7 +148,7 @@ control_center_health_checks_enabled: "{{health_checks_enabled}}"
 
 common_role_completed: false
 
-proxy_env: {}
+env_vars: {}
 
 ### Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
 monitoring_interceptors_enabled: "{{ 'control_center' in groups }}"
@@ -339,7 +341,7 @@ zookeeper_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 zookeeper_cert_path: "{{ ssl_file_dir_final }}/zookeeper.crt"
 zookeeper_key_path: "{{ ssl_file_dir_final }}/zookeeper.key"
 zookeeper_export_certs: "{{ True if zookeeper_client_authentication_type == 'mtls' or zookeeper_quorum_authentication_type in ['mtls', 'digest_over_tls'] else False }}"
-zookeeper_keytab_path: /etc/security/keytabs/zookeeper.keytab
+zookeeper_keytab_path: "{{ kerberos_keytabs_dir }}/zookeeper.keytab"
 
 ### Boolean to enable Jolokia Agent installation and configuration on zookeeper
 zookeeper_jolokia_enabled: "{{jolokia_enabled}}"
@@ -491,7 +493,7 @@ kafka_broker_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 kafka_broker_cert_path: "{{ ssl_file_dir_final }}/kafka_broker.crt"
 kafka_broker_key_path: "{{ ssl_file_dir_final }}/kafka_broker.key"
 kafka_broker_export_certs: "{{ssl_mutual_auth_enabled}}"
-kafka_broker_keytab_path: /etc/security/keytabs/kafka_broker.keytab
+kafka_broker_keytab_path: "{{ kerberos_keytabs_dir }}/kafka_broker.keytab"
 
 ### Boolean to configure Schema Validation on Kafka
 kafka_broker_schema_validation_enabled: true
@@ -614,7 +616,7 @@ schema_registry_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 schema_registry_cert_path: "{{ ssl_file_dir_final }}/schema_registry.crt"
 schema_registry_key_path: "{{ ssl_file_dir_final }}/schema_registry.key"
 schema_registry_export_certs: "{{ True if schema_registry_authentication_type == 'mtls' else False }}"
-schema_registry_keytab_path: /etc/security/keytabs/schema_registry.keytab
+schema_registry_keytab_path: "{{ kerberos_keytabs_dir }}/schema_registry.keytab"
 schema_registry_kafka_listener_name: internal
 
 ### Boolean to enable Jolokia Agent installation and configuration on schema registry
@@ -711,7 +713,7 @@ kafka_rest_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 kafka_rest_cert_path: "{{ ssl_file_dir_final }}/kafka_rest.crt"
 kafka_rest_key_path: "{{ ssl_file_dir_final }}/kafka_rest.key"
 kafka_rest_export_certs: "{{ True if kafka_rest_authentication_type == 'mtls' else False }}"
-kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
+kafka_rest_keytab_path: "{{ kerberos_keytabs_dir }}/kafka_rest.keytab"
 kafka_rest_kafka_listener_name: internal
 
 ### Boolean to enable Jolokia Agent installation and configuration on Rest Proxy
@@ -817,7 +819,7 @@ kafka_connect_ca_cert_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_n
 kafka_connect_cert_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.crt' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.crt'}}"
 kafka_connect_key_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.key' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.key'}}"
 kafka_connect_export_certs: "{{ True if kafka_connect_authentication_type == 'mtls' else False }}"
-kafka_connect_keytab_path: /etc/security/keytabs/kafka_connect.keytab
+kafka_connect_keytab_path: "{{ kerberos_keytabs_dir }}/kafka_connect.keytab"
 kafka_connect_kafka_listener_name: internal
 
 ### Allows you to select a custom kafka listener for Kafka Connect producers
@@ -953,7 +955,7 @@ ksql_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 ksql_cert_path: "{{ ssl_file_dir_final }}/ksql.crt"
 ksql_key_path: "{{ ssl_file_dir_final }}/ksql.key"
 ksql_export_certs: "{{ True if ksql_authentication_type == 'mtls' else False }}"
-ksql_keytab_path: /etc/security/keytabs/ksql.keytab
+ksql_keytab_path: "{{ kerberos_keytabs_dir }}/ksql.keytab"
 ksql_kafka_listener_name: internal
 ksql_processing_log_kafka_listener_name: "{{kafka_broker_inter_broker_listener_name if rbac_enabled else ksql_kafka_listener_name}}"
 
@@ -1066,7 +1068,7 @@ control_center_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 control_center_cert_path: "{{ ssl_file_dir_final }}/control_center.crt"
 control_center_key_path: "{{ ssl_file_dir_final }}/control_center.key"
 control_center_export_certs: "{{ssl_mutual_auth_enabled}}"
-control_center_keytab_path: /etc/security/keytabs/control_center.keytab
+control_center_keytab_path: "{{ kerberos_keytabs_dir }}/control_center.keytab"
 control_center_kafka_listener_name: internal
 
 ### Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
@@ -1790,8 +1792,8 @@ kafka_connect_replicator_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_r
 kafka_connect_replicator_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.crt"
 kafka_connect_replicator_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.key"
 kafka_connect_replicator_export_certs: kafka_connect_replicator_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
-kafka_connect_replicator_keytab_path: /etc/security/keytabs/kafka_connect_replicator.keytab
-kafka_connect_replicator_kerberos_keytab_path: /etc/security/keytabs/kafka_connect_replicator.keytab
+kafka_connect_replicator_keytab_path: "{{ kerberos_keytabs_dir }}/kafka_connect_replicator.keytab"
+kafka_connect_replicator_kerberos_keytab_path: "{{ kerberos_keytabs_dir }}/kafka_connect_replicator.keytab"
 kafka_connect_replicator_listener_name: kafka_connect_replicator_listener
 kafka_connect_replicator_group_id: replicator
 
@@ -1874,8 +1876,8 @@ kafka_connect_replicator_consumer_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_
 kafka_connect_replicator_consumer_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.crt"
 kafka_connect_replicator_consumer_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.key"
 kafka_connect_replicator_consumer_export_certs: kafka_connect_replicator_consumer_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
-kafka_connect_replicator_consumer_keytab_path: /etc/security/keytabs/kafka_connect_replicator_consumer.keytab
-kafka_connect_replicator_consumer_kerberos_keytab_path: /etc/security/keytabs/kafka_connect_replicator_consumer.keytab
+kafka_connect_replicator_consumer_keytab_path: "{{ kerberos_keytabs_dir }}/kafka_connect_replicator_consumer.keytab"
+kafka_connect_replicator_consumer_kerberos_keytab_path: "{{ kerberos_keytabs_dir }}/kafka_connect_replicator_consumer.keytab"
 
 ### Variable to define the location of the Embedded Rest Proxy for configuring RBAC.
 kafka_connect_replicator_consumer_erp_host: localhost:8090
@@ -1956,8 +1958,8 @@ kafka_connect_replicator_producer_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_
 kafka_connect_replicator_producer_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.crt"
 kafka_connect_replicator_producer_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.key"
 kafka_connect_replicator_producer_export_certs: kafka_connect_replicator_producer_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
-kafka_connect_replicator_producer_keytab_path: /etc/security/keytabs/kafka_connect_replicator_producer.keytab
-kafka_connect_replicator_producer_kerberos_keytab_path: /etc/security/keytabs/kafka_connect_replicator_producer.keytab
+kafka_connect_replicator_producer_keytab_path: "{{ kerberos_keytabs_dir }}/kafka_connect_replicator_producer.keytab"
+kafka_connect_replicator_producer_kerberos_keytab_path: "{{ kerberos_keytabs_dir }}/kafka_connect_replicator_producer.keytab"
 
 ### Variable to define the location of the Embedded Rest Proxy for configuring RBAC. Defaults to kafka_connect_replicator_erp_host.
 kafka_connect_replicator_producer_erp_host: "{{ kafka_connect_replicator_erp_host }}"
@@ -2041,7 +2043,7 @@ kafka_connect_replicator_monitoring_interceptor_ca_cert_path: "{{ ssl_file_dir_f
 kafka_connect_replicator_monitoring_interceptor_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.crt"
 kafka_connect_replicator_monitoring_interceptor_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.key"
 kafka_connect_replicator_monitoring_interceptor_export_certs: kafka_connect_replicator_monitoring_interceptor_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
-kafka_connect_replicator_monitoring_interceptor_keytab_path: /etc/security/keytabs/kafka_connect_replicator_monitoring_interceptor.keytab
+kafka_connect_replicator_monitoring_interceptor_keytab_path: "{{ kerberos_keytabs_dir }}/kafka_connect_replicator_monitoring_interceptor.keytab"
 
 ### Additional set of Kafka Connect Replicator extension classes.
 kafka_connect_replicator_custom_rest_extension_classes: []

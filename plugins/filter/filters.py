@@ -12,6 +12,7 @@ class FilterModule(object):
             'get_hostnames': self.get_hostnames,
             'get_roles': self.get_roles,
             'resolve_hostname': self.resolve_hostname,
+            'health_check_hostname': self.health_check_hostname,
             'resolve_hostnames': self.resolve_hostnames,
             'cert_extension': self.cert_extension,
             'ssl_required': self.ssl_required,
@@ -90,6 +91,12 @@ class FilterModule(object):
             return hosts_hostvars_dict.get('hostname', hosts_hostvars_dict.get('ansible_host', hosts_hostvars_dict.get('inventory_hostname')))
         else:
             return hosts_hostvars_dict.get('inventory_hostname')
+
+    def health_check_hostname(self, hosts_hostvars_dict):
+        # if health_check_hostname var is provided, use it for healthcheck; if not, revert to the usual algorithm
+        hc_hostname = hosts_hostvars_dict.get('health_check_hostname')
+        return hc_hostname if hc_hostname else self.resolve_hostname(hosts_hostvars_dict)
+
 
     def resolve_hostnames(self, hosts, hostvars_dict):
         # Given a collection of hosts, usually from a group, will resolve the correct hostname to use for each.

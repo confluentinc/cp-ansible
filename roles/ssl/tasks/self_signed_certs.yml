@@ -29,6 +29,17 @@
     dest: "{{ ssl_file_dir_final }}/generation/openssl-san.cnf"
   diff: "{{ not mask_sensitive_diff|bool }}"
 
+- name: Convert certs to z/OS encoding
+  when: ansible_os_family == 'OS/390'
+  include_role:
+    name: common
+    tasks_from: zos_convert_files.yml
+  vars:
+    paths_to_convert:
+      - "{{ca_cert_path}}"
+      - "{{ca_key_path}}"
+      - "{{ ssl_file_dir_final }}/generation/openssl-san.cnf"
+
 - name: Sign CSR with the Certificate Authority
   shell: |
     openssl x509 -req -CA {{ca_cert_path}} \
@@ -57,6 +68,15 @@
   copy:
     content: "{{ ''.join(self_signed_cert_chain.complete_chain) }}"
     dest: "{{ ssl_file_dir_final }}/{{ service_name }}.chain"
+
+- name: Convert Cert Chain to z/OS encoding
+  when: ansible_os_family == 'OS/390'
+  include_role:
+    name: common
+    tasks_from: zos_convert_files.yml
+  vars:
+    paths_to_convert:
+      - "{{ ssl_file_dir_final }}/{{ service_name }}.chain"
 
 - name: Create Keystore and Truststore from Certs
   include_tasks: create_keystores_from_certs.yml

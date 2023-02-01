@@ -38,34 +38,34 @@
     - validate
     - validate_os_version
 
-- name: Check Internet Access for Confluent Packages/Archive
-  uri:
-    url: "{{confluent_common_repository_baseurl}}"
-    status_code:
-      - 200
-      - 302
-      - 307
-  when: >
-    ( installation_method == 'package' and repository_configuration == 'confluent') or
-    ( installation_method == 'archive' and confluent_common_repository_baseurl in confluent_archive_file_source )
-  ignore_errors: true
-  register: internet_access_check
-  tags:
-    - validate
-    - validate_internet_access
-  environment: "{
-    {% if 'http_proxy' in proxy_env or 'https_proxy' in proxy_env %}
-      'http_proxy': '{{ proxy_env.http_proxy if 'http_proxy' in proxy_env else proxy_env.https_proxy}}',
-      'https_proxy': '{{ proxy_env.https_proxy if 'https_proxy' in proxy_env else proxy_env.http_proxy }}'
-    {% endif %}
-  }"
+- name: Check Internet Access
+  # for z/OS we don't download the archive from the internet
+  # but rather download it locally on your laptop, and then push to z/os node
+  when: ansible_os_family != "OS/390"
+  block:
+    - name: Check Internet Access for Confluent Packages/Archive
+      uri:
+        url: "{{confluent_common_repository_baseurl}}"
+        status_code:
+          - 200
+          - 302
+          - 307
+      when: >
+        ( installation_method == 'package' and repository_configuration == 'confluent') or
+        ( installation_method == 'archive' and confluent_common_repository_baseurl in confluent_archive_file_source )
+      ignore_errors: true
+      register: internet_access_check
+      tags:
+        - validate
+        - validate_internet_access
+      environment: "{{ env_vars }}"
 
-- name: Fail Provisioning because No Network Connectivity
-  fail:
-    msg: >-
-      Failed to connect to Package Repository at {{confluent_common_repository_baseurl}} from Host.
-      Confirm network connectivity. To skip host validations, set validate_hosts to false.
-  when: internet_access_check.failed | default(False)
+    - name: Fail Provisioning because No Network Connectivity
+      fail:
+        msg: >-
+          Failed to connect to Package Repository at {{confluent_common_repository_baseurl}} from Host.
+          Confirm network connectivity. To skip host validations, set validate_hosts to false.
+      when: internet_access_check.failed | default(False)
 
 - name: Check /tmp directory details
   stat:
@@ -91,111 +91,114 @@
       "Not enough free disk space for package installation.  Minimum space required is {{ required_disk_space_mb }}MB, please free up more disk space
        to continue installation. To skip host validations, set validate_hosts to false."
   when: (item.size_available < required_disk_space_mb|float)
-  with_items: "{{ ansible_mounts }}"
+  with_items: "{{ ansible_mounts if ansible_mounts is defined else {} }}"
   tags:
     - validate
     - validate_disk_usage
 
-- name: Validate enough free memory for Zookeeper hosts
-  assert:
-    that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_zookeeper }}|float
-    fail_msg: >-
-      "Not enough memory to run Zookeeper. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
-      Minimum memory required is {{ required_total_memory_mb_zookeeper }}MB, please add more memory to host
-      or choose a different host to install Zookeeper to continue installation."
-  when: groups['zookeeper'] is defined and inventory_hostname in groups['zookeeper']
-  tags:
-    - validate
-    - validate_memory_usage
-    - validate_memory_usage_zookeeper
+- name: Validate memory usage
+  when: ansible_memory_mb is defined
+  block:
+    - name: Validate enough free memory for Zookeeper hosts
+      assert:
+        that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_zookeeper }}|float
+        fail_msg: >-
+          "Not enough memory to run Zookeeper. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
+          Minimum memory required is {{ required_total_memory_mb_zookeeper }}MB, please add more memory to host
+          or choose a different host to install Zookeeper to continue installation."
+      when: groups['zookeeper'] is defined and inventory_hostname in groups['zookeeper']
+      tags:
+        - validate
+        - validate_memory_usage
+        - validate_memory_usage_zookeeper
 
-- name: Validate enough free memory for Kafka Broker hosts
-  assert:
-    that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_kafka_broker }}|float
-    fail_msg: >-
-      "Not enough memory to run Kafka Broker. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
-      Minimum memory required is {{ required_total_memory_mb_kafka_broker }}MB, please add more memory to host
-      or choose a different host to install Kafka Broker to continue installation."
-  when: groups['kafka_broker'] is defined and inventory_hostname in groups['kafka_broker']
-  tags:
-    - validate
-    - validate_memory_usage
-    - validate_memory_usage_kafka_broker
+    - name: Validate enough free memory for Kafka Broker hosts
+      assert:
+        that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_kafka_broker }}|float
+        fail_msg: >-
+          "Not enough memory to run Kafka Broker. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
+          Minimum memory required is {{ required_total_memory_mb_kafka_broker }}MB, please add more memory to host
+          or choose a different host to install Kafka Broker to continue installation."
+      when: groups['kafka_broker'] is defined and inventory_hostname in groups['kafka_broker']
+      tags:
+        - validate
+        - validate_memory_usage
+        - validate_memory_usage_kafka_broker
 
-- name: Validate enough free memory for Kafka Connect hosts
-  assert:
-    that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_kafka_connect }}|float
-    fail_msg: >-
-      "Not enough memory to run Kafka Connect. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
-      Minimum memory required is {{ required_total_memory_mb_kafka_connect }}MB, please add more memory to host
-      or choose a different host to install Kafka Connect to continue installation."
-  when: groups['kafka_connect'] is defined and inventory_hostname in groups['kafka_connect']
-  tags:
-    - validate
-    - validate_memory_usage
-    - validate_memory_usage_kafka_connect
+    - name: Validate enough free memory for Kafka Connect hosts
+      assert:
+        that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_kafka_connect }}|float
+        fail_msg: >-
+          "Not enough memory to run Kafka Connect. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
+          Minimum memory required is {{ required_total_memory_mb_kafka_connect }}MB, please add more memory to host
+          or choose a different host to install Kafka Connect to continue installation."
+      when: groups['kafka_connect'] is defined and inventory_hostname in groups['kafka_connect']
+      tags:
+        - validate
+        - validate_memory_usage
+        - validate_memory_usage_kafka_connect
 
-- name: Validate enough free memory for Schema Registry hosts
-  assert:
-    that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_schema_registry }}|float
-    fail_msg: >-
-      "Not enough memory to run Schema Registry. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
-      Minimum memory required is {{ required_total_memory_mb_schema_registry }}MB, please add more memory to host
-      or choose a different host to install Kafka Connect to continue installation."
-  when: groups['schema_registry'] is defined and inventory_hostname in groups['schema_registry']
-  tags:
-    - validate
-    - validate_memory_usage
-    - validate_memory_usage_schema_registry
+    - name: Validate enough free memory for Schema Registry hosts
+      assert:
+        that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_schema_registry }}|float
+        fail_msg: >-
+          "Not enough memory to run Schema Registry. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
+          Minimum memory required is {{ required_total_memory_mb_schema_registry }}MB, please add more memory to host
+          or choose a different host to install Kafka Connect to continue installation."
+      when: groups['schema_registry'] is defined and inventory_hostname in groups['schema_registry']
+      tags:
+        - validate
+        - validate_memory_usage
+        - validate_memory_usage_schema_registry
 
-- name: Validate enough free memory for KSQL hosts
-  assert:
-    that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_ksql }}|float
-    fail_msg: >-
-      "Not enough memory to run KSQL. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
-      Minimum memory required is {{ required_total_memory_mb_ksql }}MB, please add more memory to host
-      or choose a different host to install Kafka Connect to continue installation."
-  when: groups['ksql'] is defined and inventory_hostname in groups['ksql']
-  tags:
-    - validate
-    - validate_memory_usage
-    - validate_memory_usage_ksql
+    - name: Validate enough free memory for KSQL hosts
+      assert:
+        that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_ksql }}|float
+        fail_msg: >-
+          "Not enough memory to run KSQL. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
+          Minimum memory required is {{ required_total_memory_mb_ksql }}MB, please add more memory to host
+          or choose a different host to install Kafka Connect to continue installation."
+      when: groups['ksql'] is defined and inventory_hostname in groups['ksql']
+      tags:
+        - validate
+        - validate_memory_usage
+        - validate_memory_usage_ksql
 
-- name: Validate enough free memory for Rest Proxy hosts
-  assert:
-    that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_kafka_rest }}|float
-    fail_msg: >-
-      "Not enough memory to run Kafka Rest Proxy. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
-      Minimum memory required is {{ required_total_memory_mb_kafka_rest }}MB, please add more memory to host
-      or choose a different host to install Rest Proxy to continue installation."
-  when: groups['kafka_rest'] is defined and inventory_hostname in groups['kafka_rest']
-  tags:
-    - validate
-    - validate_memory_usage
-    - validate_memory_usage_kafka_rest_proxy
+    - name: Validate enough free memory for Rest Proxy hosts
+      assert:
+        that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_kafka_rest }}|float
+        fail_msg: >-
+          "Not enough memory to run Kafka Rest Proxy. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
+          Minimum memory required is {{ required_total_memory_mb_kafka_rest }}MB, please add more memory to host
+          or choose a different host to install Rest Proxy to continue installation."
+      when: groups['kafka_rest'] is defined and inventory_hostname in groups['kafka_rest']
+      tags:
+        - validate
+        - validate_memory_usage
+        - validate_memory_usage_kafka_rest_proxy
 
-- name: Validate enough free memory for Control Center hosts
-  assert:
-    that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_control_center }}|float
-    fail_msg: >-
-      "Not enough memory to run Control Center. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
-      Minimum memory required is {{ required_total_memory_mb_control_center }}MB, please add more memory to host
-      or choose a different host to install Control Center to continue installation."
-  when: groups['control_center'] is defined and inventory_hostname in groups['control_center']
-  tags:
-    - validate
-    - validate_memory_usage
-    - validate_memory_usage_control_center
+    - name: Validate enough free memory for Control Center hosts
+      assert:
+        that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_control_center }}|float
+        fail_msg: >-
+          "Not enough memory to run Control Center. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
+          Minimum memory required is {{ required_total_memory_mb_control_center }}MB, please add more memory to host
+          or choose a different host to install Control Center to continue installation."
+      when: groups['control_center'] is defined and inventory_hostname in groups['control_center']
+      tags:
+        - validate
+        - validate_memory_usage
+        - validate_memory_usage_control_center
 
-- name: Validate enough free memory for Kafka Connect Replicator hosts
-  assert:
-    that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_kafka_connect_replicator }}|float
-    fail_msg: >-
-      "Not enough memory to run Kafka Connect Replicator. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
-      Minimum memory required is {{ required_total_memory_mb_kafka_connect_replicator }}MB, please add more memory to host
-      or choose a different host to install Kafka Connect Replicator to continue installation."
-  when: groups['kafka_connect_replicator'] is defined and inventory_hostname in groups['kafka_connect_replicator']
-  tags:
-    - validate
-    - validate_memory_usage
-    - validate_memory_usage_kafka_connect_replicator
+    - name: Validate enough free memory for Kafka Connect Replicator hosts
+      assert:
+        that: ansible_memory_mb.nocache.free > {{ required_total_memory_mb_kafka_connect_replicator }}|float
+        fail_msg: >-
+          "Not enough memory to run Kafka Connect Replicator. Only {{ ansible_memory_mb.nocache.free }}MB of free memory detected.
+          Minimum memory required is {{ required_total_memory_mb_kafka_connect_replicator }}MB, please add more memory to host
+          or choose a different host to install Kafka Connect Replicator to continue installation."
+      when: groups['kafka_connect_replicator'] is defined and inventory_hostname in groups['kafka_connect_replicator']
+      tags:
+        - validate
+        - validate_memory_usage
+        - validate_memory_usage_kafka_connect_replicator
