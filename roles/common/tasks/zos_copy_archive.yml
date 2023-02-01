@@ -1,0 +1,71 @@
+---
+- name: fail if archive path is not a url
+  fail:
+    msg: confluent_archive_file_source must be a url
+  when: not confluent_archive_file_source is match('http.*')
+
+- stat:
+    path: "{{base_path}}"
+  register: base_path_stat
+
+- when: base_path_stat.stat.exists|bool
+  debug:
+    msg: Skip downloading and unpacking the archive since {{base_path}} is already present
+
+- name: Download and unpack archive if it's not present
+  when: not base_path_stat.stat.exists|bool
+  block:
+    - name: create local temp folder
+      delegate_to: localhost
+      vars:
+        ansible_become: false
+      tempfile:
+        state: directory
+        suffix: confluent-archive
+      register: local_tempdir
+
+    - set_fact:
+        archive_basename: "{{ confluent_archive_file_source | basename }}"
+    - set_fact:
+        archive_basename_unzipped: "{{ archive_basename | splitext | first }}"
+    - set_fact:
+        archive_path_local: "{{local_tempdir.path}}/{{ archive_basename }}"
+        # archive_path_local: "{{local_tempdir.path}}/{{ confluent_archive_file_source | basename }}"
+        archive_path_local_unzipped: "{{local_tempdir.path}}/{{ archive_basename_unzipped }}"
+        # archive_path_local_unzipped: "{{local_tempdir.path}}/{{ confluent_archive_file_source | basename | splitext | first }}"
+
+    - name: download tgz to localhost
+      delegate_to: localhost
+      vars:
+        ansible_become: false
+      uri:
+        url: "{{ confluent_archive_file_source }}"
+        dest: "{{ archive_path_local }}"
+        creates: "{{ archive_path_local }}"
+    - name: unzip (but not untar) the archive
+      shell: "/usr/bin/gunzip -f {{ archive_path_local }}"
+      delegate_to: localhost
+      vars:
+        ansible_become: false
+      args:
+        chdir: "{{ local_tempdir.path }}"
+        creates: "{{ archive_path_local_unzipped }}"
+
+    - name: copy unzipped tar file to the remote node
+      copy:
+      # ibm.ibm_zos_core.zos_copy:
+        src: "{{ archive_path_local_unzipped }}"
+        dest: "{{archive_destination_path}}"
+        # is_binary: yes
+        # validate: yes
+    - name: unpack the archive on the remote node
+      shell: "tar xf {{archive_destination_path}}/{{ archive_basename_unzipped }}"
+      args:
+        chdir: "{{ archive_destination_path }}"
+
+    - name: convert bin and etc contents
+      include_tasks: zos_convert_files.yml
+      vars:
+        paths_to_convert:
+          - "{{ base_path }}/bin"
+          - "{{ base_path }}/etc"

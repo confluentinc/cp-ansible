@@ -1,0 +1,51 @@
+---
+- name: Ensure Plugin Dirs
+  file:
+    path: "{{item}}"
+    state: directory
+    group: "{{kafka_connect_group}}"
+    owner: "{{kafka_connect_user}}"
+    mode: 0755
+  when: item != '/usr/share/java'
+  with_items: "{{ kafka_connect_final_properties['plugin.path'].split(',') }}"
+
+- name: Transfer local plugin zip files to the remote host
+  copy:
+    src: "{{ item }}"
+    dest: "{{kafka_connect_plugins_dest}}/"
+  with_items: "{{kafka_connect_plugins}}"
+  when: kafka_connect_plugins|length > 0
+
+- name: Download remote plugins
+  uri:
+    status_code:
+      - 200
+      - 304
+    url: "{{ item }}"
+    dest: "{{ kafka_connect_plugins_dest }}/"
+  environment:
+    SSL_CERT_FILE: "{{ ssl_cert_file }}"
+  with_items: "{{kafka_connect_plugins_remote}}"
+  when: kafka_connect_plugins_remote|length > 0
+
+- name: Gather all zip files
+  find:
+    paths: "{{ kafka_connect_plugins_dest }}"
+    patterns:
+      - "*.zip"
+  register: kafka_connect_plugins_zip_files
+
+- name: Unzip all plugins
+  when: kafka_connect_plugins_zip_files|length > 0
+  shell: 'find ./ -name "*.zip" -exec jar -xf {} \;'
+  args:
+    chdir: "{{kafka_connect_plugins_dest}}"
+
+- name: Delete downloaded zip files
+  shell: 'rm -f *.zip'
+  args:
+    chdir: "{{ kafka_connect_plugins_dest }}"
+
+- debug:
+    msg: Confluent hub plugins are not supported on z/OS
+  when: kafka_connect_confluent_hub_plugins|length > 0
