@@ -5,21 +5,30 @@
     dest: /etc/krb5.conf
   when: kerberos_configure|bool
 
-- name: Copy the client configuration file
-  template:
-    src: krb5.conf.j2
-    dest: /etc/krb5/krb5.conf
-  when: kerberos_configure|bool
-
-- name: Convert kerberos files to z/OS encoding
+- name: Kerberos on z/OS
   when: ansible_os_family == "OS/390"
-  include_role:
-    name: common
-    tasks_from: zos_convert_files.yml
-  vars:
-    paths_to_convert:
-      - /etc/krb5.conf
-      - /etc/krb5/krb5.conf
+  block:
+    - name: Create /etc/krb5 folder
+      file:
+        path: /etc/krb5
+        state: directory
+    # I don't really know which one will be used
+    # but most docs seem to refer to /etc/krb5/krb5.conf on z/os
+    # it wouldn't hurt to keep both /etc/krb5.conf and /etc/krb5/krb5.conf tho
+    - name: Copy the client configuration file
+      template:
+        src: krb5.conf.j2
+        dest: /etc/krb5/krb5.conf
+      when: kerberos_configure|bool
+    - name: Convert kerberos files to z/OS encoding
+      when: ansible_os_family == "OS/390"
+      include_role:
+        name: common
+        tasks_from: zos_convert_files.yml
+      vars:
+        paths_to_convert:
+          - /etc/krb5.conf
+          - /etc/krb5/krb5.conf
 
 - name: Create Keytabs Directory
   file:
