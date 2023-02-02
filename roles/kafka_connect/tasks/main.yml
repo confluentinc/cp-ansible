@@ -149,8 +149,7 @@
     service_name: "{{ kafka_connect_service_name if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect' }}"
     user: "{{kafka_connect_user}}"
     group: "{{kafka_connect_group}}"
-    # hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit), health_check_hostname|default(omit)] | unique }}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
     ca_cert_path: "{{kafka_connect_ca_cert_path}}"
     cert_path: "{{kafka_connect_cert_path}}"
     key_path: "{{kafka_connect_key_path}}"
@@ -174,18 +173,17 @@
     kerberos_handler: "restart connect distributed"
   when: kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'GSSAPI'
 
-# # TODO: copy_files.yml has to be modified to conditionally invoke zos_copy if using z/OS
-# - name: Copy Kafka Connect Files
-#   include_role:
-#     name: common
-#     tasks_from: copy_files.yml
-#   vars:
-#     copy_files: "{{kafka_connect_copy_files}}"
-#     user: "{{kafka_connect_user}}"
-#     group: "{{kafka_connect_group}}"
-#   when: kafka_connect_copy_files | length > 0
-#   tags:
-#     - configuration
+- name: Copy Kafka Connect Files
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{kafka_connect_copy_files}}"
+    user: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+  when: kafka_connect_copy_files | length > 0
+  tags:
+    - configuration
 
 - name: Configure RBAC
   include_tasks: rbac.yml
@@ -201,13 +199,6 @@
   tags:
     - filesystem
 
-# TODO: template works but needs encoding conversion
-#       in fact we'll need encoding conversion for a ton of files
-#       so might as well just create a separate step for it
-#       maybe a yaml file under roles/common/tasks ?
-# TODO: full list of files that need conversion
-#       gather all the names under one variable under vars or defaults or something
-#       and then iterate when ready?
 - name: Create Kafka Connect Config
   template:
     src: connect-distributed.properties.j2
@@ -422,12 +413,12 @@
     parent_kafka_connect_cluster_group: "{{ (group_names | difference(keywords))[0] | default('kafka_connect') }}"
     parent_kafka_connect_cluster_id: "{{ kafka_connect_final_properties['group.id'] }}"
 
-# - name: Register Cluster
-#   include_tasks: register_cluster.yml
-#   run_once: true
+- name: Register Cluster
+  include_tasks: register_cluster.yml
+  run_once: true
 
-# - name: Deploy Connectors
-#   include_tasks: deploy_connectors.yml
+- name: Deploy Connectors
+  include_tasks: deploy_connectors.yml
 
 - name: Delete temporary keys/certs when keystore and trustore is provided
   file:
