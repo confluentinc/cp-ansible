@@ -1,8 +1,9 @@
 import sys
 
 from discovery.service.service import AbstractPropertyBuilder
-from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
+from discovery.utils.constants import DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
+from discovery.utils.services import ConfluentServices, ServiceData
 from discovery.utils.utils import InputContext, Logger, FileUtils
 
 logger = Logger.get_logger()
@@ -33,8 +34,8 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.inventory = inventory
         self.input_context = input_context
         self.mapped_service_properties = set()
-        self.service = ConfluentServices.KAFKA_BROKER
-        self.group = self.service.value.get('group')
+        self.service = ConfluentServices(input_context).KAFKA_BROKER()
+        self.group = self.service.group
 
     def build_properties(self):
 
@@ -63,7 +64,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         # Build Command line properties
         self.__build_runtime_properties(hosts)
 
-    def __build_daemon_properties(self, input_context: InputContext, service: ConfluentServices, hosts: list):
+    def __build_daemon_properties(self, input_context: InputContext, service: ServiceData, hosts: list):
 
         # User group information
         response = self.get_service_user_group(input_context, service, hosts)
@@ -85,7 +86,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         _host_service_properties = dict()
         for host in host_service_properties.keys():
             _host_service_properties[host] = host_service_properties.get(host).get(DEFAULT_KEY)
-        self.build_custom_properties(inventory=self.inventory, group=self.service.value.get('group'),
+        self.build_custom_properties(inventory=self.inventory, group=self.group,
                                      custom_properties_group_name=custom_group,
                                      host_service_properties=_host_service_properties, skip_properties=skip_properties,
                                      mapped_properties=mapped_properties)
@@ -221,7 +222,8 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if 'kafka_broker_pkcs12_keystore_path' in property_dict:
             keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                              keystorepass=property_dict['ssl_keystore_store_password'],
-                                                             keystorepath=property_dict['kafka_broker_pkcs12_keystore_path'],
+                                                             keystorepath=property_dict[
+                                                                 'kafka_broker_pkcs12_keystore_path'],
                                                              hosts=self.hosts)
 
             if keystore_aliases:
@@ -255,7 +257,42 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if property_dict['fips_enabled'] is True:
             property_dict['kafka_broker_bcfks_keystore_path'] = service_properties.get('ssl.keystore.location')
             property_dict['kafka_broker_bcfks_truststore_path'] = service_properties.get('ssl.truststore.location')
+
+            self.mapped_service_properties.add("ssl.keymanager.algorithm")
+            self.mapped_service_properties.add("ssl.trustmanager.algorithm")
+            self.mapped_service_properties.add("ssl.keystore.type")
+            self.mapped_service_properties.add("ssl.truststore.type")
+            self.mapped_service_properties.add("ssl.truststore.location")
+            self.mapped_service_properties.add("ssl.truststore.password")
+            self.mapped_service_properties.add("ssl.keystore.location")
+            self.mapped_service_properties.add("ssl.keystore.password")
+            self.mapped_service_properties.add("ssl.key.password")
+            self.mapped_service_properties.add("ssl.enabled.protocols")
+            self.mapped_service_properties.add("confluent.metadata.server.http2.enabled")
+            self.mapped_service_properties.add("confluent.metrics.reporter.ssl.keymanager.algorithm")
+            self.mapped_service_properties.add("confluent.metrics.reporter.ssl.keystore.type")
+            self.mapped_service_properties.add("confluent.metrics.reporter.ssl.trustmanager.algorithm")
+            self.mapped_service_properties.add("confluent.metrics.reporter.ssl.truststore.type")
+
+        # Ignore generated ssl listener properties
+        listeners = self.__get_all_listeners(service_prop=service_properties)
+
+        for listener in listeners:
+            from urllib.parse import urlparse
+            parsed_uri = urlparse(listener)
+            name = parsed_uri.scheme
+            self.mapped_service_properties.add(f"listener.name.{name}.ssl.enabled.protocols")
+            self.mapped_service_properties.add(f"listener.name.{name}.ssl.keymanager.algorithm")
+            self.mapped_service_properties.add(f"listener.name.{name}.ssl.keystore.type")
+            self.mapped_service_properties.add(f"listener.name.{name}.ssl.trustmanager.algorithm")
+            self.mapped_service_properties.add(f"listener.name.{name}.ssl.truststore.type")
+
         return "all", property_dict
+
+    def __get_all_listeners(self, service_prop: dict) -> list:
+        key = "listeners"
+        self.mapped_service_properties.add(key)
+        return service_prop.get(key).split(",")
 
     def _build_custom_listeners(self, service_prop: dict) -> tuple:
         custom_listeners = dict()
@@ -266,10 +303,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         default_gssapi_users = dict()
         default_oauthbearer_users = dict()
 
-        key = "listeners"
-        self.mapped_service_properties.add(key)
-
-        listeners = service_prop.get(key).split(",")
+        listeners = self.__get_all_listeners(service_prop)
         for listener in listeners:
             from urllib.parse import urlparse
             parsed_uri = urlparse(listener)
@@ -326,8 +360,14 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if service_prop.get(key5) is not None:
             property_dict['rbac_enabled_public_pem_path'] = service_prop.get('kafka.rest.public.key.path')
             metadata_user_info = service_prop.get('kafka.rest.confluent.metadata.basic.auth.user.info')
-            property_dict['kafka_broker_ldap_user'] = metadata_user_info.split(':')[0]
-            property_dict['kafka_broker_ldap_password'] = metadata_user_info.split(':')[1]
+
+            # Update Ldap username and password only if secrete protection is not enabled.
+            if self.get_secret_protection_master_key(self.input_context, self.service, self.hosts):
+                property_dict['kafka_broker_ldap_user'] = "<<Value has been encrypted using secrets protection>>"
+                property_dict['kafka_broker_ldap_password'] = "<<Value has been encrypted using secrets protection>>"
+            else:
+                property_dict['kafka_broker_ldap_user'] = metadata_user_info.split(':')[0]
+                property_dict['kafka_broker_ldap_password'] = metadata_user_info.split(':')[1]
 
         self.mapped_service_properties.add(key5)
         self.mapped_service_properties.add('kafka.rest.public.key.path')
@@ -339,7 +379,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_mds_properties(self, service_prop: dict) -> tuple:
         if ('rbac_enabled' not in self.inventory.groups.get('kafka_broker').vars) or \
                 ('rbac_enabled' in self.inventory.groups.get('kafka_broker').vars and
-                    self.inventory.groups.get('kafka_broker').vars.get('rbac_enabled') is False):
+                 self.inventory.groups.get('kafka_broker').vars.get('rbac_enabled') is False):
             return "all", {}
         key1 = 'super.users'
         property_dict = dict()
@@ -379,12 +419,13 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         key4 = 'kafka.rest.kafka.rest.resource.extension.class'
         if service_prop.get(key4) is not None:
             metadata_user_info = service_prop.get('kafka.rest.confluent.metadata.basic.auth.user.info')
-            property_dict['mds_super_user_password'] = metadata_user_info.split(':')[1]  # set to same as kafka_broker_ldap_password
+            property_dict['mds_super_user_password'] = metadata_user_info.split(':')[
+                1]  # set to same as kafka_broker_ldap_password
 
         return "all", property_dict
 
     def _build_secret_protection_key(self, service_prop: dict) -> tuple:
-        master_key = self.get_secret_protection_key(self.input_context, self.service, self.hosts)
+        master_key = self.get_secret_protection_master_key(self.input_context, self.service, self.hosts)
         if master_key:
             return self.group, {
                 'secrets_protection_enabled': True,
@@ -401,12 +442,10 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_jmx_properties(self, service_properties: dict) -> tuple:
         monitoring_details = self.get_monitoring_details(self.input_context, self.service, self.hosts, 'KAFKA_OPTS')
         service_monitoring_details = dict()
-        group_name = self.service.value.get("group")
-
         for key, value in monitoring_details.items():
-            service_monitoring_details[f"{group_name}_{key}"] = value
+            service_monitoring_details[f"{self.group}_{key}"] = value
 
-        return group_name, service_monitoring_details
+        return self.group, service_monitoring_details
 
     def _build_audit_log_properties(self, service_prop: dict) -> tuple:
         global gl_host_service_properties
@@ -423,6 +462,8 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
                                                                         mds_password='password')
                 host.set_variable('audit_logs_destination_kafka_cluster_name', cluster['clusterName'])
                 host.set_variable('audit_logs_destination_principal', principal_name)
+
+        return 'all', {}
 
     def _build_log4j_properties(self, service_properties: dict) -> tuple:
         log4j_file = self.get_log_file_path(self.input_context, self.service, self.hosts, "KAFKA_LOG4J_OPTS")

@@ -3,9 +3,12 @@ import json
 import re
 
 import ansible_runner
+import yaml
 
-from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
-from discovery.utils.utils import Logger, InputContext, load_properties_to_dict
+from discovery.utils.constants import DEFAULT_KEY
+from discovery.utils.services import ConfluentServices, ServiceData
+from discovery.utils.utils import Logger, InputContext, load_properties_to_dict, _host_group_declared_in_inventory, \
+    terminate_script
 
 logger = Logger.get_logger()
 
@@ -39,7 +42,7 @@ class AnsibleRunnerUtils:
         return vars
 
     @staticmethod
-    def get_host_and_pattern_from_host_list(input_hosts: list) -> tuple:
+    def get_host_and_pattern_from_host_list(input_hosts: set) -> tuple:
         hosts = dict()
         host_pattern = ""
         for host in input_hosts:
@@ -49,8 +52,17 @@ class AnsibleRunnerUtils:
         return hosts, host_pattern
 
     @staticmethod
-    def get_host_and_pattern_from_input_context(input_context: InputContext) -> tuple:
-        return AnsibleRunnerUtils.get_host_and_pattern_from_host_list(input_context.ansible_hosts)
+    def get_host_and_pattern_from_input_context(input_context: InputContext, group_name: str = None) -> tuple:
+
+        hosts = set()
+        ansible_hosts = input_context.ansible_hosts
+        if group_name:
+            hosts.add(ansible_hosts.get(group_name))
+        else:
+            for group in ansible_hosts.keys():
+                hosts.update(ansible_hosts.get(group))
+
+        return AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
 
     @staticmethod
     def get_inventory_dict(input_context: InputContext, input_hosts: list = None):
@@ -74,7 +86,7 @@ class SystemPropertyManager:
         runner_utils = AnsibleRunnerUtils('ansible_facts')
         hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_input_context(input_context)
         ansible_runner.run(
-            quiet=True,
+            quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
             inventory=AnsibleRunnerUtils.get_inventory_dict(input_context),
             module='service_facts',
@@ -84,13 +96,25 @@ class SystemPropertyManager:
 
     @staticmethod
     def get_service_host_mapping(input_context: InputContext, **kwargs) -> dict:
-        logger.info(f"Getting the service<->host mapping for {input_context.ansible_hosts}")
+        logger.info(f"Creating service and host mapping...")
+        logger.info("Configured services:")
+        logger.info(yaml.dump(ConfluentServices(input_context).get_all_service_names(),
+                              indent=2,
+                              default_flow_style=False))
+
+        hosts = input_context.ansible_hosts
+        if _host_group_declared_in_inventory(hosts, input_context):
+            logger.info(f"Host service mappings:\n{yaml.dump(hosts, indent=2, default_flow_style=False)}")
+            return hosts
+
+        logger.debug(f"Getting the service<->host mapping for {input_context.ansible_hosts}")
         service_mappings = SystemPropertyManager.get_service_facts(input_context)
         mapping = dict()
 
+        confluent_service = ConfluentServices(input_context)
         for host, service_facts in service_mappings.items():
             services = service_facts.get("services")
-            for cservice in ConfluentServices.get_all_service_names():
+            for cservice in confluent_service.get_all_service_names():
 
                 if cservice in services:
                     logger.debug(
@@ -98,7 +122,10 @@ class SystemPropertyManager:
 
                     if services[cservice].get('status', None) == 'enabled' and \
                             services[cservice].get('state', None) == 'running':
-                        service_key = ConfluentServices.get_service_key_value(cservice)
+                        # Multiple services can have same name in different nodes
+                        # Need to discover which CP component, the given service is running for.
+                        service_key = confluent_service.get_group_name(cservice)
+
                         host_list = mapping.get(service_key, list())
                         host_list.append(host)
                         mapping[service_key] = list(host_list)
@@ -106,20 +133,20 @@ class SystemPropertyManager:
         if not mapping:
             logger.error("Could not get the service mappings. Please see the logs for details.")
 
-        logger.info(f"Host service mappings:\n{json.dumps(mapping)}")
+        logger.info(f"Host service mappings:\n{yaml.dump(mapping, indent=2, default_flow_style=False)}")
         return mapping
 
     @staticmethod
-    def get_service_details(input_context: InputContext, service: ConfluentServices, hosts: list = None):
+    def get_service_details(input_context: InputContext, service: ServiceData, hosts: list = None):
 
         runner_utils = AnsibleRunnerUtils()
         ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
         ansible_runner.run(
-            quiet=True,
+            quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
             inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
             module='ansible.builtin.systemd',
-            module_args=f"name={service.value.get('name')}",
+            module_args=f"name={service.name}",
             event_handler=runner_utils.my_event_handler
         )
 
@@ -136,7 +163,7 @@ class SystemPropertyManager:
         runner_utils = AnsibleRunnerUtils('ansible_facts')
         hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_input_context(input_context)
         ansible_runner.run(
-            quiet=True,
+            quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
             inventory=AnsibleRunnerUtils.get_inventory_dict(input_context),
             module='ansible_facts',
@@ -153,9 +180,13 @@ class SystemPropertyManager:
     @staticmethod
     def get_package_facts(input_context: InputContext, hosts: list = None):
         runner_utils = AnsibleRunnerUtils('ansible_facts')
-        hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_input_context(input_context)
+        if hosts:
+            hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
+        else:
+            hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_input_context(input_context)
+
         ansible_runner.run(
-            quiet=True,
+            quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
             inventory=AnsibleRunnerUtils.get_inventory_dict(input_context),
             module='package_facts',
@@ -178,7 +209,7 @@ class SystemPropertyManager:
         runner_utils = AnsibleRunnerUtils('ansible_facts')
         hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_input_context(input_context)
         ansible_runner.run(
-            quiet=True,
+            quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
             inventory=AnsibleRunnerUtils.get_inventory_dict(input_context),
             module="shell",
@@ -200,9 +231,9 @@ class SystemPropertyManager:
 class ServicePropertyManager:
 
     @staticmethod
-    def __get_service_properties_file(input_context: InputContext, service: ConfluentServices, hosts: list):
+    def __get_service_properties_file(input_context: InputContext, service: ServiceData, hosts: list):
         if not hosts:
-            logger.error(f"Host list is empty for service {service.value.get('name')}")
+            logger.error(f"Host list is empty for service {service.name}")
             return None
 
         host = hosts[0]
@@ -222,7 +253,7 @@ class ServicePropertyManager:
         return property_files
 
     @staticmethod
-    def get_property_mappings(input_context: InputContext, service: ConfluentServices, hosts: list) -> dict:
+    def get_property_mappings(input_context: InputContext, service: ServiceData, hosts: list) -> dict:
 
         mappings = dict()
         seed_properties_file = ServicePropertyManager.__get_service_properties_file(input_context, service, hosts)
@@ -235,7 +266,7 @@ class ServicePropertyManager:
             runner_utils = AnsibleRunnerUtils()
             hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
             ansible_runner.run(
-                quiet=True,
+                quiet=input_context.verbosity <= 3,
                 host_pattern=host_pattern,
                 inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
                 module="slurp",
@@ -262,7 +293,7 @@ class ServicePropertyManager:
         runner_utils = AnsibleRunnerUtils()
         ansilble_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
         ansible_runner.run(
-            quiet=True,
+            quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
             inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
             module="shell",
@@ -281,7 +312,7 @@ class ServicePropertyManager:
             return []
 
     @staticmethod
-    def get_jaas_file_path(input_context: InputContext, service: ConfluentServices, hosts: list):
+    def get_jaas_file_path(input_context: InputContext, service: ServiceData, hosts: list):
         # check if overriden as env var
         env_details = ServicePropertyManager.get_env_details(input_context, service, hosts)
         kafka_opts = env_details.get('KAFKA_OPTS', None)
@@ -292,7 +323,7 @@ class ServicePropertyManager:
         return None
 
     @staticmethod
-    def get_log_file_path(input_context: InputContext, service: ConfluentServices, hosts: list, log4j_opts_env_var):
+    def get_log_file_path(input_context: InputContext, service: ServiceData, hosts: list, log4j_opts_env_var):
         # check if overriden as env var
         env_details = ServicePropertyManager.get_env_details(input_context, service, hosts)
         log4j_opts = env_details.get(log4j_opts_env_var, None)
@@ -304,7 +335,7 @@ class ServicePropertyManager:
         runner_utils = AnsibleRunnerUtils()
         ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
         ansible_runner.run(
-            quiet=True,
+            quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
             inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
             module="shell",
@@ -329,7 +360,7 @@ class ServicePropertyManager:
         if not env_command:
             return env_details
 
-        tokens = ['KAFKA_HEAP_OPTS', 'KAFKA_OPTS', 'KAFKA_LOG4J_OPTS', 'LOG_DIR']
+        tokens = ['KAFKA_HEAP_OPTS', 'KAFKA_OPTS', 'KAFKA_LOG4J_OPTS', 'LOG_DIR', 'CONFLUENT_SECURITY_MASTER_KEY']
         for token in tokens:
             pattern = f"{token}=(.*?) ([A-Z]{{3}}|$)"
             match = re.search(pattern, env_command)
@@ -338,10 +369,17 @@ class ServicePropertyManager:
         return env_details
 
     @staticmethod
-    def get_env_details(input_context: InputContext, service: ConfluentServices, hosts: list):
+    def _get_env_from_service(input_context: InputContext, service: ServiceData, hosts: list) -> str:
         service_facts = SystemPropertyManager.get_service_details(input_context, service, hosts)
-        environment = service_facts.get("Environment", None)
-        return ServicePropertyManager.parse_environment_details(environment)
+        service_facts = service_facts.get(hosts[0])
+        return service_facts.get("status").get("Environment", None)
+
+    @staticmethod
+    def get_env_details(input_context: InputContext, service: ServiceData, hosts: list) -> dict:
+        env_cmd = ServicePropertyManager._get_env_from_service(input_context=input_context,
+                                                               service=service,
+                                                               hosts=hosts)
+        return ServicePropertyManager.parse_environment_details(env_cmd)
 
     @staticmethod
     def get_kerberos_configurations(input_context: InputContext, hosts: list, kerberos_config_file):
@@ -350,7 +388,7 @@ class ServicePropertyManager:
         runner_utils = AnsibleRunnerUtils()
         ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
         ansible_runner.run(
-            quiet=True,
+            quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
             inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
             module="shell",
@@ -365,7 +403,7 @@ class ServicePropertyManager:
         runner_utils = AnsibleRunnerUtils()
         ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
         ansible_runner.run(
-            quiet=True,
+            quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
             inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
             module="shell",
@@ -380,7 +418,7 @@ class ServicePropertyManager:
         runner_utils = AnsibleRunnerUtils()
         ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
         ansible_runner.run(
-            quiet=True,
+            quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
             inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
             module="shell",
@@ -401,7 +439,7 @@ class ServicePropertyManager:
         runner_utils = AnsibleRunnerUtils()
         ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
         ansible_runner.run(
-            quiet=True,
+            quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
             inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
             module="shell",
@@ -417,7 +455,7 @@ class ServicePropertyManager:
         runner_utils = AnsibleRunnerUtils()
         ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
         ansible_runner.run(
-            quiet=True,
+            quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
             inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
             module="shell",
@@ -442,7 +480,7 @@ class ServicePropertyManager:
             runner_utils = AnsibleRunnerUtils()
             ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
             ansible_runner.run(
-                quiet=True,
+                quiet=input_context.verbosity <= 3,
                 host_pattern=host_pattern,
                 inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
                 module="shell",
@@ -468,7 +506,7 @@ class ServicePropertyManager:
         runner_utils = AnsibleRunnerUtils()
         ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
         ansible_runner.run(
-            quiet=True,
+            quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
             inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
             module="shell",
@@ -499,7 +537,7 @@ class ServicePropertyManager:
             runner_utils = AnsibleRunnerUtils()
             ansible_hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
             ansible_runner.run(
-                quiet=True,
+                quiet=input_context.verbosity <= 3,
                 host_pattern=host_pattern,
                 inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
                 module="shell",
@@ -529,3 +567,33 @@ class ServicePropertyManager:
                 return cluster, principal_name
 
         return "", {}
+
+
+class SystemValidator:
+    @staticmethod
+    def validate_connection(input_context: InputContext) -> None:
+        runner_utils = AnsibleRunnerUtils()
+        failed_hosts = list()
+
+        hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_input_context(input_context)
+        if not hosts or len(hosts) == 0:
+            terminate_script("Empty host list. Please refer to documentation for correct host format")
+        ansible_runner.run(
+            quiet=input_context.verbosity <= 3,
+            host_pattern=host_pattern,
+            inventory=AnsibleRunnerUtils.get_inventory_dict(input_context),
+            module='ansible.builtin.ping',
+            event_handler=runner_utils.my_event_handler
+        )
+
+        if runner_utils.result_ok:
+            alive_hosts = runner_utils.result_ok.keys()
+            failed_hosts.extend(hosts - alive_hosts)
+            logger.info(f"Connection was successful to:\n{yaml.dump(list(alive_hosts), indent=2, default_flow_style=False)}")
+        else:
+            failed_hosts.extend(hosts)
+
+        if failed_hosts:
+            message = f"Could not connect to hosts:\n{yaml.dump(list(failed_hosts), indent=2, default_flow_style=False)}.\n" \
+                      f"Please verify the hostnames, ssh user and key"
+            terminate_script(message)

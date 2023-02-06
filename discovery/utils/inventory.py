@@ -5,8 +5,8 @@ import yaml
 from ansible.inventory.data import InventoryData
 from ansible.module_utils.six import iteritems
 
+from discovery.utils.services import ConfluentServices
 from discovery.utils.utils import Logger, InputContext, singleton
-from discovery.utils.constants import ConfluentServices
 
 logger = Logger.get_logger()
 
@@ -21,7 +21,7 @@ class CPInventoryManager(InventoryData):
 
     def generate_final_inventory(self):
         data = self.get_inventory_data()
-        InventorySanitizer.sanitize(data)
+        InventorySanitizer.sanitize(data, self.input_context)
         self.put_inventory_data(data)
 
     def get_inventory_data(self) -> dict:
@@ -51,8 +51,8 @@ class CPInventoryManager(InventoryData):
 
     def put_inventory_data(self, data):
         file_name = self.input_context.output_file if self.input_context.output_file else "inventory.yml"
-        # file_name = 'inventory.yml'
         with open(file_name, 'w') as outfile:
+            yaml.Dumper.ignore_aliases = lambda *args : True
             yaml.dump(data, outfile, default_flow_style=False, indent=2)
 
         logger.info(f"Inventory file successfully generated at {os.path.join(os.getcwd(), file_name)}")
@@ -62,9 +62,9 @@ class CPInventoryManager(InventoryData):
 class InventorySanitizer:
 
     @staticmethod
-    def sanitize(inventory_data: dict) -> dict:
+    def sanitize(inventory_data: dict, input_context:InputContext) -> dict:
         InventorySanitizer.typecast(inventory_data)
-        list_groups = ConfluentServices.get_all_group_names()
+        list_groups = ConfluentServices(input_context).get_all_group_names()
         list_aggregator = ['ssl_enabled', 'rbac_enabled', 'rbac_enabled_public_pem_path',
                            'ssl_keystore_alias', 'ssl_keystore_key_password', 'ssl_keystore_store_password',
                            'ssl_mutual_auth_enabled', 'ssl_provided_keystore_and_truststore',
@@ -116,25 +116,3 @@ class InventorySanitizer:
                     dict_obj[key] = int(value)
                 yield value
 
-    @staticmethod
-    def sort(inventory_data: dict):
-        from discovery.utils.constants import ConfluentServices
-        group_list = [
-            'all',
-            ConfluentServices.ZOOKEEPER.value.get('group'),
-            ConfluentServices.KAFKA_BROKER.value.get('group'),
-            ConfluentServices.SCHEMA_REGISTRY.value.get('group'),
-            ConfluentServices.KAFKA_REST.value.get('group'),
-            ConfluentServices.KAFKA_CONNECT.value.get('group'),
-            ConfluentServices.KSQL.value.get('group'),
-            ConfluentServices.KAFKA_REPLICATOR.value.get('group'),
-            ConfluentServices.CONTROL_CENTER.value.get('group'),
-        ]
-
-        ordered_dict = collections.OrderedDict(inventory_data)
-
-        for group in group_list:
-            if group in ordered_dict.keys():
-                ordered_dict.move_to_end(group)
-
-        return ordered_dict

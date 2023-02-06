@@ -3,8 +3,8 @@ import re
 from abc import ABC
 
 from discovery.manager.manager import ServicePropertyManager
-from discovery.utils.constants import ConfluentServices
 from discovery.utils.inventory import CPInventoryManager
+from discovery.utils.services import ConfluentServices, ServiceData
 from discovery.utils.utils import InputContext, Logger
 
 logger = Logger.get_logger()
@@ -33,22 +33,22 @@ class AbstractPropertyBuilder(ABC):
         return ServicePropertyManager.get_root_logger(input_context, hosts, log4j_file, default_log4j_file)
 
     @staticmethod
-    def get_log_file_path(input_context: InputContext, service: ConfluentServices, hosts: list, log4j_opts_env_var):
+    def get_log_file_path(input_context: InputContext, service: ServiceData, hosts: list, log4j_opts_env_var):
         return ServicePropertyManager.get_log_file_path(input_context, service, hosts, log4j_opts_env_var)
 
     @staticmethod
-    def get_jaas_file_path(input_context: InputContext, service: ConfluentServices, hosts: list):
+    def get_jaas_file_path(input_context: InputContext, service: ServiceData, hosts: list):
         return ServicePropertyManager.get_jaas_file_path(input_context, service, hosts)
 
     @staticmethod
-    def get_property_mappings(input_context: InputContext, service: ConfluentServices, hosts: list):
+    def get_property_mappings(input_context: InputContext, service: ServiceData, hosts: list):
         if not hosts:
             return dict()
         return ServicePropertyManager.get_property_mappings(input_context, service, hosts)
 
     @staticmethod
-    def get_service_host(service: ConfluentServices, inventory: CPInventoryManager):
-        group_name = service.value.get("group")
+    def get_service_host(service: ServiceData, inventory: CPInventoryManager):
+        group_name = service.group
         hosts = inventory.get_groups_dict().get(group_name)
 
         if group_name not in inventory.get_groups_dict() or not hosts:
@@ -61,17 +61,12 @@ class AbstractPropertyBuilder(ABC):
         return hosts
 
     @staticmethod
-    def get_secret_protection_key(input_context: InputContext, service: ConfluentServices, hosts: list):
-        env_details = ServicePropertyManager.get_env_details(input_context, service, hosts)
-        return env_details.get("CONFLUENT_SECURITY_MASTER_KEY", None)
-
-    @staticmethod
-    def get_rocksdb_path(input_context: InputContext, service: ConfluentServices, hosts: list):
+    def get_rocksdb_path(input_context: InputContext, service: ServiceData, hosts: list):
         env_details = ServicePropertyManager.get_env_details(input_context, service, hosts)
         return env_details.get("ROCKSDB_SHAREDLIB_DIR", "")
 
     @staticmethod
-    def get_jvm_arguments(input_context: InputContext, service: ConfluentServices, hosts: list):
+    def get_jvm_arguments(input_context: InputContext, service: ServiceData, hosts: list):
         # Build Java runtime overrides
         env_details = ServicePropertyManager.get_env_details(input_context, service, hosts)
         heap_ops = env_details.get('KAFKA_HEAP_OPTS', '')
@@ -103,7 +98,7 @@ class AbstractPropertyBuilder(ABC):
         return property_dict
 
     @staticmethod
-    def get_service_facts(input_context: InputContext, service: ConfluentServices, hosts: list) -> dict:
+    def get_service_facts(input_context: InputContext, service: ServiceData, hosts: list) -> dict:
         # Get the service details
         from discovery.system.system import SystemPropertyManager
         response = SystemPropertyManager.get_service_details(input_context, service, [hosts[0]])
@@ -116,7 +111,7 @@ class AbstractPropertyBuilder(ABC):
         return response.get(hosts[0]).get("status")
 
     @staticmethod
-    def get_service_user_group(input_context: InputContext, service: ConfluentServices, hosts: list) -> tuple:
+    def get_service_user_group(input_context: InputContext, service: ServiceData, hosts: list) -> tuple:
         service_facts = AbstractPropertyBuilder.get_service_facts(input_context, service, hosts)
 
         user = service_facts.get("User", None)
@@ -129,7 +124,7 @@ class AbstractPropertyBuilder(ABC):
         # service_override = service_facts.get("DropInPaths", None)
         # description = service_facts.get("Description", None)
 
-        service_group = service.value.get("group")
+        service_group = service.group
         return service_group, {
             f"{service_group}_user": str(user),
             f"{service_group}_group": str(group),
@@ -215,54 +210,77 @@ class AbstractPropertyBuilder(ABC):
 
         return monitoring_props
 
+    @staticmethod
+    def get_secret_protection_master_key(input_context: InputContext, service: ServiceData, hosts: list):
+        env_cmd = ServicePropertyManager._get_env_from_service(input_context=input_context,
+                                                               service=service,
+                                                               hosts=hosts)
+        pattern = f"CONFLUENT_SECURITY_MASTER_KEY=(\S*)"
+        match = re.search(pattern, env_cmd)
+        return match.group(1).rstrip() if match else None
+
+    @staticmethod
+    def get_audit_log_properties(input_context: InputContext, hosts: str, mds_user: str, mds_password: str) -> tuple:
+        return ServicePropertyManager.get_audit_log_properties(input_context=input_context,
+                                                               hosts=hosts,
+                                                               mds_user=mds_user,
+                                                               mds_password=mds_password)
+
 
 class ServicePropertyBuilder:
     inventory = None
     input_context = None
+    confluent_services = None
 
     def __init__(self, input_context: InputContext, inventory: CPInventoryManager):
         self.inventory = inventory
         self.input_context = input_context
+        self.confluent_services = ConfluentServices(input_context)
 
     def with_zookeeper_properties(self):
-        from discovery.service.zookeeper import ZookeeperServicePropertyBuilder
-        ZookeeperServicePropertyBuilder.build_properties(self.input_context, self.inventory)
+        if self.confluent_services.ZOOKEEPER().group in self.inventory.groups.keys():
+            from discovery.service.zookeeper import ZookeeperServicePropertyBuilder
+            ZookeeperServicePropertyBuilder.build_properties(self.input_context, self.inventory)
         return self
 
     def with_kafka_broker_properties(self):
-        from discovery.service.kafka_broker import KafkaServicePropertyBuilder
-        KafkaServicePropertyBuilder.build_properties(self.input_context, self.inventory)
+        if self.confluent_services.KAFKA_BROKER().group in self.inventory.groups.keys():
+            from discovery.service.kafka_broker import KafkaServicePropertyBuilder
+            KafkaServicePropertyBuilder.build_properties(self.input_context, self.inventory)
         return self
 
     def with_schema_registry_properties(self):
-        from discovery.service.schema_registry import SchemaRegistryServicePropertyBuilder
-        SchemaRegistryServicePropertyBuilder.build_properties(self.input_context, self.inventory)
+        if self.confluent_services.SCHEMA_REGISTRY().group in self.inventory.groups.keys():
+            from discovery.service.schema_registry import SchemaRegistryServicePropertyBuilder
+            SchemaRegistryServicePropertyBuilder.build_properties(self.input_context, self.inventory)
         return self
 
     def with_kafka_rest_properties(self):
-        from discovery.service.kafka_rest import KafkaRestServicePropertyBuilder
-        KafkaRestServicePropertyBuilder.build_properties(self.input_context, self.inventory)
+        if self.confluent_services.KAFKA_REST().group in self.inventory.groups.keys():
+            from discovery.service.kafka_rest import KafkaRestServicePropertyBuilder
+            KafkaRestServicePropertyBuilder.build_properties(self.input_context, self.inventory)
         return self
 
     def with_ksql_properties(self):
-        from discovery.service.ksql import KsqlServicePropertyBuilder
-        KsqlServicePropertyBuilder.build_properties(self.input_context, self.inventory)
+        if self.confluent_services.KSQL().group in self.inventory.groups.keys():
+            from discovery.service.ksql import KsqlServicePropertyBuilder
+            KsqlServicePropertyBuilder.build_properties(self.input_context, self.inventory)
         return self
 
     def with_control_center_properties(self):
-        from discovery.service.control_center import ControlCenterServicePropertyBuilder
-        ControlCenterServicePropertyBuilder.build_properties(self.input_context, self.inventory)
+        if self.confluent_services.CONTROL_CENTER().group in self.inventory.groups.keys():
+            from discovery.service.control_center import ControlCenterServicePropertyBuilder
+            ControlCenterServicePropertyBuilder.build_properties(self.input_context, self.inventory)
         return self
 
-    def with_mds_properties(self):
+    def with_kafka_connect_properties(self):
+        if self.confluent_services.KAFKA_CONNECT().group in self.inventory.groups.keys():
+            from discovery.service.kafka_connect import KafkaConnectServicePropertyBuilder
+            KafkaConnectServicePropertyBuilder.build_properties(self.input_context, self.inventory)
         return self
 
-    def with_connect_properties(self):
-        from discovery.service.kafka_connect import KafkaConnectServicePropertyBuilder
-        KafkaConnectServicePropertyBuilder.build_properties(self.input_context, self.inventory)
-        return self
-
-    def with_replicator_properties(self):
-        from discovery.service.kafka_replicator import KafkaReplicatorServicePropertyBuilder
-        KafkaReplicatorServicePropertyBuilder.build_properties(self.input_context, self.inventory)
+    def with_kafka_connect_replicator_properties(self):
+        if self.confluent_services.KAFKA_REPLICATOR().group in self.inventory.groups.keys():
+            from discovery.service.kafka_replicator import KafkaReplicatorServicePropertyBuilder
+            KafkaReplicatorServicePropertyBuilder.build_properties(self.input_context, self.inventory)
         return self
