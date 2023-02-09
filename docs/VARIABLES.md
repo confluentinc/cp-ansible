@@ -196,6 +196,14 @@ Default:  true
 
 ***
 
+### kerberos_client_config_file_dest
+
+Custom path for the location of kerberos client configuration file, works with any value of kerberos_configure
+
+Default:  /etc/krb5.conf
+
+***
+
 ### required_disk_space_mb
 
 Variable to define minimum free disk space in MB for installation.
@@ -912,7 +920,7 @@ Default:  "{{ skip_restarts }}"
 
 Default controller quorum voters
 
-Default:  "{% for inventory_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{inventory_hostname[-1]|int + 9990}}@{{inventory_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{controller_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
 
 ***
 
@@ -920,7 +928,7 @@ Default:  "{% for inventory_hostname in groups.kafka_controller|default([]) %}{%
 
 Default Kafka config prefix. Only valid to customize when installation_method: archive
 
-Default:  "{{ config_prefix }}/kafka"
+Default:  "{{ config_prefix }}/controller"
 
 ***
 
