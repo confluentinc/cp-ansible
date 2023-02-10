@@ -337,7 +337,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key5)
 
         if key1 in service_props:
-            return 'all', {'ksql_ssl_enabled': True}
+            return 'all', {'schema_registry_ssl_enabled': True}
 
 
 class ControlCenterServicePropertyBaseBuilder60(ControlCenterServicePropertyBaseBuilder):

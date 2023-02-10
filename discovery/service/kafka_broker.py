@@ -450,6 +450,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_audit_log_properties(self, service_prop: dict) -> tuple:
         global gl_host_service_properties
         key = "confluent.security.event.logger.exporter.kafka.bootstrap.servers"
+        key2 = 'confluent.security.event.logger.enable'
         self.mapped_service_properties.add(key)
         for hostname, properties in gl_host_service_properties.items():
             default_properties = properties.get(DEFAULT_KEY)
