@@ -318,11 +318,16 @@ kafka_broker_properties:
       zookeeper.connection.timeout.ms: 18000
       zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
-  kraft_sasl_plain:
-    enabled: "{{kraft_enabled|bool and kafka_controller_sasl_protocol=='plain'}}"
+  controller_sasl:
+    enabled: "{{ kraft_enabled|bool and kafka_controller_listeners['controller']['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol != 'none' }}"
     properties:
-      listener.name.controller.plain.sasl.jaas.config: "{{plain_jaas_config}}"
-      sasl.mechanism.controller.protocol: PLAIN
+      sasl.mechanism.controller.protocol: "{{kafka_controller_listeners['controller']['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol}}"
+  controller_listener:
+    enabled: "{{ kraft_enabled|bool }}"
+    properties: "{{ kafka_controller_listeners | confluent.platform.listener_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
+                    kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
+                    plain_jaas_config, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'), kerberos_kafka_broker_primary,
+                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path ) }}"
   broker_id:
     enabled: "{{ inventory_hostname in groups.kafka_broker }}"
     properties:
@@ -367,7 +372,7 @@ kafka_broker_properties:
   sasl_gssapi:
     enabled: "{{ 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms }}"
     properties:
-      sasl.kerberos.service.name: "{{kerberos_kafka_controller_primary if kraft_enabled|bool else kerberos_kafka_broker_primary}}"
+      sasl.kerberos.service.name: "{{ kerberos_kafka_broker_primary }}"
   zk_ssl:
     enabled: "{{ zookeeper_ssl_enabled and not kraft_enabled|bool}}"
     properties:
