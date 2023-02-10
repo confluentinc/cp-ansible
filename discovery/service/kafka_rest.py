@@ -1,7 +1,8 @@
 import sys
 
 from discovery.service.service import AbstractPropertyBuilder
-from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
+from discovery.utils.services import ConfluentServices, ServiceData
+from discovery.utils.constants import DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.utils import InputContext, Logger, FileUtils
 
@@ -32,8 +33,8 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.inventory = inventory
         self.input_context = input_context
         self.mapped_service_properties = set()
-        self.service = ConfluentServices.KAFKA_REST
-        self.group = self.service.value.get('group')
+        self.service = ConfluentServices(input_context).KAFKA_REST()
+        self.group = self.service.group
 
     def build_properties(self):
 
@@ -42,7 +43,7 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.hosts = hosts
 
         if not hosts:
-            logger.error(f"Could not find any host with service {self.service.value.get('name')} ")
+            logger.error(f"Could not find any host with service {self.service.name} ")
             return
 
         host_service_properties = self.get_property_mappings(self.input_context, self.service, hosts)
@@ -60,7 +61,7 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         # Build Command line properties
         self.__build_runtime_properties(hosts)
 
-    def __build_daemon_properties(self, input_context: InputContext, service: ConfluentServices, hosts: list):
+    def __build_daemon_properties(self, input_context: InputContext, service: ServiceData, hosts: list):
 
         # User group information
         response = self.get_service_user_group(input_context, service, hosts)
@@ -81,7 +82,7 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         _host_service_properties = dict()
         for host in host_service_properties.keys():
             _host_service_properties[host] = host_service_properties.get(host).get(DEFAULT_KEY)
-        self.build_custom_properties(inventory=self.inventory, group=self.service.value.get('group'),
+        self.build_custom_properties(inventory=self.inventory, group=self.service.group,
                                      custom_properties_group_name=custom_group,
                                      host_service_properties=_host_service_properties, skip_properties=skip_properties,
                                      mapped_properties=mapped_properties)
@@ -124,13 +125,25 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_provided_keystore_and_truststore'] = True
         property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
         property_dict['kafka_rest_keystore_path'] = service_prop.get('ssl.keystore.location')
-        property_dict['ssl_keystore_store_password'] = service_prop.get('ssl.keystore.password')
-        property_dict['ssl_keystore_key_password'] = service_prop.get('ssl.key.password')
+
+        if service_prop.get('ssl.keystore.password').startswith("${securepass"):
+            property_dict['ssl_keystore_store_password'] = "<<Value encrypted using secrets protection>>"
+        else:
+            property_dict['ssl_keystore_store_password'] = service_prop.get('ssl.keystore.password')
+
+        if service_prop.get('ssl.key.password').startswith("${securepass"):
+            property_dict['ssl_keystore_key_password'] = "<<Value encrypted using secrets protection>>"
+        else:
+            property_dict['ssl_keystore_key_password'] = service_prop.get('ssl.key.password')
+
         property_dict['ssl_truststore_ca_cert_alias'] = ''
 
         if service_prop.get('ssl.truststore.location') is not None:
             property_dict['kafka_rest_truststore_path'] = service_prop.get('ssl.truststore.location')
-            property_dict['ssl_truststore_password'] = service_prop.get('ssl.truststore.password')
+            if service_prop.get('ssl.truststore.password').startswith("${securepass"):
+                property_dict['ssl_truststore_password'] = "<<Value encrypted using secrets protection>>"
+            else:
+                property_dict['ssl_truststore_password'] = service_prop.get('ssl.truststore.password')
 
         keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                          keystorepass=property_dict['ssl_keystore_store_password'],
@@ -203,7 +216,7 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_jmx_properties(self, service_properties: dict) -> tuple:
         monitoring_details = self.get_monitoring_details(self.input_context, self.service, self.hosts, 'KAFKAREST_OPTS')
         service_monitoring_details = dict()
-        group_name = self.service.value.get("group")
+        group_name = self.service.group
 
         for key, value in monitoring_details.items():
             service_monitoring_details[f"{group_name}_{key}"] = value

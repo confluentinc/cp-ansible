@@ -1,12 +1,10 @@
 import argparse
 import logging
 import sys
-from collections import OrderedDict
 from os.path import exists
-from jproperties import Properties
 
 import yaml
-
+from jproperties import Properties
 
 def singleton(class_):
     instances = {}
@@ -92,6 +90,7 @@ class InputContext:
     output_file = None
     from_version = None
     verbosity = 0
+    service_overrides = dict()
 
     def __init__(self,
                  ansible_hosts,
@@ -105,7 +104,8 @@ class InputContext:
                  ansible_ssh_extra_args,
                  ansible_python_interpreter=None,
                  from_version=None,
-                 output_file=None):
+                 output_file=None,
+                 service_overrides = {}):
         self.ansible_hosts = ansible_hosts
         self.ansible_connection = ansible_connection
         self.ansible_user = ansible_user
@@ -118,9 +118,10 @@ class InputContext:
         self.ansible_python_interpreter = ansible_python_interpreter
         self.verbosity = verbosity
         self.output_file = output_file
-
+        self.service_overrides = service_overrides
 
 class Arguments:
+    input_context:InputContext = None
 
     @staticmethod
     def parse_arguments():
@@ -130,20 +131,9 @@ class Arguments:
 
         # Adding optional argument
         parser.add_argument("--input", type=str, required=True, help="Input Inventory file")
-        parser.add_argument("--hosts", type=str, action="extend", nargs="*", help="List of hosts")
+        parser.add_argument("--limit", type=str, nargs="*", help="Limit to list of hosts")
         parser.add_argument("--from_version", type=str, help="Target cp cluster version")
         parser.add_argument("--verbosity", type=int, help="Log level")
-        parser.add_argument("--ansible_connection", type=str, default=None,
-                            help="The connection plugin actually used for the task on the target host.")
-
-        parser.add_argument("--ansible_user", type=str, default=None, help="The user Ansible 'logs in' as.")
-        parser.add_argument("--ansible_become", type=lambda x: (str(x).lower() == 'true'), help="Boolean to use privileged")
-        parser.add_argument("--ansible_become_method", type=str, help="Method to become privileged")
-        parser.add_argument("--ansible_become_user", type=str, default=None,
-                            help="The user Ansible 'becomes' after using privilege escalation.")
-        parser.add_argument("--ansible_ssh_private_key_file", type=str, default=None, help="Private key for ssh login")
-        parser.add_argument("--ansible_ssh_extra_args", type=str, default=None, help="Extra arguments for ssh")
-        parser.add_argument("--ansible_python_interpreter", type=str, help="Python interpreter path")
         parser.add_argument("--output_file", type=str, help="Generated output inventory file")
 
         # Read arguments from command line
@@ -152,7 +142,6 @@ class Arguments:
     @classmethod
     def validate_args(cls, args):
 
-        cls.__validate_hosts(cls.get_hosts(args))
         vars = cls.get_vars(args)
         cls.__validate_variables(vars)
 
@@ -163,29 +152,26 @@ class Arguments:
 
     @classmethod
     def get_input_context(cls, args) -> InputContext:
+
+        if Arguments.input_context:
+            return Arguments.input_context
+
         hosts = cls.get_hosts(args)
         vars = cls.get_vars(args)
-        return InputContext(ansible_hosts=hosts,
-                            ansible_connection=vars.get("ansible_connection"),
-                            ansible_become=vars.get("ansible_become"),
-                            ansible_become_user=vars.get("ansible_become_user"),
-                            ansible_become_method=vars.get("ansible_become_method"),
-                            ansible_ssh_private_key_file=vars.get("ansible_ssh_private_key_file"),
-                            ansible_user=vars.get("ansible_user"),
-                            ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
-                            ansible_python_interpreter=vars.get("ansible_python_interpreter"),
-                            output_file=vars.get("output_file"),
-                            verbosity=vars.get("verbosity"),
-                            from_version=vars.get("from_version"))
-
-    @classmethod
-    def __validate_hosts(cls, hosts):
-        # Validate list of hosts
-        if len(hosts) < 1:
-            message = "Please provide at least one host to proceed with discovery"
-            logger.error(message)
-            sys.exit(message)
-        logger.debug(f"List of hosts: {hosts}")
+        Arguments.input_context = InputContext(ansible_hosts=hosts,
+                                               ansible_connection=vars.get("ansible_connection"),
+                                               ansible_become=vars.get("ansible_become"),
+                                               ansible_become_user=vars.get("ansible_become_user"),
+                                               ansible_become_method=vars.get("ansible_become_method"),
+                                               ansible_ssh_private_key_file=vars.get("ansible_ssh_private_key_file"),
+                                               ansible_user=vars.get("ansible_user"),
+                                               ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
+                                               ansible_python_interpreter=vars.get("ansible_python_interpreter"),
+                                               output_file=vars.get("output_file"),
+                                               verbosity=vars.get("verbosity"),
+                                               from_version=vars.get("from_version"),
+                                               service_overrides = vars.get("service_overrides"))
+        return Arguments.input_context
 
     @classmethod
     def __validate_variables(cls, vars):
@@ -196,8 +182,7 @@ class Arguments:
         if vars.get("ansible_connection") not in valid_connection_types:
             message = f"Invalid value for ansible_connection {vars.get('ansible_connection')}. " \
                       f"it has to be {valid_connection_types}"
-            logger.error(message)
-            sys.exit(message)
+            terminate_script(message)
 
         # Validate from_version
         from_version = vars.get("from_version")
@@ -216,18 +201,19 @@ class Arguments:
     @classmethod
     def get_hosts(cls, args):
         inventory = cls.__parse_inventory_file(args)
-        hosts = []
+        if not inventory:
+            terminate_script(f"Could not load or parse inventory to get host list")
 
-        # Check hosts in the inventory file
-        if inventory:
-            hosts.extend(inventory.get('all').get('hosts', []))
+        hosts = inventory.get('hosts', {})
 
-        # Check the command line options for hosts
-        if args.hosts:
-            hosts.extend(args.hosts)
+        # Limit the hosts list based on command line argument
+        if args.limit:
+            selected_hosts = args.limit.split(',')
+            for group, group_hosts in hosts:
+                group_hosts = list(set(group_hosts) & set(selected_hosts))
+                hosts[group] = group_hosts
 
-        # Remove duplicates keeping the order
-        return list(OrderedDict.fromkeys(hosts))
+        return hosts
 
     @classmethod
     def get_vars(cls, args) -> dict:
@@ -236,29 +222,10 @@ class Arguments:
 
         # Check vars in the inventory file
         if inventory:
-            vars = inventory.get('all').get('vars')
+            vars = inventory.get('vars')
 
-        # Override the inventory vars with command line variables.
-        if args.ansible_become is not None:
-            vars['ansible_become'] = args.ansible_become
-
-        if args.ansible_user:
-            vars['ansible_user'] = args.ansible_user
-
-        if args.ansible_connection:
-            vars['ansible_connection'] = args.ansible_connection
-
-        if args.ansible_become_user:
-            vars['ansible_become_user'] = args.ansible_become_user
-
-        if args.ansible_become_method:
-            vars['ansible_become_method'] = args.ansible_become_method
-
-        if args.ansible_ssh_private_key_file:
-            vars['ansible_ssh_private_key_file'] = args.ansible_ssh_private_key_file
-
-        if args.ansible_ssh_extra_args:
-            vars['ansible_ssh_extra_args'] = args.ansible_ssh_extra_args
+        if args.limit:
+            vars['limit'] = args.limit
 
         if args.from_version:
             vars['from_version'] = args.from_version
@@ -269,16 +236,11 @@ class Arguments:
         if args.output_file:
             vars['output_file'] = args.output_file
 
-        if args.ansible_python_interpreter:
-            vars['ansible_python_interpreter'] = args.ansible_python_interpreter
-
         # set default values of some variables explicitly
-        if vars.get('ansible_python_interpreter') is None:
-            vars['ansible_python_interpreter'] = 'auto'
-        if vars.get('ansible_become_method') is None:
-            vars['ansible_become_method'] = 'sudo'
-        if vars.get('ansible_become') is None:
-            vars['ansible_become'] = False
+        vars['ansible_python_interpreter'] = vars.get('ansible_python_interpreter', 'auto')
+        vars['ansible_become_method'] = vars.get('ansible_become_method', 'sudo')
+        vars['ansible_become'] = vars.get('ansible_become', False)
+        vars['service_overrides'] = vars.get('service_overrides', {})
 
         return vars
 
@@ -340,3 +302,23 @@ class FileUtils:
     @staticmethod
     def get_kafka_replicator_configs(name):
         return FileUtils.__read_service_configuration_file("kafka_replicator.yml").get(name, [])
+
+
+def _host_group_declared_in_inventory(hosts:dict, input_context:InputContext) -> bool:
+    from discovery.utils.services import ConfluentServices
+    from discovery.utils.constants import DEFAULT_GROUP_NAME
+
+    defined_groups = set(ConfluentServices(input_context).get_all_group_names())
+    defined_groups.add(DEFAULT_GROUP_NAME)
+
+    declared_groups = hosts.keys()
+    extra_groups = defined_groups.difference(defined_groups)
+    if extra_groups:
+        terminate_script(f"Unrecognised group: {extra_groups}. Valid group names are {defined_groups}")
+
+    return False if DEFAULT_GROUP_NAME in declared_groups else True
+
+
+def terminate_script(message: str = None):
+    logger.error(message)
+    sys.exit(message)

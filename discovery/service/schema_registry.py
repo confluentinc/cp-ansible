@@ -1,8 +1,9 @@
 import sys
 
 from discovery.service.service import AbstractPropertyBuilder
-from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
+from discovery.utils.constants import DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
+from discovery.utils.services import ConfluentServices, ServiceData
 from discovery.utils.utils import InputContext, Logger, FileUtils
 
 logger = Logger.get_logger()
@@ -32,11 +33,10 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.inventory = inventory
         self.input_context = input_context
         self.mapped_service_properties = set()
-        self.service = ConfluentServices.SCHEMA_REGISTRY
-        self.group = self.service.value.get("group")
+        self.service = ConfluentServices(input_context).SCHEMA_REGISTRY()
+        self.group = self.service.group
 
     def build_properties(self):
-
         # Get the hosts for given service
         hosts = self.get_service_host(self.service, self.inventory)
         self.hosts = hosts
@@ -60,7 +60,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         # Build Command line properties
         self.__build_runtime_properties(hosts)
 
-    def __build_daemon_properties(self, input_context: InputContext, service: ConfluentServices, hosts: list):
+    def __build_daemon_properties(self, input_context: InputContext, service: ServiceData, hosts: list):
 
         # User group information
         response = self.get_service_user_group(input_context, service, hosts)
@@ -82,7 +82,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         _host_service_properties = dict()
         for host in host_service_properties.keys():
             _host_service_properties[host] = host_service_properties.get(host).get(DEFAULT_KEY)
-        self.build_custom_properties(inventory=self.inventory, group=self.service.value.get('group'),
+        self.build_custom_properties(inventory=self.inventory, group=self.group,
                                      custom_properties_group_name=custom_group,
                                      host_service_properties=_host_service_properties, skip_properties=skip_properties,
                                      mapped_properties=mapped_properties)
@@ -113,13 +113,18 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         ssl_props['ssl_provided_keystore_and_truststore'] = True
         ssl_props['ssl_provided_keystore_and_truststore_remote_src'] = True
-
-        ssl_props["schema_registry_keystore_path"] = service_prop.get("ssl.keystore.location")
-        ssl_props["ssl_keystore_store_password"] = service_prop.get("ssl.keystore.password")
-        ssl_props["ssl_keystore_key_password"] = service_prop.get("ssl.key.password")
         ssl_props["schema_registry_truststore_path"] = service_prop.get("ssl.truststore.location")
-        ssl_props["ssl_truststore_password"] = service_prop.get("ssl.truststore.password")
         ssl_props['ssl_truststore_ca_cert_alias'] = ''
+        ssl_props["schema_registry_keystore_path"] = service_prop.get("ssl.keystore.location")
+
+        if service_prop.get("ssl.keystore.password").startswith("${securepass"):
+            ssl_props["ssl_keystore_store_password"] = "<<Value encrypted using secrets protection>>"
+            ssl_props["ssl_keystore_key_password"] = "<<Value encrypted using secrets protection>>"
+            ssl_props["ssl_truststore_password"] = "<<Value encrypted using secrets protection>>"
+        else:
+            ssl_props["ssl_keystore_store_password"] = service_prop.get("ssl.keystore.password")
+            ssl_props["ssl_keystore_key_password"] = service_prop.get("ssl.key.password")
+            ssl_props["ssl_truststore_password"] = service_prop.get("ssl.truststore.password")
 
         keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
                                                          keystorepass=ssl_props['ssl_keystore_store_password'],
@@ -186,8 +191,14 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key)
         if service_prop.get(key) is not None:
             metadata_user_info = service_prop.get(key)
-            property_dict['schema_registry_ldap_user'] = metadata_user_info.split(':')[0]
-            property_dict['schema_registry_ldap_password'] = metadata_user_info.split(':')[1]
+
+            if metadata_user_info.startswith("${securepass"):
+                property_dict['schema_registry_ldap_user'] = "<<Value encrypted using secrets protection>>"
+                property_dict['schema_registry_ldap_password'] = "<<Value encrypted using secrets protection>>"
+            else:
+                property_dict['schema_registry_ldap_user'] = metadata_user_info.split(':')[0]
+                property_dict['schema_registry_ldap_password'] = metadata_user_info.split(':')[1]
+
         return self.group, property_dict
 
     def _build_telemetry_properties(self, service_prop: dict) -> tuple:
@@ -198,12 +209,10 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         monitoring_details = self.get_monitoring_details(self.input_context, self.service, self.hosts,
                                                          'SCHEMA_REGISTRY_OPTS')
         service_monitoring_details = dict()
-        group_name = self.service.value.get("group")
-
         for key, value in monitoring_details.items():
-            service_monitoring_details[f"{group_name}_{key}"] = value
+            service_monitoring_details[f"{self.group}_{key}"] = value
 
-        return group_name, service_monitoring_details
+        return self.group, service_monitoring_details
 
     def _build_log4j_properties(self, service_properties: dict) -> tuple:
         log4j_file = self.get_log_file_path(self.input_context, self.service, self.hosts, "SCHEMA_REGISTRY_LOG4J_OPTS")

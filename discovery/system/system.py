@@ -7,9 +7,9 @@ __metaclass__ = type
 import re
 
 from discovery.manager.manager import SystemPropertyManager
-from discovery.utils.constants import ConfluentServices
 from discovery.utils.inventory import CPInventoryManager
-from discovery.utils.utils import InputContext, Logger
+from discovery.utils.services import ConfluentServices
+from discovery.utils.utils import InputContext, Logger, terminate_script
 
 logger = Logger.get_logger()
 
@@ -26,8 +26,7 @@ class SystemPropertyBuilder:
 
         mappings = SystemPropertyManager.get_service_host_mapping(self.input_context)
 
-        for service, hosts in mappings.items():
-            group = ConfluentServices.get_group_by_key(service)
+        for group, hosts in mappings.items():
             self.inventory.add_group(group)
             for host in hosts:
                 self.inventory.add_host(host, group)
@@ -48,8 +47,12 @@ class SystemPropertyBuilder:
         return self
 
     def with_installation_method(self):
-        host = self.input_context.ansible_hosts[0]
-        mappings = SystemPropertyManager.get_package_facts(self.input_context, host)
+        hosts = self.input_context.ansible_hosts
+        any_defined_group = res = next(iter(hosts))
+        host = hosts.get(any_defined_group, [])[0]
+        if not host:
+            terminate_script(f"No host found in group: {any_defined_group}")
+        mappings = SystemPropertyManager.get_package_facts(self.input_context, hosts=[host])
         installation_method = 'package' if mappings.get(host, None) else 'archive'
         self.inventory.set_variable('all', 'installation_method', installation_method)
 
@@ -65,8 +68,22 @@ class SystemPropertyBuilder:
             logger.error("Cannot find any CP service up and running. Cannot proceed for archive property details")
             return
 
-        host = service_facts.get(ConfluentServices.KAFKA_BROKER.name)[0]
-        service_details = SystemPropertyManager.get_service_details(self.input_context, ConfluentServices.KAFKA_BROKER,
+        confluent_services = ConfluentServices(self.input_context)
+        # check if we have kafka broker hosts available.
+        host = None
+        if service_facts.get(confluent_services.KAFKA_BROKER().name):
+            host = service_facts.get(confluent_services.KAFKA_BROKER().name)[0]
+        else:
+            if service_facts.get(confluent_services.ZOOKEEPER().name):
+                host = service_facts.get(confluent_services.ZOOKEEPER().name)[0]
+
+        if not host:
+            logger.error(f"Cannot find any host with either Broker or Zookeeper service running.\n"
+                         f"Cannot proceed with service property mappings.")
+            return
+
+        service_details = SystemPropertyManager.get_service_details(self.input_context,
+                                                                    confluent_services.KAFKA_BROKER(),
                                                                     [host])
         exec_start = service_details.get(host).get('status', {}).get('ExecStart', '')
         pattern = '.*path=(.*?)[\w\-\d\.]*\/bin'
