@@ -372,7 +372,10 @@ class ServicePropertyManager:
     def _get_env_from_service(input_context: InputContext, service: ServiceData, hosts: list) -> str:
         service_facts = SystemPropertyManager.get_service_details(input_context, service, hosts)
         service_facts = service_facts.get(hosts[0])
-        return service_facts.get("status").get("Environment", None)
+        environment = service_facts.get("status", dict()).get("Environment", None)
+        if not environment:
+            logger.warning(f"Could not find any environment variable for service {service.name}")
+        return environment
 
     @staticmethod
     def get_env_details(input_context: InputContext, service: ServiceData, hosts: list) -> dict:
