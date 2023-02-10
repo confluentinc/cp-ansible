@@ -36,10 +36,10 @@ platforms:
     networks:
       - name: confluent
   # MDS Zookeeper and Kafka
-  - name: mds-zookeeper1
-    hostname: mds-zookeeper1.confluent
+  - name: mds-${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: mds-${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
       - mds
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
@@ -291,11 +291,14 @@ provisioner:
           ssl_mutual_auth_enabled: true
           sasl_protocol: none
 
-        ${CONTROLLER_HOSTGROUP:-zookeeper}_kerberos_principal: "${CONTROLLER_HOSTGROUP:-zookeeper}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        ${CONTROLLER_HOSTGROUP:-zookeeper}_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/${CONTROLLER_HOSTGROUP:-zookeeper}-{{inventory_hostname}}.keytab"
+        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
 
         kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         kafka_broker_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
+
+        kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        kafka_broker_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_controller-{{inventory_hostname}}.keytab"
 
       ldap_server:
         ldaps_enabled: true
@@ -355,8 +358,10 @@ provisioner:
         keytab_output_directory: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs"
 
         kerberos_principals:
-          - principal: "${CONTROLLER_HOSTGROUP:-zookeeper}/${KRAFT_CONTROLLER:-zookeeper}1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/${CONTROLLER_HOSTGROUP:-zookeeper}-${KRAFT_CONTROLLER:-zookeeper}1.keytab"
+          - principal: "zookeeper/zookeeper1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/controller1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker2.confluent@{{kerberos.realm | upper}}"

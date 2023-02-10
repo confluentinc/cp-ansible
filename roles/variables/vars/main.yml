@@ -139,7 +139,7 @@ kafka_controller_properties:
       confluent.ansible.managed: 'true'
       confluent.license.topic: _confluent-command
       confluent.license.topic.replication.factor: "{{kafka_controller_default_internal_replication_factor}}"
-      confluent.metadata.topic.replication.factor: "{{kafka_controller_default_internal_replication_factor}}"
+      confluent.metadata.topic.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
       confluent.balancer.topic.replication.factor: "{{kafka_controller_default_internal_replication_factor}}"
       confluent.security.event.logger.exporter.kafka.topic.replicas: "{{audit_logs_destination_bootstrap_servers.split(',')|length if audit_logs_destination_enabled and rbac_enabled else kafka_controller_default_internal_replication_factor}}"
       confluent.support.metrics.enable: "true"
@@ -191,13 +191,21 @@ kafka_controller_properties:
     enabled: "{{ 'GSSAPI' in kafka_controller_sasl_enabled_mechanisms }}"
     properties:
       sasl.kerberos.service.name: "{{kerberos_kafka_controller_primary}}"
+  inter_broker_sasl:
+    enabled: "{{ kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol != 'none' }}"
+    properties:
+      sasl.mechanism.inter.broker.protocol: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol}}"
   rbac:
-    enabled: false
+    enabled: "{{ rbac_enabled }}"
     properties:
       authorizer.class.name: io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer
-      # ZK_ACL will not work with Kraft, refer https://cwiki.apache.org/confluence/display/KAFKA/KIP-801%3A+Implement+an+Authorizer+that+stores+metadata+in+__cluster_metadata for details
       confluent.authorizer.access.rule.providers: CONFLUENT,KRAFT_ACL
-      super.users: "User:{{ mds_super_user|default('mds') }}"
+      super.users: "User:{{ mds_super_user|default('mds') }};User:ANONYMOUS"
+      broker.users: "User:ANONYMOUS"
+  rbac_mds:
+    enabled: "{{rbac_enabled and not external_mds_enabled}}"
+    properties:
+      confluent.metadata.server.kraft.controller.enabled: true
   rbac_external_mds:
     enabled: "{{rbac_enabled and external_mds_enabled}}"
     properties:
@@ -425,7 +433,8 @@ kafka_broker_properties:
     properties:
       authorizer.class.name: io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer
       confluent.authorizer.access.rule.providers: CONFLUENT,{{ "ZK_ACL" if not kraft_enabled|bool else "KRAFT_ACL" }}
-      super.users: "User:{{ mds_super_user|default('mds') }}"
+      super.users: "User:{{ mds_super_user|default('mds') }};User:ANONYMOUS"
+      broker.users: "User:ANONYMOUS"
   rbac_mds:
     enabled: "{{ rbac_enabled and not external_mds_enabled }}"
     properties:
@@ -459,7 +468,7 @@ kafka_broker_properties:
     properties:
       confluent.metadata.bootstrap.servers: "{{mds_broker_bootstrap_servers}}"
   rbac_external_mds_client:
-    enabled: "{{rbac_enabled and external_mds_enabled and not kraft_enabled|bool}}"
+    enabled: "{{rbac_enabled and external_mds_enabled}}"
     properties: "{{ mds_broker_listener | confluent.platform.client_properties(ssl_enabled, fips_enabled, ssl_mutual_auth_enabled, sasl_protocol,
                             'confluent.metadata.', kafka_broker_truststore_path, kafka_broker_truststore_storepass, False, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                             false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,

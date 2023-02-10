@@ -1,4 +1,14 @@
 ---
+- name: Set Principal - Sasl Scram
+  set_fact:
+    kafka_controller_principal: "User:{{ sasl_scram_users_final.admin.principal }}"
+  when: listener['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'SCRAM-SHA-512'
+
+- name: Set Principal - Sasl Scram 256
+  set_fact:
+    kafka_controller_principal: "User:{{ sasl_scram256_users_final.admin.principal }}"
+  when: listener['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'SCRAM-SHA-256'
+
 - name: Set Principal - Sasl Plain
   set_fact:
     kafka_controller_principal: "User:{{ sasl_plain_users_final.admin.principal }}"
@@ -9,45 +19,41 @@
     kafka_controller_principal: "User:{{ kerberos_kafka_controller_primary }}"
   when: listener['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'GSSAPI'
 
-- name: Set Principal - Sasl Kerberos
+- name: Extract Distinguished Name from Keystore - SSL Mutual Auth
+  # Examine the keystore
+  # Search lines with Entry type: "PrivateKeyEntry" and return that line and all after, ca cert is of type "trustedCertEntry"
+  # Search for first "Owner" line
+  # Extract DNAME from line
+  # Remove spaces after commas
+  shell: |
+    keytool -list -keystore {{kc_keystore_path}} \
+        -storepass {{kc_keystore_storepass}} \
+        {% if fips_enabled|bool %}
+        -storetype BCFKS \
+        -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+        -providerpath {{ (binary_base_path, 'share/java/kafka/bc-fips-*.jar') | path_join }} \
+        {% endif %}
+        -v \
+        | grep PrivateKeyEntry -A1000 \
+        | grep Owner -m1 \
+        | cut -d ":" -f2 \
+        | cut -c2- \
+        | sed 's/\s*,\s*/,/g'
+  register: distinguished_name_from_keystore
+  changed_when: false
+  when:
+    - listener['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'none'
+    - listener['ssl_enabled'] | default(ssl_enabled) | bool
+    - listener['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
+  no_log: "{{ mask_sensitive_logs|bool }}"
+
+- name: Set Principal - SSL Mutual Auth
   set_fact:
-    kafka_controller_principal: "User:{{ kafka_controller_ldap_user }}"
-
-# - name: Extract Distinguished Name from Keystore - SSL Mutual Auth
-#   # Examine the keystore
-#   # Search lines with Entry type: "PrivateKeyEntry" and return that line and all after, ca cert is of type "trustedCertEntry"
-#   # Search for first "Owner" line
-#   # Extract DNAME from line
-#   # Remove spaces after commas
-#   shell: |
-#     keytool -list -keystore {{kc_keystore_path}} \
-#         -storepass {{kc_keystore_storepass}} \
-#         {% if fips_enabled|bool %}
-#         -storetype BCFKS \
-#         -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
-#         -providerpath {{ (binary_base_path, 'share/java/kafka/bc-fips-*.jar') | path_join }} \
-#         {% endif %}
-#         -v \
-#         | grep PrivateKeyEntry -A1000 \
-#         | grep Owner -m1 \
-#         | cut -d ":" -f2 \
-#         | cut -c2- \
-#         | sed 's/\s*,\s*/,/g'
-#   register: distinguished_name_from_keystore
-#   changed_when: false
-#   when:
-#     - listener['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'none'
-#     - listener['ssl_enabled'] | default(ssl_enabled) | bool
-#     - listener['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
-#   no_log: "{{ mask_sensitive_logs|bool }}"
-
-# - name: Set Principal - SSL Mutual Auth
-#   set_fact:
-#     kafka_controller_principal: "User:{{ extracted_principal }}"
-#   vars:
-#     extracted_principal: "{{distinguished_name_from_keystore.stdout if kafka_controller_final_properties['ssl.principal.mapping.rules'] is not defined \
-#                              else distinguished_name_from_keystore.stdout|confluent.platform.resolve_principal(kafka_controller_final_properties['ssl.principal.mapping.rules'])}}"
-#   when:
-#     - listener['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'none'
-#     - listener['ssl_enabled'] | default(ssl_enabled) | bool
-#     - listener['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
+    kafka_controller_principal: "User:{{ extracted_principal }}"
+  vars:
+    extracted_principal: "{{distinguished_name_from_keystore.stdout if kafka_controller_final_properties['ssl.principal.mapping.rules'] is not defined \
+                             else distinguished_name_from_keystore.stdout|confluent.platform.resolve_principal(kafka_controller_final_properties['ssl.principal.mapping.rules'])}}"
+  when:
+    - listener['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'none'
+    - listener['ssl_enabled'] | default(ssl_enabled) | bool
+    - listener['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool

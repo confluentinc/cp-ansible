@@ -37,10 +37,10 @@ platforms:
     networks:
       - name: confluent
   # MDS Zookeeper and Kafka
-  - name: mds-zookeeper1
-    hostname: mds-zookeeper1.confluent
+  - name: mds-${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: mds-${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
       - mds
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
@@ -252,6 +252,10 @@ provisioner:
 
         kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         kafka_broker_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
+        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
+        kafka_controller_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        kafka_controller_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_controller-{{inventory_hostname}}.keytab"
 
       mds:
         ssl_enabled: false
@@ -274,14 +278,10 @@ provisioner:
           ldap.group.name.attribute: cn
           ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
           ldap.user.object.class: account
-        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
 
       cluster2:
         ssl_enabled: true
         ssl_mutual_auth_enabled: true
-        ${CONTROLLER_HOSTGROUP:-zookeeper}_kerberos_principal: "${CONTROLLER_HOSTGROUP:-zookeeper}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        ${CONTROLLER_HOSTGROUP:-zookeeper}_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/${CONTROLLER_HOSTGROUP:-zookeeper}-{{inventory_hostname}}.keytab"
 
         kafka_broker_cluster_name: audit_logs
 
@@ -375,6 +375,8 @@ provisioner:
         kerberos_principals:
           - principal: "zookeeper/mds-zookeeper1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/zookeeper-mds-zookeeper1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/mds-controller1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-mds-controller1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-mds-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker2.confluent@{{kerberos.realm | upper}}"
