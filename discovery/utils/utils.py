@@ -168,7 +168,7 @@ class Arguments:
                                                ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
                                                ansible_python_interpreter=vars.get("ansible_python_interpreter"),
                                                output_file=vars.get("output_file"),
-                                               verbosity=vars.get("verbosity"),
+                                               verbosity=vars.get("verbosity", 3),
                                                from_version=vars.get("from_version"),
                                                service_overrides = vars.get("service_overrides"))
         return Arguments.input_context

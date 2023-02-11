@@ -302,6 +302,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         if key1 in service_props:
             return 'all', {'kafka_connect_ssl_enabled': True}
+        return 'all', {}
 
     def _build_ksql_ssl_properties(self, service_props) -> tuple:
         key1 = "confluent.controlcenter.ksql.default.ssl.enabled.protocols"
@@ -322,6 +323,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         if key1 in service_props:
             return 'all', {'ksql_ssl_enabled': True}
+        return 'all', {}
 
     def _build_sr_ssl_properties(self, service_props: dict) -> tuple:
         key1 = "confluent.controlcenter.schema.registry.sr-cluster.ssl.key.password"
@@ -338,6 +340,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         if key1 in service_props:
             return 'all', {'schema_registry_ssl_enabled': True}
+        return 'all', {}
 
 
 class ControlCenterServicePropertyBaseBuilder60(ControlCenterServicePropertyBaseBuilder):
