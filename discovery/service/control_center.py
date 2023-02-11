@@ -1,8 +1,9 @@
 import sys
 
 from discovery.service.service import AbstractPropertyBuilder
-from discovery.utils.constants import ConfluentServices, DEFAULT_KEY
+from discovery.utils.constants import DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
+from discovery.utils.services import ConfluentServices, ServiceData
 from discovery.utils.utils import InputContext, Logger, FileUtils
 
 logger = Logger.get_logger()
@@ -32,8 +33,8 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.inventory = inventory
         self.input_context = input_context
         self.mapped_service_properties = set()
-        self.service = ConfluentServices.CONTROL_CENTER
-        self.group = self.service.value.get("group")
+        self.service = ConfluentServices(input_context).CONTROL_CENTER()
+        self.group = self.service.group
 
     def build_properties(self):
 
@@ -59,7 +60,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         # Build Command line properties
         self.__build_runtime_properties(hosts)
 
-    def __build_daemon_properties(self, input_context: InputContext, service: ConfluentServices, hosts: list):
+    def __build_daemon_properties(self, input_context: InputContext, service: ServiceData, hosts: list):
 
         # User group information
         response = self.get_service_user_group(input_context, service, hosts)
@@ -81,7 +82,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         _host_service_properties = dict()
         for host in host_service_properties.keys():
             _host_service_properties[host] = host_service_properties.get(host).get(DEFAULT_KEY)
-        self.build_custom_properties(inventory=self.inventory, group=self.service.value.get('group'),
+        self.build_custom_properties(inventory=self.inventory, group=self.group,
                                      custom_properties_group_name=custom_group,
                                      host_service_properties=_host_service_properties, skip_properties=skip_properties,
                                      mapped_properties=mapped_properties)
@@ -112,7 +113,18 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         self.mapped_service_properties.add(key2)
         self.mapped_service_properties.add(key3)
         self.mapped_service_properties.add(key4)
-        return self.group, {"control_center_default_internal_replication_factor": int(service_prop.get(key1))}
+
+        replication_factor = 1
+        if service_prop.get(key1):
+            replication_factor = service_prop.get(key1)
+        elif service_prop.get(key2):
+            replication_factor = service_prop.get(key2)
+        elif service_prop.get(key3):
+            replication_factor = service_prop.get(key3)
+        elif service_prop.get(key4):
+            replication_factor = service_prop.get(key4)
+
+        return self.group, {"control_center_default_internal_replication_factor": replication_factor}
 
     def _build_ssl_properties(self, service_prop: dict) -> tuple:
         key = "confluent.controlcenter.rest.listeners"
@@ -135,13 +147,28 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         property_dict['ssl_provided_keystore_and_truststore_remote_src'] = True
         property_dict['control_center_truststore_path'] = service_prop.get(
             'confluent.controlcenter.rest.ssl.truststore.location')
-        property_dict['ssl_truststore_password'] = service_prop.get(
-            'confluent.controlcenter.rest.ssl.truststore.password')
+
+        password = service_prop.get('confluent.controlcenter.rest.ssl.truststore.password')
+        if password.startswith("${securepass"):
+            property_dict['ssl_truststore_password'] = "<<Value encrypted using secrets protection>>"
+        else:
+            property_dict['ssl_truststore_password'] = password
+
         property_dict['control_center_keystore_path'] = service_prop.get(
             'confluent.controlcenter.rest.ssl.keystore.location')
-        property_dict['ssl_keystore_store_password'] = service_prop.get(
-            'confluent.controlcenter.rest.ssl.keystore.password')
-        property_dict['ssl_keystore_key_password'] = service_prop.get('confluent.controlcenter.rest.ssl.key.password')
+
+        password = service_prop.get('confluent.controlcenter.rest.ssl.keystore.password')
+        if password.startswith("${securepass"):
+            property_dict['ssl_keystore_store_password'] = "<<Value encrypted using secrets protection>>"
+        else:
+            property_dict['ssl_keystore_store_password'] = password
+
+        password = service_prop.get('confluent.controlcenter.rest.ssl.key.password')
+        if password.startswith("${securepass"):
+            property_dict['ssl_keystore_key_password'] = "<<Value encrypted using secrets protection>>"
+        else:
+            property_dict['ssl_keystore_key_password'] = password
+
         property_dict['ssl_truststore_ca_cert_alias'] = ''
 
         keystore_aliases = self.get_keystore_alias_names(input_context=self.input_context,
@@ -170,7 +197,7 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
     def _build_mtls_property(self, service_prop: dict) -> tuple:
 
-        broker_group = ConfluentServices.KAFKA_BROKER.value.get('group')
+        broker_group = ConfluentServices(self.input_context).KAFKA_BROKER().group
         if broker_group in self.inventory.groups and \
                 'ssl_mutual_auth_enabled' in self.inventory.groups.get(broker_group).vars and \
                 self.inventory.groups.get(broker_group).vars.get('ssl_mutual_auth_enabled') is True:
@@ -259,6 +286,58 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 'control_center_kerberos_keytab_path': keytab
             }
         return 'all', {}
+
+    def _build_connect_ssl_properties(self, service_props) -> tuple:
+        key1 = "confluent.controlcenter.connect.ssl.key.password"
+        key2 = "confluent.controlcenter.connect.ssl.keystore.location"
+        key3 = "confluent.controlcenter.connect.ssl.keystore.password"
+        key4 = "confluent.controlcenter.connect.ssl.truststore.location"
+        key5 = "confluent.controlcenter.connect.ssl.truststore.password"
+
+        self.mapped_service_properties.add(key1)
+        self.mapped_service_properties.add(key2)
+        self.mapped_service_properties.add(key3)
+        self.mapped_service_properties.add(key4)
+        self.mapped_service_properties.add(key5)
+
+        if key1 in service_props:
+            return 'all', {'kafka_connect_ssl_enabled': True}
+
+    def _build_ksql_ssl_properties(self, service_props) -> tuple:
+        key1 = "confluent.controlcenter.ksql.default.ssl.enabled.protocols"
+        key2 = "confluent.controlcenter.ksql.default.ssl.key.password"
+        key3 = "confluent.controlcenter.ksql.default.ssl.keystore.location"
+        key4 = "confluent.controlcenter.ksql.default.ssl.keystore.password"
+        key5 = "confluent.controlcenter.ksql.default.ssl.protocol"
+        key6 = "confluent.controlcenter.ksql.default.ssl.truststore.location"
+        key7 = "confluent.controlcenter.ksql.default.ssl.truststore.password"
+
+        self.mapped_service_properties.add(key1)
+        self.mapped_service_properties.add(key2)
+        self.mapped_service_properties.add(key3)
+        self.mapped_service_properties.add(key4)
+        self.mapped_service_properties.add(key5)
+        self.mapped_service_properties.add(key6)
+        self.mapped_service_properties.add(key7)
+
+        if key1 in service_props:
+            return 'all', {'ksql_ssl_enabled': True}
+
+    def _build_sr_ssl_properties(self, service_props: dict) -> tuple:
+        key1 = "confluent.controlcenter.schema.registry.sr-cluster.ssl.key.password"
+        key2 = "confluent.controlcenter.schema.registry.sr-cluster.ssl.keystore.location"
+        key3 = "confluent.controlcenter.schema.registry.sr-cluster.ssl.keystore.password"
+        key4 = "confluent.controlcenter.schema.registry.sr-cluster.ssl.truststore.location"
+        key5 = "confluent.controlcenter.schema.registry.sr-cluster.ssl.truststore.password"
+
+        self.mapped_service_properties.add(key1)
+        self.mapped_service_properties.add(key2)
+        self.mapped_service_properties.add(key3)
+        self.mapped_service_properties.add(key4)
+        self.mapped_service_properties.add(key5)
+
+        if key1 in service_props:
+            return 'all', {'schema_registry_ssl_enabled': True}
 
 
 class ControlCenterServicePropertyBaseBuilder60(ControlCenterServicePropertyBaseBuilder):

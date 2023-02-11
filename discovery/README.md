@@ -12,7 +12,16 @@ Though this script tries to come up with inventory which is the closed represent
 
 These are dependencies for this script and should be installed on the machine where we are executing it from. This is not a requirement for managed nodes of the cluster.
 #### Hosts
-The discovery script needs list of hosts which is part of the existing cluster and services has to be discovered
+The discovery script needs list of hosts which is part of the existing cluster on which services has to be discovered. Apart from the list of hosts, the script also need the Confluent Service names. If these service names has been updated, the same should be provided under `service_override` section.
+
+```yaml
+all:
+  vars:
+    ansible_connection: docker
+    ansible_user: null
+    service_override:
+      zookeeper_service_name: myservice.zookeeper
+```
 
 ### How
 Discovery uses set of Python and Ansible scripts to build a cp-ansible compatible inventory file. Once we have the inventory file, we can use it for any cluster operation normally using cp-ansible.
@@ -22,30 +31,96 @@ cd <some_path>/ansible_collections/confluent/platform
 PYTHONPATH=. python discovery/main.py --input discovery/hosts.yml [optional arguments] 
 ```
 #### Sample input file (hosts.yml)
+A Cluster with un-known host group mappings. In this case, the script will try to map the service and corresponding hosts.
 ```yaml
-all:
-  vars:
-    ansible_connection: ssh
-    ansible_become: true
-    ansible_python_interpreter: auto
-    ansible_user: centos
-    ansible_become_user: root
-    ansible_become_method: sudo
-    ansible_ssh_extra_args: -o StrictHostKeyChecking=no
-    ansible_ssh_private_key_file: <path_to_private_key_to_login_to_vms>
-  hosts:
-    - ec2-35-164-166-99.us-west-2.compute.amazonaws.com
-    - ec2-35-164-166-99.us-west-2.compute.amazonaws.com
-    - ec2-35-86-106-150.us-west-2.compute.amazonaws.com
-    - ec2-54-191-208-245.us-west-2.compute.amazonaws.com
-    - ec2-35-164-166-99.us-west-2.compute.amazonaws.com
+vars:
+  ansible_connection: ssh
+  ansible_user: centos
+  ansible_become: true
+  ansible_ssh_extra_args: -o StrictHostKeyChecking=no
+  ansible_ssh_private_key_file: ~/Work/keys/muckrake.pem
+
+hosts:
+  all:
+    - ec2-35-85-206-158.us-west-2.compute.amazonaws.com
+    - ec2-44-236-74-105.us-west-2.compute.amazonaws.com
+    - ec2-35-85-206-158.us-west-2.compute.amazonaws.com
+    - ec2-44-236-74-105.us-west-2.compute.amazonaws.com
+    - ec2-54-212-15-112.us-west-2.compute.amazonaws.com
+    - ec2-34-219-160-51.us-west-2.compute.amazonaws.com
+    - ec2-18-237-83-100.us-west-2.compute.amazonaws.com
+    - ec2-34-209-150-254.us-west-2.compute.amazonaws.com
+    - ec2-54-245-5-52.us-west-2.compute.amazonaws.com
+
+```
+A Cluster with known host group mappings. Script will look for the configured services on the given hosts. Please update the service name if service names are non default, using service overrides values. 
+```yaml
+vars:
+  ansible_connection: ssh
+  ansible_user: centos
+  ansible_become: true
+  ansible_ssh_extra_args: -o StrictHostKeyChecking=no
+  ansible_ssh_private_key_file: ~/Work/keys/muckrake.pem
+
+hosts:
+  zookeeper:
+    - ec2-35-85-206-158.us-west-2.compute.amazonaws.com
+    - ec2-44-236-74-105.us-west-2.compute.amazonaws.com
+
+  kafka_broker:
+    - ec2-35-85-206-158.us-west-2.compute.amazonaws.com
+    - ec2-44-236-74-105.us-west-2.compute.amazonaws.com
+
+  schema_registry:
+    - ec2-54-212-15-112.us-west-2.compute.amazonaws.com
+    - ec2-34-219-160-51.us-west-2.compute.amazonaws.com
+
+  kafka_connect:
+    - ec2-18-237-83-100.us-west-2.compute.amazonaws.com
+    - ec2-34-209-150-254.us-west-2.compute.amazonaws.com
+
+  kafka_rest:
+    - ec2-54-245-5-52.us-west-2.compute.amazonaws.com
+
+  ksql:
+    - ec2-18-237-83-100.us-west-2.compute.amazonaws.com
+    - ec2-34-209-150-254.us-west-2.compute.amazonaws.com
+
+  control_center:
+    - ec2-54-245-5-52.us-west-2.compute.amazonaws.com
+
+```
+For a cluster running on local docker environment 
+```yaml
+
+vars:
+  ansible_connection: docker
+  service_override:
+    zookeeper_service_name: 'custom-service-name'
+hosts:
+  all:
+    - zookeeper1
+    - kafka-broker1
+    - kafka-broker2
+    - kafka-broker3
+    - schema-registry1
+    - kafka-rest1
+    - kafka-connect1
+    - ksql1
+    - control-center1
+
 ```
 
 #### Command Line options
-To get the verbose output from script and Ansible you can set the verbosity level between 0 to 4. Where 4 means more verbose.  
-We can override all input parameters from command line as well.
+##### verbose
+To get the verbose output from script and Ansible you can set the verbosity level between 0 to 4. Where 4 means more verbose.
+##### limit
+Use limit flag to limit the discovery for specified list of hosts
+##### output_file
+Use this flag to specify output inventory file name. Default value is inventory.yml
+
 ```shell
-python discovery/main.py --input discovery/hosts.yml --ansible_user some_user --ansible_connection docker 
+python discovery/main.py --input discovery/hosts.yml --verbose 4 --limit host1,host2
 ```
 ### FQA
 * **Can I use it for older CP versions**  
