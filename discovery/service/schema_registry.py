@@ -100,7 +100,7 @@ class SchemaRegistryServicePropertyBaseBuilder(AbstractPropertyBuilder):
         protocol = service_prop.get(key)
         self.mapped_service_properties.add(key)
         self.mapped_service_properties.add("security.protocol")
-        is_ssl = bool(f"{protocol == 'https'}")
+        is_ssl = True if protocol == 'https' else False
 
         ssl_props["ssl_enabled"] = is_ssl
         if not is_ssl:
