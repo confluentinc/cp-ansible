@@ -21,7 +21,6 @@ class FilterModule(object):
             'split_newline_to_dict': self.split_newline_to_dict,
             'listener_properties': self.listener_properties,
             'client_properties': self.client_properties,
-            'controller_properties': self.controller_properties,
             'c3_connect_properties': self.c3_connect_properties,
             'c3_ksql_properties': self.c3_ksql_properties,
             'resolve_principal': self.resolve_principal
@@ -276,68 +275,6 @@ class FilterModule(object):
 
             if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER' and not omit_jaas_configs:
                 final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"' +\
-                    oauth_username + '\" password=\"' + str(oauth_password) + '\" metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
-
-        return final_dict
-
-    def controller_properties(self, listener_dict, default_ssl_enabled, bouncy_castle_keystore, default_ssl_mutual_auth_enabled, default_sasl_protocol,
-                          config_prefix, truststore_path, truststore_storepass, public_certificates_enabled, keystore_path, keystore_storepass,
-                          keystore_keypass, omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
-                          sasl_scram256_username, sasl_scram256_password, kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
-                          omit_oauth_configs, oauth_username, oauth_password, mds_bootstrap_server_urls):
-        # For any kafka client's properties: Takes in a single kafka listener and output properties to connect to that listener
-        # Other inputs help fill out the properties
-        final_dict = {
-            config_prefix + 'security.protocol': self.kafka_protocol_defaults(listener_dict, default_ssl_enabled, default_sasl_protocol)
-        }
-        if listener_dict.get('ssl_enabled', default_ssl_enabled) and not public_certificates_enabled:
-            # Public certificates are in default java truststore, so these properties should be ommitted
-            final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
-            final_dict[config_prefix + 'ssl.truststore.password'] = str(truststore_storepass)
-
-        if listener_dict.get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
-            final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
-            final_dict[config_prefix + 'ssl.keystore.password'] = str(keystore_storepass)
-            final_dict[config_prefix + 'ssl.key.password'] = str(keystore_keypass)
-
-        if bouncy_castle_keystore:
-            final_dict[config_prefix + 'ssl.keymanager.algorithm'] = 'PKIX'
-            final_dict[config_prefix + 'ssl.trustmanager.algorithm'] = 'PKIX'
-            final_dict[config_prefix + 'ssl.keystore.type'] = 'BCFKS'
-            final_dict[config_prefix + 'ssl.truststore.type'] = 'BCFKS'
-
-        if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'PLAIN' and not omit_jaas_configs:
-            final_dict['sasl.mechanism.controller.protocol'] = 'PLAIN'
-            final_dict[config_prefix + 'plain.sasl.jaas.config'] = 'org.apache.kafka.common.security.plain.PlainLoginModule required username=\"' +\
-                sasl_plain_username +\
-                '\" password=\"' +\
-                str(sasl_plain_password) + '\";'
-
-        if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'SCRAM-SHA-512' and not omit_jaas_configs:
-            final_dict['sasl.mechanism.controller.protocol'] = 'SCRAM-SHA-512'
-            final_dict[config_prefix + 'scram-sha-512.sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' +\
-                sasl_scram_username + '\" password=\"' + str(sasl_scram_password) + '\";'
-
-        if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'SCRAM-SHA-256' and not omit_jaas_configs:
-            final_dict['sasl.mechanism.controller.protocol'] = 'SCRAM-SHA-256'
-            final_dict[config_prefix + 'scram-sha-256.sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' +\
-                sasl_scram256_username + '\" password=\"' + sasl_scram256_password + '\";'
-
-        if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI':
-            final_dict['sasl.mechanism.controller.protocol'] = 'GSSAPI'
-            final_dict[config_prefix + 'sasl.kerberos.service.name'] = kerberos_kafka_broker_primary
-
-        # if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI' and not omit_jaas_configs:
-        #     final_dict[config_prefix + 'gssapi.sasl.jaas.config'] = 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' +\
-        #         keytab_path + '\" principal=\"' + kerberos_principal + '\";'
-
-        if not omit_oauth_configs:
-            if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER':
-                final_dict['sasl.mechanism.controller.protocol'] = 'OAUTHBEARER'
-                final_dict[config_prefix + 'oauthbearer.sasl.login.callback.handler.class'] = 'io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler'
-
-            if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER' and not omit_jaas_configs:
-                final_dict[config_prefix + 'oauthbearer.sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"' +\
                     oauth_username + '\" password=\"' + str(oauth_password) + '\" metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
 
         return final_dict
