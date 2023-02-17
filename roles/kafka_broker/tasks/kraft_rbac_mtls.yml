@@ -1,0 +1,22 @@
+---
+- name: Add Broker's Principal to Controller's Super Users List
+  slurp:
+    src: "/etc/controller/server.properties"
+  delegate_to: "{{ groups['kafka_controller'][0] }}"
+  register: controller_server
+
+- set_fact:
+    controller_super_users: "{{ (((controller_server['content'] | b64decode).split('\n') | select('match','super.users*')) + [ hostvars[groups['kafka_broker'][0]]['kafka_broker_principal']] ) | unique | join(';') }}"
+
+- name: replace
+  shell: sed -i '/^super.users/c\{{controller_super_users}}' /etc/controller/server.properties
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['kafka_controller'] }}"
+
+- name: Restart kafka controller
+  include_tasks: controller_restart.yml 
+
+- name: Restart kafka broker
+  ansible.builtin.debug:
+    msg: "restarting kafka broker"
+  notify: restart kafka

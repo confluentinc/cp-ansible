@@ -29,6 +29,12 @@
     super_users: "{{ super_users + [ hostvars[item]['kafka_broker_principal'] ] }}"
   loop: "{{ groups['kafka_broker'] }}"
 
+- name: Add Each Controller's Principal to Broker's Super Users List
+  set_fact:
+    super_users: "{{ super_users + [ hostvars[item]['kafka_controller_principal'] ] }}"
+  loop: "{{ groups['kafka_controller'] }}"
+  when: kraft_enabled|bool and kafka_controller_ssl_mutual_auth_enabled|bool
+
 - name: Remove Duplicates and Convert to String
   set_fact:
     super_users: "{{ super_users | unique | join(';') }}"
@@ -40,6 +46,11 @@
           'super.users': super_users
       }
     ) }}"
+
+- name: Add Broker's Principal to Controller's Super Users List
+  include_tasks: kraft_rbac_mtls.yml
+  when: kraft_enabled|bool and kafka_controller_ssl_mutual_auth_enabled|bool
+  run_once: true
 
 - name: Create SSL Certificate Directory
   file:
