@@ -34,6 +34,12 @@ options:
         description:
             - Dict of active connectors (each connector object must have a 'name' and a 'config' field)
         required: true
+    timeout:
+        type: int
+        description:
+            - Specify timeout while connecting to connect REST server
+        required: false
+        default: 60
 
 author:
     - Laurent Domenech-Cabaud (@ldom)
@@ -43,6 +49,7 @@ EXAMPLES = '''
 - name: Deploy Some connector
   connect_url: kafka_connect_http_protocol://0.0.0.0:kafka_connect_rest_port/connectors
   active_connectors: [{"name": "test-6-sink", "config": { .../... }},{"name": "test-5-sink", "config": { .../... }}]
+  timeout: 20
 '''
 
 RETURN = '''
@@ -82,11 +89,11 @@ def remove_connector(connect_url, name):
 
 
 # return value: success (bool), changed (bool), message (str)
-def create_new_connector(connect_url, name, config):
+def create_new_connector(connect_url, name, config, timeout):
     data = json.dumps({'name': name, 'config': config})
     headers = {'Content-Type': 'application/json'}
     try:
-        r = open_url(method='POST', url=connect_url, data=data, headers=headers, validate_certs=False)
+        r = open_url(method='POST', url=connect_url, data=data, headers=headers, validate_certs=False, timeout=timeout)
     except urllib_error.HTTPError as e:
         message = "error while adding new connector configuration ({})".format(e)
         return False, False, message
@@ -149,11 +156,11 @@ def get_connector_status(connect_url, connector_name):
 
 
 # return value: success (bool), changed (bool), message (str)
-def update_existing_connector(connect_url, name, config):
+def update_existing_connector(connect_url, name, config, timeout):
     url = "{}/{}/config".format(connect_url, name)
     restart_url = "{}/{}/restart".format(connect_url, name)
 
-    res = open_url(url, validate_certs=False)
+    res = open_url(url, validate_certs=False, timeout=timeout)
     current_config = json.loads(res.read())
 
     existing_config = config.copy()
@@ -217,6 +224,7 @@ def run_module():
     module_args = dict(
         connect_url=dict(type='str', required=True),
         active_connectors=dict(type='list', elements='dict', required=True),
+        timeout=dict(type='int', required=False, default=60),
     )
 
     result = dict(changed=False, message='')
@@ -258,13 +266,15 @@ def run_module():
                 success, changed, message = update_existing_connector(
                     connect_url=module.params['connect_url'],
                     name=connector['name'],
-                    config=connector['config']
+                    config=connector['config'],
+                    timeout=module.params['timeout']
                 )
             except ValueError:
                 success, changed, message = create_new_connector(
                     connect_url=module.params['connect_url'],
                     name=connector['name'],
-                    config=connector['config']
+                    config=connector['config'],
+                    timeout=module.params['timeout']
                 )
 
             if changed:  # one connector changed is enough
