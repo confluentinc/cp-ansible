@@ -17,6 +17,13 @@
     - validate
     - validate_ansi_version
 
+- name: Check the presence of Controller and Zookeeper
+  fail:
+    msg:  "Providing Zookeeper and Controller both are not supported at this time. Please remove one of these from your inventory"
+  when:
+    - ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) | bool
+    - ('zookeeper' in groups.keys() and groups['zookeeper'] | length > 0) | bool
+
 - name: Gather OS Facts
   setup:
     gather_subset:
@@ -37,12 +44,6 @@
     - validate
     - validate_python_version
     - notest
-
-- name: Host Validations
-  include_tasks: host_validations.yml
-  when: validate_hosts|bool and deployment_strategy != "rolling"
-  tags:
-    - validate
 
 - name: Red Hat Repo Setup and Java Installation
   include_tasks: redhat.yml
@@ -71,6 +72,9 @@
     state: directory
     mode: 0755
   when: installation_method == "archive"
+  tags:
+    - privileged
+    - filesystem
 
 # If the target directory (i.e. creates) doesn't exist then download and expand the remote archive into target
 - name: Expand remote Confluent Platform archive
@@ -83,6 +87,8 @@
     mode: 0755
     creates: "{{binary_base_path}}"
   when: installation_method == "archive"
+  tags:
+    - privileged
 
 - name: Create Jolokia directory
   file:
@@ -90,6 +96,9 @@
     state: directory
     mode: 0755
   when: jolokia_enabled|bool
+  tags:
+    - privileged
+    - filesystem
 
 - name: Copy Jolokia Jar
   copy:
@@ -99,6 +108,8 @@
   when:
     - jolokia_enabled|bool
     - not jolokia_url_remote|bool
+  tags:
+    - privileged
 
 - name: Download Jolokia Jar
   get_url:
@@ -114,6 +125,8 @@
     - jolokia_enabled|bool
     - jolokia_url_remote|bool
     - not ansible_check_mode # (Bug ansible/ansible#65687)
+  tags:
+    - privileged
 
 - name: Create Prometheus install directory
   file:
@@ -121,6 +134,9 @@
     state: directory
     mode: 0755
   when: jmxexporter_enabled|bool
+  tags:
+    - privileged
+    - filesystem
 
 - name: Copy Prometheus Jar
   copy:
@@ -130,6 +146,8 @@
   when:
     - jmxexporter_enabled|bool
     - not jmxexporter_url_remote|bool
+  tags:
+    - privileged
 
 - name: Download Prometheus JMX Exporter Jar
   get_url:
@@ -145,6 +163,8 @@
     - jmxexporter_enabled|bool
     - jmxexporter_url_remote|bool
     - not ansible_check_mode # (Bug ansible/ansible#65687)
+  tags:
+    - privileged
 
 - name: Install Confluent CLI
   include_tasks: confluent_cli.yml

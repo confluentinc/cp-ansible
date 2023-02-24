@@ -21,7 +21,9 @@
   vars:
     service_name: "{{ kafka_connect_service_name }}"
   when: installation_method == "package"
-  tags: package
+  tags:
+    - package
+    - cp_package
 
 - name: Install the Kafka Connect Packages
   yum:
@@ -31,12 +33,13 @@
   until: install_kafka_connect_package_result is success  or ansible_check_mode
   retries: 5
   delay: 90
-  loop: "{{kafka_connect_packages}}"
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
   ignore_errors: "{{ ansible_check_mode }}"
-  tags: package
+  tags:
+    - package
+    - cp_package
   notify: restart connect distributed
 
 - name: Install the Kafka Connect Packages
@@ -46,12 +49,13 @@
   until: install_kafka_connect_package_result is success  or ansible_check_mode
   retries: 5
   delay: 90
-  loop: "{{kafka_connect_packages}}"
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
   ignore_errors: "{{ ansible_check_mode }}"
-  tags: package
+  tags:
+    - package
+    - cp_package
   notify: restart connect distributed
 
 - name: Create Kafka Connect Group
@@ -90,6 +94,7 @@
   when: installation_method == "archive"
   tags:
     - systemd
+    - privileged
 
 # Non-Archive File deployments need to create SystemD service units when the user changes the service name
 - name: Copy Kafka Connect Service from default install to system
@@ -100,6 +105,8 @@
     mode: 0644
     force: true
   when: installation_method != "archive" and kafka_connect_default_service_name != kafka_connect_service_name
+  tags:
+    - privileged
 
 - include_role:
     name: ssl
@@ -161,6 +168,7 @@
     group: "{{kafka_connect_group}}"
   tags:
     - filesystem
+    - privileged
 
 - name: Create Kafka Connect Config
   template:
@@ -173,6 +181,7 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
+    - privileged
 
 - name: Create Kafka Connect Config with Secrets Protection
   include_role:
@@ -207,6 +216,7 @@
   tags:
     - filesystem
     - log
+    - privileged
 
 - name: Update Connect log4j Config for Log Cleanup
   include_role:
@@ -232,6 +242,7 @@
   tags:
     - filesystem
     - log
+    - privileged
 
 - name: Create logredactor rule file directory
   file:
@@ -241,6 +252,7 @@
   when: (kafka_connect_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
+    - privileged
 
 - name: Copy logredactor rule file from control node to component node
   copy:
@@ -250,6 +262,7 @@
   when: (kafka_connect_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
+    - privileged
 
 - name: Configure logredactor
   include_role:
@@ -284,6 +297,7 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
+    - privileged
 
 - name: Deploy JMX Exporter Config File
   copy:
@@ -295,6 +309,7 @@
   when: kafka_connect_jmxexporter_enabled|bool
   tags:
     - configuration
+    - privileged
 
 - name: Create Basic Auth Jaas File
   template:
@@ -305,6 +320,8 @@
     group: "{{kafka_connect_group}}"
   notify: restart connect distributed
   when: kafka_connect_authentication_type == 'basic'
+  tags:
+    - privileged
 
 - name: Create Basic Auth Password File
   template:
@@ -315,6 +332,8 @@
     group: "{{kafka_connect_group}}"
   notify: restart connect distributed
   when: kafka_connect_authentication_type == 'basic'
+  tags:
+    - privileged
 
 - name: Create Service Override Directory
   file:
@@ -325,6 +344,7 @@
     mode: 0640
   tags:
     - systemd
+    - privileged
 
 - name: Write Service Overrides
   template:
@@ -337,6 +357,7 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - systemd
+    - privileged
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true

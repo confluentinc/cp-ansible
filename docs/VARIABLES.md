@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.3.0
+Default:  7.3.1
 
 ***
 
@@ -190,9 +190,17 @@ Default:  0
 
 ### kerberos_configure
 
-Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, keberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary
+Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, kerberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary
 
 Default:  true
+
+***
+
+### kerberos_client_config_file_dest
+
+Custom path for the location of kerberos client configuration file, works with any value of kerberos_configure
+
+Default:  /etc/krb5.conf
 
 ***
 
@@ -448,7 +456,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  2.28.1
+Default:  3.2.1
 
 ***
 
@@ -912,7 +920,7 @@ Default:  "{{ skip_restarts }}"
 
 Default controller quorum voters
 
-Default:  "{% for inventory_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{inventory_hostname[-1]|int + 9990}}@{{inventory_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{controller_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
 
 ***
 
@@ -920,7 +928,7 @@ Default:  "{% for inventory_hostname in groups.kafka_controller|default([]) %}{%
 
 Default Kafka config prefix. Only valid to customize when installation_method: archive
 
-Default:  "{{ config_prefix }}/kafka"
+Default:  "{{ config_prefix }}/controller"
 
 ***
 

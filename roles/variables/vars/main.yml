@@ -1,5 +1,5 @@
 ---
-confluent_ansible_branch: 7.3.1-post
+confluent_ansible_branch: 7.3.2-post
 
 systemd_base_dir: "{{'/lib/systemd/system' if ansible_os_family == 'Debian' else '/usr/lib/systemd/system'}}"
 
@@ -9,9 +9,9 @@ confluent_repo_version: "{{ confluent_package_version | regex_replace('^([0-9])\
 ssl_file_dir_final: "{{ ssl_file_dir |regex_replace('\\/$', '') }}"
 
 ### The base path for the binary files. When in Archive File deployment mode this results in binary files being based in, for example `/opt/confluent/confluent-5.5.1/bin`, otherwise they are based in `/usr/bin`.
-base_path: "{{ ((config_base_path,('confluent-',confluent_package_version) | join) | path_join) if installation_method == 'archive' else '/' }}"
+base_path: "{{ ((config_base_path,('confluent-',archive_version) | join) | path_join) if installation_method == 'archive' else '/' }}"
 
-binary_base_path: "{{ ((config_base_path,('confluent-',confluent_package_version) | join) | path_join) if installation_method == 'archive' else '/usr' }}"
+binary_base_path: "{{ ((config_base_path,('confluent-',archive_version) | join) | path_join) if installation_method == 'archive' else '/usr' }}"
 
 ### Runs kafka in Kraft mode if controller is present
 kraft_enabled: "{{ true if 'kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0 else false }}"
@@ -26,6 +26,11 @@ kafka_connect_config_prefix_path: "{{ kafka_connect_config_prefix.strip('/') }}"
 ksql_config_prefix_path: "{{ ksql_config_prefix.strip('/') }}"
 control_center_config_prefix_path: "{{ control_center_config_prefix.strip('/') }}"
 kafka_connect_replicator_config_prefix_path: "{{ kafka_connect_replicator_config_prefix.strip('/') }}"
+
+# Jolokia vars
+kafka_broker_jolokia_java_arg_ssl_addon: ",keystore={{kafka_broker_keystore_path}},keystorePassword={{kafka_broker_keystore_storepass}},protocol=https"
+kafka_broker_jolokia_urp_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
+kafka_broker_jolokia_active_controller_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ActiveControllerCount"
 
 #### Zookeeper Variables ####
 zookeeper_service_name: confluent-zookeeper
@@ -436,6 +441,14 @@ kafka_broker_properties:
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups }}"
     properties:
       confluent.schema.registry.url: "{{schema_registry_url}}"
+  sr_ssl:
+    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_ssl_enabled }}"
+    properties:
+      confluent.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      confluent.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
+      confluent.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
+      confluent.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
+      confluent.ssl.key.password: "{{kafka_broker_keystore_keypass}}"
   sr_ssl_fips:
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_ssl_enabled and fips_enabled }}"
     properties:
@@ -488,6 +501,7 @@ kafka_broker_properties:
       confluent.metadata.server.ssl.trustmanager.algorithm: PKIX
       confluent.metadata.server.ssl.keystore.type: BCFKS
       confluent.metadata.server.ssl.truststore.type: BCFKS
+      confluent.metadata.server.http2.enabled: false
   rbac_external_mds:
     enabled: "{{rbac_enabled and external_mds_enabled}}"
     properties:
@@ -514,12 +528,13 @@ kafka_broker_properties:
       confluent.http.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
       confluent.http.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   embedded_rest_proxy_ssl_fips:
-    enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_ssl_enabled and fips_enabled}}"
+    enabled: "{{ kafka_broker_rest_proxy_enabled and kafka_broker_rest_ssl_enabled and fips_enabled}}"
     properties:
       confluent.http.server.ssl.keymanager.algorithm: PKIX
       confluent.http.server.ssl.trustmanager.algorithm: PKIX
       confluent.http.server.ssl.keystore.type: BCFKS
       confluent.http.server.ssl.truststore.type: BCFKS
+      confluent.http.server.http2.enabled: false
   embedded_rest_proxy_basic:
     enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_proxy_authentication_type == 'basic' }}"
     properties:

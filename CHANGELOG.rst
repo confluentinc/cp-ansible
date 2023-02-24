@@ -4,6 +4,17 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.3.2
+======
+
+Notable enhancements
+-------------
+
+- Added provision to configure Kafka Connect Replicator custom rest extension classes
+- For archive installations, fixed logic to use `config_prefix` variable for zookeeper, kafka broker, schema registry, kafka connect
+- Skip "Install pip" and "Upgrade pip" tasks using `package` tag
+- Introduced new tag `cp_package` for installing/ upgrading confluent packages
+
 
 v7.3.1
 ======

@@ -1,19 +1,3 @@
-### molecule/mtls-java11-debian
-
-#### Scenario mtls-java11-debian test's the following:
-
-Installation of Confluent Platform on Debian9.
-
-MTLS enabled.
-
-Java 11.
-
-#### Scenario mtls-java11-debian verify test's the following:
-
-Validates that Java 11 is in use.
-
-***
-
 ### molecule/archive-community-plaintext-rhel
 
 #### Scenario archive-community-plaintext-rhel test's the following:
@@ -114,7 +98,7 @@ Validates that FIPS security is enabled on the Brokers.
 
 Validates that logredactor is functioning properly for all components as per the rule file.
 
-***
+#### Scenario archive-community-plaintext-rhel verify test's the following:
 
 ### molecule/archive-plain-ubuntu
 
@@ -174,8 +158,6 @@ SASL SCRAM protocol.
 
 TLS Enabled.
 
-Secrets Protection.
-
 Custom Archive owner.
 
 #### Scenario archive-scram-rhel verify test's the following:
@@ -186,7 +168,7 @@ Validates that SASL SCRAM is Protocol is set.
 
 Validates that TLS is configured properly.
 
-***
+Logredactor enabled for all components.
 
 ### molecule/broker-scale-up
 
@@ -236,7 +218,7 @@ Kerberos protocol.
 
 TLS Enabled.
 
-Custom TLS certificates.
+SSL Enabled.
 
 #### Scenario confluent-kafka-kerberos-customcerts-rhel verify test's the following:
 
@@ -382,7 +364,7 @@ Validates that SASL SSL Protocol is enabled across all components.
 
 Installation of Confluent Platform on centos7.
 
-Kerberos enabled.
+Kerberos enabled with custom client config path
 
 #### Scenario kerberos-rhel verify test's the following:
 
@@ -438,15 +420,15 @@ Validates that Keystore is present.
 
 ***
 
-### molecule/mtls-customcerts-rhel
+### molecule/kerberos-customcerts-rhel
 
-#### Scenario mtls-customcerts-rhel test's the following:
+#### Scenario kerberos-customcerts-rhel test's the following:
 
 Installation of Confluent Platform on centos8.
 
-MTLS enabled with custom certificates.
+TLS Enabled with custom certs.
 
-#### Scenario mtls-customcerts-rhel verify test's the following:
+Kerberos enabled.
 
 Verifies that keystore is present on all components.
 
@@ -490,6 +472,22 @@ Validates that Java 17 is in Use
 
 ***
 
+### molecule/mtls-java11-debian
+
+#### Scenario mtls-java11-debian test's the following:
+
+Installation of Confluent Platform on Debian9.
+
+MTLS enabled.
+
+Java 11.
+
+#### Scenario mtls-java11-debian verify test's the following:
+
+Validates that Java 11 is in use.
+
+***
+
 ### molecule/mtls-java8-ubuntu
 
 #### Scenario mtls-java8-ubuntu test's the following:
@@ -503,6 +501,36 @@ Java 8.
 #### Scenario mtls-java8-ubuntu verify test's the following:
 
 Validates that Java 11 is in use.
+
+***
+
+### molecule/mtls-java8-ubuntu
+
+#### Scenario mtls-java8-ubuntu test's the following:
+
+Installation of Confluent Platform on Ubuntu1804.
+
+MTLS enabled.
+
+Java 8.
+
+#### Scenario mtls-java8-ubuntu verify test's the following:
+
+Validates that Java 11 is in use.
+
+***
+
+### molecule/mtls-ubuntu
+
+#### Scenario mtls-ubuntu test's the following:
+
+Installation of Confluent Platform on Ubuntu1804.
+
+MTLS enabled.
+
+#### Scenario mtls-ubuntu verify test's the following:
+
+Validates that protocol is set to SSl across all components.
 
 ***
 
@@ -523,20 +551,6 @@ Validates that MTLS is enabled.
 Validates mapping rules for ACLs.
 
 Validates ACL users.
-
-***
-
-### molecule/mtls-ubuntu
-
-#### Scenario mtls-ubuntu test's the following:
-
-Installation of Confluent Platform on Ubuntu1804.
-
-MTLS enabled.
-
-#### Scenario mtls-ubuntu verify test's the following:
-
-Validates that protocol is set to SSl across all components.
 
 ***
 
@@ -636,7 +650,7 @@ Validates that SASL Plaintext protocol is set across components.
 
 Validates that Connectors are present on Kafka Connect.
 
-***
+Validates that SASL Plaintext protocol is set across components.
 
 ### molecule/plaintext-basic-rhel
 
@@ -656,9 +670,9 @@ Validates that Java 17 is in Use
 
 ***
 
-### molecule/plaintext-rhel
+### molecule/plaintext-rhel-customrepo
 
-#### Scenario plaintext-rhel test's the following:
+#### Scenario plaintext-rhel-customrepo test's the following:
 
 Installation of Confluent Platform on centos8.
 
@@ -666,7 +680,9 @@ Copying local JMX agent.
 
 Copying local files.
 
-#### Scenario plaintext-rhel verify test's the following:
+Custom yum Repository
+
+#### Scenario plaintext-rhel-customrepo verify test's the following:
 
 Validates Package version installed.
 
@@ -694,7 +710,7 @@ Customer keystore alias.
 
 Validates that keystores are in place across all components.
 
-***
+Validates that keystores are in place across all components.
 
 ### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10
 
@@ -814,6 +830,8 @@ RBAC enabled.
 
 Kerberos enabled.
 
+Provided kerberos client config (kerberos_configure:false) file with custom location
+
 Kafka broker custom listener.
 
 RBAC additional system admin user.
@@ -894,7 +912,7 @@ Validates that MDS is HTTP on Cluster1 (MDS).
 
 Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
-***
+Validates that keystores are in place.
 
 ### molecule/rbac-mds-mtls-custom-kerberos-rhel
 
@@ -956,7 +974,7 @@ Validates that MDS is HTTP on Cluster1 (MDS).
 
 Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
-***
+Provided user supplied keystore and truststore already present on the host
 
 ### molecule/rbac-mds-mtls-existing-keystore-truststore-ubuntu
 
@@ -1078,7 +1096,7 @@ RBAC enabled.
 
 MTLS enabled.
 
-Secrets protection disabled
+Secrets protection enabled
 
 Kafka Broker Customer Listener.
 
@@ -1304,8 +1322,6 @@ TLS enabled.
 
 Customer zookeeper root.
 
-Secrets Protection enabled.
-
 Jolokia has TLS disabled.
 
 #### Scenario zookeeper-tls-rhel verify test's the following:
@@ -1313,22 +1329,6 @@ Jolokia has TLS disabled.
 Validates that Zookeeper is using TLS.
 
 Validates that other components are using SCRAM for auth.
-
-***
-
-### molecule/mtls-java11-rhel
-
-#### Scenario mtls-java11-rhel test's the following:
-
-Installation of Confluent Platform on CentOS7.
-
-MTLS enabled.
-
-Java 11.
-
-#### Scenario mtls-java11-rhel verify test's the following:
-
-Validates that Java 11 is in use.
 
 ***
 

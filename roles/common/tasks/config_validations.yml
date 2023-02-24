@@ -1,7 +1,7 @@
 ---
-- name: Retrieve SSL key hash on Local Host
+- name: Retrieve SSL public key hash from private key on Local Host
   shell:
-    cmd: openssl rsa -noout -modulus | openssl md5
+    cmd: openssl pkey -pubout | openssl md5
     stdin: "{{ lookup('file', ssl_key_filepath) }}"
   register: key_hash_local
   delegate_to: localhost
@@ -26,9 +26,9 @@
     - validate_ssl_keys_certs
   loop: "{{group_names}}"
 
-- name: Retrieve SSL key hash on Remote Host
+- name: Retrieve SSL public key Hash from private key on Remote Host
   shell:
-    cmd: openssl rsa -noout -modulus | openssl md5
+    cmd: openssl pkey -pubout | openssl md5
     stdin: "{{ remote_key['results'][group_idx].content | b64decode }}"
   register: key_hash_remote
   changed_when: false
@@ -42,9 +42,9 @@
   loop_control:
     index_var: group_idx
 
-- name: Retrieve SSL cert hash on Local Host
+- name: Retrieve SSL public key hash from X509 certificate on Local Host
   shell:
-    cmd: openssl x509 -noout -modulus | openssl md5
+    cmd: openssl x509 -noout -pubkey | openssl md5
     stdin: "{{ lookup('file', ssl_signed_cert_filepath) }}"
   register: cert_hash_local
   delegate_to: localhost
@@ -69,9 +69,9 @@
     - validate_ssl_keys_certs
   loop: "{{group_names}}"
 
-- name: Retrieve SSL cert hash on Remote Host
+- name: Retrieve SSL public key hash from X509 certificate on Remote Host
   shell:
-    cmd: openssl x509 -noout -modulus | openssl md5
+    cmd: openssl x509 -noout -pubkey | openssl md5
     stdin: "{{ remote_cert['results'][group_idx].content | b64decode }}"
   register: cert_hash_remote
   changed_when: false
@@ -85,21 +85,21 @@
   loop_control:
     index_var: group_idx
 
-- name: get key hash
+- name: get public key hash from private key
   set_fact:
     key_hash: "{{key_hash_remote if ssl_custom_certs_remote_src|bool else key_hash_local}}"
   tags:
     - validate
     - validate_ssl_keys_certs
 
-- name: get cert hash
+- name: get public key hash from X509 cert
   set_fact:
     cert_hash: "{{cert_hash_remote if ssl_custom_certs_remote_src|bool else cert_hash_local}}"
   tags:
     - validate
     - validate_ssl_keys_certs
 
-- name: Assert SSL key hash matches SSL cert hash
+- name: Assert SSL public key hash from private key matches public key hash from Cert
   assert:
     that: key_hash['results'][group_idx].stdout == cert_hash['results'][group_idx].stdout and not key_hash['results'][group_idx].stderr|length > 0
     fail_msg: >-
