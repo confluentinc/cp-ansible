@@ -1,34 +1,13 @@
 ---
-- name: Extract Controller node id from meta.properties
-  slurp:
-    src: "{{ kafka_controller_final_properties['log.dirs'] }}/meta.properties"
-  register: controller_metadata
-
-- name: Add Each Broker's Principal to Controller's Super Users List
+- name: Add Super Users list to Kafka Controller Properties
   set_fact:
-    final_super_users: "{{ hostvars[controller_host]['super_users'] + ';' + hostvars[groups.kafka_broker[0]]['kafka_broker_principal'] }}"
-  args:
-    apply:
-      delegate_to: "{{controller_host}}"
-      delegate_facts: true
-
-- name: Add Super Users list and node id to Kafka Controller Properties
-  set_fact:
-    kafka_controller_final_properties: "{{ kafka_controller_final_properties | combine(
+    kafka_controller_final_properties: "{{ hostvars[controller_host]['kafka_controller_final_properties'] | combine(
       {
-          'super.users': final_super_users, 'node.id': (controller_metadata['content'] | b64decode).partition('node.id=')[2].partition('\n')[0]
+          'super.users': hostvars[controller_host]['super_users'] + ';' + hostvars[groups.kafka_broker[0]]['kafka_broker_principal']
       }
     ) }}"
-  args:
-    apply:
-      delegate_to: "{{controller_host}}"
-      delegate_facts: true
 
 - name: Create Kafka Controller Config
   include_role:
     name: kafka_controller
     tasks_from: create_config.yml
-  args:
-    apply:
-      delegate_to: "{{controller_host}}"
-      delegate_facts: true
