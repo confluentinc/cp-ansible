@@ -5,6 +5,19 @@ Ansible Playbooks for Confluent Platform - Release Notes
 .. contents:: Topics
 
 
+v7.0.8
+======
+
+Notable enhancements
+-------------
+
+- Improve error handling deploying kafka connectors
+- Add confluent.ssl.* properties
+- Fix export certificates from Keystore and Truststore
+- Fix JMX Exporter Rules
+- Support custom kerberos client config file and custom path
+
+
 v7.0.7
 ======
 
