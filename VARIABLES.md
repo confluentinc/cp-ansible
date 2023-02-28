@@ -148,6 +148,14 @@ Default:  true
 
 ***
 
+### kerberos_client_config_file_dest
+
+Custom path for the location of kerberos client configuration file, works with any value of kerberos_configure
+
+Default:  /etc/krb5.conf
+
+***
+
 ### confluent_server_enabled
 
 Boolean to install commercially licensed confluent-server instead of community version: confluent-kafka
