@@ -196,6 +196,14 @@ Default:  true
 
 ***
 
+### kerberos_client_config_file_dest
+
+Custom path for the location of kerberos client configuration file, works with any value of kerberos_configure
+
+Default:  /etc/krb5.conf
+
+***
+
 ### required_disk_space_mb
 
 Variable to define minimum free disk space in MB for installation.
