@@ -4,6 +4,21 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.3.3
+======
+
+Notable enhancements
+-------------
+
+- Move out host validations as an on-demand playbook
+- Improve error handling deploying kafka connectors
+- Add confluent.ssl.* properties
+- Fix export certificates logic from Keystore and Truststore
+- Fix JMX Exporter Rules
+- Support custom kerberos client config file and custom path
+- Add retries to register cluster task
+
+
 v7.3.2
 ======
 
