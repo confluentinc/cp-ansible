@@ -3028,14 +3028,6 @@ Default:  connect-configs
 
 ***
 
-### kafka_connect_replicator_consumer_timestamps_topic
-
-Set this variable to customize the topic where Kafka Connect Replicator consumer stores it's timestamps.
-
-Default:   __consumer_timestamps
-
-***
-
 ### kafka_connect_replicator_white_list
 
 Set this variable with a comma seperated list of Topics for Kafka Connect Replicator to replicate from.  This is a mandatory variable.
