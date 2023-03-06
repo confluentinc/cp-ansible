@@ -581,10 +581,12 @@ class SystemValidator:
         hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_input_context(input_context)
         if not hosts or len(hosts) == 0:
             terminate_script("Empty host list. Please refer to documentation for correct host format")
+
+        inventory = AnsibleRunnerUtils.get_inventory_dict(input_context)
         ansible_runner.run(
             quiet=input_context.verbosity <= 3,
             host_pattern=host_pattern,
-            inventory=AnsibleRunnerUtils.get_inventory_dict(input_context),
+            inventory=inventory,
             module='ansible.builtin.ping',
             event_handler=runner_utils.my_event_handler
         )
@@ -592,11 +594,13 @@ class SystemValidator:
         if runner_utils.result_ok:
             alive_hosts = runner_utils.result_ok.keys()
             failed_hosts.extend(hosts - alive_hosts)
-            logger.info(f"Connection was successful to:\n{yaml.dump(list(alive_hosts), indent=2, default_flow_style=False)}")
+            logger.info(
+                f"Connection was successful to:\n{yaml.dump(list(alive_hosts), indent=2, default_flow_style=False)}")
         else:
             failed_hosts.extend(hosts)
 
         if failed_hosts:
-            message = f"Could not connect to hosts:\n{yaml.dump(list(failed_hosts), indent=2, default_flow_style=False)}.\n" \
-                      f"Please verify the hostnames, ssh user and key"
+            message = f"Could not connect to hosts:\n{yaml.dump(list(failed_hosts), indent=2, default_flow_style=False)}\n" \
+                      f"Please verify the following details:\n" \
+                      f"{yaml.dump(inventory['all']['vars'], indent=2, default_flow_style=False)}"
             terminate_script(message)
