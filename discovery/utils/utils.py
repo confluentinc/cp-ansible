@@ -6,6 +6,7 @@ from os.path import exists
 import yaml
 from jproperties import Properties
 
+
 def singleton(class_):
     instances = {}
 
@@ -82,7 +83,7 @@ class InputContext:
     ansible_become = False
     ansible_user = None
     ansible_hosts = None
-    ansible_become_user = None
+    ansible_become_user = 'root'
     ansible_become_method = 'sudo'
     ansible_ssh_private_key_file = None
     ansible_ssh_extra_args = None
@@ -91,6 +92,7 @@ class InputContext:
     from_version = None
     verbosity = 0
     service_overrides = dict()
+    skip_validation = False
 
     def __init__(self,
                  ansible_hosts,
@@ -102,10 +104,11 @@ class InputContext:
                  ansible_ssh_private_key_file,
                  verbosity,
                  ansible_ssh_extra_args,
-                 ansible_python_interpreter=None,
-                 from_version=None,
-                 output_file=None,
-                 service_overrides = {}):
+                 ansible_python_interpreter,
+                 from_version,
+                 output_file,
+                 service_overrides,
+                 skip_validation):
         self.ansible_hosts = ansible_hosts
         self.ansible_connection = ansible_connection
         self.ansible_user = ansible_user
@@ -119,9 +122,11 @@ class InputContext:
         self.verbosity = verbosity
         self.output_file = output_file
         self.service_overrides = service_overrides
+        self.skip_validation = skip_validation
+
 
 class Arguments:
-    input_context:InputContext = None
+    input_context: InputContext = None
 
     @staticmethod
     def parse_arguments():
@@ -135,6 +140,7 @@ class Arguments:
         parser.add_argument("--from_version", type=str, help="Target cp cluster version")
         parser.add_argument("--verbosity", type=int, help="Log level")
         parser.add_argument("--output_file", type=str, help="Generated output inventory file")
+        parser.add_argument("--skip_validation", type=bool, default=False, help="Skip validations")
 
         # Read arguments from command line
         return parser.parse_args()
@@ -170,7 +176,8 @@ class Arguments:
                                                output_file=vars.get("output_file"),
                                                verbosity=vars.get("verbosity", 3),
                                                from_version=vars.get("from_version"),
-                                               service_overrides = vars.get("service_overrides"))
+                                               service_overrides=vars.get("service_overrides"),
+                                               skip_validation=vars.get('skip_validation'))
         return Arguments.input_context
 
     @classmethod
@@ -235,6 +242,9 @@ class Arguments:
 
         if args.output_file:
             vars['output_file'] = args.output_file
+
+        if args.skip_validation:
+            vars['skip_validation'] = bool(args.skip_validation)
 
         # set default values of some variables explicitly
         vars['ansible_python_interpreter'] = vars.get('ansible_python_interpreter', 'auto')
@@ -304,7 +314,7 @@ class FileUtils:
         return FileUtils.__read_service_configuration_file("kafka_replicator.yml").get(name, [])
 
 
-def _host_group_declared_in_inventory(hosts:dict, input_context:InputContext) -> bool:
+def _host_group_declared_in_inventory(hosts: dict, input_context: InputContext) -> bool:
     from discovery.utils.services import ConfluentServices
     from discovery.utils.constants import DEFAULT_GROUP_NAME
 
