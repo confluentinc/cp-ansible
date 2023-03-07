@@ -35,10 +35,10 @@ platforms:
     networks:
       - name: confluent
   # MDS Zookeeper and Kafka
-  - name: mds-zookeeper1
-    hostname: mds-zookeeper1.confluent
+  - name: mds-${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: mds-${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
       - mds
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
@@ -221,6 +221,9 @@ provisioner:
         mds_super_user: mds
         mds_super_user_password: password
 
+        kafka_controller_ldap_user: kafka_controller
+        kafka_controller_ldap_password: password
+
         kafka_broker_ldap_user: kafka_broker
         kafka_broker_ldap_password: password
 
@@ -248,8 +251,12 @@ provisioner:
           kdc_hostname: mds-kerberos1
           admin_hostname: mds-kerberos1
 
+        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
         kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         kafka_broker_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
+        kafka_controller_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        kafka_controller_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_controller-{{inventory_hostname}}.keytab"
 
         custom_java_path: /opt/jdk17 # Use custom Java 17
 
@@ -268,13 +275,9 @@ provisioner:
           ldap.group.name.attribute: cn
           ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
           ldap.user.object.class: account
-        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
 
       cluster2:
         external_mds_enabled: true
-        ${CONTROLLER_HOSTGROUP:-zookeeper}_kerberos_principal: "${CONTROLLER_HOSTGROUP:-zookeeper}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        ${CONTROLLER_HOSTGROUP:-zookeeper}_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/${CONTROLLER_HOSTGROUP:-zookeeper}-{{inventory_hostname}}.keytab"
 
         mds_broker_bootstrap_servers: mds-kafka-broker1:9093,mds-kafka-broker2:9093
         mds_bootstrap_server_urls: http://mds-kafka-broker1:8090,http://mds-kafka-broker2:8090
@@ -292,12 +295,16 @@ provisioner:
         kerberos_principals:
           - principal: "zookeeper/mds-zookeeper1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/zookeeper-mds-zookeeper1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/mds-controller1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-mds-controller1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-mds-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker2.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-mds-kafka-broker2.keytab"
-          - principal: "${CONTROLLER_HOSTGROUP:-zookeeper}/${KRAFT_CONTROLLER:-zookeeper}1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/${CONTROLLER_HOSTGROUP:-zookeeper}-${KRAFT_CONTROLLER:-zookeeper}1.keytab"
+          - principal: "zookeeper/zookeeper1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/controller1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker2.confluent@{{kerberos.realm | upper}}"
@@ -342,3 +349,7 @@ provisioner:
             password: "{{mds_super_user_password}}"
             uid: 9993
             guid: 93
+          - username: "{{kafka_controller_ldap_user}}"
+            password: "{{kafka_controller_ldap_password}}"
+            uid: 9992
+            guid: 92
