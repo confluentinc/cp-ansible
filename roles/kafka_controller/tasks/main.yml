@@ -147,7 +147,7 @@
     kerberos_keytab_destination_path: "{{kafka_controller_keytab_path}}"
     kerberos_handler: "restart Kafka Controller"
   when:
-    - "'GSSAPI' in kafka_controller_sasl_enabled_mechanisms"
+    - "'GSSAPI' in kafka_controller_sasl_enabled_mechanisms or mds_broker_listener.sasl_protocol =='kerberos'"
 
 - name: Copy Custom Kafka Files
   include_role:
@@ -161,9 +161,9 @@
   tags:
     - configuration
 
-- name: Set Permissions on /var/lib/kafka
+- name: Set Permissions on /var/lib/controller
   file:
-    path: /var/lib/kafka/
+    path: /var/lib/controller/
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
     state: directory
@@ -392,12 +392,12 @@
 # We need to start MDS here to proceed with secrets protection
 - meta: flush_handlers
 
-# Starting confluent cli v2, secrets protection works only when rbac
+# secrets protection for controller works only when remote MDS is already up
 - name: Encrypt secrets
   include_tasks: secrets_protection.yml
   when:
     - kafka_controller_secrets_protection_enabled|bool or kafka_controller_client_secrets_protection_enabled|bool
-    - rbac_enabled|bool
+    - rbac_enabled|bool and external_mds_enabled|bool
 
 - meta: flush_handlers
 
@@ -416,14 +416,6 @@
     - kafka_controller_health_checks_enabled|bool
     - not ansible_check_mode
   tags: health_check
-
-- name: Register Cluster
-  include_tasks: register_cluster.yml
-  when: kafka_controller_cluster_name|length > 0 and rbac_enabled|bool
-
-- name: Create RBAC Rolebindings
-  include_tasks: rbac_rolebindings.yml
-  when: kafka_controller_additional_system_admins|length > 0
 
 - name: Delete temporary keys/certs when keystore and trustore is provided
   file:
