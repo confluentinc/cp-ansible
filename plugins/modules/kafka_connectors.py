@@ -39,7 +39,7 @@ options:
         description:
             - Specify timeout while connecting to connect REST server
         required: false
-        default: 60
+        default: 30
 
 author:
     - Laurent Domenech-Cabaud (@ldom)
@@ -72,9 +72,9 @@ WAIT_TIME_BEFORE_GET_STATUS = 1  # seconds
 TIMEOUT_WAITING_FOR_TASK_STATUS = 30  # seconds
 
 
-def get_current_connectors(connect_url):
+def get_current_connectors(connect_url, timeout):
     try:
-        res = open_url(connect_url, validate_certs=False)
+        res = open_url(connect_url, validate_certs=False, timeout=timeout)
         return json.loads(res.read())
     except urllib_error.HTTPError as e:
         if e.code != 404:
@@ -82,9 +82,9 @@ def get_current_connectors(connect_url):
         return []
 
 
-def remove_connector(connect_url, name):
+def remove_connector(connect_url, name, timeout):
     url = "{}/{}".format(connect_url, name)
-    r = open_url(method='DELETE', url=url, validate_certs=False)
+    r = open_url(method='DELETE', url=url, validate_certs=False, timeout=timeout)
     return r.getcode() == 200
 
 
@@ -102,7 +102,7 @@ def create_new_connector(connect_url, name, config, timeout):
     changed = True
     message = "new connector added"
 
-    is_running, failures_msg = get_connector_status(connect_url, name)
+    is_running, failures_msg = get_connector_status(connect_url, name, timeout)
     if not is_running:
         success = False
         message = failures_msg
@@ -120,11 +120,11 @@ def truncate_error_message(message):
 
 # to be successful, the connector and all its tasks must be running
 # if anything fails, we fail and return the associated error messages
-def get_connector_status(connect_url, connector_name):
+def get_connector_status(connect_url, connector_name, timeout):
     time.sleep(WAIT_TIME_BEFORE_GET_STATUS)
     status_url = "{}/{}/status".format(connect_url, connector_name)
 
-    res = open_url(status_url, validate_certs=False)
+    res = open_url(status_url, validate_certs=False, timeout=timeout)
     current_status = json.loads(res.read())
 
     connector_status = current_status['connector']['state']
@@ -141,7 +141,7 @@ def get_connector_status(connect_url, connector_name):
         if time_waited > TIMEOUT_WAITING_FOR_TASK_STATUS:
             return False, "timeout getting task status"
 
-        res = open_url(status_url, validate_certs=False)
+        res = open_url(status_url, validate_certs=False, timeout=timeout)
         current_status = json.loads(res.read())
         nb_tasks = len(current_status['tasks'])
 
@@ -178,7 +178,7 @@ def update_existing_connector(connect_url, name, config, timeout):
     headers = {'Content-Type': 'application/json'}
     r = None
     try:
-        r = open_url(method='PUT', url=url, data=data, headers=headers, validate_certs=False)
+        r = open_url(method='PUT', url=url, data=data, headers=headers, validate_certs=False, timeout=timeout)
     except urllib_error.HTTPError as e:
         message = "error while updating configuration ({})".format(e)
         success = False
@@ -193,7 +193,7 @@ def update_existing_connector(connect_url, name, config, timeout):
     message = "connector configuration updated"
     success = True
     try:
-        r = open_url(method='POST', url=restart_url, validate_certs=False)
+        r = open_url(method='POST', url=restart_url, validate_certs=False, timeout=timeout)
     except urllib_error.HTTPError:
         pass
     finally:
@@ -205,7 +205,7 @@ def update_existing_connector(connect_url, name, config, timeout):
     # get the connector's status
     # if failed, return it
     # if there's a rebalance, wait for it to finish? how?
-    is_running, failures_msg = get_connector_status(connect_url, name)
+    is_running, failures_msg = get_connector_status(connect_url, name, timeout)
     if not is_running:
         success = False
         message = failures_msg
@@ -224,7 +224,7 @@ def run_module():
     module_args = dict(
         connect_url=dict(type='str', required=True),
         active_connectors=dict(type='list', elements='dict', required=True),
-        timeout=dict(type='int', required=False, default=60),
+        timeout=dict(type='int', required=False, default=30),
     )
 
     result = dict(changed=False, message='')
@@ -247,12 +247,12 @@ def run_module():
     output_messages = []
     added_updated_messages = []
     try:
-        current_connector_names = get_current_connectors(connect_url=module.params['connect_url'])
+        current_connector_names = get_current_connectors(connect_url=module.params['connect_url'], timeout=module.params['timeout'])
         active_connector_names = (c['name'] for c in module.params['active_connectors'])
         deleted_connector_names = set(current_connector_names) - set(active_connector_names)
 
         for to_delete in deleted_connector_names:
-            remove_connector(connect_url=module.params['connect_url'], name=to_delete)
+            remove_connector(connect_url=module.params['connect_url'], name=to_delete, timeout=module.params['timeout'])
 
         if deleted_connector_names:
             output_messages.append("Connectors removed: {}.".format(', '.join(deleted_connector_names)))
