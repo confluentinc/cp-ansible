@@ -4668,6 +4668,14 @@ Default:  30
 
 ***
 
+### kafka_connect_deploy_connector_timeout
+
+Time in seconds to wait while deploying kafka connector
+
+Default:  30
+
+***
+
 # kafka_rest
 
 Below are the supported variables for the role kafka_rest
