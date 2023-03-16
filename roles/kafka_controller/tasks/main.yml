@@ -107,7 +107,7 @@
     force: true
   tags:
     - systemd
-
+    - privileged
 
 - include_role:
     name: ssl
@@ -181,6 +181,7 @@
     mode: 0750
   tags:
     - filesystem
+    - privileged
 
 - name: Set Permissions on Data Dir files  # noqa deprecated-command-syntax
   # Have to use command + chown instead of the Ansible file module here as it seems
@@ -200,6 +201,7 @@
     group: "{{kafka_controller_group}}"
   tags:
     - filesystem
+    - privileged
 
 
 - name: Create Kafka Controller Config
@@ -213,6 +215,7 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
+    - privileged
 
 - name: Create Kafka Controller Client Config
   template:
@@ -224,6 +227,7 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
+    - privileged
 
 - name: Include Kraft tasks
   include_tasks: kraft_tasks.yml
@@ -238,6 +242,7 @@
   tags:
     - filesystem
     - log
+    - privileged
 
 - name: Update Kafka log4j Config for Log Cleanup
   include_role:
@@ -263,6 +268,7 @@
   tags:
     - filesystem
     - log
+    - privileged
 
 - name: Create logredactor rule file directory
   file:
@@ -272,6 +278,7 @@
   when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
+    - privileged
 
 - name: Copy logredactor rule file from control node to component node
   copy:
@@ -281,6 +288,7 @@
   when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
+    - privileged
 
 - name: Configure logredactor
   include_role:
@@ -315,6 +323,7 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
+    - privileged
 
 - name: Create Kafka Controller Jaas Config
   template:
@@ -328,6 +337,7 @@
   notify: restart Kafka Controller
   tags:
     - configuration
+    - privileged
 
 - name: Deploy JMX Exporter Config File
   template:
@@ -339,6 +349,7 @@
   when: kafka_controller_jmxexporter_enabled|bool
   tags:
     - configuration
+    - privileged
 
 - name: Create Service Override Directory
   file:
@@ -349,6 +360,7 @@
     mode: 0640
   tags:
     - systemd
+    - privileged
 
 - name: Write Service Overrides
   template:
@@ -361,6 +373,7 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - systemd
+    - privileged
 
 - name: Create sysctl directory on Debian distributions
   file:
@@ -425,4 +438,6 @@
     - "{{kafka_controller_ca_cert_path}}"
     - "{{kafka_controller_cert_path}}"
     - "{{kafka_controller_key_path}}"
-  when: (ssl_provided_keystore_and_truststore | bool)
+  when:
+    - (ssl_provided_keystore_and_truststore | bool)
+    - not ( ( kafka_controller_secrets_protection_enabled|bool or kafka_controller_client_secrets_protection_enabled|bool) and (rbac_enabled|bool and not external_mds_enabled|bool) )
