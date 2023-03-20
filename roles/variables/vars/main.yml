@@ -154,9 +154,10 @@ kafka_controller_properties:
       process.roles: controller
       controller.quorum.voters: "{{ kafka_controller_quorum_voters }}"
       controller.listener.names: "{{kafka_controller_listeners['controller']['name']}}"
-      listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %}"
+      listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %},{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}"
       listeners: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
       node.id: "{{ node_id|default(groups.kafka_controller.index(inventory_hostname)|int + 9991) if inventory_hostname in groups.kafka_controller else 0}}"
+      inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
   kraft_sasl_plain:
     enabled: "{{kafka_controller_sasl_protocol=='plain'}}"
     properties:
@@ -350,6 +351,7 @@ kafka_broker_properties:
       confluent.support.customer.id: anonymous
       log.dirs: "/var/lib/kafka/data"
       kafka.rest.enable: "{{kafka_broker_rest_proxy_enabled|string|lower}}"
+      inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
   broker_on_controller:
     enabled: "{{kraft_enabled|bool}}"
     properties:
@@ -358,7 +360,6 @@ kafka_broker_properties:
       controller.listener.names: "{{kafka_controller_listeners['controller']['name']}}"
       listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %},{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
       listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['ip'] | default('') }}:{{ listener['value']['port'] }}{% endfor %}"
-      inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
       confluent.cluster.link.metadata.topic.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
   broker_on_zookeeper:
     enabled: "{{not kraft_enabled|bool}}"
@@ -367,7 +368,6 @@ kafka_broker_properties:
       listener.security.protocol.map: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
       zookeeper.connection.timeout.ms: 18000
       zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
-      inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
   controller_sasl:
     enabled: "{{ kraft_enabled|bool and kafka_controller_listeners['controller']['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol != 'none' }}"
     properties:
