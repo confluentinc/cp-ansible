@@ -7,41 +7,63 @@
 
 - name: Verify - kafka_controller
   hosts: kafka_controller
-  gather_facts: false
+  gather_facts: true
+  vars:
+    controller_user: kc-test-user
+    ansible_os_family: RedHat
   tasks:
+    - name: Create Controller User
+      user:
+        name: "{{controller_user}}"
+        comment: "Controller User"
+        system: true
+        group: cp-test-group
+
+    - name: Create Controller Log Directory
+      file:
+        path: /kafka/logs/
+        state: directory
+        recurse: true
+        group: cp-test-group
+        owner: "{{controller_user}}"
+        mode: 0770
+
+    - name: Restart Service
+      systemd:
+        daemon_reload: true
+        name: "{{kafka_controller_service_name}}"
+        state: restarted
+
     - import_role:
-        name: variables
+        name: kafka_controller
+        tasks_from: health_check.yml
+
+    - name: Restart Service
+      systemd:
+        daemon_reload: true
+        name: "{{kafka_broker_service_name}}"
+        state: restarted
+
+    - import_role:
+        name: kafka_broker
+        tasks_from: health_check.yml
+
     - import_role:
         name: confluent.test
-        tasks_from: check_property.yml
+        tasks_from: check_ownership.yml
       vars:
-        file_path: /etc/controller/server.properties
-        property: controller.quorum.voters
-        expected_value: "{{ kafka_controller_quorum_voters }}"
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/controller/server.properties
-        property: process.roles
-        expected_value: controller
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/controller/server.properties
-        property: listeners
-        expected_value: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
+        file_name: controller.log
+        custom_path: /kafka/logs/
+        group: cp-test-group
+        user: kc-test-user
 
 - name: Verify - Zookeeper User Change and custom logging path
-  # Kraft:TODO: Same validations for kraft controller
   hosts: zookeeper
   gather_facts: true
   vars:
     zookeeper_user: zk-test-user
     ansible_os_family: RedHat
   tasks:
-    # Kraft:TODO: Create similar verifications for Kraft controller as well
     - name: Create Zookeeper User
       user:
         name: "{{zookeeper_user}}"
