@@ -190,7 +190,8 @@ Default:  0
 
 ### kerberos_configure
 
-Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, kerberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary
+Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, kerberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary.
+Optional variables: kerberos.kdc_port (default: 88), kerberos.admin_port (default: 749)
 
 Default:  true
 
