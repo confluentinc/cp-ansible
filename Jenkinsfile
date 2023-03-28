@@ -1,6 +1,6 @@
 #!/usr/bin/env groovy
 
-import static groovy.json.JsonOutput.*
+import static groovy.json.JsonOutput.* 
 
 /* These are variables that can be used to test an un-released version of the Confluent Platform that resides at
  * a different HTTPS Endpoint other than `https://packages.confluent.io`. You do not need to specify *any* of them
