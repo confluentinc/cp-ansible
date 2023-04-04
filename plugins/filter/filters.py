@@ -384,5 +384,7 @@ class FilterModule(object):
                     elif case[0].startswith('U'):
                         principal_mapping_value = mapping_value.upper()
                     break
-
+            if bool(matched):
+                # Remaining rules in the list are ignored when match is found
+                break
         return principal_mapping_value
