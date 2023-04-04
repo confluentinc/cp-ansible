@@ -379,9 +379,9 @@ class FilterModule(object):
                     mapping_value = mapping_value.strip()
                     principal_mapping_value = mapping_value
 
-                    if case[0] == 'L':
+                    if case[0].startswith('L'):
                         principal_mapping_value = mapping_value.lower()
-                    elif case[0] == 'U':
+                    elif case[0].startswith('U'):
                         principal_mapping_value = mapping_value.upper()
                     break
 
