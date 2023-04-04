@@ -366,7 +366,7 @@ class FilterModule(object):
         list_of_rules = [i for i in list_of_rules if i]
 
         for rule_str in list_of_rules:
-            mapping_pattern, mapping_value, *case = rule_str.split('/')
+            mapping_pattern, mapping_value, *options = rule_str.split('/')
             for common_name in common_names:
                 matched = re.match(mapping_pattern, common_name)
                 if bool(matched):
@@ -378,10 +378,10 @@ class FilterModule(object):
                     # Remove leading and trailing whitespaces
                     mapping_value = mapping_value.strip()
                     principal_mapping_value = mapping_value
-
-                    if case[0].startswith('L'):
+                    case = [option for option in options[0].split(',') if option]
+                    if case and case[0] == 'L':
                         principal_mapping_value = mapping_value.lower()
-                    elif case[0].startswith('U'):
+                    elif case and case[0] == 'U':
                         principal_mapping_value = mapping_value.upper()
                     break
             if bool(matched):
