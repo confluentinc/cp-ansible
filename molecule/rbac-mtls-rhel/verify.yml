@@ -376,7 +376,7 @@
         that:
           - dname == "{{ common_names|confluent.platform.resolve_principal(rules) }}"
       vars:
-        rules: "^CN=(.*?), OU=(.*?)$/$1/U"
+        rules: "^CN=(.*?), OU=(.*?)$/$1/U,DEFAULT"
         common_names: "CN=kafka-server1, OU=KAFKA"
         dname: KAFKA-SERVER1
 
@@ -403,6 +403,24 @@
         that:
           - dname == "{{ common_names|confluent.platform.resolve_principal(rules) }}"
       vars:
-        rules: "RULE:^cn=(.*?),ou=(.*?),dc=(.*?),dc=(.*?)$/$1/LRULE:^CN=(.*?), OU=(.*?), O=(.*?), L=(.*?), ST=(.*?), C=(.*?)$/$1@$2/"
+        rules: "RULE:^cn=(.*?),ou=(.*?),dc=(.*?),dc=(.*?)$/$1/U,RULE:^CN=(.*?), OU=(.*?), O=(.*?), L=(.*?), ST=(.*?), C=(.*?)$/$1@$2/"
         common_names: "cn=kafka1,ou=SME,dc=mycp,dc=com"
-        dname: kafka1
+        dname: KAFKA1
+
+    - name: Validate first rule gets applied in case of multiple rule matches
+      assert:
+        that:
+          - dname == "{{ common_names|confluent.platform.resolve_principal(rules) }}"
+      vars:
+        rules: "RULE:^cn=(.*?),ou=(.*?),dc=(.*?),dc=(.*?)$/$1/U,RULE:^cn=(.*?),ou=(.*?),dc=(.*?),dc=(.*?)$/$1/L"
+        common_names: "cn=kafka1,ou=SME,dc=mycp,dc=com"
+        dname: KAFKA1
+
+    - name: Validate multiple mapping rule with default
+      assert:
+        that:
+          - dname == "{{ common_names|confluent.platform.resolve_principal(rules) }}"
+      vars:
+        rules: "RULE:^cn=(.*?),ou=(.*?),dc=(.*?),dc=(.*?)$/$1/L,RULE:^CN=(.*?), OU=(.*?), O=(.*?), L=(.*?), ST=(.*?), C=(.*?)$/$1@$2/,DEFAULT"
+        common_names: "cn=kafka1,ou=SME,dc=mycp"
+        dname: "cn=kafka1,ou=SME,dc=mycp"
