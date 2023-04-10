@@ -4,6 +4,17 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.2.5
+======
+
+Notable fixes
+-------------
+
+- Introduced timeouts while deploying connector
+- Minor fixes to support confluent CLI v3
+- Added retries for few tasks
+- Fixed minor bugs in SSL principal mapping rule logic
+
 v7.2.4
 ======
 
