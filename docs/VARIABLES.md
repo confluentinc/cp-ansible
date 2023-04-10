@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.2.4
+Default:  7.2.5
 
 ***
 
@@ -414,9 +414,9 @@ Default:  "/etc"
 
 ### confluent_cli_download_enabled
 
-Boolean to have cp-ansible download the Confluent CLI
+Boolean to have cp-ansible download the Confluent CLI, required to be enabled in case of secrets protection
 
-Default:  "{{rbac_enabled}}"
+Default:  "{{ secrets_protection_enabled }}"
 
 ***
 
@@ -4374,7 +4374,7 @@ Default:  "https://s3-us-west-2.amazonaws.com/confluent.cloud"
 
 A path reference to a local archive file or URL. By default this is the URL from Confluent CLI repository.
 
-Default:  "{{confluent_cli_repository_baseurl}}/confluent-cli/archives/{{confluent_cli_version}}/{{confluent_cli_binary}}_{{(confluent_cli_version == 'latest') | ternary('', 'v')}}{{confluent_cli_version}}_{{ansible_system|lower}}_{{confluent_cli_goarch[ansible_architecture]}}.tar.gz"
+Default:  "{{confluent_cli_repository_baseurl}}/confluent-cli/archives/{{confluent_cli_version}}/{{confluent_cli_binary}}_{{(confluent_cli_version is version('3.0.0', '>=')) | ternary('', 'v')}}{{confluent_cli_version}}_{{ansible_system|lower}}_{{confluent_cli_goarch[ansible_architecture]}}.tar.gz"
 
 ***
 
