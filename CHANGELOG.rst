@@ -4,6 +4,19 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.3.4
+======
+
+Notable fixes
+-------------
+
+- Introduced timeout while deploying connector
+- Added optional vars to configure kerberos.kdc_port (default: 88), kerberos.admin_port (default: 749)
+- Minor fixes to support confluent CLI v3
+- Fixed minor bugs in SSL principal mapping rule logic
+- Fixed some non-root CP deployment issues
+- Fixed mTLS healthchecks
+
 v7.3.3
 ======
 
