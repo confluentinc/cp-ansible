@@ -80,7 +80,7 @@ Custom MDS Port.
 
 SSL Enabled.
 
-FIPS Disabled.
+FIPS Enabled.
 
 Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
 
@@ -503,6 +503,8 @@ Java 11.
 #### Scenario mtls-java11-rhel verify test's the following:
 
 Validates that Java 11 is in use.
+
+Validates that FIPS security is enabled on the Brokers.
 
 ***
 
@@ -962,6 +964,8 @@ Custom TLS certificates.
 
 MTLS enabled on both clusters.
 
+FIPS enabled on Cluster2.
+
 Kafka Broker Customer Listener.
 
 RBAC Additional System Admin.
@@ -1097,6 +1101,8 @@ Installs Confluent Platform Cluster on centos8.
 RBAC enabled.
 
 MTLS enabled.
+
+FIPS enabled.
 
 Secrets protection disabled
 
