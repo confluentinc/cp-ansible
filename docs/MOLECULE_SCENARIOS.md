@@ -72,7 +72,7 @@ Validates that Java 17 is in Use
 
 #### Scenario archive-plain-rhel test's the following:
 
-Archive Installation of Confluent Platform on centos8.
+Archive Installation of Confluent Platform on RHEL9.
 
 SASL Plain protocol.
 
@@ -80,7 +80,7 @@ Custom MDS Port.
 
 SSL Enabled.
 
-FIPS Disabled.
+FIPS Enabled.
 
 Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
 
@@ -98,7 +98,7 @@ Validates that FIPS security is enabled on the Brokers.
 
 Validates that logredactor is functioning properly for all components as per the rule file.
 
-#### Scenario archive-community-plaintext-rhel verify test's the following:
+***
 
 ### molecule/archive-plain-ubuntu
 
@@ -168,7 +168,7 @@ Validates that SASL SCRAM is Protocol is set.
 
 Validates that TLS is configured properly.
 
-Logredactor enabled for all components.
+***
 
 ### molecule/broker-scale-up
 
@@ -218,7 +218,7 @@ Kerberos protocol.
 
 TLS Enabled.
 
-SSL Enabled.
+Custom TLS certificates.
 
 #### Scenario confluent-kafka-kerberos-customcerts-rhel verify test's the following:
 
@@ -420,15 +420,15 @@ Validates that Keystore is present.
 
 ***
 
-### molecule/kerberos-customcerts-rhel
+### molecule/mtls-customcerts-rhel
 
-#### Scenario kerberos-customcerts-rhel test's the following:
+#### Scenario mtls-customcerts-rhel test's the following:
 
 Installation of Confluent Platform on centos8.
 
-TLS Enabled with custom certs.
+MTLS enabled with custom certificates.
 
-Kerberos enabled.
+#### Scenario mtls-customcerts-rhel verify test's the following:
 
 Verifies that keystore is present on all components.
 
@@ -488,19 +488,21 @@ Validates that Java 11 is in use.
 
 ***
 
-### molecule/mtls-java8-ubuntu
+### molecule/mtls-java11-rhel
 
-#### Scenario mtls-java8-ubuntu test's the following:
+#### Scenario mtls-java11-rhel test's the following:
 
-Installation of Confluent Platform on Ubuntu1804.
+Installation of Confluent Platform on RHEL9.
 
 MTLS enabled.
 
-Java 8.
+Java 11.
 
-#### Scenario mtls-java8-ubuntu verify test's the following:
+#### Scenario mtls-java11-rhel verify test's the following:
 
 Validates that Java 11 is in use.
+
+Validates that FIPS security is enabled on the Brokers.
 
 ***
 
@@ -628,7 +630,7 @@ Validates that Control Center has truststore in place.
 
 #### Scenario plain-rhel test's the following:
 
-Installation of Confluent Platform on centos8.
+Installation of Confluent Platform on RHEL9.
 
 SASL Plain enabled.
 
@@ -650,7 +652,7 @@ Validates that SASL Plaintext protocol is set across components.
 
 Validates that Connectors are present on Kafka Connect.
 
-Validates that SASL Plaintext protocol is set across components.
+***
 
 ### molecule/plaintext-basic-rhel
 
@@ -710,7 +712,7 @@ Customer keystore alias.
 
 Validates that keystores are in place across all components.
 
-Validates that keystores are in place across all components.
+***
 
 ### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10
 
@@ -912,7 +914,7 @@ Validates that MDS is HTTP on Cluster1 (MDS).
 
 Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
-Validates that keystores are in place.
+***
 
 ### molecule/rbac-mds-mtls-custom-kerberos-rhel
 
@@ -960,6 +962,8 @@ Custom TLS certificates.
 
 MTLS enabled on both clusters.
 
+FIPS enabled on Cluster2.
+
 Kafka Broker Customer Listener.
 
 RBAC Additional System Admin.
@@ -974,7 +978,7 @@ Validates that MDS is HTTP on Cluster1 (MDS).
 
 Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
-Provided user supplied keystore and truststore already present on the host
+***
 
 ### molecule/rbac-mds-mtls-existing-keystore-truststore-ubuntu
 
@@ -1097,6 +1101,8 @@ RBAC enabled.
 MTLS enabled.
 
 Secrets protection enabled
+
+FIPS enabled.
 
 Kafka Broker Customer Listener.
 
