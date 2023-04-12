@@ -532,6 +532,14 @@ Default:  "{{ssl_provided_keystore_and_truststore}}"
 
 ***
 
+### keystore_expiration_days
+
+Number of days from keystore creation to expiration. Set for all components of Confluent Platform.
+
+Default:  365
+
+***
+
 ### ssl_keystore_filepath
 
 Full path to host specific keystore on ansible control node. Used with ssl_provided_keystore_and_truststore: true. May set per host, or use inventory_hostname variable eg "/tmp/certs/{{inventory_hostname}}-keystore.jks"
