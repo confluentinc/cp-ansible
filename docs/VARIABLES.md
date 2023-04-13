@@ -484,6 +484,14 @@ Default:  false
 
 ***
 
+### certificate_authority_expiration_days
+
+Set this variable to customize expiration days for certificate authority. Applies for all components of Confluent Platform.
+
+Default:  365
+
+***
+
 ### ssl_mutual_auth_enabled
 
 Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka
@@ -5437,6 +5445,14 @@ Default:  30
 # ssl
 
 Below are the supported variables for the role ssl
+
+***
+
+### keystore_expiration_days
+
+Set this variable to customize expiration days for keystore. Applies for all components of Confluent Platform.
+
+Default:  365
 
 ***
 
