@@ -470,7 +470,7 @@ Default:  false
 
 ### certificate_authority_expiration_days
 
-Number of days from certificate authority creation to expiration. Set for all components of Confluent Platform.
+Set this variable to customize expiration days for certificate authority. Applies for all components of Confluent Platform.
 
 Default:  365
 
@@ -537,14 +537,6 @@ Default:  false
 Boolean to provide custom password for keystores and truststore. Enabled with ssl_provided_keystore_and_truststore, but can be enabled independently to set the custom password for generated keystores and truststores when using custom or self-signed certificates
 
 Default:  "{{ssl_provided_keystore_and_truststore}}"
-
-***
-
-### keystore_expiration_days
-
-Number of days from keystore creation to expiration. Set for all components of Confluent Platform.
-
-Default:  365
 
 ***
 
@@ -5117,6 +5109,14 @@ Default:  30
 # ssl
 
 Below are the supported variables for the role ssl
+
+***
+
+### keystore_expiration_days
+
+Set this variable to customize expiration days for keystore. Applies for all components of Confluent Platform.
+
+Default:  365
 
 ***
 
