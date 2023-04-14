@@ -362,7 +362,7 @@ class ServicePropertyManager:
 
         tokens = ['KAFKA_HEAP_OPTS', 'KAFKA_OPTS', 'KAFKA_LOG4J_OPTS', 'LOG_DIR', 'CONFLUENT_SECURITY_MASTER_KEY']
         for token in tokens:
-            pattern = f"{token}=(.*?) ([A-Z]{{3}}|$)"
+            pattern = f"{token}=(.*?)( [A-Z]{{3}}|$)"
             match = re.search(pattern, env_command)
             if match:
                 env_details[token] = match.group(1).rstrip()
