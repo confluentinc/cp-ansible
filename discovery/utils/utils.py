@@ -2,6 +2,8 @@ import argparse
 import logging
 import sys
 from os.path import exists
+from os.path import dirname
+from os.path import realpath
 
 import yaml
 from jproperties import Properties
@@ -270,7 +272,8 @@ class FileUtils:
     def __read_service_configuration_file(file_name):
 
         # Check if config file exists. We return an empty dictionary if there isn't any config
-        file_path = f"service/config/{file_name}"
+        parent_dir = dirname(dirname(realpath(__file__)))
+        file_path = f"{parent_dir}/service/config/{file_name}"
         if not exists(file_path):
             logger.error(f"Cannot find config file {file_name}. Returning an empty config.")
             return dict()
