@@ -1,11 +1,12 @@
 import abc
 import re
+import string
 from abc import ABC
 
 from discovery.manager.manager import ServicePropertyManager
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.services import ConfluentServices, ServiceData
-from discovery.utils.utils import InputContext, Logger
+from discovery.utils.utils import InputContext, Logger, load_properties_to_dict, MultiOrderedDict
 
 logger = Logger.get_logger()
 
@@ -62,13 +63,15 @@ class AbstractPropertyBuilder(ABC):
 
     @staticmethod
     def get_rocksdb_path(input_context: InputContext, service: ServiceData, hosts: list):
-        env_details = ServicePropertyManager.get_env_details(input_context, service, hosts)
+        env_details = AbstractPropertyBuilder.get_service_environment_variable(input_context=input_context,
+                                                                               service=service, hosts=hosts)
         return env_details.get("ROCKSDB_SHAREDLIB_DIR", "")
 
     @staticmethod
     def get_jvm_arguments(input_context: InputContext, service: ServiceData, hosts: list):
         # Build Java runtime overrides
-        env_details = ServicePropertyManager.get_env_details(input_context, service, hosts)
+        env_details = AbstractPropertyBuilder.get_service_environment_variable(input_context=input_context,
+                                                                               service=service, hosts=hosts)
         heap_ops = env_details.get('KAFKA_HEAP_OPTS', '')
         kafka_ops = env_details.get('KAFKA_OPTS', '')
         # Remove java agent configurations. These will be populated by other configs.
@@ -111,13 +114,47 @@ class AbstractPropertyBuilder(ABC):
         return response.get(hosts[0]).get("status")
 
     @staticmethod
+    def _get_systemd_env_details(file_content) -> dict:
+        import configparser
+        env_dict = dict()
+        if not file_content:
+            return env_dict
+
+        configParser = configparser.RawConfigParser(dict_type=MultiOrderedDict, strict=False)
+        configParser.read_string(file_content)
+        try:
+            env_details = configParser.get(section='Service', option='Environment')
+            for line in env_details.splitlines():
+                key, value = line.split('=', maxsplit=1)
+                env_dict[key.strip('"')] = value.strip('"')
+        except Exception:
+            pass
+        return env_dict
+
+    @staticmethod
+    def get_service_environment_variable(input_context: InputContext, service: ServiceData, hosts: list) -> dict:
+        # Large values in service environment are getting truncated. As an alternate method, we will get
+        # it from service and override variables
+        env_map = dict()
+
+        service_facts = AbstractPropertyBuilder.get_service_facts(input_context, service, hosts)
+        service_file = service_facts.get('FragmentPath')
+        override_file = service_facts.get('DropInPaths')
+
+        content = ServicePropertyManager.slurp_remote_file(input_context=input_context, hosts=hosts, file=service_file)
+        env_map.update(AbstractPropertyBuilder._get_systemd_env_details(content.get(hosts[0])))
+
+        content = ServicePropertyManager.slurp_remote_file(input_context=input_context, hosts=hosts, file=override_file)
+        env_map.update(AbstractPropertyBuilder._get_systemd_env_details(content.get(hosts[0])))
+        return env_map
+
+    @staticmethod
     def get_service_user_group(input_context: InputContext, service: ServiceData, hosts: list) -> tuple:
         service_facts = AbstractPropertyBuilder.get_service_facts(input_context, service, hosts)
 
         user = service_facts.get("User", None)
         group = service_facts.get("Group", None)
-        environment = service_facts.get("Environment", None)
-        env_details = ServicePropertyManager.parse_environment_details(environment)
+        env_details = AbstractPropertyBuilder.get_service_environment_variable(input_context, service, hosts)
 
         # Useful information for future usages
         # service_file = service_facts.get("FragmentPath", None)
@@ -143,6 +180,10 @@ class AbstractPropertyBuilder(ABC):
         mapped_properties = data[1]
 
         for key, value in mapped_properties.items():
+            # Sanitise key value to ASCII values
+            if isinstance(value, str):
+                value = ''.join(filter(lambda x: x in string.printable, value))
+
             inventory.set_variable(group_name, key, value)
 
     @staticmethod
@@ -192,32 +233,77 @@ class AbstractPropertyBuilder(ABC):
         return user_dict
 
     @staticmethod
-    def get_monitoring_details(input_context, service, hosts, key) -> dict:
+    def _get_jolokia_props(env_str: str, service: ServiceData) -> dict:
         monitoring_props = dict()
-        env_details = ServicePropertyManager.get_env_details(input_context, service, hosts)
-        ops_str = env_details.get(key, '')
+        if 'jolokia.jar' not in env_str:
+            return monitoring_props
 
-        if 'jolokia.jar' in ops_str:
-            monitoring_props['jolokia_enabled'] = True
-            # jolokia properies will be managed by cp-ansible plays
+        monitoring_props['jolokia_enabled'] = True
 
-        if 'jmx_prometheus_javaagent.jar' in ops_str:
-            monitoring_props['jmxexporter_enabled'] = True
-            pattern = "jmx_prometheus_javaagent.jar=([0-9]+):"
-            match = re.search(pattern, ops_str)
-            if match:
-                monitoring_props['jmxexporter_port'] = int(match.group(1))
+        # Parse the jolokia jar location
+        pattern = 'javaagent:(\S+jolokia.jar)'
+        match = re.search(pattern, env_str)
+        if match:
+            monitoring_props['jolokia_jar_path'] = match.group(1)
+
+        # Parse the jolokia properties
+        pattern = 'javaagent:\S+jolokia.jar\S+config=(\S+)'
+        match = re.search(pattern, env_str)
+        if match:
+            jolokia_file_path = match.group(1)
+            monitoring_props[f"{service.group}_jolokia_config"] = jolokia_file_path
+            jolokia_props = load_properties_to_dict(jolokia_file_path)
+            if "port" in jolokia_props:
+                monitoring_props[f"{service.group}_jolokia_port"] = jolokia_props.get("port")
+
+        return monitoring_props
+
+    @staticmethod
+    def _get_prometheus_props(env_str: str, service: ServiceData) -> dict:
+        monitoring_props = dict()
+        if 'jmx_prometheus_javaagent.jar' not in env_str:
+            return monitoring_props
+
+        monitoring_props['jmxexporter_enabled'] = True
+
+        # Parse the jar location. Ansible supports a single path for all components
+        pattern = 'javaagent:(\S+prometheus\S+.jar)'
+        match = re.search(pattern, env_str)
+        if match:
+            monitoring_props['jmxexporter_jar_path'] = match.group(1)
+
+        # Parse the port number
+        pattern = "\S+prometheus\S+.jar=([0-9]+):"
+        match = re.search(pattern, env_str)
+        if match:
+            monitoring_props[f'{service.group}_jmxexporter_port'] = int(match.group(1))
+
+        # Parse the properties file
+        pattern = '\S+prometheus\S+.jar=[0-9]+:(\S+)'
+        match = re.search(pattern, env_str)
+        if match:
+            jmx_file_path = match.group(1)
+            monitoring_props[f'{service.group}_jmxexporter_config_path'] = jmx_file_path
+
+        return monitoring_props
+
+    @staticmethod
+    def get_monitoring_details(input_context: InputContext, service: ServiceData, hosts: list, key: str) -> dict:
+        monitoring_props = dict()
+        env_details = AbstractPropertyBuilder.get_service_environment_variable(input_context=input_context,
+                                                                               service=service, hosts=hosts)
+        env_str = env_details.get(key, '')
+
+        monitoring_props.update(AbstractPropertyBuilder._get_jolokia_props(env_str, service))
+        monitoring_props.update(AbstractPropertyBuilder._get_prometheus_props(env_str, service))
 
         return monitoring_props
 
     @staticmethod
     def get_secret_protection_master_key(input_context: InputContext, service: ServiceData, hosts: list):
-        env_cmd = ServicePropertyManager._get_env_from_service(input_context=input_context,
-                                                               service=service,
-                                                               hosts=hosts)
-        pattern = f"CONFLUENT_SECURITY_MASTER_KEY=(\S*)"
-        match = re.search(pattern, env_cmd)
-        return match.group(1).rstrip() if match else None
+        env_dict = AbstractPropertyBuilder.get_service_environment_variable(input_context=input_context,
+                                                                            service=service, hosts=hosts)
+        return env_dict.get('CONFLUENT_SECURITY_MASTER_KEY', None)
 
     @staticmethod
     def get_audit_log_properties(input_context: InputContext, hosts: str, mds_user: str, mds_password: str) -> tuple:

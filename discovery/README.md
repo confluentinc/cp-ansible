@@ -12,15 +12,14 @@ Though this script tries to come up with inventory which is the closed represent
 
 These are dependencies for this script and should be installed on the machine where we are executing it from. This is not a requirement for managed nodes of the cluster.
 #### Hosts
-The discovery script needs list of hosts which is part of the existing cluster on which services has to be discovered. Apart from the list of hosts, the script also need the Confluent Service names. If these service names has been updated, the same should be provided under `service_override` section.
+The discovery script needs list of hosts which is part of the existing cluster on which services have to be discovered. Apart from the list of hosts, the script also need the Confluent Service names. If these service names has been updated, the same should be provided under `service_override` section.
 
 ```yaml
-all:
-  vars:
-    ansible_connection: docker
-    ansible_user: null
-    service_override:
-      zookeeper_service_name: myservice.zookeeper
+vars:
+  ansible_connection: docker
+  ansible_user: null
+  service_override:
+    zookeeper_service_name: myservice.zookeeper
 ```
 
 ### How
@@ -112,16 +111,22 @@ hosts:
 ```
 
 #### Command Line options
-##### verbose
+##### verbosity
 To get the verbose output from script and Ansible you can set the verbosity level between 0 to 4. Where 4 means more verbose.
+```shell
+python discovery/main.py --input discovery/hosts.yml --verbosity 4
+```
 ##### limit
 Use limit flag to limit the discovery for specified list of hosts
+```shell
+python discovery/main.py --input discovery/hosts.yml --limit host1,host2
+```
 ##### output_file
 Use this flag to specify output inventory file name. Default value is inventory.yml
-
 ```shell
-python discovery/main.py --input discovery/hosts.yml --verbose 4 --limit host1,host2
+python discovery/main.py --input discovery/hosts.yml --output inventory.yml
 ```
+
 ### FQA
 * **Can I use it for older CP versions**  
 Ideally we should be using the discovery from the branch which maps to the CP cluster. However, to onboard existing cluster, one can use the latest disvoery code and use **--from_version** parameter to specify the CP cluster version
