@@ -138,8 +138,10 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
     def _build_inter_broker_listener_name(self, service_prop: dict) -> tuple:
         key = "inter.broker.listener.name"
-        self.mapped_service_properties.add(key)
-        return self.group, {"kafka_broker_inter_broker_listener_name": service_prop.get(key).lower()}
+        if key in service_prop:
+            self.mapped_service_properties.add(key)
+            return self.group, {"kafka_broker_inter_broker_listener_name": service_prop.get(key).lower()}
+        return self.group, {}
 
     def _build_http_server_listener(self, service_prop: dict) -> tuple:
 

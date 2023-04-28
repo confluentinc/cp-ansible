@@ -39,6 +39,8 @@ class AnsibleRunnerUtils:
         vars['ansible_ssh_extra_args'] = input_context.ansible_ssh_extra_args
         vars['ansible_python_interpreter'] = input_context.ansible_python_interpreter
         vars['ansible_ssh_private_key_file'] = input_context.ansible_ssh_private_key_file
+        vars['ansible_common_remote_group'] = input_context.ansible_common_remote_group
+        vars['ansible_become_password'] = input_context.ansible_become_password
         return vars
 
     @staticmethod
@@ -98,9 +100,7 @@ class SystemPropertyManager:
     def get_service_host_mapping(input_context: InputContext, **kwargs) -> dict:
         logger.info(f"Creating service and host mapping...")
         logger.info("Configured services:")
-        logger.info(yaml.dump(ConfluentServices(input_context).get_all_service_names(),
-                              indent=2,
-                              default_flow_style=False))
+        logger.info(ConfluentServices(input_context).get_all_service_names())
 
         hosts = input_context.ansible_hosts
         if _host_group_declared_in_inventory(hosts, input_context):
@@ -242,7 +242,7 @@ class ServicePropertyManager:
 
         # check if we have flag based configs
         property_files = dict()
-        matches = re.findall('(--[\w\.]+\.config)*\s+([\w\/-]+\.properties)', execution_command)
+        matches = re.findall('(--[\w\.]+\.config)*\s+(\S+\.properties)', execution_command)
         for match in matches:
             key, path = match
             key = key.strip('--') if key else DEFAULT_KEY
@@ -251,6 +251,37 @@ class ServicePropertyManager:
         if not property_files:
             logger.error(f"Cannot find associated properties file for service {service.value.get('name')}")
         return property_files
+
+    @staticmethod
+    def slurp_remote_file(input_context: InputContext, hosts: list, file: str) -> dict:
+        """
+        Returns a map of hosts and content of given file on that host
+        :param input_context:
+        :param hosts:
+        :param file:
+        :return:
+        """
+
+        content = dict()
+        if not file:
+            return content
+
+        runner_utils = AnsibleRunnerUtils()
+        hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
+        ansible_runner.run(
+            quiet=input_context.verbosity <= 3,
+            host_pattern=host_pattern,
+            inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
+            module="slurp",
+            module_args=f"src={file}",
+            event_handler=runner_utils.my_event_handler
+        )
+
+        response = runner_utils.result_ok
+        for host in hosts:
+            content[host] = base64.b64decode(response[host]['content']).decode('utf-8')
+
+        return content
 
     @staticmethod
     def get_property_mappings(input_context: InputContext, service: ServiceData, hosts: list) -> dict:
@@ -262,23 +293,10 @@ class ServicePropertyManager:
             return mappings
 
         for key, file in seed_properties_file.items():
-
-            runner_utils = AnsibleRunnerUtils()
-            hosts, host_pattern = AnsibleRunnerUtils.get_host_and_pattern_from_host_list(hosts)
-            ansible_runner.run(
-                quiet=input_context.verbosity <= 3,
-                host_pattern=host_pattern,
-                inventory=AnsibleRunnerUtils.get_inventory_dict(input_context, hosts),
-                module="slurp",
-                module_args=f"src={file}",
-                event_handler=runner_utils.my_event_handler
-            )
-
-            response = runner_utils.result_ok
+            content = ServicePropertyManager.slurp_remote_file(input_context=input_context, hosts=hosts, file=file)
             for host in hosts:
-                properties = base64.b64decode(response[host]['content']).decode('utf-8')
                 host_properties = mappings.get(host, dict())
-                host_properties.update({key: load_properties_to_dict(properties)})
+                host_properties.update({key: load_properties_to_dict(content.get(host))})
                 mappings[host] = host_properties
 
         return mappings
@@ -314,7 +332,7 @@ class ServicePropertyManager:
     @staticmethod
     def get_jaas_file_path(input_context: InputContext, service: ServiceData, hosts: list):
         # check if overriden as env var
-        env_details = ServicePropertyManager.get_env_details(input_context, service, hosts)
+        env_details = ServicePropertyManager.get_service_env_details(input_context, service, hosts)
         kafka_opts = env_details.get('KAFKA_OPTS', None)
         if kafka_opts is not None:
             if "-Djava.security.auth.login.config=" in kafka_opts:
@@ -325,7 +343,9 @@ class ServicePropertyManager:
     @staticmethod
     def get_log_file_path(input_context: InputContext, service: ServiceData, hosts: list, log4j_opts_env_var):
         # check if overriden as env var
-        env_details = ServicePropertyManager.get_env_details(input_context, service, hosts)
+        from discovery.service import AbstractPropertyBuilder
+        env_details = AbstractPropertyBuilder.get_service_environment_variable(input_context=input_context,
+                                                                               service=service, hosts=hosts)
         log4j_opts = env_details.get(log4j_opts_env_var, None)
         if log4j_opts is not None:
             if "-Dlog4j.configuration=file:" in log4j_opts:
@@ -353,36 +373,6 @@ class ServicePropertyManager:
                 return log4j_path
 
         return None
-
-    @staticmethod
-    def parse_environment_details(env_command: str) -> dict:
-        env_details = dict()
-        if not env_command:
-            return env_details
-
-        tokens = ['KAFKA_HEAP_OPTS', 'KAFKA_OPTS', 'KAFKA_LOG4J_OPTS', 'LOG_DIR', 'CONFLUENT_SECURITY_MASTER_KEY']
-        for token in tokens:
-            pattern = f"{token}=(.*?)( [A-Z]{{3}}|$)"
-            match = re.search(pattern, env_command)
-            if match:
-                env_details[token] = match.group(1).rstrip()
-        return env_details
-
-    @staticmethod
-    def _get_env_from_service(input_context: InputContext, service: ServiceData, hosts: list) -> str:
-        service_facts = SystemPropertyManager.get_service_details(input_context, service, hosts)
-        service_facts = service_facts.get(hosts[0])
-        environment = service_facts.get("status", dict()).get("Environment", None)
-        if not environment:
-            logger.warning(f"Could not find any environment variable for service {service.name}")
-        return environment
-
-    @staticmethod
-    def get_env_details(input_context: InputContext, service: ServiceData, hosts: list) -> dict:
-        env_cmd = ServicePropertyManager._get_env_from_service(input_context=input_context,
-                                                               service=service,
-                                                               hosts=hosts)
-        return ServicePropertyManager.parse_environment_details(env_cmd)
 
     @staticmethod
     def get_kerberos_configurations(input_context: InputContext, hosts: list, kerberos_config_file):

@@ -1,8 +1,9 @@
 import argparse
 import logging
 import sys
-from os.path import exists
+from collections import OrderedDict
 from os.path import dirname
+from os.path import exists
 from os.path import realpath
 
 import yaml
@@ -34,6 +35,13 @@ def load_properties_to_dict(content):
         props[key] = val
     return props
 
+class MultiOrderedDict(OrderedDict):
+    def __setitem__(self, key, value):
+        if isinstance(value, list) and key in self:
+            self[key].extend(value)
+        else:
+            super(MultiOrderedDict, self).__setitem__(key, value)
+            super().__setitem__(key, value)
 
 class Logger:
     """
@@ -95,6 +103,9 @@ class InputContext:
     verbosity = 0
     service_overrides = dict()
     skip_validation = False
+    ansible_become_password = None
+    ansible_common_remote_group = None
+
 
     def __init__(self,
                  ansible_hosts,
@@ -103,6 +114,8 @@ class InputContext:
                  ansible_become,
                  ansible_become_user,
                  ansible_become_method,
+                 ansible_become_password,
+                 ansible_common_remote_group,
                  ansible_ssh_private_key_file,
                  verbosity,
                  ansible_ssh_extra_args,
@@ -117,6 +130,8 @@ class InputContext:
         self.ansible_become = ansible_become
         self.ansible_become_user = ansible_become_user
         self.ansible_become_method = ansible_become_method
+        self.ansible_become_password = ansible_become_password
+        self.ansible_common_remote_group = ansible_common_remote_group
         self.ansible_ssh_private_key_file = ansible_ssh_private_key_file
         self.from_version = from_version
         self.ansible_ssh_extra_args = ansible_ssh_extra_args
@@ -140,7 +155,7 @@ class Arguments:
         parser.add_argument("--input", type=str, required=True, help="Input Inventory file")
         parser.add_argument("--limit", type=str, nargs="*", help="Limit to list of hosts")
         parser.add_argument("--from_version", type=str, help="Target cp cluster version")
-        parser.add_argument("--verbosity", type=int, help="Log level")
+        parser.add_argument("--verbosity", type=int, default=1, help="Log level")
         parser.add_argument("--output_file", type=str, help="Generated output inventory file")
         parser.add_argument("--skip_validation", type=bool, default=False, help="Skip validations")
 
@@ -168,17 +183,19 @@ class Arguments:
         vars = cls.get_vars(args)
         Arguments.input_context = InputContext(ansible_hosts=hosts,
                                                ansible_connection=vars.get("ansible_connection"),
-                                               ansible_become=vars.get("ansible_become"),
+                                               ansible_become=vars.get("ansible_become", False),
                                                ansible_become_user=vars.get("ansible_become_user"),
-                                               ansible_become_method=vars.get("ansible_become_method"),
+                                               ansible_become_method=vars.get("ansible_become_method", 'sudo'),
+                                               ansible_become_password=vars.get("ansible_become_password", None),
+                                               ansible_common_remote_group=vars.get("ansible_common_remote_group", None),
                                                ansible_ssh_private_key_file=vars.get("ansible_ssh_private_key_file"),
                                                ansible_user=vars.get("ansible_user"),
                                                ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
-                                               ansible_python_interpreter=vars.get("ansible_python_interpreter"),
+                                               ansible_python_interpreter=vars.get("ansible_python_interpreter", 'auto'),
                                                output_file=vars.get("output_file"),
                                                verbosity=vars.get("verbosity", 3),
                                                from_version=vars.get("from_version"),
-                                               service_overrides=vars.get("service_overrides"),
+                                               service_overrides=vars.get("service_overrides", dict()),
                                                skip_validation=vars.get('skip_validation'))
         return Arguments.input_context
 
@@ -227,7 +244,7 @@ class Arguments:
     @classmethod
     def get_vars(cls, args) -> dict:
         inventory = cls.__parse_inventory_file(args)
-        vars = {}
+        vars = dict()
 
         # Check vars in the inventory file
         if inventory:
@@ -247,12 +264,6 @@ class Arguments:
 
         if args.skip_validation:
             vars['skip_validation'] = bool(args.skip_validation)
-
-        # set default values of some variables explicitly
-        vars['ansible_python_interpreter'] = vars.get('ansible_python_interpreter', 'auto')
-        vars['ansible_become_method'] = vars.get('ansible_become_method', 'sudo')
-        vars['ansible_become'] = vars.get('ansible_become', False)
-        vars['service_overrides'] = vars.get('service_overrides', {})
 
         return vars
 

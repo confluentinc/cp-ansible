@@ -70,22 +70,25 @@ class SystemPropertyBuilder:
 
         confluent_services = ConfluentServices(self.input_context)
         # check if we have kafka broker hosts available.
-        host = None
-        if service_facts.get(confluent_services.KAFKA_BROKER().name):
-            host = service_facts.get(confluent_services.KAFKA_BROKER().name)[0]
-        else:
-            if service_facts.get(confluent_services.ZOOKEEPER().name):
-                host = service_facts.get(confluent_services.ZOOKEEPER().name)[0]
+        aHost = None
+        zk_service_name = confluent_services.ZOOKEEPER().name
+        bk_service_name = confluent_services.KAFKA_BROKER().name
 
-        if not host:
+        for host, data in service_facts.items():
+            service_keys = service_facts.get(host).get('services').keys()
+            if zk_service_name in service_keys or bk_service_name in service_keys:
+                aHost = host
+                break
+
+        if not aHost:
             logger.error(f"Cannot find any host with either Broker or Zookeeper service running.\n"
                          f"Cannot proceed with service property mappings.")
             return
 
         service_details = SystemPropertyManager.get_service_details(self.input_context,
                                                                     confluent_services.KAFKA_BROKER(),
-                                                                    [host])
-        exec_start = service_details.get(host).get('status', {}).get('ExecStart', '')
+                                                                    [aHost])
+        exec_start = service_details.get(aHost).get('status', {}).get('ExecStart', '')
         pattern = '.*path=(.*?)[\w\-\d\.]*\/bin'
         match = re.search(pattern, exec_start)
 
