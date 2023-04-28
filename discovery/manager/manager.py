@@ -332,7 +332,10 @@ class ServicePropertyManager:
     @staticmethod
     def get_jaas_file_path(input_context: InputContext, service: ServiceData, hosts: list):
         # check if overriden as env var
-        env_details = ServicePropertyManager.get_service_env_details(input_context, service, hosts)
+        from discovery.service import AbstractPropertyBuilder
+        env_details = AbstractPropertyBuilder.get_service_environment_variable(input_context=input_context,
+                                                                               service=service,
+                                                                               hosts=hosts)
         kafka_opts = env_details.get('KAFKA_OPTS', None)
         if kafka_opts is not None:
             if "-Djava.security.auth.login.config=" in kafka_opts:
