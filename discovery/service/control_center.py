@@ -96,13 +96,16 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         key = "confluent.controlcenter.rest.listeners"
         self.mapped_service_properties.add(key)
         from urllib.parse import urlparse
-        listener = service_prop.get(key).split(',')[0]
-        parsed_uri = urlparse(listener)
-        return self.group, {
-            "control_center_http_protocol": parsed_uri.scheme,
-            "control_center_listener_hostname": parsed_uri.hostname,
-            "control_center_port": parsed_uri.port
-        }
+        if key in service_prop:
+            listener = service_prop.get(key).split(',')[0]
+            parsed_uri = urlparse(listener)
+            return self.group, {
+                "control_center_http_protocol": parsed_uri.scheme,
+                "control_center_listener_hostname": parsed_uri.hostname,
+                "control_center_port": parsed_uri.port
+            }
+        else:
+            return self.group, {}
 
     def _build_control_center_internal_replication_property(self, service_prop: dict) -> tuple:
         key1 = "confluent.controlcenter.command.topic.replication"
