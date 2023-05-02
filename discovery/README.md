@@ -126,6 +126,9 @@ Use this flag to specify output inventory file name. Default value is inventory.
 ```shell
 python discovery/main.py --input discovery/hosts.yml --output inventory.yml
 ```
+#### multi_threaded
+To run the discovery scripts in multi threaded environment. Default is True
+
 
 ### FQA
 * **Can I use it for older CP versions**  
