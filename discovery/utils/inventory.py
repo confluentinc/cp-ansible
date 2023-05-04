@@ -1,3 +1,4 @@
+# pylint: disable=no-self-argument
 import collections
 import os
 
@@ -52,7 +53,7 @@ class CPInventoryManager(InventoryData):
     def put_inventory_data(self, data):
         file_name = self.input_context.output_file if self.input_context.output_file else "inventory.yml"
         with open(file_name, 'w') as outfile:
-            yaml.Dumper.ignore_aliases = lambda *args : True
+            yaml.Dumper.ignore_aliases = lambda *args: True
             yaml.dump(data, outfile, default_flow_style=False, indent=2)
 
         logger.info(f"Inventory file successfully generated at {os.path.join(os.getcwd(), file_name)}")
@@ -62,7 +63,7 @@ class CPInventoryManager(InventoryData):
 class InventorySanitizer:
 
     @staticmethod
-    def sanitize(inventory_data: dict, input_context:InputContext) -> dict:
+    def sanitize(inventory_data: dict, input_context: InputContext) -> dict:
         InventorySanitizer.typecast(inventory_data)
         list_groups = ConfluentServices(input_context).get_all_group_names()
         list_aggregator = ['ssl_enabled', 'rbac_enabled', 'rbac_enabled_public_pem_path',
@@ -115,4 +116,3 @@ class InventorySanitizer:
                 if isinstance(value, str) and value.isnumeric():
                     dict_obj[key] = int(value)
                 yield value
-

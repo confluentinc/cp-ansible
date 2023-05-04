@@ -1,3 +1,4 @@
+# pylint: skip-file
 import argparse
 import logging
 import sys
@@ -7,6 +8,7 @@ from os.path import realpath
 
 import yaml
 from jproperties import Properties
+
 
 def singleton(class_):
     instances = {}
@@ -107,7 +109,7 @@ class InputContext:
                  ansible_python_interpreter=None,
                  from_version=None,
                  output_file=None,
-                 service_overrides = {}):
+                 service_overrides={}):
         self.ansible_hosts = ansible_hosts
         self.ansible_connection = ansible_connection
         self.ansible_user = ansible_user
@@ -122,8 +124,9 @@ class InputContext:
         self.output_file = output_file
         self.service_overrides = service_overrides
 
+
 class Arguments:
-    input_context:InputContext = None
+    input_context: InputContext = None
 
     @staticmethod
     def parse_arguments():
@@ -172,7 +175,7 @@ class Arguments:
                                                output_file=vars.get("output_file"),
                                                verbosity=vars.get("verbosity", 3),
                                                from_version=vars.get("from_version"),
-                                               service_overrides = vars.get("service_overrides"))
+                                               service_overrides=vars.get("service_overrides"))
         return Arguments.input_context
 
     @classmethod
@@ -307,7 +310,7 @@ class FileUtils:
         return FileUtils.__read_service_configuration_file("kafka_replicator.yml").get(name, [])
 
 
-def _host_group_declared_in_inventory(hosts:dict, input_context:InputContext) -> bool:
+def _host_group_declared_in_inventory(hosts: dict, input_context: InputContext) -> bool:
     from discovery.utils.services import ConfluentServices
     from discovery.utils.constants import DEFAULT_GROUP_NAME
 

@@ -1,3 +1,4 @@
+# pylint: skip-file
 import sys
 
 from discovery.service.service import AbstractPropertyBuilder

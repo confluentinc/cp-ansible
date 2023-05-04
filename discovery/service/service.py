@@ -1,3 +1,4 @@
+# pylint: skip-file
 import abc
 import re
 from abc import ABC
@@ -215,7 +216,7 @@ class AbstractPropertyBuilder(ABC):
         env_cmd = ServicePropertyManager._get_env_from_service(input_context=input_context,
                                                                service=service,
                                                                hosts=hosts)
-        pattern = f"CONFLUENT_SECURITY_MASTER_KEY=(\S*)"
+        pattern = f"CONFLUENT_SECURITY_MASTER_KEY=(\S*)"  # noqa
         match = re.search(pattern, env_cmd)
         return match.group(1).rstrip() if match else None
 

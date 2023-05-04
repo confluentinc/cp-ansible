@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# pylint: disable=f-string-without-interpolation
 
 from __future__ import (absolute_import, division, print_function)
 
@@ -86,7 +87,7 @@ class SystemPropertyBuilder:
                                                                     confluent_services.KAFKA_BROKER(),
                                                                     [host])
         exec_start = service_details.get(host).get('status', {}).get('ExecStart', '')
-        pattern = '.*path=(.*?)[\w\-\d\.]*\/bin'
+        pattern = r'.*path=(.*?)[\w\-\d\.]*\/bin'
         match = re.search(pattern, exec_start)
 
         if match:

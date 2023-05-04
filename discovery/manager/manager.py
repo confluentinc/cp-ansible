@@ -1,3 +1,4 @@
+# pylint: disable=f-string-without-interpolation
 import base64
 import json
 import re
@@ -242,7 +243,7 @@ class ServicePropertyManager:
 
         # check if we have flag based configs
         property_files = dict()
-        matches = re.findall('(--[\w\.]+\.config)*\s+([\w\/-]+\.properties)', execution_command)
+        matches = re.findall(r'(--[\w\.]+\.config)*\s+([\w\/-]+\.properties)', execution_command)
         for match in matches:
             key, path = match
             key = key.strip('--') if key else DEFAULT_KEY
