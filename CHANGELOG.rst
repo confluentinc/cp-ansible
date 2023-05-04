@@ -4,6 +4,30 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.4.0
+======
+
+New features
+-------------
+
+- CP-ansible supports KRaft-based fresh Confluent Platform deployments
+- CP-ansible includes the Confluent Ansible Discovery tool for migrating stand-alone Confluent Platform deployments to Ansible-managed Confluent Platform environments
+
+Notable enhancements
+-------------
+
+- Default confluent cli version has been updated to 3.2.1, which removes the dependency of secrets protection on rbac
+- Added variable to customize the number of days from Certificate Authority creation to expiration
+- Dedicated playbook to validate hosts
+- Added support for custom Kerberos client configuration file and custom path
+- Switched to archive repo for debian9 since it reached end-of-life
+- Added support for RHEL9 OS on CP
+
+Upgrade considerations
+-------------
+
+- Upgrades to CP 7.4 can be taken up with CP-Ansible using Ansible versions 4 - 7 (ansible-core versions 2.11 - 2.14)
+
 v7.3.4
 ======
 
