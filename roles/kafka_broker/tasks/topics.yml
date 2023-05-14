@@ -1,0 +1,98 @@
+---
+  - name: Get Cluster ID
+    uri:
+      url: "{{ kafka_broker_erp_clusters_url }}"
+      validate_certs: false
+      return_content: true
+      status_code: 200
+      url_username: "{{kafka_broker_rest_health_check_user}}"
+      url_password: "{{kafka_broker_rest_health_check_password}}"
+      force_basic_auth: true
+      body_format: json
+    register: cluster_id_query
+    run_once: true
+    tags:
+      - topics
+
+  - name: Parse Kafka Cluster ID from json query
+    set_fact:
+      kafka_cluster_id: "{{ cluster_id_query.json.data[0].cluster_id }}"
+    run_once: true
+    tags:
+     - topics
+
+  - name: Get topic info
+    uri:
+      url: "{{ kafka_broker_erp_clusters_url }}/{{ kafka_cluster_id }}/topics/{{ item.topic_name }}/configs"
+      status_code: [200, 404]
+      headers:
+        content-type: application/json
+      validate_certs: false
+      return_content: true
+      url_username: "{{kafka_broker_rest_health_check_user}}"
+      url_password: "{{kafka_broker_rest_health_check_password}}"
+      force_basic_auth: true
+      body_format: json
+    loop: "{{ kafka_broker_topics }}"
+    register: topic_info
+    run_once: true
+    tags:
+      - topics
+
+  - name: Identify existing topics
+    set_fact:
+      new_topics: "{{ topic_info.results | rejectattr('status', 'eq', 200) | map(attribute = 'item') }}"
+      existing_topics:  "{{ topic_info.results | selectattr('status', 'eq', 200) }}"
+    run_once: true
+    tags: 
+     - topics
+
+  - name: Create new topics
+    uri:
+      url: "{{ kafka_broker_erp_clusters_url }}/{{ kafka_cluster_id }}/topics"
+      method: POST
+      status_code: [201]
+      body: "{{ item }}"
+      headers:
+        content-type: application/json
+      validate_certs: false
+      return_content: true
+      url_username: "{{kafka_broker_rest_health_check_user}}"
+      url_password: "{{kafka_broker_rest_health_check_password}}"
+      force_basic_auth: true
+      body_format: json
+    loop: "{{ new_topics }}"
+    run_once: true
+    tags:
+     - topics
+
+  - name: Update existing configs for existing topics
+    loop: "{{ existing_topics }}"
+    uri:
+      url: "{{ kafka_broker_erp_clusters_url }}/{{ kafka_cluster_id }}/topics/{{ item.item.topic_name }}/configs:alter"
+      method: POST
+      status_code: [204]
+      body: |
+        {
+          "data": [
+            {% for config in item.item['configs']|default([]) %}
+            {% if loop.index > 1%},{% endif %}
+            {{ config }}
+            {% endfor %}
+            {% if item.item['configs']|default([]) | length > 0 %},{% endif %}
+            {% for config_remove in (item.json.data | selectattr('is_default', 'eq', false) | map(attribute = 'name')) | difference(item.item.configs|default({}) | map(attribute = 'name')) %}
+            {% if loop.index > 1%},{% endif %}
+            {"name": "{{ config_remove }}", "operation": "DELETE"}
+            {% endfor %}
+          ]
+        }
+      headers:
+        content-type: application/json
+      validate_certs: false
+      return_content: true
+      url_username: "{{kafka_broker_rest_health_check_user}}"
+      url_password: "{{kafka_broker_rest_health_check_password}}"
+      force_basic_auth: true
+      body_format: json
+    tags:
+     - topics
