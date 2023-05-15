@@ -21,7 +21,27 @@
     tags:
      - topics
 
-  - name: Get topic info
+  # Topic API (.../topics/<topicname>) has information about partition count
+  - name: Get topics
+    uri:
+      url: "{{ kafka_broker_erp_clusters_url }}/{{ kafka_cluster_id }}/topics/{{ item.topic_name }}"
+      status_code: [200, 404]
+      headers:
+        content-type: application/json
+      validate_certs: false
+      return_content: true
+      url_username: "{{kafka_broker_rest_health_check_user}}"
+      url_password: "{{kafka_broker_rest_health_check_password}}"
+      force_basic_auth: true
+      return_content: true
+      body_format: json
+    loop: "{{ kafka_broker_topics }}"
+    register: get_topics
+    run_once: true
+
+  # Topic config API (.../topics/<topicname>/configs) has configurations
+  # TODO: Only run on existing topics
+  - name: Get topic configs
     uri:
       url: "{{ kafka_broker_erp_clusters_url }}/{{ kafka_cluster_id }}/topics/{{ item.topic_name }}/configs"
       status_code: [200, 404]
@@ -33,16 +53,18 @@
       url_password: "{{kafka_broker_rest_health_check_password}}"
       force_basic_auth: true
       body_format: json
-    register: topic_info
+
     loop: "{{ kafka_broker_topics }}"
+    register: topic_configs
     run_once: true
     tags:
       - topics
 
+  # TODO: base on topics instead of topic configs?
   - name: Identify existing topics
     set_fact:
-      new_topics: "{{ topic_info.results | rejectattr('status', 'eq', 200) | map(attribute = 'item') }}"
-      existing_topics:  "{{ topic_info.results | selectattr('status', 'eq', 200) }}"
+      new_topics: "{{ topic_configs.results | rejectattr('status', 'eq', 200) | map(attribute = 'item') }}"
+      existing_topics:  "{{ topic_configs.results | selectattr('status', 'eq', 200) }}"
     run_once: true
     tags: 
      - topics
@@ -66,7 +88,7 @@
     tags:
      - topics
 
-  - name: Update existing configs for existing topics
+  - name: Update configs for existing topics
     uri:
       url: "{{ kafka_broker_erp_clusters_url }}/{{ kafka_cluster_id }}/topics/{{ item.item.topic_name }}/configs:alter"
       method: POST
@@ -94,6 +116,30 @@
       force_basic_auth: true
       body_format: json
     loop: "{{ existing_topics }}"
+    run_once: true
+    tags:
+     - topics
+
+  - name: Update partition counts
+    uri:
+      url: "{{ kafka_broker_erp_clusters_url }}/{{ kafka_cluster_id }}/topics/{{ item.item.topic_name }}"
+      method: PATCH
+      status_code: [200]
+      body: |
+        {
+          "partitions_count": "{{ item.item.partitions_count }}"
+        }
+      headers:
+        content-type: application/json
+      validate_certs: false
+      return_content: true
+      url_username: "{{kafka_broker_rest_health_check_user}}"
+      url_password: "{{kafka_broker_rest_health_check_password}}"
+      force_basic_auth: true
+      return_content: true
+      body_format: json
+    loop: "{{ get_topics.results }}"
+    when: item.status == 200 and item.item.partitions_count > item.json.partitions_count
     run_once: true
     tags:
      - topics
