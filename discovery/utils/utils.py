@@ -35,6 +35,7 @@ def load_properties_to_dict(content):
         props[key] = val
     return props
 
+
 class MultiOrderedDict(OrderedDict):
     def __setitem__(self, key, value):
         if isinstance(value, list) and key in self:
@@ -42,6 +43,7 @@ class MultiOrderedDict(OrderedDict):
         else:
             super(MultiOrderedDict, self).__setitem__(key, value)
             super().__setitem__(key, value)
+
 
 class Logger:
     """
@@ -105,7 +107,7 @@ class InputContext:
     skip_validation = False
     ansible_become_password = None
     ansible_common_remote_group = None
-
+    multi_threaded = True
 
     def __init__(self,
                  ansible_hosts,
@@ -123,7 +125,8 @@ class InputContext:
                  from_version,
                  output_file,
                  service_overrides,
-                 skip_validation):
+                 skip_validation,
+                 multi_threaded):
         self.ansible_hosts = ansible_hosts
         self.ansible_connection = ansible_connection
         self.ansible_user = ansible_user
@@ -140,6 +143,7 @@ class InputContext:
         self.output_file = output_file
         self.service_overrides = service_overrides
         self.skip_validation = skip_validation
+        self.multi_threaded = multi_threaded
 
 
 class Arguments:
@@ -158,6 +162,7 @@ class Arguments:
         parser.add_argument("--verbosity", type=int, default=1, help="Log level")
         parser.add_argument("--output_file", type=str, help="Generated output inventory file")
         parser.add_argument("--skip_validation", type=bool, default=False, help="Skip validations")
+        parser.add_argument("--multi_threaded", type=bool, default=True, help="Use multi threaded environment")
 
         # Read arguments from command line
         return parser.parse_args()
@@ -187,16 +192,19 @@ class Arguments:
                                                ansible_become_user=vars.get("ansible_become_user"),
                                                ansible_become_method=vars.get("ansible_become_method", 'sudo'),
                                                ansible_become_password=vars.get("ansible_become_password", None),
-                                               ansible_common_remote_group=vars.get("ansible_common_remote_group", None),
+                                               ansible_common_remote_group=vars.get("ansible_common_remote_group",
+                                                                                    None),
                                                ansible_ssh_private_key_file=vars.get("ansible_ssh_private_key_file"),
                                                ansible_user=vars.get("ansible_user"),
                                                ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
-                                               ansible_python_interpreter=vars.get("ansible_python_interpreter", 'auto'),
+                                               ansible_python_interpreter=vars.get("ansible_python_interpreter",
+                                                                                   'auto'),
                                                output_file=vars.get("output_file"),
                                                verbosity=vars.get("verbosity", 3),
                                                from_version=vars.get("from_version"),
                                                service_overrides=vars.get("service_overrides", dict()),
-                                               skip_validation=vars.get('skip_validation'))
+                                               skip_validation=vars.get('skip_validation'),
+                                               multi_threaded=vars.get('multi_threaded'))
         return Arguments.input_context
 
     @classmethod
@@ -264,6 +272,9 @@ class Arguments:
 
         if args.skip_validation:
             vars['skip_validation'] = bool(args.skip_validation)
+
+        if args.skip_validation:
+            vars['multi_threaded'] = bool(args.multi_threaded)
 
         return vars
 

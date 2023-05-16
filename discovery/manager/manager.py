@@ -238,11 +238,11 @@ class ServicePropertyManager:
 
         host = hosts[0]
         service_details = SystemPropertyManager.get_service_details(input_context, service, [host])
-        execution_command = service_details.get(host).get("status").get("ExecStart")
+        execution_command = str(service_details.get(host).get("status").get("ExecStart"))
 
         # check if we have flag based configs
         property_files = dict()
-        matches = re.findall('(--[\w\.]+\.config)*\s+(\S+\.properties)', execution_command)
+        matches = re.findall(u'(--[\w\.]+\.config)*\s+(\S+\.properties)', execution_command)
         for match in matches:
             key, path = match
             key = key.strip('--') if key else DEFAULT_KEY

@@ -84,7 +84,7 @@ class AbstractPropertyBuilder(ABC):
         if kafka_ops:
             jvm_str = f"{jvm_str} {kafka_ops}"
 
-        return jvm_str
+        return jvm_str.strip()
 
     @staticmethod
     def build_telemetry_properties(service_prop: dict) -> dict:

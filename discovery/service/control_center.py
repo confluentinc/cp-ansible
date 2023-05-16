@@ -1,3 +1,4 @@
+import re
 import sys
 
 from discovery.service.service import AbstractPropertyBuilder
@@ -344,6 +345,24 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
         if key1 in service_props:
             return 'all', {'schema_registry_ssl_enabled': True}
         return 'all', {}
+
+    def _build_client_properties(self, service_props: dict) -> tuple:
+        # Clients properties will be populated by CP-Ansible.
+        # We will remove the existing client properties from inventory
+        patterns = ['confluent.controlcenter.[connect|ksql].(\S+).cluster',
+                    'confluent.controlcenter.[connect|ksql].(\S+).ssl.key.password',
+                    'confluent.controlcenter.[connect|ksql].(\S+).ssl.keystore.location',
+                    'confluent.controlcenter.[connect|ksql].(\S+).ssl.keystore.password',
+                    'confluent.controlcenter.[connect|ksql].(\S+).ssl.truststore.location',
+                    'confluent.controlcenter.[connect|ksql].(\S+).ssl.truststore.password',
+                    'confluent.controlcenter.[connect|ksql].(\S+).advertised.url',
+                    'confluent.controlcenter.[connect|ksql].(\S+).url']
+
+        for pattern in patterns:
+            for key in service_props.keys():
+                match = re.search(pattern, key)
+                if match:
+                    self.mapped_service_properties.add(key)
 
 
 class ControlCenterServicePropertyBaseBuilder60(ControlCenterServicePropertyBaseBuilder):
