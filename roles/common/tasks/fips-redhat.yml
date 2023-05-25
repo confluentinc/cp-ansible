@@ -1,0 +1,27 @@
+---
+- name: get java path
+  shell: dirname $(dirname $(readlink -f $(which java)))
+  register: java_path
+
+- name: Disable JVM level FIPS
+  lineinfile:
+    path: "{{java_path.stdout}}/conf/security/java.security"
+    search_string: 'security.useSystemPropertiesFile=true'
+    line: security.useSystemPropertiesFile=false
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Configure crypto policies
+  shell: update-crypto-policies --set FIPS
+
+- name: Verify crypto policy
+  shell: update-crypto-policies --show
+  register: fips_output
+
+- name: Check if FIPS is enabled
+  assert:
+    that:
+      - fips_output.stdout == 'FIPS'
+    fail_msg: "FIPS is not enabled on your hosts, please enable fips on your host machines."
+  tags: validate

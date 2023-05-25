@@ -20,6 +20,31 @@
         state: present
       when: ansible_os_family == "Debian"
 
+    - name: get java path
+      shell: dirname $(dirname $(readlink -f $(which java)))
+      register: java_path
+      when:
+        - fips_enabled|default(false) | bool
+        - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+
+    - name: Disable JVM level FIPS
+      lineinfile:
+        path: "{{java_path.stdout}}/conf/security/java.security"
+        search_string: 'security.useSystemPropertiesFile=true'
+        line: security.useSystemPropertiesFile=false
+        owner: root
+        group: root
+        mode: '0644'
+      when:
+        - fips_enabled|default(false) | bool
+        - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+
+    - name: Configure crypto policies
+      shell: update-crypto-policies --set FIPS
+      when:
+          - fips_enabled|default(false) | bool
+          - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+
     - name: Create SSL Certificate Generation Directory
       file:
         path: /var/ssl/private/generation
