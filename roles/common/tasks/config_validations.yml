@@ -114,3 +114,39 @@
   loop: "{{group_names}}"
   loop_control:
     index_var: group_idx
+
+- name: Check if FIPS is enabled on Local Host
+  shell: fips-mode-setup --check | cat
+  delegate_to: localhost
+  register: fips_output_localhost
+  when:
+    - fips_enabled | bool
+    - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+  tags: validate
+
+- assert:
+    that:
+      - fips_output_localhost.stdout == "FIPS mode is enabled."
+    fail_msg: "FIPS is not enabled on your localhost, please enable fips on your Local Host."
+  delegate_to: localhost
+  when:
+    - fips_enabled | bool
+    - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+  tags: validate
+
+- name: Check if FIPS is enabled on Remote Host
+  shell: fips-mode-setup --check | cat
+  register: fips_output_remotehost
+  when:
+    - fips_enabled | bool
+    - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+  tags: validate
+
+- assert:
+    that:
+      - "'FIPS mode is enabled.' in fips_output_remotehost.stdout"
+    fail_msg: "FIPS is not enabled on your remote host, please enable fips on your Remote Host."
+  when:
+    - fips_enabled | bool
+    - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+  tags: validate
