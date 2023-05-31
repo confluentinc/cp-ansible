@@ -2100,6 +2100,14 @@ Default:  password
 
 ***
 
+### mds_retries
+
+Parameter to increase the number of retries for MDS API requests
+
+Default:  30
+
+***
+
 ### kafka_broker_ldap_user
 
 LDAP User for Kafkas Embedded Rest Service to authenticate as
