@@ -19,40 +19,83 @@ blacklistObjectNames:
   - "kafka.server:type=*,cipher=*,protocol=*,listener=*,networkProcessor=*"
   - "kafka.server:type=*"
 rules:
-  # This is by far the biggest contributor to the number of sheer metrics being produced.
-  # Always keep it on the top for the case of probability when so many metrics will hit the first condition and exit.
-  # "kafka.cluster:type=*, name=*, topic=*, partition=*"
-  # "kafka.log:type=*,name=*, topic=*, partition=*"
-  - pattern: kafka.(\w+)<type=(.+), name=(.+), topic=(.+), partition=(.+)><>Value
-    name: kafka_$1_$2_$3
+  # Needed for Cluster Linking metrics
+  # This rule is more specific than the next rule; it has to come before it otherwise it will never be hit
+  # "kafka.server:type=*, name=*, client-id=*, topic=*, partition=*, link-name=*"
+  - pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), topic=(.+), partition=(.*), link-name=(.+)><>Value
+    name: kafka_server_$1_$2
     type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
+      clientId: "$3"
       topic: "$4"
       partition: "$5"
-  # "kafka.server:type=*,name=*, client-id=*, topic=*, partition=*"
+      linkName: "$6" # The other Cluster Linking metrics are using the "link-name" syntax
+  # This rule is more specific than the next rule; it has to come before it otherwise it will never be hit
+  # "kafka.server:type=*, name=*, client-id=*, topic=*, partition=*"
   - pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), topic=(.+), partition=(.*)><>Value
     name: kafka_server_$1_$2
     type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       clientId: "$3"
       topic: "$4"
       partition: "$5"
+  # This is by far the biggest contributor to the number of sheer metrics being produced.
+  # Always keep it near the top for the case of probability when so many metrics will hit the first condition and exit.
+  # "kafka.cluster:type=*, name=*, topic=*, partition=*"
+  # "kafka.log:type=*, name=*, topic=*, partition=*"
+  - pattern: kafka.(\w+)<type=(.+), name=(.+), topic=(.+), partition=(.+)><>Value
+    name: kafka_$1_$2_$3
+    type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
+    labels:
+      topic: "$4"
+      partition: "$5"
+  # Value version is a GAUGE; Count version is not
   - pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), brokerHost=(.+), brokerPort=(.+)><>Value
     name: kafka_server_$1_$2
     type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       clientId: "$3"
       broker: "$4:$5"
+  - pattern: kafka.server<type=(.+), name=(.+), clientId=(.+), brokerHost=(.+), brokerPort=(.+)><>Count
+    name: kafka_server_$1_$2
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
+    labels:
+      clientId: "$3"
+      broker: "$4:$5"
+  # Needed for Cluster Linking metrics
+  # "kafka.server:type=*, name=*, *=*, *=*, *=*, *=*"
+  - pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.+), (.+)=(.+), (.+)=(.+), (.+)=(.+)><>(Count|Value)
+    name: kafka_$1_$2_$3
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
+    labels:
+      "$4": "$5"
+      "$6": "$7"
+      "$8": "$9"
+      "$10": "$11"
+  # "kafka.server:type=*, name=*, *=*, *=*, *=*, *=*"
+  - pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.+), (.+)=(.+), (.+)=(.+)><>(Count|Value)
+    name: kafka_$1_$2_$3
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
+    labels:
+      "$4": "$5"
+      "$6": "$7"
+      "$8": "$9"
   # "kafka.network:type=*, name=*, request=*, error=*"
   # "kafka.network:type=*, name=*, request=*, version=*"
   - pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.+), (.+)=(.+)><>(Count|Value)
     name: kafka_$1_$2_$3
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       "$4": "$5"
       "$6": "$7"
   - pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.*), (.+)=(.+)><>(\d+)thPercentile
     name: kafka_$1_$2_$3
     type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       "$4": "$5"
       "$6": "$7"
@@ -61,6 +104,7 @@ rules:
   # "kafka.rest:type=*, cipher=*, protocol=*, client-id=*"
   - pattern: kafka.(\w+)<type=(.+), (.+)=(.+), (.+)=(.+), (.+)=(.+)><>Value
     name: kafka_$1_$2
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       "$3": "$4"
       "$5": "$6"
@@ -79,6 +123,7 @@ rules:
   # "kafka.rest:type=*, node-id=*, client-id=*"
   - pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.+)><>(Count|Value)
     name: kafka_$1_$2_$3
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       "$4": "$5"
   # "kafka.consumer:type=*, topic=*, client-id=*"
@@ -88,6 +133,7 @@ rules:
   # "kafka.server:type=*, listener=*, networkProcessor=*"
   - pattern: kafka.(\w+)<type=(.+), (.+)=(.+), (.+)=(.+)><>(Count|Value)
     name: kafka_$1_$2
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       "$3": "$4"
       "$5": "$6"
@@ -99,6 +145,7 @@ rules:
   # "kafka.utils:type=*, name=*"
   - pattern: kafka.(\w+)<type=(.+), name=(.+)><>(Count|Value)
     name: kafka_$1_$2_$3
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
   # "kafka.producer:type=*, client-id=*"
   # "kafka.producer:type=*, id=*"
   # "kafka.rest:type=*, client-id=*"
@@ -108,16 +155,19 @@ rules:
   # "kafka.server:type=*, id=*"
   - pattern: kafka.(\w+)<type=(.+), (.+)=(.+)><>Value
     name: kafka_$1_$2
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       "$3": "$4"
 
   - pattern: kafka.server<type=KafkaRequestHandlerPool, name=RequestHandlerAvgIdlePercent><>OneMinuteRate
     name: kafka_server_kafkarequesthandlerpool_requesthandleravgidlepercent_total
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     type: GAUGE
   # "kafka.server:type=*, listener=*, networkProcessor=*, clientSoftwareName=*, clientSoftwareVersion=*"
   - pattern: kafka.server<type=socket-server-metrics, clientSoftwareName=(.+), clientSoftwareVersion=(.+), listener=(.+), networkProcessor=(.+)><>connections
     name: kafka_server_socketservermetrics_connections
     type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       client_software_name: "$1"
       client_software_version: "$2"
@@ -126,6 +176,7 @@ rules:
   - pattern: "kafka.server<type=socket-server-metrics, listener=(.+), networkProcessor=(.+)><>(.+):"
     name: kafka_server_socketservermetrics_$3
     type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       listener: "$1"
       network_processor: "$2"
@@ -133,23 +184,98 @@ rules:
   # "kafka.coordinator.transaction:type=*, name=*"
   - pattern: kafka.coordinator.(\w+)<type=(.+), name=(.+)><>(Count|Value)
     name: kafka_coordinator_$1_$2_$3
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
   # Percentile
   - pattern: kafka.(\w+)<type=(.+), name=(.+), (.+)=(.*)><>(\d+)thPercentile
     name: kafka_$1_$2_$3
     type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       "$4": "$5"
       quantile: "0.$6"
   - pattern: kafka.(\w+)<type=(.+), name=(.+)><>(\d+)thPercentile
     name: kafka_$1_$2_$3
     type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       quantile: "0.$4"
+  # Needed for Cluster Linking metrics
+  # kafka.server.link:type=ClusterLinkFetcherManager,name=*,clientId=&,link-name=*
+  - pattern : kafka.server.link<type=ClusterLinkFetcherManager, name=(.+), (.+)=(.+), (.+)=(.+)><>Value
+    name: kafka_server_link_clusterlinkfetchermanager_$1
+    type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
+    labels:
+      "$2": "$3"
+      "$4": "$5"
+  # kafka.server:type=cluster-link,link-name=*
+  - pattern : kafka.server<type=cluster-link, (.+)=(.+)><>(fetch-throttle-time-avg|fetch-throttle-time-max)
+    name: kafka_server_cluster_link_$3
+    type: GAUGE
+    labels:
+      "$1": "$2"
+  # kafka.server:type=cluster-link-metadata-metrics,link-name=*, mechanism=*
+  - pattern : 'kafka.server<type=cluster-link-metadata-metrics, (.+)=(.+), (.+)=(.+)><>(.+):'
+    name: kafka_server_cluster_link_metadata_metrics_$5
+    type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
+    labels:
+      "$1": "$2"
+      "$3": "$4"
+  # kafka.server:type=cluster-link-fetcher-metrics,link-name=*,broker-id=*,fetcher-id=*, mechanism=*
+  - pattern : 'kafka.server<type=cluster-link-fetcher-metrics, (.+)=(.+), (.+)=(.+), (.+)=(.+), (.+)=(.+)><>(.+):'
+    name: kafka_server_cluster_link_fetcher_metrics_$9
+    type: GAUGE
+    labels:
+      "$1": "$2"
+      "$3": "$4"
+      "$5": "$6"
+      "$7": "$8"
+  # kafka.server:type=cluster-link-fetcher-metrics,link-name=*,broker-id=*,fetcher-id=*
+  - pattern : 'kafka.server<type=cluster-link-fetcher-metrics, (.+)=(.+), (.+)=(.+), (.+)=(.+)><>(.+):'
+    name: kafka_server_cluster_link_fetcher_metrics_$7
+    type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
+    labels:
+      "$1": "$2"
+      "$3": "$4"
+      "$5": "$6"
+  # kafka.server:type=cluster-link-metrics, mode=*, state=*, link-name=*, name=*
+  - pattern : 'kafka.server<type=cluster-link-metrics, (.+)=(.+), (.+)=(.+), (.+)=(.+)><>(.+):'
+    name: kafka_server_cluster_link_metrics_$7
+    type: GAUGE
+    labels:
+      "$1": "$2"
+      "$3": "$4"
+      "$5": "$6"
+  # kafka.server:type=cluster-link-metrics,state=*,link-name=*,name=*
+  - pattern : 'kafka.server<type=cluster-link-metrics, (.+)=(.+), (.+)=(.+)><>(.+):'
+    name: kafka_server_cluster_link_metrics_$5
+    type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
+    labels:
+      "$1": "$2"
+      "$3": "$4"
+  # kafka.server:type=cluster-link-metrics,name=*,link-name=*
+  - pattern : 'kafka.server<type=cluster-link-metrics, (.+)=(.+)><>(.+):'
+    name: kafka_server_cluster_link_metrics_$3
+    type: GAUGE
+    labels:
+      "$1": "$2"
+  # kafka.server:type=cluster-link-source-metrics,request=*,link-id=*
+  - pattern : kafka.server<type=cluster-link-source-metrics, (.+)=(.+), (.+)=(.+)><>Value
+    name: kafka_server_cluster_link_source_metrics
+    type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
+    labels:
+      "$1": "$2"
+      "$3": "$4"
   # Additional Rules for Confluent Server Metrics
   # 'confluent.metadata:type=*, name=*, topic=*, partition=*'
   - pattern: confluent.(\w+)<type=(.+), (.+)=(.+), (.+)=(.+), (.+)=(.+)><>Value
     name: confluent_$1_$2
     type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       "$3": "$4"
       "$5": "$6"
@@ -158,6 +284,7 @@ rules:
   - pattern: confluent.(.+)<type=(.+), (.+)=(.+), (.+)=(.+)><>Value
     name: confluent_$1_$2
     type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       "$3": "$4"
       "$5": "$6"
@@ -168,5 +295,6 @@ rules:
   - pattern: confluent.(.+)<type=(.+), (.+)=(.+)><>Value
     name: confluent_$1_$2
     type: GAUGE
+    cache: {{ kafka_broker_jmxexporter_bean_name_expressions_cache | lower }}
     labels:
       "$3": "$4"
