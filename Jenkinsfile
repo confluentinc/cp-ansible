@@ -111,6 +111,16 @@ cd ansible_collections/confluent/platform
 python3 -m pip install yamllint --upgrade
 python3 -m yamllint .
 
+python3 --version
+python3.9 --version
+
+rm -rf ~/.local/lib/python3.9/site-packages/ansible-4.10.0.dist-info
+python3.9 -m pip install ansible==5.5.0
+export PATH=$PATH:/home/jenkins/.local/bin
+ansible --version
+
+ansible-test sanity
+
 molecule ${molecule_args} test -s ${params.SCENARIO_NAME}
             """
         }
