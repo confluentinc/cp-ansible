@@ -1040,7 +1040,7 @@ Validates that MDS is HTTPs on Cluster1 (MDS).
 
 Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
-Validates IODC authenticate api for SSO in Control Center
+Validates OIDC authenticate api for SSO in Control Center
 
 ***
 

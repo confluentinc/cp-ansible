@@ -2382,7 +2382,7 @@ Default:  "{{mds_ssl_enabled}}"
 
 ### sso_mode
 
-SSO mode for C3. Possible values: oidc. if enabling oidc you must set  sso_groups_claim, sso_sub_claim, sso_jwks_uri, sso_authorize_uri, sso_token_uri, sso_issuer_url, sso_client_id, sso_client_password in MDS
+SSO mode for C3. Possible values: oidc, not supported in ccs. If enabling oidc you must set  sso_groups_claim, sso_sub_claim, sso_jwks_uri, sso_authorize_uri, sso_token_uri, sso_issuer_url, sso_client_id, sso_client_password in MDS
 
 Default:  none
 
