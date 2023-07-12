@@ -12,15 +12,15 @@ Though this script tries to come up with inventory which is the closed represent
 
 These are dependencies for this script and should be installed on the machine where we are executing it from. This is not a requirement for managed nodes of the cluster.
 #### Hosts
-The discovery script needs list of hosts which is part of the existing cluster on which services has to be discovered. Apart from the list of hosts, the script also need the Confluent Service names. If these service names has been updated, the same should be provided under `service_override` section.
+The discovery script needs list of hosts which is part of the existing cluster on which services has to be discovered. Apart from the list of hosts, the script also need the Confluent Service names. If these service names has been updated, the same should be provided under `service_overrides` section. The name should be passed including ".service" 
 
 ```yaml
 all:
   vars:
     ansible_connection: docker
     ansible_user: null
-    service_override:
-      zookeeper_service_name: myservice.zookeeper
+    service_overrides:
+      zookeeper_service_name: myservice-zookeeper.service
 ```
 
 ### How
@@ -95,8 +95,8 @@ For a cluster running on local docker environment
 
 vars:
   ansible_connection: docker
-  service_override:
-    zookeeper_service_name: 'custom-service-name'
+  service_overrides:
+    zookeeper_service_name: 'custom-service-name.service'
 hosts:
   all:
     - zookeeper1
