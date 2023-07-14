@@ -4,6 +4,17 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.1.8
+======
+
+Notable enhancements
+-------------
+
+- Parametrize the number of retries for MDS API requests
+- Removed timeout configs from client properties of Kafka Broker, allowing customers to use custom timeout values
+- Archived installation of Confluent Platform on Debian 9 since the OS version reached end-of-life
+
+
 v7.1.7
 ======
 
