@@ -68,9 +68,9 @@ Validates that Java 17 is in Use
 
 ***
 
-### molecule/archive-plain-rhel
+### molecule/archive-plain-rhel-fips
 
-#### Scenario archive-plain-rhel test's the following:
+#### Scenario archive-plain-rhel-fips test's the following:
 
 Archive Installation of Confluent Platform on RHEL9.
 
@@ -88,7 +88,7 @@ Custom log dirs for all components.
 
 Logredactor enabled for all components.
 
-#### Scenario archive-plain-rhel verify test's the following:
+#### Scenario archive-plain-rhel-fips verify test's the following:
 
 Validates that SASL SSL protocol is set across all components.
 
@@ -402,9 +402,9 @@ Validates that Control Center Can connect to each KSQL cluster
 
 ***
 
-### molecule/mtls-custombundle-rhel
+### molecule/mtls-custombundle-rhel-fips
 
-#### Scenario mtls-custombundle-rhel test's the following:
+#### Scenario mtls-custombundle-rhel-fips test's the following:
 
 Installation of Confluent Platform Edition on centos7.
 
@@ -414,7 +414,9 @@ Tests custom filtering properties for Secrets Protection.
 
 TLS is disabled for Zookeeper.
 
-#### Scenario mtls-custombundle-rhel verify test's the following:
+FIPS enabled
+
+#### Scenario mtls-custombundle-rhel-fips verify test's the following:
 
 Validates that Keystore is present.
 
@@ -488,9 +490,9 @@ Validates that Java 11 is in use.
 
 ***
 
-### molecule/mtls-java11-rhel
+### molecule/mtls-java11-rhel-fips
 
-#### Scenario mtls-java11-rhel test's the following:
+#### Scenario mtls-java11-rhel-fips test's the following:
 
 Installation of Confluent Platform on RHEL9.
 
@@ -498,7 +500,9 @@ MTLS enabled.
 
 Java 11.
 
-#### Scenario mtls-java11-rhel verify test's the following:
+FIPS enabled
+
+#### Scenario mtls-java11-rhel-fips verify test's the following:
 
 Validates that Java 11 is in use.
 
@@ -584,9 +588,9 @@ Validates that Control Center Can connect to each KSQL cluster.
 
 ***
 
-### molecule/plain-customcerts-rhel
+### molecule/plain-customcerts-rhel-fips
 
-#### Scenario plain-customcerts-rhel test's the following:
+#### Scenario plain-customcerts-rhel-fips test's the following:
 
 Installation of Confluent Platform on centos8.
 
@@ -596,7 +600,9 @@ SASL Plain enabled.
 
 Custom certificates on remote host
 
-#### Scenario plain-customcerts-rhel verify test's the following:
+FIPS enabled
+
+#### Scenario plain-customcerts-rhel-fips verify test's the following:
 
 Validates that keystores are present on all components.
 
@@ -948,9 +954,9 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 ***
 
-### molecule/rbac-mds-mtls-custom-rhel
+### molecule/rbac-mds-mtls-custom-rhel-fips
 
-#### Scenario rbac-mds-mtls-custom-rhel test's the following:
+#### Scenario rbac-mds-mtls-custom-rhel-fips test's the following:
 
 Installs two Confluent Platform Clusters on centos8.
 
@@ -962,13 +968,13 @@ Custom TLS certificates.
 
 MTLS enabled on both clusters.
 
-FIPS enabled on Cluster2.
+FIPS enabled on both clusters.
 
 Kafka Broker Customer Listener.
 
 RBAC Additional System Admin.
 
-#### Scenario rbac-mds-mtls-custom-rhel verify test's the following:
+#### Scenario rbac-mds-mtls-custom-rhel-fips verify test's the following:
 
 Validates that Audit logs are working on topic creation.
 
@@ -1090,9 +1096,9 @@ Validates that TLS CN is being registered as super user.
 
 ***
 
-### molecule/rbac-mtls-rhel
+### molecule/rbac-mtls-rhel-fips
 
-#### Scenario rbac-mtls-rhel test's the following:
+#### Scenario rbac-mtls-rhel-fips test's the following:
 
 Installs Confluent Platform Cluster on centos8.
 
@@ -1110,7 +1116,7 @@ RBAC Additional System Admin.
 
 Provided SSL Principal Mapping rule
 
-#### Scenario rbac-mtls-rhel verify test's the following:
+#### Scenario rbac-mtls-rhel-fips verify test's the following:
 
 Validates TLS version across all components.
 
