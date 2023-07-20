@@ -1,177 +1,198 @@
 ---
-### Installs Confluent Platform Cluster on centos8.
+### Installs two Confluent Platform Clusters on centos8.
 ### RBAC enabled.
-### SCRAM enabled.
-### TLS with custom certs enabled.
-### Additional System Admins added.
-### Additional Scram Users added.
-### Kafka Connect Custom arguments.
+### Remote MDS from Cluster2 to Cluster1 (MDS).
+### Custom TLS certificates.
+### SASL PLAIN enabled on both clusters.
+### Kafka Broker Customer Listener.
+### RBAC Additional System Admin.
 
 driver:
   name: docker
 platforms:
-  - name: ldap1${BUILD_NUMBER}
-    hostname: ldap1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
+  - name: mds-ldap1
+    hostname: mds-ldap1.confluent
     groups:
       - ldap_server
     image: geerlingguy/docker-centos7-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+    dockerfile: ../Dockerfile.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${BUILD_NUMBER}
-  - name: ${KRAFT_CONTROLLER:-zookeeper}1${BUILD_NUMBER}
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
+      - name: confluent
+  # MDS Zookeeper and Kafka
+  - name: mds-${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: mds-${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+      - mds
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${BUILD_NUMBER}
-  - name: ${KRAFT_CONTROLLER:-zookeeper}2${BUILD_NUMBER}
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}2${BUILD_NUMBER}.confluent${BUILD_NUMBER}
-    groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent${BUILD_NUMBER}
-  - name: ${KRAFT_CONTROLLER:-zookeeper}3${BUILD_NUMBER}
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}3${BUILD_NUMBER}.confluent${BUILD_NUMBER}
-    groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent${BUILD_NUMBER}
-  - name: kafka-broker1${BUILD_NUMBER}
-    hostname: kafka-broker1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
+      - name: confluent
+  - name: mds-kafka-broker1
+    hostname: mds-kafka-broker1.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+      - mds
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${BUILD_NUMBER}
-  - name: kafka-broker2${BUILD_NUMBER}
-    hostname: kafka-broker2${BUILD_NUMBER}.confluent${BUILD_NUMBER}
+      - name: confluent
+  - name: mds-kafka-broker2
+    hostname: mds-kafka-broker2.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+      - mds
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${BUILD_NUMBER}
-  - name: kafka-broker3${BUILD_NUMBER}
-    hostname: kafka-broker3${BUILD_NUMBER}.confluent${BUILD_NUMBER}
+      - name: confluent
+  # Cluster 2 goups, groupnames will be changed during converge phase
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}2
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${BUILD_NUMBER}
-  - name: schema-registry1${BUILD_NUMBER}
-    hostname: schema-registry1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
     groups:
-      - schema_registry
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+      - kafka_broker2
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${BUILD_NUMBER}
-  - name: kafka-rest1${BUILD_NUMBER}
-    hostname: kafka-rest1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
     groups:
-      - kafka_rest
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+      - kafka_broker2
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${BUILD_NUMBER}
-  - name: kafka-connect1${BUILD_NUMBER}
-    hostname: kafka-connect1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
     groups:
-      - kafka_connect
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+      - kafka_broker2
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${BUILD_NUMBER}
-  - name: ksql1${BUILD_NUMBER}
-    hostname: ksql1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
     groups:
-      - ksql
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+      - schema_registry2
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${BUILD_NUMBER}
-  - name: control-center1${BUILD_NUMBER}
-    hostname: control-center1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
     groups:
-      - control_center
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+      - kafka_rest2
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
-    ## Commenting below to avoid port collision on jenkins server
-    ## Uncomment to view c3 in browser at localhost:9021
-    #  published_ports:
-    #    - "9021:9021"
     networks:
-      - name: confluent${BUILD_NUMBER}
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect2
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql2
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center2
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9021:9021"
+    networks:
+      - name: confluent
 provisioner:
+  playbooks:
+    converge: ../multi_rbac_converge.yml
   inventory:
     group_vars:
       all:
-        scenario_name: rbac-scram-custom-rhel
-
-        # Test additional scram user
-        sasl_scram_users:
-          client:
-            principal: test
-            password: test123
+        scenario_name: rbac-mds-plain-custom-rhel-fips
 
         ssl_enabled: true
-        sasl_protocol: scram
+        sasl_protocol: plain
+        fips_enabled: true
         ssl_custom_certs: true
         ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
         ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
@@ -179,6 +200,9 @@ provisioner:
         ssl_key_password: keypass
 
         rbac_enabled: true
+        sso_mode: oidc
+
+        kafka_broker_custom_log4j: false
 
         create_mds_certs: false
         token_services_public_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/public.pem"
@@ -191,6 +215,12 @@ provisioner:
 
         mds_super_user: mds
         mds_super_user_password: password
+
+        kafka_controller_ldap_user: kafka_controller
+        kafka_controller_ldap_password: password
+
+        kafka_broker_ldap_user: kafka_broker
+        kafka_broker_ldap_password: password
 
         schema_registry_ldap_user: schema_registry
         schema_registry_ldap_password: password
@@ -210,13 +240,22 @@ provisioner:
         rbac_component_additional_system_admins:
           - User:user1
 
-        kafka_broker_additional_system_admins:
-          - User:user2
+      mds:
+
+        # necessary configs in MDS server for sso in C3
+        sso_groups_claim: groups
+        sso_sub_claim: sub
+        sso_issuer_url: http://ec2-35-166-19-61.us-west-2.compute.amazonaws.com:8080/auth/realms/cpsso
+        sso_jwks_uri: http://ec2-35-166-19-61.us-west-2.compute.amazonaws.com:8080/auth/realms/cpsso/protocol/openid-connect/certs
+        sso_authorize_uri: http://ec2-35-166-19-61.us-west-2.compute.amazonaws.com:8080/auth/realms/cpsso/protocol/openid-connect/auth
+        sso_token_uri: http://ec2-35-166-19-61.us-west-2.compute.amazonaws.com:8080/auth/realms/cpsso/protocol/openid-connect/token
+        sso_client_id: ssologin
+        sso_client_password: 23693f02-017b-4ba2-9126-4348b0ab11a4
 
         kafka_broker_custom_properties:
           ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
           ldap.com.sun.jndi.ldap.read.timeout: 3000
-          ldap.java.naming.provider.url: "ldaps://{{ groups['ldap_server'][0] }}:636"
+          ldap.java.naming.provider.url: ldaps://mds-ldap1:636
           ldap.java.naming.security.protocol: SSL
           ldap.ssl.truststore.location: /var/ssl/private/kafka_broker.truststore.jks
           ldap.ssl.truststore.password: confluenttruststorepass
@@ -230,13 +269,17 @@ provisioner:
           ldap.group.name.attribute: cn
           ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
           ldap.user.object.class: account
-          confluent.balancer.enable: "true"
 
-        kafka_connect_service_environment_overrides:
-          CLASSPATH: /usr/share/java/kafka-connect-replicator/*
-        kafka_connect_custom_rest_extension_classes:
-          - io.confluent.connect.replicator.monitoring.ReplicatorMonitoringExtension
-        kafka_connect_custom_java_args: "-Djavax.net.ssl.trustStore={{kafka_connect_truststore_path}} -Djavax.net.ssl.trustStorePassword={{kafka_connect_truststore_storepass}}"
+      cluster2:
+        external_mds_enabled: true
+        mds_broker_bootstrap_servers: mds-kafka-broker1:9093
+        mds_bootstrap_server_urls: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
+        mds_broker_listener:
+          ssl_enabled: true
+          ssl_mutual_auth_enabled: true
+          sasl_protocol: plain
+
+        secrets_protection_enabled: true
 
       ldap_server:
         ldaps_enabled: true
@@ -253,6 +296,10 @@ provisioner:
         ldap_dc_extension: com
 
         ldap_users:
+          - username: "{{kafka_broker_ldap_user}}"
+            password: "{{kafka_broker_ldap_password}}"
+            uid: 9999
+            guid: 99
           - username: "{{schema_registry_ldap_user}}"
             password: "{{schema_registry_ldap_password}}"
             uid: 9998
@@ -281,7 +328,7 @@ provisioner:
             password: user1p
             uid: 9992
             guid: 92
-          - username: user2
-            password: user2p
+          - username: "{{kafka_controller_ldap_user}}"
+            password: "{{kafka_controller_ldap_password}}"
             uid: 9991
             guid: 91
