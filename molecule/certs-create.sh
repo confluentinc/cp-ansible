@@ -51,7 +51,7 @@ for line in `sed '/^$/d' $filename`; do
       internal=${split_hostnames[1]}
       fqdn=$internal.confluent
       ip_add=$(dig +short $internal)
-      if [$ip_add = ""]; then   # skip creating Zookeeper certs in Kraft mode and vice versa
+      if [ $ip_add = "" ]; then   # skip creating Zookeeper certs in Kraft mode and vice versa
         continue
       fi
       alias=$service.$internal
