@@ -874,6 +874,8 @@ Kafka Broker Customer Listener
 
 RBAC Additional System Admin.
 
+SSO authentication using OIDC in Control center using Azure IdP
+
 #### Scenario rbac-mds-kerberos-debian verify test's the following:
 
 Validates that GSSAPI protocol is set on Cluster2.
@@ -883,6 +885,8 @@ Validates that MDS is HTTP on Cluster1 (MDS).
 Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 Validates that Java 17 is in Use
+
+Validates OIDC authenticate api for SSO in Control Center
 
 ***
 
@@ -1032,6 +1036,8 @@ Kafka Broker Customer Listener.
 
 RBAC Additional System Admin.
 
+SSO authentication using OIDC in Control center using KeyCloak IdP
+
 #### Scenario rbac-mds-plain-custom-rhel verify test's the following:
 
 Validates that protocol is sasl plain.
@@ -1039,6 +1045,8 @@ Validates that protocol is sasl plain.
 Validates that MDS is HTTPs on Cluster1 (MDS).
 
 Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
+
+Validates OIDC authenticate api for SSO in Control Center
 
 ***
 
@@ -1144,9 +1152,13 @@ MTLS enabled.
 
 Kafka Broker Customer Listener.
 
+SSO authentication using OIDC in Control center using Okta IdP
+
 #### Scenario rbac-mtls-rhel8 verify test's the following:
 
 Validates TLS keysizes across all components.
+
+Validates OIDC authenticate api for SSO in Control Center
 
 ***
 
@@ -1202,6 +1214,8 @@ Additional Scram Users added.
 
 Kafka Connect Custom arguments.
 
+SSO authentication using OIDC in Control center using Azure IdP
+
 #### Scenario rbac-scram-custom-rhel verify test's the following:
 
 Validates keystore is present across all components.
@@ -1213,6 +1227,8 @@ Validates that Confluent Balancer is enabled.
 Validates total number of clusters for user2.
 
 Validates truststore across all components.
+
+Validates OIDC authenticate api for SSO in Control Center
 
 ***
 
