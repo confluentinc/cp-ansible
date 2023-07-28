@@ -5,6 +5,7 @@
 ### Validates total number of clusters for user2.
 ### Validates truststore across all components.
 ### Validates OIDC authenticate api for SSO in Control Center
+### Validates that FIPS is in use in OpenSSL.
 
 - name: Verify - kafka_broker
   hosts: kafka_broker
@@ -75,6 +76,19 @@
           - clusters.json|length == 1
         fail_msg: "There should only be for clusters in {{clusters.json}}"
         quiet: true
+
+    - name: Test TLS version used in certificate
+      shell: openssl s_client -connect {{inventory_hostname}}:9091 </dev/null 2>/dev/null  | grep 'Protocol  :' | sed 's/^.*:\ //'
+      register: tls_version
+
+    - fail:
+        msg: "TLS version is {{tls_version}}, it should be >=1.2"
+      when: tls_version is version('TLSv1.2', '<')
+
+    - name: Check FIPS in OpenSSL
+      shell: openssl md5 <<< "123"
+      register: openssl_out
+      failed_when: openssl_out.rc == 0
 
 - name: Verify - schema_registry
   hosts: schema_registry

@@ -3,11 +3,42 @@
 ### Validates that keystores are in place.
 ### Validates that MDS is HTTP on Cluster1 (MDS).
 ### Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
+### Validates that FIPS is in use on both clusters.
+
+- name: Validate FIPS on MDS cluster
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Test TLS version used in certificate
+      shell: openssl s_client -connect {{inventory_hostname}}:9091 </dev/null 2>/dev/null  | grep 'Protocol  :' | sed 's/^.*:\ //'
+      register: tls_version
+
+    - fail:
+        msg: "TLS version is {{tls_version}}, it should be >=1.2"
+      when: tls_version is version('TLSv1.2', '<')
+
+    - name: Check FIPS in OpenSSL
+      shell: openssl md5 <<< "123"
+      register: openssl_out
+      failed_when: openssl_out.rc == 0
 
 - name: Verify - kafka_broker
   hosts: kafka_broker2
   gather_facts: false
   tasks:
+    - name: Test TLS version used in certificate
+      shell: openssl s_client -connect {{inventory_hostname}}:9091 </dev/null 2>/dev/null  | grep 'Protocol  :' | sed 's/^.*:\ //'
+      register: tls_version
+
+    - fail:
+        msg: "TLS version is {{tls_version}}, it should be >=1.2"
+      when: tls_version is version('TLSv1.2', '<')
+
+    - name: Check FIPS in OpenSSL
+      shell: openssl md5 <<< "123"
+      register: openssl_out
+      failed_when: openssl_out.rc == 0
+
     - name: Check 2 way tls line omitted in properties
       shell: |
         grep "confluent.metadata.server.ssl.truststore.location"  /etc/kafka/server.properties
