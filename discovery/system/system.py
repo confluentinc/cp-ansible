@@ -36,6 +36,7 @@ class SystemPropertyBuilder:
     def with_ansible_variables(self):
 
         self.inventory.set_variable('all', 'ansible_user', self.input_context.ansible_user)
+        self.inventory.set_variable('all', 'ansible_password', self.input_context.ansible_password)
         self.inventory.set_variable('all', 'ansible_become', self.input_context.ansible_become)
         self.inventory.set_variable('all', 'ansible_connection', self.input_context.ansible_connection)
         self.inventory.set_variable('all', 'ansible_become_user', self.input_context.ansible_become_user)
