@@ -1,8 +1,9 @@
 ---
-### Installation of Confluent Platform on centos8.
-### TLS enabled.
-### SASL Plain enabled.
-### Custom certificates on remote host
+### Installation of Confluent Platform Edition on centos8.
+### MTLS Enabled with custom certificates.
+### Tests custom filtering properties for Secrets Protection.
+### TLS is disabled for Zookeeper.
+### FIPS enabled
 
 driver:
   name: docker
@@ -12,7 +13,7 @@ platforms:
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
     image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -24,7 +25,7 @@ platforms:
     groups:
       - kafka_broker
     image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -36,7 +37,7 @@ platforms:
     groups:
       - kafka_broker
     image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -48,7 +49,7 @@ platforms:
     groups:
       - kafka_broker
     image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -60,7 +61,7 @@ platforms:
     groups:
       - schema_registry
     image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -72,7 +73,7 @@ platforms:
     groups:
       - kafka_rest
     image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -84,7 +85,7 @@ platforms:
     groups:
       - kafka_connect
     image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -96,19 +97,21 @@ platforms:
     groups:
       - ksql
     image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
       - name: confluent
+  # Testing colocated secrets protection
   - name: control-center1
     hostname: control-center1.confluent
     groups:
       - control_center
+      - schema_registry
     image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -118,21 +121,20 @@ platforms:
     networks:
       - name: confluent
 provisioner:
-  playbooks:
-    prepare: ../certificates.yml
   inventory:
     group_vars:
       all:
-        scenario_name: plain-customcerts-rhel
-
-        sasl_protocol: plain
-
+        scenario_name: mtls-custombundle-rhel-fips
         ssl_enabled: true
+        fips_enabled: true
+        redhat_java_package_name: java-11-openjdk
+
+        # cert creation script does not use fqdn, which is a requirement for zk ssl
+        zookeeper_ssl_enabled: false
 
         ssl_custom_certs: true
-        ssl_custom_certs_remote_src: true
-
-        ssl_ca_cert_filepath: "/var/ssl/temp/generated_ssl_files/ca.crt"
-        ssl_signed_cert_filepath: "/var/ssl/temp/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
-        ssl_key_filepath: "/var/ssl/temp/generated_ssl_files/{{inventory_hostname}}-key.pem"
-        ssl_key_password: keypass
+        ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/caBundle.pem"
+        ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}.chain"
+        ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}.key"
+        # cert creation script does not put password on key, validates ssl try/catch
+        # ssl_key_password: keypass

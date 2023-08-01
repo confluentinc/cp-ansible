@@ -1,44 +1,51 @@
 ---
-### Validates that Audit logs are working on topic creation.
-### Validates that keystores are in place.
-### Validates that MDS is HTTP on Cluster1 (MDS).
+### Validates that protocol is sasl plain.
+### Validates that MDS is HTTPs on Cluster1 (MDS).
 ### Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
+### Validates OIDC authenticate api for SSO in Control Center
+### Validates that FIPS is in use on both clusters.
+
+- name: Validate FIPS on MDS cluster
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Test TLS version used in certificate
+      shell: openssl s_client -connect {{inventory_hostname}}:9091 </dev/null 2>/dev/null  | grep 'Protocol  :' | sed 's/^.*:\ //'
+      register: tls_version
+
+    - fail:
+        msg: "TLS version is {{tls_version}}, it should be >=1.2"
+      when: tls_version is version('TLSv1.2', '<')
+
+    - name: Check FIPS in OpenSSL
+      shell: openssl md5 <<< "123"
+      register: openssl_out
+      failed_when: openssl_out.rc == 0
 
 - name: Verify - kafka_broker
   hosts: kafka_broker2
   gather_facts: false
   tasks:
-    - name: Check 2 way tls line omitted in properties
-      shell: |
-        grep "confluent.metadata.server.ssl.truststore.location"  /etc/kafka/server.properties
-      register: linecheck
-      check_mode: false
-      changed_when: false
-      failed_when: linecheck.rc != 1
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: confluent.metadata.sasl.mechanism
+        expected_value: PLAIN
 
-    - name: Create Topic
-      shell: |
-        kafka-topics --bootstrap-server mds-kafka-broker1:9091 \
-          --command-config /etc/kafka/client.properties \
-          --create --if-not-exists --topic test1 \
-          --replication-factor 1 --partitions 1
-      run_once: true
+    - name: Test TLS version used in certificate
+      shell: openssl s_client -connect {{inventory_hostname}}:9091 </dev/null 2>/dev/null  | grep 'Protocol  :' | sed 's/^.*:\ //'
+      register: tls_version
 
-    - name: Consume audit logs topic
-      shell: |
-        timeout 10 kafka-console-consumer --bootstrap-server kafka-broker1:9091 \
-            --consumer.config /etc/kafka/client.properties \
-            --from-beginning --topic confluent-audit-log-events
-      register: output
-      run_once: true
-      failed_when: false
+    - fail:
+        msg: "TLS version is {{tls_version}}, it should be >=1.2"
+      when: tls_version is version('TLSv1.2', '<')
 
-    - name: Assert audit log there
-      assert:
-        that:
-          - "'\"resourceType\":\"Topic\",\"resourceName\":\"test1\"' in output.stdout"
-        fail_msg: "test1 topic creation should be in audit logs topic"
-        quiet: true
+    - name: Check FIPS in OpenSSL
+      shell: openssl md5 <<< "123"
+      register: openssl_out
+      failed_when: openssl_out.rc == 0
 
 - name: Verify - kafka_controller
   hosts: kafka_controller2
@@ -49,8 +56,8 @@
         tasks_from: check_property.yml
       vars:
         file_path: /etc/controller/server.properties
-        property: confluent.metadata.bootstrap.servers
-        expected_value: mds-kafka-broker1:9093,mds-kafka-broker2:9093
+        property: confluent.metadata.sasl.mechanism
+        expected_value: PLAIN
 
 - name: Verify - schema_registry
   hosts: schema_registry2
@@ -112,3 +119,10 @@
         file_path: /etc/confluent-control-center/control-center-production.properties
         property: confluent.metadata.bootstrap.server.urls
         expected_value: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
+    - name: Check status of Authenticate api
+      uri:
+        url: "https://control-center1:9021/api/metadata/security/1.0/oidc/authenticate?caller=https://control-center1:9021/api/metadata"
+        validate_certs: false
+        follow_redirects: none
+        status_code: 302
+      register: sso

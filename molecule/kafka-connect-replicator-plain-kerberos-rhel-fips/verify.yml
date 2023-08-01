@@ -3,6 +3,7 @@
 ### Validates that Replicator is using Kerberos and TLS to Produce data to Cluster2.
 ### Validates that Replicator is using SASL PLAIN with TLS to Consume from Cluster1 (MDS).
 ### Validates that client ID's are set correctly on Replicator.
+### Validates that FIPS is in use in OpenSSL.
 
 - name: Verify - kafka_controller
   hosts: kafka_controller
@@ -17,6 +18,23 @@
         file_path: /etc/controller/server.properties
         property: controller.quorum.voters
         expected_value: "{{ kafka_controller_quorum_voters }}"
+
+- name: Validate FIPS
+  hosts: kafka-broker1
+  gather_facts: false
+  tasks:
+    - name: Test TLS version used in certificate
+      shell: openssl s_client -connect kafka-broker1:9091 </dev/null 2>/dev/null  | grep 'Protocol  :' | sed 's/^.*:\ //'
+      register: tls_version
+
+    - fail:
+        msg: "TLS version is {{tls_version}}, it should be >=1.2"
+      when: tls_version is version('TLSv1.2', '<')
+
+    - name: Check FIPS in OpenSSL
+      shell: openssl md5 <<< "123"
+      register: openssl_out
+      failed_when: openssl_out.rc == 0
 
 - name: Confluent Replicator Validate Consumption and Production between clusters
   hosts: kafka-broker1

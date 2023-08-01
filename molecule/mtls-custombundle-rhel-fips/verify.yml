@@ -1,5 +1,6 @@
 ---
 ### Validates that Keystore is present.
+### Validates that FIPS is in use in OpenSSL.
 
 - name: Verify - kafka_controller
   hosts: kafka_controller
@@ -24,6 +25,19 @@
         file_path: /etc/kafka/server.properties
         property: listener.name.internal.ssl.keystore.location
         expected_value: /var/ssl/private/kafka_broker.keystore.bcfks
+
+    - name: Test TLS version used in certificate
+      shell: openssl s_client -connect {{inventory_hostname}}:9091 </dev/null 2>/dev/null  | grep 'Protocol  :' | sed 's/^.*:\ //'
+      register: tls_version
+
+    - fail:
+        msg: "TLS version is {{tls_version}}, it should be >=1.2"
+      when: tls_version is version('TLSv1.2', '<')
+
+    - name: Check FIPS in OpenSSL
+      shell: openssl md5 <<< "123"
+      register: openssl_out
+      failed_when: openssl_out.rc == 0
 
 - name: Verify - schema_registry
   hosts: schema_registry
