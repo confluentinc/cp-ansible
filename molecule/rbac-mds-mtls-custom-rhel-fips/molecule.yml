@@ -3,10 +3,10 @@
 ### RBAC enabled.
 ### Remote MDS from Cluster2 to Cluster1 (MDS).
 ### Custom TLS certificates.
-### SASL PLAIN enabled on both clusters.
+### MTLS enabled on both clusters.
+### FIPS enabled on both clusters.
 ### Kafka Broker Customer Listener.
 ### RBAC Additional System Admin.
-### SSO authentication using OIDC in Control center using KeyCloak IdP
 
 driver:
   name: docker
@@ -189,10 +189,11 @@ provisioner:
   inventory:
     group_vars:
       all:
-        scenario_name: rbac-mds-plain-custom-rhel
-
+        scenario_name: rbac-mds-mtls-custom-rhel-fips
+        fips_enabled: true
+        redhat_java_package_name: java-11-openjdk
         ssl_enabled: true
-        sasl_protocol: plain
+        ssl_mutual_auth_enabled: true
 
         ssl_custom_certs: true
         ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
@@ -201,9 +202,6 @@ provisioner:
         ssl_key_password: keypass
 
         rbac_enabled: true
-        sso_mode: oidc
-
-        kafka_broker_custom_log4j: false
 
         create_mds_certs: false
         token_services_public_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/public.pem"
@@ -242,16 +240,14 @@ provisioner:
           - User:user1
 
       mds:
-
-        # necessary configs in MDS server for sso in C3
-        sso_groups_claim: groups
-        sso_sub_claim: sub
-        sso_issuer_url: http://ec2-35-166-19-61.us-west-2.compute.amazonaws.com:8080/auth/realms/cpsso
-        sso_jwks_uri: http://ec2-35-166-19-61.us-west-2.compute.amazonaws.com:8080/auth/realms/cpsso/protocol/openid-connect/certs
-        sso_authorize_uri: http://ec2-35-166-19-61.us-west-2.compute.amazonaws.com:8080/auth/realms/cpsso/protocol/openid-connect/auth
-        sso_token_uri: http://ec2-35-166-19-61.us-west-2.compute.amazonaws.com:8080/auth/realms/cpsso/protocol/openid-connect/token
-        sso_client_id: ssologin
-        sso_client_password: 23693f02-017b-4ba2-9126-4348b0ab11a4
+        kafka_broker_cluster_name: mds
+        audit_logs_destination_enabled: true
+        audit_logs_destination_bootstrap_servers: kafka-broker1:9091,kafka-broker2:9091,kafka-broker3:9091
+        audit_logs_destination_kafka_cluster_name: mds
+        audit_logs_destination_listener:
+          ssl_enabled: true
+          ssl_mutual_auth_enabled: true
+          sasl_protocol: none
 
         kafka_broker_custom_properties:
           ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
@@ -272,15 +268,15 @@ provisioner:
           ldap.user.object.class: account
 
       cluster2:
+        kafka_broker_cluster_name: audit_logs
         external_mds_enabled: true
-        mds_broker_bootstrap_servers: mds-kafka-broker1:9093
+        kafka_broker_rest_ssl_enabled: true
+        mds_broker_bootstrap_servers: mds-kafka-broker1:9093,mds-kafka-broker2:9093
         mds_bootstrap_server_urls: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
         mds_broker_listener:
           ssl_enabled: true
           ssl_mutual_auth_enabled: true
-          sasl_protocol: plain
-
-        secrets_protection_enabled: true
+          sasl_protocol: none
 
       ldap_server:
         ldaps_enabled: true
