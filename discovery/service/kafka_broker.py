@@ -106,12 +106,19 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         # parse line to get the user configs
         for token in jaas_config.split():
             if "=" in token:
-                username, password = token.split('=')
-                if username.startswith('user_'):
-                    principal = username.replace('user_', '')
-                    # Sanitize the password
-                    password = password.rstrip(';').strip('"')
+                key, value = token.split('=')
+                if key.startswith('username'):
+                    principal = value.strip('"')
+                # Sanitize the password
+                if key.startswith('password'):
+                    password = value
+                    password = value.rstrip(';').strip('"')
                     users[principal] = {'principal': principal, 'password': password}
+                if key.startswith('user_'):
+                    principal = key.replace('user_', '')
+                    # Sanitize the password
+                    password = value.rstrip(';').strip('"')
+                    users[principal] = {'principal': principal, 'password': password}                    
 
         return users
 
@@ -298,8 +305,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
     def _build_custom_listeners(self, service_prop: dict) -> tuple:
         custom_listeners = dict()
-        default_scram_users = dict()
-        default_scram256_users = dict()
+        default_scram_sha_256_users = dict()
         default_scram_sha_512_users = dict()
         default_plain_users = dict()
         default_gssapi_users = dict()
@@ -313,7 +319,8 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
             port = parsed_uri.port
 
             key1 = f"listener.name.{name}.sasl.enabled.mechanisms"
-            key2 = f"listener.name.{name}.ssl.client.auth"
+            key2 = f"listener.name.{name}.ssl.keystore.location"
+            key3 = f"listener.name.{name}.ssl.client.auth"
             self.mapped_service_properties.add(key1)
             self.mapped_service_properties.add(key2)
 
@@ -325,25 +332,28 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
             ssl_enabled = service_prop.get(key2)
             if ssl_enabled is not None:
                 custom_listeners[name]['ssl_enabled'] = True
-
-            if 'ssl_mutual_auth_enabled' in self.inventory.groups.get('kafka_broker').vars and \
-                    self.inventory.groups.get('kafka_broker').vars.get('ssl_mutual_auth_enabled') is True:
-                custom_listeners[name]['ssl_mutual_auth_enabled'] = True
+                ssl_mutual_enabled = service_prop.get(key3)
+                logger.info(f"SSL mutual auth enabled for listener {name} {ssl_mutual_enabled}")
+                if ssl_mutual_enabled == 'required':
+                    custom_listeners[name]['ssl_mutual_auth_enabled'] = True
+                else:
+                    custom_listeners[name]['ssl_mutual_auth_enabled'] = False
 
             sasl_protocol = service_prop.get(key1)
             if sasl_protocol is not None:
-                custom_listeners[name]['sasl_protocol']: sasl_protocol
+                custom_listeners[name]['sasl_protocol'] = sasl_protocol
                 # Add the users to corresponding sasl mechanism
                 key = f"listener.name.{name.lower()}.{sasl_protocol.lower()}.sasl.jaas.config"
                 _dict = locals()[f"default_{sasl_protocol.lower().replace('-', '_')}_users"]
                 _dict.update(self.__get_user_dict(service_prop, key))
                 self.mapped_service_properties.add(key)
+            else:
+                custom_listeners[name]['sasl_protocol'] = 'none'
 
         return self.group, {
             "kafka_broker_custom_listeners": custom_listeners,
-            "sasl_scram_users": default_scram_users,
-            "sasl_scram256_users": default_scram256_users,
-            "sasl_scram512_users": default_scram_sha_512_users,
+            "sasl_scram_users": default_scram_sha_512_users,
+            "sasl_scram256_users": default_scram_sha_256_users,
             "sasl_plain_users": default_plain_users
         }
 
