@@ -32,6 +32,7 @@ class AnsibleRunnerUtils:
     def get_ansible_vars_from_input_context(input_context: InputContext) -> dict:
         vars = dict()
         vars['ansible_user'] = input_context.ansible_user
+        vars['ansible_password'] = input_context.ansible_password
         vars['ansible_become'] = input_context.ansible_become
         vars['ansible_connection'] = input_context.ansible_connection
         vars['ansible_become_user'] = input_context.ansible_become_user

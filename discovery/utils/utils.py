@@ -94,6 +94,7 @@ class InputContext:
     ansible_connection = None
     ansible_become = False
     ansible_user = None
+    ansible_password = None
     ansible_hosts = None
     ansible_become_user = 'root'
     ansible_become_method = 'sudo'
@@ -113,6 +114,7 @@ class InputContext:
                  ansible_hosts,
                  ansible_connection,
                  ansible_user,
+                 ansible_password,
                  ansible_become,
                  ansible_become_user,
                  ansible_become_method,
@@ -130,6 +132,7 @@ class InputContext:
         self.ansible_hosts = ansible_hosts
         self.ansible_connection = ansible_connection
         self.ansible_user = ansible_user
+        self.ansible_password = ansible_password
         self.ansible_become = ansible_become
         self.ansible_become_user = ansible_become_user
         self.ansible_become_method = ansible_become_method
@@ -196,6 +199,7 @@ class Arguments:
                                                                                     None),
                                                ansible_ssh_private_key_file=vars.get("ansible_ssh_private_key_file"),
                                                ansible_user=vars.get("ansible_user"),
+                                               ansible_password=vars.get("ansible_password"),
                                                ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
                                                ansible_python_interpreter=vars.get("ansible_python_interpreter",
                                                                                    'auto'),
