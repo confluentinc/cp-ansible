@@ -880,9 +880,9 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 ***
 
-### confluent.test/molecule/zookeeper-mtls-secrets-rhel
+### confluent.test/molecule/zookeeper-digest-mtls-secrets-rhel
 
-#### Scenario zookeeper-mtls-secrets-rhel test's the following:
+#### Scenario zookeeper-digest-mtls-secrets-rhel test's the following:
 
 Installs Confluent Platform on CentOS7
 
@@ -896,7 +896,7 @@ Secrets Protection enabled.
 
 Jolokia has TLS disabled.
 
-#### Scenario zookeeper-mtls-secrets-rhel verify test's the following:
+#### Scenario zookeeper-digest-mtls-secrets-rhel verify test's the following:
 
 Validates that Confluent CLI is installed.
 
