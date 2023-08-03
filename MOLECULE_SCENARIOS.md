@@ -1174,9 +1174,7 @@ Validates that Secrets protection is applied to the correct properties.
 
 ***
 
-### molecule/zookeeper-mtls-secrets-rhel
-
-#### Scenario zookeeper-mtls-secrets-rhel test's the following:
+#### Scenario zookeeper-digest-mtls-secrets-rhel test's the following:
 
 Installs Confluent Platform on CentOS7
 
@@ -1190,7 +1188,7 @@ Secrets Protection enabled.
 
 Jolokia has TLS disabled.
 
-#### Scenario zookeeper-mtls-secrets-rhel verify test's the following:
+#### Scenario zookeeper-digest-mtls-secrets-rhel verify test's the following:
 
 Validates that Confluent CLI is installed.
 
