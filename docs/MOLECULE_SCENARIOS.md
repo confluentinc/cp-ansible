@@ -412,7 +412,7 @@ Validates that Control Center Can connect to each KSQL cluster
 
 #### Scenario mtls-custombundle-rhel-fips test's the following:
 
-Installation of Confluent Platform Edition on centos8.
+Installation of Confluent Platform Edition on centos7.
 
 MTLS Enabled with custom certificates.
 
@@ -425,8 +425,6 @@ FIPS enabled
 #### Scenario mtls-custombundle-rhel-fips verify test's the following:
 
 Validates that Keystore is present.
-
-Validates that FIPS is in use in OpenSSL.
 
 ***
 
