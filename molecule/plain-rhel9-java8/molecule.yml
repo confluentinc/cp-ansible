@@ -1,0 +1,163 @@
+---
+### Installation of Confluent Platform on RHEL9.
+### SASL Plain enabled.
+### Control Plane listener enabled.
+### Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
+### Custom Service Unit overrides.
+### Custom log4j appender names.
+
+driver:
+  name: docker
+platforms:
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9021:9021"
+    networks:
+      - name: confluent
+provisioner:
+  inventory:
+    group_vars:
+      all:
+        sasl_protocol: plain
+        kafka_broker_configure_control_plane_listener: true
+        zookeeper_custom_properties:
+          dataDir: /opt/zookeeper
+
+        kafka_broker_custom_client_properties:
+          default.api.timeout.ms: 40000
+
+        kafka_connect_confluent_hub_plugins:
+          - jcustenborder/kafka-connect-spooldir:2.0.43
+
+        connect_s3_plugin_version: 10.3.0
+        kafka_connect_plugins:
+          - "/tmp/local_plugins/confluentinc-kafka-connect-gcp-functions-1.1.9.zip"
+          - "/tmp/local_plugins/confluentinc-kafka-connect-azure-data-lake-gen2-storage-1.6.15.zip"
+        kafka_connect_plugins_remote:
+          - "https://d1i4a15mxbxib1.cloudfront.net/api/plugins/confluentinc/kafka-connect-s3/versions/{{connect_s3_plugin_version}}/confluentinc-kafka-connect-s3-{{connect_s3_plugin_version}}.zip"
+
+        kafka_connect_connectors:
+          - name: sample-connector-1
+            config:
+              connector.class: "org.apache.kafka.connect.tools.VerifiableSinkConnector"
+              tasks.max: "1"
+              file: "/etc/kafka/connect-distributed.properties"
+              topics: "test_topic"
+
+        zookeeper_service_unit_overrides:
+          Description: Custom Zookeeper description
+
+        zookeeper_log4j_root_logger: INFO, zkAppender
+
+        kafka_controller_service_unit_overrides:
+          Description: Custom Controller description
+
+        kafka_controller_log4j_root_logger: "INFO, kafkaAppender"
+
+        kafka_broker_service_unit_overrides:
+          Description: Custom Kafka description
+
+        kafka_broker_log4j_root_logger: "INFO, kafkaAppender"
+
+        schema_registry_log4j_root_logger: INFO, file
+
+        kafka_connect_service_unit_overrides:
+          Description: Custom Connect description
+
+        kafka_connect_log4j_root_logger: "INFO, connectAppender"
+
+        kafka_rest_service_unit_overrides:
+          Description: Custom Rest Proxy description
+
+        kafka_rest_log4j_root_logger: INFO, file
+
+        ksql_service_unit_overrides:
+          Description: Custom KSQLDB description
+
+        ksql_log4j_root_logger: INFO, main
+
+        control_center_service_unit_overrides:
+          Description: Custom C3 description
+
+        control_center_log4j_root_logger: INFO, stdout, main
