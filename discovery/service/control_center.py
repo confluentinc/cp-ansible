@@ -96,13 +96,13 @@ class ControlCenterServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_service_protocol_port(self, service_prop: dict) -> tuple:
         key = "confluent.controlcenter.rest.listeners"
         self.mapped_service_properties.add(key)
-        from urllib.parse import urlparse
+        from yurl import URL
         if key in service_prop:
             listener = service_prop.get(key).split(',')[0]
-            parsed_uri = urlparse(listener)
+            parsed_uri = URL(listener)
             return self.group, {
                 "control_center_http_protocol": parsed_uri.scheme,
-                "control_center_listener_hostname": parsed_uri.hostname,
+                "control_center_listener_hostname": parsed_uri.host,
                 "control_center_port": parsed_uri.port
             }
         else:

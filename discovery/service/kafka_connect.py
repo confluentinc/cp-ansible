@@ -148,9 +148,9 @@ class KafkaConnectServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_service_protocol_port(self, service_prop: dict) -> tuple:
         key = "listeners"
         self.mapped_service_properties.add(key)
-        from urllib.parse import urlparse
+        from yurl import URL
         listener = service_prop.get(key).split(',')[0]
-        parsed_uri = urlparse(listener)
+        parsed_uri = URL(listener)
         return self.group, {
             "kafka_connect_http_protocol": parsed_uri.scheme,
             "kafka_connect_rest_port": parsed_uri.port
