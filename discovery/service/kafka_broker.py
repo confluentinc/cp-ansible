@@ -118,7 +118,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
                     principal = key.replace('user_', '')
                     # Sanitize the password
                     password = value.rstrip(';').strip('"')
-                    users[principal] = {'principal': principal, 'password': password}                    
+                    users[principal] = {'principal': principal, 'password': password}
 
         return users
 

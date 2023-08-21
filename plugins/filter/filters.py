@@ -213,8 +213,9 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.login.callback.handler.class'] =\
                     'io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler'
                 final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
-                    'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'    
-                final_dict['listener.name.' + listener_name + '.principal.builder.class'] = 'io.confluent.kafka.security.authenticator.OAuthKafkaPrincipalBuilder'
+                    'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
+                final_dict['listener.name.' + listener_name + '.principal.builder.class'] =\
+                    'io.confluent.kafka.security.authenticator.OAuthKafkaPrincipalBuilder'
 
         return final_dict
 
