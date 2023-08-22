@@ -4,6 +4,21 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.5.0
+======
+
+New features
+-------------
+
+- Configure single sign-on (SSO) authentication for Control Center using OpenID Connect (OIDC)
+- Enable FIPS on Confluent Platform(CP) for RHEL8 & RHEL9 using cp-ansible.
+
+Notable enhancements
+-------------
+
+- Added capability to discover multiple workers in the connect cluster in discovery
+- Added support to specify ansible_password in discovery
+
 v7.4.1
 ======
 
