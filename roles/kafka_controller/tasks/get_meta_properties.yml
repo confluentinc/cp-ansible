@@ -5,9 +5,17 @@
     KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
   register: uuid_key
   run_once: true
+  when: not migration_enabled|bool
+
+- name: Extract ClusterId from meta.properties on ZK Broker
+  slurp:
+    src: "{{ kafka_broker_final_properties['log.dirs'] }}/meta.properties"
+  delegate_to: "{{ groups.kafka_broker[0] }}"
+  register: zoo_cluster
+  when: migration_enabled|bool
 
 - name: Format Data Directory
   shell: "{{ binary_base_path }}/bin/kafka-storage  format -t {{ clusterid }} -c {{ kafka_controller.config_file }}  --ignore-formatted"
   register: format_meta
   vars:
-    clusterid: "{{ uuid_key.stdout }}"
+    clusterid: "{{ (zoo_cluster['content'] | b64decode).partition('cluster.id=')[2].partition('\n')[0] if migration_enabled|bool else uuid_key.stdout }}"

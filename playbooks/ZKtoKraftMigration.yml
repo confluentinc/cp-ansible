@@ -1,0 +1,91 @@
+---
+- import_playbook: kafka_controller.yml
+
+- import_playbook: kafka_broker.yml
+  vars:
+    deployment_strategy: 'serial'
+
+- name: Wait for migration to complete
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Migration successful
+      lineinfile:
+        name: "{{ kafka_controller_log_dir }}/server.log"
+        line: "Completed migration of metadata from Zookeeper to KRaft"
+        state: present
+      register: migration_message
+      until: migration_message is success
+      retries: 10
+      delay: 90
+
+- name: Migrate Brokers to Kraft
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Remove Zookeeper configs from Broker
+      lineinfile:
+        path: "{{ kafka_broker.config_file }}"
+        state: absent
+        regexp: "{{ item }}*"
+      loop:
+        - zookeeper
+        - inter.broker.protocol.version
+
+    - name: Reconfigure ZK Brokers as KRaft brokers
+      lineinfile:
+        path: "{{ kafka_broker.config_file }}"
+        line: process.roles=broker
+
+- name: Restart Kafka Broker
+  hosts: kafka_broker
+  gather_facts: true
+  serial: '1'
+  tasks:
+    - include_role:
+        name: kafka_broker
+        tasks_from: restart_and_wait.yml
+    - include_role:
+        name: kafka_broker
+        tasks_from: health_check.yml
+      tags: health_check
+
+- name: Take Controllers out of migration mode
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Remove Zookeeper configs from Controller
+      lineinfile:
+        path: "{{ kafka_controller.config_file }}"
+        state: absent
+        regexp: "{{ item }}*"
+      loop:
+        - zookeeper
+
+- name: Restart Kafka Controller
+  hosts: kafka_controller
+  gather_facts: true
+  serial: '1'
+  tasks:
+    - include_role:
+        name: kafka_controller
+        tasks_from: restart_and_wait.yml
+    - include_role:
+        name: kafka_controller
+        tasks_from: health_check.yml
+      tags: health_check
+
+- name: Finish Migration
+  hosts: kafka_controller
+  tasks:
+    - debug:
+        msg: "Migration from Zookeeper to Kraft has completed, you may shut down your Zookeeper."
