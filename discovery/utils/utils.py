@@ -361,3 +361,13 @@ def _host_group_declared_in_inventory(hosts: dict, input_context: InputContext) 
 def terminate_script(message: str = None):
     logger.error(message)
     sys.exit(message)
+
+def get_listener_details(listener):
+    """
+    Extract scheme, port and host from listener
+    """
+    listener_details = listener.split(':')
+    if len(listener_details) != 3:
+        logger.warning("Can not get listener scheme, port and host")
+
+    return {'scheme':listener_details[0].lower(), 'host':listener_details[1][2:], 'port': listener_details[2]}

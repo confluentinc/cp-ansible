@@ -4,7 +4,7 @@ from discovery.service.service import AbstractPropertyBuilder
 from discovery.utils.constants import DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.services import ConfluentServices, ServiceData
-from discovery.utils.utils import InputContext, Logger, FileUtils
+from discovery.utils.utils import InputContext, Logger, FileUtils, get_listener_details
 
 logger = Logger.get_logger()
 
@@ -101,13 +101,12 @@ class KsqlServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_service_protocol_port(self, service_prop: dict) -> tuple:
         key = "listeners"
         self.mapped_service_properties.add(key)
-        from yurl import URL
         listener = service_prop.get(key).split(',')[0]
-        parsed_uri = URL(listener)
+        parsed_uri = get_listener_details(listener)
 
         return self.group, {
-            "ksql_http_protocol": parsed_uri.scheme,
-            "ksql_listener_port": parsed_uri.port
+            "ksql_http_protocol": parsed_uri['scheme'],
+            "ksql_listener_port": parsed_uri['port']
         }
 
     def _build_ksql_internal_replication_property(self, service_prop: dict) -> tuple:

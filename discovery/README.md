@@ -9,7 +9,6 @@ Though this script tries to come up with inventory which is the closed represent
 - PyYaml 6.0  
 - ansible_runner (pip)
 - jproperties (pip)
-- yurl (pip)
 
 These are dependencies for this script and should be installed on the machine where we are executing it from. This is not a requirement for managed nodes of the cluster.
 #### Hosts
