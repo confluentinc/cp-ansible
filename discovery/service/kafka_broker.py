@@ -4,7 +4,7 @@ from discovery.service.service import AbstractPropertyBuilder
 from discovery.utils.constants import DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
 from discovery.utils.services import ConfluentServices, ServiceData
-from discovery.utils.utils import InputContext, Logger, FileUtils
+from discovery.utils.utils import InputContext, Logger, FileUtils, get_listener_details
 
 logger = Logger.get_logger()
 
@@ -287,9 +287,8 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
         listeners = self.__get_all_listeners(service_prop=service_properties)
 
         for listener in listeners:
-            from urllib.parse import urlparse
-            parsed_uri = urlparse(listener)
-            name = parsed_uri.scheme
+            parsed_uri = get_listener_details(listener)
+            name = parsed_uri['scheme']
             self.mapped_service_properties.add(f"listener.name.{name}.ssl.enabled.protocols")
             self.mapped_service_properties.add(f"listener.name.{name}.ssl.keymanager.algorithm")
             self.mapped_service_properties.add(f"listener.name.{name}.ssl.keystore.type")
@@ -313,11 +312,9 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
         listeners = self.__get_all_listeners(service_prop)
         for listener in listeners:
-            from urllib.parse import urlparse
-            parsed_uri = urlparse(listener)
-            name = parsed_uri.scheme
-            port = parsed_uri.port
-
+            parsed_uri = get_listener_details(listener)
+            name = parsed_uri['scheme']
+            port = parsed_uri['port']
             key1 = f"listener.name.{name}.sasl.enabled.mechanisms"
             key2 = f"listener.name.{name}.ssl.keystore.location"
             key3 = f"listener.name.{name}.ssl.client.auth"
@@ -328,6 +325,8 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 "name": name.upper(),
                 "port": port
             }
+
+            non_standard_protocol = {'GSSAPI':'kerberos', 'SCRAM-SHA-512':'scram', 'SCRAM-SHA-256':'scram256', 'PLAIN':'plain', 'OAUTHBEARER':'oauth'}
 
             ssl_enabled = service_prop.get(key2)
             if ssl_enabled is not None:
@@ -341,7 +340,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
 
             sasl_protocol = service_prop.get(key1)
             if sasl_protocol is not None:
-                custom_listeners[name]['sasl_protocol'] = sasl_protocol
+                custom_listeners[name]['sasl_protocol'] = non_standard_protocol[sasl_protocol]
                 # Add the users to corresponding sasl mechanism
                 key = f"listener.name.{name.lower()}.{sasl_protocol.lower()}.sasl.jaas.config"
                 _dict = locals()[f"default_{sasl_protocol.lower().replace('-', '_')}_users"]
