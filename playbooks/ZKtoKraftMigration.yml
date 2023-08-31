@@ -12,15 +12,30 @@
     - import_role:
         name: variables
 
-    - name: Migration successful
-      lineinfile:
-        name: "{{ kafka_controller_log_dir }}/server.log"
-        line: "Completed migration of metadata from Zookeeper to KRaft"
-        state: present
-      register: migration_message
-      until: migration_message is success
+    - name: Wait for Metadata Migration
+      uri:
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+        validate_certs: false
+        status_code: 200
       retries: 10
       delay: 90
+      until: jolokia_output.json.value.Value == 1
+      register: jolokia_output
+      when: jolokia_auth_mode == "none"
+
+    - name: Wait for Metadata Migration
+      uri:
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+        validate_certs: false
+        force_basic_auth: true
+        url_username: "{{ jolokia_user }}"
+        url_password: "{{ jolokia_password }}"
+        status_code: 200
+      retries: 10
+      delay: 90
+      until: jolokia_output.json.value.Value == 1
+      register: jolokia_output
+      when: jolokia_auth_mode == "basic"
 
 - name: Migrate Brokers to Kraft
   hosts: kafka_broker
