@@ -1077,7 +1077,7 @@ Default:  /opt/prometheus/kafka.yml
 
 ### kafka_controller_copy_files
 
-Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 
 Default:  []
 
