@@ -440,7 +440,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  2.28.1
+Default:  2.38.1
 
 ***
 
