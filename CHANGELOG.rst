@@ -4,6 +4,16 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.5.1
+======
+
+Notable enhancements
+-------------
+
+- Fixed bugs in discovery to generate inventory file with appropriate security protocols
+- Updated confluent cli versions to latest
+- Ansible builtin File mode is now string instead of octal
+
 v7.5.0
 ======
 
