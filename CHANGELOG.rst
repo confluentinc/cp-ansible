@@ -10,8 +10,7 @@ v7.3.6
 Notable enhancements
 -------------
 
-- Updated confluent cli version to 2.38.1
-- Fixed bugs in discovery to generate inventory file with appropriate security protocols
+- Updated default confluent cli version to 2.38.1
 - Ansible builtin File mode is now string instead of octal
 
 
