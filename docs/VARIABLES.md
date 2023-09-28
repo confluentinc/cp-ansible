@@ -743,6 +743,7 @@ Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
 ### zookeeper_quorum_authentication_type
 
 Authentication to put on ZK Server to Server connections. Available options: [mtls, digest, digest_over_tls].
+
 Default:  "{% if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled %}mtls{% elif zookeeper_sasl_protocol == 'digest' %}digest{% else %}none{% endif %}"
 
 ***
