@@ -448,6 +448,34 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 ***
 
+### confluent.test/molecule/zookeeper-digest-mtls-secrets-rhel
+
+#### Scenario zookeeper-digest-mtls-secrets-rhel test's the following:
+
+Installs Confluent Platform on CentOS7
+
+Enables SASL SCRAM Auth on Zookeeper.
+
+TLS enabled.
+
+Customer zookeeper root.
+
+Secrets Protection enabled.
+
+Jolokia has TLS disabled.
+
+#### Scenario zookeeper-digest-mtls-secrets-rhel verify test's the following:
+
+Validates that Confluent CLI is installed.
+
+Validates that Zookeeper is using SCRAM for auth.
+
+Validates that other components are using SCRAM for auth.
+
+Validates that Secrets protection is applied to the correct properties.
+
+***
+
 ### confluent.test/molecule/mtls-java11-rhel
 
 #### Scenario mtls-java11-rhel test's the following:
@@ -880,34 +908,6 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 ***
 
-### confluent.test/molecule/zookeeper-digest-mtls-secrets-rhel
-
-#### Scenario zookeeper-digest-mtls-secrets-rhel test's the following:
-
-Installs Confluent Platform on CentOS7
-
-Enables SASL SCRAM Auth on Zookeeper.
-
-TLS enabled.
-
-Customer zookeeper root.
-
-Secrets Protection enabled.
-
-Jolokia has TLS disabled.
-
-#### Scenario zookeeper-digest-mtls-secrets-rhel verify test's the following:
-
-Validates that Confluent CLI is installed.
-
-Validates that Zookeeper is using SCRAM for auth.
-
-Validates that other components are using SCRAM for auth.
-
-Validates that Secrets protection is applied to the correct properties.
-
-***
-
 ### confluent.test/molecule/mtls-ubuntu-acl
 
 #### Scenario mtls-ubuntu-acl test's the following:
@@ -925,6 +925,8 @@ Validates that MTLS is enabled.
 Validates mapping rules for ACLs.
 
 Validates ACL users.
+
+Validated ACL creation.
 
 ***
 
