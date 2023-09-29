@@ -2,6 +2,7 @@
 ### Installation of Confluent Platform on centos8.
 ### Custom user set on each component.
 ### Custom log appender path on each component.
+### Zookeeper, Controller and Broker co-located while migration
 
 driver:
   name: docker
@@ -11,7 +12,10 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_mig
       - kafka_broker
+      - kafka_broker_mig
+      - kafka_controller_mig
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -24,6 +28,7 @@ platforms:
     hostname: schema-registry1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
     groups:
       - schema_registry
+      - schema_registry_mig
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -36,6 +41,7 @@ platforms:
     hostname: kafka-rest1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
     groups:
       - kafka_rest
+      - kafka_rest_mig
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -48,6 +54,7 @@ platforms:
     hostname: kafka-connect1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
     groups:
       - kafka_connect
+      - kafka_connect_mig
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -60,6 +67,7 @@ platforms:
     hostname: ksql1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
     groups:
       - ksql
+      - ksql_mig
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -72,19 +80,22 @@ platforms:
     hostname: control-center1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
     groups:
       - control_center
+      - control_center_mig
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
-    ## Commenting below to avoid port collision on jenkins server
-    ## Uncomment to view c3 in browser at localhost:9021
-    # published_ports:
-    #   - "9021:9021"
+    # Commenting below to avoid port collision on jenkins server
+    # Uncomment to view c3 in browser at localhost:9021
+    published_ports:
+      - "9021:9021"
     networks:
       - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
 provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
@@ -96,9 +107,11 @@ provisioner:
         ksql_log_dir: /kafka/logs/ksql/
         kafka_connect_log_dir: /kafka/logs/kafkaconnect/
         control_center_log_dir: /kafka/logs/controlcenter/
+        kafka_controller_jolokia_port: 7777
       ${CONTROLLER_HOSTGROUP:-zookeeper}:
         ${CONTROLLER_HOSTGROUP:-zookeeper}_user: cp-test
         ${CONTROLLER_HOSTGROUP:-zookeeper}_group: cp-test-group
+        jolokia_enabled: ${MIGRATION:-false}  # Jolokia is necessary in Controller for Migration
       kafka_broker:
         kafka_broker_user: broker-test
         kafka_broker_group: cp-test-group

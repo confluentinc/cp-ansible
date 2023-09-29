@@ -3,6 +3,7 @@
 ### Kerberos protocol.
 ### TLS Enabled.
 ### Custom TLS certificates.
+### Kcontroller co-located with Zookeeper in migration
 
 driver:
   name: docker
@@ -23,6 +24,7 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_mig
     image: geerlingguy/docker-centos8-ansible
     # dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -35,6 +37,7 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_mig
     image: geerlingguy/docker-centos8-ansible
     # dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -47,6 +50,7 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}3.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_mig
     image: geerlingguy/docker-centos8-ansible
     # dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -59,6 +63,7 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
+      - kafka_broker_mig
     image: geerlingguy/docker-centos8-ansible
     # dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -71,6 +76,7 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
+      - kafka_broker_mig
     image: geerlingguy/docker-centos8-ansible
     # dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -83,6 +89,7 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
+      - kafka_broker_mig
     image: geerlingguy/docker-centos8-ansible
     # dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -95,6 +102,7 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
+      - schema_registry_mig
     image: geerlingguy/docker-centos8-ansible
     # dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -107,6 +115,7 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
+      - kafka_rest_mig
     image: geerlingguy/docker-centos8-ansible
     # dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -119,6 +128,7 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
+      - kafka_connect_mig
     image: geerlingguy/docker-centos8-ansible
     # dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -131,6 +141,7 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
+      - ksql_mig
     image: geerlingguy/docker-centos8-ansible
     # dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -143,6 +154,7 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
+      - control_center_mig
     image: geerlingguy/docker-centos8-ansible
     # dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -153,7 +165,46 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
+  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_mig
+    image: geerlingguy/docker-centos8-ansible
+    # dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller2-mig
+    hostname: controller2-mig.confluent
+    groups:
+      - kafka_controller_mig
+    image: geerlingguy/docker-centos8-ansible
+    # dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller3-mig
+    hostname: controller3-mig.confluent
+    groups:
+      - kafka_controller_mig
+    image: geerlingguy/docker-centos8-ansible
+    # dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
@@ -180,6 +231,7 @@ provisioner:
         zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
       kafka_controller:
+        jolokia_enabled: ${MIGRATION:-false}  # Jolokia is necessary in Controller for Migration
         kafka_controller_kerberos_principal: "kafka/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         kafka_controller_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_controller-{{inventory_hostname}}.keytab"
       kafka_broker:
@@ -225,6 +277,15 @@ provisioner:
 
           - principal: "kafka/controller3.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_controller-controller3.keytab"
+
+          - principal: "kafka/controller1-mig.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller1-mig.keytab"
+
+          - principal: "kafka/controller2-mig.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller2-mig.keytab"
+
+          - principal: "kafka/controller3-mig.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller3-mig.keytab"
 
           - principal: "kafka/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
