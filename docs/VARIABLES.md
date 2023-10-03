@@ -743,6 +743,7 @@ Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
 ### zookeeper_quorum_authentication_type
 
 Authentication to put on ZK Server to Server connections. Available options: [mtls, digest, digest_over_tls].
+
 Default:  "{% if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled %}mtls{% elif zookeeper_sasl_protocol == 'digest' %}digest{% else %}none{% endif %}"
 
 ***
@@ -2429,7 +2430,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### secrets_protection_enabled
 
-Boolean to enable secrets protection on all components except Zookeeper. Starting from CP 7.1.0, secrets protection will work only with RBAC
+Boolean to enable secrets protection on all components except Zookeeper.
 
 Default:  false
 
