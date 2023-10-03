@@ -2774,7 +2774,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### secrets_protection_enabled
 
-Boolean to enable secrets protection on all components except Zookeeper. Starting from CP 7.1.0, secrets protection will work only with RBAC
+Boolean to enable secrets protection on all components except Zookeeper.
 
 Default:  false
 
