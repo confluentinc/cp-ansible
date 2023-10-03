@@ -1118,7 +1118,7 @@ Default:  {}
 
 ### kafka_controller_rest_proxy_enabled
 
-Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
+Boolean to enable the embedded rest proxy within Kraft Controller. Not yet supported.
 
 Default:  false
 
