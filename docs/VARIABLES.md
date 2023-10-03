@@ -759,6 +759,7 @@ Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
 ### zookeeper_quorum_authentication_type
 
 Authentication to put on ZK Server to Server connections. Available options: [mtls, digest, digest_over_tls].
+
 Default:  "{% if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled %}mtls{% elif zookeeper_sasl_protocol == 'digest' %}digest{% else %}none{% endif %}"
 
 ***
@@ -1117,7 +1118,7 @@ Default:  {}
 
 ### kafka_controller_rest_proxy_enabled
 
-Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
+Boolean to enable the embedded rest proxy within Kraft Controller. Not yet supported.
 
 Default:  false
 
