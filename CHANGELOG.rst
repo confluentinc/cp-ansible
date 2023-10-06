@@ -4,6 +4,16 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.2.7
+======
+
+Notable enhancements
+-------------
+
+- Updated default confluent cli version to 2.38.1
+- Ansible builtin File mode is now string instead of octal
+
+
 v7.2.6
 ======
 
