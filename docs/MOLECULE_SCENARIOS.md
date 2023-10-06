@@ -542,6 +542,8 @@ Validates mapping rules for ACLs.
 
 Validates ACL users.
 
+Validated ACL creation.
+
 ***
 
 ### molecule/multi-ksql-connect-rhel
@@ -1166,6 +1168,34 @@ Validates that SCRAM is enabled on all components.
 
 ***
 
+### molecule/zookeeper-digest-mtls-secrets-rhel
+
+#### Scenario zookeeper-digest-mtls-secrets-rhel test's the following:
+
+Installs Confluent Platform on CentOS7
+
+Enables SASL SCRAM Auth on Zookeeper.
+
+TLS enabled.
+
+Customer zookeeper root.
+
+Secrets Protection enabled.
+
+Jolokia has TLS disabled.
+
+#### Scenario zookeeper-digest-mtls-secrets-rhel verify test's the following:
+
+Validates that Confluent CLI is installed.
+
+Validates that Zookeeper is using SCRAM for auth.
+
+Validates that other components are using SCRAM for auth.
+
+Validates that Secrets protection is applied to the correct properties.
+
+***
+
 ### molecule/zookeeper-digest-rhel
 
 #### Scenario zookeeper-digest-rhel test's the following:
@@ -1223,32 +1253,6 @@ Secrets Protection enabled.
 Validates that Confluent CLI is installed.
 
 Validates that Zookeeper is using MTLS for auth.
-
-Validates that other components are using SCRAM for auth.
-
-Validates that Secrets protection is applied to the correct properties.
-
-***
-
-#### Scenario zookeeper-digest-mtls-secrets-rhel test's the following:
-
-Installs Confluent Platform on CentOS7
-
-Enables SASL SCRAM Auth on Zookeeper.
-
-TLS enabled.
-
-Customer zookeeper root.
-
-Secrets Protection enabled.
-
-Jolokia has TLS disabled.
-
-#### Scenario zookeeper-digest-mtls-secrets-rhel verify test's the following:
-
-Validates that Confluent CLI is installed.
-
-Validates that Zookeeper is using SCRAM for auth.
 
 Validates that other components are using SCRAM for auth.
 
