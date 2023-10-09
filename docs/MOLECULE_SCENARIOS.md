@@ -566,6 +566,8 @@ Validates mapping rules for ACLs.
 
 Validates ACL users.
 
+Validated ACL creation.
+
 ***
 
 ### molecule/multi-ksql-connect-rhel
