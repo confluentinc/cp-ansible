@@ -326,7 +326,7 @@ class KafkaServicePropertyBaseBuilder(AbstractPropertyBuilder):
                 "port": port
             }
 
-            non_standard_protocol = {'GSSAPI':'kerberos', 'SCRAM-SHA-512':'scram', 'SCRAM-SHA-256':'scram256', 'PLAIN':'plain', 'OAUTHBEARER':'oauth'}
+            non_standard_protocol = {'GSSAPI': 'kerberos', 'SCRAM-SHA-512': 'scram', 'SCRAM-SHA-256': 'scram256', 'PLAIN': 'plain', 'OAUTHBEARER': 'oauth'}
 
             ssl_enabled = service_prop.get(key2)
             if ssl_enabled is not None:
