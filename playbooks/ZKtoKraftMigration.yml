@@ -62,6 +62,19 @@
         path: "{{ kafka_broker.config_file }}"
         line: process.roles=broker
 
+    - name: Check if Cluster has RBAC enabled
+      lineinfile:
+        path: "{{ kafka_broker.config_file }}"
+        regexp: 'confluent.authorizer.access.rule.providers(.*)$'
+        state: absent
+      register: auth_present
+
+    - name: Replace ZK_ACL with KRAFT_ACL
+      lineinfile:
+        path: "{{ kafka_broker.config_file }}"
+        line: confluent.authorizer.access.rule.providers=CONFLUENT,KRAFT_ACL
+      when: auth_present.found
+
 - name: Restart Kafka Broker
   hosts: kafka_broker
   tags: migrate_to_kraft
@@ -106,6 +119,39 @@
         tasks_from: health_check.yml
       when: confluent_server_enabled | default(true) | bool
       tags: health_check
+
+- name: Check Cluster State
+  hosts: kafka_controller
+  tags: migrate_to_kraft
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Validate Cluster is in Kraft mode
+      uri:
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+        validate_certs: false
+        status_code: 200
+      retries: 10
+      delay: 90
+      until: jolokia_output.json.value.Value == 3
+      register: jolokia_output
+      when: jolokia_auth_mode == "none"
+
+    - name: Validate Cluster is in Kraft mode when Basic Jolokia auth
+      uri:
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+        validate_certs: false
+        force_basic_auth: true
+        url_username: "{{ jolokia_user }}"
+        url_password: "{{ jolokia_password }}"
+        status_code: 200
+      retries: 10
+      delay: 90
+      until: jolokia_output.json.value.Value == 3
+      register: jolokia_output
+      when: jolokia_auth_mode == "basic"
 
 - name: Finish Migration
   hosts: kafka_controller
