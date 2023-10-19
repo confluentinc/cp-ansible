@@ -40,6 +40,7 @@ platforms:
     hostname: mds-${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
       - mds
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
@@ -53,6 +54,7 @@ platforms:
     hostname: mds-kafka-broker1.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
       - mds
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
@@ -66,6 +68,7 @@ platforms:
     hostname: mds-kafka-broker2.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
       - mds
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
@@ -80,6 +83,7 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}2
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}2_migration
       - cluster2
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
@@ -93,6 +97,7 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker2
+      - kafka_broker2_migration
       - cluster2
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
@@ -106,6 +111,7 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker2
+      - kafka_broker2_migration
       - cluster2
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
@@ -119,6 +125,7 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker2
+      - kafka_broker2_migration
       - cluster2
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
@@ -132,6 +139,7 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry2
+      - schema_registry2_migration
       - cluster2
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
@@ -145,6 +153,7 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest2
+      - kafka_rest2_migration
       - cluster2
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
@@ -158,6 +167,7 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect2
+      - kafka_connect2_migration
       - cluster2
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
@@ -171,6 +181,7 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql2
+      - ksql2_migration
       - cluster2
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
@@ -184,6 +195,7 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center2
+      - control_center2_migration
       - cluster2
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
@@ -195,10 +207,36 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
-
+  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: mds-controller1-mig
+    hostname: mds-controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+      - mds
+    image: geerlingguy/docker-debian9-ansible
+    dockerfile: ../Dockerfile-debian.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller2_migration
+      - cluster2
+    image: geerlingguy/docker-debian9-ansible
+    dockerfile: ../Dockerfile-debian.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
-    converge: ../multi_rbac_converge.yml
+    converge: ${MIGRATION_CONVERGE_RBAC:-../multi_rbac_converge.yml}
   inventory:
     group_vars:
       # Shared properties among mds cluster and cluster2 groups (as well as kerberos and ldap)
@@ -310,6 +348,8 @@ provisioner:
             keytab_path: "keytabs/zookeeper-mds-zookeeper1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/mds-controller1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_controller-mds-controller1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/mds-controller1-mig.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-mds-controller1-mig.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-mds-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker2.confluent@{{kerberos.realm | upper}}"
@@ -318,6 +358,8 @@ provisioner:
             keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/controller1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_controller-controller1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/controller1-mig.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller1-mig.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker2.confluent@{{kerberos.realm | upper}}"
