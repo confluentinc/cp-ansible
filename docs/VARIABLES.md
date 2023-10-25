@@ -54,7 +54,7 @@ Default:  true
 
 ### jolokia_enabled
 
-Boolean to enable Jolokia Agent installation and configuration on all components
+Boolean to enable Jolokia Agent installation and configuration on all components.
 
 Default:  false
 
@@ -924,6 +924,22 @@ Default:  "{{ skip_restarts }}"
 
 ***
 
+### kraft_migration
+
+Boolean to enable zookeeper to kraft migration
+
+Default:  false
+
+***
+
+### migration_retries
+
+Parameter to increase the number of retries for Metadata Migration API request
+
+Default:  10
+
+***
+
 ### kafka_controller_quorum_voters
 
 Default controller quorum voters
@@ -990,9 +1006,9 @@ Default:  "{{kafka_controller_default_log_dir}}"
 
 ### kafka_controller_jolokia_enabled
 
-Boolean to enable Jolokia Agent installation and configuration on kafka
+Boolean to enable Jolokia Agent installation and configuration on kafka. Jolokia is required in Kraft Controller during ZK to Kraft migration
 
-Default:  "{{jolokia_enabled}}"
+Default:  "{{jolokia_enabled or kraft_migration}}"
 
 ***
 
