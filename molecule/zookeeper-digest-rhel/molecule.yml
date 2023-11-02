@@ -1,8 +1,9 @@
 ---
 ### Installs Zookeeper, Kafka Broker, Schema Registry on centos8
 ### Digest authentication enabled.
-### SASL SCRAM enabled.
+### SASL PLAIN enabled.
 ### Customer Zookeeper Root.
+### Migration of Zk cluster with digest auth to Kraft cluster
 
 driver:
   name: docker
@@ -11,6 +12,7 @@ platforms:
     hostname: zookeeper1.confluent
     groups:
       - zookeeper
+      - zookeeper_migration
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -23,6 +25,7 @@ platforms:
     hostname: zookeeper2.confluent
     groups:
       - zookeeper
+      - zookeeper_migration
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -35,6 +38,7 @@ platforms:
     hostname: zookeeper3.confluent
     groups:
       - zookeeper
+      - zookeeper_migration
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -47,6 +51,7 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -59,6 +64,7 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -71,6 +77,7 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -83,6 +90,20 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
+      - schema_registry_migration
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
     image: geerlingguy/docker-centos8-ansible
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -92,6 +113,8 @@ platforms:
     networks:
       - name: confluent
 provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
@@ -99,6 +122,6 @@ provisioner:
 
         zookeeper_quorum_authentication_type: digest
         zookeeper_client_authentication_type: digest
-        sasl_protocol: scram
+        sasl_protocol: plain
 
         zookeeper_chroot: "/kafka"
