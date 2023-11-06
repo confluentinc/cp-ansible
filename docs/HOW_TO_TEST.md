@@ -88,6 +88,45 @@ Simply run:
 molecule destroy -s <scenario name>
 ```
 
+### Running with some enviroment variables set
+
+Create a simple custom_config.yml file with some variables and their values. For ex
+```
+---
+name1: value1
+name2: value2
+
+```
+This config file is passed as an argument to command using the `--env-file` option. To run:
+
+```
+molecule --env-file custom_config.yml converge -s <scenario name>
+```
+
+### Running in kraft mode
+
+Simply run:
+
+```
+molecule --env-file molecule/kraft.yml converge -s <scenario name>
+```
+
+### Running on ARM64 architecture machine
+
+Simply run:
+
+```
+molecule --env-file molecule/arm.yml converge -s <scenario name>
+```
+
+### Running in kraft mode on ARM64 architecture machine
+
+Simply run:
+
+```
+molecule --env-file molecule/arm_kraft.yml converge -s <scenario name>
+```
+
 ## Creating and Modifying Scenarios
 
 When developing new features you can create a new scenario simply by duplicating the default one and customizing. Edit the verify.yml to have test assertions for your scenario.
