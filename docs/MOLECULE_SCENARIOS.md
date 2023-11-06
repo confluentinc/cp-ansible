@@ -484,7 +484,7 @@ Validates that Java 17 is in Use
 
 #### Scenario mtls-java11-debian test's the following:
 
-Installation of Confluent Platform on Debian9.
+Installation of Confluent Platform on Debian10.
 
 MTLS enabled.
 
@@ -874,7 +874,7 @@ Validates that all components are pointing to the MDS for authorization.
 
 #### Scenario rbac-mds-kerberos-debian test's the following:
 
-Installs two Confluent Platform Clusters on Debian9.
+Installs two Confluent Platform Clusters on Debian10.
 
 RBAC enabled.
 
@@ -1036,7 +1036,7 @@ Validates that TLS CN is being registered as super user.
 
 #### Scenario rbac-mds-plain-custom-rhel-fips test's the following:
 
-Installs two Confluent Platform Clusters on RHEL8.
+Installs two Confluent Platform Clusters on RHEL9.
 
 RBAC enabled.
 
