@@ -932,7 +932,7 @@ Default:  false
 
 ***
 
-### migration_retries
+### metadata_migration_retries
 
 Parameter to increase the number of retries for Metadata Migration API request
 

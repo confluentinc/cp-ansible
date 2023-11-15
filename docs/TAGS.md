@@ -247,7 +247,7 @@ Description: For all zookeeper tasks - installing, configuring. Runs the zookeep
 
 ***
 
-### Tag - dual_write
+### Tag - migrate_to_dual_write
 
 Description: To pause Zookeeper to Kraft migration at Dual Write mode. Used to manually validate the metadata/ACLs before moving to Kraft mode.
 
