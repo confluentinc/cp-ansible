@@ -88,21 +88,6 @@ Simply run:
 molecule destroy -s <scenario name>
 ```
 
-### Running with some enviroment variables set
-
-Create a simple custom_config.yml file with some variables and their values. For ex
-```
----
-name1: value1
-name2: value2
-
-```
-This config file is passed as an argument to command using the `--env-file` option. To run:
-
-```
-molecule --env-file custom_config.yml converge -s <scenario name>
-```
-
 ### Running in kraft mode
 
 Simply run:
