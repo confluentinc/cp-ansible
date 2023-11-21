@@ -228,7 +228,7 @@
   template:
     src: client.properties.j2
     dest: "{{kafka_broker.client_config_file}}"
-    mode: '640'
+    mode: 0640
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
   diff: "{{ not mask_sensitive_diff|bool }}"
@@ -237,14 +237,14 @@
 
 - name: Include Kraft Cluster Data
   include_tasks: get_meta_properties.yml
-  when: kraft_enabled|bool
+  when: kraft_enabled|bool and not kraft_migration|bool
 
 # Zookeeper shell cannot read server.properties if secrets protection is enabled. Keeping a separate file.
 - name: Create Zookeeper TLS Client Config
   template:
     src: zookeeper-tls-client.properties.j2
     dest: "{{kafka_broker.zookeeper_tls_client_config_file}}"
-    mode: '640'
+    mode: 0640
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
   when: zookeeper_ssl_enabled|bool and not kraft_enabled|bool
@@ -282,7 +282,7 @@
     path: "{{kafka_broker.log4j_file}}"
     group: "{{kafka_broker_group}}"
     owner: "{{kafka_broker_user}}"
-    mode: '640'
+    mode: 0640
   tags:
     - filesystem
     - log
@@ -291,7 +291,7 @@
   file:
     path: "{{ logredactor_rule_path | dirname }}"
     state: directory
-    mode: '755'
+    mode: 0755
   when: (kafka_broker_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
@@ -300,7 +300,7 @@
   copy:
     src: "{{ logredactor_rule_path_local }}"
     dest: "{{ logredactor_rule_path }}"
-    mode: '644'
+    mode: 0644
   when: (kafka_broker_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
@@ -357,7 +357,7 @@
   template:
     src: password.properties.j2
     dest: "{{kafka_broker.rest_proxy_password_file}}"
-    mode: '640'
+    mode: 0640
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
   when: kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_proxy_authentication_type == 'basic'
@@ -446,7 +446,7 @@
   file:
     path: /usr/lib/sysctl.d
     state: directory
-    mode: '755'
+    mode: 0755
   when: ansible_distribution == "Debian"
   tags:
     - sysctl
@@ -491,8 +491,8 @@
       delegate_to: "{{item}}"
   when:
     - kafka_controller_secrets_protection_enabled|bool or kafka_controller_client_secrets_protection_enabled|bool
-    - rbac_enabled|bool and not external_mds_enabled|bool
-    - confluent_cli_version is version('3.0.0', '<')
+    - rbac_enabled|bool
+    - kafka_controller_ssl_mutual_auth_enabled|bool or ( not external_mds_enabled|bool and confluent_cli_version is version('3.0.0', '<'))
     - kraft_enabled|bool
   run_once: true
 

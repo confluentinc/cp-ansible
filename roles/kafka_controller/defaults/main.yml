@@ -19,10 +19,14 @@ kafka_controller_logredactor_logger_specs_list:
 
 kafka_controller_java_args:
   - "{% if kafka_controller_listeners | confluent.platform.ssl_required(kafka_controller_ssl_enabled) | bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
-  - "{% if 'GSSAPI' in kafka_controller_sasl_enabled_mechanisms %}-Djava.security.auth.login.config={{kafka_controller.jaas_file}}{% endif %}"
+  - "{% if 'GSSAPI' in kafka_controller_sasl_enabled_mechanisms or ( kraft_migration|bool and zookeeper_client_authentication_type in ['kerberos', 'digest']) %}-Djava.security.auth.login.config={{kafka_controller.jaas_file}}{% endif %}"
   - "{% if kafka_controller_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=config={{kafka_controller_jolokia_config}}{% endif %}"
   - "{% if kafka_controller_jmxexporter_enabled|bool %}-javaagent:{{jmxexporter_jar_path}}={{kafka_controller_jmxexporter_port}}:{{kafka_controller_jmxexporter_config_path}}{% endif %}"
+  - "{% if kraft_migration|bool and zookeeper_client_authentication_type == 'kerberos' and zookeeper_kerberos_primary != 'zookeeper' %}-Dzookeeper.sasl.client.username={{zookeeper_kerberos_primary}}{% endif %}"
   - "{% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+
+# Strip primary from the zookeeper principal on first zk host. Adds defaults for if there is not even a zookeeper group
+zookeeper_kerberos_primary: "{{ (hostvars[ groups['zookeeper'][0] | default('zookeeper') ] | default({})) ['zookeeper_kerberos_principal'] | default('zookeeper/host@EXAMPLE>COM') | regex_replace('/.*') }}"
 
 ### Custom Java Args to add to the Kafka Process
 kafka_controller_custom_java_args: ""

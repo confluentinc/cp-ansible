@@ -252,6 +252,8 @@ Installation of Confluent Community Edition on RHEL8.
 
 SASL Plain Auth.
 
+Zookeeper, Broker and Kraft Controller co-located while Migration
+
 #### Scenario cp-kafka-plain-rhel verify test's the following:
 
 Validates that SASL Plaintext protocol is set.
@@ -267,6 +269,8 @@ Installation of Confluent Platform on RHEL8.
 Custom user set on each component.
 
 Custom log appender path on each component.
+
+Zookeeper, Controller and Broker co-located while migration
 
 #### Scenario custom-user-plaintext-rhel verify test's the following:
 

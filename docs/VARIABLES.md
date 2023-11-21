@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.5.1
+Default:  7.5.2
 
 ***
 
@@ -54,7 +54,7 @@ Default:  true
 
 ### jolokia_enabled
 
-Boolean to enable Jolokia Agent installation and configuration on all components
+Boolean to enable Jolokia Agent installation and configuration on all components.
 
 Default:  false
 
@@ -456,7 +456,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  3.30.1
+Default:  3.2.1
 
 ***
 
@@ -924,6 +924,22 @@ Default:  "{{ skip_restarts }}"
 
 ***
 
+### kraft_migration
+
+Boolean to enable zookeeper to kraft migration
+
+Default:  false
+
+***
+
+### metadata_migration_retries
+
+Parameter to increase the number of retries for Metadata Migration API request
+
+Default:  10
+
+***
+
 ### kafka_controller_quorum_voters
 
 Default controller quorum voters
@@ -990,9 +1006,9 @@ Default:  "{{kafka_controller_default_log_dir}}"
 
 ### kafka_controller_jolokia_enabled
 
-Boolean to enable Jolokia Agent installation and configuration on kafka
+Boolean to enable Jolokia Agent installation and configuration on kafka. Jolokia is required in Kraft Controller during ZK to Kraft migration
 
-Default:  "{{jolokia_enabled}}"
+Default:  "{{jolokia_enabled or kraft_migration}}"
 
 ***
 
@@ -1078,7 +1094,7 @@ Default:  /opt/prometheus/kafka.yml
 
 ### kafka_controller_copy_files
 
-Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
+Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 
 Default:  []
 

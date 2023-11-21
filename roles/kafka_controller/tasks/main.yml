@@ -103,7 +103,7 @@
     src: "{{ ((binary_base_path, 'lib/systemd/system') | path_join if installation_method=='archive' else systemd_base_dir, kafka_broker.systemd_file|basename) | path_join }}"
     remote_src: true
     dest: "{{kafka_controller.systemd_file}}"
-    mode: '644'
+    mode: 0644
     force: true
   tags:
     - systemd
@@ -147,7 +147,7 @@
     kerberos_keytab_destination_path: "{{kafka_controller_keytab_path}}"
     kerberos_handler: "restart Kafka Controller"
   when:
-    - "'GSSAPI' in kafka_controller_sasl_enabled_mechanisms or mds_broker_listener.sasl_protocol =='kerberos'"
+    - "'GSSAPI' in kafka_controller_sasl_enabled_mechanisms or mds_broker_listener.sasl_protocol =='kerberos' or ( kraft_migration|bool and zookeeper_client_authentication_type == 'kerberos' )"
 
 - name: Copy Custom Kafka Files
   include_role:
@@ -167,7 +167,7 @@
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
     state: directory
-    mode: '750'
+    mode: 0750
   tags:
     - privileged
     - filesystem
@@ -178,7 +178,7 @@
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
     state: directory
-    mode: '750'
+    mode: 0750
   tags:
     - filesystem
     - privileged
@@ -196,7 +196,7 @@
   file:
     path: "{{ kafka_controller.config_file | dirname }}"
     state: directory
-    mode: '750'
+    mode: 0750
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
   tags:
@@ -208,7 +208,7 @@
   template:
     src: server.properties.j2
     dest: "{{kafka_controller.config_file}}"
-    mode: '640'
+    mode: 0640
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
   notify: restart Kafka Controller
@@ -221,7 +221,7 @@
   template:
     src: client.properties.j2
     dest: "{{kafka_controller.client_config_file}}"
-    mode: '640'
+    mode: 0640
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
   diff: "{{ not mask_sensitive_diff|bool }}"
@@ -238,7 +238,7 @@
     state: directory
     group: "{{kafka_controller_group}}"
     owner: "{{kafka_controller_user}}"
-    mode: '770'
+    mode: 0770
   tags:
     - filesystem
     - log
@@ -264,7 +264,7 @@
     path: "{{kafka_controller.log4j_file}}"
     group: "{{kafka_controller_group}}"
     owner: "{{kafka_controller_user}}"
-    mode: '640'
+    mode: 0640
   tags:
     - filesystem
     - log
@@ -274,7 +274,7 @@
   file:
     path: "{{ logredactor_rule_path | dirname }}"
     state: directory
-    mode: '755'
+    mode: 0755
   when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
@@ -284,7 +284,7 @@
   copy:
     src: "{{ logredactor_rule_path_local }}"
     dest: "{{ logredactor_rule_path }}"
-    mode: '644'
+    mode: 0644
   when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
@@ -315,7 +315,7 @@
   template:
     src: kafka_jolokia.properties.j2
     dest: "{{kafka_controller_jolokia_config}}"
-    mode: '640'
+    mode: 0640
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
   when: kafka_controller_jolokia_enabled|bool
@@ -329,11 +329,11 @@
   template:
     src: kafka_server_jaas.conf.j2
     dest: "{{kafka_controller.jaas_file}}"
-    mode: '640'
+    mode: 0640
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
-  when:
-    - "'GSSAPI' in kafka_controller_sasl_enabled_mechanisms"
+  when: "'GSSAPI' in kafka_controller_sasl_enabled_mechanisms or
+          ( kraft_migration|bool and zookeeper_client_authentication_type in ['kerberos', 'digest'])"
   notify: restart Kafka Controller
   tags:
     - configuration
@@ -343,7 +343,7 @@
   template:
     src: "{{kafka_controller_jmxexporter_config_source_path}}"
     dest: "{{kafka_controller_jmxexporter_config_path}}"
-    mode: '640'
+    mode: 0640
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
   when: kafka_controller_jmxexporter_enabled|bool
@@ -357,7 +357,7 @@
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
     state: directory
-    mode: '640'
+    mode: 0640
   tags:
     - systemd
     - privileged
@@ -366,7 +366,7 @@
   template:
     src: override.conf.j2
     dest: "{{ kafka_controller.systemd_override }}"
-    mode: '640'
+    mode: 0640
     owner: root
     group: root
   notify: restart Kafka Controller
@@ -379,7 +379,7 @@
   file:
     path: /usr/lib/sysctl.d
     state: directory
-    mode: '755'
+    mode: 0755
   when: ansible_distribution == "Debian"
   tags:
     - sysctl
