@@ -2,7 +2,7 @@
 
 #### Scenario archive-community-plaintext-rhel test's the following:
 
-Archive Installation of Confluent Community Edition on centos8
+Archive Installation of Confluent Community Edition on RHEL8
 
 JAVA 17.
 
@@ -154,7 +154,7 @@ Validates log4j config.
 
 #### Scenario archive-scram-rhel test's the following:
 
-Archive Installation of Confluent Platform on centos8.
+Archive Installation of Confluent Platform on RHEL8.
 
 SASL SCRAM protocol.
 
@@ -176,7 +176,7 @@ Validates that TLS is configured properly.
 
 #### Scenario broker-scale-up test's the following:
 
-Installation of Confluent Platform on centos8.
+Installation of Confluent Platform on RHEL8.
 
 MTLS enabled.
 
@@ -192,7 +192,7 @@ Installs two unique KSQL Clusters.
 
 #### Scenario ccloud test's the following:
 
-Simulates linking an on prem cluster to Confluent Cloud on centos8.
+Simulates linking an on prem cluster to Confluent Cloud on RHEL8.
 
 TLS Enabled.
 
@@ -214,7 +214,7 @@ Validates that all components connect to Confluent Cloud.
 
 #### Scenario confluent-kafka-kerberos-customcerts-rhel test's the following:
 
-Installation of Confluent Community Edition on centos8.
+Installation of Confluent Community Edition on RHEL8.
 
 Kerberos protocol.
 
@@ -248,7 +248,7 @@ connect-scale-up verify
 
 #### Scenario cp-kafka-plain-rhel test's the following:
 
-Installation of Confluent Community Edition on centos8.
+Installation of Confluent Community Edition on RHEL8.
 
 SASL Plain Auth.
 
@@ -264,7 +264,7 @@ Validates that SASL Plaintext protocol is set.
 
 #### Scenario custom-user-plaintext-rhel test's the following:
 
-Installation of Confluent Platform on centos8.
+Installation of Confluent Platform on RHEL8.
 
 Custom user set on each component.
 
@@ -290,7 +290,7 @@ Validates that each component is running with the correct custom logging path.
 
 #### Scenario kafka-connect-replicator-mtls-scram-rhel test's the following:
 
-Installation of Confluent Platform on centos8 with two distinct clusters.
+Installation of Confluent Platform on RHEL8 with two distinct clusters.
 
 Installation of Confluent Replicator.
 
@@ -320,7 +320,7 @@ Validates that client ID's are set correctly on Replicator.
 
 #### Scenario kafka-connect-replicator-plain-kerberos-rhel-fips test's the following:
 
-Installation of Confluent Platform on centos8 with two distinct clusters.
+Installation of Confluent Platform on RHEL8 with two distinct clusters.
 
 Installation of Confluent Replicator.
 
@@ -354,7 +354,7 @@ Validates that FIPS is in use in OpenSSL.
 
 #### Scenario kerberos-customcerts-rhel test's the following:
 
-Installation of Confluent Platform on centos8.
+Installation of Confluent Platform on RHEL8.
 
 TLS Enabled with custom certs.
 
@@ -436,7 +436,7 @@ Validates that Keystore is present.
 
 #### Scenario mtls-customcerts-rhel test's the following:
 
-Installation of Confluent Platform on centos8.
+Installation of Confluent Platform on RHEL8.
 
 MTLS enabled with custom certificates.
 
@@ -488,7 +488,7 @@ Validates that Java 17 is in Use
 
 #### Scenario mtls-java11-debian test's the following:
 
-Installation of Confluent Platform on Debian9.
+Installation of Confluent Platform on Debian10.
 
 MTLS enabled.
 
@@ -578,7 +578,7 @@ Validated ACL creation.
 
 #### Scenario multi-ksql-connect-rhel test's the following:
 
-Installation of Confluent Platform on centos8.
+Installation of Confluent Platform on RHEL8.
 
 MTLS enabled.
 
@@ -606,7 +606,7 @@ Validates that Control Center Can connect to each KSQL cluster.
 
 #### Scenario plain-customcerts-rhel-fips test's the following:
 
-Installation of Confluent Platform on centos8.
+Installation of Confluent Platform on RHEL8.
 
 TLS enabled.
 
@@ -630,7 +630,7 @@ Validates that FIPS is in use in OpenSSL.
 
 #### Scenario plain-erp-tls-rhel test's the following:
 
-Installation of Confluent Platform on centos8.
+Installation of Confluent Platform on RHEL8.
 
 SASL Plain enabled.
 
@@ -698,7 +698,7 @@ Validates that Java 17 is in Use
 
 #### Scenario plaintext-rhel-customrepo test's the following:
 
-Installation of Confluent Platform on centos8.
+Installation of Confluent Platform on RHEL8.
 
 Copying local JMX agent.
 
@@ -724,7 +724,7 @@ Validates that JMX exporter was copied and is running.
 
 #### Scenario provided-rhel test's the following:
 
-Installation of Confluent Platform on centos8.
+Installation of Confluent Platform on RHEL8.
 
 TLS enabled.
 
@@ -772,7 +772,7 @@ Validates client packages.
 
 #### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-rhel test's the following:
 
-Installation of Confluent Platform on centos8 with RBAC and Confluent Replicator.
+Installation of Confluent Platform on RHEL8 with RBAC and Confluent Replicator.
 
 RBAC enabled.
 
@@ -878,7 +878,7 @@ Validates that all components are pointing to the MDS for authorization.
 
 #### Scenario rbac-mds-kerberos-debian test's the following:
 
-Installs two Confluent Platform Clusters on Debian9.
+Installs two Confluent Platform Clusters on Debian10.
 
 RBAC enabled.
 
@@ -910,7 +910,7 @@ Validates OIDC authenticate api for SSO in Control Center
 
 #### Scenario rbac-mds-kerberos-mtls-custom-rhel test's the following:
 
-Installs two Confluent Platform Clusters on centos8.
+Installs two Confluent Platform Clusters on RHEL8.
 
 RBAC enabled.
 
@@ -946,7 +946,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 #### Scenario rbac-mds-mtls-custom-kerberos-rhel test's the following:
 
-Installs two Confluent Platform Clusters on centos8.
+Installs two Confluent Platform Clusters on RHEL8.
 
 RBAC enabled.
 
@@ -978,7 +978,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 #### Scenario rbac-mds-mtls-custom-rhel-fips test's the following:
 
-Installs two Confluent Platform Clusters on centos8.
+Installs two Confluent Platform Clusters on RHEL8.
 
 RBAC enabled.
 
@@ -1040,7 +1040,7 @@ Validates that TLS CN is being registered as super user.
 
 #### Scenario rbac-mds-plain-custom-rhel-fips test's the following:
 
-Installs two Confluent Platform Clusters on centos8.
+Installs two Confluent Platform Clusters on RHEL9.
 
 RBAC enabled.
 
@@ -1076,7 +1076,7 @@ Validates that FIPS is in use on both clusters.
 
 #### Scenario rbac-mds-scram-custom-rhel test's the following:
 
-Installs two Confluent Platform Clusters on centos8.
+Installs two Confluent Platform Clusters on RHEL8.
 
 RBAC enabled.
 
@@ -1130,7 +1130,7 @@ Validates that TLS CN is being registered as super user.
 
 #### Scenario rbac-mtls-rhel-fips test's the following:
 
-Installs Confluent Platform Cluster on centos8.
+Installs Confluent Platform Cluster on RHEL8.
 
 RBAC enabled.
 
@@ -1168,7 +1168,7 @@ Validates that FIPS is in use in OpenSSL.
 
 #### Scenario rbac-mtls-rhel8 test's the following:
 
-Installs Confluent Platform Cluster on CentOS8.
+Installs Confluent Platform Cluster on RHEL8.
 
 RBAC enabled.
 
@@ -1224,7 +1224,7 @@ Validates LDAP authentication
 
 #### Scenario rbac-scram-custom-rhel-fips test's the following:
 
-Installs Confluent Platform Cluster on centos8.
+Installs Confluent Platform Cluster on RHEL8.
 
 RBAC enabled.
 
@@ -1264,7 +1264,7 @@ Validates that FIPS is in use in OpenSSL.
 
 #### Scenario scram-rhel test's the following:
 
-Installs Confluent Platform Cluster on centos8.
+Installs Confluent Platform Cluster on RHEL8.
 
 SCRAM enabled.
 
@@ -1278,7 +1278,7 @@ Validates that SCRAM is enabled on all components.
 
 #### Scenario zookeeper-digest-mtls-secrets-rhel test's the following:
 
-Installs Confluent Platform on centos8
+Installs Confluent Platform on RHEL8
 
 Enables SASL SCRAM Auth on Zookeeper.
 
@@ -1306,7 +1306,7 @@ Validates that Secrets protection is applied to the correct properties.
 
 #### Scenario zookeeper-digest-rhel test's the following:
 
-Installs Zookeeper, Kafka Broker, Schema Registry on centos8
+Installs Zookeeper, Kafka Broker, Schema Registry on RHEL8
 
 Digest authentication enabled.
 
@@ -1326,7 +1326,7 @@ Validates that SCRAM is enabled on the Kafka Broker and Schema Registry.
 
 #### Scenario zookeeper-kerberos-rhel test's the following:
 
-Installs Confluent Platform on centos8
+Installs Confluent Platform on RHEL8
 
 Enables Kerberos on Zookeeper.
 
@@ -1344,7 +1344,7 @@ Validates Kafka Broker and Schema Registry is set to SCRAM.
 
 #### Scenario zookeeper-mtls-rhel test's the following:
 
-Installs Confluent Platform on centos8
+Installs Confluent Platform on RHEL8
 
 Enables MTLS Auth on Zookeeper.
 
@@ -1370,7 +1370,7 @@ Validates that Secrets protection is applied to the correct properties.
 
 #### Scenario zookeeper-tls-rhel-fips test's the following:
 
-Installs Confluent Platform on centos8
+Installs Confluent Platform on RHEL8
 
 Enables SASL SCRAM Auth on Zookeeper.
 
