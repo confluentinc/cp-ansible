@@ -2,7 +2,7 @@
 
 #### Scenario archive-community-plaintext-rhel test's the following:
 
-Archive Installation of Confluent Community Edition on RHEL8
+Archive Installation of Confluent Community Edition on Oracle Linux 9.
 
 JAVA 17.
 
@@ -372,7 +372,7 @@ Validates that SASL SSL Protocol is enabled across all components.
 
 #### Scenario kerberos-rhel test's the following:
 
-Installation of Confluent Platform on centos7.
+Installation of Confluent Platform on Oracle Linux 9.
 
 Kerberos enabled with custom client config path
 
@@ -1130,7 +1130,7 @@ Validates that TLS CN is being registered as super user.
 
 #### Scenario rbac-mtls-rhel-fips test's the following:
 
-Installs Confluent Platform Cluster on RHEL8.
+Installs Confluent Platform Cluster on Oracle Linux 9.
 
 RBAC enabled.
 
@@ -1310,15 +1310,17 @@ Installs Zookeeper, Kafka Broker, Schema Registry on RHEL8
 
 Digest authentication enabled.
 
-SASL SCRAM enabled.
+SASL PLAIN enabled.
 
 Customer Zookeeper Root.
+
+Migration of Zk cluster with digest auth to Kraft cluster
 
 #### Scenario zookeeper-digest-rhel verify test's the following:
 
 Validates authorization mechanism as SASL.
 
-Validates that SCRAM is enabled on the Kafka Broker and Schema Registry.
+Validates that SASL PLAIN is enabled on the Kafka Broker and Schema Registry.
 
 ***
 
