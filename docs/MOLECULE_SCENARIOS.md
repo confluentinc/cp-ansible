@@ -18,9 +18,9 @@ Validates that Confluent CLI is installed.
 
 ***
 
-### molecule/archive-plain-debian
+### molecule/archive-plain-debian9
 
-#### Scenario archive-plain-debian test's the following:
+#### Scenario archive-plain-debian9 test's the following:
 
 Archive installation of Confluent Platform on Debian 9.
 
@@ -32,7 +32,7 @@ Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-
 
 Custom log dirs for all components.
 
-#### Scenario archive-plain-debian verify test's the following:
+#### Scenario archive-plain-debian9 verify test's the following:
 
 Validates that SASL SSL protocol is set across all components
 
@@ -412,9 +412,9 @@ Validates that Control Center Can connect to each KSQL cluster
 
 ***
 
-### molecule/mtls-custombundle-rhel-fips
+### molecule/mtls-custombundle-rhel7-fips
 
-#### Scenario mtls-custombundle-rhel-fips test's the following:
+#### Scenario mtls-custombundle-rhel7-fips test's the following:
 
 Installation of Confluent Platform Edition on centos7.
 
@@ -426,7 +426,7 @@ TLS is disabled for Zookeeper.
 
 FIPS enabled
 
-#### Scenario mtls-custombundle-rhel-fips verify test's the following:
+#### Scenario mtls-custombundle-rhel7-fips verify test's the following:
 
 Validates that Keystore is present.
 
@@ -448,9 +448,9 @@ Validates the ERP returns values over MTLS.
 
 ***
 
-### molecule/mtls-debian
+### molecule/mtls-debian9
 
-#### Scenario mtls-debian test's the following:
+#### Scenario mtls-debian9 test's the following:
 
 Installation of Confluent Platform on Debian9.
 
@@ -468,7 +468,7 @@ Confluent CLI Download enabled.
 
 Schema Validation is enabled.
 
-#### Scenario mtls-debian verify test's the following:
+#### Scenario mtls-debian9 verify test's the following:
 
 Validates that SSL Protocol is set.
 
@@ -676,15 +676,15 @@ Validates that Connectors are present on Kafka Connect.
 
 ***
 
-### molecule/plaintext-basic-rhel
+### molecule/plaintext-basic-rhel7
 
-#### Scenario plaintext-basic-rhel test's the following:
+#### Scenario plaintext-basic-rhel7 test's the following:
 
 Installation of Confluent Platform on centos7.
 
 Kafka Rest API Basic Auth.
 
-#### Scenario plaintext-basic-rhel verify test's the following:
+#### Scenario plaintext-basic-rhel7 verify test's the following:
 
 Validates that each component has a unique auth user.
 
@@ -844,9 +844,9 @@ Validates client packages.
 
 ***
 
-### molecule/rbac-kerberos-debian
+### molecule/rbac-kerberos-debian9
 
-#### Scenario rbac-kerberos-debian test's the following:
+#### Scenario rbac-kerberos-debian9 test's the following:
 
 Installation of Confluent Platform on Debian9.
 
@@ -862,7 +862,7 @@ RBAC additional system admin user.
 
 Java 8
 
-#### Scenario rbac-kerberos-debian verify test's the following:
+#### Scenario rbac-kerberos-debian9 verify test's the following:
 
 Validates that protocol set to GSSAPI.
 
@@ -1186,9 +1186,9 @@ Validates OIDC authenticate api for SSO in Control Center
 
 ***
 
-### molecule/rbac-plain-provided-debian
+### molecule/rbac-plain-provided-debian9
 
-#### Scenario rbac-plain-provided-debian test's the following:
+#### Scenario rbac-plain-provided-debian9 test's the following:
 
 Installs Confluent Platform Cluster on Debian9.
 
@@ -1206,7 +1206,7 @@ Control Center disabled, metrics reporters enabled.
 
 LdapAuthenticateCallbackHandler for AuthN
 
-#### Scenario rbac-plain-provided-debian verify test's the following:
+#### Scenario rbac-plain-provided-debian9 verify test's the following:
 
 Validates Metrics reporter without C3.
 
