@@ -1368,9 +1368,9 @@ Validates that Secrets protection is applied to the correct properties.
 
 ***
 
-### molecule/zookeeper-tls-rhel-fips
+### molecule/archive-zookeeper-tls-rhel-fips
 
-#### Scenario zookeeper-tls-rhel-fips test's the following:
+#### Scenario archive-zookeeper-tls-rhel-fips test's the following:
 
 Installs Confluent Platform on RHEL8
 
@@ -1384,7 +1384,7 @@ Jolokia has TLS disabled.
 
 FIPS enabled
 
-#### Scenario zookeeper-tls-rhel-fips verify test's the following:
+#### Scenario archive-zookeeper-tls-rhel-fips verify test's the following:
 
 Validates that Zookeeper is using TLS.
 
