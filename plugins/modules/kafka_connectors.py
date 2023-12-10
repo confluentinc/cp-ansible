@@ -60,9 +60,10 @@ import ansible.module_utils.six.moves.urllib.error as urllib_error
 __metaclass__ = type
 
 
-def get_current_connectors(connect_url):
+def get_current_connectors(connect_url, url_username=None, url_password=None, force_basic_auth=False):
     try:
-        res = open_url(connect_url)
+        #res = open_url(connect_url, url_username=url_username, url_password=url_password)
+        res = open_url(connect_url, url_username=url_username, url_password=url_password, force_basic_auth=force_basic_auth)
         return json.loads(res.read())
     except urllib_error.HTTPError as e:
         if e.code != 404:
@@ -70,24 +71,24 @@ def get_current_connectors(connect_url):
         return []
 
 
-def remove_connector(connect_url, name):
+def remove_connector(connect_url, name, url_username=None, url_password=None, force_basic_auth=False):
     url = "{}/{}".format(connect_url, name)
-    r = open_url(method='DELETE', url=url)
+    r = open_url(method='DELETE', url=url, url_username=url_username, url_password=url_password, force_basic_auth=force_basic_auth)
     return r.getcode() == 200
 
 
-def create_new_connector(connect_url, name, config):
+def create_new_connector(connect_url, name, config, url_username=None, url_password=None, force_basic_auth=False):
     data = json.dumps({'name': name, 'config': config})
     headers = {'Content-Type': 'application/json'}
-    r = open_url(method='POST', url=connect_url, data=data, headers=headers)
+    r = open_url(method='POST', url=connect_url, data=data, headers=headers, url_username=url_username, url_password=url_password, force_basic_auth=force_basic_auth)
     return r.getcode() in (200, 201, 409)
 
 
-def update_existing_connector(connect_url, name, config):
+def update_existing_connector(connect_url, name, config, url_username=None, url_password=None, force_basic_auth=False):
     url = "{}/{}/config".format(connect_url, name)
     restart_url = "{}/{}/restart".format(connect_url, name)
 
-    res = open_url(url)
+    res = open_url(url, url_username=url_username, url_password=url_password, force_basic_auth=force_basic_auth)
     current_config = json.loads(res.read())
 
     existing_config = config.copy()
@@ -98,11 +99,11 @@ def update_existing_connector(connect_url, name, config):
 
     data = json.dumps(config)
     headers = {'Content-Type': 'application/json'}
-    r = open_url(method='PUT', url=url, data=data, headers=headers)
+    r = open_url(method='PUT', url=url, data=data, headers=headers, url_username=url_username, url_password=url_password, force_basic_auth=force_basic_auth)
 
     changed = r.getcode() in (200, 201, 409)
 
-    r = open_url(method='POST', url=restart_url)
+    r = open_url(method='POST', url=restart_url, url_username=url_username, url_password=url_password, force_basic_auth=force_basic_auth)
     if r.getcode() not in (200, 204, 409):
         raise Exception("Connector {} failed to restart after a configuration update. {}".format(name, r.msg))
 
@@ -113,6 +114,8 @@ def run_module():
     module_args = dict(
         connect_url=dict(type='str', required=True),
         active_connectors=dict(type='list', elements='dict', required=True),
+        kafka_connect_auth_user=dict(type='str', required=False),
+        kafka_connect_auth_password=dict(type='str', required=False),
     )
 
     result = dict(changed=False, message='')
@@ -132,13 +135,20 @@ def run_module():
     #
     result['changed'] = False
     output_messages = []
+
+    url_username = module.params['kafka_connect_auth_user']
+    url_password = module.params['kafka_connect_auth_password']
+    force_basic_auth = False
+    if (url_username != None and url_username != "") and (url_password != None and url_password != ""):
+        force_basic_auth = True
+
     try:
-        current_connector_names = get_current_connectors(connect_url=module.params['connect_url'])
+        current_connector_names = get_current_connectors(connect_url=module.params['connect_url'], url_username=url_username, url_password=url_password, force_basic_auth=force_basic_auth)
         active_connector_names = (c['name'] for c in module.params['active_connectors'])
         deleted_connector_names = set(current_connector_names) - set(active_connector_names)
 
         for to_delete in deleted_connector_names:
-            remove_connector(connect_url=module.params['connect_url'], name=to_delete)
+            remove_connector(connect_url=module.params['connect_url'], name=to_delete, url_username=url_username, url_password=url_password, force_basic_auth=force_basic_auth)
 
         if deleted_connector_names:
             output_messages.append("Connectors removed: {}.".format(', '.join(deleted_connector_names)))
@@ -152,7 +162,8 @@ def run_module():
                 changed = update_existing_connector(
                     connect_url=module.params['connect_url'],
                     name=connector['name'],
-                    config=connector['config']
+                    config=connector['config'],
+                    url_username=url_username, url_password=url_password, force_basic_auth=force_basic_auth
                 )
                 if changed:
                     output_messages.append("Connector {} updated.".format(connector['name']))
@@ -163,7 +174,9 @@ def run_module():
                 result['changed'] = create_new_connector(
                     connect_url=module.params['connect_url'],
                     name=connector['name'],
-                    config=connector['config'])
+                    config=connector['config'],
+                    url_username=url_username, url_password=url_password, force_basic_auth=force_basic_auth
+                )
                 output_messages.append("New connector {} created.".format(connector['name']))
 
         result['message'] = " ".join(output_messages)
