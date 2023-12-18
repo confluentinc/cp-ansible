@@ -4,6 +4,14 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.0.13
+======
+
+Notable enhancements
+-------------
+
+- Critical security and vulnerability issues were fixed
+
 v7.0.12
 ======
 
