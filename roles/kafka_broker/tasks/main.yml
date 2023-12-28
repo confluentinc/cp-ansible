@@ -379,8 +379,7 @@
   changed_when: "'Created ' + zookeeper_chroot in create_chroot.stderr"
   when: zookeeper_chroot|length > 0
 
-# Only supported when zookeeper is enabled
-- name: Create SCRAM Users
+- name: Create SCRAM Users with Zookeeper
   shell: |
     {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
     {{ binary_base_path }}/bin/kafka-configs {% if zookeeper_ssl_enabled|bool %}--zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
@@ -391,10 +390,10 @@
   run_once: true
   when:
     - "'SCRAM-SHA-512' in kafka_broker_sasl_enabled_mechanisms"
-  no_log: "{{mask_secrets|bool}}"
+    - not kraft_enabled|bool
+  no_log: "{{ mask_secrets|bool }}"
 
-# Only supported when zookeeper is enabled
-- name: Create SCRAM 256 Users
+- name: Create SCRAM 256 Users with Zookeeper
   shell: |
     {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
     {{ binary_base_path }}/bin/kafka-configs {% if zookeeper_ssl_enabled|bool %}--zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
@@ -405,24 +404,25 @@
   run_once: true
   when:
     - "'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms"
+    - not kraft_enabled|bool
   no_log: "{{ mask_sensitive_logs|bool }}"
 
 - name: Deploy JMX Exporter Config File
   template:
-    src: "{{kafka_broker_jmxexporter_config_source_path}}"
-    dest: "{{kafka_broker_jmxexporter_config_path}}"
+    src: "{{ kafka_broker_jmxexporter_config_source_path }}"
+    dest: "{{ kafka_broker_jmxexporter_config_path }}"
     mode: '640'
-    owner: "{{kafka_broker_user}}"
-    group: "{{kafka_broker_group}}"
+    owner: "{{ kafka_broker_user }}"
+    group: "{{ kafka_broker_group }}"
   when: kafka_broker_jmxexporter_enabled|bool
   tags:
     - configuration
 
 - name: Create Service Override Directory
   file:
-    path: "{{kafka_broker.systemd_override | dirname }}"
-    owner: "{{kafka_broker_user}}"
-    group: "{{kafka_broker_group}}"
+    path: "{{ kafka_broker.systemd_override | dirname  }}"
+    owner: "{{ kafka_broker_user }}"
+    group: "{{ kafka_broker_group }}"
     state: directory
     mode: '640'
   tags:
@@ -512,6 +512,34 @@
     - kafka_broker_health_checks_enabled|bool
     - not ansible_check_mode
   tags: health_check
+
+- name: Create SCRAM Users with KRaft
+  shell: |
+    {{ binary_base_path }}/bin/kafka-configs \
+      --bootstrap-server localhost:{{ kafka_broker_listeners['broker']['port'] }} \
+      --command-config {{ kafka_broker.client_config_file }} \
+      --alter --add-config 'SCRAM-SHA-512=[password={{ item.value['password'] }}]' \
+      --entity-type users --entity-name {{ item.value['principal'] }}
+  loop: "{{ sasl_scram_users_final|dict2items }}"
+  run_once: true
+  when:
+    - "'SCRAM-SHA-512' in kafka_broker_sasl_enabled_mechanisms"
+    - kraft_enabled|bool
+  no_log: "{{ mask_secrets|bool }}"
+
+- name: Create SCRAM 256 Users with KRaft
+  shell: |
+    {{ binary_base_path }}/bin/kafka-configs \
+      --bootstrap-server localhost:{{ kafka_broker_listeners['broker']['port'] }} \
+      --command-config {{ kafka_broker.client_config_file }} \
+      --alter --add-config 'SCRAM-SHA-256=[password={{ item.value['password'] }}]' \
+      --entity-type users --entity-name {{ item.value['principal'] }}
+  loop: "{{ sasl_scram256_users_final|dict2items }}"
+  run_once: true
+  when:
+    - "'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms"
+    - kraft_enabled|bool
+  no_log: "{{ mask_sensitive_logs|bool }}"
 
 - name: Register Cluster
   include_tasks: register_cluster.yml
