@@ -1,13 +1,62 @@
 ---
-- name: Get ClusterId
+- name: Prepare SCRAM Users if needed
+  set_fact:
+    scram_users_to_create: []
+
+- name: Check meta.properties
+  run_once: true
+  ansible.builtin.stat:
+    path: "{{ kafka_controller_final_properties['log.dirs'] }}/meta.properties"
+  register: meta_properties
+
+# if meta.properties does not exists , create uuid
+- name: Initialize ClusterId
+  when: not meta_properties.stat.exists
+  run_once: true
   shell: "{{ binary_base_path }}/bin/kafka-storage random-uuid"
   environment:
     KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
-  register: uuid_key
+  register: random_uuid
+
+- name: Set ClusterId
+  when: not meta_properties.stat.exists
   run_once: true
+  set_fact:
+    clusterid: "{{ random_uuid.stdout }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+  loop: "{{ groups['kafka_controller'] }}"
+
+## and initialize temporary controller admin user
+- name: Prepare SCRAM 512 admin user
+  when:
+    - "'SCRAM-SHA-512' in kafka_controller_sasl_enabled_mechanisms or 'SCRAM-SHA-512' in kafka_broker_sasl_enabled_mechanisms"
+  set_fact:
+    scram_users_to_create: "{{ scram_users_to_create + [ '--add-scram SCRAM-SHA-512=[name=\"'+ sasl_scram_users_final.admin.principal + '\",password=\"' + sasl_scram_users_final.admin.password + '\"]' ] }}"
+
+- name: Prepare SCRAM 256 admin user
+  when:
+    - "'SCRAM-SHA-256' in kafka_controller_sasl_enabled_mechanisms or 'SCRAM-SHA-256' in kafka_broker_sasl_enabled_mechanisms"
+  set_fact:
+    scram_users_to_create: "{{ scram_users_to_create + [ '--add-scram SCRAM-SHA-256=[name=\"'+ sasl_scram_users_final.admin.principal + '\",password=\"' + sasl_scram_users_final.admin.password + '\"]' ] }}"
+
+# else, extract it from meta.properties
+- name: Extract ClusterId from meta.properties
+  when: meta_properties.stat.exists
+  run_once: true
+  slurp:
+    src: "{{ kafka_controller_final_properties['log.dirs'] }}/meta.properties"
+  register: uuid_broker
+
+- name: Set ClusterId
+  when: meta_properties.stat.exists
+  run_once: true
+  set_fact:
+    clusterid: "{{ (uuid_broker['content'] | b64decode).partition('cluster.id=')[2].partition('\n')[0] }}"
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+  loop: "{{ groups['kafka_controller'] }}"
 
 - name: Format Data Directory
-  shell: "{{ binary_base_path }}/bin/kafka-storage  format -t {{ clusterid }} -c {{ kafka_controller.config_file }}  --ignore-formatted"
+  shell: "{{ binary_base_path }}/bin/kafka-storage format -t {{ clusterid }} -c {{ kafka_controller.config_file }} --ignore-formatted {{ scram_users_to_create|join(' ') }}"
   register: format_meta
-  vars:
-    clusterid: "{{ uuid_key.stdout }}"
