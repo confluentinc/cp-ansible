@@ -116,3 +116,23 @@ Git Commit Messages
 * Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
 * Limit the first line to 72 characters or less
 * Reference issues and pull requests liberally after the first line
+* Commit message format should be [ANSIENG-\<jira-id\>] | \<commit-msg\>
+
+To automatically get jira id in commit message do the following -
+
+1. Create a file prepare-commit-message with contents -
+```bash
+#!/bin/bash
+
+BRANCH_NAME=`git symbolic-ref --short HEAD`
+
+if [ -n "$BRANCH_NAME" ] && [ "$BRANCH_NAME" != "master" ]; then
+        PREFIX=`echo $BRANCH_NAME | sed  -e 's:.*-\([^-]*-\(.*\)\)$:\1:'`
+        sed -i.bak -e "1s/^/[$PREFIX] \| /" $1
+fi
+
+```
+2. Location of the file on OS X should be `/usr/local/gitconfig/hooks`
+3. Make it executable by running `chmod +x /usr/local/gitconfig/hooks/prepare-commit-message`
+4. Create a new branch with custom description and the Jira Ticket number appended to it. eg - `fixing-zk-slowness-ANSIENG-1234`
+5. Now on making any commit it will automatically prepend the jira ticket id to commit message
