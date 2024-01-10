@@ -8,6 +8,10 @@
   when:
     - rbac_enabled|bool
     - not ansible_check_mode
+    - kafka_connect_connectors is defined
+
+- set_fact:
+    certs_chain: "{{ssl_file_dir_final}}/{{ kafka_connect_service_name if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect' }}.chain"
 
 - name: Register connector configs and remove deleted connectors for single cluster
   confluent.platform.kafka_connectors:
@@ -30,8 +34,8 @@
     timeout: "{{ kafka_connect_deploy_connector_timeout }}"
     username: "{% if rbac_enabled %}{{kafka_connect_ldap_user}}{% else %}{{none}}{% endif %}"
     password: "{% if rbac_enabled %}{{kafka_connect_ldap_password}}{% else %}{{none}}{% endif %}"
-    client_cert: "{% if (ssl_provided_keystore_and_truststore and ssl_mutual_auth_enabled) %}{{kafka_connect_cert_path}}{% elif ssl_mutual_auth_enabled %}{{certs_chain}}{% else %}{{none}}{% endif %}"
-    client_key: "{% if ssl_mutual_auth_enabled %}{{kafka_connect_key_path}}{% else %}{{none}}{% endif %}"
+    client_cert: "{% if (ssl_provided_keystore_and_truststore and hostvars[groups[item][0]].kafka_connect_ssl_mutual_auth_enabled|default(kafka_connect_ssl_mutual_auth_enabled)) %}{{hostvars[groups[item][0]].kafka_connect_cert_path|default(kafka_connect_cert_path)}}{% elif hostvars[groups[item][0]].kafka_connect_ssl_mutual_auth_enabled|default(kafka_connect_ssl_mutual_auth_enabled) %}{{certs_chain}}{% else %}{{none}}{% endif %}"
+    client_key: "{% if hostvars[groups[item][0]].kafka_connect_ssl_mutual_auth_enabled|default(kafka_connect_ssl_mutual_auth_enabled) %}{{hostvars[groups[item][0]].kafka_connect_key_path|default(kafka_connect_key_path)}}{% else %}{{none}}{% endif %}"
   when: hostvars[groups[item][0]].kafka_connect_connectors is defined
   delegate_to: "{{ groups[item][0] }}"
   loop: "{{subgroups}}"
