@@ -18,6 +18,30 @@ Validates that Confluent CLI is installed.
 
 ***
 
+### molecule/archive-plain-debian10
+
+#### Scenario archive-plain-debian10 test's the following:
+
+Archive installation of Confluent Platform on Debian 10.
+
+SASL Protocol Plain.
+
+SSL Enabled.
+
+Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
+
+Custom log dirs for all components.
+
+#### Scenario archive-plain-debian10 verify test's the following:
+
+Validates that SASL SSL protocol is set across all components.
+
+Validates that custom log4j configuration is in place.
+
+Validates that Java 17 is in Use
+
+***
+
 ### molecule/archive-plain-debian9
 
 #### Scenario archive-plain-debian9 test's the following:
@@ -41,30 +65,6 @@ Validates that custom log4j configuration is in place.
 Validates that Java 17 is in Use
 
 Validates that Confluent CLI is installed.
-
-***
-
-### molecule/archive-plain-debian10
-
-#### Scenario archive-plain-debian10 test's the following:
-
-Archive installation of Confluent Platform on Debian 10.
-
-SASL Protocol Plain.
-
-SSL Enabled.
-
-Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
-
-Custom log dirs for all components.
-
-#### Scenario archive-plain-debian10 verify test's the following:
-
-Validates that SASL SSL protocol is set across all components.
-
-Validates that custom log4j configuration is in place.
-
-Validates that Java 17 is in Use
 
 ***
 
@@ -140,6 +140,8 @@ Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-
 
 Custom log dirs for all components.
 
+Deploy Connector on Connect Cluster.
+
 #### Scenario archive-plain-ubuntu2004 verify test's the following:
 
 Validates that protocol is set to sasl plain.
@@ -148,13 +150,15 @@ Validates that protocol is set to SASL SSL.
 
 Validates log4j config.
 
+Validates that Connector is Running.
+
 ***
 
 ### molecule/archive-scram-rhel
 
 #### Scenario archive-scram-rhel test's the following:
 
-Archive Installation of Confluent Platform on RHEL8.
+Archive Installation of Confluent Platform on Oracle Linux 8.
 
 SASL SCRAM protocol.
 
@@ -169,6 +173,32 @@ Validates that customer user and group on archive are set.
 Validates that SASL SCRAM is Protocol is set.
 
 Validates that TLS is configured properly.
+
+***
+
+### molecule/archive-zookeeper-tls-rhel-fips
+
+#### Scenario archive-zookeeper-tls-rhel-fips test's the following:
+
+Installs Confluent Platform on Rocky linux 8
+
+Enables SASL SCRAM Auth on Zookeeper.
+
+TLS enabled.
+
+Customer zookeeper root.
+
+Jolokia has TLS disabled.
+
+FIPS enabled
+
+#### Scenario archive-zookeeper-tls-rhel-fips verify test's the following:
+
+Validates that Zookeeper is using TLS.
+
+Validates that other components are using SCRAM for auth.
+
+Validates that FIPS is in use in OpenSSL.
 
 ***
 
@@ -376,11 +406,15 @@ Installation of Confluent Platform on Oracle Linux 9.
 
 Kerberos enabled with custom client config path
 
+Creates a Connector in Connect cluster
+
 #### Scenario kerberos-rhel verify test's the following:
 
 Validates that Kerberos is enabled across all components.
 
 Validates that SASL SSL Plaintext is enabled across all components.
+
+Validates that Connector is running
 
 ***
 
@@ -388,7 +422,7 @@ Validates that SASL SSL Plaintext is enabled across all components.
 
 #### Scenario ksql-scale-up test's the following:
 
-Installation of Confluent Platform on centos7.
+Installation of Confluent Platform on RHEL9.
 
 MTLS enabled.
 
@@ -606,7 +640,7 @@ Validates that Control Center Can connect to each KSQL cluster.
 
 #### Scenario plain-customcerts-rhel-fips test's the following:
 
-Installation of Confluent Platform on RHEL8.
+Installation of Confluent Platform on Oracle Linux 8.
 
 TLS enabled.
 
@@ -1026,6 +1060,8 @@ RBAC Additional System Admin.
 
 Use Java 11 package
 
+Creates a Connector in connect cluster
+
 #### Scenario rbac-mds-mtls-existing-keystore-truststore-ubuntu verify test's the following:
 
 Validates that keystores are present on all components.
@@ -1076,7 +1112,7 @@ Validates that FIPS is in use on both clusters.
 
 #### Scenario rbac-mds-scram-custom-rhel test's the following:
 
-Installs two Confluent Platform Clusters on RHEL8.
+Installs two Confluent Platform Clusters on Rocky Linux 9.
 
 RBAC enabled.
 
@@ -1146,6 +1182,8 @@ RBAC Additional System Admin.
 
 Provided SSL Principal Mapping rule
 
+Creates two unique Connectors in Connect cluster.
+
 #### Scenario rbac-mtls-rhel-fips verify test's the following:
 
 Validates TLS version across all components.
@@ -1168,7 +1206,7 @@ Validates that FIPS is in use in OpenSSL.
 
 #### Scenario rbac-mtls-rhel8 test's the following:
 
-Installs Confluent Platform Cluster on RHEL8.
+Installs Confluent Platform Cluster on Oracle Linux 8.
 
 RBAC enabled.
 
@@ -1206,6 +1244,8 @@ Control Center disabled, metrics reporters enabled.
 
 LdapAuthenticateCallbackHandler for AuthN
 
+Creates two unique Connectors in Connect cluster
+
 #### Scenario rbac-plain-provided-debian9 verify test's the following:
 
 Validates Metrics reporter without C3.
@@ -1242,6 +1282,8 @@ SSO authentication using OIDC in Control center using Azure IdP
 
 FIPS enabled
 
+Installs Two unique Kafka Connect Clusters with unique connectors.
+
 #### Scenario rbac-scram-custom-rhel-fips verify test's the following:
 
 Validates keystore is present across all components.
@@ -1257,6 +1299,8 @@ Validates truststore across all components.
 Validates OIDC authenticate api for SSO in Control Center
 
 Validates that FIPS is in use in OpenSSL.
+
+Validates that both the Connectors are Running
 
 ***
 
@@ -1365,32 +1409,6 @@ Validates that Zookeeper is using MTLS for auth.
 Validates that other components are using SCRAM for auth.
 
 Validates that Secrets protection is applied to the correct properties.
-
-***
-
-### molecule/archive-zookeeper-tls-rhel-fips
-
-#### Scenario archive-zookeeper-tls-rhel-fips test's the following:
-
-Installs Confluent Platform on RHEL8
-
-Enables SASL SCRAM Auth on Zookeeper.
-
-TLS enabled.
-
-Customer zookeeper root.
-
-Jolokia has TLS disabled.
-
-FIPS enabled
-
-#### Scenario archive-zookeeper-tls-rhel-fips verify test's the following:
-
-Validates that Zookeeper is using TLS.
-
-Validates that other components are using SCRAM for auth.
-
-Validates that FIPS is in use in OpenSSL.
 
 ***
 
