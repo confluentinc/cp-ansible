@@ -2020,6 +2020,14 @@ Default:  ""
 
 ***
 
+### kafka_connect_connector_white_list
+
+Set this variable with a comma separated list of Topics for Kafka Connect Connector to produce/consume from.  This is a mandatory variable when creating Connector in RBAC cluster.
+
+Default:  ""
+
+***
+
 ### kafka_connect_skip_restarts
 
 Boolean used for disabling of systemd service restarts when rootless install is executed

@@ -8,6 +8,7 @@
 ### Kafka Connect Custom arguments.
 ### SSO authentication using OIDC in Control center using Azure IdP
 ### FIPS enabled
+### Installs Two unique Kafka Connect Clusters with unique connectors.
 
 driver:
   name: docker
@@ -124,6 +125,20 @@ platforms:
     hostname: kafka-connect1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
     groups:
       - kafka_connect
+      - cluster1
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent${BUILD_NUMBER}
+  - name: kafka-connect2${BUILD_NUMBER}
+    hostname: kafka-connect2${BUILD_NUMBER}.confluent${BUILD_NUMBER}
+    groups:
+      - kafka_connect
+      - cluster2
     image: redhat/ubi8-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -250,6 +265,31 @@ provisioner:
         kafka_connect_custom_rest_extension_classes:
           - io.confluent.connect.replicator.monitoring.ReplicatorMonitoringExtension
         kafka_connect_custom_java_args: "-Djavax.net.ssl.trustStore={{kafka_connect_truststore_path}} -Djavax.net.ssl.trustStorePassword={{kafka_connect_truststore_storepass}}"
+
+      cluster1:
+        kafka_connect_group_id: connect-cluster1
+        kafka_connect_connector_white_list: "test_topic"
+        kafka_connect_connectors:
+          - name: sample-connector-1
+            config:
+              connector.class: "org.apache.kafka.connect.tools.VerifiableSinkConnector"
+              tasks.max: "5"
+              file: "/etc/kafka/connect-distributed.properties"
+              topics: "test_topic"
+              key.converter: "org.apache.kafka.connect.json.JsonConverter"
+              value.converter: "org.apache.kafka.connect.json.JsonConverter"
+      cluster2:
+        kafka_connect_group_id: connect-cluster2
+        kafka_connect_connector_white_list: "test_topic"
+        kafka_connect_connectors:
+          - name: sample-connector-2
+            config:
+              connector.class: "org.apache.kafka.connect.tools.VerifiableSinkConnector"
+              tasks.max: "1"
+              file: "/etc/kafka/connect-distributed.properties"
+              topics: "test_topic"
+              key.converter: "org.apache.kafka.connect.json.JsonConverter"
+              value.converter: "org.apache.kafka.connect.json.JsonConverter"
 
       ldap_server:
         ldaps_enabled: true
