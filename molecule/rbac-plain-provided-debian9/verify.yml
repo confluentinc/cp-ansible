@@ -128,6 +128,56 @@
         property: confluent.metadata.basic.auth.user.info
         expected_value: ${securepass:/var/ssl/private/kafka-connect-security.properties:connect-distributed.properties/confluent.metadata.basic.auth.user.info}
 
+    - name: Get Connectors on connect cluster1
+      uri:
+        url: "https://kafka-connect1:8083/connectors"
+        status_code: 200
+        validate_certs: false
+        url_username: "kafka_connect"
+        url_password: "password"
+
+      register: connectors
+
+    - name: Assert Connector1 Created
+      assert:
+        that:
+          - connectors.json[0] == "sample-connector-1"
+        fail_msg: "Connector not created"
+        quiet: true
+
+    - name: Wait for Connector tasks to return Running
+      uri:
+        url: https://kafka-connect1:8083/connectors/sample-connector-1/status
+        status_code: 200
+        validate_certs: false
+        url_username: kafka_connect
+        url_password: password
+        force_basic_auth: true
+      register: connector_status_response
+      until: connector_status_response.json.tasks[0].state == 'RUNNING'
+      retries: 10
+      delay: 5
+
+    - name: Assert Connector2 Created
+      assert:
+        that:
+          - connectors.json[1] == "sample-connector-2"
+        fail_msg: "Connector not created"
+        quiet: true
+
+    - name: Wait for Connector tasks to return Running
+      uri:
+        url: https://kafka-connect1:8083/connectors/sample-connector-2/status
+        status_code: 200
+        validate_certs: false
+        url_username: kafka_connect
+        url_password: password
+        force_basic_auth: true
+      register: connector_status_response
+      until: connector_status_response.json.tasks[0].state == 'RUNNING'
+      retries: 10
+      delay: 5
+
 - name: Verify - ksql
   hosts: ksql
   gather_facts: false
