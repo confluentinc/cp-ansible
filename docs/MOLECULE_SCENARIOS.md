@@ -284,6 +284,10 @@ SASL Plain Auth.
 
 Zookeeper, Broker and Kraft Controller co-located while Migration
 
+Kafka broker has custom listener at port 9093
+
+Kraft Controller is running at port 9094
+
 #### Scenario cp-kafka-plain-rhel verify test's the following:
 
 Validates that SASL Plaintext protocol is set.

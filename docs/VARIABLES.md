@@ -956,6 +956,14 @@ Default:  "{{ config_prefix }}/controller"
 
 ***
 
+### kafka_controller_port
+
+Port to expose Kraft Controller
+
+Default:  9093
+
+***
+
 ### kafka_controller_ssl_enabled
 
 Boolean to configure controller with TLS Encryption. Also manages Java Keystore creation
