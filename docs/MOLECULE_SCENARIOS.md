@@ -250,6 +250,12 @@ Installation of Confluent Community Edition on centos8.
 
 SASL Plain Auth.
 
+Kafka Controller and broker are colocated
+
+Kafka broker has custom listener at port 9093
+
+Kraft Controller is running at port 9094
+
 #### Scenario cp-kafka-plain-rhel verify test's the following:
 
 Validates that SASL Plaintext protocol is set.
