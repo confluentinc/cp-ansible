@@ -3,6 +3,9 @@
   hosts: localhost
   gather_facts: false
   tasks:
+    - import_role:
+        name: variables
+
     - name: Check the presence of Controller in the inventory file
       fail:
         msg:  "Please add Kraft Controller hosts in the inventory file for migration."
@@ -20,6 +23,18 @@
         msg:  "Please enable Kraft Migration flag in the inventory file for migration."
       when:
         - not (kraft_migration | default(false) | bool)
+
+    - name: Get List of Kafka Broker listeners' ports
+      set_fact:
+        kafka_broker_ports: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['port'] }}{% endfor %}"
+
+    - name: Check Kraft port in colocated Migration
+      fail:
+        msg: "Port {{kafka_controller_port}} is already occupied for {{item}}, Please use a different port for Kraft Controller."
+      when:
+        - item in groups.kafka_broker
+        - kafka_controller_port|string in kafka_broker_ports.split(',')
+      loop: "{{ groups.kafka_controller }}"
 
 - name: Check Current Confluent Version
   hosts: zookeeper,kafka_broker
