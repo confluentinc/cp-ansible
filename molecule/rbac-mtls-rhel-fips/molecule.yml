@@ -8,6 +8,9 @@
 ### RBAC Additional System Admin.
 ### Provided SSL Principal Mapping rule
 ### Creates two unique Connectors in Connect cluster.
+### Zookeeper, Broker and Kraft Controller co-located while Migration
+### Kafka broker has custom listener at port 9093
+### Kraft Controller is running at port 9095
 
 driver:
   name: docker
@@ -24,24 +27,14 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}1
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
-    groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
-    image: oraclelinux:9-slim
-    dockerfile: ../Dockerfile-rhel-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
   - name: kafka-broker1
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
       - kafka_broker_migration
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller_migration
     image: oraclelinux:9-slim
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -55,6 +48,9 @@ platforms:
     groups:
       - kafka_broker
       - kafka_broker_migration
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller_migration
     image: oraclelinux:9-slim
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -68,6 +64,9 @@ platforms:
     groups:
       - kafka_broker
       - kafka_broker_migration
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller_migration
     image: oraclelinux:9-slim
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -143,19 +142,6 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
-  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  - name: controller1-mig
-    hostname: controller1-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: oraclelinux:9-slim
-    dockerfile: ../Dockerfile-rhel-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
 provisioner:
   playbooks:
     converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
@@ -167,7 +153,7 @@ provisioner:
         ssl_enabled: true
         fips_enabled: true
         ssl_mutual_auth_enabled: true
-
+        kafka_controller_port: 9095
         secrets_protection_enabled: true
         rbac_enabled: true
 
