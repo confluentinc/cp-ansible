@@ -21,7 +21,9 @@ class CPInventoryManager(InventoryData):
 
     def generate_final_inventory(self):
         data = self.get_inventory_data()
-        InventorySanitizer.sanitize(data, self.input_context)
+        # There can be dynamic child groups of defined group.
+        # We need to revisit the sanitize logic.
+        # InventorySanitizer.sanitize(data, self.input_context)
         self.put_inventory_data(data)
 
     def get_inventory_data(self) -> dict:

@@ -178,7 +178,7 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.ssl.trustmanager.algorithm'] = 'PKIX'
                 final_dict['listener.name.' + listener_name + '.ssl.keystore.type'] = 'BCFKS'
                 final_dict['listener.name.' + listener_name + '.ssl.truststore.type'] = 'BCFKS'
-                final_dict['listener.name.' + listener_name + '.ssl.enabled.protocols'] = 'TLSv1.2'
+                final_dict['listener.name.' + listener_name + '.ssl.enabled.protocols'] = 'TLSv1.2,TLSv1.3'
 
             if listeners_dict[listener].get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
                 final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = 'required'
@@ -214,6 +214,8 @@ class FilterModule(object):
                     'io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler'
                 final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
                     'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
+                final_dict['listener.name.' + listener_name + '.principal.builder.class'] =\
+                    'io.confluent.kafka.security.authenticator.OAuthKafkaPrincipalBuilder'
 
         return final_dict
 

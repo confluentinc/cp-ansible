@@ -7,8 +7,9 @@ from discovery.utils.utils import Arguments, Logger, InputContext
 logger = Logger.get_logger()
 
 
-def perform_pre_checks(input_context, inventory):
-    SystemValidator.validate_connection(input_context)
+def perform_pre_checks(input_context: InputContext, inventory: CPInventoryManager):
+    if not input_context.skip_validation:
+        SystemValidator.validate_connection(input_context)
 
 
 def build_system_properties(input_context: InputContext, inventory: CPInventoryManager):

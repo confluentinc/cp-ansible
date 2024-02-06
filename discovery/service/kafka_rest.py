@@ -4,7 +4,7 @@ from discovery.service.service import AbstractPropertyBuilder
 from discovery.utils.services import ConfluentServices, ServiceData
 from discovery.utils.constants import DEFAULT_KEY
 from discovery.utils.inventory import CPInventoryManager
-from discovery.utils.utils import InputContext, Logger, FileUtils
+from discovery.utils.utils import InputContext, Logger, FileUtils, get_listener_details
 
 logger = Logger.get_logger()
 
@@ -95,12 +95,11 @@ class KafkaRestServicePropertyBaseBuilder(AbstractPropertyBuilder):
     def _build_service_protocol_port(self, service_prop: dict) -> tuple:
         key = "listeners"
         self.mapped_service_properties.add(key)
-        from urllib.parse import urlparse
         listener = service_prop.get(key).split(',')[0]
-        parsed_uri = urlparse(listener)
+        parsed_uri = get_listener_details(listener)
         return self.group, {
-            "kafka_rest_http_protocol": parsed_uri.scheme,
-            "kafka_rest_port": parsed_uri.port
+            "kafka_rest_http_protocol": parsed_uri['scheme'],
+            "kafka_rest_port": parsed_uri['port']
         }
 
     def _build_monitoring_interceptor_property(self, service_prop: dict) -> tuple:
