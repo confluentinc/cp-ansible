@@ -4,6 +4,23 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.6.0
+======
+
+New features
+-------------
+
+- In place upgrade from Zookeeper to Kraft is now supported
+- ARM64 architecture is now supported
+
+Notable enhancements
+-------------
+
+- Oracle8, Oracle9, Rocky8, Rock9 Operating Systems are now supported
+- Discovery is now a separate repo named cp-discovery
+- Connectors now supported on clusters with RBAC & mTLS
+- Support for custom port for kraft controller added
+
 v7.5.2
 ======
 
