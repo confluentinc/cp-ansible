@@ -17,7 +17,7 @@ New features
 Notable enhancements
 -------------
 
-- Oracle8, Oracle9, Rocky8, Rock9 Operating Systems are now supported
+- Rocky Linux 8 and Rocky Linux 9 Operating Systems are now supported
 - Discovery has been de-coupled from cp-ansible and is now a present in separate repo named cp-discovery
 - Custom port can now be used in Kraft Controller listener
 
