@@ -12,13 +12,13 @@ New features
 
 - In place upgrade from Zookeeper to Kraft is now supported
 - ARM64 architecture is now supported in production
-- Oracle8, Oracle9, Rocky8, Rock9 Operating Systems are now supported
-- Discovery has been de-coupled from cp-ansible and is now a present in separate repo named cp-discovery
 - Deploying connectors now supported on clusters with RBAC & mTLS
 
 Notable enhancements
 -------------
 
+- Oracle8, Oracle9, Rocky8, Rock9 Operating Systems are now supported
+- Discovery has been de-coupled from cp-ansible and is now a present in separate repo named cp-discovery
 - Custom port can now be used in Kraft Controller listener
 
 v7.5.2
