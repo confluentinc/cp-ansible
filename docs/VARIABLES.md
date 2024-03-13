@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.5.2
+Default:  7.5.3
 
 ***
 
@@ -937,6 +937,14 @@ Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{
 Default Kafka config prefix. Only valid to customize when installation_method: archive
 
 Default:  "{{ config_prefix }}/controller"
+
+***
+
+### kafka_controller_port
+
+Port to expose Kraft Controller
+
+Default:  9093
 
 ***
 
