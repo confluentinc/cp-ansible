@@ -14,7 +14,47 @@
   until: result1.status == 200
   retries: 30
   delay: 5
-  when: schema_registry_authentication_type != 'mtls'
+  when: schema_registry_authentication_type != 'mtls' and not schema_registry_oauth_enabled
+  ignore_errors: true
+
+- name: Get Authorization Token from Identity Provider
+  uri:
+    url: "{{ oauth_token_uri }}"
+    method: POST
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    url_username: "{{ schema_registry_oauth_user }}"
+    url_password: "{{ schema_registry_oauth_password }}"
+    force_basic_auth: true
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    body_format: form-urlencoded
+    body:
+      - ["grant_type", "client_credentials"]
+      - ["scope", "{{ oauth_groups_scope }}"]
+  register: auth_token
+  until: auth_token.status == 200
+  retries: 10
+  delay: 5
+  no_log: "{{mask_secrets|bool}}"
+  when:
+    - oauth_enabled|bool
+
+- name: Wait for API to return 200 - OAuth
+  uri:
+    url: "{{schema_registry_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{schema_registry_listener_port}}/subjects"
+    status_code: 200
+    validate_certs: false
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer {{(auth_token.content | from_json).access_token}}"
+  register: result1
+  until: result1.status == 200
+  retries: 30
+  delay: 5
+  when: schema_registry_authentication_type != 'mtls' and schema_registry_oauth_enabled
+  no_log: "{{mask_secrets|bool}}"
   ignore_errors: true
 
 - set_fact:
