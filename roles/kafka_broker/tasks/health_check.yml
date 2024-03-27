@@ -34,7 +34,52 @@
     - kafka_broker_client_secrets_protection_enabled|bool
     - rbac_enabled|bool or confluent_cli_version is version('3.0.0', '>=')
 
-- name: Wait for Metadata Service to start
+- name: Get Authorization Token from Identity Provider
+  uri:
+    url: "{{ oauth_token_uri }}"
+    method: POST
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    url_username: "{{ oauth_client_id }}"
+    url_password: "{{ oauth_client_password }}"
+    force_basic_auth: true
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    body_format: form-urlencoded
+    body:
+      - ["grant_type", "client_credentials"]
+      - ["scope", "{{ oauth_groups_scope }}"]
+  register: auth_token
+  until: auth_token.status == 200
+  retries: 10
+  delay: 5
+  no_log: "{{mask_secrets|bool}}"
+  when:
+    - oauth_enabled|bool
+
+- name: Wait for Metadata Service to start with OAuth
+  uri:
+    url: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname, True) }}:{{mds_port}}/security/1.0/authenticate"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer {{(auth_token.content | from_json).access_token}}"
+  register: mds_result
+  until: mds_result.status == 200
+  retries: "{{ mds_retries }}"
+  delay: 5
+  ignore_errors: true
+  no_log: "{{mask_secrets|bool}}"
+  when:
+    - rbac_enabled|bool and not external_mds_enabled|bool
+    # Skip if any previous check failed
+    - not urp_topics.failed|default(False) and not urp_topics_secrets_protection.failed|default(False)
+    - oauth_enabled|bool
+
+- name: Wait for Metadata Service to start with LDAP
   uri:
     url: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname, True) }}:{{mds_port}}/security/1.0/authenticate"
     validate_certs: false
@@ -52,6 +97,28 @@
     - rbac_enabled|bool and not external_mds_enabled|bool
     # Skip if any previous check failed
     - not urp_topics.failed|default(False) and not urp_topics_secrets_protection.failed|default(False)
+    - not oauth_enabled|bool or ( oauth_enabled and ldap_with_oauth_enabled )
+
+- name: Wait for Embedded Rest Proxy to start with OAuth
+  uri:
+    url: "{{kafka_broker_erp_clusters_url}}"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer {{(auth_token.content | from_json).access_token}}"
+  register: erp_result
+  until: erp_result.status == 200
+  retries: "{{ mds_retries }}"
+  delay: 5
+  ignore_errors: true
+  no_log: "{{mask_secrets|bool}}"
+  when:
+    - oauth_enabled|bool
+    - kafka_broker_rest_proxy_enabled|bool
+    # Skip if any previous checks failed
+    - not urp_topics.failed|default(False) and not urp_topics_secrets_protection.failed|default(False) and not mds_result.failed|default(False)
 
 - name: Wait for Embedded Rest Proxy to start
   uri:
@@ -71,6 +138,7 @@
     - kafka_broker_rest_proxy_enabled|bool
     # Skip if any previous checks failed
     - not urp_topics.failed|default(False) and not urp_topics_secrets_protection.failed|default(False) and not mds_result.failed|default(False)
+    - not oauth_enabled|bool
 
 - name: Fetch Log Files and Error out
   block:
