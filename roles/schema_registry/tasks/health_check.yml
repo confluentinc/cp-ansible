@@ -17,6 +17,14 @@
   when: schema_registry_authentication_type != 'mtls' and not schema_registry_oauth_enabled
   ignore_errors: true
 
+- set_fact:
+    idp_body: [["grant_type", "client_credentials"]]
+  when: oauth_enabled|bool
+
+- set_fact:
+    idp_body: "{{ idp_body + [['scope', oauth_groups_scope ]]}}"
+  when: oauth_enabled|bool and oauth_groups_scope != 'none'
+
 - name: Get Authorization Token from Identity Provider
   uri:
     url: "{{ oauth_token_uri }}"
@@ -30,9 +38,7 @@
     headers:
       Content-Type: application/x-www-form-urlencoded
     body_format: form-urlencoded
-    body:
-      - ["grant_type", "client_credentials"]
-      - ["scope", "{{ oauth_groups_scope }}"]
+    body: "{{ idp_body }}"
   register: auth_token
   until: auth_token.status == 200
   retries: 10
