@@ -990,7 +990,7 @@ Default:  "{{kafka_controller_default_group}}"
 
 ### kafka_controller_log_dir
 
-Set this variable to customize the directory that the Kafka controller writes log files to. Default location is /var/log/kafka.
+Set this variable to customize the directory that the Kafka controller writes log files to. Default location is /var/log/controller.
 
 Default:  "{{kafka_controller_default_log_dir}}"
 
