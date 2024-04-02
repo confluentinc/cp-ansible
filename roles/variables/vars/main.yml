@@ -185,7 +185,7 @@ kafka_controller_properties:
     properties: "{{  {'broker_listener': kafka_broker_listeners[kafka_broker_inter_broker_listener_name]} | confluent.platform.listener_properties(ssl_enabled, fips_enabled, ssl_mutual_auth_enabled, sasl_protocol,
                     kafka_controller_truststore_path, kafka_controller_truststore_storepass, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
                     plain_jaas_config, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'), kerberos_kafka_controller_primary,
-                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience) }}"
+                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, rbac_enabled) }}"
   kraft_sasl_plain:
     enabled: "{{kafka_controller_sasl_protocol=='plain'}}"
     properties:
@@ -264,7 +264,7 @@ kafka_controller_properties:
     properties: "{{ kafka_controller_listeners | confluent.platform.listener_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
                     kafka_controller_truststore_path, kafka_controller_truststore_storepass, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
                     plain_jaas_config, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'), kerberos_kafka_controller_primary,
-                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience) }}"
+                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, rbac_enabled) }}"
   metrics_reporter:
     enabled: "{{ kafka_controller_metrics_reporter_enabled|bool }}"
     properties:
@@ -420,7 +420,7 @@ kafka_broker_properties:
     properties: "{{ kafka_controller_listeners | confluent.platform.listener_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
                     kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                     plain_jaas_config, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'), kerberos_kafka_broker_primary,
-                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience) }}"
+                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, rbac_enabled) }}"
   broker_id:
     enabled: "{{ inventory_hostname in groups.kafka_broker }}"
     properties:
@@ -502,10 +502,17 @@ kafka_broker_properties:
       confluent.ssl.keystore.type: BCFKS
       confluent.ssl.truststore.type: BCFKS
   sr_rbac:
-    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and rbac_enabled }}"
+    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and rbac_enabled and not schema_registry_oauth_enabled}}"
     properties:
       confluent.basic.auth.credentials.source: USER_INFO
       confluent.basic.auth.user.info: "{{schema_registry_ldap_user | default('sr') }}:{{schema_registry_ldap_password | default('pass')}}"
+  sr_oauth:
+    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and rbac_enabled and schema_registry_oauth_enabled }}"
+    properties:
+      confluent.bearer.auth.credentials.source: OAUTHBEARER
+      confluent.bearer.auth.issuer.endpoint.url: "{{ oauth_token_uri }}"
+      confluent.bearer.auth.client.id: "{{ schema_registry_oauth_user }}"
+      confluent.bearer.auth.client.secret: "{{ schema_registry_oauth_password }}"
   sr_basic:
     # Should not turn on basic auth if rbac is enabled
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
@@ -637,16 +644,42 @@ kafka_broker_properties:
                     'kafka.rest.client.', kafka_broker_truststore_path, kafka_broker_truststore_storepass, False, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                     false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
                     kerberos_kafka_broker_primary, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'),
-                    not oauth_enabled, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_broker_oauth_user, kafka_broker_oauth_password, oauth_groups_scope, oauth_token_uri) }}"
+                    true, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_broker_oauth_user, kafka_broker_oauth_password, oauth_groups_scope, oauth_token_uri) }}"
   embedded_rest_proxy_rbac:
-    enabled: "{{ kafka_broker_rest_proxy_enabled and rbac_enabled and not oauth_enabled }}"
+    enabled: "{{ kafka_broker_rest_proxy_enabled and rbac_enabled }}"
     properties:
       kafka.rest.kafka.rest.resource.extension.class: io.confluent.kafkarest.security.KafkaRestSecurityResourceExtension
-      kafka.rest.rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+      kafka.rest.authentication.roles: "**"
+      kafka.rest.rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
       kafka.rest.public.key.path: "{{rbac_enabled_public_pem_path}}"
       kafka.rest.confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
+  embedded_rest_proxy_rbac_ldap:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and rbac_enabled and not oauth_enabled }}"
+    properties:
       kafka.rest.confluent.metadata.basic.auth.user.info: "{{kafka_broker_ldap_user | default('kafka') }}:{{kafka_broker_ldap_password | default('pass')}}"
       kafka.rest.confluent.metadata.http.auth.credentials.provider: BASIC
+  embedded_rest_proxy_rbac_oauth:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and rbac_enabled and oauth_enabled }}"
+    properties:
+      kafka.rest.confluent.metadata.oauthbearer.login.client.id: "{{kafka_broker_oauth_user}}"
+      kafka.rest.confluent.metadata.oauthbearer.login.client.secret: "{{kafka_broker_oauth_password}}"
+      kafka.rest.confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
+  embedded_rest_proxy_oauth:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and oauth_enabled }}"
+    properties:
+      kafka.rest.rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
+      kafka.rest.authentication.roles: "**"
+      kafka.rest.oauthbearer.jwks.endpoint.url: "{{ oauth_jwks_uri }}"
+      kafka.rest.oauthbearer.sub.claim.name: "{{ oauth_sub_claim }}"
+      kafka.rest.oauthbearer.expected.issuer: "{{ oauth_issuer_url }}"
+  embedded_rest_proxy_oauth_audience:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and oauth_enabled and oauth_expected_audience!='none' }}"
+    properties:
+      kafka.rest.oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
+  embedded_rest_proxy_oauth_groups:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and oauth_enabled and oauth_groups_claim!='none' }}"
+    properties:
+      kafka.rest.oauthbearer.groups.claim.name: "{{ oauth_groups_claim }}"
   embedded_rest_proxy_rbac_ssl:
     enabled: "{{rbac_enabled and mds_tls_enabled}}"
     properties:
@@ -661,7 +694,7 @@ kafka_broker_properties:
     properties: "{{ kafka_broker_listeners | confluent.platform.listener_properties(ssl_enabled, fips_enabled, ssl_mutual_auth_enabled, sasl_protocol,
                     kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                     plain_jaas_config, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'), kerberos_kafka_broker_primary,
-                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience) }}"
+                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, rbac_enabled) }}"
   controlplane_listener:
     enabled: "{{ kafka_broker_configure_control_plane_listener|bool and kafka_broker_configure_multiple_listeners|bool and not kraft_enabled|bool}}"
     properties:
@@ -813,18 +846,18 @@ schema_registry_properties:
       confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
       rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
   rbac_ldap:
-    enabled: "{{rbac_enabled and ( not oauth_enabled or (oauth_enabled and ldap_with_oauth_enabled))}}"
+    enabled: "{{ rbac_enabled and not oauth_enabled }}"
     properties:
       confluent.metadata.http.auth.credentials.provider: BASIC
       confluent.metadata.basic.auth.user.info: "{{ schema_registry_ldap_user | default('MISSING') }}:{{ schema_registry_ldap_password | default('MISSING')}}"
   rbac_oauth:
     enabled: "{{rbac_enabled and oauth_enabled}}"
     properties:
+      confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
       confluent.metadata.oauthbearer.login.client.id: "{{schema_registry_oauth_user}}"
       confluent.metadata.oauthbearer.login.client.secret: "{{schema_registry_oauth_password}}"
       confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
       confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
-      confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
   rbac_oauth_scope:
     enabled: "{{rbac_enabled and oauth_enabled and oauth_groups_scope!='none' }}"
     properties:
@@ -1028,7 +1061,7 @@ kafka_connect_properties:
   rbac:
     enabled: "{{rbac_enabled}}"
     properties:
-      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
       public.key.path: "{{rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
       confluent.metadata.basic.auth.user.info: "{{kafka_connect_ldap_user| default('MISSING')}}:{{kafka_connect_ldap_password| default('MISSING')}}"
@@ -1368,7 +1401,7 @@ kafka_rest_properties:
     enabled: "{{rbac_enabled}}"
     properties:
       kafka.rest.resource.extension.class: io.confluent.kafkarest.security.KafkaRestSecurityResourceExtension
-      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
       public.key.path: "{{rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
       confluent.metadata.basic.auth.user.info: "{{kafka_rest_ldap_user | default('rest') }}:{{kafka_rest_ldap_password | default('pass')}}"
@@ -1608,7 +1641,7 @@ kafka_connect_replicator_properties:
   rbac:
     enabled: "{{kafka_connect_replicator_rbac_enabled}}"
     properties:
-      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
       public.key.path: "{{kafka_connect_replicator_rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{kafka_connect_replicator_erp_host}}"
       confluent.metadata.basic.auth.user.info: "{{kafka_connect_replicator_ldap_user | default('replicator') }}:{{kafka_connect_replicator_ldap_password | default('pass')}}"
