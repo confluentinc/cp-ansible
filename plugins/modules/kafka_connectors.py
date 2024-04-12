@@ -94,7 +94,15 @@ TIMEOUT_WAITING_FOR_TASK_STATUS = 30  # seconds
 
 def get_current_connectors(connect_url, timeout, username, password, client_cert, client_key):
     try:
-        res = open_url(connect_url, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
+        res = open_url(
+            connect_url,
+            validate_certs=False,
+            timeout=timeout,
+            url_username=username,
+            url_password=password,
+            client_cert=client_cert,
+            client_key=client_key
+        )
         return json.loads(res.read())
     except urllib_error.HTTPError as e:
         if e.code != 404:
@@ -104,7 +112,16 @@ def get_current_connectors(connect_url, timeout, username, password, client_cert
 
 def remove_connector(connect_url, name, timeout, username, password, client_cert, client_key):
     url = "{}/{}".format(connect_url, name)
-    r = open_url(method='DELETE', url=url, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
+    r = open_url(
+        method='DELETE',
+        url=url,
+        validate_certs=False,
+        timeout=timeout,
+        url_username=username,
+        url_password=password,
+        client_cert=client_cert,
+        client_key=client_key
+    )
     return r.getcode() == 200
 
 
@@ -113,7 +130,18 @@ def create_new_connector(connect_url, name, config, timeout, username, password,
     data = json.dumps({'name': name, 'config': config})
     headers = {'Content-Type': 'application/json'}
     try:
-        r = open_url(method='POST', url=connect_url, data=data, headers=headers, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
+        r = open_url(
+            method='POST',
+            url=connect_url,
+            data=data,
+            headers=headers,
+            validate_certs=False,
+            timeout=timeout,
+            url_username=username,
+            url_password=password,
+            client_cert=client_cert,
+            client_key=client_key
+        )
     except urllib_error.HTTPError as e:
         message = "error while adding new connector configuration ({})".format(e)
         return False, False, message
@@ -144,7 +172,15 @@ def get_connector_status(connect_url, connector_name, timeout, username, passwor
     time.sleep(WAIT_TIME_BEFORE_GET_STATUS)
     status_url = "{}/{}/status".format(connect_url, connector_name)
 
-    res = open_url(status_url, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
+    res = open_url(
+        status_url,
+        validate_certs=False,
+        timeout=timeout,
+        url_username=username,
+        url_password=password,
+        client_cert=client_cert,
+        client_key=client_key
+    )
     current_status = json.loads(res.read())
 
     connector_status = current_status['connector']['state']
@@ -161,7 +197,15 @@ def get_connector_status(connect_url, connector_name, timeout, username, passwor
         if time_waited > TIMEOUT_WAITING_FOR_TASK_STATUS:
             return False, "timeout getting task status"
 
-        res = open_url(status_url, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
+        res = open_url(
+            status_url,
+            validate_certs=False,
+            timeout=timeout,
+            url_username=username,
+            url_password=password,
+            client_cert=client_cert,
+            client_key=client_key
+        )
         current_status = json.loads(res.read())
         nb_tasks = len(current_status['tasks'])
 
@@ -198,7 +242,18 @@ def update_existing_connector(connect_url, name, config, timeout, username, pass
     headers = {'Content-Type': 'application/json'}
     r = None
     try:
-        r = open_url(method='PUT', url=url, data=data, headers=headers, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
+        r = open_url(
+            method='PUT',
+            url=url,
+            data=data,
+            headers=headers,
+            validate_certs=False,
+            timeout=timeout,
+            url_username=username,
+            url_password=password,
+            client_cert=client_cert,
+            client_key=client_key
+        )
     except urllib_error.HTTPError as e:
         message = "error while updating configuration ({})".format(e)
         success = False
@@ -213,7 +268,16 @@ def update_existing_connector(connect_url, name, config, timeout, username, pass
     message = "connector configuration updated"
     success = True
     try:
-        r = open_url(method='POST', url=restart_url, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
+        r = open_url(
+            method='POST',
+            url=restart_url,
+            validate_certs=False,
+            timeout=timeout,
+            url_username=username,
+            url_password=password,
+            client_cert=client_cert,
+            client_key=client_key
+        )
     except urllib_error.HTTPError:
         pass
     finally:
@@ -246,7 +310,7 @@ def run_module():
         active_connectors=dict(type='list', elements='dict', required=True),
         timeout=dict(type='int', required=False, default=30),
         username=dict(type='str', required=False),
-        password=dict(type='str', required=False),
+        password=dict(type='str', required=False, no_log=True),
         client_cert=dict(type='path', required=False),
         client_key=dict(type='path', required=False),
     )
@@ -271,12 +335,27 @@ def run_module():
     output_messages = []
     added_updated_messages = []
     try:
-        current_connector_names = get_current_connectors(connect_url=module.params['connect_url'], timeout=module.params['timeout'],username=module.params['username'],password=module.params['password'],client_cert=module.params['client_cert'],client_key=module.params['client_key'])
+        current_connector_names = get_current_connectors(
+            connect_url=module.params['connect_url'],
+            timeout=module.params['timeout'],
+            username=module.params['username'],
+            password=module.params['password'],
+            client_cert=module.params['client_cert'],
+            client_key=module.params['client_key']
+        )
         active_connector_names = (c['name'] for c in module.params['active_connectors'])
         deleted_connector_names = set(current_connector_names) - set(active_connector_names)
 
         for to_delete in deleted_connector_names:
-            remove_connector(connect_url=module.params['connect_url'], name=to_delete, timeout=module.params['timeout'],username=module.params['username'],password=module.params['password'],client_cert=module.params['client_cert'],client_key=module.params['client_key'])
+            remove_connector(
+                connect_url=module.params['connect_url'],
+                name=to_delete,
+                timeout=module.params['timeout'],
+                username=module.params['username'],
+                password=module.params['password'],
+                client_cert=module.params['client_cert'],
+                client_key=module.params['client_key']
+            )
 
         if deleted_connector_names:
             output_messages.append("Connectors removed: {}.".format(', '.join(deleted_connector_names)))
