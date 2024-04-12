@@ -7,7 +7,7 @@ Ansible Playbooks for Confluent Platform - Release Notes
 v7.0.14
 ======
 
-Notable enhancements
+Notable fixes
 -------------
 
 - Connect and ksqlDB clusters are correctly registered even for co-located components
