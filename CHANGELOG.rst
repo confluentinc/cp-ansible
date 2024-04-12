@@ -4,6 +4,21 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.5.4
+======
+
+Notable enhancements
+-------------
+
+- Added support for configuring a custom port for the kraft controllers.
+- Updated default confluent cli version to 3.55.0
+
+Notable fixes
+-------------
+
+- Connect and Ksqldb clusters are correctly registered even for co-located components
+- Critical security and vulnerability issues were fixed
+
 v7.5.3
 ======
 
