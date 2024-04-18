@@ -32,9 +32,9 @@
   loop: "{{schema_registry_additional_system_admins}}"
   when: not ansible_check_mode
 
-- name: Grant Schema Registry OAuth user the role SecurityAdmin on the Schema Registry cluster
+- name: Grant Schema Registry user the role SecurityAdmin on the Schema Registry cluster
   uri:
-    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_oauth_user}}/roles/SecurityAdmin"
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{sr_user}}/roles/SecurityAdmin"
     method: POST
     validate_certs: false
     headers:
@@ -54,13 +54,11 @@
   retries: "{{ mds_retries }}"
   delay: 5
   no_log: "{{mask_secrets|bool}}"
-  when:
-    - not ansible_check_mode
-    - oauth_enabled
+  when: not ansible_check_mode
 
-- name: Grant Schema Registry OAuth user ResourceOwner Schema Registry Group and Topic
+- name: Grant Schema Registry user ResourceOwner Schema Registry Group and Topic
   uri:
-    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_oauth_user}}/roles/ResourceOwner/bindings"
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{sr_user}}/roles/ResourceOwner/bindings"
     method: POST
     validate_certs: false
     headers:
@@ -98,76 +96,4 @@
   retries: "{{ mds_retries }}"
   delay: 5
   no_log: "{{mask_secrets|bool}}"
-  when:
-    - not ansible_check_mode
-    - oauth_enabled
-
-- name: Grant Schema Registry LDAP user the role SecurityAdmin on the Schema Registry cluster
-  uri:
-    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_ldap_user}}/roles/SecurityAdmin"
-    method: POST
-    validate_certs: false
-    headers:
-      Content-Type: application/json
-      Authorization: "Bearer {{ authorization_token }}"
-    body_format: json
-    body: >
-      {
-        "clusters": {
-          "kafka-cluster": "{{kafka_cluster_id}}",
-          "schema-registry-cluster": "{{schema_registry_final_properties['schema.registry.group.id']}}"
-        }
-      }
-    status_code: 204
-  register: sr_mds_result
-  until: sr_mds_result.status == 204
-  retries: "{{ mds_retries }}"
-  delay: 5
-  no_log: "{{mask_secrets|bool}}"
-  when:
-    - not ansible_check_mode
-    - not oauth_enabled or ( oauth_enabled and ldap_with_oauth_enabled )
-
-- name: Grant Schema Registry LDAP user ResourceOwner Schema Registry Group and Topic
-  uri:
-    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_ldap_user}}/roles/ResourceOwner/bindings"
-    method: POST
-    validate_certs: false
-    headers:
-      Content-Type: application/json
-      Authorization: "Bearer {{ authorization_token }}"
-    body_format: json
-    body: >
-      {
-        "scope": {
-          "clusters": {
-            "kafka-cluster": "{{kafka_cluster_id}}"
-          }
-        },
-        "resourcePatterns": [
-          {
-            "resourceType":"Group",
-            "name": "{{schema_registry_final_properties['schema.registry.group.id']}}",
-            "patternType":"LITERAL"
-          },
-          {
-            "resourceType":"Topic",
-            "name": "{{schema_registry_final_properties['kafkastore.topic']}}",
-            "patternType":"LITERAL"
-          },
-          {
-            "resourceType":"Topic",
-            "name": "{{schema_registry_final_properties['confluent.license.topic']}}",
-            "patternType":"LITERAL"
-          }
-        ]
-      }
-    status_code: 204
-  register: sr_mds_result
-  until: sr_mds_result.status == 204
-  retries: "{{ mds_retries }}"
-  delay: 5
-  no_log: "{{mask_secrets|bool}}"
-  when:
-    - not ansible_check_mode
-    - not oauth_enabled or ( oauth_enabled and ldap_with_oauth_enabled )
+  when: not ansible_check_mode
