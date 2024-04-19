@@ -563,7 +563,7 @@ kafka_broker_default_listeners: "{
     'port': 9092,
     'ssl_enabled': {% if ccloud_kafka_enabled|bool %}true{% else %}{{ssl_enabled|string|lower}}{% endif %},
     'ssl_mutual_auth_enabled': {% if ccloud_kafka_enabled|bool %}false{% else %}{{ssl_mutual_auth_enabled|string|lower}}{% endif %},
-    'sasl_protocol': '{% if rbac_enabled|bool %}OAUTH{% elif ccloud_kafka_enabled|bool %}PLAIN{% else %}{{sasl_protocol}}{% endif %}'
+    'sasl_protocol': '{% if rbac_enabled|bool or oauth_enabled|bool %}OAUTH{% elif ccloud_kafka_enabled|bool %}PLAIN{% else %}{{sasl_protocol}}{% endif %}'
   }{% if kafka_broker_configure_multiple_listeners|bool %},
   'broker': {
     'name': 'BROKER',
@@ -700,6 +700,8 @@ kafka_broker_rest_proxy_enabled: "{{confluent_server_enabled and not ccloud_kafk
 ### Authentication type to add to Kafka's embedded rest proxy or Admin API. Do not set when RBAC is enabled. Options: [basic, none]
 kafka_broker_rest_proxy_authentication_type: none
 
+kafka_broker_rest_proxy_listener_name: "{{ 'internal' if rbac_enabled else kafka_broker_inter_broker_listener_name }}"
+
 ### Use to register and identify your Kafka cluster in the MDS.
 kafka_broker_cluster_name: ""
 
@@ -806,6 +808,9 @@ schema_registry_cluster_name: ""
 ### Boolean used for disabling of systemd service restarts when rootless install is executed
 schema_registry_skip_restarts: "{{ skip_restarts }}"
 
+### Boolean used for enabling OAuth on Schema Registry
+schema_registry_oauth_enabled: "{{ oauth_enabled }}"
+
 #### Kafka Rest Variables ####
 
 ### Default Kafka Rest config prefix. Only valid to customize when installation_method: archive
@@ -902,6 +907,9 @@ kafka_rest_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled 
 
 ### Boolean used for disabling of systemd service restarts when rootless install is executed
 kafka_rest_skip_restarts: "{{ skip_restarts }}"
+
+### Boolean used for enabling OAuth on Rest Proxy
+kafka_rest_oauth_enabled: "{{ oauth_enabled }}"
 
 # Kafka Connect Variables
 
@@ -1049,6 +1057,9 @@ kafka_connect_connector_white_list: ""
 
 ### Boolean used for disabling of systemd service restarts when rootless install is executed
 kafka_connect_skip_restarts: "{{ skip_restarts }}"
+
+### Boolean used for enabling OAuth on Kafka Connect
+kafka_connect_oauth_enabled: "{{ oauth_enabled }}"
 
 #### KSQLDB Variables ####
 
@@ -1228,6 +1239,9 @@ control_center_custom_properties: {}
 
 ### Boolean used for disabling of systemd service restarts when rootless install is executed
 control_center_skip_restarts: "{{ skip_restarts }}"
+
+### Boolean used for enabling OAuth on Control Center
+control_center_oauth_enabled: "{{ oauth_enabled }}"
 
 # Hash merging not working with new approach
 _sasl_scram_users: "{
@@ -1434,7 +1448,7 @@ sso_issuer_url: none
 ### JSON Web Key Set (JWKS) URI
 sso_jwks_uri: none
 
-### Endpoint for an OAuth authorization request
+### Endpoint for an OAuth authorization request in Control Center
 sso_authorize_uri: none
 
 ### IdP token endpoint, from where a token is requested by MDS
@@ -1452,6 +1466,39 @@ sso_groups_scope: none
 ### Configures whether offline_access scope would be requested in the authorization URI, Set this to false if offline tokens are not allowed for the user or client in IdP
 sso_refresh_token: true
 
+### Boolean to enable OAuth on all cp components, except ksqlDB. When set to true, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_client_id, oauth_client_password
+oauth_enabled: false
+
+### Boolean to enable OAuth with LDAP, required when dual support needed. oauth_enabled flag also needs to be true
+ldap_with_oauth_enabled: false
+
+### Client id for authorize and token request to Idp via cp components. This is the super user for all MDS api calls
+oauth_client_id: none
+
+### Client password for authorize and token request to Idp via cp components
+oauth_client_password: none
+
+### IdP token endpoint, from where a token is requested by MDS when OAuth is enabled
+oauth_token_uri: none
+
+### The issuer url, which is typically the authorization server's URL. This value is used to compare to issuer claim in the JWT token for verification
+oauth_issuer_url: none
+
+### The OAuth/OIDC provider URL from which the provider's JWKS (JSON Web Key Set) can be retrieved.
+oauth_jwks_uri: none
+
+### This optional setting provides the name of claim to use for the groups in the JWT. If not provided, groups of principal will be empty.
+oauth_groups_claim: none
+
+### If any additional scope is needed to include groups in the OAuth token, this config is optional based on Idp.
+oauth_groups_scope: none
+
+### This optional setting can provide a different name to use for the subject included in the JWT
+oauth_sub_claim: sub
+
+### The optional comma-delimited setting for MDS to use to verify that the JWT was issued for one of the expected audiences.
+oauth_expected_audience: none
+
 ### LDAP User which will be granted super user permissions to create role bindings in the MDS
 mds_super_user: mds
 
@@ -1467,11 +1514,23 @@ kafka_broker_ldap_user: "{{mds_super_user}}"
 ### Password to kafka_broker_ldap_user LDAP User
 kafka_broker_ldap_password: "{{mds_super_user_password}}"
 
+### OAuth user for Kafka broker Service to authenticate as
+kafka_broker_oauth_user: "{{oauth_client_id}}"
+
+### Password to kafka_broker_oauth_user
+kafka_broker_oauth_password: "{{oauth_client_password}}"
+
 ### LDAP User for Kafkas Embedded Rest Service to authenticate as
 kafka_controller_ldap_user: "{{mds_super_user}}"
 
 ### Password to kafka_controller_ldap_user LDAP User
 kafka_controller_ldap_password: "{{mds_super_user_password}}"
+
+### OAuth user for Kafka Controller Service to authenticate as
+kafka_controller_oauth_user: "{{oauth_client_id}}"
+
+### Password to kafka_controller_oauth_user
+kafka_controller_oauth_password: "{{oauth_client_password}}"
 
 ### Unique advertised hostname for Metadata Server
 mds_advertised_listener_hostname: ""
@@ -1482,11 +1541,23 @@ schema_registry_ldap_user: schema-registry
 ### Password to schema_registry_ldap_user LDAP User
 schema_registry_ldap_password: password
 
+### OAuth User for Schema Registry to authenticate as
+schema_registry_oauth_user: schema-registry
+
+### Password to schema_registry_oauth_user
+schema_registry_oauth_password: password
+
 ### LDAP User for Connect to authenticate as
 kafka_connect_ldap_user: connect
 
 ### Password to kafka_connect_ldap_user LDAP User
 kafka_connect_ldap_password: password
+
+### OAuth User for Connect to authenticate as
+kafka_connect_oauth_user: connect
+
+### Password to kafka_connect_oauth_user
+kafka_connect_oauth_password: password
 
 ### LDAP User for ksqlDB to authenticate as
 ksql_ldap_user: ksql
@@ -1500,11 +1571,23 @@ kafka_rest_ldap_user: kafka-rest
 ### Password to kafka_rest_ldap_user LDAP User
 kafka_rest_ldap_password: password
 
+### OAuth User for Rest Proxy to authenticate as
+kafka_rest_oauth_user: kafka-rest
+
+### Password to kafka_rest_oauth_user
+kafka_rest_oauth_password: password
+
 ### LDAP User for Control Center to authenticate as
 control_center_ldap_user: control-center
 
 ### Password to control_center_ldap_user LDAP User
 control_center_ldap_password: password
+
+### OAuth User for Control Center to authenticate as
+control_center_oauth_user: control-center
+
+### Password to control_center_oauth_user
+control_center_oauth_password: password
 
 ### LDAP User for Confluent Replicator to authenticate as
 kafka_connect_replicator_ldap_user: replicator
@@ -1770,16 +1853,16 @@ mds_health_check_user: "{{mds_super_user}}"
 mds_health_check_password: "{{mds_super_user_password}}"
 
 ### User for authenticated Kafka Admin API Health Check.
-kafka_broker_rest_health_check_user: "{{ mds_super_user if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.principal }}"
+kafka_broker_rest_health_check_user: "{{ kafka_broker_rest_proxy_basic_users.admin.principal }}"
 
 ### Password for authenticated Kafka Admin API Health Check.
-kafka_broker_rest_health_check_password: "{{ mds_super_user_password if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.password }}"
+kafka_broker_rest_health_check_password: "{{ kafka_broker_rest_proxy_basic_users.admin.password }}"
 
 ### User for authenticated Schema Registry Health Check.
-schema_registry_health_check_user: "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registry_basic_users_final.admin.principal }}"
+schema_registry_health_check_user: "{{ schema_registry_basic_users_final.admin.principal }}"
 
 ### Password for authenticated Schema Registry Health Check.
-schema_registry_health_check_password: "{{ schema_registry_ldap_password if rbac_enabled|bool else schema_registry_basic_users_final.admin.password }}"
+schema_registry_health_check_password: "{{ schema_registry_basic_users_final.admin.password }}"
 
 ### User for authenticated Connect Health Check.
 kafka_connect_health_check_user: "{{ kafka_connect_ldap_user if rbac_enabled|bool else kafka_connect_basic_users.admin.principal }}"

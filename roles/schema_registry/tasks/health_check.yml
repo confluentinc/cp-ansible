@@ -1,6 +1,16 @@
 ---
-# Cannot use Block/Rescue in Ansible Handlers: https://github.com/ansible/ansible/issues/14270
-# Implementing try/catch logic with ignore_errors and conditionals
+- name: Get Authorization Token
+  import_role:
+    name: common
+    tasks_from: get_authorization_token.yml
+  vars:
+    oauth: "{{ schema_registry_oauth_enabled }}"
+    oauth_user: "{{ schema_registry_oauth_user }}"
+    oauth_password: "{{ schema_registry_oauth_password }}"
+    ldap_user: "{{ schema_registry_ldap_user }}"
+    ldap_password: "{{ schema_registry_ldap_password }}"
+  when: rbac_enabled or schema_registry_oauth_enabled
+
 - name: Wait for API to return 200
   uri:
     url: "{{schema_registry_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{schema_registry_listener_port}}/subjects"
@@ -14,7 +24,27 @@
   until: result1.status == 200
   retries: 30
   delay: 5
-  when: schema_registry_authentication_type != 'mtls'
+  when:
+    - schema_registry_authentication_type != 'mtls'
+    - not ( rbac_enabled or schema_registry_oauth_enabled)
+  ignore_errors: true
+
+- name: Wait for API to return 200
+  uri:
+    url: "{{schema_registry_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{schema_registry_listener_port}}/subjects"
+    status_code: 200
+    validate_certs: false
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+  register: result1_oauth
+  until: result1_oauth.status == 200
+  retries: 30
+  delay: 5
+  when:
+    - schema_registry_authentication_type != 'mtls'
+    - rbac_enabled or schema_registry_oauth_enabled
+  no_log: "{{mask_secrets|bool}}"
   ignore_errors: true
 
 - set_fact:
@@ -35,7 +65,29 @@
   until: result2.status == 200
   retries: 30
   delay: 5
-  when: schema_registry_authentication_type == 'mtls'
+  when:
+    - schema_registry_authentication_type == 'mtls'
+    - not (rbac_enabled or schema_registry_oauth_enabled)
+  ignore_errors: true
+
+- name: Wait for API to return 200 - mTLS
+  uri:
+    url: "{{schema_registry_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{schema_registry_listener_port}}/subjects"
+    status_code: 200
+    validate_certs: false
+    client_cert: "{{ schema_registry_cert_path if ssl_provided_keystore_and_truststore else certs_chain }}"
+    client_key: "{{schema_registry_key_path}}"
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+  register: result2_oauth
+  until: result2_oauth.status == 200
+  retries: 30
+  delay: 5
+  when:
+    - schema_registry_authentication_type == 'mtls'
+    - rbac_enabled or schema_registry_oauth_enabled
+  no_log: "{{mask_secrets|bool}}"
   ignore_errors: true
 
 - name: Fetch Log Files and Error out
@@ -54,4 +106,4 @@
       fail:
         msg: Health checks failed. Review exported files.
   # When only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
-  when: result1.failed|default(False) or result2.failed|default(False)
+  when: result1.failed|default(False) or result1_oauth.failed|default(False) or result2.failed|default(False) or result2_oauth.failed|default(False)
