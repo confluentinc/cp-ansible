@@ -26,9 +26,20 @@
   run_once: true
 
 # Take super.users property, split into list, remove empty string from list, and add in mds_super_user
-- name: Initialize Super Users List
+- name: Initialize Super Users List with LDAP
   set_fact:
     super_users: "{{ (kafka_broker_final_properties['super.users'] | default('')).split(';') | difference(['']) + [ 'User:' + lookup('vars', 'mds_super_user') ]}}"
+  when: not oauth_enabled
+
+- name: Initialize Super Users List with OAuth
+  set_fact:
+    super_users: "{{ (kafka_broker_final_properties['super.users'] | default('')).split(';') | difference(['']) + [ 'User:' + lookup('vars', 'oauth_client_id') ]}}"
+  when: oauth_enabled and not ldap_with_oauth_enabled
+
+- name: Initialize Super Users List with both OAuth and LDAP
+  set_fact:
+    super_users: "{{ (kafka_broker_final_properties['super.users'] | default('')).split(';') | difference(['']) + [ 'User:' + lookup('vars', 'oauth_client_id') ] + [ 'User:' + lookup('vars', 'mds_super_user') ] }}"
+  when: oauth_enabled and ldap_with_oauth_enabled
 
 # Loop over each brokers principal and add to list
 - name: Add Each Broker's Principal to Super Users List
