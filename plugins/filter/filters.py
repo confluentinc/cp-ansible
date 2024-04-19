@@ -308,15 +308,14 @@ class FilterModule(object):
                 final_dict[config_prefix + 'sasl.login.connect.timeout'] = '15000'
                 final_dict[config_prefix + 'sasl.oauthbearer.token.endpoint.url'] = oauth_token_uri
 
-            if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER' and \
-                    oauth_enabled and oauth_groups_scope == 'none':
-                final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"' +\
-                    oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\";'
+                if oauth_groups_scope == 'none':
+                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+                    clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\";'
 
-            if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER' and \
-                    oauth_enabled and oauth_groups_scope != 'none':
-                final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"' +\
-                    oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" scope=\"' + oauth_groups_scope + '\";'
+                if oauth_groups_scope != 'none':
+                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+                    clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" scope=\"' + oauth_groups_scope + '\";'
+
         return final_dict
 
     def c3_connect_properties(self, connect_group_list, groups, hostvars, ssl_enabled, http_protocol, port, default_connect_group_id,
