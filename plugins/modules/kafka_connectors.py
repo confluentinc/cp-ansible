@@ -48,7 +48,7 @@ author:
 EXAMPLES = '''
 - name: Deploy Some connector
   connect_url: kafka_connect_http_protocol://0.0.0.0:kafka_connect_rest_port/connectors
-  active_connectors: [{"name": "test-6-sink", "config": { .../... }},{"name": "test-5-sink", "config": { .../... }}]
+  active_connectors: [{"name": "test-6-sink", "config": { .../... }}, {"name": "test-5-sink", "config": { .../... }}]
   timeout: 20
 '''
 
