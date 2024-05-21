@@ -377,9 +377,11 @@ class FilterModule(object):
         for rule_str in list_of_rules:
             tokens = rule_str.split('/')
             if len(tokens) < 2:
-                raise "Invalid rule format. Please ensure the rule has Mapping pattern and Mapping replacement.\n" \
-                      "For details, please refer to "\
-                      "https://cwiki.apache.org/confluence/display/KAFKA/KIP-371%3A+Add+a+configuration+to+build+custom+SSL+principal+name"
+                raise ValueError(
+                    "Invalid rule format. Please ensure the rule has Mapping pattern and Mapping replacement.\n"
+                    "For details, please refer to "
+                    "https://cwiki.apache.org/confluence/display/KAFKA/KIP-371%3A+Add+a+configuration+to+build+custom+SSL+principal+name"
+                )
 
             mapping_pattern = tokens[0]
             mapping_value = tokens[1]
