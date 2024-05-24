@@ -165,7 +165,7 @@ class FilterModule(object):
                             plain_jaas_config, keytab_path,
                             kerberos_principal, kerberos_primary,
                             scram_user, scram_password, scram256_user,
-                            scram256_password, oauth_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, rbac_enabled):
+                            scram256_password, oauth_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, oauth_sub_claim, rbac_enabled):
         # For kafka broker properties: Takes listeners dictionary and outputs all properties based on the listeners' settings
         # Other inputs help fill out the properties
         final_dict = {}
@@ -233,6 +233,7 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.server.callback.handler.class'] =\
                     'io.confluent.kafka.server.plugins.auth.token.CompositeBearerValidatorCallbackHandler'
                 final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.jwks.endpoint.url'] = oauth_jwks_uri
+                final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.sub.claim.name'] = oauth_sub_claim
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER' \
                     and oauth_enabled and not rbac_enabled:
@@ -241,6 +242,7 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.server.callback.handler.class'] =\
                     'org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerValidatorCallbackHandler'
                 final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.jwks.endpoint.url'] = oauth_jwks_uri
+                final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.sub.claim.name'] = oauth_sub_claim
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER' and \
                     oauth_enabled and oauth_expected_audience != 'none':
