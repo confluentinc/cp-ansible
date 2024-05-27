@@ -8,6 +8,23 @@
 driver:
   name: docker
 platforms:
+  - name: oauth1
+    hostname: oauth1.confluent
+    groups:
+      - oauth_server
+    image: quay.io/keycloak/keycloak:latest
+    env:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    dockerfile: ../Dockerfile-oauth.j2
+    published_ports:
+      - "8080:8080"
+    command: start-dev
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: ${KRAFT_CONTROLLER:-zookeeper}1
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
@@ -209,13 +226,14 @@ provisioner:
             port: 9093
 
         oauth_enabled: true
-        oauth_client_id: ${OKTA_CLIENT:-user}
-        oauth_client_password: ${OKTA_PASSWORD:-password}
-        oauth_groups_scope: groups
+        oauth_client_id: superuser
+        oauth_client_password: my-secret
+        oauth_sub_claim: client_id
         oauth_groups_claim: groups
-        oauth_token_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/token
-        oauth_issuer_url: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7
-        oauth_jwks_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/keys
-        oauth_expected_audience: Confluent,api://default,https://my-company.com
-        schema_registry_oauth_user: ${OKTA_CLIENT:-sruser}
-        schema_registry_oauth_password: ${OKTA_PASSWORD:-password}
+        oauth_token_uri: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/token
+        oauth_issuer_url: http://oauth1:8080/realms/cp-ansible-realm
+        oauth_jwks_uri: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/certs
+        oauth_expected_audience: Confluent,account,api://default
+        schema_registry_oauth_user: schema_registry
+        schema_registry_oauth_password: my-secret
+        mask_secrets: false
