@@ -165,7 +165,8 @@ class FilterModule(object):
                             plain_jaas_config, keytab_path,
                             kerberos_principal, kerberos_primary,
                             scram_user, scram_password, scram256_user,
-                            scram256_password, oauth_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, oauth_sub_claim, rbac_enabled):
+                            scram256_password, oauth_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience,
+                            oauth_sub_claim, rbac_enabled, kraft_listener):
         # For kafka broker properties: Takes listeners dictionary and outputs all properties based on the listeners' settings
         # Other inputs help fill out the properties
         final_dict = {}
@@ -247,6 +248,10 @@ class FilterModule(object):
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER' and \
                     oauth_enabled and oauth_expected_audience != 'none':
                 final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.expected.audience'] = oauth_expected_audience
+
+            if kraft_listener and (rbac_enabled or oauth_enabled):
+                final_dict['listener.name.' + listener_name + '.principal.builder.class'] =\
+                    'io.confluent.kafka.security.authenticator.OAuthKafkaPrincipalBuilder'
 
         return final_dict
 
