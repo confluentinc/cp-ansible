@@ -1355,7 +1355,7 @@ kafka_rest_properties:
                     'client.', kafka_rest_truststore_path, kafka_rest_truststore_storepass, public_certificates_enabled, kafka_rest_keystore_path, kafka_rest_keystore_storepass, kafka_rest_keystore_keypass,
                     false, sasl_plain_users_final.kafka_rest.principal, sasl_plain_users_final.kafka_rest.password, sasl_scram_users_final.kafka_rest.principal, sasl_scram_users_final.kafka_rest.password, sasl_scram256_users_final.kafka_rest.principal, sasl_scram256_users_final.kafka_rest.password,
                     kerberos_kafka_broker_primary, kafka_rest_keytab_path, kafka_rest_kerberos_principal|default('rp'),
-                    false, kafka_rest_ldap_user, kafka_rest_ldap_password, mds_bootstrap_server_urls, oauth_enabled, oauth_client_id, oauth_client_password, oauth_groups_scope, oauth_token_uri) }}"
+                    false, kafka_rest_ldap_user, kafka_rest_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_rest_oauth_user, kafka_rest_oauth_password, oauth_groups_scope, oauth_token_uri) }}"
   kafka_client_password_protection:
     # Edge case for RP only- 'client' prefix not honored by secrets protection
     enabled: "{{ kafka_rest_secrets_protection_enabled }}"
@@ -1392,7 +1392,7 @@ kafka_rest_properties:
                             'client.confluent.monitoring.interceptor.', kafka_rest_truststore_path, kafka_rest_truststore_storepass, public_certificates_enabled, kafka_rest_keystore_path, kafka_rest_keystore_storepass, kafka_rest_keystore_keypass,
                             false, sasl_plain_users_final.kafka_rest.principal, sasl_plain_users_final.kafka_rest.password, sasl_scram_users_final.kafka_rest.principal, sasl_scram_users_final.kafka_rest.password, sasl_scram256_users_final.kafka_rest.principal, sasl_scram256_users_final.kafka_rest.password,
                             kerberos_kafka_broker_primary, kafka_rest_keytab_path, kafka_rest_kerberos_principal|default('rp'),
-                            false, kafka_rest_ldap_user, kafka_rest_ldap_password, mds_bootstrap_server_urls, oauth_enabled, oauth_client_id, oauth_client_password, oauth_groups_scope, oauth_token_uri) }}"
+                            false, kafka_rest_ldap_user, kafka_rest_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_rest_oauth_user, kafka_rest_oauth_password, oauth_groups_scope, oauth_token_uri) }}"
   rbac:
     enabled: "{{rbac_enabled}}"
     properties:
@@ -1400,8 +1400,38 @@ kafka_rest_properties:
       rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
       public.key.path: "{{rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
-      confluent.metadata.basic.auth.user.info: "{{kafka_rest_ldap_user | default('rest') }}:{{kafka_rest_ldap_password | default('pass')}}"
+  rbac_ldap:
+    enabled: "{{ rbac_enabled and not oauth_enabled }}"
+    properties:
       confluent.metadata.http.auth.credentials.provider: BASIC
+      confluent.metadata.basic.auth.user.info: "{{kafka_rest_ldap_user | default('rest') }}:{{kafka_rest_ldap_password | default('pass')}}"
+  rbac_oauth:
+    enabled: "{{ rbac_enabled and oauth_enabled }}"
+    properties:
+      confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
+      confluent.metadata.oauthbearer.login.client.id: "{{kafka_rest_oauth_user}}"
+      confluent.metadata.oauthbearer.login.client.secret: "{{kafka_rest_oauth_password}}"
+      confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
+  rbac_oauth_scope:
+    enabled: "{{rbac_enabled and oauth_enabled and oauth_groups_scope!='none' }}"
+    properties:
+      confluent.metadata.oauthbearer.login.oauth.scope: "{{oauth_groups_scope}}"
+  kafka_rest_oauth:
+    enabled: "{{kafka_rest_oauth_enabled}}"
+    properties:
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
+      oauthbearer.jwks.endpoint.url: "{{oauth_jwks_uri}}"
+      oauthbearer.sub.claim.name: "{{ oauth_sub_claim }}"
+      oauthbearer.expected.issuer: "{{ oauth_issuer_url }}"
+  kafka_rest_oauth_scope:
+    enabled: "{{kafka_rest_oauth_enabled and oauth_groups_scope!='none' }}"
+    properties:
+      oauthbearer.groups.claim.name: "{{ oauth_groups_scope }}"
+  kafka_rest_oauth_audience:
+    enabled: "{{kafka_rest_oauth_enabled and oauth_expected_audience!='none' }}"
+    properties:
+      oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
   rbac_external_client:
     enabled: "{{rbac_enabled and external_mds_enabled and mds_tls_enabled }}"
     properties:
