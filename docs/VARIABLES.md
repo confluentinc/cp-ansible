@@ -4762,6 +4762,14 @@ Default:  java-17-openjdk
 
 ***
 
+### amazon_java_package_name
+
+Java Package to install on RHEL/Centos hosts. Possible values java-8-openjdk, java-11-openjdk or java-17-openjdk
+
+Default:  java-17-amazon-corretto
+
+***
+
 ### debian_java_package_name
 
 Java Package to install on Debian hosts. Possible values openjdk-11-jdk, openjdk-8-jdk or openjdk-17-jdk
