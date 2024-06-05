@@ -4762,19 +4762,19 @@ Default:  java-17-openjdk
 
 ***
 
-### amazon_java_package_name
-
-Java Package to install on Amazon hosts. Possible values java-11-amazon-corretto or java-17-amazon-corretto
-
-Default:  java-17-amazon-corretto
-
-***
-
 ### debian_java_package_name
 
 Java Package to install on Debian hosts. Possible values openjdk-11-jdk, openjdk-8-jdk or openjdk-17-jdk
 
 Default:  openjdk-17-jdk
+
+***
+
+### amazon_java_package_name
+
+Java Package to install on Amazon hosts. Possible values java-11-amazon-corretto or java-17-amazon-corretto
+
+Default:  java-17-amazon-corretto
 
 ***
 
