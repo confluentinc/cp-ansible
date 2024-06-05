@@ -640,6 +640,60 @@ Validates that Control Center Can connect to each KSQL cluster.
 
 ***
 
+### molecule/oauth-rbac-mds-kerberos-debian
+
+#### Scenario oauth-rbac-mds-kerberos-debian test's the following:
+
+Installs two Confluent Platform Clusters on Debian10.
+
+RBAC enabled.
+
+Remote MDS from Cluster2 to Cluster1 (MDS).
+
+Custom TLS certificates.
+
+Kafka Broker Customer Listener
+
+RBAC Additional System Admin.
+
+SSO authentication using OIDC in Control center using Azure IdP
+
+#### Scenario oauth-rbac-mds-kerberos-debian verify test's the following:
+
+Validates that GSSAPI protocol is set on Cluster2.
+
+Validates that MDS is HTTP on Cluster1 (MDS).
+
+Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
+
+Validates that Java 17 is in Use
+
+Validates OIDC authenticate api for SSO in Control Center
+
+***
+
+### molecule/oauth-rbac-plain-rhel8
+
+#### Scenario oauth-rbac-plain-rhel8 test's the following:
+
+Installs Confluent Platform Cluster on Oracle Linux 8.
+
+RBAC enabled.
+
+MTLS enabled.
+
+Kafka Broker Customer Listener.
+
+SSO authentication using OIDC in Control center using Okta IdP
+
+#### Scenario oauth-rbac-plain-rhel8 verify test's the following:
+
+Validates TLS keysizes across all components.
+
+Validates OIDC authenticate api for SSO in Control Center
+
+***
+
 ### molecule/plain-customcerts-rhel-fips
 
 #### Scenario plain-customcerts-rhel-fips test's the following:
