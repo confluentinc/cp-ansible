@@ -1,0 +1,50 @@
+---
+- name: Copy OAuth IDP Cert to Node
+  copy:
+    src: "{{oauth_idp_pem_path}}"
+    dest: "oauth_idp_cert.pem"
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  when:
+    - oauth_enabled|bool
+    - oauth_idp_pem_path != ""
+    - inventory_hostname in groups.kafka_broker
+    - not external_mds_enabled|bool
+
+- name: Import OAuth IdP certificate to Truststore
+  shell: |
+    keytool -noprompt -keystore {{truststore_path}} \
+      -storetype pkcs12 \
+      -alias oauth_cert \
+      -import -file oauth_idp_cert.pem \
+      -storepass {{truststore_storepass}}
+  when:
+    - oauth_enabled|bool
+    - oauth_idp_pem_path != ""
+    - inventory_hostname in groups.kafka_broker
+    - not external_mds_enabled|bool
+  no_log: "{{mask_secrets|bool}}"
+
+- name: Copy C3 SSO IDP Cert to Node
+  copy:
+    src: "{{sso_idp_pem_path}}"
+    dest: "sso_idp_cert.pem"
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  when:
+    - sso_mode != 'none'
+    - sso_idp_pem_path != ""
+    - inventory_hostname in groups.kafka_broker
+    - not external_mds_enabled|bool
+
+- name: Import C3 SSO IdP certificate to Truststore
+  shell: |
+    keytool -noprompt -keystore {{truststore_path}} \
+      -storetype pkcs12 \
+      -alias sso_cert \
+      -import -file sso_idp_cert.pem \
+      -storepass {{truststore_storepass}}
+  when:
+    - sso_mode != 'none'
+    - sso_idp_pem_path != ""
+    - inventory_hostname in groups.kafka_broker
+    - not external_mds_enabled|bool
+  no_log: "{{mask_secrets|bool}}"
