@@ -4770,6 +4770,14 @@ Default:  openjdk-17-jdk
 
 ***
 
+### amazon_java_package_name
+
+Java Package to install on Amazon hosts. Possible values java-11-amazon-corretto or java-17-amazon-corretto
+
+Default:  java-17-amazon-corretto
+
+***
+
 ### ubuntu_java_package_name
 
 Java Package to install on Ubuntu hosts. Possible values openjdk-8-jdk, openjdk-11-jdk or openjdk-17-jdk
