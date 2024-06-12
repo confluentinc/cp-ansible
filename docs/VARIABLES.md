@@ -456,7 +456,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  3.55.0
+Default:  3.63.0
 
 ***
 
@@ -1588,6 +1588,14 @@ Default:  "{{ skip_restarts }}"
 
 ***
 
+### schema_registry_oauth_enabled
+
+Boolean used for enabling OAuth Server on Schema Registry
+
+Default:  "{{ oauth_enabled }}"
+
+***
+
 ### kafka_rest_config_prefix
 
 Default Kafka Rest config prefix. Only valid to customize when installation_method: archive
@@ -1769,6 +1777,14 @@ Default:  "{{ monitoring_interceptors_enabled }}"
 Boolean used for disabling of systemd service restarts when rootless install is executed
 
 Default:  "{{ skip_restarts }}"
+
+***
+
+### kafka_rest_oauth_enabled
+
+Boolean used for enabling OAuth Server on Rest Proxy
+
+Default:  "{{ oauth_enabled }}"
 
 ***
 
@@ -2041,6 +2057,14 @@ Default:  ""
 Boolean used for disabling of systemd service restarts when rootless install is executed
 
 Default:  "{{ skip_restarts }}"
+
+***
+
+### kafka_connect_oauth_enabled
+
+Boolean used for enabling OAuth Server on Kafka Connect
+
+Default:  "{{ oauth_enabled }}"
 
 ***
 
@@ -2454,7 +2478,7 @@ Default:  none
 
 ### sso_authorize_uri
 
-Endpoint for an OAuth authorization request
+Endpoint for an OAuth authorization request in Control Center
 
 Default:  none
 
@@ -2500,6 +2524,118 @@ Default:  true
 
 ***
 
+### sso_cli
+
+Boolean to enable SSO in confluent cli. If enabling SSO in cli, you must also provide sso_device_authorization_uri.
+
+Default:  false
+
+***
+
+### sso_device_authorization_uri
+
+Device Authorization endpoint of Idp, Required to enable SSO in cli.
+
+Default:  none
+
+***
+
+### oauth_enabled
+
+Boolean to enable OAuth on all cp components, except ksqlDB. When set to true, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_client_id, oauth_client_password
+
+Default:  false
+
+***
+
+### ldap_with_oauth_enabled
+
+Boolean to enable OAuth with LDAP, required when dual support needed. oauth_enabled flag also needs to be true
+
+Default:  false
+
+***
+
+### oauth_client_id
+
+Client id for authorize and token request to Idp via cp components. This is the super user for all MDS api calls
+
+Default:  none
+
+***
+
+### oauth_client_password
+
+Client password for authorize and token request to Idp via cp components
+
+Default:  none
+
+***
+
+### oauth_token_uri
+
+IdP token endpoint, from where a token is requested by MDS when OAuth is enabled
+
+Default:  none
+
+***
+
+### oauth_issuer_url
+
+The issuer url, which is typically the authorization server's URL. This value is used to compare to issuer claim in the JWT token for verification
+
+Default:  none
+
+***
+
+### oauth_jwks_uri
+
+The OAuth/OIDC provider URL from which the provider's JWKS (JSON Web Key Set) can be retrieved.
+
+Default:  none
+
+***
+
+### oauth_groups_claim
+
+This optional setting provides the name of claim to use for the groups in the JWT. If not provided, groups of principal will be empty.
+
+Default:  none
+
+***
+
+### oauth_groups_scope
+
+If any additional scope is needed to include groups in the OAuth token, this config is optional based on Idp.
+
+Default:  none
+
+***
+
+### oauth_sub_claim
+
+This optional setting can provide a different name to use for the subject included in the JWT
+
+Default:  sub
+
+***
+
+### oauth_expected_audience
+
+The optional comma-delimited setting for MDS to use to verify that the JWT was issued for one of the expected audiences.
+
+Default:  none
+
+***
+
+### oauth_super_user
+
+Service principal for OAuth client in Idp server. Defaults to client id
+
+Default:  "{{oauth_client_id}}"
+
+***
+
 ### mds_super_user
 
 LDAP User which will be granted super user permissions to create role bindings in the MDS
@@ -2540,6 +2676,22 @@ Default:  "{{mds_super_user_password}}"
 
 ***
 
+### kafka_broker_oauth_user
+
+OAuth user for Kafka broker Service to authenticate as
+
+Default:  "{{oauth_client_id}}"
+
+***
+
+### kafka_broker_oauth_password
+
+Password to kafka_broker_oauth_user
+
+Default:  "{{oauth_client_password}}"
+
+***
+
 ### kafka_controller_ldap_user
 
 LDAP User for Kafkas Embedded Rest Service to authenticate as
@@ -2553,6 +2705,22 @@ Default:  "{{mds_super_user}}"
 Password to kafka_controller_ldap_user LDAP User
 
 Default:  "{{mds_super_user_password}}"
+
+***
+
+### kafka_controller_oauth_user
+
+OAuth user for Kafka Controller Service to authenticate as
+
+Default:  "{{oauth_client_id}}"
+
+***
+
+### kafka_controller_oauth_password
+
+Password to kafka_controller_oauth_user
+
+Default:  "{{oauth_client_password}}"
 
 ***
 
@@ -2580,6 +2748,30 @@ Default:  password
 
 ***
 
+### schema_registry_oauth_user
+
+OAuth User for Schema Registry to authenticate as
+
+Default:  schema-registry
+
+***
+
+### schema_registry_oauth_password
+
+Password to schema_registry_oauth_user
+
+Default:  password
+
+***
+
+### schema_registry_oauth_principal
+
+Service principal for SR client in Idp server. Defaults to SR client
+
+Default:  "{{ schema_registry_oauth_user }}"
+
+***
+
 ### kafka_connect_ldap_user
 
 LDAP User for Connect to authenticate as
@@ -2593,6 +2785,30 @@ Default:  connect
 Password to kafka_connect_ldap_user LDAP User
 
 Default:  password
+
+***
+
+### kafka_connect_oauth_user
+
+OAuth User for Connect to authenticate as
+
+Default:  connect
+
+***
+
+### kafka_connect_oauth_password
+
+Password to kafka_connect_oauth_user
+
+Default:  password
+
+***
+
+### kafka_connect_oauth_principal
+
+Service principal for Connect client in Idp server. Defaults to Connect client
+
+Default:  "{{ kafka_connect_oauth_user }}"
 
 ***
 
@@ -2628,6 +2844,30 @@ Default:  password
 
 ***
 
+### kafka_rest_oauth_user
+
+OAuth User for Rest Proxy to authenticate as
+
+Default:  kafka-rest
+
+***
+
+### kafka_rest_oauth_password
+
+Password to kafka_rest_oauth_user
+
+Default:  password
+
+***
+
+### kafka_rest_oauth_principal
+
+Service principal for Rest Proxy client in Idp server. Defaults to Rest proxy client
+
+Default:  "{{ kafka_rest_oauth_user }}"
+
+***
+
 ### control_center_ldap_user
 
 LDAP User for Control Center to authenticate as
@@ -2641,6 +2881,30 @@ Default:  control-center
 Password to control_center_ldap_user LDAP User
 
 Default:  password
+
+***
+
+### control_center_oauth_user
+
+OAuth User for Control Center to authenticate as
+
+Default:  control-center
+
+***
+
+### control_center_oauth_password
+
+Password to control_center_oauth_user
+
+Default:  password
+
+***
+
+### control_center_oauth_principal
+
+Service principal for Control Center client in Idp server. Defaults to Control Center client
+
+Default:  "{{ control_center_oauth_user }}"
 
 ***
 
@@ -3304,7 +3568,7 @@ Default:  "{{mds_super_user_password}}"
 
 User for authenticated Kafka Admin API Health Check.
 
-Default:  "{{ mds_super_user if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.principal }}"
+Default:  "{{ kafka_broker_rest_proxy_basic_users.admin.principal }}"
 
 ***
 
@@ -3312,7 +3576,7 @@ Default:  "{{ mds_super_user if rbac_enabled|bool else kafka_broker_rest_proxy_b
 
 Password for authenticated Kafka Admin API Health Check.
 
-Default:  "{{ mds_super_user_password if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.password }}"
+Default:  "{{ kafka_broker_rest_proxy_basic_users.admin.password }}"
 
 ***
 
@@ -3320,7 +3584,7 @@ Default:  "{{ mds_super_user_password if rbac_enabled|bool else kafka_broker_res
 
 User for authenticated Schema Registry Health Check.
 
-Default:  "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registry_basic_users_final.admin.principal }}"
+Default:  "{{ schema_registry_basic_users_final.admin.principal }}"
 
 ***
 
@@ -3328,7 +3592,7 @@ Default:  "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registr
 
 Password for authenticated Schema Registry Health Check.
 
-Default:  "{{ schema_registry_ldap_password if rbac_enabled|bool else schema_registry_basic_users_final.admin.password }}"
+Default:  "{{ schema_registry_basic_users_final.admin.password }}"
 
 ***
 

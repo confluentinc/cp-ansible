@@ -1,0 +1,70 @@
+---
+
+- name: Grab Master Token
+  uri:
+    url: "{{ keycloak_master_token_url }}"
+    method: POST
+    validate_certs: false
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    body:
+      client_id: "{{ keycloak_master_client }}"
+      username: "{{ keycloak_master_username }}"
+      password: "{{ keycloak_master_password }}"
+      grant_type: "password"
+    body_format: form-urlencoded
+  register: keycloak_master_token
+
+- name: extract master_token
+  set_fact:
+    keycloak_master_access_token: "{{ keycloak_master_token.json.access_token }}"
+
+- name: Create New Realm on Keycloak Server
+  community.general.keycloak_realm:
+    state: present
+    realm: "{{ keycloak_realm_name }}"
+    id: "{{ keycloak_realm_name }}"
+    enabled: true
+    auth_keycloak_url: "{{ keycloak_oauth_server_base_url }}"
+    auth_client_id: "{{ keycloak_master_client }}"
+    auth_username: "{{ keycloak_master_username }}"
+    auth_password: "{{ keycloak_master_password }}"
+    auth_realm: master
+    access_token_lifespan: 3600
+    validate_certs: false
+  register: keycloak_realm
+
+- name: Create New Keycloak Client
+  community.general.keycloak_client:
+    state: present
+    realm: "{{ keycloak_realm_name }}"
+    id: "{{ item }}"
+    client_id: "{{ item }}"
+    secret: my-secret
+    enabled: true
+    protocol: openid-connect
+    service_accounts_enabled: true
+    authorization_services_enabled: true
+    client_authenticator_type: client-secret
+    auth_keycloak_url: "{{ keycloak_oauth_server_base_url }}"
+    auth_client_id: "{{ keycloak_master_client }}"
+    auth_username: "{{ keycloak_master_username }}"
+    auth_password: "{{ keycloak_master_password }}"
+    auth_realm: master
+    validate_certs: false
+    public_client: false
+    protocol_mappers:
+      - config:
+          "id.token.claim": "true"
+          "access.token.claim": "true"
+          "claim.name": "sub"
+          "claim.value": "{{ item }}_sub"
+          "userinfo.token.claim": "true"
+          "jsonType.label": "String"
+        id: "{{item}}"
+        consentRequired: false
+        name: "Hardcore"
+        protocol: "openid-connect"
+        protocolMapper: "oidc-hardcoded-claim-mapper"
+  register: keycloak_client
+  loop: "{{ keycloak_clients }}"
