@@ -1130,7 +1130,7 @@ kafka_connect_properties:
                     'config.providers.secret.param.kafkastore.', kafka_connect_truststore_path, kafka_connect_truststore_storepass, public_certificates_enabled, kafka_connect_keystore_path, kafka_connect_keystore_storepass, kafka_connect_keystore_keypass,
                     false, sasl_plain_users_final.kafka_connect.principal, sasl_plain_users_final.kafka_connect.password, sasl_scram_users_final.kafka_connect.principal, sasl_scram_users_final.kafka_connect.password, sasl_scram256_users_final.kafka_connect.principal, sasl_scram256_users_final.kafka_connect.password,
                     kerberos_kafka_broker_primary, kafka_connect_keytab_path, kafka_connect_kerberos_principal|default('kafka'),
-                    false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls, oauth_enabled, oauth_client_id, oauth_client_password, oauth_groups_scope, oauth_token_uri) }}"
+                    false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_connect_oauth_user, kafka_connect_oauth_password, oauth_groups_scope, oauth_token_uri) }}"
   telemetry:
     enabled: "{{kafka_connect_telemetry_enabled}}"
     properties:
@@ -1729,7 +1729,7 @@ kafka_connect_replicator_properties:
       confluent.metadata.basic.auth.user.info: "{{kafka_connect_replicator_ldap_user | default('replicator') }}:{{kafka_connect_replicator_ldap_password | default('pass')}}"
       confluent.metadata.http.auth.credentials.provider: BASIC
   rbac_oauth:
-    enabled: "{{rbac_enabled and oauth_enabled}}"
+    enabled: "{{kafka_connect_replicator_rbac_enabled and oauth_enabled}}"
     properties:
       confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
       confluent.metadata.oauthbearer.login.client.id: "{{kafka_connect_replicator_oauth_user}}"
@@ -1737,9 +1737,24 @@ kafka_connect_replicator_properties:
       confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
       confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
   rbac_oauth_scope:
-    enabled: "{{rbac_enabled and oauth_enabled and oauth_groups_scope!='none' }}"
+    enabled: "{{kafka_connect_replicator_rbac_enabled and oauth_enabled and oauth_groups_scope!='none' }}"
     properties:
       confluent.metadata.oauthbearer.login.oauth.scope: "{{oauth_groups_scope}}"
+  kafka_connect_replicator_oauth:
+    enabled: "{{kafka_connect_replicator_oauth_enabled}}"
+    properties:
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
+      oauthbearer.jwks.endpoint.url: "{{oauth_jwks_uri}}"
+      oauthbearer.sub.claim.name: "{{ oauth_sub_claim }}"
+      oauthbearer.expected.issuer: "{{ oauth_issuer_url }}"
+  kafka_connect_oauth_scope:
+    enabled: "{{kafka_connect_replicator_oauth_enabled and oauth_groups_scope!='none' }}"
+    properties:
+      oauthbearer.groups.claim.name: "{{ oauth_groups_scope }}"
+  kafka_connect_oauth_audience:
+    enabled: "{{kafka_connect_replicator_oauth_enabled and oauth_expected_audience!='none' }}"
+    properties:
+      oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
   rbac_external_client:
     enabled: "{{kafka_connect_replicator_rbac_enabled and kafka_connect_replicator_erp_tls_enabled }}"
     properties:
