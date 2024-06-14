@@ -43,7 +43,7 @@ options:
     token:
         type: str
         description:
-            - Oauth or MDS token used for Bearer Auth
+            - IDP token or MDS token used for Bearer Auth
         required: false
     client_cert:
         type: path
@@ -96,8 +96,7 @@ def get_headers(token, headers=None):
         # Making default None is required as default value gets updated on subsequent function calls
         headers = {}
     bearer_header = {
-        'Authorization': 'Bearer {}'.format(token),
-        # Cant use f-string as this file runs with python2
+        'Authorization': 'Bearer {}'.format(token)
     }
     headers.update(bearer_header)
     return headers
