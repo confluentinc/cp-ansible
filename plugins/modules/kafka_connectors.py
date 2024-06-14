@@ -44,7 +44,7 @@ options:
         type: str
         description:
             - Oauth or MDS token used for Bearer Auth
-        required: true
+        required: false
     client_cert:
         type: path
         description:
@@ -89,8 +89,10 @@ TIMEOUT_WAITING_FOR_TASK_STATUS = 30  # seconds
 
 def get_headers(token, headers=None):
     if headers is None:
-        # Making default None instead of {} is required as default value gets updated on subsequent calls
-        headers = {}
+        # Making default None is required as default value gets updated on subsequent function calls
+        headers = {'Content-Type': 'application/json'}
+    if token == '': # no bearer auth enabled hence no change in headers
+        return headers
     bearer_header = {
         'Authorization': 'Bearer {}'.format(token),
         # Cant use f-string as this file runs with python2
