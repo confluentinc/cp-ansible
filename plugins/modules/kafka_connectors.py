@@ -88,11 +88,13 @@ TIMEOUT_WAITING_FOR_TASK_STATUS = 30  # seconds
 
 
 def get_headers(token, headers=None):
-    if headers is None:
-        # Making default None is required as default value gets updated on subsequent function calls
-        headers = {'Content-Type': 'application/json'}
+    if headers is None and token == '':
+        return None
     if token == '': # no bearer auth enabled hence no change in headers
         return headers
+    if headers is None:
+        # Making default None is required as default value gets updated on subsequent function calls
+        headers = {}
     bearer_header = {
         'Authorization': 'Bearer {}'.format(token),
         # Cant use f-string as this file runs with python2
