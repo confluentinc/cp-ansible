@@ -1235,13 +1235,21 @@ ksql_properties:
       sasl.kerberos.service.name: "{{kerberos_kafka_broker_primary}}"
       sasl.jaas.config: |-
         com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab="{{ksql_keytab_path}}" principal="{{ksql_kerberos_principal | default('ksql')}}";
+  # kafka_sasl_oauth:
+  #   enabled: "{{ kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'OAUTHBEARER' }}"
+  #   properties:
+  #     sasl.mechanism: OAUTHBEARER
+  #     sasl.login.callback.handler.class: io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler
+  #     sasl.jaas.config: |-
+  #       org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username="{{ksql_ldap_user | default('ksql')}}" password="{{ksql_ldap_password | default('pass')}}" metadataServerUrls="{{mds_bootstrap_server_urls}}";
   kafka_sasl_oauth:
     enabled: "{{ kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'OAUTHBEARER' }}"
     properties:
       sasl.mechanism: OAUTHBEARER
-      sasl.login.callback.handler.class: io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler
+      sasl.login.callback.handler.class: org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler
+      sasl.oauthbearer.token.endpoint.url: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/token
       sasl.jaas.config: |-
-        org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username="{{ksql_ldap_user | default('ksql')}}" password="{{ksql_ldap_password | default('pass')}}" metadataServerUrls="{{mds_bootstrap_server_urls}}";
+        org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId="ksql" clientSecret="my-secret";
   sr:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
@@ -1264,6 +1272,15 @@ ksql_properties:
     properties:
       ksql.schema.registry.basic.auth.credentials.source: USER_INFO
       ksql.schema.registry.basic.auth.user.info: "{{ ksql_ldap_user | default('ksql') }}:{{ ksql_ldap_password | default('pass') }}"
+  sr_rbac:
+    enabled: "{{ 'schema_registry' in groups and rbac_enabled|bool }}"
+    properties:
+      ksql.schema.registry.bearer.auth.credentials.source: OAUTHBEARER
+      ksql.schema.registry.bearer.auth.client.id: "ksql"
+      ksql.schema.registry.bearer.auth.client.secret: "my-secret"
+      ksql.schema.registry.bearer.auth.issuer.endpoint.url: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/token
+      # ksql.schema.registry.basic.auth.credentials.source: USER_INFO
+      # ksql.schema.registry.basic.auth.user.info: "{{ ksql_ldap_user | default('ksql') }}:{{ ksql_ldap_password | default('pass') }}"
   monitoring_interceptor:
     enabled: "{{ ksql_monitoring_interceptors_enabled|bool }}"
     properties:
@@ -1285,8 +1302,13 @@ ksql_properties:
       ksql.authentication.plugin.class: io.confluent.ksql.security.VertxBearerOrBasicAuthenticationPlugin
       public.key.path: "{{rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
-      confluent.metadata.basic.auth.user.info: "{{ ksql_ldap_user | default('ksql') }}:{{ ksql_ldap_password | default('pass') }}"
-      confluent.metadata.http.auth.credentials.provider: BASIC
+      #confluent.metadata.basic.auth.user.info: "{{ ksql_ldap_user | default('ksql') }}:{{ ksql_ldap_password | default('pass') }}"
+      #confluent.metadata.http.auth.credentials.provider: BASIC
+      confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
+      confluent.metadata.oauthbearer.login.client.id: "ksql"
+      confluent.metadata.oauthbearer.login.client.secret: "my-secret"
+      confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
   rbac_external_client:
     enabled: "{{rbac_enabled and external_mds_enabled and mds_tls_enabled }}"
     properties:
