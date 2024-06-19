@@ -181,20 +181,20 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  # - name: ksql1
-  #   hostname: ksql1.confluent
-  #   groups:
-  #     - ksql2
-  #     - ksql2_migration
-  #     - cluster2
-  #   image: geerlingguy/docker-debian10-ansible
-  #   dockerfile: ../Dockerfile-debian10.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql2
+      - ksql2_migration
+      - cluster2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: control-center1
     hostname: control-center1.confluent
     groups:
@@ -211,33 +211,33 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
-  # # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  # - name: mds-controller1-mig
-  #   hostname: mds-controller1-mig.confluent
-  #   groups:
-  #     - kafka_controller_migration
-  #     - mds
-  #   image: geerlingguy/docker-debian10-ansible
-  #   dockerfile: ../Dockerfile-debian10.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
-  # - name: controller1-mig
-  #   hostname: controller1-mig.confluent
-  #   groups:
-  #     - kafka_controller2_migration
-  #     - cluster2
-  #   image: geerlingguy/docker-debian10-ansible
-  #   dockerfile: ../Dockerfile-debian10.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
+  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: mds-controller1-mig
+    hostname: mds-controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+      - mds
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller2_migration
+      - cluster2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
     converge: ${MIGRATION_CONVERGE_RBAC:-../multi_rbac_converge.yml}
@@ -260,8 +260,6 @@ provisioner:
           realm: realm.example.com
           kdc_hostname: mds-kerberos1
           admin_hostname: mds-kerberos1
-
-        kafka_connect_secret_registry_enabled: false
 
         zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
@@ -295,7 +293,21 @@ provisioner:
         control_center_oauth_user: control_center
         control_center_oauth_password: my-secret
         control_center_oauth_principal: control_center_sub
-        mask_secrets: false
+        ksql_oauth_user: ksql
+        ksql_oauth_password: my-secret
+        ksql_oauth_principal: ksql_sub
+
+        sso_mode: oidc
+        sso_groups_claim: groups
+        sso_sub_claim: sub
+        sso_issuer_url: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7
+        sso_jwks_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/keys
+        sso_authorize_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/authorize
+        sso_token_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/token
+        sso_device_authorization_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/device/authorize
+        sso_cli: true
+        sso_client_id: ${OKTA_CLIENT:-user}
+        sso_client_password: ${OKTA_PASSWORD:-pass}
       mds:
         kafka_broker_cluster_name: mds
 
