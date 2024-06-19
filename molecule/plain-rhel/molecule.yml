@@ -17,15 +17,20 @@ platforms:
     env:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: localhost
+      KC_HTTPS_CERTIFICATE_FILE: /etc/ssl/idp-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /etc/ssl/idp-key.pem
+      KEYCLOAK_HTTP_PORT: "8080"
+      KEYCLOAK_HTTPS_PORT: "8443"
     dockerfile: ../Dockerfile-oauth.j2
     published_ports:
       - "8080:8080"
+      - "8443:8443"
     command: start-dev
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
+      - /home/ec2-user/keys/idp-cert.pem:/etc/ssl/idp-cert.pem:ro
+      - /home/ec2-user/keys/idp-key.pem:/etc/ssl/idp-key.pem:ro
   - name: ${KRAFT_CONTROLLER:-zookeeper}1
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
@@ -139,24 +144,35 @@ provisioner:
     group_vars:
       all:
         sasl_protocol: plain
+
+        keycloak_oauth_server_port: 8443
+        keycloak_http_protocol: https
+
         oauth_enabled: true
         schema_registry_oauth_enabled: false # to test disabling OAuth on one component on a non rbac cluster
+
         oauth_client_id: superuser
         oauth_client_password: my-secret
+
         oauth_sub_claim: client_id
         oauth_groups_claim: groups
         oauth_token_uri: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/token
         oauth_issuer_url: http://oauth1:8080/realms/cp-ansible-realm
         oauth_jwks_uri: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/certs
         oauth_expected_audience: Confluent,account,https://my-company.com
+
         schema_registry_oauth_user: schema_registry
         schema_registry_oauth_password: my-secret
+
         kafka_rest_oauth_user: kafka_rest
         kafka_rest_oauth_password: my-secret
+
         kafka_connect_oauth_user: kafka_connect
         kafka_connect_oauth_password: my-secret
+
         control_center_oauth_user: control_center
         control_center_oauth_password: my-secret
+
         mask_secrets: false
 
         # kafka_broker_configure_control_plane_listener: true
