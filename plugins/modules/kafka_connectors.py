@@ -90,7 +90,7 @@ TIMEOUT_WAITING_FOR_TASK_STATUS = 30  # seconds
 def get_headers(token, headers=None):
     if headers is None and token == '':
         return None
-    if token == '': # no bearer auth enabled hence no change in headers
+    if token == '':  # no bearer auth enabled hence no change in headers
         return headers
     if headers is None:
         # Making default None is required as default value gets updated on subsequent function calls
@@ -100,6 +100,7 @@ def get_headers(token, headers=None):
     }
     headers.update(bearer_header)
     return headers
+
 
 def get_current_connectors(connect_url, timeout, token, client_cert, client_key):
     try:
@@ -316,7 +317,7 @@ def run_module():
         connect_url=dict(type='str', required=True),
         active_connectors=dict(type='list', elements='dict', required=True),
         timeout=dict(type='int', required=False, default=30),
-        token=dict(type='str', required=True),
+        token=dict(type='str', required=False, no_log=True),
         client_cert=dict(type='path', required=False),
         client_key=dict(type='path', required=False),
     )
