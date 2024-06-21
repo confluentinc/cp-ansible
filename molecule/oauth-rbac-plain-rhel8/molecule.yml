@@ -1,8 +1,8 @@
 ---
 ### Installs Confluent Platform Cluster on Oracle Linux 8.
 ### RBAC enabled.
-### MTLS enabled.
-### Kafka Broker Customer Listener.
+### Kafka Broker Custom Listener.
+### OAuth using keycloak idp on all cp components
 ### SSO authentication using OIDC in Control center using Okta IdP
 
 driver:
@@ -147,19 +147,19 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  # - name: ksql1
-  #   hostname: ksql1.confluent
-  #   groups:
-  #     - ksql
-  #     - ksql_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+      - ksql_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: control-center1
     hostname: control-center1.confluent
     groups:
@@ -176,42 +176,42 @@ platforms:
     networks:
       - name: confluent
     # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  # - name: controller1-mig
-  #   hostname: controller1-mig.confluent
-  #   groups:
-  #     - kafka_controller_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
-  # - name: controller2-mig
-  #   hostname: controller2-mig.confluent
-  #   groups:
-  #     - kafka_controller_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
-  # - name: controller3-mig
-  #   hostname: controller3-mig.confluent
-  #   groups:
-  #     - kafka_controller_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller2-mig
+    hostname: controller2-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller3-mig
+    hostname: controller3-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
     converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
@@ -221,6 +221,8 @@ provisioner:
         sasl_protocol: plain
         kafka_broker_cluster_name: kafka-cluster
         schema_registry_cluster_name: Test-Schema
+        kafka_connect_cluster_name: Test-Connect
+        ksql_cluster_name: Test-Ksql
         rbac_enabled: true
         rbac_component_additional_system_admins:
           - user1
@@ -229,8 +231,6 @@ provisioner:
           client_listener:
             name: CLIENT
             port: 9093
-
-        kafka_connect_secret_registry_enabled: false
 
         oauth_enabled: true
         oauth_client_id: superuser
@@ -247,11 +247,16 @@ provisioner:
         kafka_rest_oauth_password: my-secret
         kafka_connect_oauth_user: kafka_connect
         kafka_connect_oauth_password: my-secret
+        ksql_oauth_user: ksql
+        ksql_oauth_password: my-secret
         control_center_oauth_user: control_center
         control_center_oauth_password: my-secret
+
+        # SSO in C3 vars
         sso_mode: oidc
         sso_groups_claim: groups
         sso_sub_claim: sub
+        sso_groups_scope: groups
         sso_issuer_url: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7
         sso_jwks_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/keys
         sso_authorize_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/authorize
@@ -260,7 +265,3 @@ provisioner:
         sso_cli: true
         sso_client_id: ${OKTA_CLIENT:-user}
         sso_client_password: ${OKTA_PASSWORD:-pass}
-        secrets_protection_enabled: true
-        mask_secrets: false
-
-        kafka_connect_cluster_name: Test-Connect
