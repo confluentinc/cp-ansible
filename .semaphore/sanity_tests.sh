@@ -1,4 +1,3 @@
-#!/bin/bash
 # Runs sanity and galaxy-importer checks on collection to ensure all the checks are met
 
 set -ex
@@ -9,7 +8,7 @@ echo "Python $PYTHON_VERSION"
 echo "Ansible $ANSIBLE_VERSION"
 
 
-cd $HOME/cp-ansible
+cd $PATH_TO_CPA
 
 version_gte() {
     # returns 0 if first arg version is greater than equal to second arg else returns 1
@@ -59,7 +58,7 @@ export PYTHON_INTERPRETER=$(which python)
 echo $PYTHON_INTERPRETER
 
 # Test1
-export GALAXY_IMPORTER_CONFIG="$HOME/cp-ansible/galaxy-importer/galaxy-importer.cfg"
+export GALAXY_IMPORTER_CONFIG="$PATH_TO_CPA/galaxy-importer/galaxy-importer.cfg"
 python -m galaxy_importer.main $ARTEFACT
 
 # Test2
