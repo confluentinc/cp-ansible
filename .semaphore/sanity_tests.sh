@@ -1,4 +1,3 @@
-#!/bin/bash
 # Runs sanity and galaxy-importer checks on collection to ensure all the checks are met
 
 set -ex

@@ -1,4 +1,3 @@
-#!/usr/bin/bash
 # Builds the tar file of ansible collection
 
 set -ex
