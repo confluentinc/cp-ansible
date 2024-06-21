@@ -358,7 +358,7 @@ class FilterModule(object):
 
     def c3_connect_properties(self, connect_group_list, groups, hostvars, ssl_enabled, http_protocol, port, default_connect_group_id,
                               truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass,
-                              oauth_enabled, rbac_enabled, oauth_user, oauth_password, oauth_groups_scope):
+                              oauth_enabled, rbac_enabled, oauth_user, oauth_password, oauth_groups_scope, idp_self_signed):
         # For c3's connect properties, inputs a list of ansible groups of connect hosts, as well as their ssl settings
         # Outputs a properties dictionary with properties necessary to connect to each connect group
         # Other inputs help fill out the properties
@@ -392,6 +392,10 @@ class FilterModule(object):
 
                 if delegate_host.get('kafka_connect_oauth_enabled', oauth_enabled) and not rbac_enabled and oauth_groups_scope != 'none':
                     final_dict['confluent.controlcenter.connect.' + group_id + '.oauthbearer.login.oauth.scope'] = oauth_groups_scope
+
+                if delegate_host.get('kafka_connect_oauth_enabled', ssl_enabled) and not rbac_enabled and idp_self_signed:
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.truststore.location'] = truststore_path
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.truststore.password'] = truststore_storepass
 
         return final_dict
 

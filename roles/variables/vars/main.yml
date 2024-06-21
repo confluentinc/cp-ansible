@@ -517,6 +517,11 @@ kafka_broker_properties:
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_oauth_enabled and oauth_groups_scope!='none'}}"
     properties:
       confluent.bearer.auth.scope: "{{ oauth_groups_scope }}"
+  sr_oauth_ssl:
+    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_oauth_enabled and idp_self_signed}}"
+    properties:
+      confluent.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      confluent.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   sr_basic:
     # Should not turn on basic auth if rbac is enabled
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
@@ -607,10 +612,20 @@ kafka_broker_properties:
                             false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
                             kerberos_kafka_broker_primary, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'),
                             false, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_broker_oauth_user, kafka_broker_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed) }}"
+  rbac_external_mds_oauth_client:
+    enabled: "{{ oauth_enabled and rbac_enabled and external_mds_enabled and self_signed_idp }}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   rbac_cli_sso:
     enabled: "{{confluent_cli_download_enabled and sso_cli}}"
     properties:
       confluent.oidc.idp.device.authorization.endpoint.uri: "{{ sso_device_authorization_uri }}"
+  rbac_oauth_ssl:
+    enabled: "{{ oauth_enabled and rbac_enabled and (not external_mds_enabled) and idp_self_signed }}"
+    properties:
+      confluent.metadata.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      confluent.metadata.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   embedded_rest_proxy:
     # Do not need duplicating confluent.metadata.server and confluent.http.server config, rely on mds configs when kafka is the mds
     enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) }}"
@@ -690,6 +705,11 @@ kafka_broker_properties:
     enabled: "{{ kafka_broker_rest_proxy_enabled and oauth_enabled and oauth_groups_claim!='none' }}"
     properties:
       kafka.rest.oauthbearer.groups.claim.name: "{{ oauth_groups_claim }}"
+  embedded_rest_proxy_oauth_ssl:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and oauth_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and idp_self_signed}}"
+    properties:
+      confluent.http.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      confluent.http.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   embedded_rest_proxy_rbac_ssl:
     enabled: "{{rbac_enabled and mds_tls_enabled}}"
     properties:
@@ -886,6 +906,11 @@ schema_registry_properties:
     enabled: "{{schema_registry_oauth_enabled and oauth_expected_audience!='none' }}"
     properties:
       oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
+  sr_oauth_ssl:
+    enabled: "{{schema_registry_oauth_enabled and idp_self_signed}}"
+    properties:
+      ssl.truststore.location: "{{schema_registry_truststore_path}}"
+      ssl.truststore.password: "{{schema_registry_truststore_storepass}}"
   rbac_external_client:
     enabled: "{{ rbac_enabled and external_mds_enabled and mds_tls_enabled }}"
     properties:
@@ -898,6 +923,11 @@ schema_registry_properties:
       confluent.metadata.ssl.truststore.password: "{{schema_registry_truststore_storepass}}"
       confluent.metadata.ssl.endpoint.identification.algorithm:
         HTTPS
+  oauth_mds_client:
+    enabled: "{{ oauth_enabled and rbac_enabled and idp_self_signed }}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{schema_registry_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{schema_registry_truststore_storepass}}"
   telemetry:
     enabled: "{{schema_registry_telemetry_enabled}}"
     properties:
@@ -1104,6 +1134,11 @@ kafka_connect_properties:
     enabled: "{{kafka_connect_oauth_enabled and oauth_expected_audience!='none' }}"
     properties:
       oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
+  kafka_connect_oauth_ssl:
+    enabled: "{{kafka_connect_oauth_enabled and idp_self_signed}}"
+    properties:
+      ssl.truststore.location: "{{kafka_connect_truststore_path}}"
+      ssl.truststore.password: "{{kafka_connect_truststore_storepass}}"
   rbac_external_client:
     enabled: "{{ rbac_enabled and external_mds_enabled and mds_tls_enabled }}"
     properties:
@@ -1122,6 +1157,11 @@ kafka_connect_properties:
       confluent.metadata.ssl.truststore.password: "{{kafka_connect_truststore_storepass}}"
       confluent.metadata.ssl.endpoint.identification.algorithm:
         HTTPS
+  oauth_mds_client:
+    enabled: "{{ oauth_enabled and rbac_enabled and idp_self_signed }}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{kafka_connect_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{kafka_connect_truststore_storepass}}"
   secret_registry:
     enabled: "{{kafka_connect_secret_registry_enabled}}"
     properties:
@@ -1291,6 +1331,11 @@ ksql_properties:
     enabled: "{{ 'schema_registry' in groups and schema_registry_oauth_enabled and (not ldap_with_oauth_enabled) and oauth_groups_scope!='none'}}"
     properties:
       ksql.schema.registry.bearer.auth.scope: "{{oauth_groups_scope}}"
+  sr_oauth_ssl:
+    enabled: "{{ 'schema_registry' in groups and schema_registry_oauth_enabled and (not ldap_with_oauth_enabled) and idp_self_signed }}"
+    properties:
+      ksql.schema.registry.ssl.truststore.location: "{{ksql_truststore_path}}"
+      ksql.schema.registry.ssl.truststore.password: "{{ksql_truststore_storepass}}"
   monitoring_interceptor:
     enabled: "{{ ksql_monitoring_interceptors_enabled|bool }}"
     properties:
@@ -1508,6 +1553,11 @@ kafka_rest_properties:
     enabled: "{{kafka_rest_oauth_enabled and oauth_expected_audience!='none' }}"
     properties:
       oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
+  kafka_rest_oauth_ssl:
+    enabled: "{{kafka_rest_oauth_enabled and idp_self_signed}}"
+    properties:
+      ssl.truststore.location: "{{kafka_rest_truststore_path}}"
+      ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
   rbac_external_client:
     enabled: "{{rbac_enabled and external_mds_enabled and mds_tls_enabled }}"
     properties:
@@ -1521,6 +1571,11 @@ kafka_rest_properties:
       confluent.metadata.ssl.truststore.location: "{{kafka_rest_truststore_path}}"
       confluent.metadata.ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
       confluent.metadata.ssl.endpoint.identification.algorithm: HTTPS
+  oauth_mds_client:
+    enabled: "{{oauth_enabled and rbac_enabled and idp_self_signed }}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{kafka_rest_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
   telemetry:
     enabled: "{{kafka_rest_telemetry_enabled}}"
     properties:
@@ -1639,12 +1694,17 @@ control_center_properties:
     enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) and oauth_groups_scope!='none' }}"
     properties:
       confluent.controlcenter.schema.registry.oauthbearer.login.oauth.scope: "{{ oauth_groups_scope }}"
+  sr_oauth_ssl:
+    enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) and idp_self_signed }}"
+    properties:
+      confluent.controlcenter.schema.registry.ssl.truststore.location: "{{ control_center_truststore_path }}"
+      confluent.controlcenter.schema.registry.ssl.truststore.password: "{{ control_center_truststore_storepass }}"
   connect:
     enabled: "{{ kafka_connect_cluster_ansible_group_names | default(omit) | length > 0 }}"
     properties: "{{ kafka_connect_cluster_ansible_group_names | confluent.platform.c3_connect_properties(groups, hostvars, kafka_connect_ssl_enabled,
         kafka_connect_http_protocol, kafka_connect_rest_port, kafka_connect_group_id, control_center_truststore_path, control_center_truststore_storepass,
         control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass, kafka_connect_oauth_enabled, rbac_enabled,
-        control_center_oauth_user, control_center_oauth_password, oauth_groups_scope) }}"
+        control_center_oauth_user, control_center_oauth_password, oauth_groups_scope, idp_self_signed) }}"
   ksql:
     enabled: "{{ ksql_cluster_ansible_group_names | default(omit) | length > 0 }}"
     properties: "{{ ksql_cluster_ansible_group_names | confluent.platform.c3_ksql_properties(groups, hostvars, ksql_ssl_enabled,
@@ -1689,6 +1749,11 @@ control_center_properties:
       confluent.metadata.ssl.truststore.location: "{{control_center_truststore_path}}"
       confluent.metadata.ssl.truststore.password: "{{control_center_truststore_storepass}}"
       confluent.metadata.ssl.endpoint.identification.algorithm: HTTPS
+  oauth_mds_client:
+    enabled: "{{rbac_enabled and oauth_enabled and idp_self_signed}}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{ control_center_truststore_path }}"
+      confluent.metadata.ssl.truststore.password: "{{ control_center_truststore_storepass }}"
   telemetry:
     enabled: "{{control_center_telemetry_enabled}}"
     properties:
