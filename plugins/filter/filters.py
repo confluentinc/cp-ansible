@@ -338,21 +338,21 @@ class FilterModule(object):
 
                 if (oauth_groups_scope == 'none' and (not idp_self_signed)):
                     final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                    'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\";'
+                        'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\";'
 
                 if (oauth_groups_scope != 'none' and (not idp_self_signed)):
                     final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                    'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" scope=\"' + oauth_groups_scope + '\";'
+                        'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" scope=\"' + oauth_groups_scope + '\";'
 
                 if oauth_groups_scope == 'none' and idp_self_signed:
                     final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                    'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" ssl.truststore.location=\"' + truststore_path + \
-                    '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
+                        'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" ssl.truststore.location=\"' + truststore_path + \
+                        '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
 
                 if oauth_groups_scope != 'none' and idp_self_signed:
                     final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required     s' + \
-                    'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" scope=\"' + oauth_groups_scope + \
-                    '\" ssl.truststore.location=\"' + truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
+                        'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" scope=\"' + oauth_groups_scope + \
+                        '\" ssl.truststore.location=\"' + truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
 
         return final_dict
 
