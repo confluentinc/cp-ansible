@@ -177,20 +177,20 @@ platforms:
     networks:
       - name: confluent
   #Testing metrics reporter logic when c3 not in inventory
-  - name: control-center1
-    hostname: control-center1.confluent
-    groups:
-      - control_center
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    published_ports:
-      - "9021:9021"
-    networks:
-      - name: confluent
+  # - name: control-center1
+  #   hostname: control-center1.confluent
+  #   groups:
+  #     - control_center
+  #   image: geerlingguy/docker-debian9-ansible
+  #   dockerfile: ../Dockerfile-debian.j2
+  #   command: ""
+  #   volumes:
+  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
+  #   privileged: true
+  #   published_ports:
+  #     - "9021:9021"
+  #   networks:
+  #     - name: confluent
   # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
   - name: controller1-mig
     hostname: controller1-mig.confluent
@@ -210,7 +210,7 @@ provisioner:
   inventory:
     group_vars:
       all:
-        scenario_name: rbac-plain-provided-debian9
+        scenario_name: oauth-rbac-plain-provided-debian9
 
         sasl_protocol: plain
 
@@ -224,6 +224,9 @@ provisioner:
         ssl_truststore_password: truststorepass
         ssl_truststore_ca_cert_alias: CARoot
 
+        keycloak_oauth_server_port: 8443
+        keycloak_http_protocol: https
+        oauth_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oauthcertfile.pem"
         oauth_enabled: true
         schema_registry_oauth_enabled: false # to test SR without OAuth after upgrade
         kafka_rest_oauth_enabled: true
@@ -233,9 +236,9 @@ provisioner:
         oauth_client_password: my-secret
         oauth_sub_claim: client_id
         oauth_groups_claim: groups
-        oauth_token_uri: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/token
-        oauth_issuer_url: http://oauth1:8080/realms/cp-ansible-realm
-        oauth_jwks_uri: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/certs
+        oauth_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
+        oauth_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
+        oauth_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
         oauth_expected_audience: Confluent,account,api://default
         schema_registry_oauth_user: schema_registry
         schema_registry_oauth_password: my-secret
@@ -248,19 +251,6 @@ provisioner:
         control_center_oauth_user: control_center
         control_center_oauth_password: my-secret
 
-        sso_mode: oidc
-        sso_groups_claim: groups
-        sso_sub_claim: sub
-        sso_groups_scope: groups
-        sso_issuer_url: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7
-        sso_jwks_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/keys
-        sso_authorize_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/authorize
-        sso_token_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/token
-        sso_device_authorization_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/device/authorize
-        sso_cli: true
-        sso_client_id: ${OKTA_CLIENT:-user}
-        sso_client_password: ${OKTA_PASSWORD:-pass}
-        sso_idp_pem_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oktacertfile.pem"
         rbac_enabled: true
         custom_java_path: /opt/jdk17 # Use custom Java 17
 
@@ -337,13 +327,7 @@ provisioner:
         kafka_broker_metrics_reporter_enabled: true
         monitoring_interceptors_enabled: true
 
-        secrets_protection_enabled: false
-        # kafka_broker_secrets_protection_encrypt_properties: [ldap.java.naming.security.credentials, kafka.rest.confluent.metadata.basic.auth.user.info]
-        # # control_center_secrets_protection_encrypt_properties: [confluent.metadata.basic.auth.user.info]
-        # schema_registry_secrets_protection_encrypt_properties: [confluent.metadata.basic.auth.user.info]
-        # ksql_secrets_protection_encrypt_properties: [ksql.schema.registry.basic.auth.user.info, confluent.metadata.basic.auth.user.info]
-        # kafka_rest_secrets_protection_encrypt_properties: [confluent.metadata.basic.auth.user.info]
-        # kafka_connect_secrets_protection_encrypt_properties: [confluent.metadata.basic.auth.user.info]
+        secrets_protection_enabled: true
 
       kafka_rest: # kafka rest to communicate to broker with ldap
         oauth_enabled: false
