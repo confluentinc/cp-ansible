@@ -165,7 +165,7 @@ class FilterModule(object):
                             plain_jaas_config, keytab_path,
                             kerberos_principal, kerberos_primary,
                             scram_user, scram_password, scram256_user,
-                            scram256_password, oauth_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience,
+                            scram256_password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience,
                             oauth_sub_claim, rbac_enabled, kraft_listener, idp_self_signed):
         # For kafka broker properties: Takes listeners dictionary and outputs all properties based on the listeners' settings
         # Other inputs help fill out the properties
@@ -220,7 +220,7 @@ class FilterModule(object):
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER' and not oauth_enabled:
                 final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
-                    'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
+                    'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + rbac_enabled_public_pem_path + '\";'
                 final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.server.callback.handler.class'] =\
                     'io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler'
                 final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.login.callback.handler.class'] =\
@@ -245,12 +245,12 @@ class FilterModule(object):
                 if rbac_enabled and idp_self_signed:
                     final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
                         'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + \
-                        oauth_pem_path + '\" ssl.truststore.location=\"' + kafka_broker_truststore_path + \
+                        rbac_enabled_public_pem_path + '\" ssl.truststore.location=\"' + kafka_broker_truststore_path + \
                         '\" ssl.truststore.password=\"' + kafka_broker_truststore_storepass + '\" unsecuredLoginStringClaim_sub="thePrincipalName";'
                 if (rbac_enabled and (not idp_self_signed)):
                     final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
                         'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + \
-                        oauth_pem_path + '\" unsecuredLoginStringClaim_sub="thePrincipalName";'
+                        rbac_enabled_public_pem_path + '\" unsecuredLoginStringClaim_sub="thePrincipalName";'
                 if ((not rbac_enabled) and idp_self_signed):
                     final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
                         'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required' + \
@@ -338,21 +338,21 @@ class FilterModule(object):
 
                 if (oauth_groups_scope == 'none' and (not idp_self_signed)):
                     final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                    'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\";'
+                        'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\";'
 
                 if (oauth_groups_scope != 'none' and (not idp_self_signed)):
                     final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                    'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" scope=\"' + oauth_groups_scope + '\";'
+                        'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" scope=\"' + oauth_groups_scope + '\";'
 
                 if oauth_groups_scope == 'none' and idp_self_signed:
                     final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                    'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" ssl.truststore.location=\"' + truststore_path + \
-                    '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
+                        'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" ssl.truststore.location=\"' + \
+                        truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
 
                 if oauth_groups_scope != 'none' and idp_self_signed:
                     final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required     s' + \
-                    'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" scope=\"' + oauth_groups_scope + \
-                    '\" ssl.truststore.location=\"' + truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
+                        'clientId=\"' + oauth_client_id + '\" clientSecret=\"' + str(oauth_client_password) + '\" scope=\"' + oauth_groups_scope + \
+                        '\" ssl.truststore.location=\"' + truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
 
         return final_dict
 
