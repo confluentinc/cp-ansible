@@ -1,4 +1,16 @@
 ---
+- name: Get Authorization Token for Connect User
+  import_role:
+    name: common
+    tasks_from: get_authorization_token.yml
+  vars:
+    oauth: "{{ kafka_connect_oauth_enabled }}"
+    oauth_user: "{{ kafka_connect_oauth_user }}"
+    oauth_password: "{{ kafka_connect_oauth_password }}"
+    ldap_user: "{{ kafka_connect_ldap_user }}"
+    ldap_password: "{{ kafka_connect_ldap_password }}"
+  when: rbac_enabled or kafka_connect_oauth_enabled
+
 # Cannot use Block/Rescue in Ansible Handlers: https://github.com/ansible/ansible/issues/14270
 # Implementing try/catch logic with ignore_errors and conditionals
 - name: Wait for API to return 200
@@ -14,7 +26,26 @@
   until: result1.status == 200
   retries: 40
   delay: 10
-  when: kafka_connect_authentication_type != 'mtls'
+  when:
+    - kafka_connect_authentication_type != 'mtls'
+    - not ( rbac_enabled or kafka_connect_oauth_enabled)
+  ignore_errors: true
+
+- name: Wait for API to return 200
+  uri:
+    url: "{{kafka_connect_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_connect_rest_port}}/connectors"
+    status_code: 200
+    validate_certs: false
+    headers:
+      Authorization: "Bearer {{ authorization_token }}"
+  register: result1_oauth
+  until: result1_oauth.status == 200
+  retries: 40
+  delay: 10
+  no_log: "{{mask_secrets|bool}}"
+  when:
+    - kafka_connect_authentication_type != 'mtls'
+    - rbac_enabled or kafka_connect_oauth_enabled
   ignore_errors: true
 
 - set_fact:
@@ -35,7 +66,28 @@
   until: result2.status == 200
   retries: 40
   delay: 10
-  when: kafka_connect_authentication_type == 'mtls'
+  when:
+    - kafka_connect_authentication_type == 'mtls'
+    - not (rbac_enabled or kafka_connect_oauth_enabled)
+  ignore_errors: true
+
+- name: Wait for API to return 200 - mTLS
+  uri:
+    url: "{{kafka_connect_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_connect_rest_port}}/connectors"
+    status_code: 200
+    validate_certs: false
+    client_cert: "{{ kafka_connect_cert_path if ssl_provided_keystore_and_truststore else certs_chain }}"
+    client_key: "{{kafka_connect_key_path}}"
+    headers:
+      Authorization: "Bearer {{ authorization_token }}"
+  register: result2_oauth
+  until: result2_oauth.status == 200
+  retries: 40
+  delay: 10
+  no_log: "{{mask_secrets|bool}}"
+  when:
+    - kafka_connect_authentication_type == 'mtls'
+    - rbac_enabled or kafka_connect_oauth_enabled
   ignore_errors: true
 
 - name: Fetch Log Files and Error out
@@ -54,4 +106,8 @@
       fail:
         msg: Health checks failed. Review exported files.
   # When only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
-  when: result1.failed|default(False) or result2.failed|default(False)
+  when:  >
+    result1.failed|default(False) or
+    result1_oauth.failed|default(False) or
+    result2.failed|default(False) or
+    result2_oauth.failed|default(False)

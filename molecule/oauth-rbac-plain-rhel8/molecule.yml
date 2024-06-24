@@ -1,13 +1,35 @@
 ---
 ### Installs Confluent Platform Cluster on Oracle Linux 8.
 ### RBAC enabled.
-### MTLS enabled.
-### Kafka Broker Customer Listener.
+### Kafka Broker Custom Listener.
+### OAuth using keycloak idp on all cp components
 ### SSO authentication using OIDC in Control center using Okta IdP
 
 driver:
   name: docker
 platforms:
+  - name: oauth1
+    hostname: oauth1.confluent
+    groups:
+      - oauth_server
+    image: quay.io/keycloak/keycloak:latest
+    env:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
+      KEYCLOAK_HTTP_PORT: "8080"
+      KEYCLOAK_HTTPS_PORT: "8443"
+    dockerfile: ../Dockerfile-oauth.j2
+    published_ports:
+      - "8080:8080"
+      - "8443:8443"
+    command: start-dev
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: ${KRAFT_CONTROLLER:-zookeeper}1
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
@@ -21,32 +43,32 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  # - name: ${KRAFT_CONTROLLER:-zookeeper}2
-  #   hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
-  #   groups:
-  #     - ${CONTROLLER_HOSTGROUP:-zookeeper}
-  #     - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
-  # - name: ${KRAFT_CONTROLLER:-zookeeper}3
-  #   hostname: ${KRAFT_CONTROLLER:-zookeeper}3.confluent
-  #   groups:
-  #     - ${CONTROLLER_HOSTGROUP:-zookeeper}
-  #     - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}2
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}3
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}3.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: kafka-broker1
     hostname: kafka-broker1.confluent
     groups:
@@ -60,32 +82,32 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  # - name: kafka-broker2
-  #   hostname: kafka-broker2.confluent
-  #   groups:
-  #     - kafka_broker
-  #     - kafka_broker_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
-  # - name: kafka-broker3
-  #   hostname: kafka-broker3.confluent
-  #   groups:
-  #     - kafka_broker
-  #     - kafka_broker_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker
+      - kafka_broker_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
+    groups:
+      - kafka_broker
+      - kafka_broker_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: schema-registry1
     hostname: schema-registry1.confluent
     groups:
@@ -99,97 +121,97 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  # - name: kafka-rest1
-  #   hostname: kafka-rest1.confluent
-  #   groups:
-  #     - kafka_rest
-  #     - kafka_rest_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
-  # - name: kafka-connect1
-  #   hostname: kafka-connect1.confluent
-  #   groups:
-  #     - kafka_connect
-  #     - kafka_connect_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
-  # - name: ksql1
-  #   hostname: ksql1.confluent
-  #   groups:
-  #     - ksql
-  #     - ksql_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
-  # - name: control-center1
-  #   hostname: control-center1.confluent
-  #   groups:
-  #     - control_center
-  #     - control_center_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   published_ports:
-  #     - "9021:9021"
-  #   networks:
-  #     - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest
+      - kafka_rest_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+      - kafka_connect_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+      - ksql_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center
+      - control_center_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9021:9021"
+    networks:
+      - name: confluent
     # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  # - name: controller1-mig
-  #   hostname: controller1-mig.confluent
-  #   groups:
-  #     - kafka_controller_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
-  # - name: controller2-mig
-  #   hostname: controller2-mig.confluent
-  #   groups:
-  #     - kafka_controller_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
-  # - name: controller3-mig
-  #   hostname: controller3-mig.confluent
-  #   groups:
-  #     - kafka_controller_migration
-  #   image: oraclelinux:8-slim
-  #   dockerfile: ../Dockerfile-rhel-java8.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   networks:
-  #     - name: confluent
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller2-mig
+    hostname: controller2-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller3-mig
+    hostname: controller3-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
     converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
@@ -199,6 +221,8 @@ provisioner:
         sasl_protocol: plain
         kafka_broker_cluster_name: kafka-cluster
         schema_registry_cluster_name: Test-Schema
+        kafka_connect_cluster_name: Test-Connect
+        ksql_cluster_name: Test-Ksql
         rbac_enabled: true
         rbac_component_additional_system_admins:
           - user1
@@ -209,13 +233,35 @@ provisioner:
             port: 9093
 
         oauth_enabled: true
-        oauth_client_id: ${OKTA_CLIENT:-user}
-        oauth_client_password: ${OKTA_PASSWORD:-password}
-        oauth_groups_scope: groups
+        oauth_client_id: superuser
+        oauth_client_password: my-secret
+        oauth_sub_claim: client_id
         oauth_groups_claim: groups
-        oauth_token_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/token
-        oauth_issuer_url: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7
-        oauth_jwks_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/keys
-        oauth_expected_audience: Confluent,api://default,https://my-company.com
-        schema_registry_oauth_user: ${OKTA_CLIENT:-sruser}
-        schema_registry_oauth_password: ${OKTA_PASSWORD:-password}
+        oauth_token_uri: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/token
+        oauth_issuer_url: http://oauth1:8080/realms/cp-ansible-realm
+        oauth_jwks_uri: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/certs
+        oauth_expected_audience: Confluent,account,api://default
+        schema_registry_oauth_user: schema_registry
+        schema_registry_oauth_password: my-secret
+        kafka_rest_oauth_user: kafka_rest
+        kafka_rest_oauth_password: my-secret
+        kafka_connect_oauth_user: kafka_connect
+        kafka_connect_oauth_password: my-secret
+        ksql_oauth_user: ksql
+        ksql_oauth_password: my-secret
+        control_center_oauth_user: control_center
+        control_center_oauth_password: my-secret
+
+        # SSO in C3 vars
+        sso_mode: oidc
+        sso_groups_claim: groups
+        sso_sub_claim: sub
+        sso_groups_scope: groups
+        sso_issuer_url: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7
+        sso_jwks_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/keys
+        sso_authorize_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/authorize
+        sso_token_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/token
+        sso_device_authorization_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/device/authorize
+        sso_cli: true
+        sso_client_id: ${OKTA_CLIENT:-user}
+        sso_client_password: ${OKTA_PASSWORD:-pass}

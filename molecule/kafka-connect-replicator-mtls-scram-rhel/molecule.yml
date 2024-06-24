@@ -22,6 +22,28 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+  - name: oauth1
+    hostname: oauth1.confluent
+    groups:
+      - oauth_server
+    image: quay.io/keycloak/keycloak:latest
+    env:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
+      KEYCLOAK_HTTP_PORT: "8080"
+      KEYCLOAK_HTTPS_PORT: "8443"
+    dockerfile: ../Dockerfile-oauth.j2
+    published_ports:
+      - "8080:8080"
+      - "8443:8443"
+    command: start-dev
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: mds-zookeeper1
     hostname: mds-zookeeper1.confluent
     groups:
@@ -148,6 +170,8 @@ provisioner:
       all:
         scenario_name: kafka-connect-replicator-mtls-scram-rhel
 
+        mask_secrets: false
+
       mds:
         ssl_enabled: true
         ssl_custom_certs: true
@@ -160,7 +184,19 @@ provisioner:
 
       cluster2:
 
-        sasl_protocol: scram
+        oauth_enabled: true
+        oauth_client_id: superuser
+        oauth_client_password: my-secret
+        oauth_sub_claim: client_id
+        oauth_groups_claim: groups
+        oauth_token_uri: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/token
+        oauth_issuer_url: http://oauth1:8080/realms/cp-ansible-realm
+        oauth_jwks_uri: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/certs
+        oauth_expected_audience: Confluent,account,api://default
+
+        kafka_connect_replicator_oauth_user: kafka_connect_replicator
+        kafka_connect_replicator_oauth_password: my-secret
+
         ssl_enabled: true
         ssl_custom_certs: true
         ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
@@ -174,7 +210,7 @@ provisioner:
         kafka_connect_replicator_listener:
           ssl_enabled: true
           ssl_mutual_auth_enabled: false
-          sasl_protocol: scram
+          sasl_protocol: oauth
 
         kafka_connect_replicator_white_list: test-replicator-source
         kafka_connect_replicator_bootstrap_servers: kafka-broker1:9092
@@ -205,7 +241,7 @@ provisioner:
         kafka_connect_replicator_producer_listener:
           ssl_enabled: true
           ssl_mutual_auth_enabled: false
-          sasl_protocol: scram
+          sasl_protocol: oauth
 
         kafka_connect_replicator_producer_bootstrap_servers: kafka-broker1:9092
         kafka_connect_replicator_producer_ssl_ca_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
@@ -218,7 +254,7 @@ provisioner:
         kafka_connect_replicator_monitoring_interceptor_listener:
           ssl_enabled: true
           ssl_mutual_auth_enabled: false
-          sasl_protocol: scram
+          sasl_protocol: oauth
 
         kafka_connect_replicator_monitoring_interceptor_bootstrap_servers: kafka-broker1:9092
         # Testing these variables default properly
