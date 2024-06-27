@@ -21,6 +21,29 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+  - name: oauth1
+    hostname: oauth1.confluent
+    groups:
+      - oauth_server
+    image: quay.io/keycloak/keycloak:latest
+    env:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: oauth1
+      KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
+      KEYCLOAK_HTTP_PORT: "8080"
+      KEYCLOAK_HTTPS_PORT: "8443"
+    dockerfile: ../Dockerfile-oauth.j2
+    published_ports:
+      - "8080:8080"
+      - "8443:8443"
+    command: start-dev
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: ${KRAFT_CONTROLLER:-zookeeper}1
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
@@ -201,6 +224,36 @@ provisioner:
         create_mds_certs: false
         token_services_public_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/public.pem"
         token_services_private_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/tokenKeypair.pem"
+
+        keycloak_oauth_server_port: 8443
+        keycloak_http_protocol: https
+
+        oauth_enabled: true
+        ldap_with_oauth_enabled: true
+        oauth_client_id: superuser
+        oauth_client_password: my-secret
+
+        oauth_groups_claim: groups
+        oauth_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
+        oauth_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
+        oauth_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
+        oauth_expected_audience: Confluent,account,api://default
+        oauth_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oauthcertfile.pem"
+
+        schema_registry_oauth_user: schema_registry
+        schema_registry_oauth_password: my-secret
+
+        kafka_rest_oauth_user: kafka_rest
+        kafka_rest_oauth_password: my-secret
+
+        kafka_connect_oauth_user: kafka_connect
+        kafka_connect_oauth_password: my-secret
+
+        control_center_oauth_user: control_center
+        control_center_oauth_password: my-secret
+
+        ksql_oauth_user: ksql
+        ksql_oauth_password: my-secret
 
         kafka_broker_custom_listeners:
           client_listener:

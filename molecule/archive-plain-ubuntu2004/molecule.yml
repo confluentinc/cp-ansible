@@ -7,6 +7,29 @@
 ### Deploy Connector on Connect Cluster.
 
 platforms:
+  - name: oauth1
+    hostname: oauth1.confluent
+    groups:
+      - oauth_server
+    image: quay.io/keycloak/keycloak:latest
+    env:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: oauth1
+      KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
+      KEYCLOAK_HTTP_PORT: "8080"
+      KEYCLOAK_HTTPS_PORT: "8443"
+    dockerfile: ../Dockerfile-oauth.j2
+    published_ports:
+      - "8080:8080"
+      - "8443:8443"
+    command: start-dev
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: ${KRAFT_CONTROLLER:-zookeeper}1
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
@@ -130,6 +153,44 @@ provisioner:
         kafka_connect_log_dir: /connect/logs
         ksql_log_dir: /ksql/logs/
         control_center_log_dir: /c3/logs
+
+
+        keycloak_oauth_server_port: 8443
+        keycloak_http_protocol: https
+
+        oauth_sub_claim: client_id
+        oauth_groups_claim: groups
+        oauth_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oauthcertfile.pem"
+        oauth_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
+        oauth_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
+        oauth_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
+        oauth_expected_audience: Confluent,account,https://my-company.com
+
+        # Testing no oauth on brokers. But oauth servers on sr, connect, rp
+
+        kafka_controller_oauth_user: kafka_controller
+        kafka_controller_oauth_password: my-secret
+
+        kafka_broker_oauth_user: kafka_broker
+        kafka_broker_oauth_password: my-secret
+
+        schema_registry_oauth_enabled: true
+        schema_registry_oauth_user: schema_registry
+        schema_registry_oauth_password: my-secret
+
+        kafka_rest_oauth_enabled: true
+        kafka_rest_oauth_user: kafka_rest
+        kafka_rest_oauth_password: my-secret
+
+        kafka_connect_oauth_enabled: true
+        kafka_connect_oauth_user: kafka_connect
+        kafka_connect_oauth_password: my-secret
+
+        control_center_oauth_user: control_center
+        control_center_oauth_password: my-secret
+
+        ksql_oauth_user: ksql
+        ksql_oauth_password: my-secret
 
         # To run the FileStream connector, you must add the filestream-connectors path in the plugin.path
         kafka_connect_custom_properties:
