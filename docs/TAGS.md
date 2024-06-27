@@ -91,6 +91,12 @@ Description: To generate secrets protection masterkey if secrets protection enab
 
 ***
 
+### Tag - pip-package
+
+Decription: To install pip and pip packages. Skip this if already have installed pip packages.
+
+***
+
 ### Tag - package
 
 Description: This is applied to all package installation related tasks (common and CP packages). Skip this if you don't want to reinstall.
