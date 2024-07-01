@@ -52,7 +52,7 @@
 - name: Custom Java Install
   include_tasks: custom_java_install.yml
 
-- name: Install Java
+- name: Install Java on Rhel
   yum:
     name: "{{redhat_java_package_name}}"
     state: present
@@ -60,7 +60,18 @@
   until: java_install_result is success  or ansible_check_mode
   retries: 10
   delay: 5
-  when: install_java|bool
+  when: install_java|bool and ansible_distribution != "Amazon"
+  tags: package
+
+- name: Install Java on Amazonlinux
+  yum:
+    name: "{{amazon_java_package_name}}"
+    state: present
+  register: java_install_result
+  until: java_install_result is success  or ansible_check_mode
+  retries: 10
+  delay: 5
+  when: install_java|bool and ansible_distribution == "Amazon"
   tags: package
 
 - name: Install OpenSSL and Unzip
@@ -86,18 +97,45 @@
       - python3-pip
     state: present
   become: true
+  tags:
+    - package
+    - pip-package
+
+- name: Install pip package setuptools using yum
+  yum:
+    name:
+      - python3-setuptools
+    state: present
+  become: true
   tags: package
+  when: ansible_distribution == "Amazon"
+
+- name: Install pip packages using yum
+  yum:
+    name:
+      - "python3-{{item}}"
+    state: present
+  become: true
+  loop: "{{pip_packages}}"
+  tags: package
+  when: ansible_distribution == "Amazon"
 
 - name: Upgrade pip
   ansible.builtin.pip:
     name: pip
     extra_args: --upgrade
-  tags: package
+  tags:
+    - package
+    - pip-package
+  when: ansible_distribution != "Amazon"
 
 - name: Install pip packages
   ansible.builtin.pip:
     name: "{{pip_packages}}"
-  tags: package
+  tags:
+    - package
+    - pip-package
+  when: ansible_distribution != "Amazon"
 
 - name: Enable FIPS on rhel 8+
   include_tasks: fips-redhat.yml

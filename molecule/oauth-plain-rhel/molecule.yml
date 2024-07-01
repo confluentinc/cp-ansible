@@ -17,6 +17,7 @@ platforms:
     env:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: oauth1
       KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
       KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
       KEYCLOAK_HTTP_PORT: "8080"
@@ -44,8 +45,60 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}2
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}3
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}3.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: kafka-broker1
     hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - kafka_broker_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker
+      - kafka_broker_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
       - kafka_broker_migration
@@ -144,7 +197,9 @@ provisioner:
     group_vars:
       all:
         sasl_protocol: plain
-
+        ssl_enabled: true
+        keycloak_oauth_server_port: 8443
+        keycloak_http_protocol: https
         oauth_enabled: true
         schema_registry_oauth_enabled: false # to test disabling OAuth on one component on a non rbac cluster
 
@@ -153,9 +208,10 @@ provisioner:
 
         oauth_sub_claim: client_id
         oauth_groups_claim: groups
-        oauth_token_uri: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/token
-        oauth_issuer_url: http://oauth1:8080/realms/cp-ansible-realm
-        oauth_jwks_uri: http://oauth1:8080/realms/cp-ansible-realm/protocol/openid-connect/certs
+        oauth_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oauthcertfile.pem"
+        oauth_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
+        oauth_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
+        oauth_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
         oauth_expected_audience: Confluent,account,https://my-company.com
 
         schema_registry_oauth_user: schema_registry
@@ -172,11 +228,10 @@ provisioner:
         ksql_oauth_user: ksql
         ksql_oauth_password: my-secret
 
-        # kafka_broker_configure_control_plane_listener: true
-        # kafka_rest_oauth_enabled: false
-        # kafka_connect_oauth_enabled: false
-        # zookeeper_custom_properties:
-        #   dataDir: /opt/zookeeper
+        kafka_broker_configure_control_plane_listener: true
+
+        zookeeper_custom_properties:
+          dataDir: /opt/zookeeper
 
         kafka_broker_custom_client_properties:
           default.api.timeout.ms: 40000
@@ -204,39 +259,39 @@ provisioner:
               file: "/etc/kafka/connect-distributed.properties"
               topics: "test_topic"
 
-        # zookeeper_service_unit_overrides:
-        #   Description: Custom Zookeeper description
+        zookeeper_service_unit_overrides:
+          Description: Custom Zookeeper description
 
-        # zookeeper_log4j_root_logger: INFO, zkAppender
+        zookeeper_log4j_root_logger: INFO, zkAppender
 
-        # kafka_controller_service_unit_overrides:
-        #   Description: Custom Controller description
+        kafka_controller_service_unit_overrides:
+          Description: Custom Controller description
 
-        # kafka_controller_log4j_root_logger: "INFO, kafkaAppender"
+        kafka_controller_log4j_root_logger: "INFO, kafkaAppender"
 
-        # kafka_broker_service_unit_overrides:
-        #   Description: Custom Kafka description
+        kafka_broker_service_unit_overrides:
+          Description: Custom Kafka description
 
-        # kafka_broker_log4j_root_logger: "INFO, kafkaAppender"
+        kafka_broker_log4j_root_logger: "INFO, kafkaAppender"
 
-        # schema_registry_log4j_root_logger: INFO, file
+        schema_registry_log4j_root_logger: INFO, file
 
-        # kafka_connect_service_unit_overrides:
-        #   Description: Custom Connect description
+        kafka_connect_service_unit_overrides:
+          Description: Custom Connect description
 
-        # kafka_connect_log4j_root_logger: "INFO, connectAppender"
+        kafka_connect_log4j_root_logger: "INFO, connectAppender"
 
-        # kafka_rest_service_unit_overrides:
-        #   Description: Custom Rest Proxy description
+        kafka_rest_service_unit_overrides:
+          Description: Custom Rest Proxy description
 
-        # kafka_rest_log4j_root_logger: INFO, file
+        kafka_rest_log4j_root_logger: INFO, file
 
-        # ksql_service_unit_overrides:
-        #   Description: Custom KSQLDB description
+        ksql_service_unit_overrides:
+          Description: Custom KSQLDB description
 
-        # ksql_log4j_root_logger: INFO, main
+        ksql_log4j_root_logger: INFO, main
 
-        # control_center_service_unit_overrides:
-        #   Description: Custom C3 description
+        control_center_service_unit_overrides:
+          Description: Custom C3 description
 
-        # control_center_log4j_root_logger: INFO, stdout, main
+        control_center_log4j_root_logger: INFO, stdout, main
