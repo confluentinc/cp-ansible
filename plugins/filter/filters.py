@@ -222,7 +222,7 @@ class FilterModule(object):
                     'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
                 final_dict['listener.name.' + listener_name + '.principal.builder.class'] =\
                     'io.confluent.kafka.security.authenticator.OAuthKafkaPrincipalBuilder'
-            
+
             if kraft_listener and rbac_enabled:
                 final_dict['listener.name.' + listener_name + '.principal.builder.class'] =\
                     'io.confluent.kafka.security.authenticator.OAuthKafkaPrincipalBuilder'
