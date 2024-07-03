@@ -30,6 +30,7 @@ You can put <path_to_cp-ansible> anywhere in your directory structure, but the d
 * Clone the Ansible Playbooks for Confluent Platform repo into the platform directory inside the directory you created in the previous step:
 git clone https://github.com/confluentinc/cp-ansible <path_to_cp-ansible>/ansible_collections/confluent/platform
 
+
 ## Documentation
 
 You can find the documentation for running CP-Ansible at https://docs.confluent.io/current/installation/cp-ansible/index.html.
