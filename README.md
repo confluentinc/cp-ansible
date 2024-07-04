@@ -30,12 +30,12 @@ You can find supported configuration variables in [VARIABLES.md](VARIABLES.md)
 
 ## Development
 
-* Create a directory with the following structure:
+* Create a directory with the following structure:<br>
 ```mkdir -p <path_to_cp-ansible>/ansible_collections/confluent/```
 
   You can put <path_to_cp-ansible> anywhere in your directory structure, but the directory structure under <path_to_cp-ansible> should be set up exactly as specified above.
 
-* Clone the Ansible Playbooks for Confluent Platform repo into the platform directory inside the directory you created in the previous step:
+* Clone the Ansible Playbooks for Confluent Platform repo into the platform directory inside the directory you created in the previous step:<br>
 ```git clone https://github.com/confluentinc/cp-ansible <path_to_cp-ansible>/ansible_collections/confluent/platform```
 
 
