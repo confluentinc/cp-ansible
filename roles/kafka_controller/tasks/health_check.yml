@@ -1,26 +1,58 @@
 ---
 # health check for kafka controller
-- name: Check Kafka Metadata Quorum
+- name: Check Kafka Metadata Quorum using bootstrap controller
   shell: |
     {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{inventory_hostname}}:{{kafka_controller_port}} \
       --command-config {{kafka_controller.client_config_file}} describe --replication
   environment:
     KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
-  ignore_errors: false
+  ignore_errors: true
   changed_when: false
   check_mode: false
+  register: greenfield
+
+- name: Choose bootstrap server vs controller
+  set_fact:
+    bootstrap_server_or_controller: >-
+      {% if greenfield.rc == 0 %}
+        '--bootstrap-controller'
+      {% elif greenfield.rc != 0 and confluent_server_enabled|bool %}
+        '--bootstrap-server'
+      {% endif %}
+
+- name: Add confluent.use.controller.listener config to Client Properties
+  lineinfile:
+    path: "{{ kafka_controller.client_config_file }}"
+    state: present
+    line: confluent.use.controller.listener=true
+  changed_when: false
+  check_mode: false
+  when:
+    - confluent_server_enabled|bool
+    - greenfield.rc != 0
+
+- name: Check Kafka Metadata Quorum
+  shell: |
+    {{ binary_base_path }}/bin/kafka-metadata-quorum {{bootstrap_server_or_controller}} {{inventory_hostname}}:{{kafka_controller_port}} \
+      --command-config {{kafka_controller.client_config_file}} describe --replication
+  environment:
+    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+  ignore_errors: true
+  changed_when: false
+  check_mode: false
+  when: greenfield.rc == 0 or confluent_server_enabled|bool
 
 #Registers LEO of controllers only if Metadata Quorum passed in the above task
-- name: Register LogEndOffset
+- name: Register LogEndOffset using bootstrap controller
   shell: |
-    {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{inventory_hostname}}:{{kafka_controller_port}} \
+    {{ binary_base_path }}/bin/kafka-metadata-quorum {{bootstrap_server_or_controller}} {{inventory_hostname}}:{{kafka_controller_port}} \
       --command-config {{kafka_controller.client_config_file}} describe --replication |  grep -v Observer | awk '{print $2}'
   environment:
     KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
   register: leo
-  ignore_errors: false
   changed_when: false
   check_mode: false
+  when: greenfield.rc == 0 or confluent_server_enabled|bool
 
 - name: Check LogEndOffset values
   assert:
@@ -32,3 +64,17 @@
   ignore_errors: false
   changed_when: false
   check_mode: false
+  when: greenfield.rc == 0 or confluent_server_enabled|bool
+
+- name: Remove confluent.use.controller.listener config from Client Properties
+  lineinfile:
+    path: "{{ kafka_controller.client_config_file }}"
+    state: absent
+    line: confluent.use.controller.listener=true
+  changed_when: false
+  check_mode: false
+  when:
+    - not kraft_migration|bool
+    - confluent_server_enabled|bool
+    - greenfield.rc == 1
+
