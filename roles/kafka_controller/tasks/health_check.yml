@@ -11,18 +11,18 @@
   check_mode: false
   register: greenfield
 
-- name: Set hostnames and ports
+- name: Set Hostnames and Ports
   set_fact:
     broker_hostname_hc: "{{ hostvars[groups['kafka_broker'][0]] | confluent.platform.resolve_hostname }}"
     broker_port_hc: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}}"
     controller_hostname_hc: "{{inventory_hostname}}"
     controller_port_hc: "{{kafka_controller_port}}"
 
-- name: Set decider variables to pick broker or controller
+- name: Set Server/Controller Host and Port values
   set_fact:
     bootstrap_server_or_controller: "{% if greenfield.rc == 0 %}controller{% elif greenfield.rc != 0 and confluent_server_enabled|bool %}server{% endif %}"
-    broker_or_controller_hostname: "{% if greenfield.rc == 0 %}{{controller_hostname_hc}}{% elif greenfield.rc != 0 and confluent_server_enabled|bool %}{{broker_hostname_hc}}{% endif %}"
-    broker_or_controller_port: "{% if greenfield.rc == 0 %}{{controller_port_hc}}{% elif greenfield.rc != 0 and confluent_server_enabled|bool %}{{broker_port_hc}}{% endif %}"
+    server_hostname: "{% if greenfield.rc == 0 %}{{controller_hostname_hc}}{% elif greenfield.rc != 0 and confluent_server_enabled|bool %}{{broker_hostname_hc}}{% endif %}"
+    server_port: "{% if greenfield.rc == 0 %}{{controller_port_hc}}{% elif greenfield.rc != 0 and confluent_server_enabled|bool %}{{broker_port_hc}}{% endif %}"
 
 - name: Add confluent.use.controller.listener config to Client Properties
   lineinfile:
@@ -37,7 +37,7 @@
 
 - name: Check Kafka Metadata Quorum
   shell: |
-    {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-{{bootstrap_server_or_controller}} {{broker_or_controller_hostname}}:{{broker_or_controller_port}} \
+    {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-{{bootstrap_server_or_controller}} {{server_hostname}}:{{server_port}} \
       --command-config {{kafka_controller.client_config_file}} describe --replication
   environment:
     KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
@@ -49,7 +49,7 @@
 #Registers LEO of controllers only if Metadata Quorum passed in the above task
 - name: Register LogEndOffset
   shell: |
-    {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-{{bootstrap_server_or_controller}} {{broker_or_controller_hostname}}:{{broker_or_controller_port}} \
+    {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-{{bootstrap_server_or_controller}} {{server_hostname}}:{{server_port}} \
       --command-config {{kafka_controller.client_config_file}} describe --replication |  grep -v Observer | awk '{print $2}'
   environment:
     KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
@@ -80,4 +80,4 @@
   when:
     - not kraft_migration|bool
     - confluent_server_enabled|bool
-    - greenfield.rc == 1
+    - greenfield.rc != 0
