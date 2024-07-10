@@ -22,6 +22,29 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+  - name: oauth1
+    hostname: oauth1.confluent
+    groups:
+      - oauth_server
+    image: quay.io/keycloak/keycloak:latest
+    env:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: oauth1
+      KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
+      KEYCLOAK_HTTP_PORT: "8080"
+      KEYCLOAK_HTTPS_PORT: "8443"
+    dockerfile: ../Dockerfile-oauth.j2
+    published_ports:
+      - "8080:8080"
+      - "8443:8443"
+    command: start-dev
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   # MDS Zookeeper and Kafka
   - name: mds-${KRAFT_CONTROLLER:-zookeeper}1
     hostname: mds-${KRAFT_CONTROLLER:-zookeeper}1.confluent
@@ -201,6 +224,10 @@ provisioner:
         ssl_key_password: keypass
 
         rbac_enabled: true
+        sso_mode: oidc
+
+        keycloak_oauth_server_port: 8443
+        keycloak_http_protocol: https
 
         create_mds_certs: false
         token_services_public_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/public.pem"
@@ -239,6 +266,16 @@ provisioner:
           - User:user1
 
       mds:
+        # necessary configs in MDS server for sso in C3
+        sso_groups_claim: groups
+        sso_sub_claim: client_id
+        sso_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
+        sso_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
+        sso_authorize_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/auth
+        sso_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
+        sso_client_id: control_center
+        sso_client_password: my-secret
+        sso_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/ssocertfile.pem"
         kafka_broker_custom_properties:
           ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
           ldap.com.sun.jndi.ldap.read.timeout: 3000
