@@ -57,7 +57,7 @@ If you would like to contribute to the CP-Ansible project, please refer to the [
 
 ## Release Notes
 
-This [page] (https://docs.confluent.io/ansible/current/ansible-release-notes.html) summarizes the technical details of the Confluent releases.
+This [page](https://docs.confluent.io/ansible/current/ansible-release-notes.html) summarizes the technical details of the Confluent releases.
 
 ## License
 
