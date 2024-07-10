@@ -54,6 +54,9 @@ CP-Ansible's tests use the [Molecule](https://molecule.readthedocs.io/en/latest/
 
 If you would like to contribute to the CP-Ansible project, please refer to the [CONTRIBUTE.md](CONTRIBUTING.md)
 
+## Support
+
+For any support request, please reach out to [Confluent Support Portal](https://support.confluent.io/).
 
 ## Release Notes
 
