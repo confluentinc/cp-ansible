@@ -42,7 +42,7 @@ As an alternative to the recommended methods above, you can install the package 
 
 ## Use Cases
 
-Ansible Playbooks for Confluent Platform (Confluent Ansible) offers a simplified way to configure and deploy Confluent Platform
+Ansible Playbooks for Confluent Platform (Confluent Ansible) offers a simplified way to configure and deploy Confluent Platform.
 
 
 ## Testing
