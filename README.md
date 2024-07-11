@@ -47,7 +47,7 @@ Ansible Playbooks for Confluent Platform (Confluent Ansible) offers a simplified
 
 ## Testing
 
-CP-Ansible's tests use the [Molecule](https://molecule.readthedocs.io/en/latest/) framework, and it is strongly advised to test this way before submitting a Pull Request. Please refer to the [HOW_TO_TEST.md](HOW_TO_TEST.md)
+CP-Ansible's tests use the [Molecule](https://ansible.readthedocs.io/projects/molecule/) framework, and it is strongly advised to test this way before submitting a Pull Request. Please refer to the [HOW_TO_TEST.md](HOW_TO_TEST.md)
 
 
 ## Contributing
