@@ -35,29 +35,6 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: oauth1
-    hostname: oauth1.confluent
-    groups:
-      - oauth_server
-    image: quay.io/keycloak/keycloak:latest
-    env:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
-      KC_HOSTNAME: oauth1
-      KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
-      KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
-      KEYCLOAK_HTTP_PORT: "8080"
-      KEYCLOAK_HTTPS_PORT: "8443"
-    dockerfile: ../Dockerfile-oauth.j2
-    published_ports:
-      - "8080:8080"
-      - "8443:8443"
-    command: start-dev
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
   # MDS Zookeeper and Kafka
   - name: mds-${KRAFT_CONTROLLER:-zookeeper}1
     hostname: mds-${KRAFT_CONTROLLER:-zookeeper}1.confluent
@@ -266,17 +243,8 @@ provisioner:
       all:
         scenario_name: rbac-mds-kerberos-debian
 
-        ssl_enabled: true
+        ssl_enabled: false
         sasl_protocol: kerberos
-
-        ssl_custom_certs: true
-        ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
-        ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
-        ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
-        ssl_key_password: keypass
-
-        keycloak_oauth_server_port: 8443
-        keycloak_http_protocol: https
 
         rbac_enabled: true
         sso_mode: oidc
@@ -336,22 +304,18 @@ provisioner:
 
         # necessary configs in MDS server for sso in C3
         sso_groups_claim: groups
-        sso_sub_claim: client_id
-        sso_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
-        sso_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
-        sso_authorize_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/auth
-        sso_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
-        sso_client_id: control_center
-        sso_client_password: my-secret
-        sso_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/ssocertfile.pem"
+        sso_sub_claim: sub
+        sso_issuer_url: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/v2.0
+        sso_jwks_uri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/discovery/v2.0/keys
+        sso_authorize_uri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/oauth2/v2.0/authorize
+        sso_token_uri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/oauth2/v2.0/token
+        sso_client_id: ${AZURE_CLIENT:-user}
+        sso_client_password: ${AZURE_PASSWORD:-pass}
 
         kafka_broker_custom_properties:
           ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
           ldap.com.sun.jndi.ldap.read.timeout: 3000
-          ldap.java.naming.provider.url: ldaps://mds-ldap1:636
-          ldap.ssl.truststore.location: /var/ssl/private/kafka_broker.truststore.jks
-          ldap.ssl.truststore.password: truststorepass
-          ldap.java.naming.security.protocol: SSL
+          ldap.java.naming.provider.url: ldap://mds-ldap1:389
           ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
           ldap.java.naming.security.credentials: password
           ldap.java.naming.security.authentication: simple
