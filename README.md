@@ -58,4 +58,4 @@ If you would like to contribute to the CP-Ansible project, please refer to the [
 
 ## License
 
-[Apache 2.0](docs/LICENSE.md)
+[Apache 2.0](LICENSE.md)
