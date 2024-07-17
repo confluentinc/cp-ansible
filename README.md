@@ -12,7 +12,7 @@ Ansible provides a simple way to deploy, manage, and configure the Confluent Pla
 The services that can be installed from this repository are:
 
 * ZooKeeper
-* Kafka
+* Kafka Broker
 * Schema Registry
 * REST Proxy
 * Confluent Control Center
