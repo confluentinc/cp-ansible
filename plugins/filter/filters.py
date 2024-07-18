@@ -165,7 +165,7 @@ class FilterModule(object):
                             plain_jaas_config, keytab_path,
                             kerberos_principal, kerberos_primary,
                             scram_user, scram_password, scram256_user,
-                            scram256_password, oauth_pem_path):
+                            scram256_password, oauth_pem_path, rbac_enabled, kraft_listener):
         # For kafka broker properties: Takes listeners dictionary and outputs all properties based on the listeners' settings
         # Other inputs help fill out the properties
         final_dict = {}
@@ -220,6 +220,10 @@ class FilterModule(object):
                     'io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler'
                 final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
                     'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
+                final_dict['listener.name.' + listener_name + '.principal.builder.class'] =\
+                    'io.confluent.kafka.security.authenticator.OAuthKafkaPrincipalBuilder'
+
+            if kraft_listener and rbac_enabled:
                 final_dict['listener.name.' + listener_name + '.principal.builder.class'] =\
                     'io.confluent.kafka.security.authenticator.OAuthKafkaPrincipalBuilder'
 
