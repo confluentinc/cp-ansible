@@ -4,6 +4,14 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.2.11
+======
+
+Notable fixes
+-------------
+
+- Ansible playbooks use archive debian10 repo since debian 10 reached EOL.
+
 v7.2.10
 ======
 
