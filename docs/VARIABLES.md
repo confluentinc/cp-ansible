@@ -2476,14 +2476,6 @@ Default:  true
 
 ***
 
-### sso_idp_cert_path
-
-SSL certificate (full path of file on control node) of IDP Domain for SSO in C3/cli. Optional, needed when IDP server has TLS enabled with custom certificate
-
-Default:  ""
-
-***
-
 ### mds_super_user
 
 LDAP User which will be granted super user permissions to create role bindings in the MDS
