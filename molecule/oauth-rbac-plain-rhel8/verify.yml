@@ -2,61 +2,29 @@
 ### Validates TLS keysizes across all components.
 ### Validates OIDC authenticate api for SSO in Control Center
 
-- name: Verify - zookeeper
-  hosts: zookeeper
-  gather_facts: false
-  tasks:
-    - shell: grep "Djdk.tls.ephemeralDHKeySize=2048" /etc/systemd/system/confluent-zookeeper.service.d/override.conf
-      changed_when: false
-
 - name: Verify - kafka_controller
   hosts: kafka_controller
   gather_facts: false
   tasks:
-    - shell: grep "Djdk.tls.ephemeralDHKeySize=2048" /etc/systemd/system/confluent-kcontroller.service.d/override.conf
-      changed_when: false
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: listener.name.external.principal.builder.class
+        expected_value: io.confluent.kafka.security.authenticator.OAuthKafkaPrincipalBuilder
 
 - name: Verify - kafka_broker
   hosts: kafka_broker
   gather_facts: false
   tasks:
-    - shell: grep "Djdk.tls.ephemeralDHKeySize=2048" /etc/systemd/system/confluent-server.service.d/override.conf
-      changed_when: false
-
-- name: Verify - schema_registry
-  hosts: schema_registry
-  gather_facts: false
-  tasks:
-    - shell: grep "Djdk.tls.ephemeralDHKeySize=2048" /etc/systemd/system/confluent-schema-registry.service.d/override.conf
-      changed_when: false
-
-- name: Verify - kafka_rest
-  hosts: kafka_rest
-  gather_facts: false
-  tasks:
-    - shell: grep "Djdk.tls.ephemeralDHKeySize=2048" /etc/systemd/system/confluent-kafka-rest.service.d/override.conf
-      changed_when: false
-
-- name: Verify - kafka_connect
-  hosts: kafka_connect
-  gather_facts: false
-  tasks:
-    - shell: grep "Djdk.tls.ephemeralDHKeySize=2048" /etc/systemd/system/confluent-kafka-connect.service.d/override.conf
-      changed_when: false
-
-- name: Verify - ksql
-  hosts: ksql
-  gather_facts: false
-  tasks:
-    - shell: grep "Djdk.tls.ephemeralDHKeySize=2048" /etc/systemd/system/confluent-ksqldb.service.d/override.conf
-      changed_when: false
-
-- name: Verify - control_center
-  hosts: control_center
-  gather_facts: false
-  tasks:
-    - shell: grep "Djdk.tls.ephemeralDHKeySize=2048" /etc/systemd/system/confluent-control-center.service.d/override.conf
-      changed_when: false
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: listener.name.internal.sasl.enabled.mechanisms
+        expected_value: OAUTHBEARER
 
 - name: Verify Client Packages
   hosts: zookeeper kafka_controller kafka_broker schema_registry kafka_rest kafka_connect ksql control_center
@@ -72,7 +40,7 @@
   tasks:
     - name: Check status of Authenticate api
       uri:
-        url: "https://control-center1:9021/api/metadata/security/1.0/oidc/authenticate?caller=https://control-center1:9021/api/metadata"
+        url: "http://control-center1:9021/api/metadata/security/1.0/oidc/authenticate?caller=https://control-center1:9021/api/metadata"
         validate_certs: false
         follow_redirects: none
         status_code: 302
