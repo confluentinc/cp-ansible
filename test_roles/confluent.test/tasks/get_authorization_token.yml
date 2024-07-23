@@ -1,0 +1,54 @@
+---
+- set_fact:
+    idp_body: [["grant_type", "client_credentials"]]
+  when: oauth|bool
+
+- set_fact:
+    idp_body: "{{ idp_body + [['scope', oauth_groups_scope ]]}}"
+  when: oauth|bool and oauth_groups_scope != 'none'
+
+- name: Get Authorization Token from Identity Provider
+  uri:
+    url: "{{ oauth_token_uri }}"
+    method: POST
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    url_username: "{{ oauth_user }}"
+    url_password: "{{ oauth_password }}"
+    force_basic_auth: true
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    body_format: form-urlencoded
+    body: "{{ idp_body }}"
+  register: auth_token_oauth
+  until: auth_token_oauth.status == 200
+  retries: 10
+  delay: 5
+  no_log: "{{mask_secrets|bool}}"
+  when:
+    - oauth|bool
+
+- name: Get Authorization Token from MDS
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/authenticate"
+    method: GET
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    url_username: "{{ldap_user}}"
+    url_password: "{{ldap_password}}"
+    force_basic_auth: true
+  register: auth_token_mds
+  until: auth_token_mds.status == 200
+  retries: 10
+  delay: 5
+  no_log: "{{mask_secrets|bool}}"
+  when:
+    - cluster_id_source | default('erp') == 'erp'
+    - not oauth|bool
+
+- name: Get Authorization Token
+  set_fact:
+    authorization_token: "{{ (auth_token_mds.content | from_json).auth_token if not oauth else (auth_token_oauth.content | from_json).access_token }}"
+  no_log: "{{mask_secrets|bool}}"

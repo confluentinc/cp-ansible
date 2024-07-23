@@ -20,7 +20,7 @@
         name: confluent.test
         tasks_from: check_ownership.yml
       vars:
-        file_name: log.1
+        file_name: log.100000001
         custom_path: /opt/zookeeper/version-2/
         group: confluent
         user: cp-kafka
@@ -80,7 +80,7 @@
       vars:
         file_path: /etc/kafka/server.properties
         property: listener.name.internal.sasl.enabled.mechanisms
-        expected_value: PLAIN
+        expected_value: OAUTHBEARER
 
     - import_role:
         name: confluent.test
@@ -97,7 +97,7 @@
       vars:
         file_path: /etc/kafka/server.properties
         property: transaction.state.log.min.isr
-        expected_value: "1"
+        expected_value: "2"
 
     - name: Check Updated Service Description
       shell: systemctl status confluent-server
@@ -141,7 +141,7 @@
       vars:
         file_path: /etc/schema-registry/schema-registry.properties
         property: kafkastore.security.protocol
-        expected_value: SASL_PLAINTEXT
+        expected_value: SASL_SSL
 
     - name: Check Original Service Description
       shell: systemctl status confluent-schema-registry
@@ -167,7 +167,7 @@
       vars:
         file_path: /etc/kafka-rest/kafka-rest.properties
         property: client.security.protocol
-        expected_value: SASL_PLAINTEXT
+        expected_value: SASL_SSL
 
     - name: Check Updated Service Description
       shell: systemctl status confluent-kafka-rest
@@ -193,7 +193,7 @@
       vars:
         file_path: /etc/kafka/connect-distributed.properties
         property: security.protocol
-        expected_value: SASL_PLAINTEXT
+        expected_value: SASL_SSL
 
     - import_role:
         name: confluent.test
@@ -201,7 +201,7 @@
       vars:
         file_path: /etc/kafka/connect-distributed.properties
         property: producer.sasl.jaas.config
-        expected_value: 'org.apache.kafka.common.security.plain.PlainLoginModule required username="kafka_connect" password="kafka_connect-secret";'
+        expected_value: 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId="kafka_connect" clientSecret="my-secret" ssl.truststore.location="/var/ssl/private/kafka_connect.truststore.jks" ssl.truststore.password="confluenttruststorepass";'
 
     - name: Check Updated Service Description
       shell: systemctl status confluent-kafka-connect
@@ -209,11 +209,23 @@
       failed_when: "'Custom Connect description' not in systemctl_status.stdout_lines[0]"
       changed_when: false
 
+    - import_role:
+        name: confluent.platform.common
+        tasks_from: get_authorization_token.yml
+      vars:
+        oauth: "{{ kafka_connect_oauth_enabled }}"
+        oauth_user: "{{ kafka_connect_oauth_user }}"
+        oauth_password: "{{ kafka_connect_oauth_password }}"
+        ldap_user: "{{ kafka_connect_ldap_user }}"
+        ldap_password: "{{ kafka_connect_ldap_password }}"
+
     - name: Get Connectors on connect cluster1
       uri:
-        url: "http://kafka-connect1:8083/connectors"
+        url: "https://kafka-connect1:8083/connectors"
         status_code: 200
         validate_certs: false
+        headers:
+          Authorization: "Bearer {{ authorization_token }}"
       register: connectors
 
     - name: Assert Connector Created
@@ -288,6 +300,7 @@
         connect_url_input: "{{ kafka_connect_url }}"
         active_connectors_input: "{{ reset_all_connectors }}"
         expected_message: ""
+        token: "{{ authorization_token }}"
 
     - import_role:
         name: confluent.test
@@ -296,6 +309,7 @@
         connect_url_input: "{{ kafka_connect_url }}"
         active_connectors_input: "{{ add_new_connector }}"
         expected_message: "Connectors added or updated: test-connector-1: new connector added."
+        token: "{{ authorization_token }}"
 
     - import_role:
         name: confluent.test
@@ -304,6 +318,7 @@
         connect_url_input: "{{ kafka_connect_url }}"
         active_connectors_input: "{{ update_existing_connector }}"
         expected_message: "Connectors added or updated: test-connector-1: connector configuration updated."
+        token: "{{ authorization_token }}"
 
     - import_role:
         name: confluent.test
@@ -312,6 +327,7 @@
         connect_url_input: "{{ kafka_connect_url }}"
         active_connectors_input: "{{ add_bad_request_connector }}"
         expected_message: "Connectors added or updated: test-connector-1: no configuration change, test-connector-2: ERROR error while adding new connector configuration (HTTP Error 400: Bad Request)."
+        token: "{{ authorization_token }}"
 
     - import_role:
         name: confluent.test
@@ -320,6 +336,7 @@
         connect_url_input: "{{ kafka_connect_url }}"
         active_connectors_input: "{{ add_non_existent_connector }}"
         expected_message: "Connectors added or updated: test-connector-1: no configuration change, test-connector-2: ERROR error while adding new connector configuration (HTTP Error 500: Internal Server Error)."
+        token: "{{ authorization_token }}"
 
     - import_role:
         name: confluent.test
@@ -328,6 +345,7 @@
         connect_url_input: "{{ kafka_connect_url }}"
         active_connectors_input: "{{ delete_connector }}"
         expected_message: "Connectors removed: test-connector-1. Connectors added or updated: test-connector-2: new connector added."
+        token: "{{ authorization_token }}"
 
     - import_role:
         name: confluent.test
@@ -359,7 +377,7 @@
     - name: Assert installed remote plugin version
       assert:
         that:
-          - jsondata.version == "{{connect_s3_plugin_version}}"
+          - jsondata.version == connect_s3_plugin_version
 
     - name: Get stats on installed local plugin
       stat:
@@ -394,7 +412,7 @@
       vars:
         file_path: /etc/ksqldb/ksql-server.properties
         property: security.protocol
-        expected_value: SASL_PLAINTEXT
+        expected_value: SASL_SSL
 
     - name: Check Updated Service Description
       shell: systemctl status confluent-ksqldb
@@ -419,7 +437,7 @@
       vars:
         file_path: /etc/confluent-control-center/control-center-production.properties
         property: confluent.controlcenter.streams.security.protocol
-        expected_value: SASL_PLAINTEXT
+        expected_value: SASL_SSL
 
     - name: Check Updated Service Description
       shell: systemctl status confluent-control-center
