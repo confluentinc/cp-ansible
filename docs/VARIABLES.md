@@ -3744,7 +3744,7 @@ Default:  "{{ kafka_connect_basic_users.admin.password }}"
 
 User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{ ksql_ldap_user if (rbac_enabled|bool and (auth_mode in ['ldap_with_oauth', 'ldap'])) else ksql_basic_users.admin.principal }}"
+Default:  "{{ ksql_ldap_user if (rbac_enabled|bool and ('ldap' in auth_mode)) else ksql_basic_users.admin.principal }}"
 
 ***
 
@@ -3752,7 +3752,7 @@ Default:  "{{ ksql_ldap_user if (rbac_enabled|bool and (auth_mode in ['ldap_with
 
 Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
 
-Default:  "{{ ksql_ldap_password if (rbac_enabled|bool and (auth_mode in ['ldap_with_oauth', 'ldap'])) else ksql_basic_users.admin.password }}"
+Default:  "{{ ksql_ldap_password if (rbac_enabled|bool and ('ldap' in auth_mode)) else ksql_basic_users.admin.password }}"
 
 ***
 
