@@ -3740,22 +3740,6 @@ Default:  "{{ kafka_connect_basic_users.admin.password }}"
 
 ***
 
-### ksql_health_check_user
-
-User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
-
-Default:  "{{ ksql_ldap_user if (rbac_enabled|bool and ((not oauth_enabled) or ldap_with_oauth_enabled)) else ksql_basic_users.admin.principal }}"
-
-***
-
-### ksql_health_check_password
-
-Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
-
-Default:  "{{ ksql_ldap_password if (rbac_enabled|bool and ((not oauth_enabled) or ldap_with_oauth_enabled)) else ksql_basic_users.admin.password }}"
-
-***
-
 ### kafka_rest_health_check_user
 
 User for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
