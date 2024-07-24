@@ -2548,23 +2548,17 @@ Default:  none
 
 ***
 
-<<<<<<< HEAD
 ### auth_mode
 
-Authorization mode on all cp components. Possible values are ldap, oauth, ldap_with_oauth and none. Set this to oauth for OAuth cluster and ldap_with_oauth for cluster with both ldap and oauth support. When set to oauth or ldap_with_oauth, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_client_id, oauth_client_password.
+Authorization mode on all cp components. Possible values are ldap, oauth, ldap_with_oauth and none. Set this to oauth for OAuth cluster and ldap_with_oauth for cluster with both ldap and oauth support. When set to oauth or ldap_with_oauth, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_superuser_client_id, oauth_superuser_client_password.
 
 Default:  "{% if rbac_enabled|bool %}ldap{% else %}none{% endif %}"
 
 ***
 
-### oauth_client_id
-
-Client id for authorize and token request to Idp via cp components. This is the super user for all MDS api calls
-=======
 ### oauth_superuser_client_id
 
 Client id used to authorize and request token from IdP via cp components. This is the super user for all MDS api calls
->>>>>>> 7.7.x
 
 Default:  none
 
@@ -3743,6 +3737,22 @@ Default:  "{{ kafka_connect_basic_users.admin.principal }}"
 Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{ kafka_connect_basic_users.admin.password }}"
+
+***
+
+### ksql_health_check_user
+
+User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{ ksql_ldap_user if (rbac_enabled|bool and (auth_mode in ['ldap_with_oauth', 'ldap']) else ksql_basic_users.admin.principal }}"
+
+***
+
+### ksql_health_check_password
+
+Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{ ksql_ldap_password if (rbac_enabled|bool and (auth_mode in ['ldap_with_oauth', 'ldap']) else ksql_basic_users.admin.password }}"
 
 ***
 
