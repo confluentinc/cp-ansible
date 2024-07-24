@@ -3094,7 +3094,7 @@ Default:  "{{ kafka_connect_replicator_oauth_password }}"
 
 ### kafka_connect_replicator_monitoring_interceptor_oauth_principal
 
-Service principal for kafka_connect_monitoring_interceptor_replicator client in Idp server.
+Service principal for kafka_connect_replicator_monitoring_interceptor client in Idp server.
 
 Default:  "{{ kafka_connect_replicator_monitoring_interceptor_oauth_user }}"
 
