@@ -1588,11 +1588,11 @@ Default:  "{{ skip_restarts }}"
 
 ***
 
-### schema_registry_oauth_enabled
+### schema_registry_auth_mode
 
-Boolean used for enabling OAuth Server on Schema Registry
+Variable to set auth mode on Schema Registry. Possible values are oauth, ldap, ldap_with_oauth in RBAC cluster and oauth, none in non RBAC cluster.
 
-Default:  "{{ oauth_enabled }}"
+Default:  "{{ auth_mode }}"
 
 ***
 
@@ -1780,11 +1780,11 @@ Default:  "{{ skip_restarts }}"
 
 ***
 
-### kafka_rest_oauth_enabled
+### kafka_rest_auth_mode
 
-Boolean used for enabling OAuth Server on Rest Proxy
+Variable to set auth mode on Rest Proxy. Possible values are oauth, ldap, ldap_with_oauth in RBAC cluster and oauth, none in non RBAC cluster.
 
-Default:  "{{ oauth_enabled }}"
+Default:  "{{ auth_mode }}"
 
 ***
 
@@ -2060,11 +2060,11 @@ Default:  "{{ skip_restarts }}"
 
 ***
 
-### kafka_connect_oauth_enabled
+### kafka_connect_auth_mode
 
-Boolean used for enabling OAuth Server on Kafka Connect
+Variable to set auth mode on Kafka Connect server. Possible values are oauth, ldap, ldap_with_oauth in RBAC cluster and oauth, none in non RBAC cluster.
 
-Default:  "{{ oauth_enabled }}"
+Default:  "{{ auth_mode }}"
 
 ***
 
@@ -2548,19 +2548,11 @@ Default:  none
 
 ***
 
-### oauth_enabled
+### auth_mode
 
-Boolean to enable OAuth on all cp components, except ksqlDB. When set to true, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_client_id, oauth_client_password
+Authorization mode on all cp components. Possible values are ldap, oauth, ldap_with_oauth and none. Set this to oauth for OAuth cluster and ldap_with_oauth for cluster with both ldap and oauth support. When set to oauth or ldap_with_oauth, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_client_id, oauth_client_password.
 
-Default:  false
-
-***
-
-### ldap_with_oauth_enabled
-
-Boolean to enable OAuth with LDAP, required when dual support needed. oauth_enabled flag also needs to be true
-
-Default:  false
+Default:  "{% if rbac_enabled|bool %}ldap{% else %}none{% endif %}"
 
 ***
 
@@ -3102,7 +3094,7 @@ Default:  "{{ kafka_connect_replicator_oauth_password }}"
 
 ### kafka_connect_replicator_monitoring_interceptor_oauth_principal
 
-Service principal for kafka_connect_monitoring_interceptor_replicator client in Idp server.
+Service principal for kafka_connect_replicator_monitoring_interceptor client in Idp server.
 
 Default:  "{{ kafka_connect_replicator_monitoring_interceptor_oauth_user }}"
 
@@ -3748,22 +3740,6 @@ Default:  "{{ kafka_connect_basic_users.admin.password }}"
 
 ***
 
-### ksql_health_check_user
-
-User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
-
-Default:  "{{ ksql_ldap_user if (rbac_enabled|bool and ((not oauth_enabled) or ldap_with_oauth_enabled)) else ksql_basic_users.admin.principal }}"
-
-***
-
-### ksql_health_check_password
-
-Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
-
-Default:  "{{ ksql_ldap_password if (rbac_enabled|bool and ((not oauth_enabled) or ldap_with_oauth_enabled)) else ksql_basic_users.admin.password }}"
-
-***
-
 ### kafka_rest_health_check_user
 
 User for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
@@ -3812,11 +3788,11 @@ Default:  "{{ skip_restarts }}"
 
 ***
 
-### kafka_connect_replicator_oauth_enabled
+### kafka_connect_replicator_auth_mode
 
-Boolean used for enabling OAuth Server on Kafka Connect Replicator
+Variable to set auth mode on Connect Replicator. Possible values are oauth, ldap, ldap_with_oauth in RBAC cluster and oauth, none in non RBAC cluster.
 
-Default:  "{{ oauth_enabled }}"
+Default:  "{{ auth_mode }}"
 
 ***
 
