@@ -2548,35 +2548,27 @@ Default:  none
 
 ***
 
-### oauth_enabled
+### oauth_superuser_client_id
 
-Boolean to enable OAuth on all cp components, except ksqlDB. When set to true, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_client_id, oauth_client_password
-
-Default:  false
-
-***
-
-### ldap_with_oauth_enabled
-
-Boolean to enable OAuth with LDAP, required when dual support needed. oauth_enabled flag also needs to be true
-
-Default:  false
-
-***
-
-### oauth_client_id
-
-Client id for authorize and token request to Idp via cp components. This is the super user for all MDS api calls
+Client id used to authorize and request token from IdP via cp components. This is the super user for all MDS api calls
 
 Default:  none
 
 ***
 
-### oauth_client_password
+### oauth_superuser_client_password
 
-Client password for authorize and token request to Idp via cp components
+Client secret for authorize and token request to IdP via cp components
 
 Default:  none
+
+***
+
+### oauth_superuser_principal
+
+Service principal for OAuth client in IdPserver. Defaults to client id
+
+Default:  "{{oauth_superuser_client_id}}"
 
 ***
 
@@ -2636,14 +2628,6 @@ Default:  none
 
 ***
 
-### oauth_super_user
-
-Service principal for OAuth client in Idp server. Defaults to client id
-
-Default:  "{{oauth_client_id}}"
-
-***
-
 ### oauth_idp_cert_path
 
 SSL certificate (full path of file on control node) of IDP Domain. Optional, needed when IDP server has TLS enabled with custom certificate
@@ -2694,17 +2678,17 @@ Default:  "{{mds_super_user_password}}"
 
 ### kafka_broker_oauth_user
 
-OAuth user for Kafka broker Service to authenticate as
+OAuth Client Id for Kafka broker Service to authenticate as
 
-Default:  "{{oauth_client_id}}"
+Default:  "{{oauth_superuser_client_id}}"
 
 ***
 
 ### kafka_broker_oauth_password
 
-Password to kafka_broker_oauth_user
+Client Secret for kafka_broker_oauth_user
 
-Default:  "{{oauth_client_password}}"
+Default:  "{{oauth_superuser_client_password}}"
 
 ***
 
@@ -2726,17 +2710,17 @@ Default:  "{{mds_super_user_password}}"
 
 ### kafka_controller_oauth_user
 
-OAuth user for Kafka Controller Service to authenticate as
+OAuth Client Id for Kafka Controller Service to authenticate as
 
-Default:  "{{oauth_client_id}}"
+Default:  "{{oauth_superuser_client_id}}"
 
 ***
 
 ### kafka_controller_oauth_password
 
-Password to kafka_controller_oauth_user
+Client Secret to kafka_controller_oauth_user
 
-Default:  "{{oauth_client_password}}"
+Default:  "{{oauth_superuser_client_password}}"
 
 ***
 
@@ -2766,7 +2750,7 @@ Default:  password
 
 ### schema_registry_oauth_user
 
-OAuth User for Schema Registry to authenticate as
+OAuth Client Id for Schema Registry to authenticate as
 
 Default:  schema-registry
 
@@ -2774,7 +2758,7 @@ Default:  schema-registry
 
 ### schema_registry_oauth_password
 
-Password to schema_registry_oauth_user
+Client Secret for schema_registry_oauth_user
 
 Default:  password
 
@@ -2782,7 +2766,7 @@ Default:  password
 
 ### schema_registry_oauth_principal
 
-Service principal for SR client in Idp server. Defaults to SR client
+Service principal for SR client in IdPserver. Defaults to SR Client Id
 
 Default:  "{{ schema_registry_oauth_user }}"
 
@@ -2806,7 +2790,7 @@ Default:  password
 
 ### kafka_connect_oauth_user
 
-OAuth User for Connect to authenticate as
+OAuth Client Id for Connect to authenticate as
 
 Default:  connect
 
@@ -2814,7 +2798,7 @@ Default:  connect
 
 ### kafka_connect_oauth_password
 
-Password to kafka_connect_oauth_user
+Client Secret for kafka_connect_oauth_user
 
 Default:  password
 
@@ -2822,7 +2806,7 @@ Default:  password
 
 ### kafka_connect_oauth_principal
 
-Service principal for Connect client in Idp server. Defaults to Connect client
+Service principal for Connect client in IdPserver. Defaults to Connect Client Id
 
 Default:  "{{ kafka_connect_oauth_user }}"
 
@@ -2846,7 +2830,7 @@ Default:  password
 
 ### ksql_oauth_user
 
-OAuth User for ksql to authenticate as
+OAuth Client Id for ksql to authenticate as
 
 Default:  ksql
 
@@ -2854,7 +2838,7 @@ Default:  ksql
 
 ### ksql_oauth_password
 
-Password to ksql_oauth_user
+Client Secret for ksql_oauth_user
 
 Default:  password
 
@@ -2862,7 +2846,7 @@ Default:  password
 
 ### ksql_oauth_principal
 
-Service principal for Ksql client in Idp server. Defaults to Ksql client
+Service principal for Ksql client in IdPserver. Defaults to Ksql Client Id
 
 Default:  "{{ ksql_oauth_user }}"
 
@@ -2886,7 +2870,7 @@ Default:  password
 
 ### kafka_rest_oauth_user
 
-OAuth User for Rest Proxy to authenticate as
+OAuth Client Id for Rest Proxy to authenticate as
 
 Default:  kafka-rest
 
@@ -2894,7 +2878,7 @@ Default:  kafka-rest
 
 ### kafka_rest_oauth_password
 
-Password to kafka_rest_oauth_user
+Client Secret for kafka_rest_oauth_user
 
 Default:  password
 
@@ -2902,7 +2886,7 @@ Default:  password
 
 ### kafka_rest_oauth_principal
 
-Service principal for Rest Proxy client in Idp server. Defaults to Rest proxy client
+Service principal for Rest Proxy client in IdPserver. Defaults to Rest proxy Client Id
 
 Default:  "{{ kafka_rest_oauth_user }}"
 
@@ -2926,7 +2910,7 @@ Default:  password
 
 ### control_center_oauth_user
 
-OAuth User for Control Center to authenticate as
+OAuth Client Id for Control Center to authenticate as
 
 Default:  control-center
 
@@ -2934,7 +2918,7 @@ Default:  control-center
 
 ### control_center_oauth_password
 
-Password to control_center_oauth_user
+Client Secret for control_center_oauth_user
 
 Default:  password
 
@@ -2942,7 +2926,7 @@ Default:  password
 
 ### control_center_oauth_principal
 
-Service principal for Control Center client in Idp server. Defaults to Control Center client
+Service principal for Control Center client in IdPserver. Defaults to Control Center Client Id
 
 Default:  "{{ control_center_oauth_user }}"
 
@@ -2966,7 +2950,7 @@ Default:  password
 
 ### kafka_connect_replicator_oauth_user
 
-OAuth User for Confluent Replicator to authenticate as
+OAuth Client Id for Confluent Replicator to authenticate as
 
 Default:  replicator
 
@@ -2974,7 +2958,7 @@ Default:  replicator
 
 ### kafka_connect_replicator_oauth_password
 
-Password for kafka_connect_replicator_oauth_user OAuth User
+Client Secret for kafka_connect_replicator_oauth_user OAuth User
 
 Default:  password
 
@@ -2982,7 +2966,7 @@ Default:  password
 
 ### kafka_connect_replicator_oauth_principal
 
-Service principal for kafka_connect_replicator client in Idp server.
+Service principal for kafka_connect_replicator client in IdPserver. Defaults to Connect Replicator Client Id
 
 Default:  "{{ kafka_connect_replicator_oauth_user }}"
 
@@ -3006,7 +2990,7 @@ Default:  "{{kafka_connect_replicator_ldap_password}}"
 
 ### kafka_connect_replicator_consumer_oauth_user
 
-OAuth User for Confluent Replicator Consumer to authenticate as
+OAuth Client Id for Confluent Replicator Consumer to authenticate as
 
 Default:  "{{ kafka_connect_replicator_oauth_user }}"
 
@@ -3014,7 +2998,7 @@ Default:  "{{ kafka_connect_replicator_oauth_user }}"
 
 ### kafka_connect_replicator_consumer_oauth_password
 
-Password for kafka_connect_replicator_consumer_oauth_user OAuth User
+Client Secret for kafka_connect_replicator_consumer_oauth_user OAuth User
 
 Default:  "{{ kafka_connect_replicator_oauth_password }}"
 
@@ -3022,7 +3006,7 @@ Default:  "{{ kafka_connect_replicator_oauth_password }}"
 
 ### kafka_connect_replicator_consumer_oauth_principal
 
-Service principal for kafka_connect_consumer_replicator client in Idp server.
+Service principal for kafka_connect_consumer_replicator client in IdPserver. Defaults to Connect Replicator Consumer Client Id
 
 Default:  "{{ kafka_connect_replicator_consumer_oauth_user }}"
 
@@ -3046,7 +3030,7 @@ Default:  "{{kafka_connect_replicator_ldap_password}}"
 
 ### kafka_connect_replicator_producer_oauth_user
 
-OAuth User for Confluent Replicator Producer to authenticate as
+OAuth Client Id for Confluent Replicator Producer to authenticate as
 
 Default:  "{{ kafka_connect_replicator_oauth_user }}"
 
@@ -3054,7 +3038,7 @@ Default:  "{{ kafka_connect_replicator_oauth_user }}"
 
 ### kafka_connect_replicator_producer_oauth_password
 
-Password for kafka_connect_replicator_producer_oauth_user OAuth User
+Client Secret for kafka_connect_replicator_producer_oauth_user OAuth User
 
 Default:  "{{ kafka_connect_replicator_oauth_password }}"
 
@@ -3062,7 +3046,7 @@ Default:  "{{ kafka_connect_replicator_oauth_password }}"
 
 ### kafka_connect_replicator_producer_oauth_principal
 
-Service principal for kafka_connect_producer_replicator client in Idp server.
+Service principal for kafka_connect_producer_replicator client in IdPserver. Defaults to Connect Replicator Producer Client Id
 
 Default:  "{{ kafka_connect_replicator_producer_oauth_user }}"
 
@@ -3086,7 +3070,7 @@ Default:  "{{kafka_connect_replicator_ldap_password}}"
 
 ### kafka_connect_replicator_monitoring_interceptor_oauth_user
 
-OAuth User for Confluent Replicator Monitoring Interceptor to authenticate as
+OAuth Client Id for Confluent Replicator Monitoring Interceptor to authenticate as
 
 Default:  "{{ kafka_connect_replicator_oauth_user }}"
 
@@ -3094,7 +3078,7 @@ Default:  "{{ kafka_connect_replicator_oauth_user }}"
 
 ### kafka_connect_replicator_monitoring_interceptor_oauth_password
 
-Password for kafka_connect_replicator_monitoring_interceptor_oauth_user OAuth User
+Client Secret for kafka_connect_replicator_monitoring_interceptor_oauth_user OAuth User
 
 Default:  "{{ kafka_connect_replicator_oauth_password }}"
 
@@ -3102,7 +3086,7 @@ Default:  "{{ kafka_connect_replicator_oauth_password }}"
 
 ### kafka_connect_replicator_monitoring_interceptor_oauth_principal
 
-Service principal for kafka_connect_monitoring_interceptor_replicator client in Idp server.
+Service principal for kafka_connect_monitoring_interceptor_replicator client in IdPserver. Defaults to Connect Replicator Monitoring Interceptor Client Id
 
 Default:  "{{ kafka_connect_replicator_monitoring_interceptor_oauth_user }}"
 
@@ -4262,7 +4246,7 @@ Default:  ""
 
 ### kafka_connect_replicator_erp_oauth_user
 
-Set this variable to the user name of the OAuth user for the Embedded Rest Proxy, to configure RBAC.
+Set this variable to the Client Id of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.
 
 Default:  ""
 
@@ -4270,7 +4254,7 @@ Default:  ""
 
 ### kafka_connect_replicator_erp_oauth_password
 
-Set this variable to the password of OAuth user for the Embedded Rest Proxy user, to configure RBAC.
+Set this variable to the Client Secret of OAuth Client for the Embedded Rest Proxy user, to configure RBAC.
 
 Default:  ""
 
@@ -4470,7 +4454,7 @@ Default:  "{{ kafka_connect_replicator_erp_admin_password }}"
 
 ### kafka_connect_replicator_consumer_erp_oauth_user
 
-Set this variable to the user name of the OAuth user for the Embedded Rest Proxy, to configure RBAC.
+Set this variable to the Client Id of the OAuth user for the Embedded Rest Proxy, to configure RBAC.
 
 Default:  "{{ kafka_connect_replicator_erp_oauth_user }}"
 
@@ -4478,7 +4462,7 @@ Default:  "{{ kafka_connect_replicator_erp_oauth_user }}"
 
 ### kafka_connect_replicator_consumer_erp_oauth_password
 
-Set this variable to the password of the OAuth user for the Embedded Rest Proxy user, to configure RBAC.
+Set this variable to the Client Secret of the OAuth Client for the Embedded Rest Proxy user, to configure RBAC.
 
 Default:  "{{ kafka_connect_replicator_erp_oauth_password }}"
 
@@ -4678,7 +4662,7 @@ Default:  "{{ kafka_connect_replicator_erp_admin_password }}"
 
 ### kafka_connect_replicator_producer_erp_oauth_user
 
-Set this variable to the user name of the OAuth user for the Embedded Rest Proxy, to configure RBAC.  Defaults to kafka_connect_replicator_erp_user.
+Set this variable to the Client Id of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.  Defaults to kafka_connect_replicator_erp_user.
 
 Default:  "{{ kafka_connect_replicator_erp_oauth_user }}"
 
@@ -4686,7 +4670,7 @@ Default:  "{{ kafka_connect_replicator_erp_oauth_user }}"
 
 ### kafka_connect_replicator_producer_erp_oauth_password
 
-Set this variable to the password of the OAuth user for the Embedded Rest Proxy, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
+Set this variable to the Client Secret of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
 
 Default:  "{{ kafka_connect_replicator_erp_oauth_password }}"
 
@@ -4910,7 +4894,7 @@ Default:  "{{ kafka_connect_replicator_erp_admin_password }}"
 
 ### kafka_connect_replicator_monitoring_interceptor_erp_oauth_user
 
-Set this variable to the user name of the OAuth user for the Embedded Rest Proxy, to configure RBAC.  Defaults to kafka_connect_replicator_erp_user.
+Set this variable to the Client Id of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.  Defaults to kafka_connect_replicator_erp_user.
 
 Default:  "{{ kafka_connect_replicator_erp_oauth_user }}"
 
@@ -4918,7 +4902,7 @@ Default:  "{{ kafka_connect_replicator_erp_oauth_user }}"
 
 ### kafka_connect_replicator_monitoring_interceptor_erp_oauth_password
 
-Set this variable to the password of the OAuth user for the Embedded Rest Proxy, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
+Set this variable to the Client Secret of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
 
 Default:  "{{ kafka_connect_replicator_erp_oauth_password }}"
 
