@@ -4,6 +4,21 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.7.0
+======
+
+New features
+-------------
+- OAuth & OIDC capabilities added for Confluent Server, C3, SR, Connect and REST Proxy
+- Migration of existing clusters from LDAP to LDAP+OAuth is supported
+
+Notable enhancements
+-------------
+
+- Amazonlinux 2023 and Debian 12 Operating Systems are now supported
+- Ansible Versions 8 and 9 are now supported
+- IdP with Self Signed Certs is now supported
+
 v7.6.1
 ======
 
