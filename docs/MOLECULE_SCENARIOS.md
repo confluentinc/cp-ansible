@@ -904,9 +904,9 @@ Validates that Replicator logging path is valid.
 
 ***
 
-### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom
+### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu
 
-#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom test's the following:
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu test's the following:
 
 Installation of Confluent Platform on Ubuntu2204.
 
@@ -920,7 +920,7 @@ MTLS Customer certs enabled on cluster2.
 
 Replicator Configured with Kerberos and MTLS.
 
-#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom verify test's the following:
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu verify test's the following:
 
 Validates that the Console Consumer can consume data from cluster2, proving that data has been replicated from cluster1 (MDS).
 
