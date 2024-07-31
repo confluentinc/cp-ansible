@@ -368,7 +368,7 @@ Validates that Connector is running
 
 #### Scenario ksql-scale-up test's the following:
 
-Installation of Confluent Platform on RHEL9.
+Installation of Confluent Platform on Alma Linux 9.
 
 MTLS enabled.
 
@@ -906,7 +906,7 @@ Validates that Control Center has truststore in place.
 
 #### Scenario plaintext-basic-rhel test's the following:
 
-Installation of Confluent Platform on RHEL9.
+Installation of Confluent Platform on Alma Linux 9.
 
 Kafka Rest API Basic Auth.
 
@@ -1454,7 +1454,7 @@ Validates Kafka Broker and Schema Registry is set to SCRAM.
 
 #### Scenario zookeeper-mtls-rhel test's the following:
 
-Installs Confluent Platform on RHEL8
+Installs Confluent Platform on Alma Linux 8
 
 Enables MTLS Auth on Zookeeper.
 
