@@ -106,7 +106,7 @@ Validates that FIPS is in use in OpenSSL.
 
 #### Scenario archive-plain-ubuntu test's the following:
 
-Archive Installation of Confluent Platform on Ubuntu1804.
+Archive Installation of Confluent Platform on Ubuntu2204.
 
 SASL Plain protocol.
 
@@ -506,7 +506,7 @@ Validates that Java 11 is in use.
 
 #### Scenario mtls-ubuntu test's the following:
 
-Installation of Confluent Platform on Ubuntu1804.
+Installation of Confluent Platform on Ubuntu2204.
 
 MTLS enabled.
 
@@ -622,7 +622,7 @@ Validates that Java 11 is in use.
 
 #### Scenario oauth-mtls-ubuntu-acl test's the following:
 
-Installation of Confluent Platform on Ubuntu1804.
+Installation of Confluent Platform on Ubuntu2204.
 
 MTLS enabled.
 
@@ -994,11 +994,11 @@ Validates client packages.
 
 ***
 
-### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004
+### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu
 
-#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004 test's the following:
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu test's the following:
 
-Installation of Confluent Platform on Ubuntu2004.
+Installation of Confluent Platform on Ubuntu2204.
 
 RBAC Enabled.
 
@@ -1010,7 +1010,7 @@ MTLS Customer certs enabled on cluster2.
 
 Replicator Configured with Kerberos and MTLS.
 
-#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004 verify test's the following:
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu verify test's the following:
 
 Validates that the Console Consumer can consume data from cluster2, proving that data has been replicated from cluster1 (MDS).
 
@@ -1194,7 +1194,7 @@ Validates that FIPS is in use on both clusters.
 
 #### Scenario rbac-mds-mtls-existing-keystore-truststore-ubuntu test's the following:
 
-Installs Confluent Platform Cluster on Ubuntu1804.
+Installs Confluent Platform Cluster on Ubuntu2204.
 
 RBAC enabled.
 
