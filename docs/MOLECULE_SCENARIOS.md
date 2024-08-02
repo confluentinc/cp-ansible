@@ -776,7 +776,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 #### Scenario oauth-rbac-mtls-provided-ubuntu test's the following:
 
-Installs Confluent Platform Cluster on Ubuntu1804.
+Installs Confluent Platform Cluster on Ubuntu2204.
 
 RBAC enabled.
 
