@@ -368,7 +368,7 @@ Validates that Connector is running
 
 #### Scenario ksql-scale-up test's the following:
 
-Installation of Confluent Platform on RHEL9.
+Installation of Confluent Platform on Alma Linux 9.
 
 MTLS enabled.
 
@@ -468,7 +468,7 @@ Validates that Java 17 is in Use
 
 #### Scenario mtls-java11-rhel-fips test's the following:
 
-Installation of Confluent Platform on RHEL9.
+Installation of Confluent Platform on Alma Linux 9.
 
 MTLS enabled.
 
@@ -1128,7 +1128,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 #### Scenario rbac-mds-mtls-custom-kerberos-rhel test's the following:
 
-Installs two Confluent Platform Clusters on RHEL8.
+Installs two Confluent Platform Clusters on Alma Linux 9.
 
 RBAC enabled.
 
@@ -1454,7 +1454,7 @@ Validates Kafka Broker and Schema Registry is set to SCRAM.
 
 #### Scenario zookeeper-mtls-rhel test's the following:
 
-Installs Confluent Platform on RHEL8
+Installs Confluent Platform on Alma Linux 8.
 
 Enables MTLS Auth on Zookeeper.
 
