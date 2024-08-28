@@ -110,8 +110,11 @@ While the prerequisites above must be satisfied prior to having your pull reques
 
 ## Style guide
 
-Git Commit Messages
+Git Commit Messages (**For Confluent Developers**)
 
+You can run `install-githooks.sh` script present in githooks directory to install the hooks. 
+
+Git Commit Messages (**For Non-Confluent Developers**)
 * Use the present tense ("Add feature" not "Added feature")
 * Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
 * Limit the first line to 72 characters or less
