@@ -456,7 +456,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  3.63.0
+Default:  3.65.0
 
 ***
 
@@ -2574,7 +2574,7 @@ Default:  none
 
 ### oauth_superuser_principal
 
-Service principal for OAuth client in IdPserver. Defaults to client id
+Service principal for OAuth client in IdPserver. Defaults to client id. Needs to be modified based on OAuth JWT token's field pointed by oauth_sub_claim
 
 Default:  "{{oauth_superuser_client_id}}"
 
