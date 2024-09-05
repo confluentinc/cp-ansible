@@ -4,6 +4,19 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.7.1
+======
+
+Notable enhancements
+-------------
+
+- Updated default confluent cli version to 3.65.0
+
+Notable fixes
+-------------
+
+- Critical security and vulnerability issues were fixed
+
 v7.7.0
 ======
 
