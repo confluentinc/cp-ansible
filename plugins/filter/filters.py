@@ -36,28 +36,34 @@ class FilterModule(object):
         # Returns a list of standardized values for sasl mechanism strings
         normalized_protocols = []
         for protocol in protocols:
-            normalized = 'GSSAPI' if protocol.lower() == 'kerberos' \
-                else 'SCRAM-SHA-512' if protocol.upper() == 'SCRAM' \
-                else 'SCRAM-SHA-256' if protocol.lower() == 'scram256' \
-                else 'PLAIN' if protocol.upper() == 'PLAIN' \
-                else 'OAUTHBEARER' if protocol.upper() == 'OAUTH' \
-                else 'none'
+            if protocol.lower() == 'kerberos':
+                normalized = 'GSSAPI'
+            elif protocol.upper() == 'SCRAM':
+                normalized = 'SCRAM-SHA-512'
+            elif protocol.lower() == 'scram256':
+                normalized = 'SCRAM-SHA-256'
+            elif protocol.upper() == 'PLAIN':
+                normalized = 'PLAIN'
+            elif protocol.upper() == 'OAUTH':
+                normalized = 'OAUTHBEARER'
+            else:
+                normalized = 'none'
             normalized_protocols.append(normalized)
         return normalized_protocols
 
-
-    def kafka_protocol_normalized(self, sasl_protocols_normalized, ssl_enabled):
+    def kafka_protocol_normalized(self, sasl_protocol_normalized, ssl_enabled):
         # Joins a sasl mechanism and tls setting to return a kafka protocol
-        kafka_protocols = []
-        for sasl_protocol_normalized in sasl_protocols_normalized:
-            kafka_protocol = 'SASL_SSL' if ssl_enabled is True \
-            and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-512', 'SCRAM-SHA-256', 'OAUTHBEARER'] \
-            else 'SASL_PLAINTEXT' if ssl_enabled is False \
-            and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-512', 'SCRAM-SHA-256', 'OAUTHBEARER'] \
-            else 'SSL' if ssl_enabled is True and sasl_protocol_normalized == 'none' \
-            else 'PLAINTEXT'
-            kafka_protocols.append(kafka_protocol)
-        return kafka_protocols
+        required_mechanisms = ['GSSAPI', 'PLAIN', 'SCRAM-SHA-512', 'SCRAM-SHA-256', 'OAUTHBEARER']
+
+        if ssl_enabled and sasl_protocol_normalized in required_mechanisms:
+            kafka_protocol = 'SASL_SSL'
+        elif not ssl_enabled and sasl_protocol_normalized in required_mechanisms:
+            kafka_protocol = 'SASL_PLAINTEXT'
+        elif ssl_enabled and sasl_protocol_normalized == 'none':
+            kafka_protocol = 'SSL'
+        else:
+            kafka_protocol = 'PLAINTEXT'
+        return kafka_protocol
 
     def kafka_protocol(self, sasl_protocol, ssl_enabled):
         # Joins a sasl mechanism and tls setting to return a kafka protocol
