@@ -34,8 +34,10 @@ class FilterModule(object):
 
     def normalize_sasl_protocol(self, protocols):
         # Returns a list of standardized values for sasl mechanism strings
+        protocol_list = protocols.split(',')
+
         normalized_protocols = []
-        for protocol in protocols:
+        for protocol in protocol_list:
             if protocol.lower() == 'kerberos':
                 normalized = 'GSSAPI'
             elif protocol.upper() == 'SCRAM':
@@ -51,32 +53,36 @@ class FilterModule(object):
             normalized_protocols.append(normalized)
         return normalized_protocols
 
-    def kafka_protocol_normalized(self, sasl_protocol_normalized, ssl_enabled):
+
+    def kafka_protocol_normalized(self, sasl_protocols_normalized, ssl_enabled):
         # Joins a sasl mechanism and tls setting to return a kafka protocol
         required_mechanisms = ['GSSAPI', 'PLAIN', 'SCRAM-SHA-512', 'SCRAM-SHA-256', 'OAUTHBEARER']
 
-        if ssl_enabled and sasl_protocol_normalized in required_mechanisms:
+        if ssl_enabled and self.all_elements_present(sasl_protocols_normalized, required_mechanisms):
             kafka_protocol = 'SASL_SSL'
-        elif not ssl_enabled and sasl_protocol_normalized in required_mechanisms:
+        elif not ssl_enabled and self.all_elements_present(sasl_protocols_normalized, required_mechanisms):
             kafka_protocol = 'SASL_PLAINTEXT'
-        elif ssl_enabled and sasl_protocol_normalized == 'none':
+        elif ssl_enabled and 'none' in sasl_protocols_normalized:
             kafka_protocol = 'SSL'
         else:
             kafka_protocol = 'PLAINTEXT'
         return kafka_protocol
 
+    def all_elements_present(self, sasl_protocols_normalized, required_mechanisms):
+        return all(protocol in required_mechanisms for protocol in sasl_protocols_normalized)
+
     def kafka_protocol(self, sasl_protocol, ssl_enabled):
         # Joins a sasl mechanism and tls setting to return a kafka protocol
-        sasl_protocol_normalized = self.normalize_sasl_protocol(sasl_protocol)
-        kafka_protocol = self.kafka_protocol_normalized(sasl_protocol_normalized, ssl_enabled)
+        sasl_protocols_normalized = self.normalize_sasl_protocol(sasl_protocol)
+        kafka_protocol = self.kafka_protocol_normalized(sasl_protocols_normalized, ssl_enabled)
         return kafka_protocol
 
     def kafka_protocol_defaults(self, listener, default_ssl_enabled, default_sasl_protocol):
         # Joins a sasl mechanism and tls setting and their default values, to return a kafka protocol
         ssl_enabled = listener.get('ssl_enabled', default_ssl_enabled)
         sasl_protocol = listener.get('sasl_protocol', default_sasl_protocol)
-        sasl_protocol_normalized = self.normalize_sasl_protocol(sasl_protocol)
-        kafka_protocol = self.kafka_protocol_normalized(sasl_protocol_normalized, ssl_enabled)
+        sasl_protocols_normalized = self.normalize_sasl_protocol(sasl_protocol)
+        kafka_protocol = self.kafka_protocol_normalized(sasl_protocols_normalized, ssl_enabled)
         return kafka_protocol
 
     def get_sasl_mechanisms(self, listeners_dict, default_sasl_protocol):
