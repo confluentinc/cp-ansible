@@ -1,9 +1,24 @@
 ---
+- name: Initialize Broker principals list in Controller
+  set_fact:
+    broker_principals: []
+
+- name: Add Each Broker's Principal to Controller's List
+  set_fact:
+    broker_principals: "{{ broker_principals + [ hostvars[broker_item]['kafka_broker_principal'] ] }}"
+  loop: "{{ groups['kafka_broker'] }}"
+  loop_control:
+    loop_var: broker_item
+
+- name: Remove Duplicates and Convert to String
+  set_fact:
+    broker_principals: "{{ broker_principals | unique | join(';') }}"
+
 - name: Add Super Users list to Kafka Controller Properties
   set_fact:
     kafka_controller_final_properties: "{{ hostvars[controller_host]['kafka_controller_final_properties'] | combine(
       {
-          'super.users': hostvars[controller_host]['super_users'] + ';' + hostvars[groups.kafka_broker[0]]['kafka_broker_principal']
+          'super.users': hostvars[controller_host]['super_users'] + ';' + broker_principals
       }
     ) }}"
 
