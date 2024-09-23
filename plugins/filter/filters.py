@@ -291,7 +291,7 @@ class FilterModule(object):
                           keystore_keypass, omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
                           sasl_scram256_username, sasl_scram256_password, kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
                           omit_oauth_configs, oauth_username, oauth_password, mds_bootstrap_server_urls, oauth_enabled, oauth_superuser_client_id,
-                          oauth_superuser_client_password, oauth_groups_scope, oauth_token_uri, idp_self_signed):
+                          oauth_superuser_client_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, kraft_listener):
         # For any kafka client's properties: Takes in a single kafka listener and output properties to connect to that listener
         # Other inputs help fill out the properties
         final_dict = {
@@ -322,12 +322,12 @@ class FilterModule(object):
                 '\" password=\"' +\
                 str(sasl_plain_password) + '\";'
 
-        if 'SCRAM-SHA-512' in normalize_sasl_protocols and not omit_jaas_configs:
+        if 'SCRAM-SHA-512' in normalize_sasl_protocols and not omit_jaas_configs and not kraft_listener:
             final_dict[config_prefix + 'sasl.mechanism'] = 'SCRAM-SHA-512'
             final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' +\
                 sasl_scram_username + '\" password=\"' + str(sasl_scram_password) + '\";'
 
-        if 'SCRAM-SHA-256' in normalize_sasl_protocols and not omit_jaas_configs:
+        if 'SCRAM-SHA-256' in normalize_sasl_protocols and not omit_jaas_configs and not kraft_listener:
             final_dict[config_prefix + 'sasl.mechanism'] = 'SCRAM-SHA-256'
             final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' +\
                 sasl_scram256_username + '\" password=\"' + sasl_scram256_password + '\";'
