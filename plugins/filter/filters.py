@@ -16,6 +16,7 @@ class FilterModule(object):
             'kafka_protocol_defaults': self.kafka_protocol_defaults,
             'get_sasl_mechanisms': self.get_sasl_mechanisms,
             'get_hostnames': self.get_hostnames,
+            'split_string_to_list': self.split_string_to_list,
             'get_roles': self.get_roles,
             'resolve_hostname': self.resolve_hostname,
             'resolve_hostnames': self.resolve_hostnames,
@@ -34,7 +35,7 @@ class FilterModule(object):
 
     def normalize_sasl_protocol(self, protocols):
         # Returns a list of standardized values for sasl mechanism strings
-        protocol_list = protocols.split(',')
+        protocol_list = protocols.replace(" ", "").split(',')
 
         normalized_protocols = []
         for protocol in protocol_list:
@@ -67,6 +68,9 @@ class FilterModule(object):
         else:
             kafka_protocol = 'PLAINTEXT'
         return kafka_protocol
+
+    def split_string_to_list(self, string):
+        return string.replace(" ", "").split(',')
 
     def all_elements_present(self, sasl_protocols_normalized, required_mechanisms):
         return all(protocol in required_mechanisms for protocol in sasl_protocols_normalized)
