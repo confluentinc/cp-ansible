@@ -215,6 +215,20 @@ certificate_authority_expiration_days: 365
 ### Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka
 ssl_mutual_auth_enabled: false
 
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+ssl_client_authentication: >-
+  {%- if ssl_mutual_auth_enabled|bool -%}
+    {%- if deployment_strategy == 'parallel' -%}
+      required
+    {%- elif deployment_strategy in ['serial', 'rolling'] -%}
+      requested
+    {%- endif -%}
+  {%- else -%}
+      none
+  {%- endif -%}
+
+ssl_mutual_auth_enabled: "{{ true if ssl_client_authentication in ['required', 'requested'] else false }}"
+
 ### Boolean to create Keystores with Self Signed Certificates, defaults to true. Alternatively can use ssl_provided_keystore_and_truststore or ssl_custom_certs
 self_signed: "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_certs|bool else true }}"
 
@@ -224,6 +238,17 @@ ssl_self_signed_ca_password: capassword123
 
 ### Directory on hosts to store all ssl files.
 ssl_file_dir: /var/ssl/private/
+
+### principal mapping rules to map the DN from cert into a username
+principal_mapping_rules:
+  - '.*CN=([a-zA-Z0-9.-]*).*$/$1/'
+  - 'DEFAULT'
+
+### Users allowed to get an impersonation token for other users except the impersonation protected users. Must be defined in case of RBAC over mTLS only.
+impersonation_super_users: []
+
+### Users which cant be impersonated using impersonation token. Super users should be added here to disallow them from being impersonated in case of RBAC over mTLS only.
+impersonation_protected_users: []
 
 ### Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs.
 regenerate_ca: false
@@ -449,6 +474,9 @@ kafka_controller_ssl_enabled: "{{ssl_enabled}}"
 
 ### Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
 kafka_controller_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
+
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+kafka_controller_ssl_client_authentication: "{{ssl_client_authentication}}"
 
 ### SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none
 kafka_controller_sasl_protocol: "{{sasl_protocol}}"
@@ -735,6 +763,9 @@ schema_registry_ssl_enabled: "{{ssl_enabled}}"
 ### Deprecated- Boolean to enable mTLS Authentication on Schema Registry
 schema_registry_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+schema_registry_ssl_client_authentication: "{{ssl_client_authentication}}"
+
 ### Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
 schema_registry_authentication_type: "{{ 'mtls' if schema_registry_ssl_mutual_auth_enabled else 'none' }}"
 
@@ -833,6 +864,9 @@ kafka_rest_ssl_enabled: "{{ssl_enabled}}"
 
 ### Deprecated- Boolean to enable mTLS Authentication on Rest Proxy
 kafka_rest_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+kafka_rest_ssl_client_authentication: "{{ssl_client_authentication}}"
 
 ### Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
 kafka_rest_authentication_type: "{{ 'mtls' if kafka_rest_ssl_mutual_auth_enabled else 'none' }}"
@@ -939,6 +973,9 @@ kafka_connect_ssl_enabled: "{{ssl_enabled}}"
 
 ### Deprecated- Boolean to enable mTLS Authentication on Connect
 kafka_connect_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+kafka_connect_ssl_client_authentication: "{{ssl_client_authentication}}"
 
 ### Authentication to put on Connect's Rest Endpoint. Available options: [mtls, basic, none].
 kafka_connect_authentication_type: "{{ 'mtls' if kafka_connect_ssl_mutual_auth_enabled|bool else 'none' }}"
@@ -2038,6 +2075,9 @@ kafka_connect_replicator_ssl_provided_keystore_and_truststore: false
 
 ### Boolean to enable mTLS Authentication on Kafka Connect Replicator.
 kafka_connect_replicator_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
+
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+kafka_connect_replicator_ssl_client_authentication: "{{ssl_client_authentication}}"
 
 ### Boolean to enable TLS on Kafka Connect Replicator
 kafka_connect_replicator_ssl_enabled: "{{ssl_enabled}}"
