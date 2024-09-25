@@ -189,17 +189,16 @@ kafka_controller_properties:
     properties:
       zookeeper.set.acl: 'true'
   broker_listener:
-    enabled: "{{ 'plain' in confluent.platform.split_string_to_list(sasl_protocol) }}" # might need to add for kerberos also in later release
     properties: "{{  {'broker_listener': kafka_broker_listeners[kafka_broker_inter_broker_listener_name]} | confluent.platform.listener_properties(ssl_enabled, fips_enabled, ssl_mutual_auth_enabled, sasl_protocol,
                     kafka_controller_truststore_path, kafka_controller_truststore_storepass, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
                     plain_jaas_config, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'), kerberos_kafka_controller_primary,
                     sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, oauth_sub_claim, rbac_enabled, false, false) }}"
   kraft_sasl_plain:
-    enabled: "{{confluent.platform.split_string_to_list(kafka_controller_sasl_protocol)[0] == 'plain'}}"
+    enabled: "{{(kafka_controller_sasl_protocol | confluent.platform.split_to_list)[0] == 'plain'}}"
     properties:
       sasl.mechanism.controller.protocol: PLAIN
   kraft_sasl_gssapi:
-    enabled: "{{confluent.platform.split_string_to_list(kafka_controller_sasl_protocol)[0] == 'kerberos'}}"
+    enabled: "{{(kafka_controller_sasl_protocol | confluent.platform.split_to_list)[0] == 'kerberos'}}"
     properties:
       sasl.mechanism.controller.protocol: GSSAPI
   ssl:
@@ -226,9 +225,9 @@ kafka_controller_properties:
       ssl.key.password: "{{kafka_controller_keystore_storepass}}"
       ssl.enabled.protocols: TLSv1.2,TLSv1.3
   sasl_enabled:
-    enabled: "{{ kafka_controller_sasl_enabled_mechanisms|length > 0 }}"
+    enabled: "{{ kafka_sasl_enabled_mechanisms|length > 0 }}"
     properties:
-      sasl.enabled.mechanisms: "{% for mechanism in kafka_controller_sasl_enabled_mechanisms %}{% if loop.index > 1%},{% endif %}{{ mechanism|upper }}{% endfor %}"
+      sasl.enabled.mechanisms: "{% for mechanism in kafka_sasl_enabled_mechanisms %}{% if loop.index > 1%},{% endif %}{{ mechanism|upper }}{% endfor %}"
   sasl_gssapi:
     enabled: "{{ 'GSSAPI' in kafka_controller_sasl_enabled_mechanisms }}"
     properties:
@@ -262,7 +261,7 @@ kafka_controller_properties:
                             'confluent.metadata.', kafka_controller_truststore_path, kafka_controller_truststore_storepass, False, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
                             false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, '', '', '', '',
                             kerberos_kafka_controller_primary, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
-                            false, kafka_controller_ldap_user, kafka_controller_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_controller_oauth_user, kafka_controller_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, true) }}"
+                            false, kafka_controller_ldap_user, kafka_controller_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_controller_oauth_user, kafka_controller_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   rbac_external_mds_oauth_client:
     enabled: "{{rbac_enabled and oauth_enabled and idp_self_signed}}"
     properties:
@@ -290,7 +289,7 @@ kafka_controller_properties:
                     'confluent.metrics.reporter.', kafka_controller_truststore_path, kafka_controller_truststore_storepass, False, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
                     false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, '', '', '','',
                     kerberos_kafka_controller_primary, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
-                    false, kafka_controller_ldap_user, kafka_controller_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_controller_oauth_user, kafka_controller_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, true) }}"
+                    false, kafka_controller_ldap_user, kafka_controller_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_controller_oauth_user, kafka_controller_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   telemetry:
     enabled: "{{kafka_controller_telemetry_enabled}}"
     properties:
@@ -427,7 +426,7 @@ kafka_broker_properties:
   controller_sasl:
     enabled: "{{ kraft_enabled|bool and 'none' not in (kafka_controller_listeners['controller']['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol) }}"
     properties:
-      sasl.mechanism.controller.protocol: "{{ (kafka_controller_listeners['controller']['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] }}"
+      sasl.mechanism.controller.protocol: "{{ (kafka_controller_sasl_protocol | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] }}"
   controller_listener:
     enabled: "{{ kraft_enabled|bool }}"
     properties: "{{ kafka_controller_listeners | confluent.platform.listener_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
@@ -472,9 +471,9 @@ kafka_broker_properties:
     properties:
       sasl.mechanism.inter.broker.protocol: "{{ (kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] }}"
   sasl_enabled:
-    enabled: "{{ kafka_broker_sasl_enabled_mechanisms|length > 0 }}"
+    enabled: "{{ kafka_sasl_enabled_mechanisms|length > 0 }}"
     properties:
-      sasl.enabled.mechanisms: "{% for mechanism in kafka_broker_sasl_enabled_mechanisms %}{% if loop.index > 1%},{% endif %}{{ mechanism|upper }}{% endfor %}"
+      sasl.enabled.mechanisms: "{% for mechanism in kafka_sasl_enabled_mechanisms %}{% if loop.index > 1%},{% endif %}{{ mechanism|upper }}{% endfor %}"
   sasl_gssapi:
     enabled: "{{ 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms }}"
     properties:

@@ -16,7 +16,7 @@ class FilterModule(object):
             'kafka_protocol_defaults': self.kafka_protocol_defaults,
             'get_sasl_mechanisms': self.get_sasl_mechanisms,
             'get_hostnames': self.get_hostnames,
-            'split_string_to_list': self.split_string_to_list,
+            'split_to_list': self.split_to_list,
             'get_roles': self.get_roles,
             'resolve_hostname': self.resolve_hostname,
             'resolve_hostnames': self.resolve_hostnames,
@@ -69,7 +69,7 @@ class FilterModule(object):
             kafka_protocol = 'PLAINTEXT'
         return kafka_protocol
 
-    def split_string_to_list(self, string):
+    def split_to_list(self, string):
         return string.replace(" ", "").split(',')
 
     def all_elements_present(self, sasl_protocols_normalized, required_mechanisms):
