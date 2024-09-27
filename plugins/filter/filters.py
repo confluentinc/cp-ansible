@@ -54,7 +54,6 @@ class FilterModule(object):
             normalized_protocols.append(normalized)
         return normalized_protocols
 
-
     def kafka_protocol_normalized(self, sasl_protocols_normalized, ssl_enabled):
         # Joins a sasl mechanism and tls setting to return a kafka protocol
         required_mechanisms = ['GSSAPI', 'PLAIN', 'SCRAM-SHA-512', 'SCRAM-SHA-256', 'OAUTHBEARER']
