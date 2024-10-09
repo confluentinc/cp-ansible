@@ -4,6 +4,15 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.8.0
+======
+
+Notable enhancements
+-------------
+
+- Adds support for Ubuntu 22.
+- Adds support for Alma Linux 8 and 9.
+
 v7.7.0
 ======
 
