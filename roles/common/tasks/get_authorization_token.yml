@@ -7,6 +7,15 @@
     idp_body: "{{ idp_body + [['scope', oauth_groups_scope ]]}}"
   when: oauth|bool and oauth_groups_scope != 'none'
 
+- set_fact:
+    send_client_cert: "{{ ssl_client_authentication in ['required', 'requested'] }}"
+
+- name: debug
+  debug:
+    msg:
+      - "cert: {{ client_cert }}"
+      - "key: {{ client_key }}"
+
 - name: Get Authorization Token from Identity Provider
   uri:
     url: "{{ oauth_token_uri }}"
@@ -17,6 +26,8 @@
     url_username: "{{ oauth_user }}"
     url_password: "{{ oauth_password }}"
     force_basic_auth: true
+    client_cert: "{{ client_cert if send_client_cert|bool else omit }}"
+    client_key: "{{ client_key if send_client_cert|bool else omit }}"
     headers:
       Content-Type: application/x-www-form-urlencoded
     body_format: form-urlencoded
@@ -38,6 +49,8 @@
     status_code: 200
     url_username: "{{ldap_user}}"
     url_password: "{{ldap_password}}"
+    client_cert: "{{ client_cert if send_client_cert|bool else omit }}"
+    client_key: "{{ client_key if send_client_cert|bool else omit }}"
     force_basic_auth: true
   register: auth_token_mds
   until: auth_token_mds.status == 200
@@ -46,9 +59,35 @@
   no_log: "{{mask_secrets|bool}}"
   when:
     - cluster_id_source | default('erp') == 'erp'
-    - not oauth|bool
+    - auth_mode == 'ldap'
+
+- name: Get Authorization Token from MDS using mtls certs
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/authenticate"
+    method: GET
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    force_basic_auth: false
+    client_cert: "{{ client_cert if send_client_cert|bool else omit }}"
+    client_key: "{{ client_key if send_client_cert|bool else omit }}"
+  register: auth_token_mds_mtls
+  until: auth_token_mds_mtls.status == 200
+  retries: 10
+  delay: 5
+  no_log: "{{mask_secrets|bool}}"
+  when:
+    - cluster_id_source | default('erp') == 'erp'
+    - auth_mode == 'mtls'
 
 - name: Get Authorization Token
   set_fact:
-    authorization_token: "{{ (auth_token_mds.content | from_json).auth_token if not oauth else (auth_token_oauth.content | from_json).access_token }}"
+    authorization_token: >-
+      {%- if oauth|bool -%}
+        {{ (auth_token_oauth.content | from_json).access_token }}
+      {%- elif auth_mode == 'ldap' -%}
+        {{ (auth_token_mds.content | from_json).auth_token }}
+      {%- elif auth_mode == 'mtls' -%}
+        {{ (auth_token_mds_mtls.content | from_json).auth_token }}
+      {%- endif -%}
   no_log: "{{mask_secrets|bool}}"
