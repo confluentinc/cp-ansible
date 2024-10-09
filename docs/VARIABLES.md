@@ -476,7 +476,8 @@ Default:  3
 
 ### sasl_protocol
 
-SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256
+SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256.
+You can provide a comma-separated list of mechanisms to configure multiple listeners with different mechanisms. For example, 'kerberos,plain'
 
 Default:  none
 
@@ -988,7 +989,8 @@ Default:  "{{ssl_mutual_auth_enabled}}"
 
 ### kafka_controller_sasl_protocol
 
-SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none
+SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none.
+You can provide a comma-separated list of mechanisms to configure multiple listeners with different mechanisms. For example, 'kerberos,plain'
 
 Default:  "{{sasl_protocol}}"
 
