@@ -20,9 +20,21 @@
   register: zoo_cluster
   when: kraft_migration|bool
 
-- name: Format Data Directory
-  shell: "{{ binary_base_path }}/bin/kafka-storage  format -t={{ clusterid }} -c {{ kafka_controller.config_file }}  --ignore-formatted"
-  register: format_meta
+# - name: Format Data Directory
+#   shell: "{{ binary_base_path }}/bin/kafka-storage  format -t={{ clusterid }} -c {{ kafka_controller.config_file }}  --ignore-formatted"
+#   register: format_meta
+#   vars:
+#     clusterid: "{{ (zoo_cluster['content'] | b64decode).partition('cluster.id=')[2].partition('\n')[0] if kraft_migration|bool else uuid_key.stdout }}"
+#   when: formatted.rc == 1 # To trigger the command only when the directories are not formatted
+
+- name: Create Scram 512 Credentials
+  shell: |
+    {{ binary_base_path }}/bin/kafka-storage  format \
+    -t={{ clusterid }} -c {{ kafka_controller.config_file }} \
+    --add-scram 'SCRAM-SHA-512=[name={{ sasl_scram_users_final.admin.principal }},password={{ sasl_scram_users_final.admin.password }}]' \
+    --ignore-formatted
   vars:
     clusterid: "{{ (zoo_cluster['content'] | b64decode).partition('cluster.id=')[2].partition('\n')[0] if kraft_migration|bool else uuid_key.stdout }}"
-  when: formatted.rc == 1 # To trigger the command only when the directories are not formatted
+  when:
+    - "'SCRAM-SHA-512' in kafka_controller_sasl_enabled_mechanisms"
+    - formatted.rc == 1
