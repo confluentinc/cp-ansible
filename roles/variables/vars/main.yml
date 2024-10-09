@@ -571,10 +571,10 @@ kafka_broker_properties:
     enabled: "{{ rbac_enabled and not external_mds_enabled and oauth_enabled and oauth_groups_claim != 'none'}}"
     properties:
       confluent.metadata.server.oauthbearer.groups.claim.name: "{{oauth_groups_claim}}"
-  rbac_mds_ssl:
-    enabled: "{{ rbac_enabled and not external_mds_enabled and oauth_enabled and mds_ssl_enabled }}"
-    properties:
-      confluent.metadata.server.ssl.endpoint.identification.algorithm: https
+  # rbac_mds_ssl:
+  #   enabled: "{{ rbac_enabled and not external_mds_enabled and oauth_enabled and mds_ssl_enabled }}"
+  #   properties:
+  #     confluent.metadata.server.ssl.endpoint.identification.algorithm: https
   rbac_mds_ldap:
     enabled: "{{ rbac_enabled and not external_mds_enabled and ( (not oauth_enabled) or (oauth_enabled and ldap_with_oauth_enabled)) }}"
     # For backwards compatibility, need to make sure ldap_config var is honored
@@ -595,6 +595,28 @@ kafka_broker_properties:
       confluent.metadata.server.ssl.keystore.type: BCFKS
       confluent.metadata.server.ssl.truststore.type: BCFKS
       confluent.metadata.server.http2.enabled: false
+  rbac_mds_mtls_only:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and mds_ssl_enabled|bool and auth_mode == 'mtls' }}"
+    properties:
+      confluent.metadata.server.user.store: NONE
+  rbac_mds_client_authentication:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and mds_ssl_enabled|bool and ssl_client_authentication != 'none' }}"
+    properties:
+      confluent.metadata.server.ssl.client.authentication: "{{ ssl_client_authentication | upper }}"
+  rbac_mds_impersonation_super_users:
+    enabled: "{{ rbac_enabled|bool and not external_mds_enabled|bool and impersonation_super_users|length > 0 }}"
+    properties:
+      confluent.metadata.server.impersonation.super.users: >-
+        {%- for user in impersonation_super_users -%}
+          {{ ';' if loop.index > 1}}User:{{ user }}
+        {%- endfor -%}
+  rbac_mds_impersonation_protected_users:
+    enabled: "{{ rbac_enabled|bool and not external_mds_enabled|bool and impersonation_protected_users|length > 0 }}"
+    properties:
+      confluent.metadata.server.impersonation.protected.users: >-
+        {%- for user in impersonation_protected_users -%}
+          {{ ';' if loop.index > 1}}User:{{ user }}
+        {%- endfor -%}
   rbac_mds_sso:
     enabled: "{{ rbac_enabled and not external_mds_enabled and sso_mode != 'none' }}"
     properties:
@@ -694,7 +716,7 @@ kafka_broker_properties:
       kafka.rest.public.key.path: "{{rbac_enabled_public_pem_path}}"
       kafka.rest.confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
   embedded_rest_proxy_rbac_ldap:
-    enabled: "{{ kafka_broker_rest_proxy_enabled and rbac_enabled and not oauth_enabled }}"
+    enabled: "{{ kafka_broker_rest_proxy_enabled and rbac_enabled and not auth_mode == 'ldap' }}"
     properties:
       kafka.rest.confluent.metadata.basic.auth.user.info: "{{kafka_broker_ldap_user | default('kafka') }}:{{kafka_broker_ldap_password | default('pass')}}"
       kafka.rest.confluent.metadata.http.auth.credentials.provider: BASIC
