@@ -437,6 +437,7 @@ kafka_controller_listeners: "{
     'port': {{kafka_controller_port}},
     'ssl_enabled': {{kafka_controller_ssl_enabled|string|lower}},
     'ssl_mutual_auth_enabled': {{kafka_controller_ssl_mutual_auth_enabled|string|lower}},
+    'ssl_client_authentication': '{{kafka_controller_ssl_client_authentication|string|lower}}',
     'sasl_protocol': '{{kafka_controller_sasl_protocol}}'
   }
 }"
@@ -566,13 +567,24 @@ kafka_broker_default_listeners: "{
     'port': 9092,
     'ssl_enabled': {% if ccloud_kafka_enabled|bool %}true{% else %}{{ssl_enabled|string|lower}}{% endif %},
     'ssl_mutual_auth_enabled': {% if ccloud_kafka_enabled|bool %}false{% else %}{{ssl_mutual_auth_enabled|string|lower}}{% endif %},
-    'sasl_protocol': '{% if rbac_enabled|bool or oauth_enabled|bool %}OAUTH{% elif ccloud_kafka_enabled|bool %}PLAIN{% else %}{{sasl_protocol}}{% endif %}'
-  }{% if kafka_broker_configure_multiple_listeners|bool %},
+    'ssl_client_authentication': '{% if ccloud_kafka_enabled|bool %}none{% else %}{{ssl_client_authentication|string|lower}}{% endif %}',
+    'sasl_protocol': '{% if auth_mode in [\"ldap\", \"ldap_with_oauth\", \"oauth\"] %}OAUTH{% elif ccloud_kafka_enabled|bool %}PLAIN{% else %}{{sasl_protocol}}{% endif %}'
+  }{% if auth_mode == 'mtls' %},
+  'internal_token': {
+    'name': 'INTERNAL_TOKEN',
+    'port': 9088,
+    'ssl_enabled': true,
+    'ssl_mutual_auth_enabled': true,
+    'ssl_client_authentication': '{{ssl_client_authentication|string|lower}}',
+    'sasl_protocol': 'OAUTH'
+  }{% endif %}
+  {% if kafka_broker_configure_multiple_listeners|bool %},
   'broker': {
     'name': 'BROKER',
     'port': 9091,
     'ssl_enabled': {{ssl_enabled|string|lower}},
     'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
+    'ssl_client_authentication': '{{ssl_client_authentication|string|lower}}',
     'sasl_protocol': '{{sasl_protocol}}'
   }{% if kafka_broker_configure_control_plane_listener|bool and not kraft_enabled|bool %},
   'controller': {
@@ -580,6 +592,7 @@ kafka_broker_default_listeners: "{
     'port': 9089,
     'ssl_enabled': {{ssl_enabled|string|lower}},
     'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
+    'ssl_client_authentication': '{{ssl_client_authentication|string|lower}}',
     'sasl_protocol': '{{sasl_protocol}}'
   }{% endif %}{% endif %}
 }"
@@ -703,7 +716,14 @@ kafka_broker_rest_proxy_enabled: "{{confluent_server_enabled and not ccloud_kafk
 ### Authentication type to add to Kafka's embedded rest proxy or Admin API. Do not set when RBAC is enabled. Options: [basic, none]
 kafka_broker_rest_proxy_authentication_type: none
 
-kafka_broker_rest_proxy_listener_name: "{{ 'internal' if rbac_enabled else kafka_broker_inter_broker_listener_name }}"
+kafka_broker_rest_proxy_listener_name: >-
+  {%- if not rbac_enabled|bool -%}
+    {{ kafka_broker_inter_broker_listener_name }}
+  {%- elif rbac_enabled|bool and auth_mode == 'mtls' -%}
+    internal_token
+  {%- else -%}
+    internal
+  {%- endif -%}
 
 ### Use to register and identify your Kafka cluster in the MDS.
 kafka_broker_cluster_name: ""

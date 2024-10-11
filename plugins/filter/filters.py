@@ -156,7 +156,7 @@ class FilterModule(object):
         return final_dict
 
     def listener_properties(self, listeners_dict, default_ssl_enabled,
-                            bouncy_castle_keystore, default_ssl_mutual_auth_enabled,
+                            bouncy_castle_keystore, default_ssl_client_authentication,
                             default_sasl_protocol, kafka_broker_truststore_path,
                             kafka_broker_truststore_storepass,
                             kafka_broker_keystore_path,
@@ -187,8 +187,7 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.ssl.truststore.type'] = 'BCFKS'
                 final_dict['listener.name.' + listener_name + '.ssl.enabled.protocols'] = 'TLSv1.2,TLSv1.3'
 
-            if listeners_dict[listener].get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
-                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = 'required'
+                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = listeners_dict[listener].get('ssl_client_authentication', default_ssl_client_authentication)
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'PLAIN':
                 final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'PLAIN'
