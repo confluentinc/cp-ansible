@@ -167,6 +167,28 @@
   tags:
     - configuration
 
+- name: Extract Connect Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{kafka_connect_keystore_path}}"
+    keystore_storepass: "{{kafka_connect_keystore_storepass}}"
+    pm_rules: "{{kafka_connect_final_properties['ssl.principal.mapping.rules']}}"
+  when:
+    - rbac_enabled|bool
+    - not kafka_connect_oauth_enabled
+    - auth_mode == 'mtls'
+
+- name: Configure RBAC for mTLS User
+  include_tasks: rbac.yml
+  vars:
+    connect_user: "{{ks_extracted_principal}}"
+  when:
+    - rbac_enabled|bool
+    - not kafka_connect_oauth_enabled
+    - auth_mode == 'mtls'
+
 - name: Configure RBAC for OAuth User
   include_tasks: rbac.yml
   vars:
@@ -179,7 +201,7 @@
     connect_user: "{{kafka_connect_ldap_user}}"
   when:
     - rbac_enabled|bool
-    - ((not oauth_enabled) or ( oauth_enabled and ldap_with_oauth_enabled ))
+    - "'ldap' in auth_mode"
 
 - name: Import IDP certificate to Truststore for OAuth
   include_role:
