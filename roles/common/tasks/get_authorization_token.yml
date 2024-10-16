@@ -27,8 +27,6 @@
     url_username: "{{ oauth_user }}"
     url_password: "{{ oauth_password }}"
     force_basic_auth: true
-    client_cert: "{{ client_cert if send_client_cert|bool else omit }}"
-    client_key: "{{ client_key if send_client_cert|bool else omit }}"
     headers:
       Content-Type: application/x-www-form-urlencoded
     body_format: form-urlencoded
@@ -60,7 +58,8 @@
   no_log: "{{mask_secrets|bool}}"
   when:
     - cluster_id_source | default('erp') == 'erp'
-    - auth_mode == 'ldap'
+    - not oauth|bool
+    - auth_mode != 'mtls'
 
 - name: Get Authorization Token from MDS using mtls certs
   uri:
@@ -86,7 +85,7 @@
     authorization_token: >-
       {%- if oauth|bool -%}
         {{ (auth_token_oauth.content | from_json).access_token }}
-      {%- elif auth_mode == 'ldap' -%}
+      {%- elif not oauth|bool and auth_mode != 'mtls' -%}
         {{ (auth_token_mds.content | from_json).auth_token }}
       {%- elif auth_mode == 'mtls' -%}
         {{ (auth_token_mds_mtls.content | from_json).auth_token }}
