@@ -206,3 +206,26 @@
     fail_msg: "OAuth is not supported on FIPS enabled cluster yet. Please disable FIPS or OAuth to setup the cluster."
   when: auth_mode == 'oauth' or auth_mode == 'ldap_with_oauth'
   tags: validate
+
+- assert:
+    that:
+      - hostvars[item]['kafka_controller_sasl_protocol'].replace(" ", "").split(',') | length > 1
+      - hostvars[item]['kafka_controller_sasl_protocol'].replace(" ", "").split(',')[0] not in ['scram', 'scram256']
+    fail_msg: "kafka_controller_sasl_protocol in kafka controller cannot have first value as scram or scram256 since inter-controller communication via SCRAM is not supported. Please use other protocols along with it."
+  loop: "{{ groups['kafka_controller'] }}"
+  when:
+    - ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 1) | bool
+    - hostvars[item]['kafka_controller_sasl_protocol'] is defined
+  tags: validate
+
+- assert:
+    that:
+      - "'scram' in ({{ hostvars[item]['kafka_controller_sasl_protocol'].replace(' ', '').split(',') }} ) or 'scram256' in ( {{ hostvars[item]['kafka_controller_sasl_protocol'].replace(' ', '').split(',') }} )"
+      - hostvars[item]['kafka_controller_sasl_protocol'].replace(" ", "").split(',') | length > 1
+    fail_msg: "kafka_controller_sasl_protocol in kafka broker must have multiple values defined if it has scram or scram256 as one of the protocols and kafka controller is present."
+  loop: "{{ groups['kafka_broker'] }}"
+  when:
+    - ('kafka_broker' in groups.keys() and groups['kafka_broker'] | length > 0) | bool
+    - ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 1) | bool
+    - hostvars[item]['kafka_controller_sasl_protocol'] is defined
+  tags: validate
