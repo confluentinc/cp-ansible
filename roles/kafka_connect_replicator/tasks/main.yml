@@ -256,6 +256,26 @@
   include_tasks: register_cluster.yml
   when: kafka_connect_replicator_cluster_name|length > 0 and rbac_enabled|bool
 
+- name: Extract Connect Replicator Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{kafka_connect_replicator_keystore_path}}"
+    keystore_storepass: "{{kafka_connect_replicator_keystore_storepass}}"
+    pm_rules: "{{kafka_connect_replicator_final_properties.get('ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - rbac_enabled|bool
+    - auth_mode == 'mtls'
+
+- name: Configure RBAC on Replicator configuration for Mtls User
+  include_tasks: rbac_replicator.yml
+  vars:
+    replicator_user: "{{ks_extracted_principal}}"
+  when:
+    - rbac_enabled|bool
+    - auth_mode == 'mtls'
+
 - name: Configure RBAC on Replicator configuration for OAuth User
   include_tasks: rbac_replicator.yml
   vars:
@@ -270,7 +290,16 @@
     replicator_user: "{{kafka_connect_replicator_ldap_user}}"
   when:
     - kafka_connect_replicator_rbac_enabled|bool
-    - ((not oauth_enabled) or ( oauth_enabled and ldap_with_oauth_enabled ))
+    - "'ldap' in auth_mode"
+
+- name: Configure RBAC on Replicator Consumer configuration for Mtls User
+  include_tasks: rbac_replicator_consumer.yml
+  vars:
+    replicator_consumer_user: "{{ks_extracted_principal}}"
+  when:
+    - rbac_enabled|bool
+    - not kafka_connect_replicator_oauth_enabled
+    - auth_mode == 'mtls'
 
 - name: Configure RBAC on Replicator Consumer configuration for OAuth User
   include_tasks: rbac_replicator_consumer.yml
@@ -286,7 +315,16 @@
     replicator_consumer_user: "{{kafka_connect_replicator_consumer_ldap_user}}"
   when:
     - kafka_connect_replicator_consumer_rbac_enabled|bool
-    - ((not oauth_enabled) or ( oauth_enabled and ldap_with_oauth_enabled ))
+    - "'ldap' in auth_mode"
+
+- name: Configure RBAC on Replicator Producer configuration for Mtls User
+  include_tasks: rbac_replicator_producer.yml
+  vars:
+    replicator_producer_user: "{{ks_extracted_principal}}"
+  when:
+    - rbac_enabled|bool
+    - not kafka_connect_replicator_oauth_enabled
+    - auth_mode == 'mtls'
 
 - name: Configure RBAC on Replicator Producer configuration for OAuth User
   include_tasks: rbac_replicator_producer.yml
@@ -302,7 +340,16 @@
     replicator_producer_user: "{{kafka_connect_replicator_producer_ldap_user}}"
   when:
     - kafka_connect_replicator_producer_rbac_enabled|bool
-    - ((not oauth_enabled) or ( oauth_enabled and ldap_with_oauth_enabled ))
+    - "'ldap' in auth_mode"
+
+- name: Configure RBAC on Replicator monitoring interceptor configuration for Mtls User
+  include_tasks: rbac_replicator_monitoring.yml
+  vars:
+    replicator_monitoring_user: "{{ks_extracted_principal}}"
+  when:
+    - rbac_enabled|bool
+    - not kafka_connect_replicator_oauth_enabled
+    - auth_mode == 'mtls'
 
 - name: Configure RBAC on Replicator monitoring interceptor configuration for OAuth User
   include_tasks: rbac_replicator_monitoring.yml
@@ -318,7 +365,7 @@
     replicator_monitoring_user: "{{kafka_connect_replicator_monitoring_interceptor_ldap_user}}"
   when:
     - kafka_connect_replicator_monitoring_interceptor_rbac_enabled|bool
-    - ((not oauth_enabled) or ( oauth_enabled and ldap_with_oauth_enabled ))
+    - "'ldap' in auth_mode"
 
 - name: Import IDP certificate to Truststore for OAuth
   include_role:
