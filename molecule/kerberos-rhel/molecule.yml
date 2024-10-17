@@ -31,6 +31,19 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}2
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: oraclelinux:9-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: kafka-broker1
     hostname: kafka-broker1.confluent
     groups:
@@ -145,6 +158,18 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+  - name: controller2-mig
+    hostname: controller2-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: oraclelinux:9-slim
+    dockerfile: ../Dockerfile-rhel-java8.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
     converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
@@ -152,7 +177,15 @@ provisioner:
     group_vars:
       all:
         scenario_name: kerberos-rhel
-        sasl_protocol: kerberos
+        sasl_protocol: kerberos,plain
+
+        kafka_broker_custom_listeners:
+          client:
+            name: CLIENT
+            port: 9093
+            sasl_protocol: plain
+
+        ksql_kafka_listener_name: client
 
         kerberos:
           realm: realm.example.com
@@ -191,9 +224,6 @@ provisioner:
       kafka_connect:
         kafka_connect_kerberos_principal: "kafka_connect/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         kafka_connect_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_connect-{{inventory_hostname}}.keytab"
-      ksql:
-        ksql_kerberos_principal: "ksql/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        ksql_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/ksql-{{inventory_hostname}}.keytab"
       control_center:
         control_center_kerberos_principal: "control_center/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         control_center_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/control_center-{{inventory_hostname}}.keytab"
@@ -209,11 +239,20 @@ provisioner:
           - principal: "zk/zookeeper1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
 
+          - principal: "zk/zookeeper2.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/zookeeper-zookeeper2.keytab"
+
           - principal: "kafka-a/controller1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_controller-controller1.keytab"
 
           - principal: "kafka-a/controller1-mig.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_controller-controller1-mig.keytab"
+
+          - principal: "kafka-a/controller2.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller2.keytab"
+
+          - principal: "kafka-a/controller2-mig.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller2-mig.keytab"
 
           - principal: "kafka-a/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
@@ -232,9 +271,6 @@ provisioner:
 
           - principal: "kafka_connect/kafka-connect1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_connect-kafka-connect1.keytab"
-
-          - principal: "ksql/ksql1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/ksql-ksql1.keytab"
 
           - principal: "control_center/control-center1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/control_center-control-center1.keytab"
