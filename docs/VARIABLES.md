@@ -990,7 +990,7 @@ Default:  "{{ssl_mutual_auth_enabled}}"
 
 ### kafka_controller_sasl_protocol
 
-SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, scram, scram256 (only when providing some other protocol along with it).
+SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none, scram, scram256 (scram only when providing multiple values with first value being non-scram).
 You can provide a comma-separated list of at most two mechanisms to configure multiple listeners with different mechanisms. For example, 'plain,scram'
 When configuring multiple values, you can provide values only from the following list: kerberos, plain, scram, scram256
 
