@@ -1,10 +1,40 @@
 ---
+- name: Extract Certs on Broker
+  import_role:
+    name: ssl
+    tasks_from: export_certs_from_keystore_and_truststore.yml
+  vars:
+    truststore_storepass: "{{ kafka_broker_truststore_storepass }}"
+    truststore_path: "{{ kafka_broker_truststore_path }}"
+    keystore_storepass: "{{ kafka_broker_keystore_storepass }}"
+    keystore_path: "{{ kafka_broker_keystore_path }}"
+    ca_cert_path: "{{ kafka_broker_ca_cert_path }}"
+    cert_path: "{{ kafka_broker_cert_path }}"
+    key_path: "{{ kafka_broker_key_path }}"
+  when:
+    - ssl_provided_keystore_and_truststore|bool
+    - ssl_client_authentication in ['required', 'requested']
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+
 - name: Get Kafka Cluster Id
   import_role:
     name: common
     tasks_from: rbac_setup.yml
   vars:
     copy_certs: false
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+
+- name: Delete temporary keys/certs when keystore and trustore is provided
+  file:
+    path: "{{item}}"
+    state: absent
+  loop:
+    - "{{ kafka_broker_ca_cert_path }}"
+    - "{{ kafka_broker_cert_path }}"
+    - "{{ kafka_broker_key_path }}"
+  when:
+    - ssl_provided_keystore_and_truststore|bool
+    - ssl_client_authentication in ['required', 'requested']
   delegate_to: "{{ groups['kafka_broker'][0] }}"
 
 - set_fact:
