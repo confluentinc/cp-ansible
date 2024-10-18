@@ -1,5 +1,5 @@
 ---
-### Installs Confluent Platform Cluster on Oracle Linux 8.
+### Installs Confluent Platform Cluster on ubi9.
 ### RBAC enabled.
 ### MTLS enabled.
 ### Kafka Broker Customer Listener.
@@ -109,17 +109,87 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center
+    image: redhat/ubi9-minimal
+    published_ports:
+      - "9021:9021"
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
     converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
+        mask_secrets: false
         ssl_enabled: true
         ssl_mutual_auth_enabled: true
-        ssl_client_authentication: required
+        ssl_client_authentication: requested
 
         rbac_enabled: true
+        auth_mode: oauth
+
+        #impersonation_super_users:
+        #   - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker'
+        #   - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_rest'
+        #   - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=schema_registry'
+        #   - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_connect'
 
         kafka_broker_custom_listeners:
           client_listener:
@@ -130,7 +200,6 @@ provisioner:
         keycloak_http_protocol: https
 
         oauth_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oauthcertfile.pem"
-        auth_mode: oauth
         oauth_superuser_client_id: superuser
         oauth_superuser_client_password: my-secret
 
@@ -140,3 +209,32 @@ provisioner:
         oauth_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
         oauth_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
         oauth_expected_audience: Confluent,account,api://default
+
+        schema_registry_oauth_user: schema_registry
+        schema_registry_oauth_password: my-secret
+
+        kafka_rest_oauth_user: kafka_rest
+        kafka_rest_oauth_password: my-secret
+
+        kafka_connect_oauth_user: kafka_connect
+        kafka_connect_oauth_password: my-secret
+
+        ksql_oauth_user: ksql
+        ksql_oauth_password: my-secret
+
+        control_center_oauth_user: control_center
+        control_center_oauth_password: my-secret
+
+        sso_mode: oidc
+        sso_groups_claim: groups
+        sso_sub_claim: sub
+        sso_groups_scope: groups
+        sso_issuer_url: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7
+        sso_jwks_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/keys
+        sso_authorize_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/authorize
+        sso_token_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/token
+        sso_device_authorization_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/device/authorize
+        sso_cli: true
+        sso_client_id: ${OKTA_CLIENT:-user}
+        sso_client_password: ${OKTA_PASSWORD:-pass}
+        sso_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/ssocertfile.pem"
