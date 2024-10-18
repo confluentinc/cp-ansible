@@ -183,6 +183,26 @@
     - oauth_enabled|bool or schema_registry_oauth_enabled|bool or kafka_rest_oauth_enabled|bool or kafka_connect_oauth_enabled|bool or kafka_connect_replicator_oauth_enabled|bool
     - oauth_idp_cert_path != ""
 
+- name: Extract RP Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{kafka_rest_keystore_path}}"
+    keystore_storepass: "{{kafka_rest_keystore_storepass}}"
+    pm_rules: "{{kafka_rest_final_properties.get('ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - rbac_enabled|bool
+    - auth_mode == 'mtls'
+
+- name: Configure RBAC for mTLS User
+  include_tasks: rbac.yml
+  vars:
+    rest_user: "{{ks_extracted_principal}}"
+  when:
+    - rbac_enabled|bool
+    - auth_mode == 'mtls'
+
 - name: Create SSL Certificate Directory
   file:
     path: /var/ssl/private
