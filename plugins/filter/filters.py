@@ -180,8 +180,10 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.ssl.keystore.password'] = str(kafka_broker_keystore_storepass)
                 final_dict['listener.name.' + listener_name + '.ssl.key.password'] = str(kafka_broker_keystore_keypass)
 
-                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = listeners_dict[listener].get('ssl_client_authentication', default_ssl_client_authentication)
-                final_dict['listener.name.' + listener_name + '.ssl.principal.mapping.rules'] = ','.join(listeners_dict[listener].get('principal_mapping_rules', default_principal_mapping_rules))
+                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = \
+                    listeners_dict[listener].get('ssl_client_authentication', default_ssl_client_authentication)
+                final_dict['listener.name.' + listener_name + '.ssl.principal.mapping.rules'] = \
+                    ','.join(listeners_dict[listener].get('principal_mapping_rules', default_principal_mapping_rules))
 
             if bouncy_castle_keystore:
                 final_dict['listener.name.' + listener_name + '.ssl.keymanager.algorithm'] = 'PKIX'
@@ -189,7 +191,6 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.ssl.keystore.type'] = 'BCFKS'
                 final_dict['listener.name.' + listener_name + '.ssl.truststore.type'] = 'BCFKS'
                 final_dict['listener.name.' + listener_name + '.ssl.enabled.protocols'] = 'TLSv1.2,TLSv1.3'
-
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'PLAIN':
                 final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'PLAIN'
