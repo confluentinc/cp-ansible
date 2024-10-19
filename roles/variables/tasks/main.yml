@@ -1,0 +1,55 @@
+---
+- name: Define the old ssl_mutual_auth_enabled variable
+  set_fact:
+    ssl_mutual_auth_enabled: true
+  when:
+    - ssl_client_authentication in ['required','requested']
+    - not ssl_mutual_auth_enabled|bool
+
+- name: Define the new ssl_client_authentication variable
+  set_fact:
+    to_be_ssl_client_authentication: >-
+      {%- if deployment_strategy == 'parallel' -%}
+        required
+      {%- elif deployment_strategy in ['serial', 'rolling'] and rbac_enabled|bool -%}
+        requested
+      {%- endif -%}
+  when:
+    - ssl_mutual_auth_enabled|bool
+    - ssl_client_authentication == 'none'
+
+- name: Check if confirmation should be skipped
+  set_fact:
+    skip_confirmation: "{{ lookup('env', 'SKIP_SSL_CLIENT_AUTH_CONFIRMATION') | default('false') | bool }}"
+
+# Beware of the issue https://github.com/ansible/ansible/issues/81155.
+# When the output isn't directly going to terminal at times prompt may appear after user input.
+# Workaround is pointed in the github issue itself.
+# The user will not run into this issue if they have defined the new variable ssl_client_authentication
+# in the inventory file for mtls scenario.
+- name: Warn about the value of ssl_client_authentication will be set
+  pause:
+    prompt: "The value of ssl_client_authentication will be set to {{ to_be_ssl_client_authentication }}. Is this ok[y/N]"
+  register: user_confirmation
+  run_once: true
+  when:
+    - ssl_client_authentication == 'none'
+    - ssl_mutual_auth_enabled|bool
+    - not skip_confirmation|bool
+
+- name: Check user confirmation
+  fail:
+    msg: "User chose to cancel the operation."
+  when:
+    - ssl_client_authentication == 'none'
+    - ssl_mutual_auth_enabled|bool
+    - not skip_confirmation|bool
+    - user_confirmation.user_input|lower != 'y'
+
+- name: Set the ssl_client_authentication
+  set_fact:
+    ssl_client_authentication: "{{ to_be_ssl_client_authentication }}"
+  when:
+    - ssl_client_authentication == 'none'
+    - ssl_mutual_auth_enabled|bool
+    - skip_confirmation or user_confirmation.user_input|lower == 'y'
