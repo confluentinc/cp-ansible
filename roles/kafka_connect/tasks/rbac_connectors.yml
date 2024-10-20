@@ -9,12 +9,18 @@
     oauth_password: "{{ oauth_superuser_client_password }}"
     ldap_user: "{{ mds_super_user }}"
     ldap_password: "{{ mds_super_user_password }}"
+    client_cert: "{{ kafka_broker_cert_path }}"
+    client_key: "{{ kafka_broker_key_path }}"
   when: rbac_enabled or oauth_enabled
+  delegate_to: "{{ groups['kafka_broker'][0] }}"  # delegating this task to broker as in case of cert based token retrival only broker can get a super user token using its certs
 
 - name: Check Kafka Connect Connector Topics
   assert:
     that: kafka_connect_connector_white_list != ""
     fail_msg: "Please provide Connector's Topics to produce/consume data in the inventory file."
+
+- set_fact:
+    send_client_cert: "{{ ssl_client_authentication in ['required', 'requested'] }}"
 
 - name: Grant Connect User ResourceOwner role on White List Topics
   uri:
@@ -24,6 +30,8 @@
     headers:
       Content-Type: application/json
       Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -55,6 +63,8 @@
     headers:
       Content-Type: application/json
       Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -88,6 +98,8 @@
     headers:
       Content-Type: application/json
       Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -118,6 +130,8 @@
     headers:
       Content-Type: application/json
       Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
