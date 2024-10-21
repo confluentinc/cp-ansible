@@ -68,7 +68,7 @@ import ansible.module_utils.six.moves.urllib.error as urllib_error
 __metaclass__ = type
 
 RUNNING_STATE = "RUNNING"
-WAIT_TIME_BEFORE_GET_STATUS = 1  # seconds
+WAIT_TIME_BEFORE_GET_STATUS = 10  # seconds
 TIMEOUT_WAITING_FOR_TASK_STATUS = 30  # seconds
 
 
@@ -112,6 +112,8 @@ def create_new_connector(connect_url, name, config, timeout):
 
 # truncates to 200 chars or the first line feed
 def truncate_error_message(message):
+    if message is None: # to avoid Errors in None.splitlines()
+        return ''
     lines = message.splitlines()
     if lines:
         return lines[0][0:200]
@@ -124,30 +126,66 @@ def get_connector_status(connect_url, connector_name, timeout):
     time.sleep(WAIT_TIME_BEFORE_GET_STATUS)
     status_url = "{}/{}/status".format(connect_url, connector_name)
 
-    res = open_url(status_url, validate_certs=False, timeout=timeout)
-    current_status = json.loads(res.read())
+    time_waited=0
+    try:
+        connector_status = 'awaiting'
+        while connector_status != RUNNING_STATE and time_waited < TIMEOUT_WAITING_FOR_TASK_STATUS:
+            # retry until the connector is running or timeout
+            res = open_url(status_url, validate_certs=False, timeout=timeout)
+            current_status = json.loads(res.read())
 
-    connector_status = current_status['connector']['state']
+            connector_status = current_status['connector']['state']
+
+            if connector_status != RUNNING_STATE:
+                time_waited+=1
+                time.sleep(1)
+
+        if connector_status != RUNNING_STATE:
+            return False, "Connector state paused or failed"
+
+        nb_tasks = len(current_status['tasks'])
+
+    except urllib_error.HTTPError as e:
+        message = "Error while getting status of connector ({})".format(e)
+        return False, message
+    except json.JSONDecodeError as e:
+        message = "JSON decode error while parsing connector status: ({})".format(e)
+        return False, message
+    except KeyError as e:
+        message = "Key error while accessing connector state: ({})".format(e)
+        return False, message
+    except Exception as e:
+        message = "Unexpected error while getting status of connector: ({})".format(e)
+        return False, message
 
     failures = []
-    if connector_status != RUNNING_STATE:
-        failures.append("connector state paused or failed")
-
-    nb_tasks = len(current_status['tasks'])
-    time_waited = 0
     while not nb_tasks:
         time_waited += 1
         time.sleep(1)
         if time_waited > TIMEOUT_WAITING_FOR_TASK_STATUS:
             return False, "timeout getting task status"
 
-        res = open_url(status_url, validate_certs=False, timeout=timeout)
-        current_status = json.loads(res.read())
-        nb_tasks = len(current_status['tasks'])
+        try:
+            res = open_url(status_url, validate_certs=False, timeout=timeout)
+            current_status = json.loads(res.read())
+            nb_tasks = len(current_status['tasks'])
+        except urllib_error.HTTPError as e:
+            message = "Error while getting status of connector ({})".format(e)
+            return False, message
+        except json.JSONDecodeError as e:
+            message = "JSON decode error while parsing connector status: ({})".format(e)
+            return False, message
+        except KeyError as e:
+            message = "Key error while accessing connector state: ({})".format(e)
+            return False, message
+        except Exception as e:
+            message = "Unexpected error while getting status of connector: ({})".format(e)
+            return False, message
 
     for task in current_status['tasks']:
         if task['state'] != RUNNING_STATE:
-            failures.append("task {}: {}".format(task['id'], truncate_error_message(task.get('trace'))))
+            no_trace_error_msg = 'No trace in api response. task[\'state\']: {}'.format(task['state'])
+            failures.append("task {}: {}".format(task['id'], truncate_error_message(task.get('trace', no_trace_error_msg))))
 
     if failures:
         return False, ", ".join(failures)
