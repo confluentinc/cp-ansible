@@ -1,4 +1,12 @@
 ---
+- name: Set delegation status
+  set_fact:
+    delegated_to_localhost: external_mds_enabled|bool
+    mds_mtls_client_cert: "{{ mds_super_user_external_cert_path if delegated_to_localhost|bool else kafka_broker_cert_path }}"
+    mds_mtls_client_key: "{{ mds_super_user_external_key_path if delegated_to_localhost|bool else kafka_broker_key_path }}"
+  # In case of Centralized MDS other clusters can't delegate to MDS cluster as that cluster may
+  # not have permissions to ssh into MDS, thus delegate to localhost.
+
 - name: Get Authorization Token for Connect Replicator Producer ERP User
   import_role:
     name: common
@@ -9,10 +17,8 @@
     oauth_password: "{{ kafka_connect_replicator_producer_erp_oauth_password }}"
     ldap_user: "{{ kafka_connect_replicator_producer_erp_admin_user }}"
     ldap_password: "{{ kafka_connect_replicator_producer_erp_admin_password }}"
-    client_cert: "{{ kafka_broker_cert_path }}"
-    client_key: "{{ kafka_broker_key_path }}"
   when: kafka_connect_replicator_producer_rbac_enabled or kafka_connect_replicator_oauth_enabled
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_to: "{{ 'localhost' if external_mds_enabled|bool else groups['kafka_broker'][0] }}"
 
 - name: Create SSL Certificate Directory
   file:
