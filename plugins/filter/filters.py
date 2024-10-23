@@ -69,7 +69,7 @@ class FilterModule(object):
         return kafka_protocol
 
     def split_to_list(self, string):
-        return string.replace(" ", "").split(',')
+        return re.sub(r"[ \t]", "", string).split(',')
 
     def all_elements_present(self, sasl_protocols_normalized, required_mechanisms):
         return all(protocol in required_mechanisms for protocol in sasl_protocols_normalized)
@@ -318,39 +318,39 @@ class FilterModule(object):
 
         sasl_protocols = listener_dict.get('sasl_protocol', default_sasl_protocol)
         normalize_sasl_protocols = self.normalize_sasl_protocol(sasl_protocols)
-        if 'PLAIN' in normalize_sasl_protocols and not omit_jaas_configs:
+        if normalize_sasl_protocols[0] == 'PLAIN' and not omit_jaas_configs:
             final_dict[config_prefix + 'sasl.mechanism'] = 'PLAIN'
             final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.plain.PlainLoginModule required username=\"' +\
                 sasl_plain_username +\
                 '\" password=\"' +\
                 str(sasl_plain_password) + '\";'
 
-        if 'SCRAM-SHA-512' in normalize_sasl_protocols and not omit_jaas_configs and not kraft_listener:
+        if normalize_sasl_protocols[0] == 'SCRAM-SHA-512' and not omit_jaas_configs and not kraft_listener:
             final_dict[config_prefix + 'sasl.mechanism'] = 'SCRAM-SHA-512'
             final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' +\
                 sasl_scram_username + '\" password=\"' + str(sasl_scram_password) + '\";'
 
-        if 'SCRAM-SHA-256' in normalize_sasl_protocols and not omit_jaas_configs and not kraft_listener:
+        if normalize_sasl_protocols[0] == 'SCRAM-SHA-256' and not omit_jaas_configs and not kraft_listener:
             final_dict[config_prefix + 'sasl.mechanism'] = 'SCRAM-SHA-256'
             final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' +\
                 sasl_scram256_username + '\" password=\"' + sasl_scram256_password + '\";'
 
-        if 'GSSAPI' in normalize_sasl_protocols:
+        if normalize_sasl_protocols[0] == 'GSSAPI':
             final_dict[config_prefix + 'sasl.mechanism'] = 'GSSAPI'
             final_dict[config_prefix + 'sasl.kerberos.service.name'] = kerberos_kafka_broker_primary
 
-        if 'GSSAPI' in normalize_sasl_protocols and not omit_jaas_configs:
+        if normalize_sasl_protocols[0] == 'GSSAPI' and not omit_jaas_configs:
             final_dict[config_prefix + 'sasl.jaas.config'] = 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' +\
                 keytab_path + '\" principal=\"' + kerberos_principal + '\";'
 
         if not omit_oauth_configs:
-            if 'OAUTHBEARER' in normalize_sasl_protocols and not oauth_enabled:
+            if normalize_sasl_protocols[0] == 'OAUTHBEARER' and not oauth_enabled:
                 final_dict[config_prefix + 'sasl.mechanism'] = 'OAUTHBEARER'
                 final_dict[config_prefix + 'sasl.login.callback.handler.class'] = 'io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler'
                 final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"' +\
                     oauth_username + '\" password=\"' + str(oauth_password) + '\" metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
 
-            if 'OAUTHBEARER' in normalize_sasl_protocols and oauth_enabled:
+            if normalize_sasl_protocols[0] == 'OAUTHBEARER' and oauth_enabled:
                 final_dict[config_prefix + 'sasl.mechanism'] = 'OAUTHBEARER'
                 final_dict[config_prefix + 'sasl.login.callback.handler.class'] =\
                     'org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler'
