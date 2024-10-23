@@ -112,7 +112,7 @@ def create_new_connector(connect_url, name, config, timeout):
 
 # truncates to 200 chars or the first line feed
 def truncate_error_message(message):
-    if message is None: # to avoid Errors in None.splitlines()
+    if message is None:  # to avoid Errors in None.splitlines()
         return ''
     lines = message.splitlines()
     if lines:
@@ -126,7 +126,7 @@ def get_connector_status(connect_url, connector_name, timeout):
     time.sleep(WAIT_TIME_BEFORE_GET_STATUS)
     status_url = "{}/{}/status".format(connect_url, connector_name)
 
-    time_waited=0
+    time_waited = 0
     try:
         connector_status = 'awaiting'
         while connector_status != RUNNING_STATE and time_waited < TIMEOUT_WAITING_FOR_TASK_STATUS:
@@ -137,7 +137,7 @@ def get_connector_status(connect_url, connector_name, timeout):
             connector_status = current_status['connector']['state']
 
             if connector_status != RUNNING_STATE:
-                time_waited+=1
+                time_waited += 1
                 time.sleep(1)
 
         if connector_status != RUNNING_STATE:
