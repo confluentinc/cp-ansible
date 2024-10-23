@@ -35,7 +35,7 @@ class FilterModule(object):
 
     def normalize_sasl_protocol(self, protocols):
         # Returns a list of standardized values for sasl mechanism strings
-        protocol_list = protocols.replace(" ", "").split(',')
+        protocol_list = self.split_to_list(protocols)
 
         normalized_protocols = []
         for protocol in protocol_list:
