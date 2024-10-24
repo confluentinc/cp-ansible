@@ -6,11 +6,18 @@
   when: rbac_enabled
   vars:
     copy_certs: false
+    delegated_to_localhost: "{{ external_mds_enabled|bool }}"
+  delegate_to: "{{ 'localhost' if external_mds_enabled|bool else groups['kafka_broker'][0] }}"
+  # For single cluster delegating this task to broker as in case of cert based token retrival only broker can get a super user token using its certs
+  # For Centralized MDS other clusters can't delegate to MDS cluster as that cluster may not have permissions to ssh into MDS, thus delegate to localhost
 
 - name: Fetch KSQL Cluster Groups
   set_fact:
     active_ksql_groups: "{{ (((active_ksql_groups | default([])) + hostvars[item].group_names) | difference('ksql'+'ksql_parallel'+'ksql_serial'+'kafka_connect'+'kafka_connect_parallel'+'kafka_connect_serial'+ 'kafka_broker'+ 'kafka_broker_parallel'+'kafka_broker_serial'+'control_center'+'control_center_parallel'+'control_center_serial'+'schema_registry'+'zookeeper'+'zookeeper_parallel'+'zookeeper_serial'+'kafka_rest'+'kafka_rest_parallel'+'kafka_rest_serial'+'kafka_controller'+'kafka_controller_parallel'+'kafka_controller_serial')) | default(['ksql'], true) }}"
   with_items: "{{ ansible_play_hosts }}"
+
+- set_fact:
+    send_client_cert: "{{ ssl_client_authentication in ['required', 'requested'] }}"
 
 - name: Register KSQL Cluster
   vars:
@@ -22,6 +29,8 @@
     url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/registry/clusters"
     method: POST
     validate_certs: false
+    client_cert: "{{ ksql_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ ksql_key_path if send_client_cert|bool else omit }}"
     headers:
       Content-Type: application/json
       Authorization: "Bearer {{ authorization_token }}"

@@ -212,8 +212,11 @@ ssl_enabled: false
 ### Set this variable to customize expiration days for certificate authority. Applies for all components of Confluent Platform.
 certificate_authority_expiration_days: 365
 
-### Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka
+### Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka. No need to define this anymore, use ssl_client_authentication instead.
 ssl_mutual_auth_enabled: false
+
+### mTLS server's config to enforce ssl client authentication. Options are none, requested(used for upgrades where client is not mandated to send certs to server), required(client must send cert to server)
+ssl_client_authentication: none
 
 ### Boolean to create Keystores with Self Signed Certificates, defaults to true. Alternatively can use ssl_provided_keystore_and_truststore or ssl_custom_certs
 self_signed: "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_certs|bool else true }}"
@@ -224,6 +227,16 @@ ssl_self_signed_ca_password: capassword123
 
 ### Directory on hosts to store all ssl files.
 ssl_file_dir: /var/ssl/private/
+
+### principal mapping rules to map the DN from cert into a username
+principal_mapping_rules:
+  - 'DEFAULT'
+
+### Users allowed to get an impersonation token for other users except the impersonation protected users. Must be defined in case of RBAC over mTLS only.
+impersonation_super_users: []
+
+### Users which cant be impersonated using impersonation token. Super users should be added here to disallow them from being impersonated in case of RBAC over mTLS only.
+impersonation_protected_users: []
 
 ### Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs.
 regenerate_ca: false
@@ -437,6 +450,8 @@ kafka_controller_listeners: "{
     'port': {{kafka_controller_port}},
     'ssl_enabled': {{kafka_controller_ssl_enabled|string|lower}},
     'ssl_mutual_auth_enabled': {{kafka_controller_ssl_mutual_auth_enabled|string|lower}},
+    'ssl_client_authentication': '{{kafka_controller_ssl_client_authentication|string|lower}}',
+    'principal_mapping_rules': {{principal_mapping_rules}},
     'sasl_protocol': '{{kafka_controller_sasl_protocol}}'
   }
 }"
@@ -449,6 +464,9 @@ kafka_controller_ssl_enabled: "{{ssl_enabled}}"
 
 ### Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
 kafka_controller_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
+
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+kafka_controller_ssl_client_authentication: "{{ssl_client_authentication}}"
 
 ### SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none
 kafka_controller_sasl_protocol: "{{sasl_protocol}}"
@@ -566,13 +584,27 @@ kafka_broker_default_listeners: "{
     'port': 9092,
     'ssl_enabled': {% if ccloud_kafka_enabled|bool %}true{% else %}{{ssl_enabled|string|lower}}{% endif %},
     'ssl_mutual_auth_enabled': {% if ccloud_kafka_enabled|bool %}false{% else %}{{ssl_mutual_auth_enabled|string|lower}}{% endif %},
-    'sasl_protocol': '{% if rbac_enabled|bool or oauth_enabled|bool %}OAUTH{% elif ccloud_kafka_enabled|bool %}PLAIN{% else %}{{sasl_protocol}}{% endif %}'
-  }{% if kafka_broker_configure_multiple_listeners|bool %},
+    'ssl_client_authentication': '{% if ccloud_kafka_enabled|bool %}none{% else %}{{ssl_client_authentication|string|lower}}{% endif %}',
+    'principal_mapping_rules': {{principal_mapping_rules}},
+    'sasl_protocol': '{% if auth_mode in [\"ldap\", \"ldap_with_oauth\", \"oauth\"] %}OAUTH{% elif ccloud_kafka_enabled|bool %}PLAIN{% else %}{{sasl_protocol}}{% endif %}'
+  }{% if auth_mode == 'mtls' %},
+  'internal_token': {
+    'name': 'INTERNAL_TOKEN',
+    'port': 9088,
+    'ssl_enabled': true,
+    'ssl_mutual_auth_enabled': true,
+    'ssl_client_authentication': '{{ssl_client_authentication|string|lower}}',
+    'principal_mapping_rules': {{principal_mapping_rules}},
+    'sasl_protocol': 'OAUTH'
+  }{% endif %}
+  {% if kafka_broker_configure_multiple_listeners|bool %},
   'broker': {
     'name': 'BROKER',
     'port': 9091,
     'ssl_enabled': {{ssl_enabled|string|lower}},
     'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
+    'ssl_client_authentication': '{{ssl_client_authentication|string|lower}}',
+    'principal_mapping_rules': {{principal_mapping_rules}},
     'sasl_protocol': '{{sasl_protocol}}'
   }{% if kafka_broker_configure_control_plane_listener|bool and not kraft_enabled|bool %},
   'controller': {
@@ -580,6 +612,8 @@ kafka_broker_default_listeners: "{
     'port': 9089,
     'ssl_enabled': {{ssl_enabled|string|lower}},
     'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
+    'ssl_client_authentication': '{{ssl_client_authentication|string|lower}}',
+    'principal_mapping_rules': {{principal_mapping_rules}},
     'sasl_protocol': '{{sasl_protocol}}'
   }{% endif %}{% endif %}
 }"
@@ -700,10 +734,20 @@ kafka_broker_custom_client_properties: {}
 ### Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
 kafka_broker_rest_proxy_enabled: "{{confluent_server_enabled and not ccloud_kafka_enabled }}"
 
+### Property of ERP as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+kafka_broker_rest_proxy_to_mds_send_certs_only: false
+
 ### Authentication type to add to Kafka's embedded rest proxy or Admin API. Do not set when RBAC is enabled. Options: [basic, none]
 kafka_broker_rest_proxy_authentication_type: none
 
-kafka_broker_rest_proxy_listener_name: "{{ 'internal' if rbac_enabled else kafka_broker_inter_broker_listener_name }}"
+kafka_broker_rest_proxy_listener_name: >-
+  {%- if not rbac_enabled|bool -%}
+    {{ kafka_broker_inter_broker_listener_name }}
+  {%- elif rbac_enabled|bool and auth_mode == 'mtls' -%}
+    internal_token
+  {%- else -%}
+    internal
+  {%- endif -%}
 
 ### Use to register and identify your Kafka cluster in the MDS.
 kafka_broker_cluster_name: ""
@@ -734,6 +778,12 @@ schema_registry_ssl_enabled: "{{ssl_enabled}}"
 
 ### Deprecated- Boolean to enable mTLS Authentication on Schema Registry
 schema_registry_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+schema_registry_ssl_client_authentication: "{{ssl_client_authentication}}"
+
+### Property of SR as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+schema_registry_to_mds_send_certs_only: false
 
 ### Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
 schema_registry_authentication_type: "{{ 'mtls' if schema_registry_ssl_mutual_auth_enabled else 'none' }}"
@@ -834,6 +884,12 @@ kafka_rest_ssl_enabled: "{{ssl_enabled}}"
 ### Deprecated- Boolean to enable mTLS Authentication on Rest Proxy
 kafka_rest_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+kafka_rest_ssl_client_authentication: "{{ssl_client_authentication}}"
+
+### Property of Rest Proxy as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+kafka_rest_to_mds_send_certs_only: false
+
 ### Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
 kafka_rest_authentication_type: "{{ 'mtls' if kafka_rest_ssl_mutual_auth_enabled else 'none' }}"
 
@@ -864,7 +920,12 @@ kafka_rest_cert_path: "{{ ssl_file_dir_final }}/kafka_rest.crt"
 kafka_rest_key_path: "{{ ssl_file_dir_final }}/kafka_rest.key"
 kafka_rest_export_certs: "{{ True if kafka_rest_authentication_type == 'mtls' else False }}"
 kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
-kafka_rest_kafka_listener_name: internal
+kafka_rest_kafka_listener_name: >-
+  {%- if rbac_enabled|bool and auth_mode=='mtls' -%}
+    internal_token
+  {%- else -%}
+    internal
+  {%- endif -%}
 
 ### Boolean to enable Jolokia Agent installation and configuration on Rest Proxy
 kafka_rest_jolokia_enabled: "{{jolokia_enabled}}"
@@ -939,6 +1000,12 @@ kafka_connect_ssl_enabled: "{{ssl_enabled}}"
 
 ### Deprecated- Boolean to enable mTLS Authentication on Connect
 kafka_connect_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+kafka_connect_ssl_client_authentication: "{{ssl_client_authentication}}"
+
+### Property of Connect as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+kafka_connect_to_mds_send_certs_only: false
 
 ### Authentication to put on Connect's Rest Endpoint. Available options: [mtls, basic, none].
 kafka_connect_authentication_type: "{{ 'mtls' if kafka_connect_ssl_mutual_auth_enabled|bool else 'none' }}"
@@ -1084,6 +1151,9 @@ ksql_ssl_enabled: "{{ssl_enabled}}"
 ### Deprecated - Boolean to enable mTLS Authentication on ksqlDB
 ksql_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 
+### Property of Ksql as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+ksql_to_mds_send_certs_only: false
+
 ### Authentication to put on ksqlDB's Rest Endpoint. Available options: [mtls, basic, none].
 ksql_authentication_type: "{{ 'mtls' if ksql_ssl_mutual_auth_enabled|bool else 'none' }}"
 
@@ -1197,6 +1267,9 @@ control_center_listener_hostname: "0.0.0.0"
 
 ### Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
 control_center_ssl_enabled: "{{ssl_enabled}}"
+
+### Property of Control Center as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+control_center_to_mds_send_certs_only: false
 
 ### Control Center Authentication. Available options: [basic, none].
 control_center_authentication_type: none
@@ -1513,6 +1586,12 @@ oauth_expected_audience: none
 oauth_idp_cert_path: ""
 
 idp_self_signed: "{{'true' if oauth_idp_cert_path != '' else 'false'}}"
+
+### MDS certs path on ansible control node. Used in case of centralized MDS with mTLS for external clusters to get a superuser token from MDS. This cert must have super user permissions as it will be the one used for giving rolebindings to other users like SR, Connect. Used with mds_super_user_external_key_path
+mds_super_user_external_cert_path: ""
+
+### MDS key path on ansible control node.
+mds_super_user_external_key_path: ""
 
 ### LDAP User which will be granted super user permissions to create role bindings in the MDS
 mds_super_user: mds
@@ -2038,6 +2117,13 @@ kafka_connect_replicator_ssl_provided_keystore_and_truststore: false
 
 ### Boolean to enable mTLS Authentication on Kafka Connect Replicator.
 kafka_connect_replicator_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
+
+
+### Property of Replicator as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+kafka_connect_replicator_to_mds_send_certs_only: false
+
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+kafka_connect_replicator_ssl_client_authentication: "{{ssl_client_authentication}}"
 
 ### Boolean to enable TLS on Kafka Connect Replicator
 kafka_connect_replicator_ssl_enabled: "{{ssl_enabled}}"

@@ -156,9 +156,9 @@ class FilterModule(object):
         return final_dict
 
     def listener_properties(self, listeners_dict, default_ssl_enabled,
-                            bouncy_castle_keystore, default_ssl_mutual_auth_enabled,
-                            default_sasl_protocol, kafka_broker_truststore_path,
-                            kafka_broker_truststore_storepass,
+                            bouncy_castle_keystore, default_ssl_client_authentication,
+                            default_principal_mapping_rules, default_sasl_protocol,
+                            kafka_broker_truststore_path, kafka_broker_truststore_storepass,
                             kafka_broker_keystore_path,
                             kafka_broker_keystore_storepass,
                             kafka_broker_keystore_keypass,
@@ -180,15 +180,17 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.ssl.keystore.password'] = str(kafka_broker_keystore_storepass)
                 final_dict['listener.name.' + listener_name + '.ssl.key.password'] = str(kafka_broker_keystore_keypass)
 
+                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = \
+                    listeners_dict[listener].get('ssl_client_authentication', default_ssl_client_authentication)
+                final_dict['listener.name.' + listener_name + '.ssl.principal.mapping.rules'] = \
+                    ','.join(listeners_dict[listener].get('principal_mapping_rules', default_principal_mapping_rules))
+
             if bouncy_castle_keystore:
                 final_dict['listener.name.' + listener_name + '.ssl.keymanager.algorithm'] = 'PKIX'
                 final_dict['listener.name.' + listener_name + '.ssl.trustmanager.algorithm'] = 'PKIX'
                 final_dict['listener.name.' + listener_name + '.ssl.keystore.type'] = 'BCFKS'
                 final_dict['listener.name.' + listener_name + '.ssl.truststore.type'] = 'BCFKS'
                 final_dict['listener.name.' + listener_name + '.ssl.enabled.protocols'] = 'TLSv1.2,TLSv1.3'
-
-            if listeners_dict[listener].get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
-                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = 'required'
 
             if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'PLAIN':
                 final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'PLAIN'
@@ -453,6 +455,11 @@ class FilterModule(object):
         common_names = common_names.split("\n")
         # Get the default mapping value which is string representation of certificate
         principal_mapping_value = common_names[0]
+
+        # When no extra rules just return the full common names string
+        if rules == "DEFAULT":
+            return principal_mapping_value
+
         # Get all the rules and apply one by one on given Dname
         list_of_rules = rules.split("RULE:")
         list_of_rules = [i for i in list_of_rules if i]
