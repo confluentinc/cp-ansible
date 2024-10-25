@@ -479,6 +479,7 @@ Default:  3
 SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256.
 You can provide a comma-separated list of at most two mechanisms to configure multiple listeners with different mechanisms. For example, 'kerberos,plain'
 When configuring multiple values, you can provide values only from the following list: kerberos, plain, scram, scram256
+First value of the list is used as the default mechanism for all communications.
 
 Default:  none
 
@@ -993,6 +994,7 @@ Default:  "{{ssl_mutual_auth_enabled}}"
 SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none, scram, scram256 (scram only when providing multiple values with first value being non-scram).
 You can provide a comma-separated list of at most two mechanisms to configure multiple listeners with different mechanisms. For example, 'plain,scram'
 When configuring multiple values, you can provide values only from the following list: kerberos, plain, scram, scram256
+First value of the list is used for controller-controller communication.
 
 Default:  "{{sasl_protocol}}"
 
@@ -6183,4 +6185,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-
