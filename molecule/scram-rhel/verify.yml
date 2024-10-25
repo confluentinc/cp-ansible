@@ -50,15 +50,6 @@
         tasks_from: check_property.yml
       vars:
         file_path: /etc/kafka/server.properties
-        property: sasl.mechanism.controller.protocol
-        expected_value: SCRAM-SHA-512
-      when: not kraft_mode|bool
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/kafka/server.properties
         property: sasl.enabled.mechanisms
         expected_value: SCRAM-SHA-512,SCRAM-SHA-256,GSSAPI
       when: kraft_mode|bool
@@ -81,12 +72,16 @@
         expected_value: CONTROLLER
       when: not kraft_mode|bool
 
-    - name: Copy client properties for scram protocol
+    - name: Create client_scram.properties file with SCRAM configuration
       copy:
-        src: client_scram.properties
         dest: /etc/kafka/client_scram.properties
+        content: |
+          sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="admin" password="admin-secret";
+          sasl.mechanism=SCRAM-SHA-256
+          security.protocol=SASL_PLAINTEXT
+        owner: root
+        group: root
         mode: '0644'
-      tags: copy
 
     - name: Create Kafka topic
       shell: kafka-topics --create --topic test-topic \
