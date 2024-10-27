@@ -40,22 +40,25 @@
     super_users: "{{ super_users + [ 'User:' + lookup('vars', 'oauth_superuser_principal') ]}}"
   when: "'oauth' in auth_mode"
 
-- name: Extract the super users from each broker's certs
-  block:
-    - name: Extract principal from cert
-      include_role:
-        name: common
-        tasks_from: extract_super_users_from_cert.yml
-      vars:
-        keystore_path: "{{ hostvars[item]['kafka_broker_keystore_path'] }}"
-        keystore_storepass: "{{ hostvars[item]['kafka_broker_keystore_storepass'] }}"
-        pm_rules: "{{ hostvars[item]['kafka_broker_final_properties'].get('principal.mapping.rules', 'DEFAULT') }}"
-      delegate_to: "{{ item }}"
+- name: Extract principal from each broker's cert
+  include_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{ kafka_broker_keystore_path }}"
+    keystore_storepass: "{{ kafka_broker_keystore_storepass }}"
+    pm_rules: "{{ kafka_broker_final_properties.get('principal.mapping.rules', 'DEFAULT') }}"
+  args:
+    apply:
+      delegate_to: "{{item}}"
+      delegate_facts: true
+  loop: "{{ groups['kafka_broker'] }}"
+  run_once: true
+  when: ssl_client_authentication != 'none'
 
-    - name: Append to super users list
-      set_fact:
-        super_users: "{{ super_users + [ 'User:' + hostvars[inv_hostname]['ks_extracted_principal'] ]}}"
-
+- name: Append cert principal to super users list
+  set_fact:
+    super_users: "{{ super_users + [ 'User:' + hostvars[item]['ks_extracted_principal'] ]}}"
   loop: "{{ groups['kafka_broker'] }}"
   when: ssl_client_authentication != 'none'
 
