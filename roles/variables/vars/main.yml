@@ -252,9 +252,12 @@ kafka_controller_properties:
       confluent.authorizer.access.rule.providers: CONFLUENT,KRAFT_ACL
       super.users: >-
         {{
-           ('ldap' in auth_mode) | ternary("User:" + mds_super_user|default('mds'), "") +
-           (auth_mode == 'ldap_with_oauth') | ternary(";", "") +
-           ('oauth' in auth_mode) | ternary("User:" + oauth_superuser_principal, "")
+            (
+              [
+                ('ldap' in auth_mode) | ternary("User:" + mds_super_user|default('mds'), none),
+                ('oauth' in auth_mode) | ternary("User:" + oauth_superuser_principal, none)
+              ] | select('string') | list
+            ) | join(';')
         }}
   rbac_mds:
     enabled: "{{rbac_enabled and not external_mds_enabled}}"
@@ -571,9 +574,12 @@ kafka_broker_properties:
       confluent.authorizer.access.rule.providers: CONFLUENT,{{ "ZK_ACL" if ((not kraft_enabled|bool) or kraft_migration|bool) else "KRAFT_ACL" }}
       super.users: >-
         {{
-           ('ldap' in auth_mode) | ternary("User:" + mds_super_user|default('mds'), "") +
-           (auth_mode == 'ldap_with_oauth') | ternary(";", "") +
-           ('oauth' in auth_mode) | ternary("User:" + oauth_superuser_principal, "")
+            (
+              [
+                ('ldap' in auth_mode) | ternary("User:" + mds_super_user|default('mds'), none),
+                ('oauth' in auth_mode) | ternary("User:" + oauth_superuser_principal, none)
+              ] | select('string') | list
+            ) | join(';')
         }}
   rbac_mds:
     enabled: "{{ rbac_enabled and not external_mds_enabled }}"
@@ -1986,7 +1992,7 @@ kafka_connect_replicator_properties:
   principal_mapping_rules:
     enabled: "{{ssl_enabled}}"
     properties:
-      ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
+      auth.ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
   mds_mtls_client:
     enabled: "{{ kafka_connect_replicator_rbac_enabled and ssl_client_authentication != 'none' }}"
     properties:
