@@ -5,10 +5,49 @@
 driver:
   name: docker
 platforms:
-  - name: zookeeper1
-    hostname: zookeeper1.confluent
+  - name: kerberos1
+    hostname: kerberos1.confluent
     groups:
-      - zookeeper
+      - kerberos_server
+    image: centos:centos8
+    dockerfile: ../Dockerfile-centos8-base.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}2
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+            - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}3
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}3.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
     image: redhat/ubi8-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -21,6 +60,7 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: redhat/ubi8-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -33,6 +73,7 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
+      - schema_registry_migration
     image: redhat/ubi8-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -45,6 +86,7 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
+      - kafka_rest_migration
     image: redhat/ubi8-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -57,6 +99,7 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
+      - kafka_connect_migration
     image: redhat/ubi8-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -69,6 +112,7 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
+      - ksql_migration
     image: redhat/ubi8-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -81,6 +125,7 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
+      - control_center_migration
     image: redhat/ubi8-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -91,18 +136,92 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller2-mig
+    hostname: controller2-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller3-mig
+    hostname: controller3-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
-        sasl_protocol: scram
+        sasl_protocol: scram,scram256
+        kafka_controller_sasl_protocol: kerberos
         mask_secrets: false
 
-        kafka_broker_custom_listeners:
-          client:
-            name: CLIENT
-            port: 9093
-            sasl_protocol: scram256
-
-        schema_registry_kafka_listener_name: client
         kafka_broker_configure_control_plane_listener: true
+
+        kerberos:
+          realm: realm.example.com
+          kdc_hostname: kerberos1
+          admin_hostname: kerberos1
+
+          kerberos_client_config_file_dest: /krb/krb5.conf
+
+      kafka_controller:
+        kafka_controller_kerberos_principal: "kafka-a/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        kafka_controller_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_controller-{{inventory_hostname}}.keytab"
+
+      kafka_broker:
+        kafka_broker_kerberos_principal: "kafka-a/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        kafka_broker_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
+
+      kerberos_server:
+        realm_name: "{{ kerberos.realm | upper }}"
+
+        keytab_output_directory: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs"
+
+        kerberos_principals:
+          - principal: "kafka-a/controller1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller1.keytab"
+
+          - principal: "kafka-a/controller2.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller2.keytab"
+
+          - principal: "kafka-a/controller3.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller3.keytab"
+
+          - principal: "kafka-a/controller1-mig.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller1-mig.keytab"
+
+          - principal: "kafka-a/controller2-mig.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller2-mig.keytab"
+
+          - principal: "kafka-a/controller3-mig.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller3-mig.keytab"
+
+          - principal: "kafka-a/kafka-broker1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
