@@ -1,5 +1,25 @@
 ---
-### Validates that SCRAM is enabled on all components.
+### Validates that SCRAM is enabled on all components except kafka controller.
+- name: Verify - kafka_controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: sasl.enabled.mechanisms
+        expected_value: SCRAM-SHA-512,SCRAM-SHA-256,GSSAPI
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: sasl.mechanism.controller.protocol
+        expected_value: GSSAPI
 
 - name: Verify - kafka_broker
   hosts: kafka_broker
@@ -14,7 +34,34 @@
       vars:
         file_path: /etc/kafka/server.properties
         property: listener.name.internal.sasl.enabled.mechanisms
-        expected_value: SCRAM-SHA-512
+        expected_value: SCRAM-SHA-512,SCRAM-SHA-256,GSSAPI
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: sasl.mechanism.controller.protocol
+        expected_value: GSSAPI
+      when: kraft_mode|bool
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: sasl.enabled.mechanisms
+        expected_value: SCRAM-SHA-512,SCRAM-SHA-256,GSSAPI
+      when: kraft_mode|bool
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: sasl.enabled.mechanisms
+        expected_value: SCRAM-SHA-512,SCRAM-SHA-256
+      when: not kraft_mode|bool
 
     - import_role:
         name: confluent.test
@@ -24,6 +71,42 @@
         property: control.plane.listener.name
         expected_value: CONTROLLER
       when: not kraft_mode|bool
+
+    - name: Create client_scram.properties file with SCRAM configuration
+      copy:
+        dest: /etc/kafka/client_scram.properties
+        content: |
+          sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="admin" password="admin-secret";
+          sasl.mechanism=SCRAM-SHA-256
+          security.protocol=SASL_PLAINTEXT
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create Kafka topic
+      shell: kafka-topics --create --topic test-topic \
+        --bootstrap-server kafka-broker1:9092 --command-config /etc/kafka/client_scram.properties \
+        --replication-factor 1 --partitions 6
+      run_once: true
+      register: output
+      failed_when:
+        - "'Topic test-topic already exists' not in output.stdout"
+        - "'Created topic test-topic' not in output.stdout"
+
+    - name: Create Topic Data
+      shell: |
+        seq 10 | kafka-console-producer --topic test-topic \
+        --bootstrap-server kafka-broker1:9092 --producer.config /etc/kafka/client_scram.properties
+      run_once: true
+
+    - name: Read Topic Data
+      shell: kafka-console-consumer --topic test-topic \
+        --bootstrap-server kafka-broker1:9092 --timeout-ms 10000 \
+        --from-beginning --consumer.config /etc/kafka/client_scram.properties
+      run_once: true
+      register: consumer_output
+      failed_when:
+        - "'1\n2\n3\n4\n5\n6\n7\n8\n9\n10' not in consumer_output.stdout"
 
 - name: Verify - schema_registry
   hosts: schema_registry
