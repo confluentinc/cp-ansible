@@ -7,10 +7,11 @@
 driver:
   name: docker
 platforms:
-  - name: zookeeper1
-    hostname: zookeeper1.confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
     image: oraclelinux:8-slim
     dockerfile: ../Dockerfile-rhel-tar.j2
     command: ""
@@ -93,12 +94,26 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: oraclelinux:8-slim
+    dockerfile: ../Dockerfile-rhel-tar.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
         ssl_enabled: true
-        sasl_protocol: scram
+        sasl_protocol: scram256
 
         installation_method: archive
 
@@ -106,6 +121,8 @@ provisioner:
         archive_owner: cp-custom
 
         mask_secrets: false
-
         kafka_broker_custom_properties:
           log.dirs: /tmp/logs1,/tmp/logs2
+
+      kafka_controller:
+        kafka_controller_sasl_protocol: plain,scram256
