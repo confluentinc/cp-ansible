@@ -3,10 +3,10 @@
 #   set_fact:
 #     delegated_to_localhost: "{{inventory_hostname == 'localhost'}}"
 
-- name: Set MDS client cert path
-  set_fact:
-    mds_mtls_client_cert_common: "{{ mds_super_user_external_cert_path if delegated_to_localhost|bool else kafka_broker_cert_path }}"
-    mds_mtls_client_key_common: "{{ mds_super_user_external_key_path if delegated_to_localhost|bool else kafka_broker_key_path }}"
+# - name: Set MDS client cert path
+#   set_fact:
+#     mds_mtls_client_cert_common: "{{ mds_super_user_external_cert_path if delegated_to_localhost|bool else kafka_broker_cert_path }}"
+#     mds_mtls_client_key_common: "{{ mds_super_user_external_key_path if delegated_to_localhost|bool else kafka_broker_key_path }}"
   # In case of Centralized MDS other clusters can't delegate to MDS cluster as that cluster may
   # not have permissions to ssh into MDS, thus delegate to localhost.
 
@@ -18,8 +18,8 @@
     oauth_password: "{{ oauth_superuser_client_password }}"
     ldap_user: "{{ mds_super_user }}"
     ldap_password: "{{ mds_super_user_password }}"
-    mds_mtls_client_cert: "{{ mds_mtls_client_cert_common }}"
-    mds_mtls_client_key: "{{ mds_mtls_client_key_common }}"
+    mds_mtls_client_cert: "{{ mds_super_user_external_cert_path if delegated_to_localhost|bool else kafka_broker_cert_path }}"
+    mds_mtls_client_key: "{{ mds_super_user_external_key_path if delegated_to_localhost|bool else kafka_broker_key_path }}"
 
 - set_fact:
     send_client_cert: "{{ ssl_client_authentication in ['required', 'requested'] }}"
@@ -34,13 +34,14 @@
     headers:
       Content-Type: application/json
       Authorization: "Bearer {{ authorization_token }}"
-    client_cert: "{{ mds_mtls_client_cert_common if send_client_cert|bool else omit }}"
-    client_key: "{{ mds_mtls_client_key_common if send_client_cert|bool else omit }}"
+    client_cert: "{{ kafka_broker_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_broker_key_path if send_client_cert|bool else omit }}"
   register: cluster_id_query
   until: cluster_id_query.status == 200
   retries: "{{ mds_retries }}"
   delay: 10
   no_log: "{{mask_secrets|bool}}"
+  delegate_to: "{{ inventory_hostname }}"
   when:
     - cluster_id_source | default('erp') == 'erp'
 
@@ -48,6 +49,7 @@
   set_fact:
     kafka_cluster_id: "{{ cluster_id_query.json.data[0].cluster_id }}"
   when: (cluster_id_source | default('erp') == 'erp') and not ansible_check_mode
+  delegate_to: "{{ inventory_hostname }}"
 
 - name: Get Kafka Cluster ID from Zookeeper
   shell: >
@@ -57,15 +59,18 @@
       get /cluster/id | grep version
   register: zk_cluster_id_query
   when: cluster_id_source | default('erp') == 'zookeeper'
+  delegate_to: "{{ inventory_hostname }}"
 
 - set_fact:
     cluster_id_json: "{{ zk_cluster_id_query.stdout }}"
   when: cluster_id_source | default('erp') == 'zookeeper'
+  delegate_to: "{{ inventory_hostname }}"
 
 - name: Set kafka_cluster_id Variable
   set_fact:
     kafka_cluster_id: "{{ cluster_id_json.id }}"
   when: cluster_id_source | default('erp') == 'zookeeper'
+  delegate_to: "{{ inventory_hostname }}"
 
 - name: Create SSL Certificate Directory
   file:
