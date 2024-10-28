@@ -20,9 +20,25 @@
   register: zoo_cluster
   when: kraft_migration|bool
 
-- name: Format Data Directory
-  shell: "{{ binary_base_path }}/bin/kafka-storage  format -t={{ clusterid }} -c {{ kafka_controller.config_file }}  --ignore-formatted"
+- name: Create SCRAM Credentials
+  set_fact:
+    scram_credentials: >-
+      {% if 'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms %}
+      SCRAM-SHA-512=[name={{ sasl_scram_users_final.admin.principal }},password={{ sasl_scram_users_final.admin.password }}]
+      {% endif %}
+      {% if 'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms and 'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms %},{% endif %}
+      {% if 'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms %}
+      SCRAM-SHA-256=[name={{ sasl_scram256_users_final.admin.principal }},password={{ sasl_scram256_users_final.admin.password }}]
+      {% endif %}
+  when: "'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms or 'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms"
+
+- name: Format Data Directory and Add Scram Credentials
+  shell: |
+    {{ binary_base_path }}/bin/kafka-storage format \
+    -t={{ clusterid }} -c {{ kafka_controller.config_file }} \
+    {% if scram_credentials is defined %}--add-scram '{{ scram_credentials | trim }}'{% endif %} \
+    --ignore-formatted
   register: format_meta
   vars:
     clusterid: "{{ (zoo_cluster['content'] | b64decode).partition('cluster.id=')[2].partition('\n')[0] if kraft_migration|bool else uuid_key.stdout }}"
-  when: formatted.rc == 1 # To trigger the command only when the directories are not formatted
+  when: formatted.rc == 1
