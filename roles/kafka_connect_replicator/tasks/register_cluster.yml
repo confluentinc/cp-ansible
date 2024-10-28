@@ -1,4 +1,18 @@
 ---
+- name: Decide Where to delegate task of getting superuser token
+  set_fact:
+    delegation_target: >-
+      {%- if external_mds_enabled|bool -%}
+        localhost
+      {%- else -%}
+        {{ groups['kafka_broker'][0] }}
+      {%- endif -%}
+
+- name: Debug delegation Target
+  debug:
+    msg:
+      - "delegation target: {{ delegation_target }}"
+
 - name: Get Kafka Cluster Id
   import_role:
     name: common
@@ -6,14 +20,7 @@
   vars:
     copy_certs: false
     delegated_to_localhost: "{{ external_mds_enabled|bool }}"
-  delegate_to: >-
-    {%- if ssl_client_authentication == 'none' -%}
-      {{ omit }}
-    {%- elif external_mds_enabled|bool -%}
-      localhost
-    {%- else -%}
-      {{ groups['kafka_broker'][0] }}
-    {%- endif -%}
+  delegate_to: "{{ delegation_target if ssl_client_authentication != 'none' else omit }}"
 
 - name: Register Kafka Replicator Cluster
   uri:
