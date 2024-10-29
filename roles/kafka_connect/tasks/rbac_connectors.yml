@@ -1,4 +1,15 @@
 ---
+- name: Decide Where to delegate task of getting superuser token
+  set_fact:
+    delegation_target: >-
+      {%- if ssl_client_authentication == 'none' -%}
+        {{ inventory_hostname }}
+      {%- elif external_mds_enabled|bool -%}
+        localhost
+      {%- else -%}
+        {{ groups['kafka_broker'][0] }}
+      {%- endif -%}
+
 - name: Get Authorization Token for Super User
   import_role:
     name: common
@@ -9,12 +20,20 @@
     oauth_password: "{{ oauth_superuser_client_password }}"
     ldap_user: "{{ mds_super_user }}"
     ldap_password: "{{ mds_super_user_password }}"
+    mds_mtls_client_cert: "{{ mds_super_user_external_cert_path if external_mds_enabled|bool else kafka_broker_cert_path }}"
+    mds_mtls_client_key: "{{ mds_super_user_external_key_path if external_mds_enabled|bool else kafka_broker_key_path }}"
   when: rbac_enabled or oauth_enabled
+  delegate_to: "{{ delegation_target }}"
+  # For single cluster delegating this task to broker as in case of cert based token retrival only broker can get a super user token using its certs
+  # For Centralized MDS other clusters can't delegate to MDS cluster as that cluster may not have permissions to ssh into MDS, thus delegate to localhost
 
 - name: Check Kafka Connect Connector Topics
   assert:
     that: kafka_connect_connector_white_list != ""
     fail_msg: "Please provide Connector's Topics to produce/consume data in the inventory file."
+
+- set_fact:
+    send_client_cert: "{{ ssl_client_authentication in ['required', 'requested'] }}"
 
 - name: Grant Connect User ResourceOwner role on White List Topics
   uri:
@@ -24,6 +43,8 @@
     headers:
       Content-Type: application/json
       Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -55,6 +76,8 @@
     headers:
       Content-Type: application/json
       Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -88,6 +111,8 @@
     headers:
       Content-Type: application/json
       Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -118,6 +143,8 @@
     headers:
       Content-Type: application/json
       Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
