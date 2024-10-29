@@ -1,4 +1,15 @@
 ---
+- name: Decide Where to delegate task of getting superuser token
+  set_fact:
+    delegation_target: >-
+      {%- if ssl_client_authentication == 'none' -%}
+        {{ inventory_hostname }}
+      {%- elif external_mds_enabled|bool -%}
+        localhost
+      {%- else -%}
+        {{ groups['kafka_broker'][0] }}
+      {%- endif -%}
+
 - name: Get Kafka Cluster Id
   import_role:
     name: common
@@ -6,6 +17,10 @@
   when: rbac_enabled
   vars:
     copy_certs: false
+    delegated_to_localhost: "{{ external_mds_enabled|bool }}"
+  delegate_to: "{{ delegation_target }}"
+  # For single cluster delegating this task to broker as in case of cert based token retrival only broker can get a super user token using its certs
+  # For Centralized MDS other clusters can't delegate to MDS cluster as that cluster may not have permissions to ssh into MDS, thus delegate to localhost
 
 - name: Fetch Kafka Connect Cluster Groups
   set_fact:
@@ -25,6 +40,8 @@
     headers:
       Content-Type: application/json
       Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       [
