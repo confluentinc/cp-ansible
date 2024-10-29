@@ -1,4 +1,15 @@
 ---
+- name: Decide Where to delegate task of getting superuser token
+  set_fact:
+    delegation_target: >-
+      {%- if ssl_client_authentication == 'none' -%}
+        {{ inventory_hostname }}
+      {%- elif external_mds_enabled|bool -%}
+        localhost
+      {%- else -%}
+        {{ groups['kafka_broker'][0] }}
+      {%- endif -%}
+
 - name: Get Authorization Token for Connect Replicator ERP User
   import_role:
     name: common
@@ -14,7 +25,7 @@
   # For single cluster delegating this task to broker as in case of cert based token retrival only broker can get a super user token using its certs
   # For Centralized MDS other clusters can't delegate to MDS cluster as that cluster may not have permissions to ssh into MDS, thus delegate to localhost
   when: kafka_connect_replicator_rbac_enabled or kafka_connect_replicator_oauth_enabled
-  delegate_to: "{{ 'localhost' if external_mds_enabled|bool else groups['kafka_broker'][0] }}"
+  delegate_to: "{{ delegation_target }}"
 
 - name: Create SSL Certificate Directory
   file:

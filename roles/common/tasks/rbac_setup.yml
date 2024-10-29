@@ -1,12 +1,4 @@
 ---
-- name: Set MDS client cert path
-  set_fact:
-    mds_mtls_client_cert_common: "{{ mds_super_user_external_cert_path if delegated_to_localhost|bool else kafka_broker_cert_path }}"
-    mds_mtls_client_key_common: "{{ mds_super_user_external_key_path if delegated_to_localhost|bool else kafka_broker_key_path }}"
-  # Caller of rbac_setup must set delegated_to_localhost to true if the task is delegated to localhost
-  # In case of Centralized MDS other clusters can't delegate to MDS cluster as that cluster may
-  # not have permissions to ssh into MDS, thus delegate to localhost.
-
 - name: Get Authorization Token for Super User
   include_tasks: get_authorization_token.yml
   vars:
@@ -15,11 +7,13 @@
     oauth_password: "{{ oauth_superuser_client_password }}"
     ldap_user: "{{ mds_super_user }}"
     ldap_password: "{{ mds_super_user_password }}"
-    mds_mtls_client_cert: "{{ mds_mtls_client_cert_common }}"
-    mds_mtls_client_key: "{{ mds_mtls_client_key_common }}"
+    mds_mtls_client_cert: "{{ mds_super_user_external_cert_path if delegated_to_localhost|bool else kafka_broker_cert_path }}"
+    mds_mtls_client_key: "{{ mds_super_user_external_key_path if delegated_to_localhost|bool else kafka_broker_key_path }}"
 
 - set_fact:
     send_client_cert: "{{ ssl_client_authentication in ['required', 'requested'] }}"
+    erp_cert_path: "{{ mds_super_user_external_cert_path if delegated_to_localhost|bool else kafka_broker_cert_path }}"
+    erp_key_path: "{{ mds_super_user_external_key_path if delegated_to_localhost|bool else kafka_broker_key_path }}"
 
 - name: Get Kafka Cluster ID from Embedded Rest Proxy
   uri:
@@ -31,8 +25,8 @@
     headers:
       Content-Type: application/json
       Authorization: "Bearer {{ authorization_token }}"
-    client_cert: "{{ mds_mtls_client_cert_common if send_client_cert|bool else omit }}"
-    client_key: "{{ mds_mtls_client_key_common if send_client_cert|bool else omit }}"
+    client_cert: "{{ erp_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ erp_key_path if send_client_cert|bool else omit }}"
   register: cluster_id_query
   until: cluster_id_query.status == 200
   retries: "{{ mds_retries }}"
@@ -54,15 +48,18 @@
       get /cluster/id | grep version
   register: zk_cluster_id_query
   when: cluster_id_source | default('erp') == 'zookeeper'
+  delegate_to: "{{ inventory_hostname }}"
 
 - set_fact:
     cluster_id_json: "{{ zk_cluster_id_query.stdout }}"
   when: cluster_id_source | default('erp') == 'zookeeper'
+  delegate_to: "{{ inventory_hostname }}"
 
 - name: Set kafka_cluster_id Variable
   set_fact:
     kafka_cluster_id: "{{ cluster_id_json.id }}"
   when: cluster_id_source | default('erp') == 'zookeeper'
+  delegate_to: "{{ inventory_hostname }}"
 
 - name: Create SSL Certificate Directory
   file:

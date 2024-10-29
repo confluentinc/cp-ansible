@@ -216,9 +216,6 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.ssl.truststore.type'] = 'BCFKS'
                 final_dict['listener.name.' + listener_name + '.ssl.enabled.protocols'] = 'TLSv1.2,TLSv1.3'
 
-            if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'PLAIN':
-                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'PLAIN'
-
             if 'PLAIN' in normalize_sasl_protocols:
                 final_dict['listener.name.' + listener_name + '.plain.sasl.jaas.config'] = plain_jaas_config
 
