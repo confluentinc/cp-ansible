@@ -1,0 +1,27 @@
+---
+- name: Get containers info
+  docker_container_info:
+    name: "{{ item }}"
+  register: container_info
+  loop: "{{ docker_containers }}"
+  delegate_to: localhost
+
+- name: Clear old settings
+  lineinfile:
+    path: /etc/hosts
+    state: absent
+    regexp: '^\d+\.\d+\.\d+\.\d+\s+{{ item }}$'
+  with_items: "{{ docker_containers }}"
+  become: true
+  delegate_to: localhost
+
+- name: Add IP container name mapping to /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ (container_info.results[idx].container.NetworkSettings.Networks.values() | first).IPAddress }} {{ docker_containers[idx] }}"
+    state: present
+  become: true
+  loop: "{{ docker_containers }}"
+  loop_control:
+    index_var: idx
+  delegate_to: localhost
