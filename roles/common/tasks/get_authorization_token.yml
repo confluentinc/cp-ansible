@@ -31,6 +31,7 @@
   no_log: "{{mask_secrets|bool}}"
   when:
     - oauth|bool
+    - (not mtls_cert_only|bool)
 
 - name: Get Authorization Token from MDS
   uri:
@@ -52,6 +53,7 @@
   when:
     - cluster_id_source | default('erp') == 'erp'
     - not oauth|bool
+    - not mtls_cert_only|bool
     - auth_mode != 'mtls'
 
 - name: Get Authorization Token from MDS using mtls certs
@@ -71,16 +73,16 @@
   no_log: "{{mask_secrets|bool}}"
   when:
     - cluster_id_source | default('erp') == 'erp'
-    - auth_mode == 'mtls'
+    - auth_mode == 'mtls' or mtls_cert_only|bool
 
 - name: Get Authorization Token
   set_fact:
     authorization_token: >-
       {%- if oauth|bool -%}
         {{ (auth_token_oauth.content | from_json).access_token }}
-      {%- elif not oauth|bool and auth_mode != 'mtls' -%}
+      {%- elif not oauth|bool and auth_mode != 'mtls' and (not mtls_cert_only|bool) -%}
         {{ (auth_token_mds.content | from_json).auth_token }}
-      {%- elif auth_mode == 'mtls' -%}
+      {%- elif auth_mode == 'mtls' or mtls_cert_only|bool -%}
         {{ (auth_token_mds_mtls.content | from_json).auth_token }}
       {%- endif -%}
   no_log: "{{mask_secrets|bool}}"
