@@ -23,21 +23,33 @@ all:
     rbac_enabled: true
     auth_mode: mtls # This decides where the principal comes from for assigning role bindings
 
-    ssl_mutual_auth_enabled: true
-    ssl_client_authentication: required # <required/requested/none>
+    # ssl_mutual_auth_enabled: true  Deprecated in 7.8.x
+    ssl_client_authentication: required  # <required/requested/none>
+    # Sets mtls on kafka broker listeners and ERP
+
+    mds_ssl_client_authentication: requested  # <required/requested/none>
+    # Sets mtls on MDS server
+    # Must be defined in all section as all components need to know its value for assigning role bindings
+
     # When set to required clients must send certs to server
     # When set to requested sending certs is optional given there is another mechanism like ldap/oauth which is sending principal
     # requested mode is used for upgrade scenarios where all clients might not be sending certs to server
     # Once all clients start sending certs to server this requested should be changed to required
 
+    principal_mapping_rules:
+      - "RULE:.*CN=([a-zA-Z0-9.-_]*).*$/$1/"
+      - "DEFAULT"
+
     # List of super user principals who can get an impersonation token on behalf of other users
     # Needed for principal propogation for Rest Proxy.
-    # To extract dn from cert check <link>
+    # To extract dn from cert check use openssl x509 -in <cert> -noout -subject -nameopt RFC2253
+    # using this the dn would be something like 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker'
+    # Then applying the principal mapping rules it would give the principal kafka_broker
     impersonation_super_users:
-      - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker'
-      - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_rest'
-      - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=schema_registry'
-      - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_connect'
+      - 'kafka_broker'
+      - 'kafka_rest'
+      - 'schema_registry'
+      - 'kafka_connect'
 
     # These users cant be impersonated by impersonation_super_users. Typically one might want to add super users here to stop any other user from impersonating it
     impersonation_protected_users:
