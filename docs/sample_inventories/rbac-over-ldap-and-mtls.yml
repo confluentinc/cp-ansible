@@ -1,0 +1,95 @@
+---
+##
+## The following is an example inventory file of the configuration required for setting up Confluent Platform with RBAC over LDAP and mTLS.
+## Principals extracted from certs and ldap users are given role bindings.
+
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: ec2-user
+    ansible_become: true
+    ansible_ssh_private_key_file: /home/ec2-user/guest.pem
+    ansible_python_interpreter: /usr/bin/python3
+
+    ## TLS Configuration
+    ssl_enabled: true
+    # 3 ways to handle ssl
+    # Self Signed Certs (Default) Not recommended for production clusters
+    # Custom Certs
+    # Set ssl_custom_certs, ssl_ca_cert_filepath, ssl_signed_cert_filepath, ssl_key_filepath, ssl_key_password & ssl_custom_certs_remote_src(optional)
+    # Provided Keystore Truststore
+    # Set ssl_provided_keystore_and_truststore, ssl_keystore_and_truststore_custom_password, ssl_keystore_filepath, ssl_keystore_key_password, ssl_keystore_store_password, ssl_keystore_alias, ssl_truststore_filepath, ssl_truststore_password, ssl_truststore_ca_cert_alias and ssl_provided_keystore_and_truststore_remote_src (optional)
+
+    rbac_enabled: true
+    auth_mode: ldap # This sets up MDS so that it can accept ldap credentials. Due to mds_ssl_client_authentication MDS can also accept certs for authnz.
+
+    # ssl_mutual_auth_enabled: true  Deprecated in 7.8.x
+    ssl_client_authentication: required  # <required/requested/none>
+    # Sets mtls on kafka broker listeners and ERP
+
+    mds_ssl_client_authentication: requested  # <required/requested/none>
+    # Sets mtls on MDS server
+    # Must be defined in all section as all components need to know its value for assigning role bindings
+
+    # When set to required clients must send certs to server
+    # When set to requested sending certs is optional given there is another mechanism like ldap/oauth which is sending principal
+    # requested mode is used for upgrade scenarios where all clients might not be sending certs to server
+    # Once all clients start sending certs to server this requested should be changed to required
+
+    mds_super_user: mds
+    mds_super_user_password: password
+    kafka_broker_ldap_user: kafka_broker
+    kafka_broker_ldap_password: password
+    schema_registry_ldap_user: schema_registry
+    schema_registry_ldap_password: password
+    kafka_connect_ldap_user: connect_worker
+    kafka_connect_ldap_password: password
+    ksql_ldap_user: ksql
+    ksql_ldap_password: password
+    kafka_rest_ldap_user: rest_proxy
+    kafka_rest_ldap_password: password
+    control_center_ldap_user: control_center
+    control_center_ldap_password: password
+
+kafka_controller:
+  hosts:
+    ec2-34-219-110-48.us-west-2.compute.amazonaws.com:
+    ec2-18-237-72-224.us-west-2.compute.amazonaws.com:
+    ec2-35-161-39-212.us-west-2.compute.amazonaws.com:
+
+kafka_broker:
+  vars:
+    kafka_broker_custom_properties:
+      ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+      ldap.com.sun.jndi.ldap.read.timeout: 3000
+      ldap.java.naming.provider.url: ldaps://ldap1:636
+      ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
+      ldap.java.naming.security.credentials: password
+      ldap.java.naming.security.authentication: simple
+      ldap.user.search.base: OU=rbac,DC=example,DC=com
+      ldap.group.search.base: OU=rbac,DC=example,DC=com
+      ldap.user.name.attribute: uid
+      ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+      ldap.group.name.attribute: cn
+      ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+      ldap.user.object.class: account
+  hosts:
+    ec2-34-211-33-32.us-west-2.compute.amazonaws.com:
+    ec2-35-89-77-112.us-west-2.compute.amazonaws.com:
+    ec2-35-163-80-4.us-west-2.compute.amazonaws.com:
+
+schema_registry:
+  hosts:
+    ec2-34-212-49-238.us-west-2.compute.amazonaws.com:
+
+kafka_connect:
+  hosts:
+    ec2-35-93-21-143.us-west-2.compute.amazonaws.com:
+
+kafka_rest:
+  hosts:
+    ec2-34-222-41-249.us-west-2.compute.amazonaws.com:
+
+control_center:
+  hosts:
+    ec2-35-87-151-33.us-west-2.compute.amazonaws.com:
