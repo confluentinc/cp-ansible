@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.7.1
+Default:  7.7.0
 
 ***
 
@@ -187,6 +187,12 @@ If present, it's used to specify a time in ms for how often the file system or U
 Default:  0
 
 ***
+
+### all_components_copy_files
+
+Use to copy files from control node to all components hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
+
+Default:  []
 
 ### kerberos_configure
 
@@ -456,7 +462,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  3.65.0
+Default:  3.63.0
 
 ***
 
@@ -470,7 +476,10 @@ Default:  3
 
 ### sasl_protocol
 
-SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256
+SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256.
+You can provide a comma-separated list of at most two mechanisms to configure multiple listeners with different mechanisms. For example, 'kerberos,plain'
+When configuring multiple values, you can provide values only from the following list: kerberos, plain, scram, scram256
+First value of the list is used as the default mechanism for all communications.
 
 Default:  none
 
@@ -982,7 +991,10 @@ Default:  "{{ssl_mutual_auth_enabled}}"
 
 ### kafka_controller_sasl_protocol
 
-SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none
+SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none, scram, scram256 (scram only when providing multiple values with first value being non-scram).
+You can provide a comma-separated list of at most two mechanisms to configure multiple listeners with different mechanisms. For example, 'plain,scram'
+When configuring multiple values, you can provide values only from the following list: kerberos, plain, scram, scram256
+First value of the list is used for controller-controller communication.
 
 Default:  "{{sasl_protocol}}"
 
@@ -2574,7 +2586,7 @@ Default:  none
 
 ### oauth_superuser_principal
 
-Service principal for OAuth client in IdPserver. Defaults to client id. Needs to be modified based on OAuth JWT token's field pointed by oauth_sub_claim
+Service principal for OAuth client in IdPserver. Defaults to client id
 
 Default:  "{{oauth_superuser_client_id}}"
 
@@ -6173,4 +6185,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-

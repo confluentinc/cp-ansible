@@ -128,7 +128,7 @@
     kerberos_keytab_path: "{{schema_registry_kerberos_keytab_path}}"
     kerberos_keytab_destination_path: "{{schema_registry_keytab_path}}"
     kerberos_handler: "restart schema-registry"
-  when: kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'GSSAPI'
+  when: "'GSSAPI' in (kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)"
 
 - name: Copy Custom Schema Registry Files
   include_role:
@@ -139,6 +139,18 @@
     user: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
   when: schema_registry_copy_files | length > 0
+  tags:
+    - configuration
+
+- name: Copy Custom Files From All Components List
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{all_components_copy_files}}"
+    user: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  when: all_components_copy_files | length > 0
   tags:
     - configuration
 
@@ -154,7 +166,27 @@
     sr_user: "{{schema_registry_ldap_user}}"
   when:
     - rbac_enabled|bool
-    - ((not oauth_enabled) or ( oauth_enabled and ldap_with_oauth_enabled ))
+    - "'ldap' in auth_mode"
+
+- name: Extract SR Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{schema_registry_keystore_path}}"
+    keystore_storepass: "{{schema_registry_keystore_storepass}}"
+    pm_rules: "{{schema_registry_final_properties.get('auth.ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC for mTLS User
+  include_tasks: rbac.yml
+  vars:
+    sr_user: "{{ks_extracted_principal}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
 
 - name: Import IDP certificate to Truststore for OAuth
   include_role:

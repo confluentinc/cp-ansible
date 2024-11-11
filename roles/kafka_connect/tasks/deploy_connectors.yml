@@ -4,6 +4,30 @@
     subgroups: "{{ ((subgroups | default([])) + hostvars[item].group_names) | difference('kafka_broker, ksql, kafka_connect, kafka_rest, kerberos, ksql, schema_registry, zookeeper, kafka_broker_parallel, ksql_parallel, kafka_connect_parallel, kafka_rest_parallel, kerberos_parallel, ksql_parallel, schema_registry_parallel, zookeeper_parallel, kafka_controller, kafka_controller_parallel') }}"
   with_items: "{{groups['kafka_connect']}}"
 
+- name: Extract Connect Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{kafka_connect_keystore_path}}"
+    keystore_storepass: "{{kafka_connect_keystore_storepass}}"
+    pm_rules: "{{kafka_connect_final_properties.get('auth.ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+    - not ansible_check_mode
+    - kafka_connect_connectors is defined
+
+- name: Add Role Bindings for Connect mTLS User
+  include_tasks: rbac_connectors.yml
+  vars:
+    connect_user: "{{ks_extracted_principal}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+    - not ansible_check_mode
+    - kafka_connect_connectors is defined
+
 - name: Add Role Bindings for Connect OAuth
   include_tasks: rbac_connectors.yml
   vars:
@@ -20,7 +44,7 @@
     connect_user: "{{kafka_connect_ldap_user}}"
   when:
     - rbac_enabled|bool
-    - ((not oauth_enabled) or ( oauth_enabled and ldap_with_oauth_enabled ))
+    - "'ldap' in auth_mode"
     - not ansible_check_mode
     - kafka_connect_connectors is defined
 
@@ -37,6 +61,9 @@
     oauth_password: "{{ kafka_connect_oauth_password }}"
     ldap_user: "{{ kafka_connect_ldap_user }}"
     ldap_password: "{{ kafka_connect_ldap_password }}"
+    mtls_client_cert: "{{ kafka_connect_cert_path }}"
+    mtls_client_key: "{{ kafka_connect_key_path }}"
+    cert_auth_only_enabled: "{{ kafka_connect_mds_cert_auth_only|bool }}"
   when: rbac_enabled or kafka_connect_oauth_enabled
 
 - name: Register connector configs and remove deleted connectors for single cluster
