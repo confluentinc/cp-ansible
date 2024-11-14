@@ -39,6 +39,7 @@ schema_registry_oauth_enabled: "{{ 'oauth' in schema_registry_auth_mode }}"
 kafka_rest_oauth_enabled: "{{ 'oauth' in kafka_rest_auth_mode }}"
 kafka_connect_oauth_enabled: "{{ 'oauth' in kafka_connect_auth_mode }}"
 kafka_connect_replicator_oauth_enabled: "{{ 'oauth' in kafka_connect_replicator_auth_mode }}"
+ksql_oauth_enabled: "{{ 'oauth' in ksql_auth_mode }}"
 
 #### Zookeeper Variables ####
 zookeeper_service_name: confluent-zookeeper
@@ -770,7 +771,7 @@ kafka_broker_properties:
     enabled: "{{ kafka_broker_rest_proxy_enabled and oauth_enabled and oauth_expected_audience!='none' }}"
     properties:
       kafka.rest.oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
-  embedded_rest_proxy_oauth_groups:
+  embedded_rest_proxy_oauth_claim:
     enabled: "{{ kafka_broker_rest_proxy_enabled and oauth_enabled and oauth_groups_claim!='none' }}"
     properties:
       kafka.rest.oauthbearer.groups.claim.name: "{{ oauth_groups_claim }}"
@@ -1464,14 +1465,14 @@ ksql_properties:
       public.key.path: "{{rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
   rbac_ldap:
-    enabled: "{{rbac_enabled and ('ldap' in auth_mode) and (not ksql_mds_cert_auth_only) }}"
+    enabled: "{{ rbac_enabled and auth_mode == 'ldap' and (not ksql_mds_cert_auth_only) }}"
     properties:
       ksql.security.extension.class: io.confluent.ksql.security.KsqlConfluentSecurityExtension
-      ksql.authentication.plugin.class: io.confluent.ksql.security.VertxBearerOrBasicAuthenticationPlugin
+      ksql.authentication.plugin.class: io.confluent.ksql.security.VertxAuthenticationHandlerPlugin
       confluent.metadata.basic.auth.user.info: "{{ ksql_ldap_user | default('ksql') }}:{{ ksql_ldap_password | default('pass') }}"
       confluent.metadata.http.auth.credentials.provider: BASIC
   rbac_oauth:
-    enabled: "{{ rbac_enabled and auth_mode == 'oauth' and (not ksql_mds_cert_auth_only) }}"
+    enabled: "{{ rbac_enabled and oauth_enabled and (not ksql_mds_cert_auth_only ) }}"
     properties:
       confluent.metadata.oauthbearer.login.client.id: "{{ksql_oauth_user}}"
       confluent.metadata.oauthbearer.login.client.secret: "{{ksql_oauth_password}}"
@@ -1482,6 +1483,26 @@ ksql_properties:
     enabled: "{{ rbac_enabled and auth_mode == 'oauth' and oauth_groups_scope!='none' and (not ksql_mds_cert_auth_only) }}"
     properties:
       confluent.metadata.oauthbearer.login.oauth.scope: "{{ oauth_groups_scope }}"
+  ksql_oauth:
+    enabled: "{{ksql_oauth_enabled}}"
+    properties:
+      ksql.authentication.plugin.class: io.confluent.ksql.security.VertxAuthenticationHandlerPlugin
+      oauthbearer.jwks.endpoint.url: "{{oauth_jwks_uri}}"
+      oauthbearer.sub.claim.name: "{{ oauth_sub_claim }}"
+      oauthbearer.expected.issuer: "{{ oauth_issuer_url }}"
+  ksql_oauth_claim:
+    enabled: "{{ksql_oauth_enabled and oauth_groups_scope!='none' }}"
+    properties:
+      oauthbearer.groups.claim.name: "{{ oauth_groups_scope }}"
+  ksql_oauth_audience:
+    enabled: "{{ksql_oauth_enabled and oauth_expected_audience!='none' }}"
+    properties:
+      oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
+  ksql_oauth_ssl:
+    enabled: "{{ksql_oauth_enabled and idp_self_signed}}"
+    properties:
+      ssl.truststore.location: "{{ksql_truststore_path}}"
+      ssl.truststore.password: "{{ksql_truststore_storepass}}"
   rbac_external_client:
     enabled: "{{rbac_enabled and external_mds_enabled and mds_tls_enabled }}"
     properties:
@@ -1852,7 +1873,8 @@ control_center_properties:
     enabled: "{{ ksql_cluster_ansible_group_names | default(omit) | length > 0 }}"
     properties: "{{ ksql_cluster_ansible_group_names | confluent.platform.c3_ksql_properties(groups, hostvars, ksql_ssl_enabled,
         ksql_http_protocol, ksql_listener_port, control_center_truststore_path, control_center_truststore_storepass,
-        control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass) }}"
+        control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass, ksql_oauth_enabled, rbac_enabled,
+        ksql_oauth_user, ksql_oauth_password, oauth_groups_scope, idp_self_signed) }}"
   oauth:
     enabled: "{{oauth_enabled or schema_registry_oauth_enabled or kafka_connect_oauth_enabled}}"
     properties:
@@ -2025,7 +2047,7 @@ kafka_connect_replicator_properties:
       oauthbearer.jwks.endpoint.url: "{{oauth_jwks_uri}}"
       oauthbearer.sub.claim.name: "{{ oauth_sub_claim }}"
       oauthbearer.expected.issuer: "{{ oauth_issuer_url }}"
-  kafka_connect_oauth_scope:
+  kafka_connect_oauth_claim:
     enabled: "{{kafka_connect_replicator_oauth_enabled and oauth_groups_scope!='none' }}"
     properties:
       oauthbearer.groups.claim.name: "{{ oauth_groups_scope }}"
