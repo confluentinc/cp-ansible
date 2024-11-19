@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.2.12
+Default:  7.3.10
 
 ***
 
@@ -134,7 +134,7 @@ Default:  false
 
 ### fips_enabled
 
-Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
+Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8 or 11. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
 
 Default:  false
 
@@ -190,7 +190,7 @@ Default:  0
 
 ### kerberos_configure
 
-Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, keberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary
+Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, kerberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary. Optional variables: kerberos.kdc_port (default: 88), kerberos.admin_port (default: 749)
 
 Default:  true
 
@@ -465,6 +465,14 @@ Default:  none
 Boolean to configure components with TLS Encryption. Also manages Java Keystore creation
 
 Default:  false
+
+***
+
+### certificate_authority_expiration_days
+
+Set this variable to customize expiration days for certificate authority. Applies for all components of Confluent Platform.
+
+Default:  365
 
 ***
 
@@ -2374,7 +2382,7 @@ Default:  false
 
 ### rbac_component_additional_system_admins
 
-List of users to be granted system admin Role Bindings across all components
+List of principals to be granted system admin Role Bindings across all components
 
 Default:  []
 
@@ -2382,7 +2390,7 @@ Default:  []
 
 ### kafka_broker_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the Kafka Cluster
+List of principals to be granted system admin Role Bindings on the Kafka Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -2390,7 +2398,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### schema_registry_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the Schema Registry Cluster
+List of principals to be granted system admin Role Bindings on the Schema Registry Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -2398,7 +2406,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### ksql_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the ksqlDB Cluster
+List of principals to be granted system admin Role Bindings on the ksqlDB Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -2406,7 +2414,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### kafka_connect_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the Connect Cluster
+List of principals to be granted system admin Role Bindings on the Connect Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -2414,7 +2422,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### control_center_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the Control Center Cluster
+List of principals to be granted system admin Role Bindings on the Control Center Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -4274,35 +4282,43 @@ Default:  "https://packages.confluent.io"
 
 ***
 
+### custom_java_path
+
+Full pre-existing Java path on custom nodes. CP-Ansible will use the provided path and will skip installing java as part of execution
+
+Default:  ""
+
+***
+
 ### install_java
 
-Boolean to have cp-ansible install Java on hosts
+Boolean to have cp-ansible install Java on Hosts depending on custom_java_path provided
 
-Default:  true
+Default:  "{{ false if custom_java_path | length > 0 else true }}"
 
 ***
 
 ### redhat_java_package_name
 
-Java Package to install on RHEL/Centos hosts. Possible values java-1.8.0-openjdk or java-11-openjdk
+Java Package to install on RHEL/Centos hosts. Possible values java-8-openjdk, java-11-openjdk or java-17-openjdk
 
-Default:  java-11-openjdk
+Default:  java-17-openjdk
 
 ***
 
 ### debian_java_package_name
 
-Java Package to install on Debian hosts. Possible values openjdk-8-jdk or openjdk-11-jdk
+Java Package to install on Debian hosts. Possible values openjdk-11-jdk, openjdk-8-jdk or openjdk-17-jdk
 
-Default:  openjdk-11-jdk
+Default:  openjdk-17-jdk
 
 ***
 
 ### ubuntu_java_package_name
 
-Java Package to install on Ubuntu hosts. Possible values openjdk-8-jdk or openjdk-11-jdk
+Java Package to install on Ubuntu hosts. Possible values openjdk-8-jdk, openjdk-11-jdk or openjdk-17-jdk
 
-Default:  openjdk-11-jdk
+Default:  openjdk-17-jdk
 
 ***
 
@@ -5101,6 +5117,14 @@ Default:  30
 # ssl
 
 Below are the supported variables for the role ssl
+
+***
+
+### keystore_expiration_days
+
+Set this variable to customize expiration days for keystore. Applies for all components of Confluent Platform.
+
+Default:  365
 
 ***
 
