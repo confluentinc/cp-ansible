@@ -3,6 +3,12 @@ Ansible Playbooks for Confluent Platform - Release Notes
 ================================
 
 .. contents:: Topics
+v7.1.15
+======
+
+Notable fixes
+-------------
+- Improved error handling in connectors
 
 v7.1.14
 ======
