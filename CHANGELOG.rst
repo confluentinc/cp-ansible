@@ -9,7 +9,6 @@ v7.1.15
 Notable fixes
 -------------
 - Improved error handling in connectors
-- Critical security and vulnerability issues were fixed
 
 v7.1.14
 ======
