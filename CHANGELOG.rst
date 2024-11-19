@@ -10,6 +10,14 @@ v7.7.1
 Notable enhancements
 -------------
 
+- Improved error handling in connectors
+
+v7.7.1
+======
+
+Notable enhancements
+-------------
+
 - Updated default confluent cli version to 3.65.0
 
 Notable fixes
