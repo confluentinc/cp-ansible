@@ -457,14 +457,14 @@ class FilterModule(object):
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.password'] = str(keystore_storepass)
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.key.password'] = str(keystore_keypass)
 
-                if delegate_host.get('kafka_connect_oauth_enabled', oauth_enabled) and not rbac_enabled:
+                if delegate_host.get('ksql_oauth_enabled', oauth_enabled) and not rbac_enabled:
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.oauthbearer.login.client.id'] = oauth_user
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.oauthbearer.login.client.secret'] = oauth_password
 
-                if delegate_host.get('kafka_connect_oauth_enabled', oauth_enabled) and not rbac_enabled and oauth_groups_scope != 'none':
+                if delegate_host.get('ksql_oauth_enabled', oauth_enabled) and not rbac_enabled and oauth_groups_scope != 'none':
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.oauthbearer.login.oauth.scope'] = oauth_groups_scope
 
-                if delegate_host.get('kafka_connect_oauth_enabled', oauth_enabled) and not rbac_enabled and idp_self_signed:
+                if delegate_host.get('ksql_oauth_enabled', oauth_enabled) and not rbac_enabled and idp_self_signed:
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.location'] = truststore_path
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.password'] = truststore_storepass
 
