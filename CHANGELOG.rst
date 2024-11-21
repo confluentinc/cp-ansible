@@ -10,7 +10,7 @@ v7.3.12
 Notable fixes
 -------------
 
-- Improved error handling in connectors
+- Improved error handling in connectors.
 
 v7.3.11
 ======
