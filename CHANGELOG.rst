@@ -4,6 +4,15 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.7.2
+======
+
+Notable enhancements
+-------------
+
+- Improved error handling in connectors.
+- Fixed the ownership of data directory files in kraft controllers and brokers.
+
 v7.7.1
 ======
 
