@@ -12,18 +12,18 @@
 driver:
   name: docker
 platforms:
-  - name: ldap1
-    hostname: ldap1.confluent
-    groups:
-      - ldap_server
-    image: centos:centos8
-    dockerfile: ../Dockerfile-centos8-base.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
+  # - name: ldap1
+  #   hostname: ldap1.confluent
+  #   groups:
+  #     - ldap_server
+  #   image: centos:centos8
+  #   dockerfile: ../Dockerfile-centos8-base.j2
+  #   command: ""
+  #   volumes:
+  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
+  #   privileged: true
+  #   networks:
+  #     - name: confluent
   - name: oauth1
     hostname: oauth1.confluent
     groups:
@@ -177,33 +177,33 @@ platforms:
     networks:
       - name: confluent
   #Testing metrics reporter logic when c3 not in inventory
-  # - name: control-center1
-  #   hostname: control-center1.confluent
-  #   groups:
-  #     - control_center
-  #   image: debian:12
-  #   dockerfile: ../Dockerfile-debian12.j2
-  #   command: ""
-  #   volumes:
-  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
-  #   privileged: true
-  #   published_ports:
-  #     - "9021:9021"
-  #   networks:
-  #     - name: confluent
-  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  - name: controller1-mig
-    hostname: controller1-mig.confluent
+  - name: control-center1
+    hostname: control-center1.confluent
     groups:
-      - kafka_controller_migration
+      - control_center
     image: debian:12
     dockerfile: ../Dockerfile-debian12.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
+    published_ports:
+      - "9021:9021"
     networks:
       - name: confluent
+  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  # - name: controller1-mig
+  #   hostname: controller1-mig.confluent
+  #   groups:
+  #     - kafka_controller_migration
+  #   image: debian:12
+  #   dockerfile: ../Dockerfile-debian12.j2
+  #   command: ""
+  #   volumes:
+  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
+  #   privileged: true
+  #   networks:
+  #     - name: confluent
 provisioner:
   playbooks:
     converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
@@ -228,8 +228,9 @@ provisioner:
         keycloak_http_protocol: https
 
         oauth_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oauthcertfile.pem"
-        auth_mode: "ldap_with_oauth"
-        schema_registry_auth_mode: "ldap" # to test SR without OAuth after upgrade
+        auth_mode: oauth
+        # auth_mode: "ldap_with_oauth"
+        # schema_registry_auth_mode: "ldap" # to test SR without OAuth after upgrade
 
         oauth_superuser_client_id: superuser
         oauth_superuser_client_password: my-secret
@@ -294,24 +295,6 @@ provisioner:
               principal.service.name: "kafka_connect"
               principal.service.password: "password"
 
-        mds_super_user: mds
-        mds_super_user_password: password
-
-        schema_registry_ldap_user: schema_registry
-        schema_registry_ldap_password: password
-
-        kafka_connect_ldap_user: kafka_connect
-        kafka_connect_ldap_password: password
-
-        ksql_ldap_user: ksql
-        ksql_ldap_password: password
-
-        kafka_rest_ldap_user: kafka_rest
-        kafka_rest_ldap_password: password
-
-        control_center_ldap_user: control_center
-        control_center_ldap_password: password
-
         rbac_component_additional_system_admins:
           - User:user1
 
@@ -332,50 +315,12 @@ provisioner:
 
           # interbroker listener need to include user/password in this jaasconfig
           listener.name.client.plain.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required;
-          listener.name.client.plain.sasl.server.callback.handler.class: io.confluent.security.auth.provider.ldap.LdapAuthenticateCallbackHandler
+          # listener.name.client.plain.sasl.server.callback.handler.class: io.confluent.security.auth.provider.ldap.LdapAuthenticateCallbackHandler
 
-        kafka_broker_metrics_reporter_enabled: true
-        monitoring_interceptors_enabled: true
+        # kafka_broker_metrics_reporter_enabled: true
+        # monitoring_interceptors_enabled: true
 
-        secrets_protection_enabled: true
+        # secrets_protection_enabled: true
 
-      kafka_rest: # kafka rest to communicate to broker with ldap
-        auth_mode: ldap
-      ldap_server:
-        ldaps_enabled: false
-
-        ldap_admin_password: ldppassword
-
-        ldap_rbac_group: rbac
-        ldap_dc: example
-        ldap_dc_extension: com
-
-        ldap_users:
-          - username: "{{schema_registry_ldap_user}}"
-            password: "{{schema_registry_ldap_password}}"
-            uid: 9998
-            guid: 98
-          - username: "{{kafka_connect_ldap_user}}"
-            password: "{{kafka_connect_ldap_password}}"
-            uid: 9997
-            guid: 97
-          - username: "{{ksql_ldap_user}}"
-            password: "{{ksql_ldap_password}}"
-            uid: 9996
-            guid: 96
-          - username: "{{control_center_ldap_user}}"
-            password: "{{control_center_ldap_password}}"
-            uid: 9995
-            guid: 95
-          - username: "{{kafka_rest_ldap_user}}"
-            password: "{{kafka_rest_ldap_password}}"
-            uid: 9994
-            guid: 94
-          - username: "{{mds_super_user}}"
-            password: "{{mds_super_user_password}}"
-            uid: 9993
-            guid: 93
-          - username: user1
-            password: user1p
-            uid: 9992
-            guid: 92
+      # kafka_rest: # kafka rest to communicate to broker with ldap
+      #   auth_mode: ldap
