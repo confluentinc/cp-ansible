@@ -392,6 +392,138 @@ Validates that Control Center Can connect to each KSQL cluster
 
 ***
 
+### molecule/mini-setup-ext-mds-mtls
+
+#### Scenario mini-setup-ext-mds-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC enabled.
+
+MTLS enabled.
+
+Kafka Broker Customer Listener.
+
+SSO authentication using OIDC in Control center using Okta IdP
+
+#### Scenario mini-setup-ext-mds-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-ldap-mtls
+
+#### Scenario mini-setup-ldap-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC enabled.
+
+MTLS enabled.
+
+Kafka Broker Customer Listener.
+
+SSO authentication using OIDC in Control center using Okta IdP
+
+#### Scenario mini-setup-ldap-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-mtls
+
+#### Scenario mini-setup-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC enabled.
+
+MTLS enabled.
+
+Kafka Broker Customer Listener.
+
+SSO authentication using OIDC in Control center using Okta IdP
+
+#### Scenario mini-setup-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-oauth-mtls
+
+#### Scenario mini-setup-oauth-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC enabled.
+
+MTLS enabled.
+
+Kafka Broker Customer Listener.
+
+SSO authentication using OIDC in Control center using Okta IdP
+
+#### Scenario mini-setup-oauth-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-out-ldap-in-mtls
+
+#### Scenario mini-setup-out-ldap-in-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC enabled.
+
+MTLS enabled.
+
+Kafka Broker Customer Listener.
+
+SSO authentication using OIDC in Control center using Okta IdP
+
+#### Scenario mini-setup-out-ldap-in-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-out-oauth-in-mtls
+
+#### Scenario mini-setup-out-oauth-in-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC enabled.
+
+MTLS enabled.
+
+Kafka Broker Customer Listener.
+
+SSO authentication using OIDC in Control center using Okta IdP
+
+#### Scenario mini-setup-out-oauth-in-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
 ### molecule/mtls-custombundle-rhel-fips
 
 #### Scenario mtls-custombundle-rhel-fips test's the following:
@@ -1324,6 +1456,38 @@ Validates OIDC authenticate api for SSO in Control Center
 
 ***
 
+### molecule/rbac-replicator-mtls-custom-ubuntu
+
+#### Scenario rbac-replicator-mtls-custom-ubuntu test's the following:
+
+Installation of Confluent Platform on Ubuntu2204.
+
+RBAC Enabled.
+
+Customer RBAC system admins.
+
+Kerberos enabled on Cluster1(mds).
+
+MTLS Customer certs enabled on cluster2.
+
+Replicator Configured with Kerberos and MTLS.
+
+#### Scenario rbac-replicator-mtls-custom-ubuntu verify test's the following:
+
+Validates that the Console Consumer can consume data from cluster2, proving that data has been replicated from cluster1 (MDS).
+
+Validates that Replicator is using MTLS with RBAC to Produce data to Cluster2.
+
+Validates that Replicator is using Kerberos with RBAC to Consume from Cluster1 (MDS).
+
+Validates that client ID's are set correctly on Replicator.
+
+Validates that Replicator logging path is valid.
+
+Validates client packages.
+
+***
+
 ### molecule/rbac-scram-custom-rhel-fips
 
 #### Scenario rbac-scram-custom-rhel-fips test's the following:
@@ -1378,7 +1542,7 @@ SCRAM enabled.
 
 #### Scenario scram-rhel verify test's the following:
 
-Validates that SCRAM is enabled on all components.
+Validates that SCRAM is enabled on all components except kafka controller.
 
 ***
 
