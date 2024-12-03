@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.7.0
+Default:  7.8.0
 
 ***
 
@@ -193,6 +193,8 @@ Default:  0
 Use to copy files from control node to all components hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 
 Default:  []
+
+***
 
 ### kerberos_configure
 
@@ -462,7 +464,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  3.63.0
+Default:  4.5.0
 
 ***
 
@@ -476,10 +478,7 @@ Default:  3
 
 ### sasl_protocol
 
-SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256.
-You can provide a comma-separated list of at most two mechanisms to configure multiple listeners with different mechanisms. For example, 'kerberos,plain'
-When configuring multiple values, you can provide values only from the following list: kerberos, plain, scram, scram256
-First value of the list is used as the default mechanism for all communications.
+SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256. You can provide a comma-separated list of at most two mechanisms to configure multiple listeners with different mechanisms. For example, 'kerberos,plain'. When configuring multiple values, you can provide values only from the following list: kerberos, plain, scram, scram256. First value of the list is used as the default mechanism for all communications.
 
 Default:  none
 
@@ -503,9 +502,33 @@ Default:  365
 
 ### ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka
+Deprecated. Use ssl_client_authentication instead. Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka.
 
 Default:  false
+
+***
+
+### ssl_client_authentication
+
+Kafka broker listeners and ERP server's config to enforce ssl client authentication. Options are none, requested(client may send certs or may not), required(client must send cert to server)
+
+Default:  "none"
+
+***
+
+### mds_ssl_client_authentication
+
+MDS server's config to enforce ssl client authentication on MDS. Options are none, requested(used during upgrades), required
+
+Default:  "none"
+
+***
+
+### erp_ssl_client_authentication
+
+ERP server's config to enforce ssl client authentication on ERP. Options are none, requested(used during upgrades), required
+
+Default:  "{{ mds_ssl_client_authentication }}"
 
 ***
 
@@ -522,6 +545,30 @@ Default:  "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_c
 Directory on hosts to store all ssl files.
 
 Default:  /var/ssl/private/
+
+***
+
+### principal_mapping_rules
+
+principal mapping rules to map the DN from cert into a username
+
+Default:  ['DEFAULT']
+
+***
+
+### impersonation_super_users
+
+Users allowed to get an impersonation token for other users except the impersonation protected users. Must be defined in case of RBAC over mTLS only.
+
+Default:  []
+
+***
+
+### impersonation_protected_users
+
+Users which cant be impersonated using impersonation token. Super users should be added here to disallow them from being impersonated in case of RBAC over mTLS only.
+
+Default:  []
 
 ***
 
@@ -761,7 +808,7 @@ Default:  "{{ssl_mutual_auth_enabled}}"
 
 Deprecated- SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
 
-Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
+Default:  "{{ 'kerberos' if 'kerberos' in (sasl_protocol | confluent.platform.split_to_list) else 'none' }}"
 
 ***
 
@@ -983,18 +1030,23 @@ Default:  "{{ssl_enabled}}"
 
 ### kafka_controller_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+Deprecated. Use kafka_controller_ssl_client_authentication instead. Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
 
 Default:  "{{ssl_mutual_auth_enabled}}"
 
 ***
 
+### kafka_controller_ssl_client_authentication
+
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+
+Default:  "{{ssl_client_authentication}}"
+
+***
+
 ### kafka_controller_sasl_protocol
 
-SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none, scram, scram256 (scram only when providing multiple values with first value being non-scram).
-You can provide a comma-separated list of at most two mechanisms to configure multiple listeners with different mechanisms. For example, 'plain,scram'
-When configuring multiple values, you can provide values only from the following list: kerberos, plain, scram, scram256
-First value of the list is used for controller-controller communication.
+SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none, scram, scram256 (scram only when providing multiple values with first value being non-scram). You can provide a comma-separated list of at most two mechanisms to configure multiple listeners with different mechanisms. For example, 'plain,scram'. When configuring multiple values, you can provide values only from the following list: kerberos, plain, scram, scram256. First value of the list is used for controller-controller communication.
 
 Default:  "{{sasl_protocol}}"
 
@@ -1376,11 +1428,27 @@ Default:  {}
 
 ***
 
+### kafka_broker_mds_cert_auth_only
+
+Property of Broker as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+
+Default:  false
+
+***
+
 ### kafka_broker_rest_proxy_enabled
 
 Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
 
 Default:  "{{confluent_server_enabled and not ccloud_kafka_enabled }}"
+
+***
+
+### kafka_broker_rest_proxy_mds_cert_auth_only
+
+Property of ERP as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+
+Default:  false
 
 ***
 
@@ -1461,6 +1529,22 @@ Default:  "{{ssl_enabled}}"
 Deprecated- Boolean to enable mTLS Authentication on Schema Registry
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### schema_registry_ssl_client_authentication
+
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+
+Default:  "{{ssl_client_authentication}}"
+
+***
+
+### schema_registry_mds_cert_auth_only
+
+Property of SR as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+
+Default:  false
 
 ***
 
@@ -1653,6 +1737,22 @@ Default:  "{{ssl_enabled}}"
 Deprecated- Boolean to enable mTLS Authentication on Rest Proxy
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### kafka_rest_ssl_client_authentication
+
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+
+Default:  "{{ssl_client_authentication}}"
+
+***
+
+### kafka_rest_mds_cert_auth_only
+
+Property of Rest Proxy as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+
+Default:  false
 
 ***
 
@@ -1861,6 +1961,22 @@ Default:  "{{ssl_enabled}}"
 Deprecated- Boolean to enable mTLS Authentication on Connect
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### kafka_connect_ssl_client_authentication
+
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+
+Default:  "{{ssl_client_authentication}}"
+
+***
+
+### kafka_connect_mds_cert_auth_only
+
+Property of Connect as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+
+Default:  false
 
 ***
 
@@ -2128,6 +2244,14 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ***
 
+### ksql_mds_cert_auth_only
+
+Property of Ksql as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+
+Default:  false
+
+***
+
 ### ksql_authentication_type
 
 Authentication to put on ksqlDB's Rest Endpoint. Available options: [mtls, basic, none].
@@ -2349,6 +2473,14 @@ Default:  "0.0.0.0"
 Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
 
 Default:  "{{ssl_enabled}}"
+
+***
+
+### control_center_mds_cert_auth_only
+
+Property of Control Center as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+
+Default:  false
 
 ***
 
@@ -2594,7 +2726,7 @@ Default:  none
 
 ### oauth_superuser_principal
 
-Service principal for OAuth client in IdPserver. Defaults to client id
+Service principal for OAuth client in IdPserver. Defaults to client id. Needs to be modified based on OAuth JWT token's field pointed by oauth_sub_claim
 
 Default:  "{{oauth_superuser_client_id}}"
 
@@ -2659,6 +2791,22 @@ Default:  none
 ### oauth_idp_cert_path
 
 SSL certificate (full path of file on control node) of IDP Domain. Optional, needed when IDP server has TLS enabled with custom certificate
+
+Default:  ""
+
+***
+
+### mds_super_user_external_cert_path
+
+MDS certs path on ansible control node. Used in case of centralized MDS with mTLS for external clusters to get a superuser token from MDS. This cert must have super user permissions as it will be the one used for giving rolebindings to other users like SR, Connect. Used with mds_super_user_external_key_path
+
+Default:  ""
+
+***
+
+### mds_super_user_external_key_path
+
+MDS key path on ansible control node.
 
 Default:  ""
 
@@ -3978,9 +4126,25 @@ Default:  false
 
 ### kafka_connect_replicator_ssl_mutual_auth_enabled
 
-Boolean to enable mTLS Authentication on Kafka Connect Replicator.
+Deprecated. Use kafka_connect_replicator_ssl_client_authentication instead. Boolean to enable mTLS Authentication on Kafka Connect Replicator.
 
 Default:  "{{ssl_mutual_auth_enabled}}"
+
+***
+
+### kafka_connect_replicator_mds_cert_auth_only
+
+Property of Replicator as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_ssl_client_authentication
+
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+
+Default:  "{{ssl_client_authentication}}"
 
 ***
 
@@ -6193,3 +6357,4 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
+
