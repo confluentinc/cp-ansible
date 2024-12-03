@@ -4,6 +4,18 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.8.0
+======
+
+New features
+-------------
+- Role-based access control (RBAC) with principal from mTLS certs is now supported
+- SASL/SCRAM authentication support for kraft controllers and broker communication
+
+Notable enhancements
+-------------
+- Ubuntu 22, Alma Linux 8, and Alma Linux 9 Operating systems are now supported
+
 v7.7.0
 ======
 
