@@ -398,13 +398,11 @@ Validates that Control Center Can connect to each KSQL cluster
 
 Installs Confluent Platform Cluster on ubi9.
 
-RBAC enabled.
+RBAC over mTLS enabled.
 
-MTLS enabled.
+Centralized MDS.
 
-Kafka Broker Customer Listener.
-
-SSO authentication using OIDC in Control center using Okta IdP
+File based login to C3 using overrides.
 
 #### Scenario mini-setup-ext-mds-mtls verify test's the following:
 
@@ -420,13 +418,11 @@ Validates ssl.client.authentication is set to REQUIRED.
 
 Installs Confluent Platform Cluster on ubi9.
 
-RBAC enabled.
+RBAC over mTLS+LDAP enabled.
 
-MTLS enabled.
+MDS accepts LDAP credentials and mTLS certs.
 
-Kafka Broker Customer Listener.
-
-SSO authentication using OIDC in Control center using Okta IdP
+LDAP based login to C3.
 
 #### Scenario mini-setup-ldap-mtls verify test's the following:
 
@@ -442,13 +438,9 @@ Validates ssl.client.authentication is set to REQUIRED.
 
 Installs Confluent Platform Cluster on ubi9.
 
-RBAC enabled.
+RBAC over mTLS enabled.
 
-MTLS enabled.
-
-Kafka Broker Customer Listener.
-
-SSO authentication using OIDC in Control center using Okta IdP
+File based login to C3 using overrides.
 
 #### Scenario mini-setup-mtls verify test's the following:
 
@@ -464,13 +456,9 @@ Validates ssl.client.authentication is set to REQUIRED.
 
 Installs Confluent Platform Cluster on ubi9.
 
-RBAC enabled.
+RBAC over mTLS+OAuth enabled.
 
-MTLS enabled.
-
-Kafka Broker Customer Listener.
-
-SSO authentication using OIDC in Control center using Okta IdP
+SSO authentication using OIDC in Control center using Okta IdP.
 
 #### Scenario mini-setup-oauth-mtls verify test's the following:
 
@@ -486,13 +474,13 @@ Validates ssl.client.authentication is set to REQUIRED.
 
 Installs Confluent Platform Cluster on ubi9.
 
-RBAC enabled.
+RBAC over mTLS+LDAP enabled.
 
-MTLS enabled.
+Outside CP to CP communication over LDAP.
 
-Kafka Broker Customer Listener.
+Internal CP communication over mTLS.
 
-SSO authentication using OIDC in Control center using Okta IdP
+LDAP based login to C3.
 
 #### Scenario mini-setup-out-ldap-in-mtls verify test's the following:
 
@@ -508,13 +496,13 @@ Validates ssl.client.authentication is set to REQUIRED.
 
 Installs Confluent Platform Cluster on ubi9.
 
-RBAC enabled.
+RBAC over mTLS+OAuth enabled.
 
-MTLS enabled.
+Outside CP to CP communication over OAuth.
 
-Kafka Broker Customer Listener.
+Internal CP communication over mTLS.
 
-SSO authentication using OIDC in Control center using Okta IdP
+SSO authentication using OIDC in Control center using Okta IdP.
 
 #### Scenario mini-setup-out-oauth-in-mtls verify test's the following:
 
