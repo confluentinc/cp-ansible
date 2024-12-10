@@ -149,7 +149,7 @@
     kerberos_keytab_path: "{{control_center_kerberos_keytab_path}}"
     kerberos_keytab_destination_path: "{{control_center_keytab_path}}"
     kerberos_handler: "restart control center"
-  when: kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'GSSAPI'
+  when: "'GSSAPI' in (kafka_broker_listeners[control_center_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)"
 
 - name: Copy Custom Control Center Files
   include_role:
@@ -163,9 +163,66 @@
   tags:
     - configuration
 
-- name: Configure RBAC
+- name: Copy Custom Files From All Components List
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{all_components_copy_files}}"
+    user: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+  when: all_components_copy_files | length > 0
+  tags:
+    - configuration
+
+- name: Configure RBAC for OAuth User
   include_tasks: rbac.yml
-  when: rbac_enabled|bool
+  vars:
+    c3_user: "{{control_center_oauth_principal}}"
+  when: rbac_enabled|bool and oauth_enabled|bool
+
+- name: Configure RBAC for LDAP User
+  include_tasks: rbac.yml
+  vars:
+    c3_user: "{{control_center_ldap_user}}"
+  when:
+    - rbac_enabled|bool
+    - "'ldap' in auth_mode"
+
+- name: Extract C3 Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{control_center_keystore_path}}"
+    keystore_storepass: "{{control_center_keystore_storepass}}"
+    pm_rules: "{{control_center_final_properties.get('ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC for mTLS User
+  include_tasks: rbac.yml
+  vars:
+    c3_user: "{{ks_extracted_principal}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Import IDP certificate to Truststore for OAuth
+  include_role:
+    name: common
+    tasks_from: idp_certs.yml
+  vars:
+    idp_cert_path: "{{ oauth_idp_cert_path }}"
+    idp_cert_dest: /tmp/oauth_idp_cert.pem
+    alias: "oauth_cert"
+    truststore_storepass: "{{control_center_truststore_storepass}}"
+    truststore_path: "{{control_center_truststore_path}}"
+    create_bouncy_castle_keystore: false
+  when:
+    - oauth_enabled|bool or schema_registry_oauth_enabled|bool or kafka_rest_oauth_enabled|bool or kafka_connect_oauth_enabled|bool or kafka_connect_replicator_oauth_enabled|bool
+    - oauth_idp_cert_path != ""
 
 - name: Create Control Center Config directory
   file:
@@ -182,7 +239,7 @@
   template:
     src: control-center.properties.j2
     dest: "{{control_center.config_file}}"
-    mode: 0640
+    mode: '640'
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
   notify: restart control center
@@ -240,7 +297,7 @@
     path: "{{control_center.log4j_file}}"
     group: "{{control_center_group}}"
     owner: "{{control_center_user}}"
-    mode: 0640
+    mode: '640'
   tags:
     - filesystem
     - log
@@ -249,7 +306,7 @@
   file:
     path: "{{ logredactor_rule_path | dirname }}"
     state: directory
-    mode: 0755
+    mode: '755'
   when: (control_center_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
@@ -258,7 +315,7 @@
   copy:
     src: "{{ logredactor_rule_path_local }}"
     dest: "{{ logredactor_rule_path }}"
-    mode: 0644
+    mode: '644'
   when: (control_center_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
@@ -309,7 +366,7 @@
   template:
     src: jaas.conf.j2
     dest: "{{control_center.jaas_file}}"
-    mode: 0640
+    mode: '640'
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
   notify: restart control center
@@ -319,7 +376,7 @@
   template:
     src: password.properties.j2
     dest: "{{control_center.password_file}}"
-    mode: 0640
+    mode: '640'
     owner: "{{control_center_user}}"
     group: "{{control_center_group}}"
   notify: restart control center

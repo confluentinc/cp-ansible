@@ -1,0 +1,23 @@
+---
+- name: Extract Distinguished Name from Keystore - SSL Mutual Auth
+  # Examine the keystore
+  # Search lines with Entry type: "PrivateKeyEntry" and return that line and all after, ca cert is of type "trustedCertEntry"
+  # Search for first "Owner" line
+  # Extract DNAME from line
+  # Remove spaces after commas
+  shell: |
+    keytool -list -keystore {{keystore_path}} \
+        -storepass {{keystore_storepass}} \
+        -v \
+        | grep PrivateKeyEntry -A1000 \
+        | grep Owner -m1 \
+        | cut -d ":" -f2 \
+        | cut -c2- \
+        | sed 's/\s*,\s*/,/g'
+  register: distinguished_name_from_keystore
+  changed_when: false
+  no_log: "{{ mask_sensitive_logs|bool }}"
+
+- name: Extract Principal
+  set_fact:
+    ks_extracted_principal: "{{distinguished_name_from_keystore.stdout|confluent.platform.resolve_principal(pm_rules)}}"

@@ -1,0 +1,381 @@
+---
+### Installs Confluent Platform Cluster on Debian 12.
+### RBAC enabled.
+### SASL PLAIN enabled.
+### TLS with custom certs enabled.
+### Kafka Broker Customer Listener.
+### Secrets protection enabled.
+### Control Center disabled, metrics reporters enabled.
+### LdapAuthenticateCallbackHandler for AuthN
+### Creates two unique Connectors in Connect cluster
+
+driver:
+  name: docker
+platforms:
+  - name: ldap1
+    hostname: ldap1.confluent
+    groups:
+      - ldap_server
+    image: centos:centos8
+    dockerfile: ../Dockerfile-centos8-base.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: oauth1
+    hostname: oauth1.confluent
+    groups:
+      - oauth_server
+    image: quay.io/keycloak/keycloak:latest
+    env:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
+      KEYCLOAK_HTTP_PORT: "8080"
+      KEYCLOAK_HTTPS_PORT: "8443"
+    dockerfile: ../Dockerfile-oauth.j2
+    published_ports:
+      - "8080:8080"
+      - "8443:8443"
+    command: start-dev
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: debian:12
+    dockerfile: ../Dockerfile-debian12.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}2
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: debian:12
+    dockerfile: ../Dockerfile-debian12.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}3
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}3.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: debian:12
+    dockerfile: ../Dockerfile-debian12.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - kafka_broker_migration
+    image: debian:12
+    dockerfile: ../Dockerfile-debian12.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker
+      - kafka_broker_migration
+    image: debian:12
+    dockerfile: ../Dockerfile-debian12.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
+    groups:
+      - kafka_broker
+      - kafka_broker_migration
+    image: debian:12
+    dockerfile: ../Dockerfile-debian12.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+      - schema_registry_migration
+    image: debian:12
+    dockerfile: ../Dockerfile-debian12.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest
+      - kafka_rest_migration
+    image: debian:12
+    dockerfile: ../Dockerfile-debian12.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+      - kafka_connect_migration
+    image: debian:12
+    dockerfile: ../Dockerfile-debian12.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+      - ksql_migration
+    image: debian:12
+    dockerfile: ../Dockerfile-debian12.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  #Testing metrics reporter logic when c3 not in inventory
+  # - name: control-center1
+  #   hostname: control-center1.confluent
+  #   groups:
+  #     - control_center
+  #   image: debian:12
+  #   dockerfile: ../Dockerfile-debian12.j2
+  #   command: ""
+  #   volumes:
+  #     - /sys/fs/cgroup:/sys/fs/cgroup:ro
+  #   privileged: true
+  #   published_ports:
+  #     - "9021:9021"
+  #   networks:
+  #     - name: confluent
+  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: debian:12
+    dockerfile: ../Dockerfile-debian12.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
+  inventory:
+    group_vars:
+      all:
+        scenario_name: oauth-rbac-plain-provided-debian12
+
+        sasl_protocol: plain
+
+        ssl_enabled: true
+
+        ssl_provided_keystore_and_truststore: true
+        ssl_keystore_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}.keystore.jks"
+        ssl_keystore_key_password: keystorepass
+        ssl_keystore_store_password: keystorepass
+        ssl_truststore_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/truststore.jks"
+        ssl_truststore_password: truststorepass
+        ssl_truststore_ca_cert_alias: CARoot
+
+        keycloak_oauth_server_port: 8443
+        keycloak_http_protocol: https
+
+        oauth_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oauthcertfile.pem"
+        auth_mode: "ldap_with_oauth"
+        schema_registry_auth_mode: "ldap" # to test SR without OAuth after upgrade
+
+        oauth_superuser_client_id: superuser
+        oauth_superuser_client_password: my-secret
+
+        oauth_sub_claim: client_id
+        oauth_groups_claim: groups
+        oauth_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
+        oauth_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
+        oauth_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
+        oauth_expected_audience: Confluent,account,api://default
+
+        schema_registry_oauth_user: schema_registry
+        schema_registry_oauth_password: my-secret
+
+        kafka_rest_oauth_user: kafka_rest
+        kafka_rest_oauth_password: my-secret
+
+        kafka_connect_oauth_user: kafka_connect
+        kafka_connect_oauth_password: my-secret
+
+        ksql_oauth_user: ksql
+        ksql_oauth_password: my-secret
+
+        control_center_oauth_user: control_center
+        control_center_oauth_password: my-secret
+
+        rbac_enabled: true
+        custom_java_path: /opt/jdk17 # Use custom Java 17
+
+        kafka_broker_custom_listeners:
+          client_listener:
+            name: CLIENT
+            port: 9093
+            ssl_enabed: true
+            sasl_protocol: plain
+
+        # To run the FileStream connector, you must add the filestream-connectors path in the plugin.path
+        kafka_connect_custom_properties:
+          plugin.path: "/usr/share/filestream-connectors,/usr/share/java/connect_plugins"
+
+        kafka_connect_connector_white_list: "test_topic1,test_topic2"
+        kafka_connect_connectors:
+          - name: sample-connector-1
+            config:
+              connector.class: "FileStreamSourceConnector"
+              tasks.max: "5"
+              file: "/etc/kafka/connect-distributed.properties"
+              topic: "test_topic1"
+              key.converter: "org.apache.kafka.connect.json.JsonConverter"
+              value.converter: "org.apache.kafka.connect.json.JsonConverter"
+          - name: sample-connector-2
+            config:
+              connector.class: "FileStreamSinkConnector"
+              tasks.max: "1"
+              file: "/etc/kafka/connect-distributed.properties"
+              topics: "test_topic2"
+              key.converter: "org.apache.kafka.connect.json.JsonConverter"
+              value.converter: "org.apache.kafka.connect.json.JsonConverter"
+              consumer.override.security.protocol: SASL_SSL
+              consumer.override.sasl.mechanism: OAUTHBEARER
+              consumer.override.sasl.jaas.config: "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"kafka_connect\" password=\"password\" metadataServerUrls=\"https://kafka-broker1:8090,https://kafka-broker2:8090,https://kafka-broker3:8090\";"
+              principal.service.name: "kafka_connect"
+              principal.service.password: "password"
+
+        mds_super_user: mds
+        mds_super_user_password: password
+
+        schema_registry_ldap_user: schema_registry
+        schema_registry_ldap_password: password
+
+        kafka_connect_ldap_user: kafka_connect
+        kafka_connect_ldap_password: password
+
+        ksql_ldap_user: ksql
+        ksql_ldap_password: password
+
+        kafka_rest_ldap_user: kafka_rest
+        kafka_rest_ldap_password: password
+
+        control_center_ldap_user: control_center
+        control_center_ldap_password: password
+
+        rbac_component_additional_system_admins:
+          - User:user1
+
+        kafka_broker_custom_properties:
+          ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+          ldap.com.sun.jndi.ldap.read.timeout: 3000
+          ldap.java.naming.provider.url: ldap://ldap1:389
+          ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
+          ldap.java.naming.security.credentials: password
+          ldap.java.naming.security.authentication: simple
+          ldap.user.search.base: OU=rbac,DC=example,DC=com
+          ldap.group.search.base: OU=rbac,DC=example,DC=com
+          ldap.user.name.attribute: uid
+          ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.group.name.attribute: cn
+          ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.user.object.class: account
+
+          # interbroker listener need to include user/password in this jaasconfig
+          listener.name.client.plain.sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required;
+          listener.name.client.plain.sasl.server.callback.handler.class: io.confluent.security.auth.provider.ldap.LdapAuthenticateCallbackHandler
+
+        kafka_broker_metrics_reporter_enabled: true
+        monitoring_interceptors_enabled: true
+
+        secrets_protection_enabled: true
+
+      kafka_rest: # kafka rest to communicate to broker with ldap
+        auth_mode: ldap
+      ldap_server:
+        ldaps_enabled: false
+
+        ldap_admin_password: ldppassword
+
+        ldap_rbac_group: rbac
+        ldap_dc: example
+        ldap_dc_extension: com
+
+        ldap_users:
+          - username: "{{schema_registry_ldap_user}}"
+            password: "{{schema_registry_ldap_password}}"
+            uid: 9998
+            guid: 98
+          - username: "{{kafka_connect_ldap_user}}"
+            password: "{{kafka_connect_ldap_password}}"
+            uid: 9997
+            guid: 97
+          - username: "{{ksql_ldap_user}}"
+            password: "{{ksql_ldap_password}}"
+            uid: 9996
+            guid: 96
+          - username: "{{control_center_ldap_user}}"
+            password: "{{control_center_ldap_password}}"
+            uid: 9995
+            guid: 95
+          - username: "{{kafka_rest_ldap_user}}"
+            password: "{{kafka_rest_ldap_password}}"
+            uid: 9994
+            guid: 94
+          - username: "{{mds_super_user}}"
+            password: "{{mds_super_user_password}}"
+            uid: 9993
+            guid: 93
+          - username: user1
+            password: user1p
+            uid: 9992
+            guid: 92

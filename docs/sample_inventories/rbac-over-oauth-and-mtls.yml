@@ -1,0 +1,143 @@
+---
+##
+## The following is an example inventory file of the configuration required for setting up Confluent Platform with RBAC over OAuth and mTLS.
+## Principals extracted from certs and OAuth clientids are given role bindings.
+## Extra configs added to keep cp service to service communication over certs only and not use OAuth credentials there.
+## External clients of kafka or other services can use OAuth credentials to communicate with the cluster
+## SSO enabled on Confluent Control Center
+
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: ec2-user
+    ansible_become: true
+    ansible_ssh_private_key_file: /home/ec2-user/guest.pem
+    ansible_python_interpreter: /usr/bin/python3
+
+    ## TLS Configuration
+    ssl_enabled: true
+    # 3 ways to handle ssl
+    # Self Signed Certs (Default) Not recommended for production clusters
+    # Custom Certs
+    # Set ssl_custom_certs, ssl_ca_cert_filepath, ssl_signed_cert_filepath, ssl_key_filepath, ssl_key_password & ssl_custom_certs_remote_src(optional)
+    # Provided Keystore Truststore
+    # Set ssl_provided_keystore_and_truststore, ssl_keystore_and_truststore_custom_password, ssl_keystore_filepath, ssl_keystore_key_password, ssl_keystore_store_password, ssl_keystore_alias, ssl_truststore_filepath, ssl_truststore_password, ssl_truststore_ca_cert_alias and ssl_provided_keystore_and_truststore_remote_src (optional)
+
+    rbac_enabled: true
+    auth_mode: oauth  # This sets up MDS so that it can accept OAuth token. Due to mds_ssl_client_authentication MDS can also accept certs for authnz.
+
+    # ssl_mutual_auth_enabled: true  Deprecated in 7.8.x
+    ssl_client_authentication: required  # <required/requested/none>
+    # Sets mtls on kafka broker listeners
+
+    mds_ssl_client_authentication: required  # <required/requested/none>
+    # Sets mtls on MDS server
+    # Must be defined in all section as all components need to know its value for assigning role bindings
+
+    erp_ssl_client_authentication: requested  # <required/requested/none>
+    # Sets mTLS on ERP.
+    # Takes default value from mds_ssl_client_authentication
+    # Default value is none
+
+    # SR's clients dont have to send certs when they send any request to SR server
+    # Takes the default value from ssl_client_authentication. So if kept undefined in inventory it will be set to required as ssl_client_authentication is set to required
+    schema_registry_ssl_client_authentication: none
+
+    # Connect's clients must send certs when they send any request to Connect server
+    kafka_connect_ssl_client_authentication: required
+
+    # Standalone Rest Proxy's clients may send cert when they send any request to Rest Proxy server but not hard and fast.
+    kafka_rest_ssl_client_authentication: requested
+
+    kafka_broker_custom_listeners:
+      puremtls:
+        name: CERTONLY
+        port: 9094
+        ssl_client_authentication: required
+        ssl_enabled: true
+        sasl_protocol: none
+        # creating a listener with mtls only and no sasl protocol
+
+    # Configs to send only certs and no oauth credentials to MDS
+    # Not mandatory to use but should be used in case cp components to MDS communication should not be using oauthbearer and use just mTLS certs
+    kafka_broker_rest_proxy_mds_cert_auth_only: true
+    schema_registry_mds_cert_auth_only: true
+    kafka_connect_mds_cert_auth_only: true
+    kafka_rest_mds_cert_auth_only: true
+    ksql_mds_cert_auth_only: true
+    control_center_mds_cert_auth_only: true
+
+    # configs to talk to mtls only kafka Listener.
+    schema_registry_kafka_listener_name: puremtls
+    kafka_connect_kafka_listener_name: puremtls
+    ksql_kafka_listener_name: puremtls
+    control_center_kafka_listener_name: puremtls
+
+    # Rest Proxy to kafka broker communication should happen over SASL_SSL listener thus not using the above puremtls listener which is SSL only
+    # If we dont explicitly set kafka_rest_kafka_listener_name variable it uses OAuthbearer and certs both for authnz in such scenario
+
+    # variables required to enable OAuth on all components
+    oauth_sub_claim: client_id
+    oauth_groups_claim: groups
+    oauth_token_uri: <idp_token_uri>
+    oauth_issuer_url: <idp_issuer_url>
+    oauth_jwks_uri: <idp_jwks_uri>
+    oauth_expected_audience: Confluent,account,api://default
+    # optional, needed when any additional scope is needed to include groups in the OAuth token
+    oauth_groups_scope: groups
+    # optional,needed when OAuth IDP server has TLS enabled with custom certificate.
+    oauth_idp_cert_path: <cert_path>
+
+    oauth_superuser_client_id: <superuser_client_id>
+    oauth_superuser_client_password: <superuser_client_secret>
+    schema_registry_oauth_user: <sr_client_id>
+    schema_registry_oauth_password: <sr_client_secret>
+    kafka_rest_oauth_user: <rp_client_id>
+    kafka_rest_oauth_password: <rp_client_secret>
+    kafka_connect_oauth_user: <connect_client_id>
+    kafka_connect_oauth_password: <connect_client_secret>
+    control_center_oauth_user: <c3_client_id>
+    control_center_oauth_password: <c3_client_secret>
+
+    ## Varibles to enable SSO in Control Center
+    sso_mode: oidc
+    # necessary configs in MDS server for sso in C3
+    sso_groups_claim: groups  # default
+    sso_sub_claim: sub        # default
+    sso_groups_scope: groups # scope is optional, depending on the Idp
+    sso_issuer_url: <issuer url>
+    sso_jwks_uri: <jwks uri>
+    sso_authorize_uri: <OAuth authorization endpoint>
+    sso_token_uri: <IdP token endpoint>
+    sso_client_id: <client id>
+    sso_client_password: <client password>
+    sso_refresh_token: true   # defaults to true
+
+
+kafka_controller:
+  hosts:
+    ec2-34-219-110-48.us-west-2.compute.amazonaws.com:
+    ec2-18-237-72-224.us-west-2.compute.amazonaws.com:
+    ec2-35-161-39-212.us-west-2.compute.amazonaws.com:
+
+kafka_broker:
+  hosts:
+    ec2-34-211-33-32.us-west-2.compute.amazonaws.com:
+    ec2-35-89-77-112.us-west-2.compute.amazonaws.com:
+    ec2-35-163-80-4.us-west-2.compute.amazonaws.com:
+
+schema_registry:
+  hosts:
+    ec2-34-212-49-238.us-west-2.compute.amazonaws.com:
+
+kafka_connect:
+  hosts:
+    ec2-35-93-21-143.us-west-2.compute.amazonaws.com:
+
+kafka_rest:
+  hosts:
+    ec2-34-222-41-249.us-west-2.compute.amazonaws.com:
+
+control_center:
+  hosts:
+    ec2-35-87-151-33.us-west-2.compute.amazonaws.com:

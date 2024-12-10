@@ -4,7 +4,7 @@
 ### Validates that TLS is configured properly.
 
 - name: Verify
-  hosts: all
+  hosts: all,!kafka_controller_migration
   gather_facts: false
   tasks:
     - import_role:
@@ -23,6 +23,43 @@
           - archive.stat.pw_name == 'cp-custom'
         quiet: true
 
+- name: Verify - kafka_controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /opt/confluent/etc/controller/server.properties
+        property: sasl.enabled.mechanisms
+        expected_value: SCRAM-SHA-256,PLAIN
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /opt/confluent/etc/controller/server.properties
+        property: sasl.mechanism.controller.protocol
+        expected_value: PLAIN
+
+- name: Verify - kafka_broker
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - set_fact:
+        kraft_mode: "{{ ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) }}"
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /opt/confluent/etc/kafka/server.properties
+        property: sasl.mechanism.controller.protocol
+        expected_value: SCRAM-SHA-256
+      when: kraft_mode|bool
+
 - name: Verify - kafka_connect
   hosts: kafka_connect
   gather_facts: false
@@ -37,3 +74,15 @@
         file_path: /opt/confluent/etc/kafka/connect-distributed.properties
         property: plugin.path
         expected_value: "/opt/confluent/confluent-{{confluent_package_version}}/share/java/connect_plugins,/usr/share/java/connect_plugins"
+
+- name: Verify - kafka_broker
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /opt/confluent/etc/kafka/server.properties
+        property: log.dirs
+        expected_value: /tmp/logs1,/tmp/logs2

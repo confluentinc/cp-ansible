@@ -1,0 +1,69 @@
+---
+- name: Register if Truststore Exists
+  stat:
+    path: "{{truststore_path}}"
+  register: truststore
+
+- name: Create SSL Certificate Directory
+  file:
+    path: /var/ssl/private
+    state: directory
+    mode: '755'
+  tags:
+    - privileged
+    - filesystem
+  when: not truststore.stat.exists|bool
+
+- name: Copy IDP Cert to Node
+  copy:
+    src: "{{idp_cert_path}}"
+    dest: "{{idp_cert_dest}}"
+  diff: "{{ not mask_sensitive_diff|bool }}"
+
+- name: Check if Cert already imported
+  shell: |
+    keytool -list -keystore {{truststore_path}} \
+    -storetype pkcs12 -alias {{alias}} -storepass {{truststore_storepass}}
+  ignore_errors: true
+  failed_when: false
+  register: cert_imported
+  no_log: "{{mask_secrets|bool}}"
+
+- name: Import IdP certificate to Truststore
+  shell: |
+    keytool -noprompt -keystore {{truststore_path}} \
+      -storetype pkcs12 \
+      -alias {{alias}} \
+      -import -file {{idp_cert_dest}} \
+      -storepass {{truststore_storepass}}
+  when:
+    - cert_imported.rc == 1
+  no_log: "{{mask_secrets|bool}}"
+
+- name: Check if Cert already imported
+  shell: |
+    keytool -list -keystore {{bcfks_truststore_path}} \
+    -storetype BCFKS -alias {{alias}} \
+    -storepass {{truststore_storepass}} \
+    -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+    -providerpath {{ (binary_base_path, 'share/java/kafka/bc-fips-*.jar') | path_join }}
+  ignore_errors: true
+  failed_when: false
+  register: cert_imported
+  when:
+    - create_bouncy_castle_keystore|bool
+  no_log: "{{mask_secrets|bool}}"
+
+- name: Import IdP certificate to BCFKS Truststore
+  shell: |
+    keytool -noprompt -keystore {{bcfks_truststore_path}} \
+      -storetype BCFKS \
+      -alias {{alias}} \
+      -import -file {{idp_cert_dest}} \
+      -storepass {{truststore_storepass}} \
+      -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+      -providerpath {{ (binary_base_path, 'share/java/kafka/bc-fips-*.jar') | path_join }}
+  when:
+    - create_bouncy_castle_keystore|bool
+    - cert_imported.rc == 1
+  no_log: "{{mask_secrets|bool}}"

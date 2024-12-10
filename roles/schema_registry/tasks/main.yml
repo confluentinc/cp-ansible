@@ -128,7 +128,7 @@
     kerberos_keytab_path: "{{schema_registry_kerberos_keytab_path}}"
     kerberos_keytab_destination_path: "{{schema_registry_keytab_path}}"
     kerberos_handler: "restart schema-registry"
-  when: kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'GSSAPI'
+  when: "'GSSAPI' in (kafka_broker_listeners[schema_registry_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)"
 
 - name: Copy Custom Schema Registry Files
   include_role:
@@ -142,9 +142,66 @@
   tags:
     - configuration
 
-- name: Configure RBAC
+- name: Copy Custom Files From All Components List
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{all_components_copy_files}}"
+    user: "{{schema_registry_user}}"
+    group: "{{schema_registry_group}}"
+  when: all_components_copy_files | length > 0
+  tags:
+    - configuration
+
+- name: Configure RBAC for OAuth User
   include_tasks: rbac.yml
-  when: rbac_enabled|bool
+  vars:
+    sr_user: "{{schema_registry_oauth_principal}}"
+  when: rbac_enabled|bool and oauth_enabled|bool
+
+- name: Configure RBAC for LDAP User
+  include_tasks: rbac.yml
+  vars:
+    sr_user: "{{schema_registry_ldap_user}}"
+  when:
+    - rbac_enabled|bool
+    - "'ldap' in auth_mode"
+
+- name: Extract SR Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{schema_registry_keystore_path}}"
+    keystore_storepass: "{{schema_registry_keystore_storepass}}"
+    pm_rules: "{{schema_registry_final_properties.get('auth.ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC for mTLS User
+  include_tasks: rbac.yml
+  vars:
+    sr_user: "{{ks_extracted_principal}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Import IDP certificate to Truststore for OAuth
+  include_role:
+    name: common
+    tasks_from: idp_certs.yml
+  vars:
+    idp_cert_path: "{{ oauth_idp_cert_path }}"
+    idp_cert_dest: /tmp/oauth_idp_cert.pem
+    alias: "oauth_cert"
+    truststore_storepass: "{{schema_registry_truststore_storepass}}"
+    truststore_path: "{{schema_registry_truststore_path}}"
+    create_bouncy_castle_keystore: false
+  when:
+    - oauth_enabled|bool or schema_registry_oauth_enabled|bool or kafka_rest_oauth_enabled|bool or kafka_connect_oauth_enabled|bool or kafka_connect_replicator_oauth_enabled|bool
+    - oauth_idp_cert_path != ""
 
 - name: Create Schema Registry Config directory
   file:
@@ -219,7 +276,7 @@
     path: "{{schema_registry.log4j_file}}"
     group: "{{schema_registry_group}}"
     owner: "{{schema_registry_user}}"
-    mode: 0640
+    mode: '640'
   tags:
     - configuration
     - log
@@ -228,7 +285,7 @@
   file:
     path: "{{ logredactor_rule_path | dirname }}"
     state: directory
-    mode: 0755
+    mode: '755'
   when: (schema_registry_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
@@ -237,7 +294,7 @@
   copy:
     src: "{{ logredactor_rule_path_local }}"
     dest: "{{ logredactor_rule_path }}"
-    mode: 0644
+    mode: '644'
   when: (schema_registry_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
@@ -291,7 +348,7 @@
   template:
     src: jaas.conf.j2
     dest: "{{schema_registry.jaas_file}}"
-    mode: 0640
+    mode: '640'
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
   notify: restart schema-registry
@@ -301,7 +358,7 @@
   template:
     src: password.properties.j2
     dest: "{{schema_registry.password_file}}"
-    mode: 0640
+    mode: '640'
     owner: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
   notify: restart schema-registry

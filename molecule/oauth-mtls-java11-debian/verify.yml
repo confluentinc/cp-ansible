@@ -1,0 +1,45 @@
+---
+### Validates that Java 11 is in use.
+
+- name: Verify
+  hosts: all,!kafka_controller_migration,!oauth_server  #Workaround to skip the task in migration test, need to remove in CP 8.0
+  gather_facts: false
+  tasks:
+    - name: Get Java Version
+      shell: java -version
+      register: version_output
+
+    - name: Assert Java Version is 11
+      assert:
+        that:
+          - version_output.stderr_lines[0] | regex_search("11\.0\.")
+        fail_msg: "Current Java Version is: {{version_output.stderr_lines[0]}}. Verify again"
+        quiet: true
+
+- name: Verify - kafka_controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: controller.quorum.voters
+        expected_value: "{{ kafka_controller_quorum_voters }}"
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: process.roles
+        expected_value: controller
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: listeners
+        expected_value: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"

@@ -138,7 +138,7 @@
     truststore_path: "{{kafka_connect_replicator_producer_truststore_path}}"
     keystore_path: "{{kafka_connect_replicator_producer_keystore_path}}"
     keystore_storepass: "{{kafka_connect_replicator_producer_keystore_storepass}}"
-    keystore_keypass: "{{kafka_connect_replicator_producer)keystore_keypass}}"
+    keystore_keypass: "{{kafka_connect_replicator_producer_keystore_keypass}}"
     service_name: kafka-connect-replicator
     user: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
@@ -240,31 +240,189 @@
   tags:
     - configuration
 
+- name: Copy Custom Files From All Components List
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{all_components_copy_files}}"
+    user: "{{kafka_connect_replicator_user}}"
+    group: "{{kafka_connect_replicator_group}}"
+  when: all_components_copy_files | length > 0
+  tags:
+    - configuration
+
 - name: Register Cluster
   include_tasks: register_cluster.yml
   when: kafka_connect_replicator_cluster_name|length > 0 and rbac_enabled|bool
 
-- name: Configure RBAC on Replicator configuration
+- name: Extract Connect Replicator Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{kafka_connect_replicator_keystore_path}}"
+    keystore_storepass: "{{kafka_connect_replicator_keystore_storepass}}"
+    pm_rules: "{{kafka_connect_replicator_final_properties.get('auth.ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - kafka_connect_replicator_rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC on Replicator configuration for mTLS User
   include_tasks: rbac_replicator.yml
-  when: kafka_connect_replicator_rbac_enabled|bool
+  vars:
+    replicator_user: "{{ks_extracted_principal}}"
+  when:
+    - kafka_connect_replicator_rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
 
-- name: Configure RBAC on Replicator Consumer configuration
+- name: Configure RBAC on Replicator configuration for OAuth User
+  include_tasks: rbac_replicator.yml
+  vars:
+    replicator_user: "{{kafka_connect_replicator_oauth_principal}}"
+  when:
+    - kafka_connect_replicator_rbac_enabled|bool
+    - oauth_enabled|bool
+
+- name: Configure RBAC on Replicator configuration for Ldap User
+  include_tasks: rbac_replicator.yml
+  vars:
+    replicator_user: "{{kafka_connect_replicator_ldap_user}}"
+  when:
+    - kafka_connect_replicator_rbac_enabled|bool
+    - "'ldap' in auth_mode"
+
+- name: Extract Connect Replicator Consumer Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{kafka_connect_replicator_consumer_keystore_path}}"
+    keystore_storepass: "{{kafka_connect_replicator_consumer_keystore_storepass}}"
+    pm_rules: "{{kafka_connect_replicator_consumer_final_properties.get('auth.ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - kafka_connect_replicator_consumer_rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC on Replicator Consumer configuration for mTLS User
   include_tasks: rbac_replicator_consumer.yml
-  when: kafka_connect_replicator_consumer_rbac_enabled|bool
+  vars:
+    replicator_consumer_user: "{{ks_extracted_principal}}"
+  when:
+    - kafka_connect_replicator_consumer_rbac_enabled|bool
+    - not kafka_connect_replicator_oauth_enabled
+    - mds_ssl_client_authentication != 'none'
 
-- name: Configure RBAC on Replicator Producer configuration
+- name: Configure RBAC on Replicator Consumer configuration for OAuth User
+  include_tasks: rbac_replicator_consumer.yml
+  vars:
+    replicator_consumer_user: "{{kafka_connect_replicator_consumer_oauth_principal}}"
+  when:
+    - kafka_connect_replicator_consumer_rbac_enabled|bool
+    - oauth_enabled|bool
+
+- name: Configure RBAC on Replicator Consumer configuration for Ldap User
+  include_tasks: rbac_replicator_consumer.yml
+  vars:
+    replicator_consumer_user: "{{kafka_connect_replicator_consumer_ldap_user}}"
+  when:
+    - kafka_connect_replicator_consumer_rbac_enabled|bool
+    - "'ldap' in auth_mode"
+
+- name: Extract Connect Replicator Producer Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{kafka_connect_replicator_producer_keystore_path}}"
+    keystore_storepass: "{{kafka_connect_replicator_producer_keystore_storepass}}"
+    pm_rules: "{{kafka_connect_replicator_producer_final_properties.get('auth.ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - kafka_connect_replicator_producer_rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC on Replicator Producer configuration for mTLS User
   include_tasks: rbac_replicator_producer.yml
-  when: kafka_connect_replicator_producer_rbac_enabled|bool
+  vars:
+    replicator_producer_user: "{{ks_extracted_principal}}"
+  when:
+    - kafka_connect_replicator_producer_rbac_enabled|bool
+    - not kafka_connect_replicator_oauth_enabled
+    - mds_ssl_client_authentication != 'none'
 
-- name: Configure RBAC on Replicator monitoring interceptor configuration
+- name: Configure RBAC on Replicator Producer configuration for OAuth User
+  include_tasks: rbac_replicator_producer.yml
+  vars:
+    replicator_producer_user: "{{kafka_connect_replicator_producer_oauth_principal}}"
+  when:
+    - kafka_connect_replicator_producer_rbac_enabled|bool
+    - oauth_enabled|bool
+
+- name: Configure RBAC on Replicator Producer configuration for Ldap User
+  include_tasks: rbac_replicator_producer.yml
+  vars:
+    replicator_producer_user: "{{kafka_connect_replicator_producer_ldap_user}}"
+  when:
+    - kafka_connect_replicator_producer_rbac_enabled|bool
+    - "'ldap' in auth_mode"
+
+- name: Extract Connect Replicator Monitoring Interceptor Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{kafka_connect_replicator_monitoring_interceptor_keystore_path}}"
+    keystore_storepass: "{{kafka_connect_replicator_monitoring_interceptor_keystore_storepass}}"
+    pm_rules: "{{kafka_connect_replicator_monitoring_interceptor_final_properties.get('auth.ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - kafka_connect_replicator_monitoring_interceptor_rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC on Replicator monitoring interceptor configuration for mTLS User
   include_tasks: rbac_replicator_monitoring.yml
-  when: kafka_connect_replicator_monitoring_interceptor_rbac_enabled|bool
+  vars:
+    replicator_monitoring_user: "{{ks_extracted_principal}}"
+  when:
+    - kafka_connect_replicator_monitoring_interceptor_rbac_enabled|bool
+    - not kafka_connect_replicator_oauth_enabled
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC on Replicator monitoring interceptor configuration for OAuth User
+  include_tasks: rbac_replicator_monitoring.yml
+  vars:
+    replicator_monitoring_user: "{{kafka_connect_replicator_monitoring_interceptor_oauth_principal}}"
+  when:
+    - kafka_connect_replicator_monitoring_interceptor_rbac_enabled|bool
+    - oauth_enabled|bool
+
+- name: Configure RBAC on Replicator monitoring interceptor configuration for Ldap User
+  include_tasks: rbac_replicator_monitoring.yml
+  vars:
+    replicator_monitoring_user: "{{kafka_connect_replicator_monitoring_interceptor_ldap_user}}"
+  when:
+    - kafka_connect_replicator_monitoring_interceptor_rbac_enabled|bool
+    - "'ldap' in auth_mode"
+
+- name: Import IDP certificate to Truststore for OAuth
+  include_role:
+    name: common
+    tasks_from: idp_certs.yml
+  vars:
+    idp_cert_path: "{{ oauth_idp_cert_path }}"
+    idp_cert_dest: /tmp/oauth_idp_cert.pem
+    alias: "oauth_cert"
+    truststore_storepass: "{{kafka_connect_replicator_truststore_storepass}}"
+    truststore_path: "{{kafka_connect_replicator_truststore_path}}"
+    create_bouncy_castle_keystore: false
+  when:
+    - oauth_enabled|bool or schema_registry_oauth_enabled|bool or kafka_rest_oauth_enabled|bool or kafka_connect_oauth_enabled|bool or kafka_connect_replicator_oauth_enabled|bool
+    - oauth_idp_cert_path != ""
 
 - name: Create Kafka Connect Replicator Config directory
   file:
     path: "{{ kafka_connect_replicator.replication_config_file | dirname }}"
     state: directory
-    mode: 0750
+    mode: '750'
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   tags:
@@ -276,7 +434,7 @@
     state: directory
     group: "{{kafka_connect_replicator_group}}"
     owner: "{{kafka_connect_replicator_user}}"
-    mode: 0770
+    mode: '770'
   tags:
     - filesystem
 
@@ -284,7 +442,7 @@
   template:
     src: kafka-connect-replicator-log4j.properties.j2
     dest: "{{kafka_connect_replicator.log4j_file}}"
-    mode: 0640
+    mode: '640'
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   when: kafka_connect_replicator_custom_log4j|bool
@@ -296,7 +454,7 @@
   template:
     src: kafka-connect-replicator-jolokia.properties.j2
     dest: "{{kafka_connect_replicator_jolokia_config}}"
-    mode: 0640
+    mode: '640'
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   when: kafka_connect_replicator_jolokia_enabled|bool
@@ -308,7 +466,7 @@
   template:
     src: kafka-connect-replicator.properties.j2
     dest: "{{kafka_connect_replicator.replication_config_file}}"
-    mode: 0640
+    mode: '640'
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   notify: Restart Kafka Connect Replicator
@@ -319,7 +477,7 @@
   template:
     src: kafka-connect-replicator-consumer.properties.j2
     dest: "{{kafka_connect_replicator.consumer_config_file}}"
-    mode: 0640
+    mode: '640'
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   notify: Restart Kafka Connect Replicator
@@ -330,7 +488,7 @@
   template:
     src: kafka-connect-replicator-producer.properties.j2
     dest: "{{kafka_connect_replicator.producer_config_file}}"
-    mode: 0640
+    mode: '640'
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   notify: Restart Kafka Connect Replicator
@@ -341,7 +499,7 @@
   template:
     src: kafka-connect-replicator-interceptors.properties.j2
     dest: "{{kafka_connect_replicator.interceptors_config_file}}"
-    mode: 0640
+    mode: '640'
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   notify: Restart Kafka Connect Replicator
@@ -352,7 +510,7 @@
   template:
     src: kafka-connect-replicator.service.j2
     dest:  "{{kafka_connect_replicator.systemd_file}}"
-    mode: 0640
+    mode: '640'
     owner: root
     group: root
   notify: Restart Kafka Connect Replicator
@@ -365,7 +523,7 @@
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
     state: directory
-    mode: 0640
+    mode: '640'
   tags:
     - systemd
 
@@ -373,7 +531,7 @@
   template:
     src: override.conf.j2
     dest: "{{ kafka_connect_replicator.systemd_override }}"
-    mode: 0640
+    mode: '640'
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   notify: Restart Kafka Connect Replicator

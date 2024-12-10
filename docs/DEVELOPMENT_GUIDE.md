@@ -26,7 +26,7 @@ Each Confluent component has its own role, with the name `<component_name>`. Wit
   template:	(2)
     src: override.conf.j2
     dest: "{{ kafka_broker.systemd_override }}"	(3)
-    mode: 0640	(4)
+    mode: '640'	(4)
     owner: "{{kafka_broker_user}}"	(5)
     group: "{{kafka_broker_group}}"
   notify: restart kafka	(6)
@@ -168,7 +168,7 @@ Now the schema_registry_final_properties property set eventually gets written to
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
     state: directory
-    mode: 0750
+    mode: '750'
   with_items: "{{ kafka_broker_final_properties['log.dirs'].split(',') }}"
 ```
 

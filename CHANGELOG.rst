@@ -4,6 +4,49 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.8.0
+======
+
+New features
+-------------
+- Role-based access control (RBAC) with principal from mTLS certs is now supported
+- SASL/SCRAM authentication support for kraft controllers and broker communication
+
+Notable enhancements
+-------------
+- Ubuntu 22, Alma Linux 8, and Alma Linux 9 Operating systems are now supported
+
+v7.7.0
+======
+
+New features
+-------------
+- OAuth & OIDC capabilities added for Confluent Server, C3, SR, Connect and REST Proxy
+- Migration of existing clusters from LDAP to LDAP+OAuth is supported
+
+Notable enhancements
+-------------
+
+- Amazonlinux 2023 and Debian 12 Operating Systems are now supported
+- Ansible Versions 8 and 9 are now supported
+- IdP with Self Signed Certs is now supported
+
+v7.6.1
+======
+
+Notable enhancements
+-------------
+
+- Updated default confluent cli version to 3.55.0
+
+Notable fixes
+-------------
+
+- Connect and Ksqldb clusters are correctly registered even for co-located components
+- Critical security and vulnerability issues were fixed
+
+
+
 v7.6.0
 ======
 

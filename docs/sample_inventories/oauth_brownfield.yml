@@ -1,0 +1,132 @@
+---
+##
+## The following is an example inventory file of the configuration required for upgrading CP cluster from LDAP to OAuth
+## The initial cluster must be having the LDAP configs similar to the sample here
+## In the same inv file, we add the inputs under sections OAuth Configurations, OAuth Users and enable OAuth with LDAP similarly
+## upon running Ansible playbooks with all these inputs, the cluster now has both ldap and oauth support on "INTERNAL" listener
+## after upgrade, all cp components would act as OAuth clients for kafka on the same listener, except ksql. ksql would act as ldap client
+## to set any other component as ldap client, set "auth_mode: ldap" under that component, kafka_rest is used as example here
+
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: ec2-user
+    ansible_become: true
+    ansible_ssh_private_key_file: /home/ec2-user/repos/ansible_collections/confluent/platform/docs/sample_inventories/cp-ansible.pem
+    ansible_python_interpreter: /usr/bin/python3
+
+    ## TLS Configuration
+    ssl_enabled: true
+    # sasl protocol for inter-broker communication
+    sasl_protocol: plain
+
+    rbac_enabled: true
+    rbac_component_additional_system_admins:
+      - user1
+
+    ## OAuth Configurations
+    auth_mode: ldap_with_oauth  # to configure both ldap and oauth
+    oauth_sub_claim: client_id
+    oauth_groups_claim: groups
+    oauth_token_uri: <idp_token_uri>
+    oauth_issuer_url: <idp_issuer_url>
+    oauth_jwks_uri: <idp_jwks_uri>
+    oauth_expected_audience: Confluent,account,api://default
+
+    ## OAuth Users
+    oauth_superuser_client_id: <superuser_client_id>
+    oauth_superuser_client_password: <superuser_client_secret>
+    schema_registry_oauth_user: <sr_client_id>
+    schema_registry_oauth_password: <sr_client_secret>
+    kafka_rest_oauth_user: <rp_client_id>
+    kafka_rest_oauth_password: <rp_client_secret>
+    kafka_connect_oauth_user: <connect_client_id>
+    kafka_connect_oauth_password: <connect_client_secret>
+    ksql_oauth_user: <ksql_client_id>
+    ksql_oauth_password: <ksql_client_secret>
+    control_center_oauth_user: <c3_client_id>
+    control_center_oauth_password: <c3_client_secret>
+
+
+    ## LDAP CONFIGURATION
+    kafka_broker_custom_properties:
+      ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+      ldap.com.sun.jndi.ldap.read.timeout: 3000
+      ldap.java.naming.provider.url: ldaps://ldap1:636
+      ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
+      ldap.java.naming.security.credentials: password
+      ldap.java.naming.security.authentication: simple
+      ldap.user.search.base: OU=rbac,DC=example,DC=com
+      ldap.group.search.base: OU=rbac,DC=example,DC=com
+      ldap.user.name.attribute: uid
+      ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+      ldap.group.name.attribute: cn
+      ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+      ldap.user.object.class: account
+
+    ## LDAP USERS
+    mds_super_user: mds
+    mds_super_user_password: password
+    kafka_broker_ldap_user: kafka_broker
+    kafka_broker_ldap_password: password
+    schema_registry_ldap_user: schema_registry
+    schema_registry_ldap_password: password
+    kafka_connect_ldap_user: connect_worker
+    kafka_connect_ldap_password: password
+    ksql_ldap_user: ksql
+    ksql_ldap_password: password
+    kafka_rest_ldap_user: rest_proxy
+    kafka_rest_ldap_password: password
+    control_center_ldap_user: control_center
+    control_center_ldap_password: password
+
+    # variables to enable SSO in Control Center and confluent cli
+    sso_mode: oidc
+    sso_groups_claim: groups
+    sso_sub_claim: sub
+    sso_issuer_url: <c3_sso_issuer_url>
+    sso_jwks_uri: <c3_sso_jwks_url>
+    sso_authorize_uri: <c3_sso_authorize_uri>
+    sso_token_uri: <c3_sso_token_uri>
+    sso_device_authorization_uri: <c3_sso_device_auth_uri>
+    sso_cli: true
+    sso_client_id: <idp_client_id>
+    sso_client_password: <idp_client_secret>
+
+    # optional,needed when IDP server has TLS enabled with custom certificate.
+    sso_idp_cert_path: <cert_path>
+
+kafka_controller:
+  hosts:
+    demo-controller-0:
+    demo-controller-1:
+    demo-controller-2:
+
+kafka_broker:
+  hosts:
+    demo-broker-0:
+    demo-broker-1:
+    demo-broker-2:
+
+schema_registry:
+  hosts:
+    demo-sr-0:
+
+kafka_connect:
+  hosts:
+    demo-connect-0:
+
+kafka_rest:
+  hosts:
+    demo-rest-0:
+  # uncomment this to keep kafka rest as ldap client post upgrade
+  #vars:
+  #  auth_mode: ldap
+
+ksql:
+  hosts:
+    demo-ksql-0:
+
+control_center:
+  hosts:
+    demo-c3-0:

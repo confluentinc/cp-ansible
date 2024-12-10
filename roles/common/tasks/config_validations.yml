@@ -158,3 +158,126 @@
     - fips_enabled | bool
     - ansible_os_family == "RedHat"
   tags: validate
+
+- assert:
+    that:
+      - auth_mode in ['ldap', 'ldap_with_oauth', 'oauth', 'mtls', 'none']
+    fail_msg: "auth_mode must be one of 'ldap', 'ldap_with_oauth', 'oauth', 'none'"
+  tags: validate
+
+- assert:
+    that:
+      - auth_mode in ['ldap', 'ldap_with_oauth', 'oauth', 'mtls']
+    fail_msg: "When RBAC is enabled, auth_mode must be one of 'ldap', 'ldap_with_oauth', 'oauth'"
+  when:
+    - rbac_enabled|bool
+  tags: validate
+
+- assert:
+    that:
+      - auth_mode in ['none', 'oauth']
+    fail_msg: "When RBAC is not enabled, auth_mode must be one of 'oauth', 'none'"
+  when:
+    - not rbac_enabled|bool
+  tags: validate
+
+- assert:
+    that:
+      - rbac_enabled|bool
+    fail_msg: "When auth mode is ldap or mtls, RBAC also must be enabled"
+  when:
+    - auth_mode == 'ldap' or auth_mode == 'ldap_with_oauth' or auth_mode == 'mtls'
+  tags: validate
+
+- assert:
+    that:
+      - mds_ssl_client_authentication != 'none'
+    fail_msg: "When auth mode is mtls mds must have ssl client authentication is set to required or requested"
+  when:
+    - auth_mode == 'mtls'
+  tags: validate
+
+- assert:
+    that:
+      - mds_super_user_external_cert_path != ''
+      - mds_super_user_external_key_path != ''
+    fail_msg: "When Centralized MDS has mTLS enabled you must provide super user cert and key in mds_super_user_external_cert_path and mds_super_user_external_key_path"
+  when:
+    - mds_ssl_client_authentication != 'none'
+    - external_mds_enabled|bool
+  tags: validate
+
+- assert:
+    that:
+      - "{{item}} != 'none'"
+    fail_msg: "Please provide the value of {{ item }} in the inventory file."
+  loop:
+    - oauth_token_uri
+    - oauth_issuer_url
+    - oauth_jwks_uri
+  when: auth_mode == 'oauth' or auth_mode == 'ldap_with_oauth'
+  tags: validate
+
+- assert:
+    that:
+      - not fips_enabled|bool
+    fail_msg: "OAuth is not supported on FIPS enabled cluster yet. Please disable FIPS or OAuth to setup the cluster."
+  when: auth_mode == 'oauth' or auth_mode == 'ldap_with_oauth'
+  tags: validate
+
+- assert:
+    that:
+      - sasl_protocol | confluent.platform.split_to_list | length < 3
+    fail_msg: "CP-Ansible supports at most two values of sasl_protocol at the moment."
+  when: sasl_protocol is defined
+  tags: validate
+
+- assert:
+    that:
+      - (sasl_protocol | confluent.platform.split_to_list)[0] in ['plain', 'scram', 'scram256', 'kerberos', 'oauth', 'none']
+    fail_msg: "sasl_protocol supports ['plain', 'scram', 'scram256', 'kerberos', 'oauth', 'none'] when providing single value."
+  when: sasl_protocol is defined and sasl_protocol | confluent.platform.split_to_list | length == 1
+  tags: validate
+
+- assert:
+    that:
+      - item in ['plain', 'scram', 'scram256', 'kerberos']
+    fail_msg: "sasl_protocol can have support for two values from the list ['plain', 'scram', 'scram256', 'kerberos']"
+  loop: "{{ sasl_protocol | confluent.platform.split_to_list }}"
+  when: sasl_protocol is defined and sasl_protocol | confluent.platform.split_to_list | length == 2
+  tags: validate
+
+- assert:
+    that:
+      - kafka_controller_sasl_protocol | confluent.platform.split_to_list | length < 3
+    fail_msg: "CP-Ansible supports at most two values of kafka_controller_sasl_protocol at the moment."
+  when: kafka_controller_sasl_protocol is defined
+  tags: validate
+
+- assert:
+    that:
+      - item in ['plain', 'scram', 'scram256', 'kerberos']
+    fail_msg: "kafka_controller_sasl_protocol value in CP-Ansible can have support for two values from the list ['plain', 'scram', 'scram256', 'kerberos']"
+  loop: "{{ kafka_controller_sasl_protocol | confluent.platform.split_to_list }}"
+  when: kafka_controller_sasl_protocol is defined and kafka_controller_sasl_protocol | confluent.platform.split_to_list | length == 2
+  tags: validate
+
+- assert:
+    that:
+      - (hostvars[item]['kafka_controller_sasl_protocol'] | confluent.platform.split_to_list)[0] not in ['scram', 'scram256']
+    fail_msg: "kafka_controller_sasl_protocol in kafka controller {{hostvars[item]['kafka_controller_sasl_protocol']}} cannot have first value as scram or scram256 since inter-controller communication via SCRAM is not supported. Please use other protocols along with it."
+  loop: "{{ groups['kafka_controller'] }}"
+  when:
+    - ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) | bool
+    - hostvars[item]['kafka_controller_sasl_protocol'] is defined
+  tags: validate
+
+- assert:
+    that:
+      - hostvars[item]['kafka_controller_sasl_protocol'] is defined
+    fail_msg: "kafka_controller_sasl_protocol must be defined."
+  loop: "{{ groups['kafka_controller'] }}"
+  when:
+    - ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) | bool
+    - sasl_protocol is defined and (sasl_protocol | confluent.platform.split_to_list)[0] in ['scram', 'scram256']
+  tags: validate

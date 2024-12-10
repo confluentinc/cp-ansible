@@ -1,25 +1,45 @@
 ---
+- name: Get Authorization Token for Super User
+  include_tasks: get_authorization_token.yml
+  vars:
+    oauth: "{{ oauth_enabled }}"
+    oauth_user: "{{ oauth_superuser_client_id }}"
+    oauth_password: "{{ oauth_superuser_client_password }}"
+    ldap_user: "{{ mds_super_user }}"
+    ldap_password: "{{ mds_super_user_password }}"
+    mtls_client_cert: "{{ mds_super_user_external_cert_path if delegated_to_localhost|bool else kafka_broker_cert_path }}"
+    mtls_client_key: "{{ mds_super_user_external_key_path if delegated_to_localhost|bool else kafka_broker_key_path }}"
+    cert_auth_only_enabled: "{{ cert_auth_only_enabled_for_rbac|bool }}"
+
+- set_fact:
+    send_client_cert: "{{ erp_ssl_client_authentication in ['required', 'requested'] }}"
+
 - name: Get Kafka Cluster ID from Embedded Rest Proxy
   uri:
     url: "{{mds_http_protocol}}://{{ hostvars[groups['kafka_broker'][0]] | confluent.platform.resolve_hostname }}:{{mds_port}}/kafka/v3/clusters"
     method: GET
     validate_certs: false
-    body_format: json
     return_content: true
     status_code: 200
-    url_username: "{{mds_super_user}}"
-    url_password: "{{mds_super_user_password}}"
-    force_basic_auth: true
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ erp_client_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ erp_client_key_path if send_client_cert|bool else omit }}"
   register: cluster_id_query
   until: cluster_id_query.status == 200
   retries: "{{ mds_retries }}"
   delay: 10
-  when: cluster_id_source | default('erp') == 'erp'
+  no_log: "{{mask_secrets|bool}}"
+  delegate_to: "{{ inventory_hostname }}"
+  when:
+    - cluster_id_source | default('erp') == 'erp'
 
 - name: Parse Kafka Cluster ID from json query
   set_fact:
     kafka_cluster_id: "{{ cluster_id_query.json.data[0].cluster_id }}"
   when: (cluster_id_source | default('erp') == 'erp') and not ansible_check_mode
+  delegate_to: "{{ inventory_hostname }}"
 
 - name: Get Kafka Cluster ID from Zookeeper
   shell: >
@@ -29,15 +49,18 @@
       get /cluster/id | grep version
   register: zk_cluster_id_query
   when: cluster_id_source | default('erp') == 'zookeeper'
+  delegate_to: "{{ inventory_hostname }}"
 
 - set_fact:
     cluster_id_json: "{{ zk_cluster_id_query.stdout }}"
   when: cluster_id_source | default('erp') == 'zookeeper'
+  delegate_to: "{{ inventory_hostname }}"
 
 - name: Set kafka_cluster_id Variable
   set_fact:
     kafka_cluster_id: "{{ cluster_id_json.id }}"
   when: cluster_id_source | default('erp') == 'zookeeper'
+  delegate_to: "{{ inventory_hostname }}"
 
 - name: Create SSL Certificate Directory
   file:
@@ -47,6 +70,8 @@
   tags:
     - privileged
     - filesystem
+  # delegating task to actual node because the above task may be running on kafka broker due to delegation from components to get a super user token
+  delegate_to: "{{ inventory_hostname }}"
 
 - name: Check if MDS public pem file exists on Ansible Controller
   stat:
@@ -74,3 +99,4 @@
     - public_pem_file.stat.exists|bool
     - copy_certs | default(True)
   diff: "{{ not mask_sensitive_diff|bool }}"
+  delegate_to: "{{ inventory_hostname }}"

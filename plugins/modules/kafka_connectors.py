@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 # Copyright: (c) 2019, Confluent Inc
 
@@ -40,15 +40,10 @@ options:
             - Specify timeout while connecting to connect REST server
         required: false
         default: 30
-    username:
+    token:
         type: str
         description:
-            - LDAP User for Connect to authenticate as
-        required: false
-    password:
-        type: str
-        description:
-            - Password for LDAP user when authenticating
+            - IDP token or MDS token used for Bearer Auth
         required: false
     client_cert:
         type: path
@@ -68,7 +63,7 @@ author:
 EXAMPLES = '''
 - name: Deploy Some connector
   connect_url: kafka_connect_http_protocol://0.0.0.0:kafka_connect_rest_port/connectors
-  active_connectors: [{"name": "test-6-sink", "config": { .../... }},{"name": "test-5-sink", "config": { .../... }}]
+  active_connectors: [{"name": "test-6-sink", "config": { .../... }}, {"name": "test-5-sink", "config": { .../... }}]
   timeout: 20
 '''
 
@@ -88,13 +83,35 @@ import ansible.module_utils.six.moves.urllib.error as urllib_error
 __metaclass__ = type
 
 RUNNING_STATE = "RUNNING"
-WAIT_TIME_BEFORE_GET_STATUS = 1  # seconds
+WAIT_TIME_BEFORE_GET_STATUS = 10  # seconds
 TIMEOUT_WAITING_FOR_TASK_STATUS = 30  # seconds
 
 
-def get_current_connectors(connect_url, timeout, username, password, client_cert, client_key):
+def get_headers(token, headers=None):
+    if headers is None and token == '':
+        return None
+    if token == '':  # no bearer auth enabled hence no change in headers
+        return headers
+    if headers is None:
+        # Making default None is required as default value gets updated on subsequent function calls
+        headers = {}
+    bearer_header = {
+        'Authorization': 'Bearer {}'.format(token)
+    }
+    headers.update(bearer_header)
+    return headers
+
+
+def get_current_connectors(connect_url, timeout, token, client_cert, client_key):
     try:
-        res = open_url(connect_url, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
+        res = open_url(
+            connect_url,
+            validate_certs=False,
+            timeout=timeout,
+            headers=get_headers(token),
+            client_cert=client_cert,
+            client_key=client_key
+        )
         return json.loads(res.read())
     except urllib_error.HTTPError as e:
         if e.code != 404:
@@ -102,18 +119,35 @@ def get_current_connectors(connect_url, timeout, username, password, client_cert
         return []
 
 
-def remove_connector(connect_url, name, timeout, username, password, client_cert, client_key):
+def remove_connector(connect_url, name, timeout, token, client_cert, client_key):
     url = "{}/{}".format(connect_url, name)
-    r = open_url(method='DELETE', url=url, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
+    r = open_url(
+        method='DELETE',
+        url=url,
+        validate_certs=False,
+        timeout=timeout,
+        headers=get_headers(token),
+        client_cert=client_cert,
+        client_key=client_key
+    )
     return r.getcode() == 200
 
 
 # return value: success (bool), changed (bool), message (str)
-def create_new_connector(connect_url, name, config, timeout, username, password, client_cert, client_key):
+def create_new_connector(connect_url, name, config, timeout, token, client_cert, client_key):
     data = json.dumps({'name': name, 'config': config})
     headers = {'Content-Type': 'application/json'}
     try:
-        r = open_url(method='POST', url=connect_url, data=data, headers=headers, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
+        r = open_url(
+            method='POST',
+            url=connect_url,
+            data=data,
+            headers=get_headers(token, headers),
+            validate_certs=False,
+            timeout=timeout,
+            client_cert=client_cert,
+            client_key=client_key
+        )
     except urllib_error.HTTPError as e:
         message = "error while adding new connector configuration ({})".format(e)
         return False, False, message
@@ -122,7 +156,7 @@ def create_new_connector(connect_url, name, config, timeout, username, password,
     changed = True
     message = "new connector added"
 
-    is_running, failures_msg = get_connector_status(connect_url, name, timeout, username, password, client_cert, client_key)
+    is_running, failures_msg = get_connector_status(connect_url, name, timeout, token, client_cert, client_key)
     if not is_running:
         success = False
         message = failures_msg
@@ -132,6 +166,8 @@ def create_new_connector(connect_url, name, config, timeout, username, password,
 
 # truncates to 200 chars or the first line feed
 def truncate_error_message(message):
+    if message is None:  # to avoid Errors in None.splitlines()
+        return ''
     lines = message.splitlines()
     if lines:
         return lines[0][0:200]
@@ -140,34 +176,84 @@ def truncate_error_message(message):
 
 # to be successful, the connector and all its tasks must be running
 # if anything fails, we fail and return the associated error messages
-def get_connector_status(connect_url, connector_name, timeout, username, password, client_cert, client_key):
+def get_connector_status(connect_url, connector_name, timeout, token, client_cert, client_key):
     time.sleep(WAIT_TIME_BEFORE_GET_STATUS)
     status_url = "{}/{}/status".format(connect_url, connector_name)
 
-    res = open_url(status_url, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
-    current_status = json.loads(res.read())
+    time_waited = 0
+    try:
+        connector_status = 'awaiting'
+        while connector_status != RUNNING_STATE and time_waited < TIMEOUT_WAITING_FOR_TASK_STATUS:
+            # retry until the connector is running or timeout
+            res = open_url(
+                status_url,
+                validate_certs=False,
+                timeout=timeout,
+                headers=get_headers(token),
+                client_cert=client_cert,
+                client_key=client_key
+            )
+            current_status = json.loads(res.read())
 
-    connector_status = current_status['connector']['state']
+            connector_status = current_status['connector']['state']
+
+            if connector_status != RUNNING_STATE:
+                time_waited += 1
+                time.sleep(1)
+
+        if connector_status != RUNNING_STATE:
+            return False, "Connector state paused or failed"
+
+        nb_tasks = len(current_status['tasks'])
+
+    except urllib_error.HTTPError as e:
+        message = "Error while getting status of connector ({})".format(e)
+        return False, message
+    except json.JSONDecodeError as e:
+        message = "JSON decode error while parsing connector status: ({})".format(e)
+        return False, message
+    except KeyError as e:
+        message = "Key error while accessing connector state: ({})".format(e)
+        return False, message
+    except Exception as e:
+        message = "Unexpected error while getting status of connector: ({})".format(e)
+        return False, message
 
     failures = []
-    if connector_status != RUNNING_STATE:
-        failures.append("connector state paused or failed")
-
-    nb_tasks = len(current_status['tasks'])
-    time_waited = 0
     while not nb_tasks:
         time_waited += 1
         time.sleep(1)
         if time_waited > TIMEOUT_WAITING_FOR_TASK_STATUS:
             return False, "timeout getting task status"
 
-        res = open_url(status_url, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
-        current_status = json.loads(res.read())
-        nb_tasks = len(current_status['tasks'])
+        try:
+            res = open_url(
+                status_url,
+                validate_certs=False,
+                timeout=timeout,
+                headers=get_headers(token),
+                client_cert=client_cert,
+                client_key=client_key
+            )
+            current_status = json.loads(res.read())
+            nb_tasks = len(current_status['tasks'])
+        except urllib_error.HTTPError as e:
+            message = "Error while getting status of connector ({})".format(e)
+            return False, message
+        except json.JSONDecodeError as e:
+            message = "JSON decode error while parsing connector status: ({})".format(e)
+            return False, message
+        except KeyError as e:
+            message = "Key error while accessing connector state: ({})".format(e)
+            return False, message
+        except Exception as e:
+            message = "Unexpected error while getting status of connector: ({})".format(e)
+            return False, message
 
     for task in current_status['tasks']:
         if task['state'] != RUNNING_STATE:
-            failures.append("task {}: {}".format(task['id'], truncate_error_message(task.get('trace'))))
+            no_trace_error_msg = 'No trace in api response. task[\'state\']: {}'.format(task['state'])
+            failures.append("task {}: {}".format(task['id'], truncate_error_message(task.get('trace', no_trace_error_msg))))
 
     if failures:
         return False, ", ".join(failures)
@@ -176,11 +262,18 @@ def get_connector_status(connect_url, connector_name, timeout, username, passwor
 
 
 # return value: success (bool), changed (bool), message (str)
-def update_existing_connector(connect_url, name, config, timeout, username, password, client_cert, client_key):
+def update_existing_connector(connect_url, name, config, timeout, token, client_cert, client_key):
     url = "{}/{}/config".format(connect_url, name)
     restart_url = "{}/{}/restart".format(connect_url, name)
 
-    res = open_url(url, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
+    res = open_url(
+        url,
+        validate_certs=False,
+        timeout=timeout,
+        headers=get_headers(token),
+        client_cert=client_cert,
+        client_key=client_key
+    )
     current_config = json.loads(res.read())
 
     existing_config = config.copy()
@@ -198,7 +291,16 @@ def update_existing_connector(connect_url, name, config, timeout, username, pass
     headers = {'Content-Type': 'application/json'}
     r = None
     try:
-        r = open_url(method='PUT', url=url, data=data, headers=headers, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
+        r = open_url(
+            method='PUT',
+            url=url,
+            data=data,
+            headers=get_headers(token, headers),
+            validate_certs=False,
+            timeout=timeout,
+            client_cert=client_cert,
+            client_key=client_key
+        )
     except urllib_error.HTTPError as e:
         message = "error while updating configuration ({})".format(e)
         success = False
@@ -213,7 +315,15 @@ def update_existing_connector(connect_url, name, config, timeout, username, pass
     message = "connector configuration updated"
     success = True
     try:
-        r = open_url(method='POST', url=restart_url, validate_certs=False, timeout=timeout, url_username=username, url_password=password, client_cert=client_cert, client_key=client_key)
+        r = open_url(
+            method='POST',
+            url=restart_url,
+            validate_certs=False,
+            timeout=timeout,
+            headers=get_headers(token),
+            client_cert=client_cert,
+            client_key=client_key
+        )
     except urllib_error.HTTPError:
         pass
     finally:
@@ -225,7 +335,7 @@ def update_existing_connector(connect_url, name, config, timeout, username, pass
     # get the connector's status
     # if failed, return it
     # if there's a rebalance, wait for it to finish? how?
-    is_running, failures_msg = get_connector_status(connect_url, name, timeout, username, password, client_cert, client_key)
+    is_running, failures_msg = get_connector_status(connect_url, name, timeout, token, client_cert, client_key)
     if not is_running:
         success = False
         message = failures_msg
@@ -245,8 +355,7 @@ def run_module():
         connect_url=dict(type='str', required=True),
         active_connectors=dict(type='list', elements='dict', required=True),
         timeout=dict(type='int', required=False, default=30),
-        username=dict(type='str', required=False),
-        password=dict(type='str', required=False),
+        token=dict(type='str', required=False, no_log=True),
         client_cert=dict(type='path', required=False),
         client_key=dict(type='path', required=False),
     )
@@ -271,12 +380,25 @@ def run_module():
     output_messages = []
     added_updated_messages = []
     try:
-        current_connector_names = get_current_connectors(connect_url=module.params['connect_url'], timeout=module.params['timeout'],username=module.params['username'],password=module.params['password'],client_cert=module.params['client_cert'],client_key=module.params['client_key'])
+        current_connector_names = get_current_connectors(
+            connect_url=module.params['connect_url'],
+            timeout=module.params['timeout'],
+            token=module.params['token'],
+            client_cert=module.params['client_cert'],
+            client_key=module.params['client_key']
+        )
         active_connector_names = (c['name'] for c in module.params['active_connectors'])
         deleted_connector_names = set(current_connector_names) - set(active_connector_names)
 
         for to_delete in deleted_connector_names:
-            remove_connector(connect_url=module.params['connect_url'], name=to_delete, timeout=module.params['timeout'],username=module.params['username'],password=module.params['password'],client_cert=module.params['client_cert'],client_key=module.params['client_key'])
+            remove_connector(
+                connect_url=module.params['connect_url'],
+                name=to_delete,
+                timeout=module.params['timeout'],
+                token=module.params['token'],
+                client_cert=module.params['client_cert'],
+                client_key=module.params['client_key']
+            )
 
         if deleted_connector_names:
             output_messages.append("Connectors removed: {}.".format(', '.join(deleted_connector_names)))
@@ -292,8 +414,7 @@ def run_module():
                     name=connector['name'],
                     config=connector['config'],
                     timeout=module.params['timeout'],
-                    username=module.params['username'],
-                    password=module.params['password'],
+                    token=module.params['token'],
                     client_cert=module.params['client_cert'],
                     client_key=module.params['client_key']
                 )
@@ -303,8 +424,7 @@ def run_module():
                     name=connector['name'],
                     config=connector['config'],
                     timeout=module.params['timeout'],
-                    username=module.params['username'],
-                    password=module.params['password'],
+                    token=module.params['token'],
                     client_cert=module.params['client_cert'],
                     client_key=module.params['client_key']
                 )

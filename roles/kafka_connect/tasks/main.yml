@@ -141,7 +141,7 @@
     kerberos_keytab_path: "{{kafka_connect_kerberos_keytab_path}}"
     kerberos_keytab_destination_path: "{{kafka_connect_keytab_path}}"
     kerberos_handler: "restart connect distributed"
-  when: kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'GSSAPI'
+  when: "'GSSAPI' in (kafka_broker_listeners[kafka_connect_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)"
 
 - name: Copy Kafka Connect Files
   include_role:
@@ -155,9 +155,66 @@
   tags:
     - configuration
 
-- name: Configure RBAC
+- name: Copy Custom Files From All Components List
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{all_components_copy_files}}"
+    user: "{{kafka_connect_user}}"
+    group: "{{kafka_connect_group}}"
+  when: all_components_copy_files | length > 0
+  tags:
+    - configuration
+
+- name: Extract Connect Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{kafka_connect_keystore_path}}"
+    keystore_storepass: "{{kafka_connect_keystore_storepass}}"
+    pm_rules: "{{kafka_connect_final_properties.get('auth.ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC for mTLS User
   include_tasks: rbac.yml
-  when: rbac_enabled|bool
+  vars:
+    connect_user: "{{ks_extracted_principal}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC for OAuth User
+  include_tasks: rbac.yml
+  vars:
+    connect_user: "{{kafka_connect_oauth_principal}}"
+  when: rbac_enabled|bool and oauth_enabled|bool
+
+- name: Configure RBAC for Ldap User
+  include_tasks: rbac.yml
+  vars:
+    connect_user: "{{kafka_connect_ldap_user}}"
+  when:
+    - rbac_enabled|bool
+    - "'ldap' in auth_mode"
+
+- name: Import IDP certificate to Truststore for OAuth
+  include_role:
+    name: common
+    tasks_from: idp_certs.yml
+  vars:
+    idp_cert_path: "{{ oauth_idp_cert_path }}"
+    idp_cert_dest: /tmp/oauth_idp_cert.pem
+    alias: "oauth_cert"
+    truststore_storepass: "{{kafka_connect_truststore_storepass}}"
+    truststore_path: "{{kafka_connect_truststore_path}}"
+    create_bouncy_castle_keystore: false
+  when:
+    - oauth_enabled|bool or schema_registry_oauth_enabled|bool or kafka_rest_oauth_enabled|bool or kafka_connect_oauth_enabled|bool or kafka_connect_replicator_oauth_enabled|bool
+    - oauth_idp_cert_path != ""
 
 - name: Create Kafka Connect Config directory
   file:
@@ -244,7 +301,7 @@
   file:
     path: "{{ logredactor_rule_path | dirname }}"
     state: directory
-    mode: 0755
+    mode: '755'
   when: (kafka_connect_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
@@ -253,7 +310,7 @@
   copy:
     src: "{{ logredactor_rule_path_local }}"
     dest: "{{ logredactor_rule_path }}"
-    mode: 0644
+    mode: '644'
   when: (kafka_connect_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
@@ -377,6 +434,25 @@
       - kafka_connect
       - kafka_connect_parallel
       - kafka_connect_serial
+      - kafka_broker
+      - kafka_broker_parallel
+      - kafka_broker_serial
+      - zookeeper
+      - zookeeper_parallel
+      - zookeeper_serial
+      - kafka_rest
+      - kafka_rest_parallel
+      - kafka_rest_serial
+      - control_center
+      - control_center_parallel
+      - control_center_serial
+      - ksql
+      - ksql_parallel
+      - ksql_serial
+      - schema_registry
+      - kafka_controller
+      - kafka_controller_parallel
+      - kafka_controller_serial
   set_fact:
     parent_kafka_connect_cluster_group: "{{ (group_names | difference(keywords))[0] | default('kafka_connect') }}"
     parent_kafka_connect_cluster_id: "{{ kafka_connect_final_properties['group.id'] }}"

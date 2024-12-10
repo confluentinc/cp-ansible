@@ -1,0 +1,203 @@
+---
+### Archive Installation of Confluent Platform on Ubuntu2004.
+### SASL Plain protocol.
+### SSL Enabled.
+### Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
+### Custom log dirs for all components.
+### Deploy Connector on Connect Cluster.
+
+platforms:
+  - name: oauth1
+    hostname: oauth1.confluent
+    groups:
+      - oauth_server
+    image: quay.io/keycloak/keycloak:latest
+    env:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: oauth1
+      KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
+      KEYCLOAK_HTTP_PORT: "8080"
+      KEYCLOAK_HTTPS_PORT: "8443"
+    dockerfile: ../Dockerfile-oauth.j2
+    published_ports:
+      - "8080:8080"
+      - "8443:8443"
+    command: start-dev
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - kafka_broker_migration
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+      - schema_registry_migration
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest
+      - kafka_rest_migration
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+      - kafka_connect_migration
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+      - ksql_migration
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center
+      - control_center_migration
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9021:9021"
+    networks:
+      - name: confluent
+      # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: geerlingguy/docker-ubuntu2004-ansible
+    dockerfile: ../Dockerfile-ubuntu2004-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
+  inventory:
+    group_vars:
+      all:
+        scenario_name: oauth-archive-plain-ubuntu2004
+        sasl_protocol: plain
+        ssl_enabled: true
+        installation_method: "archive"
+        kafka_connect_confluent_hub_plugins:
+          - jcustenborder/kafka-connect-spooldir:2.0.43
+
+        ${CONTROLLER_HOSTGROUP:-zookeeper}_log_dir: /${CONTROLLER_HOSTGROUP:-zookeeper}/logs
+        kafka_broker_log_dir: /kafka/logs/
+        schema_registry_log_dir: /sr/logs
+        kafka_rest_log_dir: /rp/logs
+        kafka_connect_log_dir: /connect/logs
+        ksql_log_dir: /ksql/logs/
+        control_center_log_dir: /c3/logs
+
+
+        keycloak_oauth_server_port: 8443
+        keycloak_http_protocol: https
+
+        oauth_sub_claim: client_id
+        oauth_groups_claim: groups
+        oauth_groups_scope: "profile email"
+        oauth_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oauthcertfile.pem"
+        oauth_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
+        oauth_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
+        oauth_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
+        oauth_expected_audience: Confluent,account,https://my-company.com
+
+        # Testing no oauth on brokers. But oauth servers on sr, connect, rp
+
+        schema_registry_auth_mode: oauth
+        schema_registry_oauth_user: schema_registry
+        schema_registry_oauth_password: my-secret
+
+        kafka_rest_auth_mode: oauth
+        kafka_rest_oauth_user: kafka_rest
+        kafka_rest_oauth_password: my-secret
+
+        kafka_connect_auth_mode: oauth
+        kafka_connect_oauth_user: kafka_connect
+        kafka_connect_oauth_password: my-secret
+
+        control_center_oauth_user: control_center
+        control_center_oauth_password: my-secret
+
+        ksql_oauth_user: ksql
+        ksql_oauth_password: my-secret
+
+        # To run the FileStream connector, you must add the filestream-connectors path in the plugin.path
+        kafka_connect_custom_properties:
+          plugin.path: "{{binary_base_path}}/share/java/connect_plugins,{{binary_base_path}}/share/filestream-connectors,/usr/share/java/connect_plugins"
+
+        kafka_connect_connectors:
+          - name: sample-connector-1
+            config:
+              connector.class: "FileStreamSourceConnector"
+              tasks.max: "1"
+              file: "{{archive_destination_path}}/etc/kafka/connect-distributed.properties"
+              topic: "test_topic"

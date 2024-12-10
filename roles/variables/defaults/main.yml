@@ -2,7 +2,7 @@
 # Custom filters used in this file are defined in plugins/filter/filters.py
 
 ### Version of Confluent Platform to install
-confluent_package_version: 7.6.0
+confluent_package_version: 7.8.0
 
 confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
@@ -78,6 +78,9 @@ logredactor_rule_url: ""
 
 ### If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. Default is 0 and it means that the policy rules will be checked only at startup. Can be specified as logredactor_policy_refresh_interval: 7000
 logredactor_policy_refresh_interval: 0
+
+### Use to copy files from control node to all components hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
+all_components_copy_files: []
 
 ### Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, kerberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary. Optional variables: kerberos.kdc_port (default: 88), kerberos.admin_port (default: 749)
 kerberos_configure: true
@@ -195,12 +198,12 @@ confluent_cli_base_path: /opt/confluent-cli
 confluent_cli_path: "/usr/local/bin/confluent"
 
 ### Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
-confluent_cli_version: 3.2.1
+confluent_cli_version: 4.5.0
 
 ### Recommended replication factor, defaults to 3. When splitting your cluster across 2 DCs with 4 or more Brokers, this should be increased to 4 to balance topic replicas.
 default_internal_replication_factor: 3
 
-### SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256
+### SASL Mechanism to set on all Kafka Listeners. Configures all components to use that mechanism for authentication. Possible options none, kerberos, plain, scram, scram256. You can provide a comma-separated list of at most two mechanisms to configure multiple listeners with different mechanisms. For example, 'kerberos,plain'. When configuring multiple values, you can provide values only from the following list: kerberos, plain, scram, scram256. First value of the list is used as the default mechanism for all communications.
 sasl_protocol: none
 
 ### Boolean to configure components with TLS Encryption. Also manages Java Keystore creation
@@ -209,8 +212,17 @@ ssl_enabled: false
 ### Set this variable to customize expiration days for certificate authority. Applies for all components of Confluent Platform.
 certificate_authority_expiration_days: 365
 
-### Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka
+### Deprecated. Use ssl_client_authentication instead. Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka.
 ssl_mutual_auth_enabled: false
+
+### Kafka broker listeners and ERP server's config to enforce ssl client authentication. Options are none, requested(client may send certs or may not), required(client must send cert to server)
+ssl_client_authentication: "none"
+
+### MDS server's config to enforce ssl client authentication on MDS. Options are none, requested(used during upgrades), required
+mds_ssl_client_authentication: "none"
+
+### ERP server's config to enforce ssl client authentication on ERP. Options are none, requested(used during upgrades), required
+erp_ssl_client_authentication: "{{ mds_ssl_client_authentication }}"
 
 ### Boolean to create Keystores with Self Signed Certificates, defaults to true. Alternatively can use ssl_provided_keystore_and_truststore or ssl_custom_certs
 self_signed: "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_certs|bool else true }}"
@@ -221,6 +233,15 @@ ssl_self_signed_ca_password: capassword123
 
 ### Directory on hosts to store all ssl files.
 ssl_file_dir: /var/ssl/private/
+
+### principal mapping rules to map the DN from cert into a username
+principal_mapping_rules: ['DEFAULT']
+
+### Users allowed to get an impersonation token for other users except the impersonation protected users. Must be defined in case of RBAC over mTLS only.
+impersonation_super_users: []
+
+### Users which cant be impersonated using impersonation token. Super users should be added here to disallow them from being impersonated in case of RBAC over mTLS only.
+impersonation_protected_users: []
 
 ### Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs.
 regenerate_ca: false
@@ -313,7 +334,7 @@ zookeeper_ssl_enabled: "{{ssl_enabled}}"
 zookeeper_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
 
 ### Deprecated- SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
-zookeeper_sasl_protocol: "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
+zookeeper_sasl_protocol: "{{ 'kerberos' if 'kerberos' in (sasl_protocol | confluent.platform.split_to_list) else 'none' }}"
 
 ### Authentication to put on ZK Server to Server connections. Available options: [mtls, digest, digest_over_tls].
 zookeeper_quorum_authentication_type: "{% if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled %}mtls{% elif zookeeper_sasl_protocol == 'digest' %}digest{% else %}none{% endif %}"
@@ -434,6 +455,8 @@ kafka_controller_listeners: "{
     'port': {{kafka_controller_port}},
     'ssl_enabled': {{kafka_controller_ssl_enabled|string|lower}},
     'ssl_mutual_auth_enabled': {{kafka_controller_ssl_mutual_auth_enabled|string|lower}},
+    'ssl_client_authentication': '{{kafka_controller_ssl_client_authentication|string|lower}}',
+    'principal_mapping_rules': {{principal_mapping_rules}},
     'sasl_protocol': '{{kafka_controller_sasl_protocol}}'
   }
 }"
@@ -444,10 +467,13 @@ kafka_controller_port: 9093
 ### Boolean to configure controller with TLS Encryption. Also manages Java Keystore creation
 kafka_controller_ssl_enabled: "{{ssl_enabled}}"
 
-### Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+### Deprecated. Use kafka_controller_ssl_client_authentication instead. Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
 kafka_controller_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
 
-### SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+kafka_controller_ssl_client_authentication: "{{ssl_client_authentication}}"
+
+### SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none, scram, scram256 (scram only when providing multiple values with first value being non-scram). You can provide a comma-separated list of at most two mechanisms to configure multiple listeners with different mechanisms. For example, 'plain,scram'. When configuring multiple values, you can provide values only from the following list: kerberos, plain, scram, scram256. First value of the list is used for controller-controller communication.
 kafka_controller_sasl_protocol: "{{sasl_protocol}}"
 
 # Uses custom filter to create a list of all sasl_protocols, removes ['none'], and reduces to unique items
@@ -459,7 +485,7 @@ kafka_controller_user: "{{kafka_controller_default_user}}"
 ### Set this variable to customize the Linux Group that the Kafka controller Service user belongs to. Default group is confluent.
 kafka_controller_group: "{{kafka_controller_default_group}}"
 
-### Set this variable to customize the directory that the Kafka controller writes log files to. Default location is /var/log/kafka.
+### Set this variable to customize the directory that the Kafka controller writes log files to. Default location is /var/log/controller.
 kafka_controller_log_dir: "{{kafka_controller_default_log_dir}}"
 
 kafka_controller_packages:
@@ -528,7 +554,7 @@ kafka_controller_jmxexporter_config_source_path: kafka.yml.j2
 ### Destination path for Kafka controller jmx config file
 kafka_controller_jmxexporter_config_path: /opt/prometheus/kafka.yml
 
-### Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+### Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 kafka_controller_copy_files: []
 
 ### Replication Factor for internal topics. Defaults to the minimum of the number of controllers and can be overridden via default replication factor (see default_internal_replication_factor).
@@ -563,13 +589,27 @@ kafka_broker_default_listeners: "{
     'port': 9092,
     'ssl_enabled': {% if ccloud_kafka_enabled|bool %}true{% else %}{{ssl_enabled|string|lower}}{% endif %},
     'ssl_mutual_auth_enabled': {% if ccloud_kafka_enabled|bool %}false{% else %}{{ssl_mutual_auth_enabled|string|lower}}{% endif %},
-    'sasl_protocol': '{% if rbac_enabled|bool %}OAUTH{% elif ccloud_kafka_enabled|bool %}PLAIN{% else %}{{sasl_protocol}}{% endif %}'
-  }{% if kafka_broker_configure_multiple_listeners|bool %},
+    'ssl_client_authentication': '{% if ccloud_kafka_enabled|bool %}none{% else %}{{ssl_client_authentication|string|lower}}{% endif %}',
+    'principal_mapping_rules': {{principal_mapping_rules}},
+    'sasl_protocol': '{% if auth_mode in [\"ldap\", \"ldap_with_oauth\", \"oauth\"] %}OAUTH{% elif ccloud_kafka_enabled|bool %}PLAIN{% else %}{{sasl_protocol}}{% endif %}'
+  }{% if auth_mode == 'mtls' %},
+  'internal_token': {
+    'name': 'INTERNAL_TOKEN',
+    'port': 9088,
+    'ssl_enabled': true,
+    'ssl_mutual_auth_enabled': true,
+    'ssl_client_authentication': '{{ssl_client_authentication|string|lower}}',
+    'principal_mapping_rules': {{principal_mapping_rules}},
+    'sasl_protocol': 'OAUTH'
+  }{% endif %}
+  {% if kafka_broker_configure_multiple_listeners|bool %},
   'broker': {
     'name': 'BROKER',
     'port': 9091,
     'ssl_enabled': {{ssl_enabled|string|lower}},
     'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
+    'ssl_client_authentication': '{{ssl_client_authentication|string|lower}}',
+    'principal_mapping_rules': {{principal_mapping_rules}},
     'sasl_protocol': '{{sasl_protocol}}'
   }{% if kafka_broker_configure_control_plane_listener|bool and not kraft_enabled|bool %},
   'controller': {
@@ -577,6 +617,8 @@ kafka_broker_default_listeners: "{
     'port': 9089,
     'ssl_enabled': {{ssl_enabled|string|lower}},
     'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
+    'ssl_client_authentication': '{{ssl_client_authentication|string|lower}}',
+    'principal_mapping_rules': {{principal_mapping_rules}},
     'sasl_protocol': '{{sasl_protocol}}'
   }{% endif %}{% endif %}
 }"
@@ -694,11 +736,26 @@ kafka_broker_custom_properties: {}
 ### Use to add custom properties to variable kafka_broker_client_properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
 kafka_broker_custom_client_properties: {}
 
+### Property of Broker as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+kafka_broker_mds_cert_auth_only: false
+
 ### Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
 kafka_broker_rest_proxy_enabled: "{{confluent_server_enabled and not ccloud_kafka_enabled }}"
 
+### Property of ERP as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+kafka_broker_rest_proxy_mds_cert_auth_only: false
+
 ### Authentication type to add to Kafka's embedded rest proxy or Admin API. Do not set when RBAC is enabled. Options: [basic, none]
 kafka_broker_rest_proxy_authentication_type: none
+
+kafka_broker_rest_proxy_listener_name: >-
+  {%- if not rbac_enabled|bool -%}
+    {{ kafka_broker_inter_broker_listener_name }}
+  {%- elif rbac_enabled|bool and auth_mode == 'mtls' -%}
+    internal_token
+  {%- else -%}
+    internal
+  {%- endif -%}
 
 ### Use to register and identify your Kafka cluster in the MDS.
 kafka_broker_cluster_name: ""
@@ -729,6 +786,12 @@ schema_registry_ssl_enabled: "{{ssl_enabled}}"
 
 ### Deprecated- Boolean to enable mTLS Authentication on Schema Registry
 schema_registry_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+schema_registry_ssl_client_authentication: "{{ssl_client_authentication}}"
+
+### Property of SR as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+schema_registry_mds_cert_auth_only: false
 
 ### Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
 schema_registry_authentication_type: "{{ 'mtls' if schema_registry_ssl_mutual_auth_enabled else 'none' }}"
@@ -806,6 +869,9 @@ schema_registry_cluster_name: ""
 ### Boolean used for disabling of systemd service restarts when rootless install is executed
 schema_registry_skip_restarts: "{{ skip_restarts }}"
 
+### Variable to set auth mode on Schema Registry. Possible values are oauth, ldap, ldap_with_oauth in RBAC cluster and oauth, none in non RBAC cluster.
+schema_registry_auth_mode: "{{ auth_mode }}"
+
 #### Kafka Rest Variables ####
 
 ### Default Kafka Rest config prefix. Only valid to customize when installation_method: archive
@@ -825,6 +891,12 @@ kafka_rest_ssl_enabled: "{{ssl_enabled}}"
 
 ### Deprecated- Boolean to enable mTLS Authentication on Rest Proxy
 kafka_rest_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+kafka_rest_ssl_client_authentication: "{{ssl_client_authentication}}"
+
+### Property of Rest Proxy as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+kafka_rest_mds_cert_auth_only: false
 
 ### Authentication to put on Schema Registry Rest Endpoint. Available options: [mtls, basic, none].
 kafka_rest_authentication_type: "{{ 'mtls' if kafka_rest_ssl_mutual_auth_enabled else 'none' }}"
@@ -856,7 +928,12 @@ kafka_rest_cert_path: "{{ ssl_file_dir_final }}/kafka_rest.crt"
 kafka_rest_key_path: "{{ ssl_file_dir_final }}/kafka_rest.key"
 kafka_rest_export_certs: "{{ True if kafka_rest_authentication_type == 'mtls' else False }}"
 kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
-kafka_rest_kafka_listener_name: internal
+kafka_rest_kafka_listener_name: >-
+  {%- if rbac_enabled|bool and auth_mode=='mtls' -%}
+    internal_token
+  {%- else -%}
+    internal
+  {%- endif -%}
 
 ### Boolean to enable Jolokia Agent installation and configuration on Rest Proxy
 kafka_rest_jolokia_enabled: "{{jolokia_enabled}}"
@@ -903,6 +980,9 @@ kafka_rest_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabled 
 ### Boolean used for disabling of systemd service restarts when rootless install is executed
 kafka_rest_skip_restarts: "{{ skip_restarts }}"
 
+### Variable to set auth mode on Rest Proxy. Possible values are oauth, ldap, ldap_with_oauth in RBAC cluster and oauth, none in non RBAC cluster.
+kafka_rest_auth_mode: "{{ auth_mode }}"
+
 # Kafka Connect Variables
 
 ### Service Name to define/use for Kafka Connect System.d.
@@ -928,6 +1008,12 @@ kafka_connect_ssl_enabled: "{{ssl_enabled}}"
 
 ### Deprecated- Boolean to enable mTLS Authentication on Connect
 kafka_connect_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+kafka_connect_ssl_client_authentication: "{{ssl_client_authentication}}"
+
+### Property of Connect as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+kafka_connect_mds_cert_auth_only: false
 
 ### Authentication to put on Connect's Rest Endpoint. Available options: [mtls, basic, none].
 kafka_connect_authentication_type: "{{ 'mtls' if kafka_connect_ssl_mutual_auth_enabled|bool else 'none' }}"
@@ -1050,6 +1136,9 @@ kafka_connect_connector_white_list: ""
 ### Boolean used for disabling of systemd service restarts when rootless install is executed
 kafka_connect_skip_restarts: "{{ skip_restarts }}"
 
+### Variable to set auth mode on Kafka Connect server. Possible values are oauth, ldap, ldap_with_oauth in RBAC cluster and oauth, none in non RBAC cluster.
+kafka_connect_auth_mode: "{{ auth_mode }}"
+
 #### KSQLDB Variables ####
 
 ### Default KSQLDB config prefix. Only valid to customize when installation_method: archive
@@ -1069,6 +1158,9 @@ ksql_ssl_enabled: "{{ssl_enabled}}"
 
 ### Deprecated - Boolean to enable mTLS Authentication on ksqlDB
 ksql_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### Property of Ksql as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+ksql_mds_cert_auth_only: false
 
 ### Authentication to put on ksqlDB's Rest Endpoint. Available options: [mtls, basic, none].
 ksql_authentication_type: "{{ 'mtls' if ksql_ssl_mutual_auth_enabled|bool else 'none' }}"
@@ -1183,6 +1275,9 @@ control_center_listener_hostname: "0.0.0.0"
 
 ### Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
 control_center_ssl_enabled: "{{ssl_enabled}}"
+
+### Property of Control Center as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+control_center_mds_cert_auth_only: false
 
 ### Control Center Authentication. Available options: [basic, none].
 control_center_authentication_type: none
@@ -1434,7 +1529,7 @@ sso_issuer_url: none
 ### JSON Web Key Set (JWKS) URI
 sso_jwks_uri: none
 
-### Endpoint for an OAuth authorization request
+### Endpoint for an OAuth authorization request in Control Center
 sso_authorize_uri: none
 
 ### IdP token endpoint, from where a token is requested by MDS
@@ -1452,6 +1547,60 @@ sso_groups_scope: none
 ### Configures whether offline_access scope would be requested in the authorization URI, Set this to false if offline tokens are not allowed for the user or client in IdP
 sso_refresh_token: true
 
+### SSL certificate (full path of file on control node) of IDP Domain for SSO in C3/cli. Optional, needed when IDP server has TLS enabled with custom certificate
+sso_idp_cert_path: ""
+
+### Boolean to enable SSO in confluent cli. If enabling SSO in cli, you must also provide sso_device_authorization_uri.
+sso_cli: false
+
+### Device Authorization endpoint of Idp, Required to enable SSO in cli.
+sso_device_authorization_uri: none
+
+### Authorization mode on all cp components. Possible values are ldap, oauth, ldap_with_oauth and none. Set this to oauth for OAuth cluster and ldap_with_oauth for cluster with both ldap and oauth support. When set to oauth or ldap_with_oauth, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_superuser_client_id, oauth_superuser_client_password.
+auth_mode: "{% if rbac_enabled|bool %}ldap{% else %}none{% endif %}"
+
+### Client id used to authorize and request token from IdP via cp components. This is the super user for all MDS api calls
+oauth_superuser_client_id: none
+
+### Client secret for authorize and token request to IdP via cp components
+oauth_superuser_client_password: none
+
+### Service principal for OAuth client in IdPserver. Defaults to client id. Needs to be modified based on OAuth JWT token's field pointed by oauth_sub_claim
+oauth_superuser_principal: "{{oauth_superuser_client_id}}"
+
+### IdP token endpoint, from where a token is requested by MDS when OAuth is enabled
+oauth_token_uri: none
+
+### The issuer url, which is typically the authorization server's URL. This value is used to compare to issuer claim in the JWT token for verification
+oauth_issuer_url: none
+
+### The OAuth/OIDC provider URL from which the provider's JWKS (JSON Web Key Set) can be retrieved.
+oauth_jwks_uri: none
+
+### This optional setting provides the name of claim to use for the groups in the JWT. If not provided, groups of principal will be empty.
+oauth_groups_claim: none
+
+### If any additional scope is needed to include groups in the OAuth token, this config is optional based on Idp.
+oauth_groups_scope: none
+
+### This optional setting can provide a different name to use for the subject included in the JWT
+oauth_sub_claim: sub
+
+### The optional comma-delimited setting for MDS to use to verify that the JWT was issued for one of the expected audiences.
+oauth_expected_audience: none
+
+
+### SSL certificate (full path of file on control node) of IDP Domain. Optional, needed when IDP server has TLS enabled with custom certificate
+oauth_idp_cert_path: ""
+
+idp_self_signed: "{{'true' if oauth_idp_cert_path != '' else 'false'}}"
+
+### MDS certs path on ansible control node. Used in case of centralized MDS with mTLS for external clusters to get a superuser token from MDS. This cert must have super user permissions as it will be the one used for giving rolebindings to other users like SR, Connect. Used with mds_super_user_external_key_path
+mds_super_user_external_cert_path: ""
+
+### MDS key path on ansible control node.
+mds_super_user_external_key_path: ""
+
 ### LDAP User which will be granted super user permissions to create role bindings in the MDS
 mds_super_user: mds
 
@@ -1467,11 +1616,23 @@ kafka_broker_ldap_user: "{{mds_super_user}}"
 ### Password to kafka_broker_ldap_user LDAP User
 kafka_broker_ldap_password: "{{mds_super_user_password}}"
 
+### OAuth Client Id for Kafka broker Service to authenticate as
+kafka_broker_oauth_user: "{{oauth_superuser_client_id}}"
+
+### Client Secret for kafka_broker_oauth_user
+kafka_broker_oauth_password: "{{oauth_superuser_client_password}}"
+
 ### LDAP User for Kafkas Embedded Rest Service to authenticate as
 kafka_controller_ldap_user: "{{mds_super_user}}"
 
 ### Password to kafka_controller_ldap_user LDAP User
 kafka_controller_ldap_password: "{{mds_super_user_password}}"
+
+### OAuth Client Id for Kafka Controller Service to authenticate as
+kafka_controller_oauth_user: "{{oauth_superuser_client_id}}"
+
+### Client Secret to kafka_controller_oauth_user
+kafka_controller_oauth_password: "{{oauth_superuser_client_password}}"
 
 ### Unique advertised hostname for Metadata Server
 mds_advertised_listener_hostname: ""
@@ -1482,11 +1643,29 @@ schema_registry_ldap_user: schema-registry
 ### Password to schema_registry_ldap_user LDAP User
 schema_registry_ldap_password: password
 
+### OAuth Client Id for Schema Registry to authenticate as
+schema_registry_oauth_user: schema-registry
+
+### Client Secret for schema_registry_oauth_user
+schema_registry_oauth_password: password
+
+### Service principal for SR client in IdPserver. Defaults to SR Client Id
+schema_registry_oauth_principal: "{{ schema_registry_oauth_user }}"
+
 ### LDAP User for Connect to authenticate as
 kafka_connect_ldap_user: connect
 
 ### Password to kafka_connect_ldap_user LDAP User
 kafka_connect_ldap_password: password
+
+### OAuth Client Id for Connect to authenticate as
+kafka_connect_oauth_user: connect
+
+### Client Secret for kafka_connect_oauth_user
+kafka_connect_oauth_password: password
+
+### Service principal for Connect client in IdPserver. Defaults to Connect Client Id
+kafka_connect_oauth_principal: "{{ kafka_connect_oauth_user }}"
 
 ### LDAP User for ksqlDB to authenticate as
 ksql_ldap_user: ksql
@@ -1494,11 +1673,29 @@ ksql_ldap_user: ksql
 ### Password to ksql_ldap_user LDAP User
 ksql_ldap_password: password
 
+### OAuth Client Id for ksql to authenticate as
+ksql_oauth_user: ksql
+
+### Client Secret for ksql_oauth_user
+ksql_oauth_password: password
+
+### Service principal for Ksql client in IdPserver. Defaults to Ksql Client Id
+ksql_oauth_principal: "{{ ksql_oauth_user }}"
+
 ### LDAP User for Rest Proxy to authenticate as
 kafka_rest_ldap_user: kafka-rest
 
 ### Password to kafka_rest_ldap_user LDAP User
 kafka_rest_ldap_password: password
+
+### OAuth Client Id for Rest Proxy to authenticate as
+kafka_rest_oauth_user: kafka-rest
+
+### Client Secret for kafka_rest_oauth_user
+kafka_rest_oauth_password: password
+
+### Service principal for Rest Proxy client in IdPserver. Defaults to Rest proxy Client Id
+kafka_rest_oauth_principal: "{{ kafka_rest_oauth_user }}"
 
 ### LDAP User for Control Center to authenticate as
 control_center_ldap_user: control-center
@@ -1506,11 +1703,29 @@ control_center_ldap_user: control-center
 ### Password to control_center_ldap_user LDAP User
 control_center_ldap_password: password
 
+### OAuth Client Id for Control Center to authenticate as
+control_center_oauth_user: control-center
+
+### Client Secret for control_center_oauth_user
+control_center_oauth_password: password
+
+### Service principal for Control Center client in IdPserver. Defaults to Control Center Client Id
+control_center_oauth_principal: "{{ control_center_oauth_user }}"
+
 ### LDAP User for Confluent Replicator to authenticate as
 kafka_connect_replicator_ldap_user: replicator
 
 ### Password for kafka_connect_replicator_ldap_user LDAP User
 kafka_connect_replicator_ldap_password: password
+
+### OAuth Client Id for Confluent Replicator to authenticate as
+kafka_connect_replicator_oauth_user: replicator
+
+### Client Secret for kafka_connect_replicator_oauth_user OAuth User
+kafka_connect_replicator_oauth_password: password
+
+### Service principal for kafka_connect_replicator client in IdPserver. Defaults to Connect Replicator Client Id
+kafka_connect_replicator_oauth_principal: "{{ kafka_connect_replicator_oauth_user }}"
 
 ### LDAP User for Confluent Replicator Consumer to authenticate as
 kafka_connect_replicator_consumer_ldap_user: "{{kafka_connect_replicator_ldap_user}}"
@@ -1518,17 +1733,44 @@ kafka_connect_replicator_consumer_ldap_user: "{{kafka_connect_replicator_ldap_us
 ### Password for kafka_connect_replicator_consumer_ldap_user LDAP User
 kafka_connect_replicator_consumer_ldap_password: "{{kafka_connect_replicator_ldap_password}}"
 
+### OAuth Client Id for Confluent Replicator Consumer to authenticate as
+kafka_connect_replicator_consumer_oauth_user: "{{ kafka_connect_replicator_oauth_user }}"
+
+### Client Secret for kafka_connect_replicator_consumer_oauth_user OAuth User
+kafka_connect_replicator_consumer_oauth_password: "{{ kafka_connect_replicator_oauth_password }}"
+
+### Service principal for kafka_connect_consumer_replicator client in IdPserver. Defaults to Connect Replicator Consumer Client Id
+kafka_connect_replicator_consumer_oauth_principal: "{{ kafka_connect_replicator_consumer_oauth_user }}"
+
 ### LDAP User for Confluent Replicator Producer to authenticate as
 kafka_connect_replicator_producer_ldap_user: "{{kafka_connect_replicator_ldap_user}}"
 
 ### Password for kafka_connect_replicator_producer_ldap_user LDAP User
 kafka_connect_replicator_producer_ldap_password: "{{kafka_connect_replicator_ldap_password}}"
 
+### OAuth Client Id for Confluent Replicator Producer to authenticate as
+kafka_connect_replicator_producer_oauth_user: "{{ kafka_connect_replicator_oauth_user }}"
+
+### Client Secret for kafka_connect_replicator_producer_oauth_user OAuth User
+kafka_connect_replicator_producer_oauth_password: "{{ kafka_connect_replicator_oauth_password }}"
+
+### Service principal for kafka_connect_producer_replicator client in IdPserver. Defaults to Connect Replicator Producer Client Id
+kafka_connect_replicator_producer_oauth_principal: "{{ kafka_connect_replicator_producer_oauth_user }}"
+
 ### LDAP User for Confluent Replicator Monitoring Interceptor to authenticate as
 kafka_connect_replicator_monitoring_interceptor_ldap_user: "{{kafka_connect_replicator_ldap_user}}"
 
 ### Password for kafka_connect_replicator_monitoring_interceptor_ldap_user LDAP User
 kafka_connect_replicator_monitoring_interceptor_ldap_password: "{{kafka_connect_replicator_ldap_password}}"
+
+### OAuth Client Id for Confluent Replicator Monitoring Interceptor to authenticate as
+kafka_connect_replicator_monitoring_interceptor_oauth_user: "{{ kafka_connect_replicator_oauth_user }}"
+
+### Client Secret for kafka_connect_replicator_monitoring_interceptor_oauth_user OAuth User
+kafka_connect_replicator_monitoring_interceptor_oauth_password: "{{ kafka_connect_replicator_oauth_password }}"
+
+### Service principal for kafka_connect_replicator_monitoring_interceptor client in IdPserver. Defaults to Connect Replicator Monitoring Interceptor Client Id
+kafka_connect_replicator_monitoring_interceptor_oauth_principal: "{{ kafka_connect_replicator_monitoring_interceptor_oauth_user }}"
 
 ### Boolean to describe if kafka group should be configured with an External MDS Kafka Cluster. If set to true, you must also set mds_broker_bootstrap_servers, mds_broker_listener, kafka_broker_rest_ssl_enabled
 external_mds_enabled: false
@@ -1770,40 +2012,40 @@ mds_health_check_user: "{{mds_super_user}}"
 mds_health_check_password: "{{mds_super_user_password}}"
 
 ### User for authenticated Kafka Admin API Health Check.
-kafka_broker_rest_health_check_user: "{{ mds_super_user if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.principal }}"
+kafka_broker_rest_health_check_user: "{{ kafka_broker_rest_proxy_basic_users.admin.principal }}"
 
 ### Password for authenticated Kafka Admin API Health Check.
-kafka_broker_rest_health_check_password: "{{ mds_super_user_password if rbac_enabled|bool else kafka_broker_rest_proxy_basic_users.admin.password }}"
+kafka_broker_rest_health_check_password: "{{ kafka_broker_rest_proxy_basic_users.admin.password }}"
 
 ### User for authenticated Schema Registry Health Check.
-schema_registry_health_check_user: "{{ schema_registry_ldap_user if rbac_enabled|bool else schema_registry_basic_users_final.admin.principal }}"
+schema_registry_health_check_user: "{{ schema_registry_basic_users_final.admin.principal }}"
 
 ### Password for authenticated Schema Registry Health Check.
-schema_registry_health_check_password: "{{ schema_registry_ldap_password if rbac_enabled|bool else schema_registry_basic_users_final.admin.password }}"
+schema_registry_health_check_password: "{{ schema_registry_basic_users_final.admin.password }}"
 
 ### User for authenticated Connect Health Check.
-kafka_connect_health_check_user: "{{ kafka_connect_ldap_user if rbac_enabled|bool else kafka_connect_basic_users.admin.principal }}"
+kafka_connect_health_check_user: "{{ kafka_connect_basic_users.admin.principal }}"
 
 ### Password for authenticated Connect Health Check. Set if using customized security like Basic Auth.
-kafka_connect_health_check_password: "{{ kafka_connect_ldap_password if rbac_enabled|bool else kafka_connect_basic_users.admin.password }}"
+kafka_connect_health_check_password: "{{ kafka_connect_basic_users.admin.password }}"
 
 ### User for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
-ksql_health_check_user: "{{ ksql_ldap_user if rbac_enabled|bool else ksql_basic_users.admin.principal }}"
+ksql_health_check_user: "{{ ksql_ldap_user if (rbac_enabled|bool and ('ldap' in auth_mode)) else ksql_basic_users.admin.principal }}"
 
 ### Password for authenticated ksqlDB Health Check. Set if using customized security like Basic Auth.
-ksql_health_check_password: "{{ ksql_ldap_password if rbac_enabled|bool else ksql_basic_users.admin.password }}"
+ksql_health_check_password: "{{ ksql_ldap_password if (rbac_enabled|bool and ('ldap' in auth_mode)) else ksql_basic_users.admin.password }}"
 
 ### User for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
-kafka_rest_health_check_user: "{{ kafka_rest_ldap_user if rbac_enabled|bool else kafka_rest_basic_users.admin.principal }}"
+kafka_rest_health_check_user: "{{ kafka_rest_basic_users.admin.principal }}"
 
 ### Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
-kafka_rest_health_check_password: "{{ kafka_rest_ldap_password if rbac_enabled|bool else kafka_rest_basic_users.admin.password }}"
+kafka_rest_health_check_password: "{{ kafka_rest_basic_users.admin.password }}"
 
 ### User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
-control_center_health_check_user: "{{ control_center_ldap_user if rbac_enabled|bool else control_center_basic_users.admin.principal }}"
+control_center_health_check_user: "{{ control_center_basic_users.admin.principal }}"
 
 ### Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
-control_center_health_check_password: "{{ control_center_ldap_password if rbac_enabled|bool else control_center_basic_users.admin.password }}"
+control_center_health_check_password: "{{ control_center_basic_users.admin.password }}"
 
 
 # Kafka Connect Replicator Variables
@@ -1813,6 +2055,9 @@ kafka_connect_replicator_config_prefix: "{{ config_prefix }}/kafka-connect-repli
 
 ### Boolean used for disabling of systemd service restarts when rootless install is executed
 kafka_connect_replicator_skip_restarts: "{{ skip_restarts }}"
+
+### Variable to set auth mode on Connect Replicator. Possible values are oauth, ldap, ldap_with_oauth in RBAC cluster and oauth, none in non RBAC cluster.
+kafka_connect_replicator_auth_mode: "{{ auth_mode }}"
 
 ## Set this variable to customize the Linux User that the Kafka Connect Replicator Service runs with. Default user is cp-kafka-connect-replicator.
 kafka_connect_replicator_user: "{{kafka_connect_replicator_default_user}}"
@@ -1878,8 +2123,14 @@ kafka_connect_replicator_jolokia_ssl_enabled: "{{ kafka_connect_replicator_ssl_e
 ### Boolean that determines if a provided keystore and truststore are being used for Kafka Connect Replicator configuration.
 kafka_connect_replicator_ssl_provided_keystore_and_truststore: false
 
-### Boolean to enable mTLS Authentication on Kafka Connect Replicator.
+### Deprecated. Use kafka_connect_replicator_ssl_client_authentication instead. Boolean to enable mTLS Authentication on Kafka Connect Replicator.
 kafka_connect_replicator_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
+
+### Property of Replicator as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+kafka_connect_replicator_mds_cert_auth_only: false
+
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+kafka_connect_replicator_ssl_client_authentication: "{{ssl_client_authentication}}"
 
 ### Boolean to enable TLS on Kafka Connect Replicator
 kafka_connect_replicator_ssl_enabled: "{{ssl_enabled}}"
@@ -2014,11 +2265,17 @@ kafka_connect_replicator_group_id: replicator
 ### Variable to define the location of the Embedded Rest Proxy for configuring RBAC.
 kafka_connect_replicator_erp_host: localhost:8090
 
-### Set this variable to the user name of the admin user for the Embedded Rest Proxy, to configure RBAC.
+### Set this variable to the user name of the Ldap admin user for the Embedded Rest Proxy, to configure RBAC.
 kafka_connect_replicator_erp_admin_user: ""
 
-### Set this variable to the password for the Embedded Rest Proxy user, to configure RBAC.
+### Set this variable to the password of the Ldap admin user for the Embedded Rest Proxy user, to configure RBAC.
 kafka_connect_replicator_erp_admin_password: ""
+
+### Set this variable to the Client Id of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.
+kafka_connect_replicator_erp_oauth_user: ""
+
+### Set this variable to the Client Secret of OAuth Client for the Embedded Rest Proxy user, to configure RBAC.
+kafka_connect_replicator_erp_oauth_password: ""
 
 ### Set this variable to the Cluster ID for the kafka cluster which you are interacting with.
 kafka_connect_replicator_kafka_cluster_id: ""
@@ -2096,11 +2353,17 @@ kafka_connect_replicator_consumer_kerberos_keytab_path: /etc/security/keytabs/ka
 ### Variable to define the location of the Embedded Rest Proxy for configuring RBAC.
 kafka_connect_replicator_consumer_erp_host: localhost:8090
 
-### Set this variable to the user name of the admin user for the Embedded Rest Proxy, to configure RBAC.
-kafka_connect_replicator_consumer_erp_admin_user: ""
+### Set this variable to the user name of the Ldap admin user for the Embedded Rest Proxy, to configure RBAC.
+kafka_connect_replicator_consumer_erp_admin_user: "{{ kafka_connect_replicator_erp_admin_user }}"
 
-### Set this variable to the password for the Embedded Rest Proxy user, to configure RBAC.
-kafka_connect_replicator_consumer_erp_admin_password: ""
+### Set this variable to the password of the Ldap admin user for the Embedded Rest Proxy user, to configure RBAC.
+kafka_connect_replicator_consumer_erp_admin_password: "{{ kafka_connect_replicator_erp_admin_password }}"
+
+### Set this variable to the Client Id of the OAuth user for the Embedded Rest Proxy, to configure RBAC.
+kafka_connect_replicator_consumer_erp_oauth_user: "{{ kafka_connect_replicator_erp_oauth_user }}"
+
+### Set this variable to the Client Secret of the OAuth Client for the Embedded Rest Proxy user, to configure RBAC.
+kafka_connect_replicator_consumer_erp_oauth_password: "{{ kafka_connect_replicator_erp_oauth_password }}"
 
 ### Set this variable to the Cluster ID for the kafka cluster which you are interacting with.
 kafka_connect_replicator_consumer_kafka_cluster_id: ""
@@ -2183,6 +2446,12 @@ kafka_connect_replicator_producer_erp_admin_user: "{{ kafka_connect_replicator_e
 
 ### Set this variable to the password for the Embedded Rest Proxy user, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
 kafka_connect_replicator_producer_erp_admin_password: "{{ kafka_connect_replicator_erp_admin_password }}"
+
+### Set this variable to the Client Id of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.  Defaults to kafka_connect_replicator_erp_user.
+kafka_connect_replicator_producer_erp_oauth_user: "{{ kafka_connect_replicator_erp_oauth_user }}"
+
+### Set this variable to the Client Secret of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
+kafka_connect_replicator_producer_erp_oauth_password: "{{ kafka_connect_replicator_erp_oauth_password }}"
 
 ### Set this variable to the Cluster ID for the kafka cluster which you are interacting with. Defaults to match kafka_connect_replicator_kafka_cluster_id.
 kafka_connect_replicator_producer_kafka_cluster_id: "{{ kafka_connect_replicator_kafka_cluster_id }}"
@@ -2269,11 +2538,17 @@ deployment_strategy: parallel
 ### Variable to define the location of the Embedded Rest Proxy for configuring RBAC. Defaults to kafka_connect_replicator_erp_host.
 kafka_connect_replicator_monitoring_interceptor_erp_host: "{{ kafka_connect_replicator_erp_host }}"
 
-### Set this variable to the user name of the admin user for the Embedded Rest Proxy, to configure RBAC.  Defaults to kafka_connect_replicator_erp_user.
+### Set this variable to the user name of the Ldap admin user for the Embedded Rest Proxy, to configure RBAC.  Defaults to kafka_connect_replicator_erp_user.
 kafka_connect_replicator_monitoring_interceptor_erp_admin_user: "{{ kafka_connect_replicator_erp_admin_user }}"
 
-### Set this variable to the password for the Embedded Rest Proxy user, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
+### Set this variable to the password  of the Ldap admin user for the Embedded Rest Proxy, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
 kafka_connect_replicator_monitoring_interceptor_erp_admin_password: "{{ kafka_connect_replicator_erp_admin_password }}"
+
+### Set this variable to the Client Id of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.  Defaults to kafka_connect_replicator_erp_user.
+kafka_connect_replicator_monitoring_interceptor_erp_oauth_user: "{{ kafka_connect_replicator_erp_oauth_user }}"
+
+### Set this variable to the Client Secret of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
+kafka_connect_replicator_monitoring_interceptor_erp_oauth_password: "{{ kafka_connect_replicator_erp_oauth_password }}"
 
 ### Set this variable to the Cluster ID for the kafka cluster which you are interacting with. Defaults to match kafka_connect_replicator_kafka_cluster_id.
 kafka_connect_replicator_monitoring_interceptor_kafka_cluster_id: "{{ kafka_connect_replicator_kafka_cluster_id }}"
@@ -2368,3 +2643,6 @@ ccloud_schema_registry_key: xxxxx
 
 ### CCloud Schema Registry Secret
 ccloud_schema_registry_secret: yyyyyy
+
+kafka_sasl_enabled_mechanisms: >-
+  {{ (kafka_broker_sasl_enabled_mechanisms + kafka_controller_sasl_enabled_mechanisms) | unique if kraft_enabled|bool else kafka_broker_sasl_enabled_mechanisms }}

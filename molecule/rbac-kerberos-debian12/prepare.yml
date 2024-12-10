@@ -1,0 +1,33 @@
+---
+- name: Provision LDAP Server
+  import_playbook: ../ldap.yml
+
+- name: Provision Kerberos Server
+  import_playbook: ../kerberos.yml
+
+- name: Copy kerberos client configuration file
+  hosts: all,!ldap_server,!kerberos_server
+  tasks:
+    - name: Create a directory if it does not exist
+      ansible.builtin.file:
+        path: "{{ kerberos_client_config_file_dest | dirname }}"
+        state: directory
+        mode: '755'
+
+    - name: Include vars from test role kerberos
+      ansible.builtin.include_vars:
+        file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/../../test_roles/confluent.test.kerberos/defaults/main.yml"
+
+    - name: Include vars from role kerberos
+      ansible.builtin.include_vars:
+        file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/../../roles/kerberos/defaults/main.yml"
+
+    - name: Copy kerberos client config file
+      template:
+        src: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/../../roles/kerberos/templates/krb5.conf.j2"
+        dest: "{{ kerberos_client_config_file_dest }}"
+        mode: '755'
+
+- name: Install Zookeeper Cluster
+  import_playbook: confluent.platform.all
+  when: lookup('env', 'MIGRATION')|default('false') == 'true'

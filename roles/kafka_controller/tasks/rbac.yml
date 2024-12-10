@@ -25,10 +25,42 @@
   loop: "{{ groups['kafka_controller'] }}"
   run_once: true
 
-# Take super.users property, split into list, remove empty string from list, and add in mds_super_user
+# Take super.users property, split into list, remove empty string from list
 - name: Initialize Super Users List
   set_fact:
-    super_users: "{{ (kafka_controller_final_properties['super.users'] | default('')).split(';') | difference(['']) + [ 'User:' + lookup('vars', 'mds_super_user') ]}}"
+    super_users: "{{ (kafka_controller_final_properties['super.users'] | default('')).split(';') | difference(['']) }}"
+
+- name: Append Super Users List with LDAP
+  set_fact:
+    super_users: "{{ super_users + [ 'User:' + lookup('vars', 'mds_super_user') ]}}"
+  when: "'ldap' in auth_mode"
+
+- name: Append Super Users List with OAuth
+  set_fact:
+    super_users: "{{ super_users + [ 'User:' + lookup('vars', 'oauth_superuser_principal') ]}}"
+  when: "'oauth' in auth_mode"
+
+- name: Extract principal from each controller's cert
+  include_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{ kafka_controller_keystore_path }}"
+    keystore_storepass: "{{ kafka_controller_keystore_storepass }}"
+    pm_rules: "{{ kafka_controller_final_properties.get('ssl.principal.mapping.rules', 'DEFAULT') }}"
+  args:
+    apply:
+      delegate_to: "{{item}}"
+      delegate_facts: true
+  loop: "{{ groups['kafka_controller'] }}"
+  run_once: true
+  when: mds_ssl_client_authentication != 'none'
+
+- name: Append cert principal to super users list
+  set_fact:
+    super_users: "{{ super_users + [ 'User:' + hostvars[item]['ks_extracted_principal'] ]}}"
+  loop: "{{ groups['kafka_controller'] }}"
+  when: mds_ssl_client_authentication != 'none'
 
 # Loop over each controllers principal and add to list
 - name: Add Each Controller's Principal to Super Users List
@@ -64,7 +96,7 @@
   file:
     path: /var/ssl/private
     state: directory
-    mode: 0755
+    mode: '755'
   tags:
     - privileged
     - filesystem
@@ -87,7 +119,7 @@
   copy:
     src: "{{token_services_public_pem_file}}"
     dest: "{{rbac_enabled_public_pem_path}}"
-    mode: 0640
+    mode: '640'
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
   when:
@@ -113,7 +145,7 @@
   copy:
     src: "{{token_services_private_pem_file}}"
     dest: "{{rbac_enabled_private_pem_path}}"
-    mode: 0640
+    mode: '640'
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
   when:

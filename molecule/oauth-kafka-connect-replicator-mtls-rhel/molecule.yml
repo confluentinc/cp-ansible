@@ -1,0 +1,268 @@
+---
+### Installation of Confluent Platform on RHEL8 with two distinct clusters.
+### Installation of Confluent Replicator.
+### Cluster1 (MDS) is running MTLS with Custom Certs.
+### Cluster2 is running OAuth with TLS enabled.
+### Replicator consumes from Cluster1 (MDS) using MTLS with Custom Certs for TLS.
+### Replicator Produces to Cluster2 using OAuth with Custom Certs for TLS.
+### Tests default values for replicator configuration works.
+
+driver:
+  name: docker
+platforms:
+  - name: mds-kerberos1
+    hostname: mds-kerberos1.confluent
+    groups:
+      - kerberos_server
+    image: centos:centos8
+    dockerfile: ../Dockerfile-centos8-base.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: oauth1
+    hostname: oauth1.confluent
+    groups:
+      - oauth_server
+    image: quay.io/keycloak/keycloak:latest
+    env:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: oauth1
+      KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
+      KEYCLOAK_HTTP_PORT: "8080"
+      KEYCLOAK_HTTPS_PORT: "8443"
+    dockerfile: ../Dockerfile-oauth.j2
+    published_ports:
+      - "8080:8080"
+      - "8443:8443"
+    command: start-dev
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mds-zookeeper1
+    hostname: mds-zookeeper1.confluent
+    groups:
+      - zookeeper
+      - mds
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mds-kafka-broker1
+    hostname: mds-kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - mds
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mds-kafka-broker2
+    hostname: mds-kafka-broker2.confluent
+    groups:
+      - kafka_broker
+      - mds
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mds-kafka-broker3
+    hostname: mds-kafka-broker3.confluent
+    groups:
+      - kafka_broker
+      - mds
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  # Cluster 2 goups, groupnames will be changed during converge phase
+  - name: zookeeper1
+    hostname: zookeeper1.confluent
+    groups:
+      - zookeeper2
+      - cluster2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker2
+      - cluster2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker2
+      - cluster2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
+    groups:
+      - kafka_broker2
+      - cluster2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect-replicator1
+    hostname: kafka_connect_replicator1.confluent
+    groups:
+      - kafka_connect_replicator2
+      - cluster2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    converge: converge.yml
+  inventory:
+    group_vars:
+      all:
+        scenario_name: oauth-kafka-connect-replicator-mtls-rhel
+        keycloak_oauth_server_port: 8443
+        keycloak_http_protocol: https
+        mask_secrets: false
+
+      mds:
+        ssl_enabled: true
+        ssl_custom_certs: true
+        ssl_mutual_auth_enabled: true
+        ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        ssl_key_password: keypass
+
+
+      cluster2:
+
+        auth_mode: oauth
+        oauth_superuser_client_id: superuser
+        oauth_superuser_client_password: my-secret
+
+        oauth_sub_claim: client_id
+        oauth_groups_claim: groups
+        oauth_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
+        oauth_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
+        oauth_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
+        oauth_expected_audience: Confluent,account,api://default
+        oauth_idp_cert_path:  "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oauthcertfile.pem"
+
+        kafka_connect_replicator_oauth_user: kafka_connect_replicator
+        kafka_connect_replicator_oauth_password: my-secret
+
+        ssl_enabled: true
+        ssl_custom_certs: true
+        ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        ssl_key_password: keypass
+
+
+      kafka_connect_replicator:
+
+        kafka_connect_replicator_listener:
+          ssl_enabled: true
+          ssl_mutual_auth_enabled: false
+          sasl_protocol: oauth
+
+        kafka_connect_replicator_white_list: test-replicator-source
+        kafka_connect_replicator_bootstrap_servers: kafka-broker1:9092
+        kafka_connect_replicator_ssl_ca_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        kafka_connect_replicator_ssl_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        kafka_connect_replicator_ssl_key_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        kafka_connect_replicator_ssl_key_password: keypass
+        kafka_connect_replicator_truststore_storepass: confluenttruststorepass
+        kafka_connect_replicator_keystore_storepass: confluentkeystorestorepass
+
+
+        kafka_connect_replicator_consumer_listener:
+          ssl_enabled: true
+          ssl_mutual_auth_enabled: true
+          sasl_protocol: none
+
+        kafka_connect_replicator_consumer_bootstrap_servers: mds-kafka-broker1:9092
+        # Validating these vars default properly
+        # kafka_connect_replicator_consumer_ssl_ca_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        # kafka_connect_replicator_consumer_ssl_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        # kafka_connect_replicator_consumer_ssl_key_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        # kafka_connect_replicator_consumer_ssl_key_password: keypass
+        # kafka_connect_replicator_truststore_storepass: confluenttruststorepass
+        # kafka_connect_replicator_keystore_storepass: confluentkeystorestorepass
+        kafka_connect_replicator_consumer_custom_properties:
+          client.id: consumer-test
+
+        kafka_connect_replicator_producer_listener:
+          ssl_enabled: true
+          ssl_mutual_auth_enabled: false
+          sasl_protocol: oauth
+
+        kafka_connect_replicator_producer_bootstrap_servers: kafka-broker1:9092
+        kafka_connect_replicator_producer_ssl_ca_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        kafka_connect_replicator_producer_ssl_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        kafka_connect_replicator_producer_ssl_key_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        kafka_connect_replicator_producer_ssl_key_password: keypass
+        kafka_connect_replicator_producer_custom_properties:
+          client.id: producer-test
+
+        kafka_connect_replicator_monitoring_interceptor_listener:
+          ssl_enabled: true
+          ssl_mutual_auth_enabled: false
+          sasl_protocol: oauth
+
+        kafka_connect_replicator_monitoring_interceptor_bootstrap_servers: kafka-broker1:9092
+        # Testing these variables default properly
+        # kafka_connect_replicator_monitoring_interceptor_ssl_ca_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        # kafka_connect_replicator_monitoring_interceptor_ssl_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        # kafka_connect_replicator_monitoring_interceptor_ssl_key_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        # kafka_connect_replicator_monitoring_interceptor_ssl_key_password: keypass
