@@ -2420,6 +2420,14 @@ Default:  "{{ skip_restarts }}"
 
 ***
 
+### ksql_auth_mode
+
+Variable to set auth mode on ksqlDB. Possible values are oauth, ldap, ldap_with_oauth in RBAC cluster and oauth, none in non RBAC cluster.
+
+Default:  "{{ auth_mode }}"
+
+***
+
 ### control_center_config_prefix
 
 Default Control Center config prefix. Only valid to customize when installation_method: archive
