@@ -1,0 +1,33 @@
+---
+- name: Read the properties file
+  slurp:
+    src: "{{file_path}}"
+  register: file_content_raw
+
+- name: Decode content
+  set_fact:
+    file_content: "{{ file_content_raw['content'] | b64decode }}"
+
+- name: Extract value for specific property
+  set_fact:
+    value_string: "{{ file_content | regex_search(property + '=([^\n]*)', '\\1') | first }}"
+
+- name: Make a list of values for our property
+  set_fact:
+    values: "{{ value_string.split(',') }}"
+
+- name: Sort actual values and expected values lists
+  set_fact:
+    values_sorted: "{{ values | sort }}"
+    expected_values_sorted: "{{ expected_values | sort }}"
+
+- name: Compare lists
+  assert:
+    that:
+      - values_sorted == expected_values_sorted
+    fail_msg: >-
+      Lists do not match for property '{{ property }}'
+      Expected: {{ expected_values_sorted }}
+      Actual: {{ values_sorted }}
+      Missing items: {{ expected_values_sorted | difference(values_sorted) }}
+      Extra items: {{ values_sorted | difference(expected_values_sorted) }}
