@@ -5702,6 +5702,14 @@ Default:  20
 
 ***
 
+### kafka_broker_health_check_urp_topics_retries
+
+Number of retries while waiting for no URP topics during Kafka Health Checks.
+
+Default:  15
+
+***
+
 ### kafka_broker_jmxexporter_startup_delay
 
 Time in seconds to wait before JMX exporter starts serving metrics. Any requests within the delay period will result in an empty metrics set.
