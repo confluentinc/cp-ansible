@@ -572,6 +572,7 @@
   when:
     - "'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms"
     - kraft_enabled|bool
+    - not ( kafka_broker_client_secrets_protection_enabled|bool )
   no_log: "{{ mask_secrets|bool }}"
 
 - name: Create SCRAM 256 Users with KRaft
@@ -586,6 +587,41 @@
   when:
     - "'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms"
     - kraft_enabled|bool
+    - not ( kafka_broker_client_secrets_protection_enabled|bool )
+  no_log: "{{ mask_secrets|bool }}"
+
+- name: Create SCRAM Users with KRaft with Secrets Protection enabled
+  shell: |
+    {{ binary_base_path }}/bin/kafka-configs \
+      --bootstrap-server {{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}} \
+      --command-config {{ kafka_broker.client_config_file }} \
+      --alter --add-config 'SCRAM-SHA-512=[password={{ item.value['password'] }}]' \
+      --entity-type users --entity-name {{ item.value['principal'] }}
+  environment:
+    CONFLUENT_SECURITY_MASTER_KEY: "{{ secrets_protection_masterkey }}"
+  loop: "{{ sasl_scram_users_final|dict2items }}"
+  run_once: true
+  when:
+    - "'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms"
+    - kraft_enabled|bool
+    - kafka_broker_client_secrets_protection_enabled|bool
+  no_log: "{{ mask_secrets|bool }}"
+
+- name: Create SCRAM 256 Users with KRaft with Secrets Protection enabled
+  shell: |
+    {{ binary_base_path }}/bin/kafka-configs \
+      --bootstrap-server {{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}} \
+      --command-config {{ kafka_broker.client_config_file }} \
+      --alter --add-config 'SCRAM-SHA-256=[password={{ item.value['password'] }}]' \
+      --entity-type users --entity-name {{ item.value['principal'] }}
+  environment:
+    CONFLUENT_SECURITY_MASTER_KEY: "{{ secrets_protection_masterkey }}"
+  loop: "{{ sasl_scram256_users_final|dict2items }}"
+  run_once: true
+  when:
+    - "'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms"
+    - kraft_enabled|bool
+    - kafka_broker_client_secrets_protection_enabled|bool
   no_log: "{{ mask_secrets|bool }}"
 
 - name: Register Cluster
