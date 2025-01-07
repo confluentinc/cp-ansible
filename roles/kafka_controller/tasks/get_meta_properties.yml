@@ -20,23 +20,22 @@
   register: zoo_cluster
   when: kraft_migration|bool
 
-- name: Create SCRAM Credentials
+- name: Create SCRAM Credentials for SCRAM-SHA-512
   set_fact:
-    scram_credentials: >-
-      {% if 'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms %}
-      SCRAM-SHA-512=[name={{ sasl_scram_users_final.admin.principal }},password={{ sasl_scram_users_final.admin.password }}]
-      {% endif %}
-      {% if 'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms and 'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms %},{% endif %}
-      {% if 'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms %}
-      SCRAM-SHA-256=[name={{ sasl_scram256_users_final.admin.principal }},password={{ sasl_scram256_users_final.admin.password }}]
-      {% endif %}
-  when: "'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms or 'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms"
+    scram_credentials_512: "SCRAM-SHA-512=[name={{ sasl_scram_users_final.admin.principal }},password={{ sasl_scram_users_final.admin.password }}]"
+  when: "'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms"
+
+- name: Create SCRAM Credentials for SCRAM-SHA-256
+  set_fact:
+    scram_credentials_256: "SCRAM-SHA-256=[name={{ sasl_scram256_users_final.admin.principal }},password={{ sasl_scram256_users_final.admin.password }}]"
+  when: "'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms"
 
 - name: Format Data Directory and Add Scram Credentials
   shell: |
     {{ binary_base_path }}/bin/kafka-storage format \
     -t={{ clusterid }} -c {{ kafka_controller.config_file }} \
-    {% if scram_credentials is defined %}--add-scram '{{ scram_credentials | trim }}'{% endif %} \
+    {% if scram_credentials_512 is defined %}--add-scram '{{ scram_credentials_512 | trim }}' {% endif %} \
+    {% if scram_credentials_256 is defined %}--add-scram '{{ scram_credentials_256 | trim }}' {% endif %} \
     --ignore-formatted
   register: format_meta
   vars:
