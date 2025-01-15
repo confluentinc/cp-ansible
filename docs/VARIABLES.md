@@ -1003,6 +1003,15 @@ Default controller quorum voters
 Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{controller_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
 
 ***
+### kafka_controller_dynamic_quorum_voters
+
+Default controller quorum voters for dynamic quorum
+
+Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{controller_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+
+kafka_controller_dynamic_quorum_voters: "{% for controller_hostname in groups.kafka_controller %}{% if loop.index > 1 %},{% endif %}{{ controller_hostname }}:{{ kafka_controller_listeners['controller']['port'] }}{% endfor %}"
+
+***
 
 ### kafka_controller_config_prefix
 
@@ -6357,4 +6366,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-
