@@ -15,7 +15,7 @@ Description: To make a task/play run always regardless of the tag specified. It'
 
 ### Tag - certificate_authority
 
-Description: To generate the certificate authority (CA) if TLS encryption is enabled and using self-signed certificates.
+Description: To generate the certificate authority (CA) if TLS encryption is enabled and using self-signed certificates.Additionally, a key pair for the MDS token, a private key and a public certificate, will be generated.
 
 ***
 
