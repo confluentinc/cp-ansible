@@ -610,7 +610,7 @@ Validates that FIPS is in use in OpenSSL.
 
 #### Scenario mtls-java8-ubuntu test's the following:
 
-Installation of Confluent Platform on Ubuntu1804.
+Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
 
@@ -742,7 +742,7 @@ Validates that Java 11 is in use.
 
 #### Scenario oauth-mtls-ubuntu-acl test's the following:
 
-Installation of Confluent Platform on Ubuntu2204.
+Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
 
@@ -896,7 +896,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 #### Scenario oauth-rbac-mtls-provided-ubuntu test's the following:
 
-Installs Confluent Platform Cluster on Ubuntu2204.
+Installs Confluent Platform Cluster on Ubuntu2404.
 
 RBAC enabled.
 
