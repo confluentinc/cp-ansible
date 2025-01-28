@@ -4,6 +4,60 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.5.3
+======
+
+Notable fixes
+-------------
+
+- Critical security and vulnerability issues were fixed.
+
+v7.5.2
+======
+
+Notable fixes
+-------------
+
+- Critical security and vulnerability issues were fixed.
+
+
+v7.5.1
+======
+
+Notable enhancements
+-------------
+
+- Updated default confluent cli version to 3.30.1
+- Fixed bugs in discovery to generate inventory file with appropriate security protocols
+- Ansible builtin File mode is now string instead of octal
+
+v7.5.0
+======
+
+New features
+-------------
+
+- Configure single sign-on (SSO) authentication for Control Center using OpenID Connect (OIDC)
+- Enable FIPS on Confluent Platform(CP) for RHEL8 & RHEL9 using cp-ansible.
+
+Notable enhancements
+-------------
+
+- Added capability to discover multiple workers in the connect cluster in discovery
+- Added support to specify ansible_password in discovery
+
+v7.4.1
+======
+
+Notable enhancements
+-------------
+
+- Parametrize the number of retries for MDS API requests
+- Add Broker's principals to Controller's super user list on a Kraft cluster with RBAC
+- Removed timeout configs from client properties of Kafka Broker, allowing customers to use custom timeout values
+- Archived installation of Confluent Platform on Debian 9 since the OS version reached end-of-life
+
+
 v7.4.0
 ======
 
