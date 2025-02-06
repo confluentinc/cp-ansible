@@ -37,7 +37,7 @@ class FilterModule(object):
         }
 
 
-    def is_ipv6(address):
+    def is_ipv6(self, address):
         try:
             return isinstance(ipaddress.ip_address(address), ipaddress.IPv6Address)
         except ValueError:
