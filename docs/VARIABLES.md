@@ -3324,6 +3324,14 @@ Default:  ""
 
 ***
 
+### kafka_connect_replicator_listener
+
+Listener Dictionary that describes Kafka Connect Replicator Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
+
+***
+
 ### kafka_connect_replicator_erp_host
 
 Variable to define the location of the Embedded Rest Proxy for configuring RBAC.
@@ -3516,6 +3524,14 @@ Default:  "{{  kafka_connect_replicator_keystore_storepass }}"
 
 ***
 
+### kafka_connect_replicator_consumer_listener
+
+Listener Dictionary that describes Kafka Connect Replicator Consumer Listener. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
+
+***
+
 ### kafka_connect_replicator_consumer_erp_host
 
 Variable to define the location of the Embedded Rest Proxy for configuring RBAC.
@@ -3705,6 +3721,14 @@ Default:  "{{ kafka_connect_replicator_truststore_storepass}}"
 The password for the Kafka Connect Replicator Producer TLS keystore.  Defaults to match kafka_connect_replicator_keystore_storepass.
 
 Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
+
+***
+
+### kafka_connect_replicator_producer_listener
+
+Listener Dictionary that describes Kafka Connect Replicator Producer Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
 
 ***
 
@@ -3905,6 +3929,14 @@ Default:  "{{ kafka_connect_replicator_truststore_storepass}}"
 The password for the Kafka Connect Replicator Monitoring Interceptor TLS keystore.  Defaults to match kafka_connect_replicator_keystore_storepass.
 
 Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_listener
+
+Listener Dictionary that describes Kafka Connect Replicator Monitoring Interceptor Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
 
 ***
 
@@ -5007,4 +5039,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-
