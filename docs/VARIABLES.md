@@ -3326,7 +3326,7 @@ Default:  ""
 
 ### kafka_connect_replicator_listener
 
-Kafka Connect Replicator Listener. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+Listener Dictionary that describes Kafka Connect Replicator Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
 Default: 
 
@@ -3526,7 +3526,7 @@ Default:  "{{  kafka_connect_replicator_keystore_storepass }}"
 
 ### kafka_connect_replicator_consumer_listener
 
-Kafka Connect Replicator Consumer Listener. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+Listener Dictionary that describes Kafka Connect Replicator Consumer Listener. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
 Default: 
 
@@ -3726,7 +3726,7 @@ Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
 
 ### kafka_connect_replicator_producer_listener
 
-Kafka Connect Replicator Producer Listener. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+Listener Dictionary that describes Kafka Connect Replicator Producer Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
 Default: 
 
@@ -3934,7 +3934,7 @@ Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
 
 ### kafka_connect_replicator_monitoring_interceptor_listener
 
-Kafka Connect Replicator Monitoring Interceptor Listener. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+Listener Dictionary that describes Kafka Connect Replicator Monitoring Interceptor Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
 Default: 
 
@@ -5039,4 +5039,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-
