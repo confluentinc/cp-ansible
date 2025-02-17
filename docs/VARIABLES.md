@@ -3526,7 +3526,7 @@ Default:  "{{  kafka_connect_replicator_keystore_storepass }}"
 
 ### kafka_connect_replicator_consumer_listener
 
-Listener Dictionary that describes Kafka Connect Replicator Consumer Listener. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+Listener Dictionary that describes Kafka Connect Replicator Consumer Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
 Default: 
 
