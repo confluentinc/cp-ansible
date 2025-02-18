@@ -4,6 +4,18 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.9.0
+======
+
+New features
+-------------
+- OAuth & OIDC capabilities have been added for Ksqldb as a server and C3 as its client.
+- The JMX exporter version has been upgraded to the latest, 1.0.1, and the deprecated configurations have been removed.
+
+Notable enhancements
+-------------
+- Ubuntu 24.04 Operating system is now supported.
+
 v7.8.0
 ======
 
