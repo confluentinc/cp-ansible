@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.8.0
+Default:  7.9.0
 
 ***
 
@@ -464,7 +464,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  4.5.0
+Default:  4.7.0
 
 ***
 
@@ -4412,6 +4412,14 @@ Default:  ""
 
 ***
 
+### kafka_connect_replicator_listener
+
+Listener Dictionary that describes Kafka Connect Replicator Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
+
+***
+
 ### kafka_connect_replicator_erp_host
 
 Variable to define the location of the Embedded Rest Proxy for configuring RBAC.
@@ -4620,6 +4628,14 @@ Default:  "{{  kafka_connect_replicator_keystore_storepass }}"
 
 ***
 
+### kafka_connect_replicator_consumer_listener
+
+Listener Dictionary that describes Kafka Connect Replicator Consumer Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
+
+***
+
 ### kafka_connect_replicator_consumer_erp_host
 
 Variable to define the location of the Embedded Rest Proxy for configuring RBAC.
@@ -4825,6 +4841,14 @@ Default:  "{{ kafka_connect_replicator_truststore_storepass}}"
 The password for the Kafka Connect Replicator Producer TLS keystore.  Defaults to match kafka_connect_replicator_keystore_storepass.
 
 Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
+
+***
+
+### kafka_connect_replicator_producer_listener
+
+Listener Dictionary that describes Kafka Connect Replicator Producer Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
 
 ***
 
@@ -5041,6 +5065,14 @@ Default:  "{{ kafka_connect_replicator_truststore_storepass}}"
 The password for the Kafka Connect Replicator Monitoring Interceptor TLS keystore.  Defaults to match kafka_connect_replicator_keystore_storepass.
 
 Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_listener
+
+Listener Dictionary that describes Kafka Connect Replicator Monitoring Interceptor Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
 
 ***
 
@@ -5470,7 +5502,7 @@ Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jv
 
 Version of JmxExporter Agent Jar to Donwload
 
-Default:  0.12.0
+Default:  1.0.1
 
 ***
 
