@@ -1292,6 +1292,14 @@ Default:  "{{kafka_broker_default_log_dir}}"
 
 ***
 
+### kafka_broker_metadata_version
+
+Specify the desired metadata.version. Ensures that metadata.version is finalized on the specified version. Valid values are any valid metadata.version, usually tracks the major.minor of the underlying Apache Kafka version, like: 3.7, 3.8, 3.9, etc
+
+Default:   undefined (not set)
+
+***
+
 ### kafka_broker_schema_validation_enabled
 
 Boolean to configure Schema Validation on Kafka
