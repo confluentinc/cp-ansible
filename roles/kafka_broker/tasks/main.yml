@@ -15,6 +15,15 @@
     - ansible_fqdn
     - ansible_distribution
 
+- name: Validate cert principals defined in inventory for RBAC mTLS setup
+  debug:
+    msg: "Warning: Please add list of broker and controller certificate principals in rbac_super_users variable"
+  when:
+    - rbac_enabled|bool
+    - kraft_enabled|bool
+    - ssl_mutual_auth_enabled|bool
+    - rbac_super_users | length == 0
+
 # datadir is no longer supported method to provide data directories for kafka brokers
 - name: Assert that datadir is not present in the inventory
   assert:
@@ -550,7 +559,8 @@
   when:
     - kafka_controller_secrets_protection_enabled|bool or kafka_controller_client_secrets_protection_enabled|bool
     - rbac_enabled|bool
-    - kafka_controller_ssl_mutual_auth_enabled|bool or ( not external_mds_enabled|bool and confluent_cli_version is version('3.0.0', '<'))
+    - (kafka_controller_ssl_mutual_auth_enabled|bool and rbac_super_users | length == 0)
+      or ( not external_mds_enabled|bool and confluent_cli_version is version('3.0.0', '<'))
     - kraft_enabled|bool
   run_once: true
 
