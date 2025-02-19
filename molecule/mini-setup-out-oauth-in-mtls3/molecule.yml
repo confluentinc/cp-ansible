@@ -1,11 +1,36 @@
 ---
 ### Installs Confluent Platform Cluster on ubi9.
-### RBAC over mTLS enabled.
-### File based login to C3 using overrides.
+### RBAC over mTLS+OAuth enabled.
+### Outside CP to CP communication over OAuth.
+### Internal CP communication over mTLS.
+### SSO authentication using OIDC in Control center using Okta IdP.
 
 driver:
   name: docker
 platforms:
+  - name: oauth1
+    hostname: oauth1.confluent
+    groups:
+      - oauth_server
+    image: quay.io/keycloak/keycloak:latest
+    env:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: oauth1
+      KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
+      KEYCLOAK_HTTP_PORT: "8080"
+      KEYCLOAK_HTTPS_PORT: "8443"
+    dockerfile: ../Dockerfile-oauth.j2
+    published_ports:
+      - "8080:8080"
+      - "8443:8443"
+    command: start-dev
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: ${KRAFT_CONTROLLER:-zookeeper}1
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
@@ -151,7 +176,7 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
   - name: controller1-mig
     hostname: controller1-mig.confluent
     groups:
@@ -197,24 +222,86 @@ provisioner:
         mask_secrets: false
         ssl_enabled: true
         ssl_client_authentication: required
-        # mds_ssl_client_authentication: required
+        mds_ssl_client_authentication: required
 
         rbac_enabled: true
-        auth_mode: mtls
+        auth_mode: oauth
+
+        # configs to send only certs to MDS and no oauth credentials
+        kafka_broker_mds_cert_auth_only: true
+        kafka_broker_rest_proxy_mds_cert_auth_only: true
+        schema_registry_mds_cert_auth_only: true
+        kafka_connect_mds_cert_auth_only: true
+        kafka_rest_mds_cert_auth_only: true # trying this out
+        ksql_mds_cert_auth_only: true
+        control_center_mds_cert_auth_only: true
+
+        kafka_broker_custom_listeners:
+          client_listener:
+            name: CLIENT
+            port: 9093
+          puremtls:
+            name: CERTONLY
+            port: 9094
+            ssl_client_authentication: required
+            ssl_enabled: true
+            sasl_protocol: none
+
+        # configs to talk to mtls only listener
+        # schema_registry_kafka_listener_name: puremtls
+        # kafka_connect_kafka_listener_name: puremtls
+        # kafka_rest_kafka_listener_name: puremtls
+        # ksql_kafka_listener_name: puremtls
+        # control_center_kafka_listener_name: puremtls
 
         impersonation_super_users:
-          - 'kafka_broker'
-          - 'kafka_rest'
-          - 'schema_registry'
-          - 'kafka_connect'
+          - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker'
+          - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_connect'
+          - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_rest'
+          - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=schema_registry'
 
-        principal_mapping_rules:
-          - "RULE:.*CN=([a-zA-Z0-9.-_]*).*$$/$$1/"
-          - "DEFAULT"
+        keycloak_oauth_server_port: 8443
+        keycloak_http_protocol: https
 
-        kafka_broker_custom_properties:
-          confluent.metadata.server.user.store: FILE
-          confluent.metadata.server.user.store.file.path: /tmp/credentials
+        oauth_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oauthcertfile.pem"
+        oauth_superuser_client_id: superuser
+        oauth_superuser_client_password: my-secret
+
+        oauth_sub_claim: client_id
+        oauth_groups_claim: groups
+        oauth_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
+        oauth_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
+        oauth_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
+        oauth_expected_audience: Confluent,account,api://default
+
+        # schema_registry_oauth_user: schema_registry
+        # schema_registry_oauth_password: my-secret
+
+        kafka_rest_oauth_user: kafka_rest
+        kafka_rest_oauth_password: my-secret
+
+        # kafka_connect_oauth_user: kafka_connect
+        # kafka_connect_oauth_password: my-secret
+
+        # ksql_oauth_user: ksql
+        # ksql_oauth_password: my-secret
+
+        # control_center_oauth_user: control_center
+        # control_center_oauth_password: my-secret
+
+        sso_mode: oidc
+        sso_groups_claim: groups
+        sso_sub_claim: sub
+        sso_groups_scope: groups
+        sso_issuer_url: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7
+        sso_jwks_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/keys
+        sso_authorize_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/authorize
+        sso_token_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/token
+        sso_device_authorization_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/device/authorize
+        sso_cli: true
+        sso_client_id: ${OKTA_CLIENT:-user}
+        sso_client_password: ${OKTA_PASSWORD:-pass}
+        sso_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/ssocertfile.pem"
 
         kafka_connect_custom_properties:
           plugin.path: "/usr/share/filestream-connectors,/usr/share/java/connect_plugins"
