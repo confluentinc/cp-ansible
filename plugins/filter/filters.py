@@ -1,4 +1,5 @@
 import re
+import ipaddress
 
 DOCUMENTATION = '''
 ---
@@ -30,8 +31,21 @@ class FilterModule(object):
             'client_properties': self.client_properties,
             'c3_connect_properties': self.c3_connect_properties,
             'c3_ksql_properties': self.c3_ksql_properties,
-            'resolve_principal': self.resolve_principal
+            'resolve_principal': self.resolve_principal,
+            'is_ipv6': self.is_ipv6,
+            'format_hostname': self.format_hostname
         }
+
+    def is_ipv6(self, address):
+        try:
+            return isinstance(ipaddress.ip_address(address), ipaddress.IPv6Address)
+        except ValueError:
+            return False
+
+    def format_hostname(self, hostname):
+        if self.is_ipv6(hostname):
+            return f"[{hostname}]"
+        return hostname
 
     def normalize_sasl_protocol(self, protocols):
         # Returns a list of standardized values for sasl mechanism strings
@@ -401,7 +415,7 @@ class FilterModule(object):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + self.resolve_hostname(hostvars[host]) + ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
+                    urls.append(protocol + '://' + self.format_hostname(self.resolve_hostname(hostvars[host])) + ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
 
                 final_dict['confluent.controlcenter.connect.' + group_id + '.cluster'] = ','.join(urls)
 
@@ -442,8 +456,8 @@ class FilterModule(object):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + self.resolve_hostname(hostvars[host]) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
-                    advertised_urls.append(protocol + '://' + hostvars[host].get('ksql_advertised_listener_hostname', self.resolve_hostname(hostvars[host])) +
+                    urls.append(protocol + '://' + self.format_hostname(self.resolve_hostname(hostvars[host])) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
+                    advertised_urls.append(protocol + '://' + hostvars[host].get('ksql_advertised_listener_hostname', self.format_hostname(self.resolve_hostname(hostvars[host]))) +
                                            ':' + str(hostvars[host].get('ksql_listener_port', port)))
 
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.url'] = ','.join(urls)
