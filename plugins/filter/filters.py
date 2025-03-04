@@ -415,7 +415,9 @@ class FilterModule(object):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + self.format_hostname(self.resolve_hostname(hostvars[host])) + ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
+                    urls.append(protocol + '://' +
+                                self.format_hostname(self.resolve_hostname(hostvars[host])) +
+                                ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
 
                 final_dict['confluent.controlcenter.connect.' + group_id + '.cluster'] = ','.join(urls)
 
@@ -456,9 +458,11 @@ class FilterModule(object):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + self.format_hostname(self.resolve_hostname(hostvars[host])) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
-                    advertised_urls.append(protocol + '://' + hostvars[host].get('ksql_advertised_listener_hostname', self.format_hostname(self.resolve_hostname(hostvars[host]))) +
-                                           ':' + str(hostvars[host].get('ksql_listener_port', port)))
+                    urls.append(protocol + '://' + self.format_hostname(self.resolve_hostname(hostvars[host])) +
+                                ':' + str(hostvars[host].get('ksql_listener_port', port)))
+                    advertised_urls.append(protocol + '://' +
+                                    hostvars[host].get('ksql_advertised_listener_hostname', self.format_hostname(self.resolve_hostname(hostvars[host]))) +
+                                    ':' + str(hostvars[host].get('ksql_listener_port', port)))
 
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.url'] = ','.join(urls)
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.advertised.url'] = ','.join(advertised_urls)
