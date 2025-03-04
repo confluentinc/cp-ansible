@@ -36,7 +36,6 @@ class FilterModule(object):
             'format_hostname': self.format_hostname
         }
 
-
     def is_ipv6(self, address):
         try:
             return isinstance(ipaddress.ip_address(address), ipaddress.IPv6Address)
