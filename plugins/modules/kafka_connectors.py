@@ -3,6 +3,7 @@
 # Copyright: (c) 2019, Confluent Inc
 
 from __future__ import (absolute_import, division, print_function)
+import sys
 
 ANSIBLE_METADATA = {
     'metadata_version': '0.91',
