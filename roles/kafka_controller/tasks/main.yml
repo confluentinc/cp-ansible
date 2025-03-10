@@ -241,12 +241,19 @@
     - filesystem
     - privileged
 
+- name: Check Green/Brownfield setup
+  set_fact:
+    is_brownfield_setup: "{{ kraft_service_state == 'running' }}"
+  vars:
+    kraft_service_state: "{{ ansible_facts.services[kafka_controller_service_name + '.service'].state | default('unknown') }}"
+
 - name: Set Permissions on Data Dir files  # noqa no-free-form
   # Have to use command + chown instead of the Ansible file module here as it seems
   # like the file module can't handle files modified/deleted while running. This task
   # can fail on a very active cluster. See https://github.com/confluentinc/cp-ansible/pull/903 for details.
   command: chown -R {{ kafka_controller_user }}:{{ kafka_controller_group }} {{ kafka_controller_final_properties['log.dirs'] }}
   changed_when: false
+  when: not is_brownfield_setup # Skips this task during upgrades as the user/group is already set in the initial setup run. This will avoid the race condition caused by sudden deletion of .tmp files in data dir.
   tags:
     - filesystem
 
