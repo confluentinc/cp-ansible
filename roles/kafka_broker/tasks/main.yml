@@ -285,6 +285,12 @@
   tags:
     - filesystem
 
+- name: Check Green/Brownfield setup
+  set_fact:
+    is_brownfield_setup: "{{ broker_service_state == 'running' }}"
+  vars:
+    broker_service_state: "{{ ansible_facts.services[kafka_broker_service_name + '.service'].state | default('unknown') }}"
+
 - name: Set Permissions on Data Dir files  # noqa no-free-form
   # Have to use command + chown instead of the Ansible file module here as it seems
   # like the file module can't handle files modified/deleted while running. This task
@@ -292,6 +298,7 @@
   command: chown -R {{ kafka_broker_user }}:{{ kafka_broker_group }} {{ item }}
   changed_when: false
   with_items: "{{ kafka_broker_final_properties['log.dirs'].split(',') }}"
+  when: not is_brownfield_setup # Skips this task during upgrades as the user/group is already set in the initial setup run. This will avoid the race condition caused by sudden deletion of .tmp files in data dir.
   tags:
     - filesystem
 
