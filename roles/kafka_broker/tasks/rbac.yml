@@ -28,7 +28,7 @@
 # Take super.users property, split into list, remove empty string from list
 - name: Initialize Super Users List
   set_fact:
-    super_users: "{{ (kafka_broker_final_properties['super.users'] | default('')).split(';') | difference(['']) }}"
+    super_users: "{{ rbac_super_users + (kafka_broker_final_properties['super.users'] | default('')).split(';') | difference(['']) }}"
 
 - name: Append Super Users List with LDAP
   set_fact:
@@ -72,7 +72,10 @@
   set_fact:
     super_users: "{{ super_users + [ hostvars[item]['kafka_controller_principal'] ] }}"
   loop: "{{ groups['kafka_controller'] }}"
-  when: kraft_enabled|bool and kafka_controller_ssl_mutual_auth_enabled|bool
+  when:
+    - kraft_enabled|bool
+    - kafka_controller_ssl_mutual_auth_enabled|bool
+    - rbac_super_users | length == 0 # when this variable isnt defined then we need to bring in principals from other host
 
 - name: Remove Duplicates and Convert to String
   set_fact:
@@ -92,6 +95,7 @@
   when:
     - kraft_enabled|bool
     - "inventory_hostname in groups.kafka_controller"
+    - rbac_super_users | length == 0
 
 #this is required when we have mTLS enabled
 - name: Add Broker's Principal to Controller's Super Users List
@@ -102,7 +106,10 @@
   args:
     apply:
       delegate_to: "{{item}}"
-  when: kraft_enabled|bool and kafka_controller_ssl_mutual_auth_enabled|bool
+  when:
+    - kraft_enabled|bool
+    - kafka_controller_ssl_mutual_auth_enabled|bool
+    - rbac_super_users | length == 0
   run_once: true
 
 # reset the Controller's properties to the original properties when Controller and Broker colocated
@@ -111,6 +118,7 @@
   when:
     - kraft_enabled|bool
     - "inventory_hostname in groups.kafka_controller"
+    - rbac_super_users | length == 0
 
 - name: Create SSL Certificate Directory
   file:
