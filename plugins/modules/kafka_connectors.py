@@ -438,6 +438,7 @@ def run_module():
             added_updated_messages.append(format_output(connector['name'], success, message))
 
         output_messages.append("Connectors added or updated: {}.".join(added_updated_messages))
+
         result['message'] = " ".join(output_messages)
 
         if connector_failure:
