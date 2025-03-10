@@ -27,12 +27,12 @@
 
 - name: Initialize super users as Broker and Controller's cert principals
   set_fact:
-    super_users: "{{ rbac_mtls_kafka_kraft_cert_principals }}"
+    super_users: "{{ rbac_mtls_kafka_kraft_cert_principals + (kafka_broker_final_properties['super.users'] | default('')).split(';') | difference(['']) }}"
 
 # Take super.users property, split into list, remove empty string from list, and add in mds_super_user
 - name: Append MDS super user principal in Super Users List
   set_fact:
-    super_users: "{{ super_users + (kafka_broker_final_properties['super.users'] | default('')).split(';') | difference(['']) + [ 'User:' + lookup('vars', 'mds_super_user') ]}}"
+    super_users: "{{ super_users + [ 'User:' + lookup('vars', 'mds_super_user') ]}}"
 
 # Loop over each brokers principal and add to list
 - name: Add Each Broker's Principal to Super Users List
@@ -47,7 +47,7 @@
   when:
     - kraft_enabled|bool
     - kafka_controller_ssl_mutual_auth_enabled|bool
-    - rbac_mtls_kafka_kraft_cert_principals | length == 0 # when this variable isnt defined then we need to bring in principals from other host and cant run with --tags kafka_broker
+    - rbac_mtls_kafka_kraft_cert_principals | length == 0 # when this variable isnt defined then we need to bring in principals from other host
 
 - name: Remove Duplicates and Convert to String
   set_fact:
