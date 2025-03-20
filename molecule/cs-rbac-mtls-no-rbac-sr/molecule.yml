@@ -102,6 +102,21 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center
+    image: oraclelinux:9-slim
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9021:9021"
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
     converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
@@ -122,11 +137,13 @@ provisioner:
             ssl_enabed: true
             sasl_protocol: plain
 
+        schema_registry_authentication_type: basic
+        control_center_authentication_type: basic
         schema_registry_kafka_listener_name: client_listener
         kafka_rest_kafka_listener_name: client_listener
         # kafka_connect_kafka_listener_name: client
         # ksql_kafka_listener_name: client
-        # control_center_kafka_listener_name: client
+        control_center_kafka_listener_name: client_listener
 
         mds_super_user: mds
         mds_super_user_password: password
@@ -165,10 +182,15 @@ provisioner:
 
         kafka_broker_cluster_name: Test-Broker
 
-
-
       schema_registry:
         schema_registry_cluster_name: Test-Schema
+        rbac_enabled: false
+
+      kafka_rest:
+        rbac_enabled: false
+
+      control_center:
+        rbac_enabled: false
 
       ldap_server:
         ldaps_enabled: false
@@ -181,11 +203,11 @@ provisioner:
         ldap_dc_extension: com
 
         ldap_users:
-          - username: kafka_rest
+          - username: kafka_rest # for sasl plain over ldapauthentication handler
             password: kafka_rest-secret
             uid: 9990
             guid: 90
-          - username: schema_registry
+          - username: schema_registry # for sasl plain over ldapauthentication handler
             password: schema_registry-secret
             uid: 9999
             guid: 99
