@@ -454,15 +454,16 @@ class FilterModule(object):
                 urls = []
                 advertised_urls = []
                 for host in groups[ansible_group]:
+                    formatted_hostname = self.format_hostname(self.resolve_hostname(hostvars[host]))
                     if hostvars[host].get('ksql_ssl_enabled', ssl_enabled):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + self.format_hostname(self.resolve_hostname(hostvars[host])) +
+                    urls.append(protocol + '://' + formatted_hostname +
                                 ':' + str(hostvars[host].get('ksql_listener_port', port)))
                     advertised_urls.append(
                         protocol + '://' +
-                        hostvars[host].get('ksql_advertised_listener_hostname', self.format_hostname(self.resolve_hostname(hostvars[host]))) +
+                        hostvars[host].get('ksql_advertised_listener_hostname', formatted_hostname) +
                         ':' + str(hostvars[host].get('ksql_listener_port', port))
                     )
 
