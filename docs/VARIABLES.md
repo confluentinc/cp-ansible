@@ -2644,6 +2644,14 @@ Default:  ""
 
 ***
 
+### rbac_super_users
+
+Additional list of super user principals for RBAC clusters. In case when mTLS is enabled on brokers or controllers their certificate principals should be passed in this list.
+
+Default:  []
+
+***
+
 ### mds_super_user
 
 LDAP User which will be granted super user permissions to create role bindings in the MDS
@@ -6205,3 +6213,4 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
+
