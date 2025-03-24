@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.4.8
+Default:  7.4.9
 
 ***
 
@@ -2385,6 +2385,14 @@ Default:  8090
 Boolean to configure TLS encryption on the Broker Rest endpoint. NOTE- mds_ssl_enabled is now deprecated
 
 Default:  "{{mds_ssl_enabled}}"
+
+***
+
+### rbac_super_users
+
+Additional list of super user principals for RBAC clusters. In case when mTLS is enabled on brokers or controllers their certificate principals should be passed in this list.
+
+Default:  []
 
 ***
 
@@ -5621,3 +5629,4 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
+
