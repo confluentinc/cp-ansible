@@ -17,6 +17,7 @@ Notable enhancements
 Notable fixes
 -------------
 
+- Bug fix in secrets protection for SCRAM in kraft clusters
 - Bug fix in Set Permissions on Data Dir files task to avoid race condition
 - Changed systemd service override directory permissions from 640 to 750
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
