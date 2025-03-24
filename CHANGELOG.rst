@@ -9,7 +9,10 @@ v7.7.3
 
 Notable enhancements
 -------------
-- Removed kafka kraft delegation for mTLS clusters
+
+- Introduced a new variable `rbac_super_users` to specify additional super users for the cluster
+- Removed Kraft controller and broker dependency on each other for fetching cert principals in RBAC enabled clusters with mTLS
+
 
 Notable fixes
 -------------
