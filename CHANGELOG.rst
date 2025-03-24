@@ -11,6 +11,7 @@ Notable fixes
 -------------
 
 - Bug fix in Set Permissions on Data Dir files task to avoid race condition
+- Fixed systemd overrides directory permissions
 - CP side critical security and vulnerability issues were fixed - https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
 v7.1.15
