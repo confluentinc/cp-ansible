@@ -10,6 +10,7 @@ v7.4.9
 Notable enhancements
 -------------
 
+- Introduced a new variable `rbac_super_users` to specify additional super users for the cluster
 - Removed Kraft controller and broker dependency on each other for fetching cert principals in RBAC enabled clusters with mTLS
 
 
