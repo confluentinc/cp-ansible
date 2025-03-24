@@ -24,7 +24,6 @@ The services that can be installed from this repository are:
 
 Prerequisites for installing CP can be found at https://docs.confluent.io/ansible/current/ansible-requirements.html#general-requirements.
 
-
 ## Installation
 
 You can install this collection from Ansible Automation Hub and Ansible Galaxy by following https://docs.confluent.io/ansible/current/ansible-download.html.
