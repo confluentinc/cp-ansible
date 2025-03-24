@@ -11,7 +11,8 @@ Notable fixes
 -------------
 
 - Bug fix in Set Permissions on Data Dir files task to avoid race condition
-- CP side critical security and vulnerability issues were fixed - https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+- Changed systemd service override directory permissions from 640 to 750
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
 v7.2.13
 ======
