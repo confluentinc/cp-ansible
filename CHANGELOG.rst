@@ -14,6 +14,7 @@ Notable enhancements
 Notable fixes
 -------------
 
+- Bug fix in secrets protection for SCRAM in kraft clusters
 - Bug fix in Set Permissions on Data Dir files task to avoid race condition
 - CP side critical security and vulnerability issues were fixed - https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
