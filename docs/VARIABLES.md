@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.6.4
+Default:  7.6.5
 
 ***
 
@@ -2505,6 +2505,14 @@ Default:  true
 SSL certificate (full path of file on control node) of IDP Domain for SSO in C3/cli. Optional, needed when IDP server has TLS enabled with custom certificate
 
 Default:  ""
+
+***
+
+### rbac_super_users
+
+Additional list of super user principals for RBAC clusters. In case when mTLS is enabled on brokers or controllers their certificate principals should be passed in this list.
+
+Default:  []
 
 ***
 
@@ -5741,3 +5749,4 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
+
