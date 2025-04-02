@@ -5,6 +5,9 @@ systemd_base_dir: "{{'/lib/systemd/system' if ansible_os_family == 'Debian' else
 
 confluent_repo_version: "{{ confluent_package_version | regex_replace('^([0-9])\\.([0-9]*).*', '\\1.\\2') }}"
 
+# todo/abh uncomment master
+confluent_control_center_next_gen_repo_version: master/10 # {{ confluent_control_center_next_gen_package_version }}
+
 # Confirm no trailing / on the ssl file directory path
 ssl_file_dir_final: "{{ ssl_file_dir |regex_replace('\\/$', '') }}"
 
@@ -1956,6 +1959,213 @@ control_center_properties:
 control_center_combined_properties: "{{control_center_properties | confluent.platform.combine_properties}}"
 
 control_center_final_properties: "{{ control_center_combined_properties | combine(control_center_custom_properties) }}"
+
+### Control Center Next Generation Variables ###
+# todo/abh change service name here as it will conflict co location with old control center
+control_center_next_gen_service_name: confluent-control-center
+control_center_next_gen_dep_prometheus_service_name: prometheus
+control_center_next_gen_dep_alertmanager_service_name: alertmanager
+control_center_next_gen_default_user: cp-control-center
+control_center_next_gen_default_group: confluent
+control_center_next_gen_default_log_dir: /var/log/confluent/control-center
+control_center_next_gen_dep_prometheus:
+  server_start_file: "{{ binary_base_path }}/bin/prometheus-start"
+  config_file: "{{ (config_base_path, control_center_next_gen_config_prefix_path, 'control-center-production.properties') | path_join }}"
+  systemd_file: "{{ (systemd_base_dir, (control_center_next_gen_service_name, '.service') | join) | path_join }}"
+  systemd_override: "{{ ('/etc/systemd/system', (control_center_next_gen_service_name, '.service.d') | join , 'override.conf') | path_join }}"
+control_center_next_gen_dep_alertmanager:
+  server_start_file: "{{ binary_base_path }}/bin/alertmanager-start"
+  config_file: "{{ (config_base_path, control_center_next_gen_config_prefix_path, 'control-center-production.properties') | path_join }}"
+  systemd_file: "{{ (systemd_base_dir, (control_center_next_gen_service_name, '.service') | join) | path_join }}"
+  systemd_override: "{{ ('/etc/systemd/system', (control_center_next_gen_service_name, '.service.d') | join , 'override.conf') | path_join }}"
+control_center_next_gen:
+  server_start_file: "{{ binary_base_path }}/bin/control-center-start"
+  config_file: "{{ (config_base_path, control_center_next_gen_config_prefix_path, 'control-center-production.properties') | path_join }}"
+  systemd_file: "{{ (systemd_base_dir, (control_center_next_gen_service_name, '.service') | join) | path_join }}"
+  systemd_override: "{{ ('/etc/systemd/system', (control_center_next_gen_service_name, '.service.d') | join , 'override.conf') | path_join }}"
+  log4j_file: "{{ (base_path, 'etc/confluent-control-center/log4j-rolling.properties') | path_join }}"
+  jaas_file: "{{ (config_base_path, control_center_next_gen_config_prefix_path, 'jaas.conf') | path_join }}"
+  password_file: "{{ (config_base_path, control_center_next_gen_config_prefix_path, 'password.properties') | path_join }}"
+
+control_center_next_gen_http_protocol: "{{ 'https' if control_center_next_gen_ssl_enabled|bool else 'http' }}"
+
+control_center_next_gen_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[control_center_next_gen_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[control_center_next_gen_kafka_listener_name]['port']}}"
+
+control_center_next_gen_properties:
+  defaults:
+    enabled: true
+    properties:
+      confluent.controlcenter.streams.num.stream.threads: 12
+      confluent.controlcenter.data.dir: /var/lib/confluent/control-center
+      confluent.controlcenter.internal.topics.replication: "{{control_center_next_gen_default_internal_replication_factor}}"
+      confluent.metrics.topic.replication: "{{control_center_next_gen_default_internal_replication_factor}}"
+      confluent.monitoring.interceptor.topic.replication: "{{control_center_next_gen_default_internal_replication_factor}}"
+      confluent.controlcenter.command.topic.replication: "{{control_center_next_gen_default_internal_replication_factor}}"
+      confluent.controlcenter.rest.listeners: "{{control_center_next_gen_http_protocol}}://{{control_center_next_gen_listener_hostname}}:{{control_center_next_gen_port}}"
+      bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else control_center_next_gen_bootstrap_servers }}"
+      confluent.controlcenter.streams.security.protocol: "{{kafka_broker_listeners[control_center_next_gen_kafka_listener_name] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol) }}"
+  ssl:
+    enabled: "{{control_center_next_gen_ssl_enabled or (kafka_broker_rest_proxy_enabled and mds_tls_enabled) }}"
+    properties:
+      confluent.controlcenter.rest.ssl.keystore.location: "{{control_center_next_gen_keystore_path}}"
+      confluent.controlcenter.rest.ssl.keystore.password: "{{control_center_next_gen_keystore_storepass}}"
+      confluent.controlcenter.rest.ssl.key.password: "{{control_center_next_gen_keystore_keypass}}"
+      confluent.controlcenter.rest.ssl.truststore.location: "{{control_center_next_gen_truststore_path}}"
+      confluent.controlcenter.rest.ssl.truststore.password: "{{control_center_next_gen_truststore_storepass}}"
+  principal_mapping_rules:
+    enabled: "{{control_center_next_gen_ssl_enabled}}"
+    properties:
+      ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
+  basic:
+    enabled: "{{ control_center_next_gen_authentication_type == 'basic' }}"
+    properties:
+      confluent.controlcenter.rest.authentication.method: BASIC
+      confluent.controlcenter.rest.authentication.realm: ControlCenter
+      confluent.controlcenter.rest.authentication.roles: "{{ (control_center_next_gen_basic_users|confluent.platform.get_roles + [ 'Restricted' ]) | unique | join(',') }}"
+      confluent.controlcenter.auth.restricted.roles: Restricted
+      confluent.controlcenter.auth.session.expiration.ms: 600000
+  broker_embedded_rest_endpoint:
+    enabled: "{{kafka_broker_rest_proxy_enabled or rbac_enabled }}"
+    properties:
+      confluent.controlcenter.streams.cprest.url: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
+  kafka_client:
+    enabled: true
+    properties: "{{ kafka_broker_listeners[control_center_next_gen_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
+                    'confluent.controlcenter.streams.', control_center_next_gen_truststore_path, control_center_next_gen_truststore_storepass, public_certificates_enabled, control_center_next_gen_keystore_path, control_center_next_gen_keystore_storepass, control_center_next_gen_keystore_keypass,
+                    false, sasl_plain_users_final.control_center_next_gen.principal, sasl_plain_users_final.control_center_next_gen.password, sasl_scram_users_final.control_center_next_gen.principal, sasl_scram_users_final.control_center_next_gen.password, sasl_scram256_users_final.control_center_next_gen.principal, sasl_scram256_users_final.control_center_next_gen.password,
+                    kerberos_kafka_broker_primary, control_center_next_gen_keytab_path, control_center_next_gen_kerberos_principal|default('c3'),
+                    false, control_center_next_gen_ldap_user, control_center_next_gen_ldap_password, mds_bootstrap_server_urls, oauth_enabled, control_center_next_gen_oauth_user, control_center_next_gen_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  kafka_interceptors:
+    enabled: true
+    properties: "{{ kafka_broker_listeners[control_center_next_gen_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
+                    'confluent.monitoring.interceptor.', control_center_next_gen_truststore_path, control_center_next_gen_truststore_storepass, public_certificates_enabled, control_center_next_gen_keystore_path, control_center_next_gen_keystore_storepass, control_center_next_gen_keystore_keypass,
+                    false, sasl_plain_users_final.control_center_next_gen.principal, sasl_plain_users_final.control_center_next_gen.password, sasl_scram_users_final.control_center_next_gen.principal, sasl_scram_users_final.control_center_next_gen.password, sasl_scram256_users_final.control_center_next_gen.principal, sasl_scram256_users_final.control_center_next_gen.password,
+                    kerberos_kafka_broker_primary, control_center_next_gen_keytab_path, control_center_next_gen_kerberos_principal|default('c3'),
+                    false, control_center_next_gen_ldap_user, control_center_next_gen_ldap_password, mds_bootstrap_server_urls, oauth_enabled, control_center_next_gen_oauth_user, control_center_next_gen_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  sr:
+    enabled: "{{ 'schema_registry' in groups }}"
+    properties:
+      confluent.controlcenter.schema.registry.url: "{{schema_registry_url}}"
+  sr_ssl:
+    enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool and not ccloud_schema_registry_enabled|bool }}"
+    properties:
+      confluent.controlcenter.schema.registry.schema.registry.ssl.truststore.location: "{{control_center_next_gen_truststore_path}}"
+      confluent.controlcenter.schema.registry.schema.registry.ssl.truststore.password: "{{control_center_next_gen_truststore_storepass}}"
+      confluent.controlcenter.schema.registry.schema.registry.ssl.keystore.location: "{{control_center_next_gen_keystore_path}}"
+      confluent.controlcenter.schema.registry.schema.registry.ssl.keystore.password: "{{control_center_next_gen_keystore_storepass}}"
+      confluent.controlcenter.schema.registry.schema.registry.ssl.key.password: "{{control_center_next_gen_keystore_keypass}}"
+  sr_basic:
+    enabled: "{{ ('schema_registry' in groups and schema_registry_authentication_type == 'basic') or ccloud_schema_registry_enabled|bool }}"
+    properties:
+      confluent.controlcenter.schema.registry.basic.auth.credentials.source: USER_INFO
+      confluent.controlcenter.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users_final.admin.principal}}:{{schema_registry_basic_users_final.admin.password}}"
+  sr_oauth:
+    enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) }}"
+    properties:
+      confluent.controlcenter.schema.registry.bearer.auth.credentials.source: OAUTHBEARER
+      confluent.controlcenter.schema.registry.oauthbearer.login.client.id: "{{ control_center_next_gen_oauth_user }}"
+      confluent.controlcenter.schema.registry.oauthbearer.login.client.secret: "{{ control_center_next_gen_oauth_password }}"
+  sr_oauth_scope:
+    enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) and oauth_groups_scope!='none' }}"
+    properties:
+      confluent.controlcenter.schema.registry.oauthbearer.login.oauth.scope: "{{ oauth_groups_scope }}"
+  sr_oauth_ssl:
+    enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) and idp_self_signed }}"
+    properties:
+      confluent.controlcenter.schema.registry.ssl.truststore.location: "{{ control_center_next_gen_truststore_path }}"
+      confluent.controlcenter.schema.registry.ssl.truststore.password: "{{ control_center_next_gen_truststore_storepass }}"
+  connect:
+    enabled: "{{ kafka_connect_cluster_ansible_group_names | default(omit) | length > 0 }}"
+    properties: "{{ kafka_connect_cluster_ansible_group_names | confluent.platform.c3_connect_properties(groups, hostvars, kafka_connect_ssl_enabled,
+        kafka_connect_http_protocol, kafka_connect_rest_port, kafka_connect_group_id, control_center_next_gen_truststore_path, control_center_next_gen_truststore_storepass,
+        control_center_next_gen_keystore_path, control_center_next_gen_keystore_storepass, control_center_next_gen_keystore_keypass, kafka_connect_oauth_enabled, rbac_enabled,
+        control_center_next_gen_oauth_user, control_center_next_gen_oauth_password, oauth_groups_scope, idp_self_signed) }}"
+  ksql:
+    enabled: "{{ ksql_cluster_ansible_group_names | default(omit) | length > 0 }}"
+    properties: "{{ ksql_cluster_ansible_group_names | confluent.platform.c3_ksql_properties(groups, hostvars, ksql_ssl_enabled,
+        ksql_http_protocol, ksql_listener_port, control_center_next_gen_truststore_path, control_center_next_gen_truststore_storepass,
+        control_center_next_gen_keystore_path, control_center_next_gen_keystore_storepass, control_center_next_gen_keystore_keypass, ksql_oauth_enabled, rbac_enabled,
+        control_center_next_gen_oauth_user, control_center_next_gen_oauth_password, oauth_groups_scope, idp_self_signed) }}"
+  oauth:
+    enabled: "{{oauth_enabled or schema_registry_oauth_enabled or kafka_connect_oauth_enabled}}"
+    properties:
+      confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
+  rbac:
+    enabled: "{{rbac_enabled}}"
+    properties:
+      confluent.controlcenter.rest.authentication.method: BEARER
+      public.key.path: "{{rbac_enabled_public_pem_path}}"
+      confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
+  rbac_ldap:
+    enabled: "{{rbac_enabled and auth_mode == 'ldap' and (not control_center_next_gen_mds_cert_auth_only) }}"
+    properties:
+      confluent.metadata.basic.auth.user.info: "{{ control_center_next_gen_ldap_user | default('c3') }}:{{ control_center_next_gen_ldap_password | default('pass') }}"
+      confluent.metadata.http.auth.credentials.provider: BASIC
+  rbac_oauth:
+    enabled: "{{rbac_enabled and oauth_enabled and (not control_center_next_gen_mds_cert_auth_only)}}"
+    properties:
+      confluent.metadata.oauthbearer.login.client.id: "{{ control_center_next_gen_oauth_user }}"
+      confluent.metadata.oauthbearer.login.client.secret: "{{ control_center_next_gen_oauth_password }}"
+  rbac_oauth_scope:
+    enabled: "{{rbac_enabled and oauth_enabled and oauth_groups_scope != 'none' and (not control_center_next_gen_mds_cert_auth_only)}}"
+    properties:
+      confluent.metadata.oauthbearer.login.oauth.scope: "{{ oauth_groups_scope }}"
+  rbac_external_client:
+    enabled: "{{rbac_enabled and external_mds_enabled and mds_tls_enabled }}"
+    properties:
+      confluent.controlcenter.streams.ssl.truststore.location: "{{control_center_next_gen_truststore_path}}"
+      confluent.controlcenter.streams.ssl.truststore.password: "{{control_center_next_gen_truststore_storepass}}"
+  rbac_mds_sso:
+    enabled: "{{ rbac_enabled and sso_mode != 'none' }}"
+    properties:
+      confluent.controlcenter.auth.sso.mode: "{{ sso_mode }}"
+  mds_client:
+    enabled: "{{rbac_enabled and mds_tls_enabled }}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{control_center_next_gen_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{control_center_next_gen_truststore_storepass}}"
+      confluent.metadata.ssl.endpoint.identification.algorithm: HTTPS
+  mds_mtls_client:
+    enabled: "{{ rbac_enabled and mds_ssl_client_authentication != 'none' }}"
+    properties:
+      confluent.metadata.ssl.keystore.location: "{{control_center_next_gen_keystore_path}}"
+      confluent.metadata.ssl.keystore.password: "{{control_center_next_gen_keystore_keypass}}"
+      confluent.metadata.ssl.key.password: "{{control_center_next_gen_keystore_keypass}}"
+      confluent.metadata.ssl.truststore.location: "{{control_center_next_gen_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{control_center_next_gen_truststore_storepass}}"
+  oauth_mds_client:
+    enabled: "{{rbac_enabled and oauth_enabled and idp_self_signed}}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{ control_center_next_gen_truststore_path }}"
+      confluent.metadata.ssl.truststore.password: "{{ control_center_next_gen_truststore_storepass }}"
+  telemetry:
+    enabled: "{{control_center_next_gen_telemetry_enabled}}"
+    properties:
+      confluent.telemetry.enabled: 'true'
+      confluent.telemetry.api.key: "{{telemetry_api_key}}"
+      confluent.telemetry.api.secret: "{{telemetry_api_secret}}"
+      metric.reporters: io.confluent.telemetry.reporter.TelemetryReporter
+  telemetry_proxy:
+    enabled: "{{control_center_next_gen_telemetry_enabled and telemetry_proxy_url != ''}}"
+    properties:
+      confluent.telemetry.proxy.url: "{{telemetry_proxy_url}}"
+  telemetry_proxy_auth:
+    enabled: "{{control_center_next_gen_telemetry_enabled and telemetry_proxy_username != ''}}"
+    properties:
+      confluent.telemetry.proxy.username: "{{telemetry_proxy_username}}"
+      confluent.telemetry.proxy.password: "{{telemetry_proxy_password}}"
+  telemetry_labels:
+    enabled: "{{control_center_next_gen_telemetry_ansible_labels_enabled}}"
+    properties:
+      confluent.telemetry.labels.confluent.ansible.playbooks.version: "{{confluent_ansible_branch}}"
+  ccloud:
+    enabled: "{{ccloud_kafka_enabled}}"
+    properties:
+      confluent.metrics.topic.max.message.bytes: 8388608
+
+control_center_next_gen_combined_properties: "{{control_center_next_gen_properties | confluent.platform.combine_properties}}"
+
+control_center_next_gen_final_properties: "{{ control_center_next_gen_combined_properties | combine(control_center_next_gen_custom_properties) }}"
 
 #### Kafka Connect Replicator Variables ####
 kafka_connect_replicator_service_name: kafka-connect-replicator
