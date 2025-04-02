@@ -60,7 +60,7 @@
 
 - name: Create Control Center Group
   group:
-    name: "{{control_center_group}}"
+    name: "{{control_center_next_gen_group}}"
   tags:
     - privileged
 
@@ -68,25 +68,25 @@
   # Create user task must be skipped for non-linux users
   getent:
     database: passwd
-    key: "{{control_center_user}}"
+    key: "{{control_center_next_gen_user}}"
   failed_when: false
 
 - name: Create Control Center User
   user:
-    name: "{{control_center_user}}"
+    name: "{{control_center_next_gen_user}}"
     comment: Confluent Control Center
     system: true
     shell: "{{user_login_shell}}"
-    group: "{{control_center_group}}"
-  when: (getent_passwd|default({}))[control_center_user] is not defined
+    group: "{{control_center_next_gen_group}}"
+  when: (getent_passwd|default({}))[control_center_next_gen_user] is not defined
   tags:
     - privileged
 
 - name: Set Control Center Data Dir permissions
   file:
     path: "{{control_center_next_gen_final_properties['confluent.controlcenter.data.dir']}}"
-    owner: "{{control_center_user}}"
-    group: "{{control_center_group}}"
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
     state: directory
     mode: '750'
   tags:
@@ -95,8 +95,8 @@
 - name: Set Control Center Data Dir file permissions
   file:
     path: "{{control_center_next_gen_final_properties['confluent.controlcenter.data.dir']}}"
-    owner: "{{control_center_user}}"
-    group: "{{control_center_group}}"
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
     recurse: true
   tags:
     - filesystem
@@ -105,9 +105,9 @@
 # Copy the tarball's systemd service to the system
 - name: Copy Control Center Service from archive file to system
   copy:
-    src: "{{binary_base_path}}/lib/systemd/system/{{control_center.systemd_file|basename}}"
+    src: "{{binary_base_path}}/lib/systemd/system/{{control_center_next_gen.systemd_file|basename}}"
     remote_src: true
-    dest: "{{control_center.systemd_file}}"
+    dest: "{{control_center_next_gen.systemd_file}}"
     mode: '644'
     force: true
   when: installation_method == "archive"
@@ -123,13 +123,13 @@
     keystore_storepass: "{{control_center_next_gen_keystore_storepass}}"
     keystore_keypass: "{{control_center_next_gen_keystore_keypass}}"
     service_name: control_center
-    user: "{{control_center_user}}"
-    group: "{{control_center_group}}"
+    user: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
     hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
-    ca_cert_path: "{{control_center_ca_cert_path}}"
-    cert_path: "{{control_center_cert_path}}"
-    key_path: "{{control_center_key_path}}"
-    export_certs: "{{control_center_export_certs}}"
+    ca_cert_path: "{{control_center_next_gen_ca_cert_path}}"
+    cert_path: "{{control_center_next_gen_cert_path}}"
+    key_path: "{{control_center_next_gen_key_path}}"
+    export_certs: "{{control_center_next_gen_export_certs}}"
   # CCloud Kafka does not need Keystores/Truststores
   when: >
     control_center_next_gen_ssl_enabled|bool or
@@ -144,8 +144,8 @@
   include_role:
     name: kerberos
   vars:
-    kerberos_group: "{{control_center_group}}"
-    kerberos_user: "{{control_center_user}}"
+    kerberos_group: "{{control_center_next_gen_group}}"
+    kerberos_user: "{{control_center_next_gen_user}}"
     kerberos_keytab_path: "{{control_center_kerberos_keytab_path}}"
     kerberos_keytab_destination_path: "{{control_center_next_gen_keytab_path}}"
     kerberos_handler: "restart control center"
@@ -157,8 +157,8 @@
     tasks_from: copy_files.yml
   vars:
     copy_files: "{{control_center_copy_files}}"
-    user: "{{control_center_user}}"
-    group: "{{control_center_group}}"
+    user: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
   when: control_center_copy_files | length > 0
   tags:
     - configuration
@@ -169,8 +169,8 @@
     tasks_from: copy_files.yml
   vars:
     copy_files: "{{all_components_copy_files}}"
-    user: "{{control_center_user}}"
-    group: "{{control_center_group}}"
+    user: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
   when: all_components_copy_files | length > 0
   tags:
     - configuration
@@ -229,8 +229,8 @@
     path: "{{ control_center.config_file | dirname }}"
     state: directory
     mode: '750'
-    owner: "{{control_center_user}}"
-    group: "{{control_center_group}}"
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
   tags:
     - configuration
     - filesystem
@@ -238,10 +238,10 @@
 - name: Create Control Center Config
   template:
     src: control-center.properties.j2
-    dest: "{{control_center.config_file}}"
+    dest: "{{control_center_next_gen.config_file}}"
     mode: '640'
-    owner: "{{control_center_user}}"
-    group: "{{control_center_group}}"
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
   notify: restart control center
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
@@ -257,9 +257,9 @@
     encrypt_properties: "{{ control_center_secrets_protection_encrypt_properties }}"
     config_path: "{{ control_center.config_file }}"
     secrets_file: "{{ control_center_secrets_protection_file }}"
-    secrets_file_owner: "{{ control_center_user }}"
-    secrets_file_group: "{{ control_center_group }}"
-    ca_cert_path: "{{ control_center_ca_cert_path if control_center_next_gen_ssl_enabled|bool else '' }}"
+    secrets_file_owner: "{{ control_center_next_gen_user }}"
+    secrets_file_group: "{{ control_center_next_gen_group }}"
+    ca_cert_path: "{{ control_center_next_gen_ca_cert_path if control_center_next_gen_ssl_enabled|bool else '' }}"
     handler: restart control center
   tags:
     - configuration
@@ -269,10 +269,10 @@
 
 - name: Create Logs Directory
   file:
-    path: "{{control_center_log_dir}}"
+    path: "{{control_center_next_gen_log_dir}}"
     state: directory
-    group: "{{control_center_group}}"
-    owner: "{{control_center_user}}"
+    group: "{{control_center_next_gen_group}}"
+    owner: "{{control_center_next_gen_user}}"
     mode: '770'
   tags:
     - filesystem
@@ -283,7 +283,7 @@
     name: common
     tasks_from: update_log4j.yml
   vars:
-    log4j_file: "{{control_center.log4j_file}}"
+    log4j_file: "{{control_center_next_gen.log4j_file}}"
     log4j_max_backup_index: "{{control_center_max_log_files}}"
     log4j_max_file_size: "{{control_center_log_file_size}}"
     log4j_root_logger: "{{control_center_log4j_root_logger}}"
@@ -294,9 +294,9 @@
 
 - name: Set Permissions on Log4j Conf
   file:
-    path: "{{control_center.log4j_file}}"
-    group: "{{control_center_group}}"
-    owner: "{{control_center_user}}"
+    path: "{{control_center_next_gen.log4j_file}}"
+    group: "{{control_center_next_gen_group}}"
+    owner: "{{control_center_next_gen_user}}"
     mode: '640'
   tags:
     - filesystem
@@ -325,7 +325,7 @@
     name: common
     tasks_from: configure_logredactor.yml
   vars:
-    log4j_file: "{{control_center.log4j_file}}"
+    log4j_file: "{{control_center_next_gen.log4j_file}}"
     logredactor_rule_var: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
     logredactor_policy_refresh_interval_var: "{{logredactor_policy_refresh_interval}}"
   with_items: "{{ control_center_logredactor_logger_specs_list }}"
@@ -337,15 +337,15 @@
   ansible.builtin.debug:
     msg: "restarting control center"
   notify: restart control center
-  when: (control_center_custom_log4j|bool) and (logredactor_enabled|bool) and (not control_center_skip_restarts|bool)
+  when: (control_center_custom_log4j|bool) and (logredactor_enabled|bool) and (not control_center_next_gen_skip_restarts|bool)
   tags:
     - log
 
 - name: Create RocksDB Directory
   file:
     path: "{{control_center_rocksdb_path}}"
-    group: "{{control_center_group}}"
-    owner: "{{control_center_user}}"
+    group: "{{control_center_next_gen_group}}"
+    owner: "{{control_center_next_gen_user}}"
     mode: '750'
     state: directory
   when: control_center_rocksdb_path != ""
@@ -355,8 +355,8 @@
 - name: Set Permission to RocksDB Files
   file:
     path: "{{control_center_rocksdb_path}}"
-    group: "{{control_center_group}}"
-    owner: "{{control_center_user}}"
+    group: "{{control_center_next_gen_group}}"
+    owner: "{{control_center_next_gen_user}}"
     recurse: true
   when: control_center_rocksdb_path != ""
   tags:
@@ -365,29 +365,77 @@
 - name: Create Basic Auth Jaas File
   template:
     src: jaas.conf.j2
-    dest: "{{control_center.jaas_file}}"
+    dest: "{{control_center_next_gen.jaas_file}}"
     mode: '640'
-    owner: "{{control_center_user}}"
-    group: "{{control_center_group}}"
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
   notify: restart control center
-  when: control_center_authentication_type == 'basic'
+  when: control_center_next_gen_authentication_type == 'basic'
 
 - name: Create Basic Auth Password File
   template:
     src: password.properties.j2
-    dest: "{{control_center.password_file}}"
+    dest: "{{control_center_next_gen.password_file}}"
     mode: '640'
-    owner: "{{control_center_user}}"
-    group: "{{control_center_group}}"
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
   notify: restart control center
-  when: control_center_authentication_type == 'basic'
+  when: control_center_next_gen_authentication_type == 'basic'
+
+- name: Create Prometheus (C3 Dependency) Service Override Directory
+  file:
+    path: "{{control_center_next_gen.systemd_override | dirname}}"
+    state: directory
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+    mode: '750'
+  tags:
+    - systemd
+    - privileged
+
+- name: Write Prometheus (C3 Dependency) Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{control_center_next_gen.systemd_override}}"
+    mode: '640'
+    owner: root
+    group: root
+  notify: restart control center
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - systemd
+    - privileged
+
+- name: Create AlertManager (C3 Dependency) Service Override Directory
+  file:
+    path: "{{control_center_next_gen.systemd_override | dirname}}"
+    state: directory
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+    mode: '750'
+  tags:
+    - systemd
+    - privileged
+
+- name: Write AlertManager (C3 Dependency) Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{control_center_next_gen.systemd_override}}"
+    mode: '640'
+    owner: root
+    group: root
+  notify: restart control center
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - systemd
+    - privileged
 
 - name: Create Service Override Directory
   file:
-    path: "{{control_center.systemd_override | dirname}}"
+    path: "{{control_center_next_gen.systemd_override | dirname}}"
     state: directory
-    owner: "{{control_center_user}}"
-    group: "{{control_center_group}}"
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
     mode: '750'
   tags:
     - systemd
@@ -396,7 +444,7 @@
 - name: Write Service Overrides
   template:
     src: override.conf.j2
-    dest: "{{control_center.systemd_override}}"
+    dest: "{{control_center_next_gen.systemd_override}}"
     mode: '640'
     owner: root
     group: root
@@ -412,6 +460,22 @@
   when: certs_updated|bool
 
 - meta: flush_handlers
+
+- name: Start Prometheus (C3 Dependency) Service
+  systemd:
+    name: "{{control_center_next_gen_service_name}}"
+    enabled: true
+    state: started
+  tags:
+    - systemd
+
+- name: Start AlertManager (C3 Dependency) Service
+  systemd:
+    name: "{{control_center_next_gen_service_name}}"
+    enabled: true
+    state: started
+  tags:
+    - systemd
 
 - name: Start Control Center Service
   systemd:
@@ -433,7 +497,7 @@
     path: "{{item}}"
     state: absent
   loop:
-    - "{{control_center_ca_cert_path}}"
-    - "{{control_center_cert_path}}"
-    - "{{control_center_key_path}}"
+    - "{{control_center_next_gen_ca_cert_path}}"
+    - "{{control_center_next_gen_cert_path}}"
+    - "{{control_center_next_gen_key_path}}"
   when: (ssl_provided_keystore_and_truststore | bool)
