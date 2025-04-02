@@ -1,0 +1,80 @@
+---
+- name: Decide Where to delegate task of getting superuser token
+  set_fact:
+    delegation_target: >-
+      {%- if mds_ssl_client_authentication == 'none' -%}
+        {{ inventory_hostname }}
+      {%- elif external_mds_enabled|bool -%}
+        localhost
+      {%- else -%}
+        {{ groups['kafka_broker'][0] }}
+      {%- endif -%}
+
+- name: RBAC Setup Tasks
+  import_role:
+    name: common
+    tasks_from: rbac_setup.yml
+  vars:
+    user: "{{control_center_user}}"
+    group: "{{control_center_group}}"
+    delegated_to_localhost: "{{ external_mds_enabled|bool }}"
+    erp_client_cert_path: "{{ control_center_cert_path }}"
+    erp_client_key_path: "{{ control_center_key_path }}"
+    cert_auth_only_enabled_for_rbac: "{{ control_center_next_gen_mds_cert_auth_only|bool }}"
+  delegate_to: "{{ delegation_target }}"
+  # For single cluster delegating this task to broker as in case of cert based token retrival only broker can get a super user token using its certs
+  # For Centralized MDS other clusters can't delegate to MDS cluster as that cluster may not have permissions to ssh into MDS, thus delegate to localhost
+
+- set_fact:
+    send_client_cert: "{{ mds_ssl_client_authentication in ['required', 'requested'] }}"
+
+- name: Grant role System Admin to Additional Control Center users/groups
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/{% if 'User' not in item and 'Group' not in item %}User:{% endif %}{{item}}/roles/SystemAdmin"
+    method: POST
+    validate_certs: false
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ control_center_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ control_center_key_path if send_client_cert|bool else omit }}"
+    body_format: json
+    body: >
+      {
+        "clusters": {
+          "kafka-cluster": "{{kafka_cluster_id}}"
+        }
+      }
+    status_code: 204
+  register: c3_mds_result
+  until: c3_mds_result.status == 204
+  retries: "{{ mds_retries }}"
+  delay: 5
+  no_log: "{{mask_secrets|bool}}"
+  loop: "{{control_center_additional_system_admins}}"
+  when: not ansible_check_mode
+
+- name: Grant role System Admin to Control Center user
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{c3_user}}/roles/SystemAdmin"
+    method: POST
+    validate_certs: false
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ control_center_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ control_center_key_path if send_client_cert|bool else omit }}"
+    body_format: json
+    body: >
+      {
+        "clusters": {
+          "kafka-cluster": "{{kafka_cluster_id}}"
+        }
+      }
+    status_code: 204
+  register: c3_mds_result
+  until: c3_mds_result.status == 204
+  retries: "{{ mds_retries }}"
+  delay: 5
+  no_log: "{{mask_secrets|bool}}"
+  when: not ansible_check_mode
