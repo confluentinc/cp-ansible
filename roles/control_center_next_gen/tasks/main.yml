@@ -1,0 +1,602 @@
+---
+- include_role:
+    name: common
+  when: not common_role_completed|bool
+  tags: common
+
+- name: Gather OS Facts
+  setup:
+    # Only gathers items in list, filters out the rest
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_fqdn
+
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ control_center_next_gen_service_name }}"
+  when: installation_method == "package"
+  tags:
+    - package
+    - cp_package
+
+- name: Install the Control Center Packages
+  yum:
+    name: "{{ control_center_next_gen_packages | product([confluent_control_center_next_gen_package_redhat_suffix]) | map('join') | list }}"
+    state: latest
+  register: install_c3_package_result
+  until: install_c3_package_result is success or ansible_check_mode
+  retries: 5
+  delay: 90
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags:
+    - package
+    - cp_package
+  notify: restart control center next gen
+
+- name: Install the Control Center Packages
+  apt:
+    name: "{{ control_center_next_gen_packages | product([confluent_control_center_next_gen_package_debian_suffix]) | map('join') | list }}"
+  register: install_c3_package_result
+  until: install_c3_package_result is success or ansible_check_mode
+  retries: 5
+  delay: 90
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags:
+    - package
+    - cp_package
+  notify: restart control center next gen
+
+- name: Create Control Center Group
+  group:
+    name: "{{control_center_next_gen_group}}"
+  tags:
+    - privileged
+
+- name: Check if Control Center User Exists
+  # Create user task must be skipped for non-linux users
+  getent:
+    database: passwd
+    key: "{{control_center_next_gen_user}}"
+  failed_when: false
+
+- name: Create Control Center User
+  user:
+    name: "{{control_center_next_gen_user}}"
+    comment: Confluent Control Center
+    system: true
+    shell: "{{user_login_shell}}"
+    group: "{{control_center_next_gen_group}}"
+  when: (getent_passwd|default({}))[control_center_next_gen_user] is not defined
+  tags:
+    - privileged
+
+- name: Set Control Center Data Dir permissions
+  file:
+    path: "{{control_center_next_gen_final_properties['confluent.controlcenter.data.dir']}}"
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+    state: directory
+    mode: '750'
+  tags:
+    - filesystem
+
+- name: Set Control Center Data Dir file permissions
+  file:
+    path: "{{control_center_next_gen_final_properties['confluent.controlcenter.data.dir']}}"
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+    recurse: true
+  tags:
+    - filesystem
+
+- name: Set Control Center Dependencies (Prometheus, AlertManager)'s Data Dir permissions
+  file:
+    path: "{{control_center_next_gen_dependency_config_path}}"
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+    state: directory
+    mode: '750'
+  tags:
+    - filesystem
+
+- name: Set Control Center Dependencies (Prometheus, AlertManager)'s Data Dir file permissions
+  file:
+    path: "{{control_center_next_gen_dependency_config_path}}"
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+    recurse: true
+  tags:
+    - filesystem
+
+- name: Check if Prometheus (Control Center Dependency) configuration src config file exists
+  stat:
+    path: "{{prometheus_control_center_dependency_src_config_file}}"
+  register: prometheus_control_center_dependency_src_config_file_stat
+  failed_when: not prometheus_control_center_dependency_src_config_file_stat.stat.exists
+  tags:
+    - configuration
+
+- name: Check if Prometheus (Control Center Dependency) configuration dst config file exists
+  stat:
+    path: "{{control_center_next_gen_dep_prometheus.config_file}}"
+  register: prometheus_control_center_dependency_dst_config_file_stat
+  tags:
+    - configuration
+
+- name: Copy Prometheus (Control Center Dependency) configuration from archive/rpm file to system
+  copy:
+    src: "{{prometheus_control_center_dependency_src_config_file}}"
+    remote_src: true
+    dest: "{{control_center_next_gen_dep_prometheus.config_file}}"
+    mode: '644'
+    force: true
+    # todo/abh uncomment back when done complete testing
+#  when: prometheus_control_center_dependency_dst_config_file_stat.stat.exists == false
+  tags:
+    - configuration
+
+- name: Check if AlertManager (Control Center Dependency) configuration src config file exists
+  stat:
+    path: "{{alertmanager_control_center_dependency_src_config_file}}"
+  register: alertmanager_control_center_dependency_src_config_file_stat
+  failed_when: not alertmanager_control_center_dependency_src_config_file_stat.stat.exists
+  tags:
+    - configuration
+
+- name: Check if AlertManager (Control Center Dependency) configuration dst config file exists
+  stat:
+    path: "{{control_center_next_gen_dep_alertmanager.config_file}}"
+  register: alertmanager_control_center_dependency_dst_config_file_stat
+  tags:
+    - configuration
+
+- name: Copy AlertManager (Control Center Dependency) configuration from archive/rpm file to system
+  copy:
+    src: "{{alertmanager_control_center_dependency_src_config_file}}"
+    remote_src: true
+    dest: "{{control_center_next_gen_dep_alertmanager.config_file}}"
+    mode: '644'
+    force: true
+    # todo/abh uncomment back when done complete testing
+#  when: alertmanager_control_center_dependency_dst_config_file_stat.stat.exists == false
+  tags:
+    - configuration
+
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Prometheus (Control Center Dependency) Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{control_center_next_gen_dep_prometheus.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{control_center_next_gen_dep_prometheus.systemd_file}}"
+    mode: '644'
+    force: true
+  when: installation_method == "archive"
+  tags:
+    - systemd
+
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy AlertManager (Control Center Dependency) Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{control_center_next_gen_dep_alertmanager.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{control_center_next_gen_dep_alertmanager.systemd_file}}"
+    mode: '644'
+    force: true
+  when: installation_method == "archive"
+  tags:
+    - systemd
+
+# Archive File deployments need to create SystemD service units
+# Copy the tarball's systemd service to the system
+- name: Copy Control Center Service from archive file to system
+  copy:
+    src: "{{binary_base_path}}/lib/systemd/system/{{control_center_next_gen.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{control_center_next_gen.systemd_file}}"
+    mode: '644'
+    force: true
+  when: installation_method == "archive"
+  tags:
+    - systemd
+
+- include_role:
+    name: ssl
+  vars:
+    truststore_storepass: "{{control_center_next_gen_truststore_storepass}}"
+    truststore_path: "{{control_center_next_gen_truststore_path}}"
+    keystore_path: "{{control_center_next_gen_keystore_path}}"
+    keystore_storepass: "{{control_center_next_gen_keystore_storepass}}"
+    keystore_keypass: "{{control_center_next_gen_keystore_keypass}}"
+    service_name: control_center
+    user: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
+    ca_cert_path: "{{control_center_next_gen_ca_cert_path}}"
+    cert_path: "{{control_center_next_gen_cert_path}}"
+    key_path: "{{control_center_next_gen_key_path}}"
+    export_certs: "{{control_center_next_gen_export_certs}}"
+  # CCloud Kafka does not need Keystores/Truststores
+  when: >
+    control_center_next_gen_ssl_enabled|bool or
+    ( kafka_broker_listeners[control_center_next_gen_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool and not public_certificates_enabled|bool ) or
+    ( mds_tls_enabled | bool and not public_certificates_enabled|bool ) or
+    ( 'schema_registry' in groups and schema_registry_ssl_enabled|bool ) or
+    ( 'kafka_connect' in groups and kafka_connect_ssl_enabled|bool ) or
+    ( 'ksql' in groups and ksql_ssl_enabled|bool )
+  tags: ssl
+
+- name: Configure Kerberos
+  include_role:
+    name: kerberos
+  vars:
+    kerberos_group: "{{control_center_next_gen_group}}"
+    kerberos_user: "{{control_center_next_gen_user}}"
+    kerberos_keytab_path: "{{control_center_kerberos_keytab_path}}"
+    kerberos_keytab_destination_path: "{{control_center_next_gen_keytab_path}}"
+    kerberos_handler: "restart control center"
+  when: "'GSSAPI' in (kafka_broker_listeners[control_center_next_gen_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)"
+
+- name: Copy Custom Control Center Files
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{control_center_copy_files}}"
+    user: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+  when: control_center_copy_files | length > 0
+  tags:
+    - configuration
+
+- name: Copy Custom Files From All Components List
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{all_components_copy_files}}"
+    user: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+  when: all_components_copy_files | length > 0
+  tags:
+    - configuration
+
+- name: Configure RBAC for OAuth User
+  include_tasks: rbac.yml
+  vars:
+    c3_user: "{{control_center_oauth_principal}}"
+  when: rbac_enabled|bool and oauth_enabled|bool
+
+- name: Configure RBAC for LDAP User
+  include_tasks: rbac.yml
+  vars:
+    c3_user: "{{control_center_next_gen_ldap_user}}"
+  when:
+    - rbac_enabled|bool
+    - "'ldap' in auth_mode"
+
+- name: Extract C3 Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{control_center_next_gen_keystore_path}}"
+    keystore_storepass: "{{control_center_next_gen_keystore_storepass}}"
+    pm_rules: "{{control_center_next_gen_final_properties.get('ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC for mTLS User
+  include_tasks: rbac.yml
+  vars:
+    c3_user: "{{ks_extracted_principal}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Import IDP certificate to Truststore for OAuth
+  include_role:
+    name: common
+    tasks_from: idp_certs.yml
+  vars:
+    idp_cert_path: "{{ oauth_idp_cert_path }}"
+    idp_cert_dest: /tmp/oauth_idp_cert.pem
+    alias: "oauth_cert"
+    truststore_storepass: "{{control_center_next_gen_truststore_storepass}}"
+    truststore_path: "{{control_center_next_gen_truststore_path}}"
+    create_bouncy_castle_keystore: false
+  when:
+    - oauth_enabled|bool or schema_registry_oauth_enabled|bool or kafka_rest_oauth_enabled|bool or kafka_connect_oauth_enabled|bool or kafka_connect_replicator_oauth_enabled|bool
+    - oauth_idp_cert_path != ""
+
+- name: Create Control Center Config directory
+  file:
+    path: "{{ control_center.config_file | dirname }}"
+    state: directory
+    mode: '750'
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+  tags:
+    - configuration
+    - filesystem
+
+- name: Create Control Center Config
+  template:
+    src: control-center.properties.j2
+    dest: "{{control_center_next_gen.config_file}}"
+    mode: '640'
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+  notify: restart control center next gen
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
+- name: Create Control Center Config with Secrets Protection
+  include_role:
+    name: common
+    tasks_from: secrets_protection.yml
+  vars:
+    final_properties: "{{ control_center_next_gen_final_properties }}"
+    encrypt_passwords: "{{ control_center_secrets_protection_encrypt_passwords }}"
+    encrypt_properties: "{{ control_center_secrets_protection_encrypt_properties }}"
+    config_path: "{{ control_center.config_file }}"
+    secrets_file: "{{ control_center_secrets_protection_file }}"
+    secrets_file_owner: "{{ control_center_next_gen_user }}"
+    secrets_file_group: "{{ control_center_next_gen_group }}"
+    ca_cert_path: "{{ control_center_next_gen_ca_cert_path if control_center_next_gen_ssl_enabled|bool else '' }}"
+    handler: restart control center
+  tags:
+    - configuration
+  when:
+    - control_center_secrets_protection_enabled|bool
+    - rbac_enabled|bool or confluent_cli_version is version('3.0.0', '>=')
+
+- name: Create Logs Directory
+  file:
+    path: "{{control_center_next_gen_log_dir}}"
+    state: directory
+    group: "{{control_center_next_gen_group}}"
+    owner: "{{control_center_next_gen_user}}"
+    mode: '770'
+  tags:
+    - filesystem
+    - log
+
+- name: Update log4j Config for Log Cleanup
+  include_role:
+    name: common
+    tasks_from: update_log4j.yml
+  vars:
+    log4j_file: "{{control_center_next_gen.log4j_file}}"
+    log4j_max_backup_index: "{{control_center_max_log_files}}"
+    log4j_max_file_size: "{{control_center_log_file_size}}"
+    log4j_root_logger: "{{control_center_log4j_root_logger}}"
+    handler: "restart control center"
+  when: control_center_custom_log4j|bool
+  tags:
+    - log
+
+- name: Set Permissions on Log4j Conf
+  file:
+    path: "{{control_center_next_gen.log4j_file}}"
+    group: "{{control_center_next_gen_group}}"
+    owner: "{{control_center_next_gen_user}}"
+    mode: '640'
+  tags:
+    - filesystem
+    - log
+
+- name: Create logredactor rule file directory
+  file:
+    path: "{{ logredactor_rule_path | dirname }}"
+    state: directory
+    mode: '755'
+  when: (control_center_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ logredactor_rule_path_local }}"
+    dest: "{{ logredactor_rule_path }}"
+    mode: '644'
+  when: (control_center_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Configure logredactor
+  include_role:
+    name: common
+    tasks_from: configure_logredactor.yml
+  vars:
+    log4j_file: "{{control_center_next_gen.log4j_file}}"
+    logredactor_rule_var: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
+    logredactor_policy_refresh_interval_var: "{{logredactor_policy_refresh_interval}}"
+  with_items: "{{ control_center_logredactor_logger_specs_list }}"
+  when: (control_center_custom_log4j|bool) and (logredactor_enabled|bool)
+  tags:
+    - log
+
+- name: Restart control center
+  ansible.builtin.debug:
+    msg: "restarting control center"
+  notify: restart control center next gen
+  when: (control_center_custom_log4j|bool) and (logredactor_enabled|bool) and (not control_center_next_gen_skip_restarts|bool)
+  tags:
+    - log
+
+- name: Create RocksDB Directory
+  file:
+    path: "{{control_center_rocksdb_path}}"
+    group: "{{control_center_next_gen_group}}"
+    owner: "{{control_center_next_gen_user}}"
+    mode: '750'
+    state: directory
+  when: control_center_rocksdb_path != ""
+  tags:
+    - filesystem
+
+- name: Set Permission to RocksDB Files
+  file:
+    path: "{{control_center_rocksdb_path}}"
+    group: "{{control_center_next_gen_group}}"
+    owner: "{{control_center_next_gen_user}}"
+    recurse: true
+  when: control_center_rocksdb_path != ""
+  tags:
+    - filesystem
+
+- name: Create Basic Auth Jaas File
+  template:
+    src: jaas.conf.j2
+    dest: "{{control_center_next_gen.jaas_file}}"
+    mode: '640'
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+  notify: restart control center next gen
+  when: control_center_next_gen_authentication_type == 'basic'
+
+- name: Create Basic Auth Password File
+  template:
+    src: password.properties.j2
+    dest: "{{control_center_next_gen.password_file}}"
+    mode: '640'
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+  notify: restart control center next gen
+  when: control_center_next_gen_authentication_type == 'basic'
+
+- name: Create Prometheus (C3 Dependency) Service Override Directory
+  file:
+    path: "{{control_center_next_gen_dep_prometheus.systemd_override | dirname}}"
+    state: directory
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+    mode: '750'
+  tags:
+    - systemd
+    - privileged
+
+- name: Write Prometheus (C3 Dependency) Service Overrides
+  template:
+    src: prometheus_override.conf.j2
+    dest: "{{control_center_next_gen_dep_prometheus.systemd_override}}"
+    mode: '640'
+    owner: root
+    group: root
+  notify: restart control center next gen
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - systemd
+    - privileged
+
+- name: Create AlertManager (C3 Dependency) Service Override Directory
+  file:
+    path: "{{control_center_next_gen_dep_alertmanager.systemd_override | dirname}}"
+    state: directory
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+    mode: '750'
+  tags:
+    - systemd
+    - privileged
+
+- name: Write AlertManager (C3 Dependency) Service Overrides
+  template:
+    src: alertmanager_override.conf.j2
+    dest: "{{control_center_next_gen_dep_alertmanager.systemd_override}}"
+    mode: '640'
+    owner: root
+    group: root
+  notify: restart control center next gen
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - systemd
+    - privileged
+
+- name: Create Control Center Service Override Directory
+  file:
+    path: "{{control_center_next_gen.systemd_override | dirname}}"
+    state: directory
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+    mode: '750'
+  tags:
+    - systemd
+    - privileged
+
+- name: Write Control Center Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{control_center_next_gen.systemd_override}}"
+    mode: '640'
+    owner: root
+    group: root
+  notify: restart control center next gen
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - systemd
+    - privileged
+
+- name: Certs were Updated - Trigger Restart
+  command: /bin/true
+  notify: restart control center next gen
+  when: certs_updated|bool
+
+- meta: flush_handlers
+
+- name: Start Prometheus (C3 Dependency) Service
+  systemd:
+    name: "{{control_center_next_gen_dep_prometheus_service_name}}"
+    enabled: true
+    state: started
+  tags:
+    - systemd
+
+- name: Start AlertManager (C3 Dependency) Service
+  systemd:
+    name: "{{control_center_next_gen_dep_alertmanager_service_name}}"
+    enabled: true
+    state: started
+  tags:
+    - systemd
+
+- name: Start Control Center Service
+  systemd:
+    name: "{{control_center_next_gen_service_name}}"
+    enabled: true
+    state: started
+  tags:
+    - systemd
+
+- name: Health Check
+  include_tasks: health_check.yml
+  when:
+    - control_center_next_gen_health_checks_enabled|bool
+    - not ansible_check_mode
+  tags: health_check
+
+- name: Delete temporary keys/certs when keystore and trustore is provided
+  file:
+    path: "{{item}}"
+    state: absent
+  loop:
+    - "{{control_center_next_gen_ca_cert_path}}"
+    - "{{control_center_next_gen_cert_pzath}}"
+    - "{{control_center_next_gen_key_path}}"
+  when: (ssl_provided_keystore_and_truststore | bool)
