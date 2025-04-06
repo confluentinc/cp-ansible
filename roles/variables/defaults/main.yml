@@ -416,8 +416,22 @@ zookeeper_skip_restarts: "{{ skip_restarts }}"
 
 #### kafka Controller variables ####
 
-### Default controller quorum voters
-kafka_controller_quorum_voters: "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{controller_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+### set to true to install controller and broker on same nodes
+kraft_combined: false
+
+### Default controller quorum voters. Dynamically assigned later if not user provided
+kafka_controller_quorum_voters: >-
+  {%- if kraft_combined -%}
+    {%- for broker_hostname in groups.kafka_broker|default([]) %}
+      {%- if loop.index > 1%},{% endif -%}
+      {{ groups.kafka_broker.index(broker_hostname)|int + 1 }}@{{ broker_hostname }}:{{ kafka_broker_listeners['controller']['port'] }}
+    {%- endfor -%}
+  {%- else -%}
+    {%- for controller_hostname in groups.kafka_controller|default([]) -%}
+      {%- if loop.index > 1%},{% endif -%}
+      {{ groups.kafka_controller.index(controller_hostname)|int + 9991 }}@{{ controller_hostname }}:{{ kafka_controller_listeners['controller']['port'] }}
+    {%- endfor -%}
+  {%- endif -%}
 
 ### Default Kafka config prefix. Only valid to customize when installation_method: archive
 kafka_controller_config_prefix: "{{ config_prefix }}/controller"
@@ -569,7 +583,8 @@ kafka_broker_default_listeners: "{
     'ssl_enabled': {{ssl_enabled|string|lower}},
     'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
     'sasl_protocol': '{{sasl_protocol}}'
-  }{% endif %}{% endif %}
+  }{% endif %}{% if kraft_enabled|bool and kraft_combined|bool %},
+  'controller': {{ kafka_controller_listeners['controller'] }}{% endif %}{% endif %}
 }"
 
 ### Dictionary to put additional listeners to be configured within Kafka. Each listener must include a 'name' and 'port' key. Optionally they can include the keys 'ssl_enabled', 'ssl_mutual_auth_enabled', and 'sasl_protocol'
