@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.4.0
+Default:  7.5.3
 
 ***
 
@@ -134,7 +134,7 @@ Default:  false
 
 ### fips_enabled
 
-Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8 or 11. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
+Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true. Refer CP-Ansible docs for prerequisites.
 
 Default:  false
 
@@ -456,7 +456,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  3.2.1
+Default:  3.30.1
 
 ***
 
@@ -760,7 +760,7 @@ Default:  "{{sasl_protocol if sasl_protocol == 'kerberos' else 'none'}}"
 
 Authentication to put on ZK Server to Server connections. Available options: [mtls, digest, digest_over_tls].
 
-Default:  "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
+Default:  "{% if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled %}mtls{% elif zookeeper_sasl_protocol == 'digest' %}digest{% else %}none{% endif %}"
 
 ***
 
@@ -902,7 +902,7 @@ Default:  3888
 
 ### zookeeper_copy_files
 
-Use to copy files from control node to zookeeper hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+Use to copy files from control node to zookeeper hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 
 Default:  []
 
@@ -958,7 +958,7 @@ Default:  "{{ssl_mutual_auth_enabled}}"
 
 ### kafka_controller_sasl_protocol
 
-SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
+SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none
 
 Default:  "{{sasl_protocol}}"
 
@@ -1078,7 +1078,7 @@ Default:  /opt/prometheus/kafka.yml
 
 ### kafka_controller_copy_files
 
-Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 
 Default:  []
 
@@ -1118,7 +1118,7 @@ Default:  {}
 
 ### kafka_controller_rest_proxy_enabled
 
-Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
+Boolean to enable the embedded rest proxy within Kraft Controller. Not yet supported.
 
 Default:  false
 
@@ -1302,7 +1302,7 @@ Default:  /opt/prometheus/kafka.yml
 
 ### kafka_broker_copy_files
 
-Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 
 Default:  []
 
@@ -1534,7 +1534,7 @@ Default:  8078
 
 ### schema_registry_copy_files
 
-Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 
 Default:  []
 
@@ -1718,7 +1718,7 @@ Default:  8075
 
 ### kafka_rest_copy_files
 
-Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+Use to copy files from control node to schema registry hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 
 Default:  []
 
@@ -1942,7 +1942,7 @@ Default:  8077
 
 ### kafka_connect_copy_files
 
-Use to copy files from control node to connect hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+Use to copy files from control node to connect hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 
 Default:  []
 
@@ -2166,7 +2166,7 @@ Default:  8076
 
 ### ksql_copy_files
 
-Use to copy files from control node to ksqlDB hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+Use to copy files from control node to ksqlDB hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 
 Default:  []
 
@@ -2294,7 +2294,7 @@ Default:  "{{control_center_default_log_dir}}"
 
 ### control_center_copy_files
 
-Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
+Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 
 Default:  []
 
@@ -2380,6 +2380,94 @@ Default:  "{{mds_ssl_enabled}}"
 
 ***
 
+### sso_mode
+
+SSO mode for C3. Possible values: oidc, not supported in ccs. If enabling oidc you must set  sso_groups_claim, sso_sub_claim, sso_jwks_uri, sso_authorize_uri, sso_token_uri, sso_issuer_url, sso_client_id, sso_client_password in MDS
+
+Default:  none
+
+***
+
+### sso_groups_claim
+
+Groups in JWT
+
+Default:  groups
+
+***
+
+### sso_sub_claim
+
+Sub in JWT
+
+Default:  sub
+
+***
+
+### sso_issuer_url
+
+The issuer url, which is typically the authorization server's URL. This value is used to compare to issuer claim in the JWT token for verification
+
+Default:  none
+
+***
+
+### sso_jwks_uri
+
+JSON Web Key Set (JWKS) URI
+
+Default:  none
+
+***
+
+### sso_authorize_uri
+
+Endpoint for an OAuth authorization request
+
+Default:  none
+
+***
+
+### sso_token_uri
+
+IdP token endpoint, from where a token is requested by MDS
+
+Default:  none
+
+***
+
+### sso_client_id
+
+Client id for authorize and token request to Idp
+
+Default:  none
+
+***
+
+### sso_client_password
+
+Client password for authorize and token request to Idp
+
+Default:  none
+
+***
+
+### sso_groups_scope
+
+If any additional scope is needed to include groups in the token, this config is optional based on Idp. Possible values: groups,openid,offline_access etc.
+
+Default:  none
+
+***
+
+### sso_refresh_token
+
+Configures whether offline_access scope would be requested in the authorization URI, Set this to false if offline tokens are not allowed for the user or client in IdP
+
+Default:  true
+
+***
+
 ### mds_super_user
 
 LDAP User which will be granted super user permissions to create role bindings in the MDS
@@ -2393,6 +2481,14 @@ Default:  mds
 Password to mds_super_user LDAP User
 
 Default:  password
+
+***
+
+### mds_retries
+
+Parameter to increase the number of retries for MDS API requests
+
+Default:  30
 
 ***
 
@@ -2678,7 +2774,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### secrets_protection_enabled
 
-Boolean to enable secrets protection on all components except Zookeeper. Starting from CP 7.1.0, secrets protection will work only with RBAC
+Boolean to enable secrets protection on all components except Zookeeper.
 
 Default:  false
 

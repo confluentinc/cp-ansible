@@ -1,5 +1,5 @@
 ---
-confluent_ansible_branch: 7.4.0-post
+confluent_ansible_branch: 7.5.3-post
 
 systemd_base_dir: "{{'/lib/systemd/system' if ansible_os_family == 'Debian' else '/usr/lib/systemd/system'}}"
 
@@ -188,7 +188,7 @@ kafka_controller_properties:
       ssl.keystore.location: "{{kafka_controller_keystore_path}}"
       ssl.keystore.password: "{{kafka_controller_keystore_storepass}}"
       ssl.key.password: "{{kafka_controller_keystore_storepass}}"
-      ssl.enabled.protocols: TLSv1.2
+      ssl.enabled.protocols: TLSv1.2,TLSv1.3
   sasl_enabled:
     enabled: "{{ kafka_controller_sasl_enabled_mechanisms|length > 0 }}"
     properties:
@@ -410,7 +410,7 @@ kafka_broker_properties:
       ssl.keystore.location: "{{kafka_broker_keystore_path}}"
       ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
       ssl.key.password: "{{kafka_broker_keystore_storepass}}"
-      ssl.enabled.protocols: TLSv1.2
+      ssl.enabled.protocols: TLSv1.2,TLSv1.3
   inter_broker_sasl:
     enabled: "{{ kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol != 'none' }}"
     properties:
@@ -504,6 +504,25 @@ kafka_broker_properties:
       confluent.metadata.server.ssl.keystore.type: BCFKS
       confluent.metadata.server.ssl.truststore.type: BCFKS
       confluent.metadata.server.http2.enabled: false
+  rbac_mds_sso:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and sso_mode != 'none' }}"
+    properties:
+      confluent.metadata.server.sso.mode: "{{ sso_mode }}"
+      confluent.oidc.idp.groups.claim.name: "{{ sso_groups_claim }}"
+      confluent.oidc.idp.sub.claim.name: "{{ sso_sub_claim }}"
+      confluent.oidc.idp.issuer: "{{ sso_issuer_url }}"
+      confluent.oidc.idp.jwks.endpoint.uri: "{{ sso_jwks_uri }}"
+      confluent.oidc.idp.authorize.base.endpoint.uri: "{{ sso_authorize_uri }}"
+      confluent.oidc.idp.token.base.endpoint.uri: "{{ sso_token_uri }}"
+      confluent.oidc.idp.client.id: "{{ sso_client_id }}"
+      confluent.oidc.idp.client.secret: "{{ sso_client_password }}"
+      confluent.oidc.idp.refresh.token.enabled: "{{ sso_refresh_token }}"
+      confluent.oidc.session.token.expiry.ms: 900000
+      confluent.oidc.session.max.timeout.ms: 21600000
+  rbac_mds_sso_scope:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and sso_mode != 'none' and sso_groups_scope != 'none' }}"
+    properties:
+      confluent.oidc.idp.groups.claim.scope: "{{ sso_groups_scope }}"
   rbac_external_mds:
     enabled: "{{rbac_enabled and external_mds_enabled}}"
     properties:
@@ -1064,7 +1083,7 @@ ksql_properties:
       sasl.jaas.config: |-
         org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username="{{ksql_ldap_user | default('ksql')}}" password="{{ksql_ldap_password | default('pass')}}" metadataServerUrls="{{mds_bootstrap_server_urls}}";
   sr:
-    enabled: "{{ 'schema_registry' in groups }}"
+    enabled: "{{ 'schema_registry' in groups or ccloud_schema_registry_enabled|bool }}"
     properties:
       ksql.schema.registry.url: "{{schema_registry_url}}"
   sr_ssl:
@@ -1218,7 +1237,7 @@ kafka_rest_properties:
       client.config.providers: securepass
       client.config.providers.securepass.class: io.confluent.kafka.security.config.provider.SecurePassConfigProvider
   sr:
-    enabled: "{{ 'schema_registry' in groups }}"
+    enabled: "{{ 'schema_registry' in groups or ccloud_schema_registry_enabled|bool }}"
     properties:
       schema.registry.url: "{{schema_registry_url}}"
   sr_ssl:
@@ -1318,7 +1337,7 @@ control_center_properties:
   defaults:
     enabled: true
     properties:
-      confluent.controlcenter.streams.num.stream.threads: 8
+      confluent.controlcenter.streams.num.stream.threads: 12
       confluent.controlcenter.data.dir: /var/lib/confluent/control-center
       confluent.controlcenter.internal.topics.replication: "{{control_center_default_internal_replication_factor}}"
       confluent.metrics.topic.replication: "{{control_center_default_internal_replication_factor}}"
@@ -1362,7 +1381,7 @@ control_center_properties:
                     kerberos_kafka_broker_primary, control_center_keytab_path, control_center_kerberos_principal|default('c3'),
                     false, control_center_ldap_user, control_center_ldap_password, mds_bootstrap_server_urls) }}"
   sr:
-    enabled: "{{ 'schema_registry' in groups }}"
+    enabled: "{{ 'schema_registry' in groups or ccloud_schema_registry_enabled|bool }}"
     properties:
       confluent.controlcenter.schema.registry.url: "{{schema_registry_url}}"
   sr_ssl:
@@ -1401,6 +1420,10 @@ control_center_properties:
     properties:
       confluent.controlcenter.streams.ssl.truststore.location: "{{control_center_truststore_path}}"
       confluent.controlcenter.streams.ssl.truststore.password: "{{control_center_truststore_storepass}}"
+  rbac_mds_sso:
+    enabled: "{{ rbac_enabled and sso_mode != 'none' }}"
+    properties:
+      confluent.controlcenter.auth.sso.mode: "{{ sso_mode }}"
   mds_client:
     enabled: "{{rbac_enabled and mds_tls_enabled }}"
     properties:

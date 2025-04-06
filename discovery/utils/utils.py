@@ -1,12 +1,14 @@
 import argparse
 import logging
 import sys
-from os.path import exists
+from collections import OrderedDict
 from os.path import dirname
+from os.path import exists
 from os.path import realpath
 
 import yaml
 from jproperties import Properties
+
 
 def singleton(class_):
     instances = {}
@@ -32,6 +34,15 @@ def load_properties_to_dict(content):
         val = item[1][0]
         props[key] = val
     return props
+
+
+class MultiOrderedDict(OrderedDict):
+    def __setitem__(self, key, value):
+        if isinstance(value, list) and key in self:
+            self[key].extend(value)
+        else:
+            super(MultiOrderedDict, self).__setitem__(key, value)
+            super().__setitem__(key, value)
 
 
 class Logger:
@@ -83,8 +94,9 @@ class InputContext:
     ansible_connection = None
     ansible_become = False
     ansible_user = None
+    ansible_password = None
     ansible_hosts = None
-    ansible_become_user = None
+    ansible_become_user = 'root'
     ansible_become_method = 'sudo'
     ansible_ssh_private_key_file = None
     ansible_ssh_extra_args = None
@@ -93,27 +105,39 @@ class InputContext:
     from_version = None
     verbosity = 0
     service_overrides = dict()
+    skip_validation = False
+    ansible_become_password = None
+    ansible_common_remote_group = None
+    multi_threaded = True
 
     def __init__(self,
                  ansible_hosts,
                  ansible_connection,
                  ansible_user,
+                 ansible_password,
                  ansible_become,
                  ansible_become_user,
                  ansible_become_method,
+                 ansible_become_password,
+                 ansible_common_remote_group,
                  ansible_ssh_private_key_file,
                  verbosity,
                  ansible_ssh_extra_args,
-                 ansible_python_interpreter=None,
-                 from_version=None,
-                 output_file=None,
-                 service_overrides = {}):
+                 ansible_python_interpreter,
+                 from_version,
+                 output_file,
+                 service_overrides,
+                 skip_validation,
+                 multi_threaded):
         self.ansible_hosts = ansible_hosts
         self.ansible_connection = ansible_connection
         self.ansible_user = ansible_user
+        self.ansible_password = ansible_password
         self.ansible_become = ansible_become
         self.ansible_become_user = ansible_become_user
         self.ansible_become_method = ansible_become_method
+        self.ansible_become_password = ansible_become_password
+        self.ansible_common_remote_group = ansible_common_remote_group
         self.ansible_ssh_private_key_file = ansible_ssh_private_key_file
         self.from_version = from_version
         self.ansible_ssh_extra_args = ansible_ssh_extra_args
@@ -121,9 +145,12 @@ class InputContext:
         self.verbosity = verbosity
         self.output_file = output_file
         self.service_overrides = service_overrides
+        self.skip_validation = skip_validation
+        self.multi_threaded = multi_threaded
+
 
 class Arguments:
-    input_context:InputContext = None
+    input_context: InputContext = None
 
     @staticmethod
     def parse_arguments():
@@ -135,8 +162,10 @@ class Arguments:
         parser.add_argument("--input", type=str, required=True, help="Input Inventory file")
         parser.add_argument("--limit", type=str, nargs="*", help="Limit to list of hosts")
         parser.add_argument("--from_version", type=str, help="Target cp cluster version")
-        parser.add_argument("--verbosity", type=int, help="Log level")
+        parser.add_argument("--verbosity", type=int, default=1, help="Log level")
         parser.add_argument("--output_file", type=str, help="Generated output inventory file")
+        parser.add_argument("--skip_validation", type=bool, default=False, help="Skip validations")
+        parser.add_argument("--multi_threaded", type=bool, default=True, help="Use multi threaded environment")
 
         # Read arguments from command line
         return parser.parse_args()
@@ -162,17 +191,24 @@ class Arguments:
         vars = cls.get_vars(args)
         Arguments.input_context = InputContext(ansible_hosts=hosts,
                                                ansible_connection=vars.get("ansible_connection"),
-                                               ansible_become=vars.get("ansible_become"),
+                                               ansible_become=vars.get("ansible_become", False),
                                                ansible_become_user=vars.get("ansible_become_user"),
-                                               ansible_become_method=vars.get("ansible_become_method"),
+                                               ansible_become_method=vars.get("ansible_become_method", 'sudo'),
+                                               ansible_become_password=vars.get("ansible_become_password", None),
+                                               ansible_common_remote_group=vars.get("ansible_common_remote_group",
+                                                                                    None),
                                                ansible_ssh_private_key_file=vars.get("ansible_ssh_private_key_file"),
                                                ansible_user=vars.get("ansible_user"),
+                                               ansible_password=vars.get("ansible_password"),
                                                ansible_ssh_extra_args=vars.get("ansible_ssh_extra_args"),
-                                               ansible_python_interpreter=vars.get("ansible_python_interpreter"),
+                                               ansible_python_interpreter=vars.get("ansible_python_interpreter",
+                                                                                   'auto'),
                                                output_file=vars.get("output_file"),
                                                verbosity=vars.get("verbosity", 3),
                                                from_version=vars.get("from_version"),
-                                               service_overrides = vars.get("service_overrides"))
+                                               service_overrides=vars.get("service_overrides", dict()),
+                                               skip_validation=vars.get('skip_validation'),
+                                               multi_threaded=vars.get('multi_threaded'))
         return Arguments.input_context
 
     @classmethod
@@ -220,7 +256,7 @@ class Arguments:
     @classmethod
     def get_vars(cls, args) -> dict:
         inventory = cls.__parse_inventory_file(args)
-        vars = {}
+        vars = dict()
 
         # Check vars in the inventory file
         if inventory:
@@ -238,11 +274,11 @@ class Arguments:
         if args.output_file:
             vars['output_file'] = args.output_file
 
-        # set default values of some variables explicitly
-        vars['ansible_python_interpreter'] = vars.get('ansible_python_interpreter', 'auto')
-        vars['ansible_become_method'] = vars.get('ansible_become_method', 'sudo')
-        vars['ansible_become'] = vars.get('ansible_become', False)
-        vars['service_overrides'] = vars.get('service_overrides', {})
+        if args.skip_validation:
+            vars['skip_validation'] = bool(args.skip_validation)
+
+        if args.skip_validation:
+            vars['multi_threaded'] = bool(args.multi_threaded)
 
         return vars
 
@@ -307,7 +343,7 @@ class FileUtils:
         return FileUtils.__read_service_configuration_file("kafka_replicator.yml").get(name, [])
 
 
-def _host_group_declared_in_inventory(hosts:dict, input_context:InputContext) -> bool:
+def _host_group_declared_in_inventory(hosts: dict, input_context: InputContext) -> bool:
     from discovery.utils.services import ConfluentServices
     from discovery.utils.constants import DEFAULT_GROUP_NAME
 
@@ -325,3 +361,13 @@ def _host_group_declared_in_inventory(hosts:dict, input_context:InputContext) ->
 def terminate_script(message: str = None):
     logger.error(message)
     sys.exit(message)
+
+def get_listener_details(listener):
+    """
+    Extract scheme, port and host from listener
+    """
+    listener_details = listener.split(':')
+    if len(listener_details) != 3:
+        logger.warning("Can not get listener scheme, port and host")
+
+    return {'scheme':listener_details[0].lower(), 'host':listener_details[1][2:], 'port': listener_details[2]}
