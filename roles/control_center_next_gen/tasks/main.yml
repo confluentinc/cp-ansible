@@ -171,15 +171,27 @@
   tags:
     - configuration
 
-- name: Copy Prometheus (Control Center Dependency) `web-config-prom.yml` configuration from archive/rpm file to system
-  copy:
-    src: "{{control_center_dependency_web_config_prom_src_config_file}}"
-    remote_src: true
+#- name: Copy Prometheus (Control Center Dependency) `web-config-prom.yml` configuration from archive/rpm file to system
+#  copy:
+#    src: "{{control_center_dependency_web_config_prom_src_config_file}}"
+#    remote_src: true
+#    dest: "{{control_center_next_gen_dep_prometheus.web_config_file}}"
+#    mode: '644'
+#    force: true
+#    # todo/abh uncomment back when done complete testing
+#  #  when: prometheus_control_center_dependency_dst_config_file_stat.stat.exists == false
+#  tags:
+#    - configuration
+
+- name: Create Prometheus (Control Center Dependency) `web-config-prom.yml` configuration
+  template:
+    src: prometheus_web_config.yml.j2
     dest: "{{control_center_next_gen_dep_prometheus.web_config_file}}"
-    mode: '644'
-    force: true
-    # todo/abh uncomment back when done complete testing
-  #  when: prometheus_control_center_dependency_dst_config_file_stat.stat.exists == false
+    mode: '640'
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+  notify: restart control center next gen
+#  when: control_center_next_gen_authentication_type == 'basic'
   tags:
     - configuration
 
@@ -286,6 +298,17 @@
     ( 'kafka_connect' in groups and kafka_connect_ssl_enabled|bool ) or
     ( 'ksql' in groups and ksql_ssl_enabled|bool )
   tags: ssl
+
+- include_role:
+    name: ssl
+  vars:
+    service_name: control_center_next_gen_prometheus
+    user: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
+    ca_cert_path: "{{control_center_next_gen_dependency_prometheus_ca_cert_path}}"
+    cert_path: "{{control_center_next_gen_dependency_prometheus_cert_path}}"
+    key_path: "{{control_center_next_gen_dependency_prometheus_key_path}}"
 
 - name: Configure Kerberos
   include_role:

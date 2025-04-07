@@ -30,7 +30,8 @@ class FilterModule(object):
             'client_properties': self.client_properties,
             'c3_connect_properties': self.c3_connect_properties,
             'c3_ksql_properties': self.c3_ksql_properties,
-            'resolve_principal': self.resolve_principal
+            'resolve_principal': self.resolve_principal,
+            'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
         }
 
     def normalize_sasl_protocol(self, protocols):
@@ -521,3 +522,12 @@ class FilterModule(object):
                 # Remaining rules in the list are ignored when match is found
                 break
         return principal_mapping_value
+
+    def c3_generate_salt_and_hash(self, users_dict):
+        import getpass
+        import bcrypt
+        username_with_hashed_passwords = {}
+        for user in users_dict:
+            if users_dict[user].get('principal') and users_dict[user].get('password'):
+                username_with_hashed_passwords[users_dict['principal']] = bcrypt.hashpw(users_dict[user].get('password').encode("utf-8"), bcrypt.gensalt())
+        return username_with_hashed_passwords
