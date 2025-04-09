@@ -222,17 +222,29 @@
   tags:
     - configuration
 
-- name: Copy AlertManager (Control Center Dependency) `web-config-am.yml` configuration from archive/rpm file to system
-  copy:
-    src: "{{control_center_dependency_web_config_am_src_config_file}}"
-    remote_src: true
+- name: Create Prometheus (Control Center Dependency) `web-config-am.yml` configuration
+  template:
+    src: alertmanager_web_config.yml.j2
     dest: "{{control_center_next_gen_dep_alertmanager.web_config_file}}"
-    mode: '644'
-    force: true
-    # todo/abh uncomment back when done complete testing
-  #  when: alertmanager_control_center_dependency_dst_config_file_stat.stat.exists == false
+    mode: '640'
+    owner: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+  notify: restart control center next gen
+  #  when: control_center_next_gen_authentication_type == 'basic'
   tags:
     - configuration
+
+#- name: Copy AlertManager (Control Center Dependency) `web-config-am.yml` configuration from archive/rpm file to system
+#  copy:
+#    src: "{{control_center_dependency_web_config_am_src_config_file}}"
+#    remote_src: true
+#    dest: "{{control_center_next_gen_dep_alertmanager.web_config_file}}"
+#    mode: '644'
+#    force: true
+#    # todo/abh uncomment back when done complete testing
+#  #  when: alertmanager_control_center_dependency_dst_config_file_stat.stat.exists == false
+#  tags:
+#    - configuration
 
 # Archive File deployments need to create SystemD service units
 # Copy the tarball's systemd service to the system
@@ -314,6 +326,23 @@
     ca_cert_path: "{{control_center_next_gen_dependency_prometheus_ca_cert_path}}"
     cert_path: "{{control_center_next_gen_dependency_prometheus_cert_path}}"
     key_path: "{{control_center_next_gen_dependency_prometheus_key_path}}"
+    export_certs: "true"
+
+- include_role:
+    name: ssl
+  vars:
+    truststore_storepass: "{{control_center_next_gen_dependency_alertmanager_truststore_storepass}}"
+    truststore_path: "{{control_center_next_gen_dependency_alertmanager_truststore_path}}"
+    keystore_path: "{{control_center_next_gen_dependency_alertmanager_keystore_path}}"
+    keystore_storepass: "{{control_center_next_gen_dependency_alertmanager_keystore_storepass}}"
+    keystore_keypass: "{{control_center_next_gen_dependency_alertmanager_keystore_keypass}}"
+    service_name: "{{control_center_next_gen_dependency_alertmanager_service_name}}"
+    user: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
+    ca_cert_path: "{{control_center_next_gen_dependency_alertmanager_ca_cert_path}}"
+    cert_path: "{{control_center_next_gen_dependency_alertmanager_cert_path}}"
+    key_path: "{{control_center_next_gen_dependency_alertmanager_key_path}}"
     export_certs: "true"
 
 - name: Configure Kerberos
