@@ -106,7 +106,7 @@ Validates that FIPS is in use in OpenSSL.
 
 #### Scenario archive-plain-ubuntu test's the following:
 
-Archive Installation of Confluent Platform on Ubuntu2204.
+Archive Installation of Confluent Platform on Ubuntu2404.
 
 SASL Plain protocol.
 
@@ -626,7 +626,7 @@ Validates that Java 11 is in use.
 
 #### Scenario mtls-ubuntu test's the following:
 
-Installation of Confluent Platform on Ubuntu2204.
+Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
 
@@ -1118,7 +1118,7 @@ Validates client packages.
 
 #### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu test's the following:
 
-Installation of Confluent Platform on Ubuntu2204.
+Installation of Confluent Platform on Ubuntu2404.
 
 RBAC Enabled.
 
@@ -1314,7 +1314,7 @@ Validates that FIPS is in use on both clusters.
 
 #### Scenario rbac-mds-mtls-existing-keystore-truststore-ubuntu test's the following:
 
-Installs Confluent Platform Cluster on Ubuntu2204.
+Installs Confluent Platform Cluster on Ubuntu2404.
 
 RBAC enabled.
 
@@ -1627,4 +1627,3 @@ Validates that other components are using SCRAM for auth.
 Validates that Secrets protection is applied to the correct properties.
 
 ***
-
