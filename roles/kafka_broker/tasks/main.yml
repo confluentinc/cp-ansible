@@ -15,6 +15,15 @@
     - ansible_fqdn
     - ansible_distribution
 
+- name: Validate cert principals defined in inventory for RBAC mTLS setup
+  debug:
+    msg: "Warning: Please add list of broker and controller certificate principals in rbac_super_users variable"
+  when:
+    - rbac_enabled|bool
+    - kraft_enabled|bool
+    - ssl_mutual_auth_enabled|bool
+    - rbac_super_users | length == 0
+
 # datadir is no longer supported method to provide data directories for kafka brokers
 - name: Assert that datadir is not present in the inventory
   assert:
@@ -297,6 +306,12 @@
   tags:
     - filesystem
 
+- name: Check Green/Brownfield setup
+  set_fact:
+    is_brownfield_setup: "{{ broker_service_state == 'running' }}"
+  vars:
+    broker_service_state: "{{ ansible_facts.services[kafka_broker_service_name + '.service'].state | default('unknown') }}"
+
 - name: Set Permissions on Data Dir files  # noqa no-free-form
   # Have to use command + chown instead of the Ansible file module here as it seems
   # like the file module can't handle files modified/deleted while running. This task
@@ -304,6 +319,7 @@
   command: chown -R {{ kafka_broker_user }}:{{ kafka_broker_group }} {{ item }}
   changed_when: false
   with_items: "{{ kafka_broker_final_properties['log.dirs'].split(',') }}"
+  when: not is_brownfield_setup # Skips this task during upgrades as the user/group is already set in the initial setup run. This will avoid the race condition caused by sudden deletion of .tmp files in data dir.
   tags:
     - filesystem
 
@@ -471,7 +487,7 @@
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
     state: directory
-    mode: '640'
+    mode: '750'
   tags:
     - systemd
     - privileged
@@ -539,7 +555,8 @@
   when:
     - kafka_controller_secrets_protection_enabled|bool or kafka_controller_client_secrets_protection_enabled|bool
     - rbac_enabled|bool
-    - kafka_controller_ssl_mutual_auth_enabled|bool or ( not external_mds_enabled|bool and confluent_cli_version is version('3.0.0', '<'))
+    - (kafka_controller_ssl_mutual_auth_enabled|bool and rbac_super_users | length == 0)
+      or ( not external_mds_enabled|bool and confluent_cli_version is version('3.0.0', '<'))
     - kraft_enabled|bool
   run_once: true
 
