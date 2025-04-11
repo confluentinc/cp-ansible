@@ -33,8 +33,20 @@ class FilterModule(object):
             'c3_ksql_properties': self.c3_ksql_properties,
             'resolve_principal': self.resolve_principal,
             'is_ipv6': self.is_ipv6,
-            'format_hostname': self.format_hostname
+            'format_hostname': self.format_hostname,
+            'resolve_and_format_hostname': self.resolve_and_format_hostname,
+            'resolve_and_format_hostnames': self.resolve_and_format_hostnames
         }
+
+    def resolve_and_format_hostname(self, hosts_hostvars_dict):
+        return self.format_hostname(self.resolve_hostname(hosts_hostvars_dict))
+
+    def resolve_and_format_hostnames(self, hosts, hostvars_dict):
+        hostnames = self.resolve_hostnames(hosts, hostvars_dict)
+        formatted_hostnames = []
+        for hostname in hostnames:
+            formatted_hostnames.append(self.format_hostname(hostname))
+        return formatted_hostnames
 
     def is_ipv6(self, address):
         try:
@@ -416,7 +428,7 @@ class FilterModule(object):
                     else:
                         protocol = 'http'
                     urls.append(protocol + '://' +
-                                self.format_hostname(self.resolve_hostname(hostvars[host])) +
+                                self.resolve_and_format_hostname(hostvars[host]) +
                                 ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
 
                 final_dict['confluent.controlcenter.connect.' + group_id + '.cluster'] = ','.join(urls)
@@ -454,16 +466,16 @@ class FilterModule(object):
                 urls = []
                 advertised_urls = []
                 for host in groups[ansible_group]:
-                    formatted_hostname = self.format_hostname(self.resolve_hostname(hostvars[host]))
                     if hostvars[host].get('ksql_ssl_enabled', ssl_enabled):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + formatted_hostname +
+                    urls.append(protocol + '://' + self.resolve_and_format_hostname(hostvars[host]) +
                                 ':' + str(hostvars[host].get('ksql_listener_port', port)))
                     advertised_urls.append(
                         protocol + '://' +
-                        hostvars[host].get('ksql_advertised_listener_hostname', formatted_hostname) +
+                        hostvars[host].get('ksql_advertised_listener_hostname',
+                                           self.resolve_and_format_hostname(hostvars[host])) +
                         ':' + str(hostvars[host].get('ksql_listener_port', port))
                     )
 
