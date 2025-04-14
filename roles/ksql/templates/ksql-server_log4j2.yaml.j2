@@ -1,0 +1,181 @@
+Configuration:
+  status: info
+  name: KSQLConfig
+  Properties:
+    Property:
+      - name: ksql.log.pattern
+        value: "[%d] %p %m (%c:%L)%n"
+      - name: ksql.log.dir
+        value: "${env:KSQL_LOG_DIR:-/var/log/confluent/ksql}"
+
+  Appenders:
+    Console:
+      name: stdout
+      target: SYSTEM_OUT
+      PatternLayout:
+        pattern: ${ksql.log.pattern}
+
+    RollingFile:
+      - name: main
+        fileName: ${ksql.log.dir}/ksql.log
+        filePattern: ${ksql.log.dir}/ksql.log.%i
+        PatternLayout:
+          pattern: ${ksql.log.pattern}
+        Policies:
+          SizeBasedTriggeringPolicy:
+            size: {{ksql_log_file_size}}
+        DefaultRolloverStrategy:
+          max: {{ksql_max_log_files}}
+
+      - name: streams
+        fileName: ${ksql.log.dir}/ksql-streams.log
+        filePattern: ${ksql.log.dir}/ksql-streams.log.%i
+        PatternLayout:
+          pattern: ${ksql.log.pattern}
+        Policies:
+          SizeBasedTriggeringPolicy:
+            size: {{ksql_log_file_size}}
+        DefaultRolloverStrategy:
+          max: {{ksql_max_log_files}}
+
+      - name: kafka
+        fileName: ${ksql.log.dir}/ksql-kafka.log
+        filePattern: ${ksql.log.dir}/ksql-kafka.log.%i
+        PatternLayout:
+          pattern: ${ksql.log.pattern}
+        Policies:
+          SizeBasedTriggeringPolicy:
+            size: {{ksql_log_file_size}}
+        DefaultRolloverStrategy:
+          max: {{ksql_max_log_files}}
+
+    {% if ksql_log_streaming_enabled | bool %}
+    Kafka:
+      name: kafka_appender
+      topic: {{ksql_service_id}}{{ksql_processing_log}}
+      syncSend: false
+      JsonLayout:
+        eventEol: true
+        compact: true
+        properties: true
+      Property:
+        - name: bootstrap.servers
+          value: {% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{{ host }}:{{kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['port']}}{% endfor %}
+
+        {% set listener = kafka_broker_listeners[ksql_processing_log_kafka_listener_name] %}
+        - name: security.protocol
+          value: {{listener | confluent.platform.kafka_protocol_defaults(sasl_protocol, ssl_enabled)}}
+
+        {% if listener['ssl_enabled'] | default(ssl_enabled) | bool %}
+        - name: ssl.truststore.location
+          value: {{ksql_truststore_path}}
+        - name: ssl.truststore.password
+          value: {{ksql_truststore_storepass}}
+        {% if listener['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool %}
+        - name: ssl.keystore.location
+          value: {{ksql_keystore_path}}
+        - name: ssl.keystore.password
+          value: {{ksql_keystore_keypass}}
+        - name: ssl.key.password
+          value: {{ksql_keystore_keypass}}
+        - name: ssl.keystore.type
+          value: JKS
+        {% endif %}
+        {% endif %}
+
+        {% if (listener['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'PLAIN' %}
+        - name: sasl.mechanism
+          value: PLAIN
+        - name: sasl.jaas.config
+          value: org.apache.kafka.common.security.plain.PlainLoginModule required username="{{sasl_plain_users_final.ksql.principal}}" password="{{sasl_plain_users_final.ksql.password}}";
+        {% endif %}
+
+        {% if (listener['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'SCRAM-SHA-512' %}
+        - name: sasl.mechanism
+          value: SCRAM-SHA-512
+        - name: sasl.jaas.config
+          value: org.apache.kafka.common.security.scram.ScramLoginModule required username="{{sasl_scram_users_final.ksql.principal}}" password="{{sasl_scram_users_final.ksql.password}}";
+        {% endif %}
+
+        {% if (listener['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'SCRAM-SHA-256' %}
+        - name: sasl.mechanism
+          value: SCRAM-SHA-256
+        - name: sasl.jaas.config
+          value: org.apache.kafka.common.security.scram.ScramLoginModule required username="{{sasl_scram256_users_final.ksql.principal}}" password="{{sasl_scram_users_final.ksql.password}}";
+        {% endif %}
+
+        {% if (listener['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'GSSAPI' %}
+        - name: sasl.mechanism
+          value: GSSAPI
+        - name: sasl.kerberos.service.name
+          value: {{kerberos_kafka_broker_primary}}
+        - name: sasl.jaas.config
+          value: com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab="{{ksql_keytab_path}}" principal="{{ksql_kerberos_principal | default('ksql')}}" serviceName="{{kerberos_kafka_broker_primary}}";
+        {% endif %}
+    {% endif %}
+
+  Loggers:
+    Logger:
+      - name: org.reflections
+        level: error
+        additivity: false
+        AppenderRef:
+          - ref: main
+
+      # Uncomment to stop KSQL from logging each request
+      #- name: io.confluent.ksql.rest.server.resources.KsqlResource
+      #  level: warn
+
+      # Uncomment to reduce KsqlConfig logging
+      #- name: io.confluent.ksql.util.KsqlConfig
+      #  level: warn
+
+      {% if ksql_log_streaming_enabled | bool %}
+      - name: processing
+        level: warn
+        additivity: false
+        AppenderRef:
+          - ref: kafka_appender
+      {% endif %}
+
+      - name: org.apache.kafka.streams
+        level: info
+        additivity: false
+        AppenderRef:
+          - ref: streams
+
+      - name: kafka
+        level: warn
+        additivity: false
+        AppenderRef:
+          - ref: kafka
+
+      - name: org.apache.zookeeper
+        level: warn
+        additivity: false
+        AppenderRef:
+          - ref: kafka
+
+      - name: org.apache.kafka
+        level: warn
+        additivity: false
+        AppenderRef:
+          - ref: kafka
+
+      - name: org.I0Itec.zkclient
+        level: warn
+        additivity: false
+        AppenderRef:
+          - ref: kafka
+
+      - name: io.confluent.rest-utils.requests
+        level: warn
+        additivity: false
+        AppenderRef:
+          - ref: main
+
+    Root:
+      level: ${env:KSQL_LOG_LEVEL:-info}
+      AppenderRef:
+        - ref: main
+        - ref: stdout
