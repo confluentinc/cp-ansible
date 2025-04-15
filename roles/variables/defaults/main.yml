@@ -10,6 +10,14 @@ confluent_package_debian_suffix: "{{ '=' + confluent_full_package_version if con
 confluent_common_repository_redhat_release_version: "{{ ansible_distribution_major_version if ansible_os_family == 'RedHat' else ''}}"
 confluent_common_repository_debian_release_version: "{{ansible_distribution_release if ansible_os_family == 'Debian' else ''}}"
 
+### Version of Confluent Control Center Next Gen to install
+confluent_control_center_next_gen_package_version: 2.0.0
+confluent_control_center_next_gen_full_package_version: "{{ confluent_control_center_next_gen_package_version + '-0.1.0' }}"
+confluent_control_center_next_gen_package_redhat_suffix: "{{ '-' + confluent_control_center_next_gen_full_package_version if confluent_control_center_next_gen_full_package_version != '' else ''}}"
+confluent_control_center_next_gen_package_debian_suffix: "{{ '=' + confluent_control_center_next_gen_full_package_version if confluent_control_center_next_gen_full_package_version != '' else ''}}"
+confluent_control_center_next_gen_repository_redhat_release_version: "{{ ansible_distribution_major_version if ansible_os_family == 'RedHat' else ''}}"
+confluent_control_center_next_gen_repository_debian_release_version: "{{ansible_distribution_release if ansible_os_family == 'Debian' else ''}}"
+
 # Deprecated, see mask_sensitive_logs
 mask_secrets: true
 
@@ -158,12 +166,15 @@ ksql_health_checks_enabled: "{{health_checks_enabled}}"
 ### Boolean to enable health checks on Control Center
 control_center_health_checks_enabled: "{{health_checks_enabled}}"
 
+### Boolean to enable health checks on Control Center
+control_center_next_gen_health_checks_enabled: "{{health_checks_enabled}}"
+
 common_role_completed: false
 
 proxy_env: {}
 
 ### Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
-monitoring_interceptors_enabled: "{{ 'control_center' in groups }}"
+monitoring_interceptors_enabled: "{{ 'control_center' in groups or 'control_center_next_gen' in groups }}"
 
 ### The method of installation. Valid values are "package" or "archive". If "archive" is selected then services will not be installed via the use of yum or apt, but will instead be installed via expanding the target .tar.gz file from the Confluent archive into the path defined by `archive_destination_path`. Configuration files are also kept in this directory structure instead of `/etc`. SystemD service units are copied from the ardhive for each target service and overrides are created pointing at the new paths. The "package" installation method is the default behavior that utilizes yum/apt.
 installation_method: "package"
@@ -172,6 +183,8 @@ installation_method: "package"
 archive_destination_path: "/opt/confluent"
 
 archive_version: "{{confluent_package_version}}"
+
+confluent_control_center_next_gen_archive_version: "{{confluent_control_center_next_gen_package_version}}-0"
 
 ### Owner of the downloaded archive. Not mandatory to set.
 archive_owner: ""
@@ -561,7 +574,10 @@ kafka_controller_copy_files: []
 kafka_controller_default_internal_replication_factor: "{{ [ groups['kafka_controller'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ### Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
-kafka_controller_metrics_reporter_enabled: "{{ confluent_server_enabled and 'control_center' in groups }}"
+kafka_controller_metrics_reporter_enabled: "{{ confluent_server_enabled and ('control_center' in groups or 'control_center_next_gen' in groups) }}"
+
+### Boolean to enable the kafka's metrics reporter for Control Center Next Gen. Defaults to true if Control Center Next Gen in inventory.
+kafka_controller_metrics_reporter_for_control_center_next_gen_enabled: "{{ confluent_server_enabled and ('control_center_next_gen' in groups) }}"
 
 ### Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
 kafka_controller_custom_properties: {}
@@ -728,7 +744,7 @@ kafka_broker_copy_files: []
 kafka_broker_default_internal_replication_factor: "{{ [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
 
 ### Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
-kafka_broker_metrics_reporter_enabled: "{{ confluent_server_enabled and 'control_center' in groups }}"
+kafka_broker_metrics_reporter_enabled: "{{ confluent_server_enabled and ('control_center' in groups or 'control_center_next_gen' in groups) }}"
 
 ### Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 kafka_broker_custom_properties: {}
@@ -1327,6 +1343,103 @@ control_center_custom_properties: {}
 ### Boolean used for disabling of systemd service restarts when rootless install is executed
 control_center_skip_restarts: "{{ skip_restarts }}"
 
+# Control Center Next Gen Variables
+
+### Default Control Center config prefix. Only valid to customize when installation_method: archive
+control_center_next_gen_config_prefix: "{{ config_prefix }}/confluent-control-center"
+
+### Default Control Center's dependency (prometheus & alertmanager) config path
+control_center_next_gen_dependency_config_path: "/opt/confluent-control-center/dependencies"
+
+### Set this variable to customize the Linux User that the Control Center Service runs with. Default user is cp-control-center.
+control_center_next_gen_user: "{{control_center_default_user}}"
+
+### Set this variable to customize the Linux Group that the Control Center Service user belongs to. Default group is confluent.
+control_center_next_gen_group: "{{control_center_default_group}}"
+
+### Port Control Center Next Gen Exposed over
+control_center_next_gen_port: 9022
+
+### Interface on host for Control Center to listen on
+control_center_next_gen_listener_hostname: "0.0.0.0"
+
+### Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
+control_center_next_gen_ssl_enabled: "{{ssl_enabled}}"
+
+### Property of Control Center as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+control_center_next_gen_mds_cert_auth_only: false
+
+### Control Center Authentication. Available options: [basic, none].
+control_center_next_gen_authentication_type: none
+
+### Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
+control_center_next_gen_log_dir: "{{control_center_next_gen_default_log_dir}}"
+
+### Set this variable to customize the directory that Control Center writes data files to. Default location is /var/lib/confluent/control-center.
+control_center_next_gen_data_dir: "/var/lib/confluent/control-center"
+
+control_center_next_gen_packages:
+  - confluent-control-center-next-gen
+
+control_center_next_gen_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center.truststore.jks{% endif %}"
+control_center_next_gen_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center.keystore.jks{% endif %}"
+control_center_next_gen_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+control_center_next_gen_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+control_center_next_gen_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_next_gen_keystore_storepass }}"
+control_center_next_gen_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+control_center_next_gen_cert_path: "{{ ssl_file_dir_final }}/control_center.crt"
+control_center_next_gen_key_path: "{{ ssl_file_dir_final }}/control_center.key"
+control_center_next_gen_export_certs: "{{ssl_mutual_auth_enabled}}"
+control_center_next_gen_keytab_path: /etc/security/keytabs/control_center.keytab
+control_center_next_gen_kafka_listener_name: internal
+
+control_center_next_gen_dependency_prometheus_schema: "{{ 'https' if control_center_next_gen_dependency_prometheus_ssl_enabled|bool else 'http' }}"
+control_center_next_gen_dependency_prometheus_host: "{{ (groups.get('control_center_next_gen') if groups.get('control_center_next_gen') else ['localhost']) | confluent.platform.resolve_hostnames(hostvars) | first }}"
+control_center_next_gen_dependency_prometheus_port: 9090
+control_center_next_gen_dependency_prometheus_url: "{{control_center_next_gen_dependency_prometheus_schema}}://{{control_center_next_gen_dependency_prometheus_host}}:{{control_center_next_gen_dependency_prometheus_port}}"
+control_center_next_gen_dependency_prometheus_ssl_enabled: true
+control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+control_center_next_gen_dependency_prometheus_mtls_enabled: true
+control_center_next_gen_dependency_prometheus_service_name: control-center-next-gen
+control_center_next_gen_dependency_prometheus_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center_next_gen_dependency_prometheus.truststore.jks{% endif %}"
+control_center_next_gen_dependency_prometheus_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center_next_gen_dependency_prometheus.keystore.jks{% endif %}"
+control_center_next_gen_dependency_prometheus_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+control_center_next_gen_dependency_prometheus_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+control_center_next_gen_dependency_prometheus_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_next_gen_keystore_storepass }}"
+control_center_next_gen_dependency_prometheus_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+control_center_next_gen_dependency_prometheus_cert_path: "{{ ssl_file_dir_final }}/control_center_dependency_prometheus.crt"
+control_center_next_gen_dependency_prometheus_key_path: "{{ ssl_file_dir_final }}/control_center_dependency_prometheus.key"
+
+control_center_next_gen_dependency_alertmanager_schema: "{{ 'https' if control_center_next_gen_dependency_alertmanager_ssl_enabled|bool else 'http' }}"
+control_center_next_gen_dependency_alertmanager_host: "{{ (groups.get('control_center_next_gen') if groups.get('control_center_next_gen') else ['localhost']) | confluent.platform.resolve_hostnames(hostvars) | first }}"
+control_center_next_gen_dependency_alertmanager_port: 9093
+control_center_next_gen_dependency_alertmanager_url: "{{control_center_next_gen_dependency_alertmanager_schema}}://{{control_center_next_gen_dependency_alertmanager_host}}:{{control_center_next_gen_dependency_alertmanager_port}}"
+control_center_next_gen_dependency_alertmanager_ssl_enabled: true
+control_center_next_gen_dependency_alertmanager_basic_auth_enabled: true
+control_center_next_gen_dependency_alertmanager_mtls_enabled: true
+control_center_next_gen_dependency_alertmanager_service_name: control-center-next-gen
+control_center_next_gen_dependency_alertmanager_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center_next_gen_dependency_alertmanager.truststore.jks{% endif %}"
+control_center_next_gen_dependency_alertmanager_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center_next_gen_dependency_alertmanager.keystore.jks{% endif %}"
+control_center_next_gen_dependency_alertmanager_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+control_center_next_gen_dependency_alertmanager_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+control_center_next_gen_dependency_alertmanager_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_next_gen_keystore_storepass }}"
+control_center_next_gen_dependency_alertmanager_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+control_center_next_gen_dependency_alertmanager_cert_path: "{{ ssl_file_dir_final }}/control_center_dependency_alertmanager.crt"
+control_center_next_gen_dependency_alertmanager_key_path: "{{ ssl_file_dir_final }}/control_center_dependency_alertmanager.key"
+
+### Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
+control_center_next_gen_copy_files: []
+
+### Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
+control_center_next_gen_default_internal_replication_factor: "{{ 3 if ccloud_kafka_enabled|bool else
+  [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
+
+### Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
+control_center_next_gen_custom_properties: {}
+
+### Boolean used for disabling of systemd service restarts when rootless install is executed
+control_center_next_gen_skip_restarts: "{{ skip_restarts }}"
+
 # Hash merging not working with new approach
 _sasl_scram_users: "{
   'admin': {
@@ -1354,6 +1467,10 @@ _sasl_scram_users: "{
     'password': 'ksql-secret'
   }{% endif %}{% if 'control_center' in groups %},
   'control_center': {
+    'principal': 'control_center',
+    'password': 'control_center-secret'
+  }{% endif %}{% if 'control_center_next_gen' in groups %},
+  'control_center_next_gen': {
     'principal': 'control_center',
     'password': 'control_center-secret'
   }{% endif %}{% if 'kafka_connect_replicator' in groups %},
@@ -1397,6 +1514,10 @@ _sasl_scram256_users: "{
   'control_center': {
     'principal': 'control_center',
     'password': 'control_center-secret'
+  }{% endif %}{% if 'control_center_next_gen' in groups %},
+  'control_center_next_gen': {
+    'principal': 'control_center',
+    'password': 'control_center-secret'
   }{% endif %}{% if 'kafka_connect_replicator' in groups %},
   'kafka_connect_replicator': {
     'principal': 'kafka_connect_replicator',
@@ -1436,6 +1557,10 @@ _sasl_plain_users: "{
     'password': '{% if ccloud_kafka_enabled|bool %}{{ccloud_kafka_secret}}{% else %}ksql-secret{% endif %}'
   }{% endif %}{% if 'control_center' in groups %},
   'control_center': {
+    'principal': '{% if ccloud_kafka_enabled|bool %}{{ccloud_kafka_key}}{% else %}control_center{% endif %}',
+    'password': '{% if ccloud_kafka_enabled|bool %}{{ccloud_kafka_secret}}{% else %}control_center-secret{% endif %}'
+  }{% endif %}{% if 'control_center_next_gen' in groups %},
+  'control_center_next_gen': {
     'principal': '{% if ccloud_kafka_enabled|bool %}{{ccloud_kafka_key}}{% else %}control_center{% endif %}',
     'password': '{% if ccloud_kafka_enabled|bool %}{{ccloud_kafka_secret}}{% else %}control_center-secret{% endif %}'
   }{% endif %}{% if 'kafka_connect_replicator' in groups %},
@@ -1500,6 +1625,22 @@ control_center_basic_users:
     principal: admin
     password: admin-secret
     roles: admin
+
+control_center_next_gen_basic_users:
+  admin:
+    principal: admin
+    password: admin-secret
+    roles: admin
+
+control_center_next_gen_dependency_prometheus_basic_users:
+  admin:
+    principal: admin-pm
+    password: admin-pm-secret
+
+control_center_next_gen_dependency_alertmanager_basic_users:
+  admin:
+    principal: admin-am
+    password: admin-am-secret
 
 ### Boolean to configure Confluent Platform with RBAC enabled. Creates Rolebindings for all components to function
 rbac_enabled: false
@@ -1717,6 +1858,21 @@ control_center_oauth_password: password
 
 ### Service principal for Control Center client in IdPserver. Defaults to Control Center Client Id
 control_center_oauth_principal: "{{ control_center_oauth_user }}"
+
+### LDAP User for Control Center (Next Gen) to authenticate as
+control_center_next_gen_ldap_user: control-center
+
+### Password to control_center_next_gen_ldap_user LDAP User
+control_center_next_gen_ldap_password: password
+
+### OAuth Client Id for Control Center (Next Gen) to authenticate as
+control_center_next_gen_oauth_user: control-center
+
+### Client Secret for control_center_next_gen_oauth_user
+control_center_next_gen_oauth_password: password
+
+### Service principal for Control Center (Next Gen) client in IdPserver. Defaults to Control Center Client Id
+control_center_next_gen_oauth_principal: "{{ control_center_next_gen_oauth_user }}"
 
 ### LDAP User for Confluent Replicator to authenticate as
 kafka_connect_replicator_ldap_user: replicator
@@ -1952,6 +2108,12 @@ kafka_broker_telemetry_enabled: "{{telemetry_enabled}}"
 ### Boolean to send cp-ansible Telemetry Metrics from Kafka. Currently only sends cp-ansible version data
 kafka_broker_telemetry_ansible_labels_enabled: "{{kafka_broker_telemetry_enabled}}"
 
+### user used to send telemetry data from Kafka to Control Center Next Gen
+kafka_broker_telemetry_control_center_next_gen_user: "{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}"
+
+### Password for the user used to send telemetry data from Kafka to Control Center Next Gen
+kafka_broker_telemetry_control_center_next_gen_password: "{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}"
+
 ### Boolean to configure Telemetry on Schema Registry. Must also set telemetry_api_key and telemetry_api_secret
 schema_registry_telemetry_enabled: "{{telemetry_enabled}}"
 
@@ -1982,6 +2144,11 @@ control_center_telemetry_enabled: "{{telemetry_enabled}}"
 ### Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
 control_center_telemetry_ansible_labels_enabled: "{{control_center_telemetry_enabled}}"
 
+### Boolean to configure Telemetry on Control Center. Must also set telemetry_api_key and telemetry_api_secret
+control_center_next_gen_telemetry_enabled: "{{telemetry_enabled}}"
+
+### Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
+control_center_next_gen_telemetry_ansible_labels_enabled: "{{control_center_next_gen_telemetry_enabled}}"
 
 ### Boolean to configure Kafka to set Audit Logs on an external Kafka Cluster. Must also include audit_logs_destination_bootstrap_servers and audit_logs_destination_listener.
 audit_logs_destination_enabled: false
@@ -2053,6 +2220,11 @@ control_center_health_check_user: "{{ control_center_basic_users.admin.principal
 ### Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
 control_center_health_check_password: "{{ control_center_basic_users.admin.password }}"
 
+### User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
+control_center_next_gen_health_check_user: "{{ control_center_next_gen_basic_users.admin.principal }}"
+
+### Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
+control_center_next_gen_health_check_password: "{{ control_center_next_gen_basic_users.admin.password }}"
 
 # Kafka Connect Replicator Variables
 
@@ -2613,6 +2785,9 @@ ksql_deployment_strategy: "{{deployment_strategy}}"
 ### Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 control_center_deployment_strategy: "{{deployment_strategy}}"
 
+### Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+control_center_next_gen_deployment_strategy: "{{deployment_strategy}}"
+
 ### Kafka Connect Replicator reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
 kafka_connect_replicator_deployment_strategy: "{{deployment_strategy}}"
 
@@ -2643,8 +2818,23 @@ ksql_pause_rolling_deployment: "{{pause_rolling_deployment}}"
 ### Boolean to Pause Rolling Deployment after each Control Center Node starts up.
 control_center_pause_rolling_deployment: "{{pause_rolling_deployment}}"
 
+### Boolean to Pause Rolling Deployment after each Control Center Node starts up.
+control_center_next_gen_pause_rolling_deployment: "{{pause_rolling_deployment}}"
+
 ### Boolean to Pause Rolling Deployment after each Kafka Connect Replicator Node starts up.
 kafka_connect_replicator_pause_rolling_deployment: "{{pause_rolling_deployment}}"
+
+### user for the user used to do healthcheck on Control Center Next Gen (prometheus)
+control_center_next_gen_dependency_prometheus_health_check_user: "{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}"
+
+### Password for the user used to do healthcheck on Control Center Next Gen (prometheus)
+control_center_next_gen_dependency_prometheus_health_check_password: "{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}"
+
+### user for the user used to do healthcheck on Control Center Next Gen (prometheus)
+control_center_next_gen_dependency_alertmanager_health_check_user: "{{control_center_next_gen_dependency_alertmanager_basic_users.admin.principal}}"
+
+### Password for the user used to do healthcheck on Control Center Next Gen (prometheus)
+control_center_next_gen_dependency_alertmanager_health_check_password: "{{control_center_next_gen_dependency_alertmanager_basic_users.admin.password}}"
 
 
 ### Boolean to configure component to Confluent Cloud Kafka. Must also set ccloud_kafka_bootstrap_servers, ccloud_kafka_key, and ccloud_kafka_secret. zookeeper and kafka_broker groups should not be in inventory.

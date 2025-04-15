@@ -1,0 +1,29 @@
+---
+- name: Read base Prometheus configuration
+  slurp:
+    path: "{{ control_center_next_gen_dep_prometheus.config_file }}"
+  register: base_prometheus_config
+
+- name: Read custom overlay configuration
+  slurp:
+    path: "{{ control_center_next_gen_dependency_prometheus_custom_overlay_path }}"
+  register: custom_prometheus_config
+  when: control_center_next_gen_dependency_prometheus_custom_overlay_path is defined
+  ignore_errors: yes  # In case overlay doesn't exist
+
+- name: Merge Prometheus configurations
+  set_fact:
+    merged_prometheus_config: "{{ (base_prometheus_config.content | b64decode | from_yaml) | 
+                                 combine((custom_prometheus_config.content | b64decode | from_yaml), 
+                                 recursive=True) }}"
+  when: custom_prometheus_config is defined and custom_prometheus_config.content is defined
+
+- name: Write merged configuration
+  copy:
+    content: "{{ merged_prometheus_config | to_nice_yaml }}"
+    dest: "{{ control_center_next_gen_dep_prometheus.config_file }}"
+    mode: '644'
+    owner: "{{ control_center_next_gen_user }}"
+    group: "{{ control_center_next_gen_group }}"
+  when: merged_prometheus_config is defined
+  notify: restart control center next gen
