@@ -65,6 +65,21 @@
   when: not rbac_enabled|bool
   ignore_errors: true
 
+- name: Wait for Control Center Feature Flags Health Check
+  uri:
+    url: "{{control_center_next_gen_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{control_center_next_gen_port}}/2.0/feature/flags"
+    method: GET  # Explicitly set the method (usually GET by default, but good to be explicit)
+    validate_certs: false  #  Set this appropriately!
+    timeout: 5
+  register: control_center_feature_flags_check
+  # Wait until the status is 200 and the JSON content contains the flag
+  until:
+    - control_center_feature_flags_check.status == 200
+    - '"confluent.controlcenter.prometheus.enable": true' in control_center_feature_flags_check.content
+  retries: 40
+  delay: 10
+  ignore_errors: true
+
 - name: Fetch Log Files and Error out
   block:
     - name: Fetch Files for Debugging Failure
