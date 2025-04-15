@@ -760,6 +760,34 @@ Validated ACL creation.
 
 ***
 
+### molecule/oauth-plain-debian12
+
+#### Scenario oauth-plain-debian12 test's the following:
+
+Installation of Confluent Platform on Debian12.
+
+SASL Plain enabled.
+
+Control Plane listener enabled.
+
+Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
+
+Custom Service Unit overrides.
+
+Custom log4j appender names.
+
+#### Scenario oauth-plain-debian12 verify test's the following:
+
+Validates that custom log4j appenders are present on each component.
+
+Validates that Service Description has been overridden.
+
+Validates that SASL Plaintext protocol is set across components.
+
+Validates that Connectors are present on Kafka Connect.
+
+***
+
 ### molecule/oauth-plain-rhel
 
 #### Scenario oauth-plain-rhel test's the following:
