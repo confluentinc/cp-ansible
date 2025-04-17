@@ -1655,4 +1655,3 @@ Validates that other components are using SCRAM for auth.
 Validates that Secrets protection is applied to the correct properties.
 
 ***
-

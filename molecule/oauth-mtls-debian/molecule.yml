@@ -1,13 +1,34 @@
 ---
-### Archive installation of Confluent Platform on Debian 12.
-### SASL Protocol Plain.
-### SSL Enabled.
-### Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
-### Custom log dirs for all components.
+### Installation of Confluent Platform on Debian10.
+### MTLS enabled.
+### Java 11.
 
 driver:
   name: docker
 platforms:
+  - name: oauth1
+    hostname: oauth1.confluent
+    groups:
+      - oauth_server
+    image: quay.io/keycloak/keycloak:latest
+    env:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: oauth1
+      KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
+      KEYCLOAK_HTTP_PORT: "8080"
+      KEYCLOAK_HTTPS_PORT: "8443"
+    dockerfile: ../Dockerfile-oauth.j2
+    published_ports:
+      - "8080:8080"
+      - "8443:8443"
+    command: start-dev
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
   - name: ${KRAFT_CONTROLLER:-zookeeper}1
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
@@ -23,6 +44,32 @@ platforms:
       - name: confluent
   - name: kafka-broker1
     hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - kafka_broker_migration
+    image: debian:12
+    dockerfile: ../Dockerfile-debian12.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker
+      - kafka_broker_migration
+    image: debian:12
+    dockerfile: ../Dockerfile-debian12.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
       - kafka_broker_migration
@@ -101,7 +148,7 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
-    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+      # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
   - name: controller1-mig
     hostname: controller1-mig.confluent
     groups:
@@ -120,20 +167,36 @@ provisioner:
   inventory:
     group_vars:
       all:
-        scenario_name: archive-plain-debian12
-        confluent_cli_download_enabled: true
-        confluent_cli_version: 3.2.1
-        sasl_protocol: plain
+        scenario_name: oauth-mtls-debian
         ssl_enabled: true
-        installation_method: "archive"
-        kafka_connect_confluent_hub_plugins:
-          - jcustenborder/kafka-connect-spooldir:2.0.43
+        ssl_mutual_auth_enabled: true
 
-        ${CONTROLLER_HOSTGROUP:-zookeeper}_log_dir: /${CONTROLLER_HOSTGROUP:-zookeeper}/logs
-        kafka_broker_log_dir: /kafka/logs/
-        schema_registry_log_dir: /sr/logs
-        kafka_rest_log_dir: /rp/logs
-        kafka_connect_log_dir: /connect/logs
-        ksql_log_dir: /ksql/logs/
-        control_center_log_dir: /c3/logs
-        custom_java_path: /opt/jdk17    # Use custom java 17
+        keycloak_oauth_server_port: 8443
+        keycloak_http_protocol: https
+
+        auth_mode: oauth
+        oauth_superuser_client_id: superuser
+        oauth_superuser_client_password: my-secret
+
+        oauth_sub_claim: client_id
+        oauth_groups_claim: groups
+        oauth_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
+        oauth_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
+        oauth_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
+        oauth_expected_audience: Confluent,account,api://default
+        oauth_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oauthcertfile.pem"
+
+        schema_registry_oauth_user: schema_registry
+        schema_registry_oauth_password: my-secret
+
+        kafka_rest_oauth_user: kafka_rest
+        kafka_rest_oauth_password: my-secret
+
+        kafka_connect_oauth_user: kafka_connect
+        kafka_connect_oauth_password: my-secret
+
+        control_center_oauth_user: control_center
+        control_center_oauth_password: my-secret
+
+        ksql_oauth_user: ksql
+        ksql_oauth_password: my-secret
