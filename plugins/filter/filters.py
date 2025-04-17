@@ -35,7 +35,8 @@ class FilterModule(object):
             'is_ipv6': self.is_ipv6,
             'format_hostname': self.format_hostname,
             'resolve_and_format_hostname': self.resolve_and_format_hostname,
-            'resolve_and_format_hostnames': self.resolve_and_format_hostnames
+            'resolve_and_format_hostnames': self.resolve_and_format_hostnames,
+            'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
@@ -554,3 +555,14 @@ class FilterModule(object):
                 # Remaining rules in the list are ignored when match is found
                 break
         return principal_mapping_value
+
+    def c3_generate_salt_and_hash(self, users_dict):
+        import getpass
+        import bcrypt
+        username_with_hashed_passwords = {}
+        for user in users_dict:
+            if users_dict[user].get('principal') and users_dict[user].get('password'):
+                username_with_hashed_passwords[users_dict[user]['principal']] = bcrypt.hashpw(
+                    users_dict[user].get('password').encode("utf-8"), bcrypt.gensalt()
+                )
+        return username_with_hashed_passwords
