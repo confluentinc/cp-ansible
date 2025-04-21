@@ -564,5 +564,5 @@ class FilterModule(object):
             if users_dict[user].get('principal') and users_dict[user].get('password'):
                 username_with_hashed_passwords[users_dict[user]['principal']] = bcrypt.hashpw(
                     users_dict[user].get('password').encode("utf-8"), bcrypt.gensalt()
-                )
+                ).decode()
         return username_with_hashed_passwords
