@@ -16,7 +16,7 @@ openssl req -new -x509 \
     -keyout $CA_KEY \
     -out $CA_CRT \
     -days 365 \
-    -subj '/CN=test.confluent.io/OU=TEST/O=CONFLUENT/L=MountainView/S=Ca/C=US' \
+    -subj '/CN=test.confluent.io/OU=TEST CONFLUENT/O=CONFLUENT/L=MountainView/S=Ca/C=US' \
     -passin pass:capassword \
     -passout pass:capassword
 
@@ -69,7 +69,7 @@ for line in `sed '/^$/d' $filename`; do
       keytool -genkeypair -noprompt \
           -keystore $KEYSTORE_FILENAME \
           -alias $alias \
-          -dname "CN=$service,OU=TEST,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US" \
+          -dname "CN=$service,OU=TEST CONFLUENT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US" \
           -ext $EXT \
           -keyalg RSA \
           -storetype $FORMAT \
