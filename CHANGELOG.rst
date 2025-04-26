@@ -37,7 +37,7 @@ v7.6.3
 Notable enhancements
 -------------
 
-- Updated default confluent cli version to 3.61.1
+- Updated default confluent cli version to 3.65.0
 
 Notable fixes
 -------------
