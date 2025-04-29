@@ -4,6 +4,23 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.7.3
+======
+
+Notable enhancements
+-------------
+
+- Introduced a new variable `rbac_super_users` to specify additional super users for the cluster
+- Removed Kraft controller and broker dependency on each other for fetching cert principals in RBAC enabled clusters with mTLS
+
+
+Notable fixes
+-------------
+
+- Bug fix in Set Permissions on Data Dir files task to avoid race condition
+- Changed systemd service override directory permissions from 640 to 750
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
 v7.7.2
 ======
 
