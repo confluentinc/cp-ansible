@@ -204,8 +204,14 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.ssl.keystore.password'] = str(kafka_broker_keystore_storepass)
                 final_dict['listener.name.' + listener_name + '.ssl.key.password'] = str(kafka_broker_keystore_keypass)
 
-                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = \
-                    listeners_dict[listener].get('ssl_client_authentication', default_ssl_client_authentication)
+                mtls_mode = listeners_dict[listener].get('ssl_client_authentication', default_ssl_client_authentication)
+                # check the new propery in listener, if it doesnt exist then check global value of new property for mtls
+                if mtls_mode == 'none':
+                # if still it is none then check for deprecated property inside listener,
+                # if that too is undefined then check global value of deprecated property.
+                # Since deprecated property is boolean convert it to required/none
+                    mtls_mode = 'required' if listeners_dict[listener].get('ssl_mutual_auth_enabled', default_ssl_enabled) else 'none'
+                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = mtls_mode
                 final_dict['listener.name.' + listener_name + '.ssl.principal.mapping.rules'] = \
                     ','.join(listeners_dict[listener].get('principal_mapping_rules', default_principal_mapping_rules))
 
