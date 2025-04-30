@@ -169,7 +169,6 @@
     truststore_path: "{{kafka_broker_pkcs12_truststore_path}}"
     bcfks_truststore_path: "{{kafka_broker_bcfks_truststore_path}}"
     create_bouncy_castle_keystore: "{{fips_enabled}}"
-  notify: restart kafka
   when:
     - oauth_enabled|bool or schema_registry_oauth_enabled|bool or kafka_rest_oauth_enabled|bool or kafka_connect_oauth_enabled|bool or kafka_connect_replicator_oauth_enabled|bool
     - oauth_idp_cert_path != ""
@@ -190,6 +189,27 @@
     - sso_mode != 'none'
     - sso_idp_cert_path != ""
     - not external_mds_enabled|bool
+
+- name: Trigger Restart on Kafka Broker after Adding Self Signed IDP Certs
+  ansible.builtin.debug:
+    msg: "trigger kafka broker restart"
+  notify: restart kafka
+  when:
+    - >
+      (
+        sso_mode != 'none' and
+        sso_idp_cert_path != "" and
+        not external_mds_enabled|bool
+      ) or (
+        (
+          oauth_enabled|bool or
+          schema_registry_oauth_enabled|bool or
+          kafka_rest_oauth_enabled|bool or
+          kafka_connect_oauth_enabled|bool or
+          kafka_connect_replicator_oauth_enabled|bool
+        ) and
+        oauth_idp_cert_path != ""
+      )
 
 - name: Configure Kerberos
   include_role:
