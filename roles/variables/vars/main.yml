@@ -620,9 +620,14 @@ kafka_broker_properties:
     properties:
       confluent.metadata.server.auth.ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
   rbac_mds_mtls_only:
-    enabled: "{{ rbac_enabled and not external_mds_enabled and mds_ssl_enabled|bool and auth_mode == 'mtls' }}"
+    enabled: "{{ rbac_enabled and not external_mds_enabled and mds_ssl_enabled|bool and auth_mode == 'mtls' and not mds_file_based_user_store_enabled|bool }}"
     properties:
       confluent.metadata.server.user.store: NONE
+  rbac_mds_file_store:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and mds_file_based_user_store_enabled|bool }}"
+    properties:
+      confluent.metadata.server.user.store: FILE
+      confluent.metadata.server.user.store.file.path: "{{ mds_file_based_user_store_dest_path }}"
   rbac_mds_client_authentication:
     enabled: "{{ rbac_enabled and not external_mds_enabled and mds_ssl_enabled|bool and mds_ssl_client_authentication != 'none' }}"
     properties:
@@ -1795,13 +1800,33 @@ control_center_properties:
     enabled: "{{kafka_broker_rest_proxy_enabled or rbac_enabled }}"
     properties:
       confluent.controlcenter.streams.cprest.url: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
-  kafka_client:
-    enabled: true
+  kafka_client_non_mtls:
+    enabled: "{{ auth_mode != 'mtls' }}" # ldap/oauth enabled, dont omit oauth configs, use control_center_ldap_user or control_center_oauth_user based on oauth_enabled
     properties: "{{ kafka_broker_listeners[control_center_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
                     'confluent.controlcenter.streams.', control_center_truststore_path, control_center_truststore_storepass, public_certificates_enabled, control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass,
                     false, sasl_plain_users_final.control_center.principal, sasl_plain_users_final.control_center.password, sasl_scram_users_final.control_center.principal, sasl_scram_users_final.control_center.password, sasl_scram256_users_final.control_center.principal, sasl_scram256_users_final.control_center.password,
                     kerberos_kafka_broker_primary, control_center_keytab_path, control_center_kerberos_principal|default('c3'),
                     false, control_center_ldap_user, control_center_ldap_password, mds_bootstrap_server_urls, oauth_enabled, control_center_oauth_user, control_center_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  kafka_client_mtls: # dont omit oauth configs, i.e use similar to ldap, use mds_file_based_control_center_user
+    enabled: "{{ auth_mode == 'mtls' and sso_mode == 'none' and mds_file_based_user_store_enabled|bool }}" # Todo: if sso and file based both enabled then should we allow it and prefer sso for c3 to kafka or not allow it via config validations
+    properties: "{{ kafka_broker_listeners[control_center_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
+                    'confluent.controlcenter.streams.', control_center_truststore_path, control_center_truststore_storepass, public_certificates_enabled, control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass,
+                    false, sasl_plain_users_final.control_center.principal, sasl_plain_users_final.control_center.password, sasl_scram_users_final.control_center.principal, sasl_scram_users_final.control_center.password, sasl_scram256_users_final.control_center.principal, sasl_scram256_users_final.control_center.password,
+                    kerberos_kafka_broker_primary, control_center_keytab_path, control_center_kerberos_principal|default('c3'),
+                    false, mds_file_based_control_center_user, mds_file_based_control_center_password, mds_bootstrap_server_urls, oauth_enabled, control_center_oauth_user, control_center_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  kafka_client_mtls_sso: # omit oauth configs as they are added via next kafka_client_mtls_sso_token_cert_lcbh section seperately
+    enabled: "{{ auth_mode == 'mtls' and sso_mode == 'oidc' }}"
+    properties: "{{ kafka_broker_listeners[control_center_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
+                    'confluent.controlcenter.streams.', control_center_truststore_path, control_center_truststore_storepass, public_certificates_enabled, control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass,
+                    false, sasl_plain_users_final.control_center.principal, sasl_plain_users_final.control_center.password, sasl_scram_users_final.control_center.principal, sasl_scram_users_final.control_center.password, sasl_scram256_users_final.control_center.principal, sasl_scram256_users_final.control_center.password,
+                    kerberos_kafka_broker_primary, control_center_keytab_path, control_center_kerberos_principal|default('c3'),
+                    true, control_center_ldap_user, control_center_ldap_password, mds_bootstrap_server_urls, oauth_enabled, control_center_oauth_user, control_center_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  kafka_client_mtls_sso_token_cert_lcbh: # no username/clientId needed as cert based handler different from the handlers in other cases which do need username/clientId
+    enabled: "{{ auth_mode == 'mtls' and sso_mode == 'oidc' }}"
+    properties:
+      confluent.controlcenter.streams.sasl.jaas.config: |-
+        org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required metadataServerUrls="{{ mds_bootstrap_server_urls }}";
+      confluent.controlcenter.streams.sasl.login.callback.handler.class: io.confluent.kafka.clients.plugins.auth.token.TokenCertificateLoginCallbackHandler
   kafka_interceptors:
     enabled: true
     properties: "{{ kafka_broker_listeners[control_center_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
