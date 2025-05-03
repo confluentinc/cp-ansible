@@ -33,11 +33,7 @@
 
     - import_role:
         name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /opt/confluent/etc/kafka/zookeeper-log4j.properties
-        property: log4j.rootLogger
-        expected_value: "INFO, zkAppender"
+        tasks_from: check_log4j.yml
 
 - name: Verify - kafka_controller
   hosts: kafka_controller
@@ -98,11 +94,7 @@
 
     - import_role:
         name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /opt/confluent/etc/kafka/log4j.properties
-        property: log4j.rootLogger
-        expected_value: "INFO, kafkaAppender"
+        tasks_from: check_log4j.yml
 
     - import_role:
         name: confluent.test
@@ -132,11 +124,7 @@
 
     - import_role:
         name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /opt/confluent/etc/schema-registry/log4j.properties
-        property: log4j.rootLogger
-        expected_value: "INFO, file"
+        tasks_from: check_log4j.yml
 
 - name: Verify - kafka_rest
   hosts: kafka_rest
@@ -158,11 +146,7 @@
 
     - import_role:
         name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /opt/confluent/etc/kafka-rest/log4j.properties
-        property: log4j.rootLogger
-        expected_value: "INFO, file"
+        tasks_from: check_log4j.yml
 
 - name: Verify - kafka_connect
   hosts: kafka_connect
@@ -191,199 +175,8 @@
       changed_when: false
 
     - import_role:
-        name: confluent.platform.common
-        tasks_from: get_authorization_token.yml
-      vars:
-        oauth: "{{ kafka_connect_oauth_enabled }}"
-        oauth_user: "{{ kafka_connect_oauth_user }}"
-        oauth_password: "{{ kafka_connect_oauth_password }}"
-        ldap_user: "{{ kafka_connect_ldap_user }}"
-        ldap_password: "{{ kafka_connect_ldap_password }}"
-        cert_auth_only_enabled: false
-
-    - name: Get Connectors on connect cluster1
-      uri:
-        url: "https://kafka-connect1:8083/connectors"
-        status_code: 200
-        validate_certs: false
-        headers:
-          Authorization: "Bearer {{ authorization_token }}"
-      register: connectors
-
-    - name: Assert Connector Created
-      assert:
-        that:
-          - connectors.json[0] == "sample-connector-1"
-        fail_msg: "Connector not created"
-        quiet: true
-
-    - import_role:
         name: variables
 
-    - name: Test data
-      set_fact:
-        kafka_connect_url: "{{kafka_connect_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_connect_rest_port}}/connectors"
-        reset_all_connectors: []
-
-        add_new_connector:
-          - name: test-connector-1
-            config:
-              connector.class: "FileStreamSinkConnector"
-              tasks.max: "1"
-              file: "/opt/confluent/etc/kafka/connect-distributed.properties"
-              topics: "test_topic"
-
-        update_existing_connector:
-          - name: test-connector-1
-            config:
-              connector.class: "FileStreamSinkConnector"
-              tasks.max: "5"
-              file: "/opt/confluent/etc/kafka/connect-distributed.properties"
-              topics: "test_topic"
-
-        add_bad_request_connector:
-          - name: test-connector-1
-            config:
-              connector.class: "FileStreamSinkConnector"
-              tasks.max: "5"
-              file: "/opt/confluent/etc/kafka/connect-distributed.properties"
-              topics: "test_topic"
-          - name: test-connector-2
-            config:
-              connector.class: "org.apache.kafka.connect.mirror.MirrorHeartbeatConnector"
-              tasks.max: "1"
-              file: "/opt/confluent/etc/kafka/connect-distributed.properties"
-              topics: "foo"
-
-        add_non_existent_connector:
-          - name: test-connector-1
-            config:
-              connector.class: "FileStreamSinkConnector"
-              tasks.max: "5"
-              file: "/opt/confluent/etc/kafka/connect-distributed.properties"
-              topics: "test_topic"
-          - name: test-connector-2
-            config:
-              connector.class: "io.confluent.connect.jdbc.JdbcSinkConnector"
-              tasks.max: "1"
-              topics: "foo"
-
-        delete_connector:
-          - name: test-connector-2
-            config:
-              connector.class: "FileStreamSinkConnector"
-              tasks.max: "1"
-              topics: "bar"
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_connector.yml
-      vars:
-        connect_url_input: "{{ kafka_connect_url }}"
-        active_connectors_input: "{{ reset_all_connectors }}"
-        expected_message: ""
-        token: "{{ authorization_token }}"
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_connector.yml
-      vars:
-        connect_url_input: "{{ kafka_connect_url }}"
-        active_connectors_input: "{{ add_new_connector }}"
-        expected_message: "Connectors added or updated: test-connector-1: new connector added."
-        token: "{{ authorization_token }}"
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_connector.yml
-      vars:
-        connect_url_input: "{{ kafka_connect_url }}"
-        active_connectors_input: "{{ update_existing_connector }}"
-        expected_message: "Connectors added or updated: test-connector-1: connector configuration updated."
-        token: "{{ authorization_token }}"
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_connector.yml
-      vars:
-        connect_url_input: "{{ kafka_connect_url }}"
-        active_connectors_input: "{{ add_bad_request_connector }}"
-        expected_message: "Connectors added or updated: test-connector-1: no configuration change, test-connector-2: ERROR error while adding new connector configuration (HTTP Error 400: Bad Request)."
-        token: "{{ authorization_token }}"
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_connector.yml
-      vars:
-        connect_url_input: "{{ kafka_connect_url }}"
-        active_connectors_input: "{{ add_non_existent_connector }}"
-        expected_message: "Connectors added or updated: test-connector-1: no configuration change, test-connector-2: ERROR error while adding new connector configuration (HTTP Error 500: Internal Server Error)."
-        token: "{{ authorization_token }}"
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_connector.yml
-      vars:
-        connect_url_input: "{{ kafka_connect_url }}"
-        active_connectors_input: "{{ delete_connector }}"
-        expected_message: "Connectors removed: test-connector-1. Connectors added or updated: test-connector-2: new connector added."
-        token: "{{ authorization_token }}"
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /opt/confluent/etc/kafka/connect-log4j.properties
-        property: log4j.rootLogger
-        expected_value: "INFO, connectAppender"
-
-    - name: Get stats on installed remote plugin
-      stat:
-        path: /usr/share/java/connect_plugins/confluentinc-kafka-connect-s3
-      register: installed_remote_plugin
-
-    - name: Assert remote plugin is installed correctly
-      assert:
-        that:
-          - installed_remote_plugin.stat.exists
-          - installed_remote_plugin.stat.gr_name == 'confluent'
-          - installed_remote_plugin.stat.pw_name == 'cp-kafka-connect'
-        quiet: true
-
-    - name: Grab installed remote plugin manifest file
-      shell: cat /usr/share/java/connect_plugins/confluentinc-kafka-connect-s3/manifest.json
-      register: result
-    - name: Parse manifest file
-      set_fact:
-        jsondata: "{{ result.stdout | from_json }}"
-    - name: Assert installed remote plugin version
-      assert:
-        that:
-          - jsondata.version == connect_s3_plugin_version
-
-    - name: Get stats on installed local plugin
-      stat:
-        path: /usr/share/java/connect_plugins/confluentinc-kafka-connect-gcp-functions
-      register: installed_local_plugin
-
-    - name: Assert local plugin is installed correctly
-      assert:
-        that:
-          - installed_local_plugin.stat.exists
-          - installed_local_plugin.stat.gr_name == 'confluent'
-          - installed_local_plugin.stat.pw_name == 'cp-kafka-connect'
-        quiet: true
-
-    - name: Grab installed local plugin manifest file
-      shell: cat /usr/share/java/connect_plugins/confluentinc-kafka-connect-gcp-functions/manifest.json
-      register: result
-    - name: Parse manifest file
-      set_fact:
-        jsondata: "{{ result.stdout | from_json }}"
-    - name: Assert installed local plugin version
-      assert:
-        that:
-          - jsondata.version == "1.1.9"
 - name: Verify - ksql
   hosts: ksql
   gather_facts: false
@@ -404,11 +197,8 @@
 
     - import_role:
         name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /opt/confluent/etc/ksqldb/ksqldb-log4j.properties
-        property: log4j.rootLogger
-        expected_value: "INFO, main"
+        tasks_from: check_log4j.yml
+
 - name: Verify - control_center
   hosts: control_center
   gather_facts: false
@@ -429,8 +219,26 @@
 
     - import_role:
         name: confluent.test
+        tasks_from: check_log4j.yml
+
+- name: Verify - control_center_next_gen
+  hosts: control_center_next_gen
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/confluent-control-center/log4j-rolling.properties
-        property: log4j.rootLogger
-        expected_value: "INFO, stdout, main"
+        file_path: /opt/confluent/etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.streams.security.protocol
+        expected_value: SASL_SSL
+
+    - name: Check Updated Service Description
+      shell: systemctl status confluent-control-center
+      register: systemctl_status
+      failed_when: "'Custom C3 description' not in systemctl_status.stdout_lines[0]"
+      changed_when: false
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_log4j.yml
