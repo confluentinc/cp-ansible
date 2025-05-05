@@ -822,6 +822,8 @@ schema_registry_cert_path: "{{ ssl_file_dir_final }}/schema_registry.crt"
 schema_registry_key_path: "{{ ssl_file_dir_final }}/schema_registry.key"
 schema_registry_export_certs: "{{ True if schema_registry_authentication_type == 'mtls' else False }}"
 schema_registry_keytab_path: /etc/security/keytabs/schema_registry.keytab
+
+### Name of listener used by Schema Registry to talk to Kafka
 schema_registry_kafka_listener_name: internal
 
 ### Boolean to enable Jolokia Agent installation and configuration on schema registry
@@ -928,6 +930,8 @@ kafka_rest_cert_path: "{{ ssl_file_dir_final }}/kafka_rest.crt"
 kafka_rest_key_path: "{{ ssl_file_dir_final }}/kafka_rest.key"
 kafka_rest_export_certs: "{{ True if kafka_rest_authentication_type == 'mtls' else False }}"
 kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
+
+### Name of listener used by Kafka Rest to talk to Kafka
 kafka_rest_kafka_listener_name: >-
   {%- if rbac_enabled|bool and auth_mode=='mtls' -%}
     internal_token
@@ -1048,6 +1052,8 @@ kafka_connect_cert_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name
 kafka_connect_key_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.key' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.key'}}"
 kafka_connect_export_certs: "{{ True if kafka_connect_authentication_type == 'mtls' else False }}"
 kafka_connect_keytab_path: /etc/security/keytabs/kafka_connect.keytab
+
+### Name of listener used by Kafka Connect to talk to Kafka
 kafka_connect_kafka_listener_name: internal
 
 ### Allows you to select a custom kafka listener for Kafka Connect producers
@@ -1193,7 +1199,10 @@ ksql_cert_path: "{{ ssl_file_dir_final }}/ksql.crt"
 ksql_key_path: "{{ ssl_file_dir_final }}/ksql.key"
 ksql_export_certs: "{{ True if ksql_authentication_type == 'mtls' else False }}"
 ksql_keytab_path: /etc/security/keytabs/ksql.keytab
+
+### Name of listener used by Schema Registry to talk to Kafka
 ksql_kafka_listener_name: internal
+
 ksql_processing_log_kafka_listener_name: "{{kafka_broker_inter_broker_listener_name if rbac_enabled else ksql_kafka_listener_name}}"
 
 ### Boolean to enable Jolokia Agent installation and configuration on ksqlDB
@@ -1309,7 +1318,14 @@ control_center_cert_path: "{{ ssl_file_dir_final }}/control_center.crt"
 control_center_key_path: "{{ ssl_file_dir_final }}/control_center.key"
 control_center_export_certs: "{{ssl_mutual_auth_enabled}}"
 control_center_keytab_path: /etc/security/keytabs/control_center.keytab
-control_center_kafka_listener_name: internal
+
+### Name of listener used by C3 to talk to Kafka
+control_center_kafka_listener_name: >-
+  {%- if rbac_enabled|bool and auth_mode=='mtls' -%}
+    internal_token
+  {%- else -%}
+    internal
+  {%- endif -%}
 
 ### Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 control_center_copy_files: []
@@ -1556,7 +1572,25 @@ sso_cli: false
 ### Device Authorization endpoint of Idp, Required to enable SSO in cli.
 sso_device_authorization_uri: none
 
-### Authorization mode on all cp components. Possible values are ldap, oauth, ldap_with_oauth and none. Set this to oauth for OAuth cluster and ldap_with_oauth for cluster with both ldap and oauth support. When set to oauth or ldap_with_oauth, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_superuser_client_id, oauth_superuser_client_password.
+### Boolean to enable file based user store on MDS. Can be helpful in case of no SSO in Control Center. When setting this true we must also define mds_file_based_user_store_src_path and mds_file_based_user_store_dest_path.
+mds_file_based_user_store_enabled: false
+
+### Path to the file containing the user store for MDS. This must be defined when mds_file_based_user_store_enabled is true. The file must have the format where each entry is newline seperated and in each entry we have username and password separated by a colon. For example: admin: admin-secret
+mds_file_based_user_store_src_path: ""
+
+### Boolean to indicate if the user store file is present on the control node or remote host. If false, the file will be copied from the control node to the target host. If true it will be moved from src to dst path on the target host.
+mds_file_based_user_store_remote_src: false
+
+### Path of the destination file on the target host i.e MDS server. Should be a file path and not a directory.
+mds_file_based_user_store_dest_path: ""
+
+### This is the user for Control Center to Kafka communication over SASL_SSL (internal_token listener) in case of rbac_enabled, auth_mode mtls, file based user store, and no SSO in Control Center. This user must be present in the file given via mds_file_based_user_store_src_path.
+mds_file_based_control_center_user: ""
+
+### Password for the mds_file_based_control_center_user. This password must be present in the file given via mds_file_based_user_store_src_path.
+mds_file_based_control_center_password: ""
+
+### Authorization mode on all cp components. Possible values are ldap, oauth, ldap_with_oauth, mtls and none. Set this to oauth for OAuth cluster and ldap_with_oauth for cluster with both ldap and oauth support. When set to oauth or ldap_with_oauth, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_superuser_client_id, oauth_superuser_client_password. When MDS only has mTLS and no user store then set it to mTLS. In case of OAuth/LDAP + mTLS keep it to ldap/oauth
 auth_mode: "{% if rbac_enabled|bool %}ldap{% else %}none{% endif %}"
 
 ### Client id used to authorize and request token from IdP via cp components. This is the super user for all MDS api calls
