@@ -322,7 +322,8 @@ class FilterModule(object):
                           keystore_keypass, omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
                           sasl_scram256_username, sasl_scram256_password, kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
                           omit_oauth_configs, oauth_username, oauth_password, mds_bootstrap_server_urls, oauth_enabled, oauth_superuser_client_id,
-                          oauth_superuser_client_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, kraft_listener):
+                          oauth_superuser_client_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, kraft_listener,
+                          assertion_config=None):
         # For any kafka client's properties: Takes in a single kafka listener and output properties to connect to that listener
         # Other inputs help fill out the properties
         final_dict = {
@@ -405,6 +406,24 @@ class FilterModule(object):
                         'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + \
                         '\" scope=\"' + oauth_groups_scope + \
                         '\" ssl.truststore.location=\"' + truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
+                
+                if assertion_config and assertion_config.get('enabled'):
+                    if assertion_config.get('client_assertion_issuer'):
+                        final_dict[config_prefix + 'sasl.oauthbearer.assertion.claim.iss'] = assertion_config['client_assertion_issuer']
+                    if assertion_config.get('client_assertion_sub'):
+                        final_dict[config_prefix + 'sasl.oauthbearer.assertion.claim.sub'] = assertion_config['client_assertion_sub']
+                    if assertion_config.get('client_assertion_audience'):
+                        final_dict[config_prefix + 'sasl.oauthbearer.assertion.claim.aud'] = assertion_config['client_assertion_audience']
+                    if assertion_config.get('client_assertion_private_key_file'):
+                        final_dict[config_prefix + 'sasl.oauthbearer.assertion.private.key.file'] = assertion_config['client_assertion_private_key_file']
+                    if assertion_config.get('client_assertion_private_key_passphrase'):
+                        final_dict[config_prefix + 'sasl.oauthbearer.assertion.private.key.passphrase'] = assertion_config['client_assertion_private_key_passphrase']
+                    if assertion_config.get('client_assertion_template_file'):
+                        final_dict[config_prefix + 'sasl.oauthbearer.assertion.template.file'] = assertion_config['client_assertion_template_file']
+                    if assertion_config.get('client_assertion_jwt_id'):
+                        final_dict[config_prefix + 'sasl.oauthbearer.assertion.claim.jti.include'] = assertion_config['client_assertion_jwt_id']
+                    if assertion_config.get('client_assertion_not_before'):
+                        final_dict[config_prefix + 'sasl.oauthbearer.assertion.claim.nbf.include'] = assertion_config['client_assertion_not_before']
 
         return final_dict
 
