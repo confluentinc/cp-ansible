@@ -20,7 +20,6 @@
     msg: "Warning: Please add list of broker and controller certificate principals in rbac_super_users variable"
   when:
     - rbac_enabled|bool
-    - kraft_enabled|bool
     - ssl_mutual_auth_enabled|bool
     - rbac_super_users | length == 0
 
@@ -270,19 +269,6 @@
 
 - name: Include Kraft Cluster Data
   include_tasks: get_meta_properties.yml
-  when: kraft_enabled|bool and not kraft_migration|bool
-
-# Zookeeper shell cannot read server.properties if secrets protection is enabled. Keeping a separate file.
-- name: Create Zookeeper TLS Client Config
-  template:
-    src: zookeeper-tls-client.properties.j2
-    dest: "{{kafka_broker.zookeeper_tls_client_config_file}}"
-    mode: '640'
-    owner: "{{kafka_broker_user}}"
-    group: "{{kafka_broker_group}}"
-  when: zookeeper_ssl_enabled|bool and not kraft_enabled|bool
-  tags:
-    - configuration
 
 - name: Create Logs Directory
   file:
@@ -440,36 +426,6 @@
   changed_when: "'Created ' + zookeeper_chroot in create_chroot.stderr"
   when: zookeeper_chroot|length > 0
 
-# Only supported when zookeeper is enabled
-- name: Create SCRAM Users with Zookeeper
-  shell: |
-    {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
-    {{ binary_base_path }}/bin/kafka-configs {% if zookeeper_ssl_enabled|bool %}--zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
-      --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
-      --add-config 'SCRAM-SHA-512=[password={{ item.value['password'] }}]' \
-      --entity-type users --entity-name {{ item.value['principal'] }}
-  loop: "{{ sasl_scram_users_final|dict2items }}"
-  run_once: true
-  when:
-    - "'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms"
-    - not kraft_enabled|bool
-  no_log: "{{mask_secrets|bool}}"
-
-# Only supported when zookeeper is enabled
-- name: Create SCRAM 256 Users with Zookeeper
-  shell: |
-    {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
-    {{ binary_base_path }}/bin/kafka-configs {% if zookeeper_ssl_enabled|bool %}--zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
-      --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
-      --add-config 'SCRAM-SHA-256=[password={{ item.value['password'] }}]' \
-      --entity-type users --entity-name {{ item.value['principal'] }}
-  loop: "{{ sasl_scram256_users_final|dict2items }}"
-  run_once: true
-  when:
-    - "'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms"
-    - not kraft_enabled|bool
-  no_log: "{{ mask_sensitive_logs|bool }}"
-
 - name: Deploy JMX Exporter Config File
   template:
     src: "{{kafka_broker_jmxexporter_config_source_path}}"
@@ -557,7 +513,6 @@
     - rbac_enabled|bool
     - (kafka_controller_ssl_mutual_auth_enabled|bool and rbac_super_users | length == 0)
       or ( not external_mds_enabled|bool and confluent_cli_version is version('3.0.0', '<'))
-    - kraft_enabled|bool
   run_once: true
 
 - meta: flush_handlers
@@ -588,7 +543,6 @@
   run_once: true
   when:
     - "'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms"
-    - kraft_enabled|bool
     - not ( kafka_broker_client_secrets_protection_enabled|bool )
   no_log: "{{ mask_secrets|bool }}"
 
@@ -603,7 +557,6 @@
   run_once: true
   when:
     - "'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms"
-    - kraft_enabled|bool
     - not ( kafka_broker_client_secrets_protection_enabled|bool )
   no_log: "{{ mask_secrets|bool }}"
 
@@ -620,7 +573,6 @@
   run_once: true
   when:
     - "'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms"
-    - kraft_enabled|bool
     - kafka_broker_client_secrets_protection_enabled|bool
   no_log: "{{ mask_secrets|bool }}"
 
@@ -637,7 +589,6 @@
   run_once: true
   when:
     - "'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms"
-    - kraft_enabled|bool
     - kafka_broker_client_secrets_protection_enabled|bool
   no_log: "{{ mask_secrets|bool }}"
 
