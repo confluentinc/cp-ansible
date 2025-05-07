@@ -349,7 +349,8 @@ class FilterModule(object):
             # Not adding this config always when normalize_sasl_protocols[0] == 'OAUTHBEARER'
             # This is because it is not getting added for ERP currently due to omit_oauth_configs currently.
             final_dict[config_prefix + 'sasl.mechanism'] = 'OAUTHBEARER'
-            final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
+            final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule \
+                required metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
 
         if not omit_oauth_configs:
             if normalize_sasl_protocols[0] == 'OAUTHBEARER' and not oauth_enabled:
