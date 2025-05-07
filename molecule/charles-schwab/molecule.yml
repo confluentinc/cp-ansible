@@ -165,50 +165,12 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
-    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  - name: controller1-mig
-    hostname: controller1-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: oraclelinux:8-slim
-    dockerfile: ../Dockerfile-rhel-java8.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
-  - name: controller2-mig
-    hostname: controller2-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: oraclelinux:8-slim
-    dockerfile: ../Dockerfile-rhel-java8.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
-  - name: controller3-mig
-    hostname: controller3-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: oraclelinux:8-slim
-    dockerfile: ../Dockerfile-rhel-java8.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
 provisioner:
   playbooks:
     converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
-        # zk, bk, sr, c3 only
         ssl_enabled: true
         rbac_enabled: true
         sasl_protocol: scram
@@ -246,9 +208,31 @@ provisioner:
           - "DEFAULT"
 
         mds_ssl_client_authentication: requested
-        schema_registry_kafka_broker_listener_name: mtls
-        ksql_kafka_broker_listener_name: mtls
-        kafka_connect_kafka_broker_listener_name: mtls
+        ssl_client_authentication: requested # this will start mtls in requested on kafka listeners and other cp components
+        schema_registry_kafka_listener_name: mtls
+        # ksql_kafka_listener_name: mtls, ksql cant use this
+        kafka_connect_kafka_listener_name: mtls
+        kafka_rest_kafka_listener_name: internal_token
+        control_center_kafka_listener_name: internal_token
+
+        kafka_broker_rest_proxy_mds_cert_auth_only: true
+        schema_registry_mds_cert_auth_only: true
+        kafka_connect_mds_cert_auth_only: true
+        kafka_rest_mds_cert_auth_only: true
+        control_center_mds_cert_auth_only: true
+
+        kafka_rest_custom_properties:
+          confluent.license.bootstrap.servers: kafka-broker1:9097,kafka-broker2:9097,kafka-broker3:9097
+          confluent.license.security.protocol: SSL
+          confluent.license.ssl.key.password: confluentkeystorestorepass
+          confluent.license.ssl.keystore.location: /var/ssl/private/kafka_rest.keystore.jks
+          confluent.license.ssl.keystore.password: confluentkeystorestorepass
+          confluent.license.ssl.truststore.location: /var/ssl/private/kafka_rest.truststore.jks
+          confluent.license.ssl.truststore.password: confluenttruststorepass
+
+        # schema_registry_custom_properties:
+        #   authentication.roles: "**"
+        #   authentication.skip.paths: "/*"
 
         # rbac_super_users:
         #   - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker
@@ -285,10 +269,6 @@ provisioner:
 
         control_center_ldap_user: control-center1
         control_center_ldap_password: password
-
-        schema_registry_custom_properties:
-          authentication.roles: "**"
-          authentication.skip.paths: "/*"
 
         kafka_broker_custom_properties:
           ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
