@@ -582,7 +582,7 @@ Installation of Confluent Platform on Alma Linux 9.
 
 MTLS enabled.
 
-Java 11.
+Java 21.
 
 FIPS enabled
 
@@ -604,7 +604,7 @@ Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
 
-Java 8.
+Java 21.
 
 #### Scenario mtls-ubuntu verify test's the following:
 
@@ -705,8 +705,6 @@ Validates that client ID's are set correctly on Replicator.
 Installation of Confluent Platform on Debian10.
 
 MTLS enabled.
-
-Java 11.
 
 #### Scenario oauth-mtls-debian verify test's the following:
 
