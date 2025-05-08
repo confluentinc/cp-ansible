@@ -4,6 +4,14 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.9.1
+======
+
+New features
+-------------
+- Next Gen Control Center Support
+- IPv6 support for CP-ansible
+
 v7.9.0
 ======
 
