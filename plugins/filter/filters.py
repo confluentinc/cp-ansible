@@ -210,9 +210,10 @@ class FilterModule(object):
                 # 3 default_ssl_client_authentication (global level new variable)
                 mtls_mode = listeners_dict[listener].get('ssl_client_authentication', 'none')
                 if mtls_mode == 'none':
-                    mtls_mode = 'required' if listeners_dict[listener].get('ssl_mutual_auth_enabled', False) else 'none'
-                if mtls_mode == 'none':
-                    mtls_mode = default_ssl_client_authentication
+                    if listeners_dict[listener].get('ssl_mutual_auth_enabled', False):
+                        mtls_mode = 'required'
+                    else:
+                        mtls_mode = default_ssl_client_authentication
 
                 final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = mtls_mode
                 final_dict['listener.name.' + listener_name + '.ssl.principal.mapping.rules'] = \
