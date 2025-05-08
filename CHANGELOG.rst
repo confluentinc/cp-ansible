@@ -9,7 +9,7 @@ v7.9.1
 
 New features
 -------------
-- Next Gen Control Center Support
+- Confluent Control Center Next Gen Support
 - IPv6 support for CP-ansible
 
 v7.9.0
