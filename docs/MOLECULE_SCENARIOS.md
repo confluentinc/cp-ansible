@@ -18,33 +18,9 @@ Validates that Confluent CLI is installed.
 
 ***
 
-### molecule/archive-plain-debian10
+### molecule/archive-plain-debian
 
-#### Scenario archive-plain-debian10 test's the following:
-
-Archive installation of Confluent Platform on Debian 10.
-
-SASL Protocol Plain.
-
-SSL Enabled.
-
-Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
-
-Custom log dirs for all components.
-
-#### Scenario archive-plain-debian10 verify test's the following:
-
-Validates that SASL SSL protocol is set across all components.
-
-Validates that custom log4j configuration is in place.
-
-Validates that Java 17 is in Use
-
-***
-
-### molecule/archive-plain-debian12
-
-#### Scenario archive-plain-debian12 test's the following:
+#### Scenario archive-plain-debian test's the following:
 
 Archive installation of Confluent Platform on Debian 12.
 
@@ -56,7 +32,7 @@ Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-
 
 Custom log dirs for all components.
 
-#### Scenario archive-plain-debian12 verify test's the following:
+#### Scenario archive-plain-debian verify test's the following:
 
 Validates that SASL SSL protocol is set across all components
 
@@ -584,9 +560,23 @@ Validates that Java 17 is in Use
 
 ***
 
-### molecule/mtls-java11-rhel-fips
+### molecule/mtls-java17-ubuntu
 
-#### Scenario mtls-java11-rhel-fips test's the following:
+#### Scenario mtls-java17-ubuntu test's the following:
+
+Installation of Confluent Platform on Ubuntu2404.
+
+MTLS enabled.
+
+#### Scenario mtls-java17-ubuntu verify test's the following:
+
+Validates that protocol is set to SSl across all components.
+
+***
+
+### molecule/mtls-java21-rhel-fips
+
+#### Scenario mtls-java21-rhel-fips test's the following:
 
 Installation of Confluent Platform on Alma Linux 9.
 
@@ -596,29 +586,13 @@ Java 11.
 
 FIPS enabled
 
-#### Scenario mtls-java11-rhel-fips verify test's the following:
+#### Scenario mtls-java21-rhel-fips verify test's the following:
 
-Validates that Java 11 is in use.
+Validates that Java 21 is in use.
 
 Validates that FIPS security is enabled on the Brokers.
 
 Validates that FIPS is in use in OpenSSL.
-
-***
-
-### molecule/mtls-java8-ubuntu
-
-#### Scenario mtls-java8-ubuntu test's the following:
-
-Installation of Confluent Platform on Ubuntu2404.
-
-MTLS enabled.
-
-Java 8.
-
-#### Scenario mtls-java8-ubuntu verify test's the following:
-
-Validates that Java 11 is in use.
 
 ***
 
@@ -629,6 +603,8 @@ Validates that Java 11 is in use.
 Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
+
+Java 8.
 
 #### Scenario mtls-ubuntu verify test's the following:
 
@@ -722,9 +698,9 @@ Validates that client ID's are set correctly on Replicator.
 
 ***
 
-### molecule/oauth-mtls-java11-debian
+### molecule/oauth-mtls-debian
 
-#### Scenario oauth-mtls-java11-debian test's the following:
+#### Scenario oauth-mtls-debian test's the following:
 
 Installation of Confluent Platform on Debian10.
 
@@ -732,7 +708,7 @@ MTLS enabled.
 
 Java 11.
 
-#### Scenario oauth-mtls-java11-debian verify test's the following:
+#### Scenario oauth-mtls-debian verify test's the following:
 
 Validates that Java 11 is in use.
 
@@ -1082,9 +1058,9 @@ Validates that keystores are in place across all components.
 
 ***
 
-### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10
+### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-debian
 
-#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10 test's the following:
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian test's the following:
 
 Installation of Confluent Platform on Debian10.
 
@@ -1098,7 +1074,7 @@ MTLS Customer certs enabled on cluster2.
 
 Replicator Configured with Kerberos and MTLS.
 
-#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10 verify test's the following:
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian verify test's the following:
 
 Validates that the Console Consumer can consume data from cluster2, proving that data has been replicated from cluster1 (MDS).
 
@@ -1627,3 +1603,4 @@ Validates that other components are using SCRAM for auth.
 Validates that Secrets protection is applied to the correct properties.
 
 ***
+

@@ -144,7 +144,7 @@ Default:  false
 
 Boolean to configure ZK, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 
-Default:  true
+Default:  false
 
 ***
 
@@ -438,9 +438,9 @@ Default:  "/etc"
 
 ### confluent_cli_download_enabled
 
-Boolean to have cp-ansible download the Confluent CLI, required to be enabled in case of secrets protection
+Enable download of confluent-cli
 
-Default:  "{{ secrets_protection_enabled }}"
+Default:  true
 
 ***
 
@@ -2809,6 +2809,14 @@ Default:  ""
 MDS key path on ansible control node.
 
 Default:  ""
+
+***
+
+### rbac_super_users
+
+Additional list of super user principals for RBAC clusters. In case when mTLS is enabled on brokers or controllers their certificate principals should be passed in this list.
+
+Default:  []
 
 ***
 
@@ -5436,15 +5444,15 @@ Default:  "{{ false if custom_java_path | length > 0 else true }}"
 
 ### redhat_java_package_name
 
-Java Package to install on RHEL/Centos hosts. Possible values java-8-openjdk, java-11-openjdk or java-17-openjdk
+Java Package to install on RHEL/Centos hosts. Possible values java-17-openjdk or java-21-openjdk
 
-Default:  java-17-openjdk
+Default:  java-21-openjdk
 
 ***
 
 ### debian_java_package_name
 
-Java Package to install on Debian hosts. Possible values openjdk-11-jdk, openjdk-8-jdk or openjdk-17-jdk
+Java Package to install on Debian hosts. Possible values openjdk-17-jdk
 
 Default:  openjdk-17-jdk
 
@@ -5452,17 +5460,17 @@ Default:  openjdk-17-jdk
 
 ### amazon_java_package_name
 
-Java Package to install on Amazon hosts. Possible values java-11-amazon-corretto or java-17-amazon-corretto
+Java Package to install on Amazon hosts. Possible values java-17-amazon-corretto or java-21-amazon-corretto
 
-Default:  java-17-amazon-corretto
+Default:  java-21-amazon-corretto
 
 ***
 
 ### ubuntu_java_package_name
 
-Java Package to install on Ubuntu hosts. Possible values openjdk-8-jdk, openjdk-11-jdk or openjdk-17-jdk
+Java Package to install on Ubuntu hosts. Possible values openjdk-17-jdk, openjdk-21-jdk
 
-Default:  openjdk-17-jdk
+Default:  openjdk-21-jdk
 
 ***
 
@@ -6389,3 +6397,4 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
+
