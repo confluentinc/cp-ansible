@@ -9,7 +9,7 @@ v7.9.1
 
 New features
 -------------
-- C3++ EA
+- Next Gen Control Center Support
 - IPv6 support for CP-ansible
 
 v7.9.0
