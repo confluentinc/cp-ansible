@@ -4,6 +4,18 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.9.1
+======
+
+New features
+-------------
+- Confluent Control Center Next Gen Support (Only on IPv4 based deployments)
+- IPv6 support for all CP components except Control Center Next Gen
+
+Notable Fixes
+-------------
+- KSQL will now prefer OAuth over LDAP for MDS communication when both are configured on MDS server.
+
 v7.9.0
 ======
 

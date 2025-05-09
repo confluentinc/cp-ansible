@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.9.0
+Default:  7.9.1
 
 ***
 
@@ -454,9 +454,9 @@ Default:  "/etc"
 
 ### confluent_cli_download_enabled
 
-Boolean to have cp-ansible download the Confluent CLI, required to be enabled in case of secrets protection
+Enable download of confluent-cli
 
-Default:  "{{ secrets_protection_enabled }}"
+Default:  true
 
 ***
 
@@ -1433,6 +1433,14 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, defaul
 Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
 Default:  "{{ confluent_server_enabled and ('control_center' in groups or 'control_center_next_gen' in groups) }}"
+
+***
+
+### kafka_broker_metrics_reporter_for_control_center_next_gen_enabled
+
+Boolean to enable the kafka's metrics reporter for Control Center Next Gen. Defaults to true if Control Center Next Gen in inventory.
+
+Default:  "{{ confluent_server_enabled and ('control_center_next_gen' in groups) }}"
 
 ***
 
@@ -2564,7 +2572,7 @@ Default:  "{{ config_prefix }}/confluent-control-center"
 
 ***
 
-### control_center_next_gen_dependency_config_path
+### control_center_next_gen_dependencies_config_path
 
 Default Control Center's dependency (prometheus & alertmanager) config path
 
@@ -2592,7 +2600,7 @@ Default:  "{{control_center_default_group}}"
 
 Port Control Center Next Gen Exposed over
 
-Default:  9022
+Default:  9021
 
 ***
 
@@ -3876,6 +3884,22 @@ Default:  "{{kafka_controller_telemetry_enabled}}"
 
 ***
 
+### kafka_controller_telemetry_control_center_next_gen_user
+
+user used to send telemetry data from Kafka to Control Center Next Gen
+
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
+
+***
+
+### kafka_controller_telemetry_control_center_next_gen_password
+
+Password for the user used to send telemetry data from Kafka to Control Center Next Gen.
+
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled is defined %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
+
+***
+
 ### kafka_broker_telemetry_enabled
 
 Boolean to configure Telemetry on Kafka. Must also set telemetry_api_key and telemetry_api_secret
@@ -3896,7 +3920,7 @@ Default:  "{{kafka_broker_telemetry_enabled}}"
 
 user used to send telemetry data from Kafka to Control Center Next Gen
 
-Default:  "{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}"
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
 
 ***
 
@@ -3904,7 +3928,7 @@ Default:  "{{control_center_next_gen_dependency_prometheus_basic_users.admin.pri
 
 Password for the user used to send telemetry data from Kafka to Control Center Next Gen
 
-Default:  "{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}"
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled is defined %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
 
 ***
 
@@ -5580,6 +5604,22 @@ Default:  "{{control_center_next_gen_dependency_prometheus_basic_users.admin.pas
 
 ***
 
+### control_center_next_gen_dependency_alertmanager_user_for_prometheus
+
+user for the user used to do healthcheck on Control Center Next Gen (prometheus)
+
+Default:  "{{control_center_next_gen_dependency_alertmanager_basic_users.admin.principal}}"
+
+***
+
+### control_center_next_gen_dependency_alertmanager_password_for_prometheus
+
+Password for the user used to do healthcheck on Control Center Next Gen (prometheus)
+
+Default:  "{{control_center_next_gen_dependency_alertmanager_basic_users.admin.password}}"
+
+***
+
 ### control_center_next_gen_dependency_alertmanager_health_check_user
 
 user for the user used to do healthcheck on Control Center Next Gen (prometheus)
@@ -5822,7 +5862,7 @@ Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_vers
 
 A path reference to a local archive file or URL for control-center-next-gen archive. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/archive/confluent-control-center-next-gen{{confluent_control_center_next_gen_package_version}}-0.tar.gz"
+Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/archive/confluent-control-center-next-gen-{{confluent_control_center_next_gen_package_version}}.tar.gz"
 
 ***
 
@@ -6859,3 +6899,4 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
+
