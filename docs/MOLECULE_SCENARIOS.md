@@ -18,33 +18,9 @@ Validates that Confluent CLI is installed.
 
 ***
 
-### molecule/archive-plain-debian10
+### molecule/archive-plain-debian
 
-#### Scenario archive-plain-debian10 test's the following:
-
-Archive installation of Confluent Platform on Debian 10.
-
-SASL Protocol Plain.
-
-SSL Enabled.
-
-Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
-
-Custom log dirs for all components.
-
-#### Scenario archive-plain-debian10 verify test's the following:
-
-Validates that SASL SSL protocol is set across all components.
-
-Validates that custom log4j configuration is in place.
-
-Validates that Java 17 is in Use
-
-***
-
-### molecule/archive-plain-debian12
-
-#### Scenario archive-plain-debian12 test's the following:
+#### Scenario archive-plain-debian test's the following:
 
 Archive installation of Confluent Platform on Debian 12.
 
@@ -56,7 +32,7 @@ Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-
 
 Custom log dirs for all components.
 
-#### Scenario archive-plain-debian12 verify test's the following:
+#### Scenario archive-plain-debian verify test's the following:
 
 Validates that SASL SSL protocol is set across all components
 
@@ -722,9 +698,9 @@ Validates that client ID's are set correctly on Replicator.
 
 ***
 
-### molecule/oauth-mtls-java11-debian
+### molecule/oauth-mtls-debian
 
-#### Scenario oauth-mtls-java11-debian test's the following:
+#### Scenario oauth-mtls-debian test's the following:
 
 Installation of Confluent Platform on Debian10.
 
@@ -732,7 +708,7 @@ MTLS enabled.
 
 Java 11.
 
-#### Scenario oauth-mtls-java11-debian verify test's the following:
+#### Scenario oauth-mtls-debian verify test's the following:
 
 Validates that Java 11 is in use.
 
@@ -757,6 +733,34 @@ Validates mapping rules for ACLs.
 Validates ACL users.
 
 Validated ACL creation.
+
+***
+
+### molecule/oauth-plain-archive
+
+#### Scenario oauth-plain-archive test's the following:
+
+Installation of Confluent Platform on RHEL9.
+
+SASL Plain enabled.
+
+Control Plane listener enabled.
+
+Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
+
+Custom Service Unit overrides.
+
+Custom log4j appender names.
+
+#### Scenario oauth-plain-archive verify test's the following:
+
+Validates that custom log4j appenders are present on each component.
+
+Validates that Service Description has been overridden.
+
+Validates that SASL Plaintext protocol is set across components.
+
+Validates that Connectors are present on Kafka Connect.
 
 ***
 
@@ -1110,9 +1114,9 @@ Validates that keystores are in place across all components.
 
 ***
 
-### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10
+### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-debian
 
-#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10 test's the following:
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian test's the following:
 
 Installation of Confluent Platform on Debian10.
 
@@ -1126,7 +1130,7 @@ MTLS Customer certs enabled on cluster2.
 
 Replicator Configured with Kerberos and MTLS.
 
-#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10 verify test's the following:
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian verify test's the following:
 
 Validates that the Console Consumer can consume data from cluster2, proving that data has been replicated from cluster1 (MDS).
 
@@ -1655,3 +1659,4 @@ Validates that other components are using SCRAM for auth.
 Validates that Secrets protection is applied to the correct properties.
 
 ***
+
