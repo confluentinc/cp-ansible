@@ -5,24 +5,27 @@
   register: process_grep
   changed_when: false
 
-- name: Filter out log4j java args
+- name: Filter out log4j2 java args
   set_fact:
-    log4j_grep: "{{ process_grep.stdout_lines | select('match', '-Dlog4j.configuration.*') | list }}"
+    log4j_grep: "{{ process_grep.stdout_lines | select('match', '-Dlog4j2.configurationFile*') | list }}"
 
-- name: Assert only 1 log4j java arg
+- name: Assert only 1 log4j2 java arg
   assert:
     that:
       - log4j_grep|length == 1
-    fail_msg: There should only be one log4j java arg
+    fail_msg: There should only be one log4j2 java arg
     quiet: true
 
-- name: Filter out log4j configuration file path
-  set_fact:
-    log4j_config_file: "{{ log4j_grep[0] | regex_replace('-Dlog4j.configuration=file:?(.*)$', '\\1') }}"
+- debug:
+    msg : "{{log4j_grep}}"
 
-- name: Confirm log4j Configuration does not have Daily RollingFileAppender
+- name: Filter out log4j2 configuration file path
+  set_fact:
+    log4j_config_file: "{{ log4j_grep[0] | regex_replace('-Dlog4j2.configurationFile=(file:)?(.*)$', '\\2') }}"
+
+- name: Confirm log4j Configuration does have RollingFileAppender
   shell: |
-    grep "DailyRollingFileAppender" {{log4j_config_file}}
+    grep "RollingFile" {{log4j_config_file}}
   register: grep
-  failed_when: grep.rc == 0
+  failed_when: grep.rc == 1
   changed_when: false
