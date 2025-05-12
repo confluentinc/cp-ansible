@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.9.0
+Default:  8.0.0
 
 ***
 
@@ -144,7 +144,7 @@ Default:  false
 
 Boolean to configure Kraft, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 
-Default:  true
+Default:  false
 
 ***
 
@@ -464,7 +464,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  4.26.0
+Default:  4.24.0
 
 ***
 
