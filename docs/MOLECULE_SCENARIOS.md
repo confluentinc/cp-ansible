@@ -19,7 +19,9 @@ Validates that Confluent CLI is installed.
 ***
 
 ### molecule/archive-plain-debian
+### molecule/archive-plain-debian
 
+#### Scenario archive-plain-debian test's the following:
 #### Scenario archive-plain-debian test's the following:
 
 Archive installation of Confluent Platform on Debian 12.
@@ -32,6 +34,7 @@ Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-
 
 Custom log dirs for all components.
 
+#### Scenario archive-plain-debian verify test's the following:
 #### Scenario archive-plain-debian verify test's the following:
 
 Validates that SASL SSL protocol is set across all components
@@ -561,29 +564,39 @@ Validates that Java 17 is in Use
 ***
 
 ### molecule/mtls-java17-ubuntu
+### molecule/mtls-java17-ubuntu
 
 #### Scenario mtls-java17-ubuntu test's the following:
+#### Scenario mtls-java17-ubuntu test's the following:
 
+Installation of Confluent Platform on Ubuntu2404.
 Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
 
 #### Scenario mtls-java17-ubuntu verify test's the following:
+#### Scenario mtls-java17-ubuntu verify test's the following:
 
+Validates that protocol is set to SSl across all components.
 Validates that protocol is set to SSl across all components.
 
 ***
+***
 
+### molecule/mtls-java21-rhel-fips
 ### molecule/mtls-java21-rhel-fips
 
 #### Scenario mtls-java21-rhel-fips test's the following:
 
 Installation of Confluent Platform on Alma Linux 9.
+Installation of Confluent Platform on Alma Linux 9.
 
 MTLS enabled.
+MTLS enabled.
 
-Java 11.
+Java 21.
 
+FIPS enabled
 FIPS enabled
 
 #### Scenario mtls-java21-rhel-fips verify test's the following:
@@ -604,7 +617,7 @@ Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
 
-Java 8.
+Java 21.
 
 #### Scenario mtls-ubuntu verify test's the following:
 
@@ -705,8 +718,6 @@ Validates that client ID's are set correctly on Replicator.
 Installation of Confluent Platform on Debian10.
 
 MTLS enabled.
-
-Java 11.
 
 #### Scenario oauth-mtls-debian verify test's the following:
 
@@ -1603,4 +1614,5 @@ Validates that other components are using SCRAM for auth.
 Validates that Secrets protection is applied to the correct properties.
 
 ***
+
 
