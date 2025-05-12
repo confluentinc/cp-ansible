@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.6.4
+Default:  7.6.5
 
 ***
 
@@ -456,7 +456,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  3.61.1
+Default:  3.65.0
 
 ***
 
@@ -2508,6 +2508,14 @@ Default:  ""
 
 ***
 
+### rbac_super_users
+
+Additional list of super user principals for RBAC clusters. In case when mTLS is enabled on brokers or controllers their certificate principals should be passed in this list.
+
+Default:  []
+
+***
+
 ### mds_super_user
 
 LDAP User which will be granted super user permissions to create role bindings in the MDS
@@ -3836,6 +3844,14 @@ Default:  ""
 
 ***
 
+### kafka_connect_replicator_listener
+
+Listener Dictionary that describes Kafka Connect Replicator Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
+
+***
+
 ### kafka_connect_replicator_erp_host
 
 Variable to define the location of the Embedded Rest Proxy for configuring RBAC.
@@ -4028,6 +4044,14 @@ Default:  "{{  kafka_connect_replicator_keystore_storepass }}"
 
 ***
 
+### kafka_connect_replicator_consumer_listener
+
+Listener Dictionary that describes Kafka Connect Replicator Consumer Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
+
+***
+
 ### kafka_connect_replicator_consumer_erp_host
 
 Variable to define the location of the Embedded Rest Proxy for configuring RBAC.
@@ -4217,6 +4241,14 @@ Default:  "{{ kafka_connect_replicator_truststore_storepass}}"
 The password for the Kafka Connect Replicator Producer TLS keystore.  Defaults to match kafka_connect_replicator_keystore_storepass.
 
 Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
+
+***
+
+### kafka_connect_replicator_producer_listener
+
+Listener Dictionary that describes Kafka Connect Replicator Producer Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
 
 ***
 
@@ -4417,6 +4449,14 @@ Default:  "{{ kafka_connect_replicator_truststore_storepass}}"
 The password for the Kafka Connect Replicator Monitoring Interceptor TLS keystore.  Defaults to match kafka_connect_replicator_keystore_storepass.
 
 Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_listener
+
+Listener Dictionary that describes Kafka Connect Replicator Monitoring Interceptor Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
+
+Default: 
 
 ***
 
