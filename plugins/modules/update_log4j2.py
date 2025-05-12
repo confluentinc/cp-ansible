@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
@@ -36,8 +36,10 @@ options:
         type: list
         elements: str
         required: true
+        description:
+            - If set, update the root logger appender to this value.
 author:
-    - Your Name (@yourgithub)
+    - Mansi Sinha (@mansisinha)
 '''
 
 EXAMPLES = '''
@@ -65,6 +67,7 @@ message:
 import yaml
 import os
 from ansible.module_utils.basic import AnsibleModule
+
 
 def main():
     module_args = dict(
@@ -152,5 +155,6 @@ def main():
     result['changed'] = changed
     module.exit_json(**result)
 
+
 if __name__ == '__main__':
-    main() 
+    main()
