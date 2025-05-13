@@ -1,0 +1,77 @@
+---
+##
+## The following is an example inventory file of the configuration required for setting up Confluent Platform 7.9.0 with Control Center Next Gen (2.0)
+## CP 7.9.0 has a bug which causes newly introduced telemetry reporter to not work when SSL is enabled
+## In this inventory file we are using the workaround to use JVM level override to send metrics to control center next gen with ssl enabled on its prometheus endpoint
+
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: ec2-user
+    ansible_become: true
+    ansible_ssh_private_key_file: /home/ec2-user/guest.pem
+    ansible_python_interpreter: /usr/bin/python3
+
+    ssl_enabled: true
+    sasl_protocol: scram
+
+    ## Using JVM level override to send metrics to control center next gen with ssl enabled on its prometheus endpoint
+    kafka_broker_custom_java_args: "-Djavax.net.ssl.trustStore=/var/ssl/private/kafka_broker.truststore.jks -Djavax.net.ssl.trustStorePassword=confluenttruststorepass -Djavax.net.ssl.keyStore=/var/ssl/private/kafka_broker.keystore.jks -Djavax.net.ssl.keyStorePassword=confluentkeystorestorepass"
+    kafka_controller_custom_java_args: "-Djavax.net.ssl.trustStore=/var/ssl/private/kafka_controller.truststore.jks -Djavax.net.ssl.trustStorePassword=confluenttruststorepass -Djavax.net.ssl.keyStore=/var/ssl/private/kafka_controller.keystore.jks -Djavax.net.ssl.keyStorePassword=confluentkeystorestorepass"
+
+    ## Enabling basic auth for prometheus and alertmanager endpoints (dependency of control center next gen)
+    control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+    control_center_next_gen_dependency_alertmanager_basic_auth_enabled: true
+
+kafka_controller:
+  vars:
+    kafka_controller_sasl_protocol: plain,scram
+    ## (KRaftController) Disabling following variable to avoid configuring ssl properties for telemetry reporter sending metrics to control center next gen
+    control_center_next_gen_dependency_prometheus_schema: https
+    control_center_next_gen_dependency_prometheus_ssl_enabled: false
+    control_center_next_gen_dependency_alertmanager_schema: https
+    control_center_next_gen_dependency_alertmanager_ssl_enabled: false
+  hosts:
+    ec2-35-160-193-90.us-west-2.compute.amazonaws.com:
+    ec2-35-85-219-150.us-west-2.compute.amazonaws.com:
+    ec2-34-219-169-190.us-west-2.compute.amazonaws.com:
+
+kafka_broker:
+  vars:
+    ## (Kafka Brokers) Disabling following variable to avoid configuring ssl properties for telemetry reporter sending metrics to control center next gen
+    control_center_next_gen_dependency_prometheus_schema: https
+    control_center_next_gen_dependency_prometheus_ssl_enabled: false
+    control_center_next_gen_dependency_alertmanager_schema: https
+    control_center_next_gen_dependency_alertmanager_ssl_enabled: false
+  hosts:
+    ec2-35-91-214-11.us-west-2.compute.amazonaws.com:
+    ec2-54-71-228-219.us-west-2.compute.amazonaws.com:
+    ec2-54-218-9-145.us-west-2.compute.amazonaws.com:
+
+schema_registry:
+  hosts:
+    ec2-35-160-193-90.us-west-2.compute.amazonaws.com:
+
+kafka_connect:
+  hosts:
+    ec2-35-85-219-150.us-west-2.compute.amazonaws.com:
+
+kafka_rest:
+  hosts:
+    ec2-34-219-169-190.us-west-2.compute.amazonaws.com:
+
+ksql:
+  hosts:
+    ec2-35-91-214-11.us-west-2.compute.amazonaws.com:
+
+control_center:
+  hosts:
+    ec2-35-85-219-150.us-west-2.compute.amazonaws.com:
+
+control_center_next_gen:
+  vars:
+    ## (Control Center Next Gen) Enabling following variable to configure ssl properties for prometheus and alertmanager endpoints
+    control_center_next_gen_dependency_alertmanager_ssl_enabled: true
+    control_center_next_gen_dependency_prometheus_ssl_enabled: true
+  hosts:
+    ec2-35-85-219-154.us-west-2.compute.amazonaws.com:
