@@ -294,7 +294,7 @@ class FilterModule(object):
             if 'OAUTHBEARER' in normalize_sasl_protocols \
                     and oauth_enabled and not rbac_enabled:
                 final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.server.callback.handler.class'] =\
-                    'org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerValidatorCallbackHandler'
+                    'org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler'
                 final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.jwks.endpoint.url'] = oauth_jwks_uri
                 final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.sub.claim.name'] = oauth_sub_claim
 
@@ -399,7 +399,7 @@ class FilterModule(object):
             if normalize_sasl_protocols[0] == 'OAUTHBEARER' and oauth_enabled:
                 final_dict[config_prefix + 'sasl.mechanism'] = 'OAUTHBEARER'
                 final_dict[config_prefix + 'sasl.login.callback.handler.class'] =\
-                    'sasl.login.callback.handler.class: org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler'
+                    'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler'
                 final_dict[config_prefix + 'sasl.login.connect.timeout'] = '15000'
                 final_dict[config_prefix + 'sasl.oauthbearer.token.endpoint.url'] = oauth_token_uri
 
