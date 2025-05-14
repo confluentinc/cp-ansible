@@ -82,7 +82,7 @@ Validates that FIPS is in use in OpenSSL.
 
 #### Scenario archive-plain-ubuntu test's the following:
 
-Archive Installation of Confluent Platform on Ubuntu2204.
+Archive Installation of Confluent Platform on Ubuntu2404.
 
 SASL Plain protocol.
 
@@ -586,7 +586,7 @@ Validates that FIPS is in use in OpenSSL.
 
 #### Scenario mtls-java8-ubuntu test's the following:
 
-Installation of Confluent Platform on Ubuntu1804.
+Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
 
@@ -602,7 +602,7 @@ Validates that Java 11 is in use.
 
 #### Scenario mtls-ubuntu test's the following:
 
-Installation of Confluent Platform on Ubuntu2204.
+Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
 
@@ -718,7 +718,7 @@ Validates that Java 11 is in use.
 
 #### Scenario oauth-mtls-ubuntu-acl test's the following:
 
-Installation of Confluent Platform on Ubuntu2204.
+Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
 
@@ -733,6 +733,62 @@ Validates mapping rules for ACLs.
 Validates ACL users.
 
 Validated ACL creation.
+
+***
+
+### molecule/oauth-plain-archive
+
+#### Scenario oauth-plain-archive test's the following:
+
+Installation of Confluent Platform on RHEL9.
+
+SASL Plain enabled.
+
+Control Plane listener enabled.
+
+Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
+
+Custom Service Unit overrides.
+
+Custom log4j appender names.
+
+#### Scenario oauth-plain-archive verify test's the following:
+
+Validates that custom log4j appenders are present on each component.
+
+Validates that Service Description has been overridden.
+
+Validates that SASL Plaintext protocol is set across components.
+
+Validates that Connectors are present on Kafka Connect.
+
+***
+
+### molecule/oauth-plain-debian12
+
+#### Scenario oauth-plain-debian12 test's the following:
+
+Installation of Confluent Platform on Debian12.
+
+SASL Plain enabled.
+
+Control Plane listener enabled.
+
+Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
+
+Custom Service Unit overrides.
+
+Custom log4j appender names.
+
+#### Scenario oauth-plain-debian12 verify test's the following:
+
+Validates that custom log4j appenders are present on each component.
+
+Validates that Service Description has been overridden.
+
+Validates that SASL Plaintext protocol is set across components.
+
+Validates that Connectors are present on Kafka Connect.
 
 ***
 
@@ -872,7 +928,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 #### Scenario oauth-rbac-mtls-provided-ubuntu test's the following:
 
-Installs Confluent Platform Cluster on Ubuntu2204.
+Installs Confluent Platform Cluster on Ubuntu2404.
 
 RBAC enabled.
 
@@ -1094,7 +1150,7 @@ Validates client packages.
 
 #### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu test's the following:
 
-Installation of Confluent Platform on Ubuntu2204.
+Installation of Confluent Platform on Ubuntu2404.
 
 RBAC Enabled.
 
@@ -1290,7 +1346,7 @@ Validates that FIPS is in use on both clusters.
 
 #### Scenario rbac-mds-mtls-existing-keystore-truststore-ubuntu test's the following:
 
-Installs Confluent Platform Cluster on Ubuntu2204.
+Installs Confluent Platform Cluster on Ubuntu2404.
 
 RBAC enabled.
 
