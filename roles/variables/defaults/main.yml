@@ -130,9 +130,6 @@ required_total_memory_mb_ksql: 4000
 ### Variable to define the minimum amount of memory in MB required to run Rest Proxy. Calculated as default heap size plus 1GB for OS.
 required_total_memory_mb_kafka_rest: 3000
 
-### Variable to define the minimum amount of memory in MB required to run Control Center. Calculated as default heap size plus 1GB for OS.
-required_total_memory_mb_control_center: 7000
-
 ### Variable to define the minimum amount of memory in MB required to run Kafka Connect Replicator. Calculated as default heap size plus 1GB for OS.
 required_total_memory_mb_kafka_connect_replicator: 3000
 
@@ -162,9 +159,6 @@ kafka_rest_health_checks_enabled: "{{health_checks_enabled}}"
 
 ### Boolean to enable health checks on ksqlDB
 ksql_health_checks_enabled: "{{health_checks_enabled}}"
-
-### Boolean to enable health checks on Control Center
-control_center_health_checks_enabled: "{{health_checks_enabled}}"
 
 ### Boolean to enable health checks on Control Center
 control_center_next_gen_health_checks_enabled: "{{health_checks_enabled}}"
@@ -1287,81 +1281,6 @@ ksql_skip_restarts: "{{ skip_restarts }}"
 ### Variable to set auth mode on ksqlDB. Possible values are oauth, ldap, ldap_with_oauth in RBAC cluster and oauth, none in non RBAC cluster.
 ksql_auth_mode: "{{ auth_mode }}"
 
-# Control Center Variables
-
-### Default Control Center config prefix. Only valid to customize when installation_method: archive
-control_center_config_prefix: "{{ config_prefix }}/confluent-control-center"
-
-### Set this variable to customize the Linux User that the Control Center Service runs with. Default user is cp-control-center.
-control_center_user: "{{control_center_default_user}}"
-
-### Set this variable to customize the Linux Group that the Control Center Service user belongs to. Default group is confluent.
-control_center_group: "{{control_center_default_group}}"
-
-### Port Control Center exposed over
-control_center_port: 9021
-
-### Interface on host for Control Center to listen on
-control_center_listener_hostname: "0.0.0.0"
-
-### Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
-control_center_ssl_enabled: "{{ssl_enabled}}"
-
-### Property of Control Center as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
-control_center_mds_cert_auth_only: false
-
-### Control Center Authentication. Available options: [basic, none].
-control_center_authentication_type: none
-
-### Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
-control_center_log_dir: "{{control_center_default_log_dir}}"
-
-control_center_packages:
-  - confluent-common
-  - confluent-rest-utils
-  - confluent-metadata-service
-  - confluent-ce-kafka-http-server
-  - confluent-kafka-rest
-  - confluent-server-rest
-  - confluent-telemetry
-  - "{{ kafka_broker_main_package }}"
-  - confluent-security
-  - confluent-rebalancer
-  - confluent-control-center-fe
-  - confluent-control-center
-
-control_center_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center.truststore.jks{% endif %}"
-control_center_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center.keystore.jks{% endif %}"
-control_center_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
-control_center_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
-control_center_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_keystore_storepass }}"
-control_center_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
-control_center_cert_path: "{{ ssl_file_dir_final }}/control_center.crt"
-control_center_key_path: "{{ ssl_file_dir_final }}/control_center.key"
-control_center_export_certs: "{{ssl_mutual_auth_enabled}}"
-control_center_keytab_path: /etc/security/keytabs/control_center.keytab
-
-### Name of listener used by C3 to talk to Kafka
-control_center_kafka_listener_name: >-
-  {%- if rbac_enabled|bool and auth_mode=='mtls' -%}
-    internal_token
-  {%- else -%}
-    internal
-  {%- endif -%}
-
-### Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
-control_center_copy_files: []
-
-### Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
-control_center_default_internal_replication_factor: "{{ 3 if ccloud_kafka_enabled|bool else
-  [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
-
-### Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
-control_center_custom_properties: {}
-
-### Boolean used for disabling of systemd service restarts when rootless install is executed
-control_center_skip_restarts: "{{ skip_restarts }}"
-
 # Control Center Next Gen Variables
 
 ### Default Control Center config prefix. Only valid to customize when installation_method: archive
@@ -1639,12 +1558,6 @@ kafka_rest_basic_users:
     password: admin-secret
     roles: admin
 
-control_center_basic_users:
-  admin:
-    principal: admin
-    password: admin-secret
-    roles: admin
-
 control_center_next_gen_basic_users:
   admin:
     principal: admin
@@ -1878,21 +1791,6 @@ kafka_rest_oauth_password: password
 ### Service principal for Rest Proxy client in IdPserver. Defaults to Rest proxy Client Id
 kafka_rest_oauth_principal: "{{ kafka_rest_oauth_user }}"
 
-### LDAP User for Control Center to authenticate as
-control_center_ldap_user: control-center
-
-### Password to control_center_ldap_user LDAP User
-control_center_ldap_password: password
-
-### OAuth Client Id for Control Center to authenticate as
-control_center_oauth_user: control-center
-
-### Client Secret for control_center_oauth_user
-control_center_oauth_password: password
-
-### Service principal for Control Center client in IdPserver. Defaults to Control Center Client Id
-control_center_oauth_principal: "{{ control_center_oauth_user }}"
-
 ### LDAP User for Control Center (Next Gen) to authenticate as
 control_center_next_gen_ldap_user: control-center
 
@@ -2010,7 +1908,7 @@ kafka_connect_additional_system_admins: "{{rbac_component_additional_system_admi
 
 # TODO Investigate proper rolebinding for c3 system admins
 ### List of principals to be granted system admin Role Bindings on the Control Center Cluster
-control_center_additional_system_admins: "{{rbac_component_additional_system_admins}}"
+control_center_next_gen_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
 # Secrets Protection Variables
 
@@ -2102,13 +2000,13 @@ ksql_secrets_protection_encrypt_passwords: "{{secrets_protection_encrypt_passwor
 ksql_secrets_protection_encrypt_properties: []
 
 ### Boolean to enable secrets protection in Control Center.
-control_center_secrets_protection_enabled: "{{secrets_protection_enabled}}"
+control_center_next_gen_secrets_protection_enabled: "{{secrets_protection_enabled}}"
 
 ### Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Control Center.
-control_center_secrets_protection_encrypt_passwords: "{{secrets_protection_encrypt_passwords}}"
+control_center_next_gen_secrets_protection_encrypt_passwords: "{{secrets_protection_encrypt_passwords}}"
 
-### List of Control Center properties to encrypt. Can be used in addition to control_center_secrets_protection_encrypt_passwords.
-control_center_secrets_protection_encrypt_properties: []
+### List of Control Center properties to encrypt. Can be used in addition to control_center_next_gen_secrets_protection_encrypt_passwords.
+control_center_next_gen_secrets_protection_encrypt_properties: []
 
 # Telemetry Variables
 
@@ -2179,12 +2077,6 @@ ksql_telemetry_enabled: "{{telemetry_enabled}}"
 ksql_telemetry_ansible_labels_enabled: "{{ksql_telemetry_enabled}}"
 
 ### Boolean to configure Telemetry on Control Center. Must also set telemetry_api_key and telemetry_api_secret
-control_center_telemetry_enabled: "{{telemetry_enabled}}"
-
-### Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
-control_center_telemetry_ansible_labels_enabled: "{{control_center_telemetry_enabled}}"
-
-### Boolean to configure Telemetry on Control Center. Must also set telemetry_api_key and telemetry_api_secret
 control_center_next_gen_telemetry_enabled: "{{telemetry_enabled}}"
 
 ### Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
@@ -2253,12 +2145,6 @@ kafka_rest_health_check_user: "{{ kafka_rest_basic_users.admin.principal }}"
 
 ### Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
 kafka_rest_health_check_password: "{{ kafka_rest_basic_users.admin.password }}"
-
-### User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
-control_center_health_check_user: "{{ control_center_basic_users.admin.principal }}"
-
-### Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
-control_center_health_check_password: "{{ control_center_basic_users.admin.password }}"
 
 ### User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
 control_center_next_gen_health_check_user: "{{ control_center_next_gen_basic_users.admin.principal }}"
@@ -2823,9 +2709,6 @@ kafka_rest_deployment_strategy: "{{deployment_strategy}}"
 ksql_deployment_strategy: "{{deployment_strategy}}"
 
 ### Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
-control_center_deployment_strategy: "{{deployment_strategy}}"
-
-### Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 control_center_next_gen_deployment_strategy: "{{deployment_strategy}}"
 
 ### Kafka Connect Replicator reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
@@ -2854,9 +2737,6 @@ kafka_rest_pause_rolling_deployment: "{{pause_rolling_deployment}}"
 
 ### Boolean to Pause Rolling Deployment after each ksqlDB Node starts up.
 ksql_pause_rolling_deployment: "{{pause_rolling_deployment}}"
-
-### Boolean to Pause Rolling Deployment after each Control Center Node starts up.
-control_center_pause_rolling_deployment: "{{pause_rolling_deployment}}"
 
 ### Boolean to Pause Rolling Deployment after each Control Center Node starts up.
 control_center_next_gen_pause_rolling_deployment: "{{pause_rolling_deployment}}"
