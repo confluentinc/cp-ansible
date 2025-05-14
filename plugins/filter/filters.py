@@ -386,44 +386,46 @@ class FilterModule(object):
                 final_dict[config_prefix + 'sasl.login.connect.timeout'] = '15000'
                 final_dict[config_prefix + 'sasl.oauthbearer.token.endpoint.url'] = oauth_token_uri
 
-                if (oauth_groups_scope == 'none' and (not idp_self_signed)):
+                if (oauth_groups_scope == 'none' and (not idp_self_signed) and (not assertion_config.get('enabled'))):
                     final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
                         'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + '\";'
 
-                if (oauth_groups_scope != 'none' and (not idp_self_signed)):
+                if (oauth_groups_scope != 'none' and (not idp_self_signed) and (not assertion_config.get('enabled'))):
                     final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
                         'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + \
                         '\" scope=\"' + oauth_groups_scope + '\";'
 
-                if oauth_groups_scope == 'none' and idp_self_signed:
+                if (oauth_groups_scope == 'none' and idp_self_signed and (not assertion_config.get('enabled'))):
                     final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
                         'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + \
                         '\" ssl.truststore.location=\"' + \
                         truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
 
-                if oauth_groups_scope != 'none' and idp_self_signed:
+                if (oauth_groups_scope != 'none' and idp_self_signed and (not assertion_config.get('enabled'))):
                     final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
                         'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + \
                         '\" scope=\"' + oauth_groups_scope + \
                         '\" ssl.truststore.location=\"' + truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
                 
-                if assertion_config and assertion_config.get('enabled'):
-                    if assertion_config.get('client_assertion_issuer'):
+                if assertion_config.get('enabled'):
+                    if assertion_config.get('client_assertion_issuer') != 'none':
                         final_dict[config_prefix + 'sasl.oauthbearer.assertion.claim.iss'] = assertion_config['client_assertion_issuer']
-                    if assertion_config.get('client_assertion_sub'):
+                    if assertion_config.get('client_assertion_sub') != 'none':
                         final_dict[config_prefix + 'sasl.oauthbearer.assertion.claim.sub'] = assertion_config['client_assertion_sub']
-                    if assertion_config.get('client_assertion_audience'):
+                    if assertion_config.get('client_assertion_audience') != 'none':
                         final_dict[config_prefix + 'sasl.oauthbearer.assertion.claim.aud'] = assertion_config['client_assertion_audience']
-                    if assertion_config.get('client_assertion_private_key_file'):
+                    if assertion_config.get('client_assertion_private_key_file') != 'none':
                         final_dict[config_prefix + 'sasl.oauthbearer.assertion.private.key.file'] = assertion_config['client_assertion_private_key_file']
-                    if assertion_config.get('client_assertion_private_key_passphrase'):
+                    if assertion_config.get('client_assertion_private_key_passphrase') != 'none':
                         final_dict[config_prefix + 'sasl.oauthbearer.assertion.private.key.passphrase'] = assertion_config['client_assertion_private_key_passphrase']
-                    if assertion_config.get('client_assertion_template_file'):
+                    if assertion_config.get('client_assertion_template_file') != 'none':
                         final_dict[config_prefix + 'sasl.oauthbearer.assertion.template.file'] = assertion_config['client_assertion_template_file']
-                    if assertion_config.get('client_assertion_jwt_id'):
+                    if assertion_config.get('client_assertion_jwt_id') != 'none':
                         final_dict[config_prefix + 'sasl.oauthbearer.assertion.claim.jti.include'] = assertion_config['client_assertion_jwt_id']
-                    if assertion_config.get('client_assertion_not_before'):
+                    if assertion_config.get('client_assertion_not_before') != 'none':
                         final_dict[config_prefix + 'sasl.oauthbearer.assertion.claim.nbf.include'] = assertion_config['client_assertion_not_before']
+                    if assertion_config.get('client_assertion_file') != 'none':
+                        final_dict[config_prefix + 'sasl.oauthbearer.assertion.file'] = assertion_config['client_assertion_file']
 
         return final_dict
 
