@@ -408,6 +408,26 @@ Validates ssl.client.authentication is set to REQUIRED.
 
 ***
 
+### molecule/mini-setup-ldap-mtls-fips
+
+#### Scenario mini-setup-ldap-mtls-fips test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS+LDAP enabled.
+
+MDS accepts LDAP credentials and mTLS certs.
+
+LDAP based login to C3.
+
+#### Scenario mini-setup-ldap-mtls-fips verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
 ### molecule/mini-setup-mtls
 
 #### Scenario mini-setup-mtls test's the following:
@@ -419,6 +439,24 @@ RBAC over mTLS enabled.
 File based login to C3 using overrides.
 
 #### Scenario mini-setup-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-mtls-fips
+
+#### Scenario mini-setup-mtls-fips test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS enabled.
+
+File based login to C3 using overrides.
+
+#### Scenario mini-setup-mtls-fips verify test's the following:
 
 Validates that SSL Protocol is set.
 
@@ -560,41 +598,39 @@ Validates that Java 17 is in Use
 
 ***
 
-### molecule/mtls-java11-rhel-fips
+### molecule/mtls-java17-ubuntu
 
-#### Scenario mtls-java11-rhel-fips test's the following:
-
-Installation of Confluent Platform on Alma Linux 9.
-
-MTLS enabled.
-
-Java 11.
-
-FIPS enabled
-
-#### Scenario mtls-java11-rhel-fips verify test's the following:
-
-Validates that Java 11 is in use.
-
-Validates that FIPS security is enabled on the Brokers.
-
-Validates that FIPS is in use in OpenSSL.
-
-***
-
-### molecule/mtls-java8-ubuntu
-
-#### Scenario mtls-java8-ubuntu test's the following:
+#### Scenario mtls-java17-ubuntu test's the following:
 
 Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
 
-Java 8.
+#### Scenario mtls-java17-ubuntu verify test's the following:
 
-#### Scenario mtls-java8-ubuntu verify test's the following:
+Validates that protocol is set to SSl across all components.
 
-Validates that Java 11 is in use.
+***
+
+### molecule/mtls-java21-rhel-fips
+
+#### Scenario mtls-java21-rhel-fips test's the following:
+
+Installation of Confluent Platform on Alma Linux 9.
+
+MTLS enabled.
+
+Java 21.
+
+FIPS enabled
+
+#### Scenario mtls-java21-rhel-fips verify test's the following:
+
+Validates that Java 21 is in use.
+
+Validates that FIPS security is enabled on the Brokers.
+
+Validates that FIPS is in use in OpenSSL.
 
 ***
 
@@ -705,8 +741,6 @@ Validates that client ID's are set correctly on Replicator.
 Installation of Confluent Platform on Debian10.
 
 MTLS enabled.
-
-Java 11.
 
 #### Scenario oauth-mtls-debian verify test's the following:
 
