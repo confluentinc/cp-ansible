@@ -399,7 +399,7 @@ class FilterModule(object):
             if normalize_sasl_protocols[0] == 'OAUTHBEARER' and oauth_enabled:
                 final_dict[config_prefix + 'sasl.mechanism'] = 'OAUTHBEARER'
                 final_dict[config_prefix + 'sasl.login.callback.handler.class'] =\
-                    'org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler'
+                    'sasl.login.callback.handler.class: org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler'
                 final_dict[config_prefix + 'sasl.login.connect.timeout'] = '15000'
                 final_dict[config_prefix + 'sasl.oauthbearer.token.endpoint.url'] = oauth_token_uri
 
