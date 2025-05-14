@@ -5772,9 +5772,9 @@ Default:  "{{ false if custom_java_path | length > 0 else true }}"
 
 ### redhat_java_package_name
 
-Java Package to install on RHEL/Centos hosts. Possible values java-8-openjdk, java-11-openjdk or java-17-openjdk
+Java Package to install on RHEL/Centos hosts. Possible values java-17-openjdk or java-21-openjdk
 
-Default:  java-17-openjdk
+Default:  java-21-openjdk
 
 ***
 
