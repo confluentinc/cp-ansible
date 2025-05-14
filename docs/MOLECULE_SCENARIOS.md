@@ -560,39 +560,41 @@ Validates that Java 17 is in Use
 
 ***
 
-### molecule/mtls-java17-ubuntu
+### molecule/mtls-java11-rhel-fips
 
-#### Scenario mtls-java17-ubuntu test's the following:
-
-Installation of Confluent Platform on Ubuntu2404.
-
-MTLS enabled.
-
-#### Scenario mtls-java17-ubuntu verify test's the following:
-
-Validates that protocol is set to SSl across all components.
-
-***
-
-### molecule/mtls-java21-rhel-fips
-
-#### Scenario mtls-java21-rhel-fips test's the following:
+#### Scenario mtls-java11-rhel-fips test's the following:
 
 Installation of Confluent Platform on Alma Linux 9.
 
 MTLS enabled.
 
-Java 21.
+Java 11.
 
 FIPS enabled
 
-#### Scenario mtls-java21-rhel-fips verify test's the following:
+#### Scenario mtls-java11-rhel-fips verify test's the following:
 
-Validates that Java 21 is in use.
+Validates that Java 11 is in use.
 
 Validates that FIPS security is enabled on the Brokers.
 
 Validates that FIPS is in use in OpenSSL.
+
+***
+
+### molecule/mtls-java8-ubuntu
+
+#### Scenario mtls-java8-ubuntu test's the following:
+
+Installation of Confluent Platform on Ubuntu2404.
+
+MTLS enabled.
+
+Java 8.
+
+#### Scenario mtls-java8-ubuntu verify test's the following:
+
+Validates that Java 11 is in use.
 
 ***
 
@@ -603,8 +605,6 @@ Validates that FIPS is in use in OpenSSL.
 Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
-
-Java 21.
 
 #### Scenario mtls-ubuntu verify test's the following:
 
@@ -706,6 +706,8 @@ Installation of Confluent Platform on Debian10.
 
 MTLS enabled.
 
+Java 11.
+
 #### Scenario oauth-mtls-debian verify test's the following:
 
 Validates that Java 11 is in use.
@@ -731,6 +733,62 @@ Validates mapping rules for ACLs.
 Validates ACL users.
 
 Validated ACL creation.
+
+***
+
+### molecule/oauth-plain-archive
+
+#### Scenario oauth-plain-archive test's the following:
+
+Installation of Confluent Platform on RHEL9.
+
+SASL Plain enabled.
+
+Control Plane listener enabled.
+
+Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
+
+Custom Service Unit overrides.
+
+Custom log4j appender names.
+
+#### Scenario oauth-plain-archive verify test's the following:
+
+Validates that custom log4j appenders are present on each component.
+
+Validates that Service Description has been overridden.
+
+Validates that SASL Plaintext protocol is set across components.
+
+Validates that Connectors are present on Kafka Connect.
+
+***
+
+### molecule/oauth-plain-debian12
+
+#### Scenario oauth-plain-debian12 test's the following:
+
+Installation of Confluent Platform on Debian12.
+
+SASL Plain enabled.
+
+Control Plane listener enabled.
+
+Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
+
+Custom Service Unit overrides.
+
+Custom log4j appender names.
+
+#### Scenario oauth-plain-debian12 verify test's the following:
+
+Validates that custom log4j appenders are present on each component.
+
+Validates that Service Description has been overridden.
+
+Validates that SASL Plaintext protocol is set across components.
+
+Validates that Connectors are present on Kafka Connect.
 
 ***
 

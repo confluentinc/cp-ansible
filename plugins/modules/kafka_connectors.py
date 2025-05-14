@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 # Copyright: (c) 2019, Confluent Inc
 
@@ -438,7 +438,6 @@ def run_module():
             added_updated_messages.append(format_output(connector['name'], success, message))
 
         output_messages.append("Connectors added or updated: {}.".format(', '.join(added_updated_messages)))
-
         result['message'] = " ".join(output_messages)
 
         if connector_failure:
