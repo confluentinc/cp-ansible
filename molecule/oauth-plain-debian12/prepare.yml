@@ -1,0 +1,30 @@
+---
+- name: Prepare
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Create local_plugins directory
+      file:
+        state: directory
+        path: /tmp/local_plugins
+        mode: '755'
+    - name: Prepare kafka connect plugins on ansible controller
+      get_url:
+        url: "{{ item }}"
+        dest: /tmp/local_plugins/
+      with_items:
+        - "https://api.hub.confluent.io/api/plugins/confluentinc/kafka-connect-gcp-functions/versions/1.1.9/confluentinc-kafka-connect-gcp-functions-1.1.9.zip"
+        - "https://api.hub.confluent.io/api/plugins/confluentinc/kafka-connect-azure-data-lake-gen2-storage/versions/1.6.15/confluentinc-kafka-connect-azure-data-lake-gen2-storage-1.6.15.zip"
+
+- name: Provision Oauth Server
+  import_playbook: ../oauth.yml
+
+- name: Download OAuth IDP cert
+  hosts: localhost
+  tasks:
+    - shell: openssl s_client -showcerts -connect localhost:8443 </dev/null 2>/dev/null|openssl x509 -outform PEM > oauthcertfile.pem
+
+- name: Install Zookeeper Cluster
+  import_playbook: confluent.platform.all
+  when: lookup('env', 'MIGRATION')|default('false') == 'true'

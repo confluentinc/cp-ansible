@@ -12,6 +12,14 @@ Default:  8.0.0
 
 ***
 
+### confluent_control_center_next_gen_package_version
+
+Version of Confluent Control Center Next Gen to install
+
+Default:  2.0.0
+
+***
+
 ### fetch_logs_path
 
 Path on component to store logs collected during fetch_logs playbook
@@ -372,11 +380,19 @@ Default:  "{{health_checks_enabled}}"
 
 ***
 
+### control_center_next_gen_health_checks_enabled
+
+Boolean to enable health checks on Control Center
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
 ### monitoring_interceptors_enabled
 
 Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
 
-Default:  "{{ 'control_center' in groups }}"
+Default:  "{{ 'control_center' in groups or 'control_center_next_gen' in groups }}"
 
 ***
 
@@ -1184,7 +1200,15 @@ Default:  "{{ [ groups['kafka_controller'] | default(['localhost']) | length, de
 
 Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
-Default:  "{{ confluent_server_enabled and 'control_center' in groups }}"
+Default:  "{{ confluent_server_enabled and ('control_center' in groups or 'control_center_next_gen' in groups) }}"
+
+***
+
+### kafka_controller_metrics_reporter_for_control_center_next_gen_enabled
+
+Boolean to enable the kafka's metrics reporter for Control Center Next Gen. Defaults to true if Control Center Next Gen in inventory.
+
+Default:  "{{ confluent_server_enabled and ('control_center_next_gen' in groups) }}"
 
 ***
 
@@ -1408,7 +1432,15 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, defaul
 
 Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
-Default:  "{{ confluent_server_enabled and 'control_center' in groups }}"
+Default:  "{{ confluent_server_enabled and ('control_center' in groups or 'control_center_next_gen' in groups) }}"
+
+***
+
+### kafka_broker_metrics_reporter_for_control_center_next_gen_enabled
+
+Boolean to enable the kafka's metrics reporter for Control Center Next Gen. Defaults to true if Control Center Next Gen in inventory.
+
+Default:  "{{ confluent_server_enabled and ('control_center_next_gen' in groups) }}"
 
 ***
 
@@ -1561,6 +1593,14 @@ Default:  "{{ 'mtls' if schema_registry_ssl_mutual_auth_enabled else 'none' }}"
 Set this variable to customize the directory that the Schema Registry writes log files to. Default location is /var/log/confluent/schema-registry. NOTE- schema_registry.appender_log_path is deprecated.
 
 Default:  "{{schema_registry_default_log_dir}}"
+
+***
+
+### schema_registry_kafka_listener_name
+
+Name of listener used by Schema Registry to talk to Kafka
+
+Default:  internal
 
 ***
 
@@ -1769,6 +1809,14 @@ Default:  "{{ 'mtls' if kafka_rest_ssl_mutual_auth_enabled else 'none' }}"
 Set this variable to customize the directory that the Rest Proxy writes log files to. Default location is /var/log/confluent/kafka-rest. NOTE- kafka_rest.appender_log_path is deprecated.
 
 Default:  "{{kafka_rest_default_log_dir}}"
+
+***
+
+### kafka_rest_kafka_listener_name
+
+Name of listener used by Kafka Rest to talk to Kafka
+
+Default:  >-
 
 ***
 
@@ -1993,6 +2041,14 @@ Default:  "{{ 'mtls' if kafka_connect_ssl_mutual_auth_enabled|bool else 'none' }
 Set this variable to customize the directory that Kafka Connect writes log files to. Default location is /var/log/kafka. NOTE- kafka_connect.appender_log_path is deprecated.
 
 Default:  "{{kafka_connect_default_log_dir}}"
+
+***
+
+### kafka_connect_kafka_listener_name
+
+Name of listener used by Kafka Connect to talk to Kafka
+
+Default:  internal
 
 ***
 
@@ -2268,6 +2324,14 @@ Default:  "{{ksql_default_log_dir}}"
 
 ***
 
+### ksql_kafka_listener_name
+
+Name of listener used by Schema Registry to talk to Kafka
+
+Default:  internal
+
+***
+
 ### ksql_jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on ksqlDB
@@ -2500,6 +2564,14 @@ Default:  "{{control_center_default_log_dir}}"
 
 ***
 
+### control_center_kafka_listener_name
+
+Name of listener used by C3 to talk to Kafka
+
+Default:  >-
+
+***
+
 ### control_center_copy_files
 
 Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
@@ -2525,6 +2597,126 @@ Default:  {}
 ***
 
 ### control_center_skip_restarts
+
+Boolean used for disabling of systemd service restarts when rootless install is executed
+
+Default:  "{{ skip_restarts }}"
+
+***
+
+### control_center_next_gen_config_prefix
+
+Default Control Center config prefix. Only valid to customize when installation_method: archive
+
+Default:  "{{ config_prefix }}/confluent-control-center"
+
+***
+
+### control_center_next_gen_dependencies_config_path
+
+Default Control Center's dependency (prometheus & alertmanager) config path
+
+Default:  "/opt/confluent-control-center/dependencies"
+
+***
+
+### control_center_next_gen_user
+
+Set this variable to customize the Linux User that the Control Center Service runs with. Default user is cp-control-center.
+
+Default:  "{{control_center_default_user}}"
+
+***
+
+### control_center_next_gen_group
+
+Set this variable to customize the Linux Group that the Control Center Service user belongs to. Default group is confluent.
+
+Default:  "{{control_center_default_group}}"
+
+***
+
+### control_center_next_gen_port
+
+Port Control Center Next Gen Exposed over
+
+Default:  9021
+
+***
+
+### control_center_next_gen_listener_hostname
+
+Interface on host for Control Center to listen on
+
+Default:  "0.0.0.0"
+
+***
+
+### control_center_next_gen_ssl_enabled
+
+Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### control_center_next_gen_mds_cert_auth_only
+
+Property of Control Center as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+
+Default:  false
+
+***
+
+### control_center_next_gen_authentication_type
+
+Control Center Authentication. Available options: [basic, none].
+
+Default:  none
+
+***
+
+### control_center_next_gen_log_dir
+
+Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
+
+Default:  "{{control_center_next_gen_default_log_dir}}"
+
+***
+
+### control_center_next_gen_data_dir
+
+Set this variable to customize the directory that Control Center writes data files to. Default location is /var/lib/confluent/control-center.
+
+Default:  "/var/lib/confluent/control-center"
+
+***
+
+### control_center_next_gen_copy_files
+
+Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
+
+Default:  []
+
+***
+
+### control_center_next_gen_default_internal_replication_factor
+
+Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
+
+Default:  "{{ 3 if ccloud_kafka_enabled|bool else
+
+***
+
+### control_center_next_gen_custom_properties
+
+Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
+
+Default:  {}
+
+***
+
+### control_center_next_gen_skip_restarts
 
 Boolean used for disabling of systemd service restarts when rootless install is executed
 
@@ -2577,6 +2769,14 @@ Default:  false
 Port to expose MDS Server API on
 
 Default:  8090
+
+***
+
+### internal_token_port
+
+Internal Token listener Port
+
+Default:  9088
 
 ***
 
@@ -2700,9 +2900,41 @@ Default:  none
 
 ***
 
+### mds_file_based_user_store_enabled
+
+Boolean to enable file based user store on MDS. Can be helpful in case of no SSO in Control Center. When setting this true we must also define mds_file_based_user_store_src_path and mds_file_based_user_store_dest_path.
+
+Default:  false
+
+***
+
+### mds_file_based_user_store_src_path
+
+Path to the file containing the user store for MDS. This must be defined when mds_file_based_user_store_enabled is true. The file must have the format where each entry is newline seperated and in each entry we have username and password separated by a colon. For example: admin: admin-secret
+
+Default:  ""
+
+***
+
+### mds_file_based_user_store_remote_src
+
+Boolean to indicate if the user store file is present on the control node or remote host. If false, the file will be copied from the control node to the target host. If true it will be moved from src to dst path on the target host.
+
+Default:  false
+
+***
+
+### mds_file_based_user_store_dest_path
+
+Path of the destination file on the target host i.e MDS server. Should be a file path and not a directory.
+
+Default:  ""
+
+***
+
 ### auth_mode
 
-Authorization mode on all cp components. Possible values are ldap, oauth, ldap_with_oauth and none. Set this to oauth for OAuth cluster and ldap_with_oauth for cluster with both ldap and oauth support. When set to oauth or ldap_with_oauth, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_superuser_client_id, oauth_superuser_client_password.
+Authorization mode on all cp components. Possible values are ldap, oauth, ldap_with_oauth, mtls and none. Set this to oauth for OAuth cluster and ldap_with_oauth for cluster with both ldap and oauth support. When set to oauth or ldap_with_oauth, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_superuser_client_id, oauth_superuser_client_password. When MDS only has mTLS and no user store then set it to mTLS. In case of OAuth/LDAP + mTLS keep it to ldap/oauth
 
 Default:  "{% if rbac_enabled|bool %}ldap{% else %}none{% endif %}"
 
@@ -3113,6 +3345,46 @@ Default:  password
 Service principal for Control Center client in IdPserver. Defaults to Control Center Client Id
 
 Default:  "{{ control_center_oauth_user }}"
+
+***
+
+### control_center_next_gen_ldap_user
+
+LDAP User for Control Center (Next Gen) to authenticate as
+
+Default:  control-center
+
+***
+
+### control_center_next_gen_ldap_password
+
+Password to control_center_next_gen_ldap_user LDAP User
+
+Default:  password
+
+***
+
+### control_center_next_gen_oauth_user
+
+OAuth Client Id for Control Center (Next Gen) to authenticate as
+
+Default:  control-center
+
+***
+
+### control_center_next_gen_oauth_password
+
+Client Secret for control_center_next_gen_oauth_user
+
+Default:  password
+
+***
+
+### control_center_next_gen_oauth_principal
+
+Service principal for Control Center (Next Gen) client in IdPserver. Defaults to Control Center Client Id
+
+Default:  "{{ control_center_next_gen_oauth_user }}"
 
 ***
 
@@ -3692,6 +3964,22 @@ Default:  "{{kafka_controller_telemetry_enabled}}"
 
 ***
 
+### kafka_controller_telemetry_control_center_next_gen_user
+
+user used to send telemetry data from Kafka to Control Center Next Gen
+
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
+
+***
+
+### kafka_controller_telemetry_control_center_next_gen_password
+
+Password for the user used to send telemetry data from Kafka to Control Center Next Gen.
+
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled is defined %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
+
+***
+
 ### kafka_broker_telemetry_enabled
 
 Boolean to configure Telemetry on Kafka. Must also set telemetry_api_key and telemetry_api_secret
@@ -3705,6 +3993,22 @@ Default:  "{{telemetry_enabled}}"
 Boolean to send cp-ansible Telemetry Metrics from Kafka. Currently only sends cp-ansible version data
 
 Default:  "{{kafka_broker_telemetry_enabled}}"
+
+***
+
+### kafka_broker_telemetry_control_center_next_gen_user
+
+user used to send telemetry data from Kafka to Control Center Next Gen
+
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
+
+***
+
+### kafka_broker_telemetry_control_center_next_gen_password
+
+Password for the user used to send telemetry data from Kafka to Control Center Next Gen
+
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled is defined %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
 
 ***
 
@@ -3785,6 +4089,22 @@ Default:  "{{telemetry_enabled}}"
 Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
 
 Default:  "{{control_center_telemetry_enabled}}"
+
+***
+
+### control_center_next_gen_telemetry_enabled
+
+Boolean to configure Telemetry on Control Center. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### control_center_next_gen_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
+
+Default:  "{{control_center_next_gen_telemetry_enabled}}"
 
 ***
 
@@ -3961,6 +4281,22 @@ Default:  "{{ control_center_basic_users.admin.principal }}"
 Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{ control_center_basic_users.admin.password }}"
+
+***
+
+### control_center_next_gen_health_check_user
+
+User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{ control_center_next_gen_basic_users.admin.principal }}"
+
+***
+
+### control_center_next_gen_health_check_password
+
+Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
+
+Default:  "{{ control_center_next_gen_basic_users.admin.password }}"
 
 ***
 
@@ -5228,6 +5564,14 @@ Default:  "{{deployment_strategy}}"
 
 ***
 
+### control_center_next_gen_deployment_strategy
+
+Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
 ### kafka_connect_replicator_deployment_strategy
 
 Kafka Connect Replicator reconfiguration pattern. Set to parallel to reconfigure all hosts at once, which will cause downtime.
@@ -5308,11 +5652,67 @@ Default:  "{{pause_rolling_deployment}}"
 
 ***
 
+### control_center_next_gen_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Control Center Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
 ### kafka_connect_replicator_pause_rolling_deployment
 
 Boolean to Pause Rolling Deployment after each Kafka Connect Replicator Node starts up.
 
 Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### control_center_next_gen_dependency_prometheus_health_check_user
+
+user for the user used to do healthcheck on Control Center Next Gen (prometheus)
+
+Default:  "{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}"
+
+***
+
+### control_center_next_gen_dependency_prometheus_health_check_password
+
+Password for the user used to do healthcheck on Control Center Next Gen (prometheus)
+
+Default:  "{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}"
+
+***
+
+### control_center_next_gen_dependency_alertmanager_user_for_prometheus
+
+user for the user used to do healthcheck on Control Center Next Gen (prometheus)
+
+Default:  "{{control_center_next_gen_dependency_alertmanager_basic_users.admin.principal}}"
+
+***
+
+### control_center_next_gen_dependency_alertmanager_password_for_prometheus
+
+Password for the user used to do healthcheck on Control Center Next Gen (prometheus)
+
+Default:  "{{control_center_next_gen_dependency_alertmanager_basic_users.admin.password}}"
+
+***
+
+### control_center_next_gen_dependency_alertmanager_health_check_user
+
+user for the user used to do healthcheck on Control Center Next Gen (prometheus)
+
+Default:  "{{control_center_next_gen_dependency_alertmanager_basic_users.admin.principal}}"
+
+***
+
+### control_center_next_gen_dependency_alertmanager_health_check_password
+
+Password for the user used to do healthcheck on Control Center Next Gen (prometheus)
+
+Default:  "{{control_center_next_gen_dependency_alertmanager_basic_users.admin.password}}"
 
 ***
 
@@ -5426,6 +5826,14 @@ Default:  "https://packages.confluent.io"
 
 ***
 
+### confluent_independent_repository_baseurl
+
+Confluent independent release packages RPM and Debian Package Repositories
+
+Default:  "{{confluent_common_repository_baseurl}}"
+
+***
+
 ### custom_java_path
 
 Full pre-existing Java path on custom nodes. CP-Ansible will use the provided path and will skip installing java as part of execution
@@ -5530,9 +5938,25 @@ Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_vers
 
 ***
 
+### confluent_archive_control_center_next_gen_file_source
+
+A path reference to a local archive file or URL for control-center-next-gen archive. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
+
+Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/archive/confluent-control-center-next-gen-{{confluent_control_center_next_gen_package_version}}.tar.gz"
+
+***
+
 ### confluent_archive_file_remote
 
 Set to true to indicate the archive file is remote (i.e. already on the target node) or a URL. Set to false if the archive file is on the control node.
+
+Default:  true
+
+***
+
+### confluent_archive_control_center_next_gen_file_remote
+
+Set to true to indicate the archive file for Confluent Control Center Next Gen is remote (i.e. already on the target node) or a URL. Set to false if the archive file is on the control node.
 
 Default:  true
 
@@ -5651,6 +6075,164 @@ Default:
 ### control_center_health_check_delay
 
 Time in seconds to wait before starting Control Center Health Checks.
+
+Default:  30
+
+***
+
+# control_center_next_gen
+
+Below are the supported variables for the role control_center_next_gen
+
+***
+
+### control_center_next_gen_custom_log4j
+
+Boolean to reconfigure Control Center Next Gen's logging with RollingFileAppender and log cleanup
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### control_center_next_gen_log4j_root_logger
+
+Root logger within Control Center Next Gen's log4j config. Only honored if control_center_next_gen_custom_log4j: true
+
+Default:  "INFO, main"
+
+***
+
+### control_center_next_gen_max_log_files
+
+Max number of log files generated by Control Center Next Gen. Only honored if control_center_next_gen_custom_log4j: true
+
+Default:  10
+
+***
+
+### control_center_next_gen_log_file_size
+
+Max size of a log file generated by Control Center Next Gen. Only honored if control_center_next_gen_custom_log4j: true
+
+Default:  100MB
+
+***
+
+### control_center_next_gen_logredactor_logger_specs_list
+
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+
+Default: 
+
+***
+
+### control_center_next_gen_custom_java_args
+
+Custom Java Args to add to the Control Center Next Gen Process
+
+Default:  ""
+
+***
+
+### control_center_next_gen_rocksdb_path
+
+Full Path to the RocksDB Data Directory. If left as empty string, cp-ansible will not configure RocksDB
+
+Default:  ""
+
+***
+
+### control_center_next_gen_dependency_archive_config_file_path
+
+Directory path to archive config files. This is used to determine the path to the config files for Control Center Next Gen dependencies.
+
+Default:  "{{confluent_control_center_next_gen_binary_base_path}}{{ config_prefix }}/confluent-control-center"
+
+***
+
+### control_center_next_gen_dependency_rpm_config_file_path
+
+Directory path to rpm config files. This is used to determine the path to the config files for Control Center Next Gen dependencies.
+
+Default:  "{{ config_prefix }}/confluent-control-center"
+
+***
+
+### control_center_next_gen_service_overrides
+
+Overrides to the Service Section of Control Center Next Gen Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_next_gen_dependency_prometheus_service_overrides
+
+Overrides to the Service Section of Prometheus Control Center Next Gen Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_next_gen_dependency_alertmanager_service_overrides
+
+Overrides to the Service Section of AlertManager Control Center Next Gen Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_next_gen_service_environment_overrides
+
+Environment Variables to be added to the Control Center Next Gen Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_next_gen_dependency_prometheus_service_environment_overrides
+
+Environment Variables to be added to the Prometheus (Control Center Next Gen's dependency) Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_next_gen_dependency_alertmanager_service_environment_overrides
+
+Environment Variables to be added to the AlertManager (Control Center Next Gen's dependency) Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_next_gen_service_unit_overrides
+
+Overrides to the Unit Section of Control Center Next Gen Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_next_gen_dependency_prometheus_service_unit_overrides
+
+Overrides to the Unit Section of Prometheus Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_next_gen_dependency_alertmanager_service_unit_overrides
+
+Overrides to the Unit Section of Alert Manager Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### control_center_next_gen_health_check_delay
+
+Time in seconds to wait before starting Control Center Next Gen Health Checks.
 
 Default:  30
 
