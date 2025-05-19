@@ -113,7 +113,6 @@ message:
     returned: always
 '''
 
-# Note: yaml import moved inside main() to avoid sanity test issues
 import os
 from ansible.module_utils.basic import AnsibleModule
 try:
