@@ -1578,6 +1578,8 @@ kafka_rest_http_protocol: "{{ 'https' if kafka_rest_ssl_enabled|bool else 'http'
 
 kafka_rest_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}"
 
+kafka_rest_client_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_rest_client_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_rest_client_kafka_listener_name]['port']}}" # this needs to be added only in sasl_ssl kafka client i.e rp client
+
 kafka_rest_properties:
   defaults:
     enabled: true
@@ -1635,6 +1637,10 @@ kafka_rest_properties:
                     false, sasl_plain_users_final.kafka_rest.principal, sasl_plain_users_final.kafka_rest.password, sasl_scram_users_final.kafka_rest.principal, sasl_scram_users_final.kafka_rest.password, sasl_scram256_users_final.kafka_rest.principal, sasl_scram256_users_final.kafka_rest.password,
                     kerberos_kafka_broker_primary, kafka_rest_keytab_path, kafka_rest_kerberos_principal|default('rp'),
                     kafka_rest_client_kafka_listener_name == 'internal_token' and auth_mode == 'mtls', kafka_rest_ldap_user, kafka_rest_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_rest_oauth_user, kafka_rest_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  kafka_client_bootstrap_server:
+    enabled: "{{ rbac_enabled|bool and mds_ssl_client_authentication != 'none' }}"
+    properties:
+      confluent.license.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_rest_client_bootstrap_servers }}"
   kafka_client_password_protection:
     # Edge case for RP only- 'client' prefix not honored by secrets protection
     enabled: "{{ kafka_rest_secrets_protection_enabled }}"
@@ -1787,6 +1793,8 @@ control_center_http_protocol: "{{ 'https' if control_center_ssl_enabled|bool els
 
 control_center_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[control_center_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[control_center_kafka_listener_name]['port']}}"
 
+control_center_streams_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[control_center_streams_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[control_center_streams_kafka_listener_name]['port']}}" # this needs to be added only in sasl_ssl kafka client i.e streams
+
 control_center_properties:
   defaults:
     enabled: true
@@ -1831,6 +1839,10 @@ control_center_properties:
                     false, sasl_plain_users_final.control_center.principal, sasl_plain_users_final.control_center.password, sasl_scram_users_final.control_center.principal, sasl_scram_users_final.control_center.password, sasl_scram256_users_final.control_center.principal, sasl_scram256_users_final.control_center.password,
                     kerberos_kafka_broker_primary, control_center_keytab_path, control_center_kerberos_principal|default('c3'),
                     control_center_streams_kafka_listener_name == 'internal_token', control_center_ldap_user, control_center_ldap_password, mds_bootstrap_server_urls, oauth_enabled, control_center_oauth_user, control_center_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  kafka_client_bootstrap_server:
+    enabled: true
+    properties:
+      confluent.controlcenter.streams.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else control_center_streams_bootstrap_servers }}"
   kafka_client_token_cert_lcbh:  # add the new login callback handler for c3 to kafka communication
     enabled: "{{ control_center_streams_kafka_listener_name == 'internal_token' }}"
     properties:
