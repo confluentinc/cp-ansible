@@ -2564,7 +2564,7 @@ Default:  "{{control_center_default_log_dir}}"
 
 ***
 
-### control_center_kafka_listener_name
+### control_center_next_gen_kafka_listener_name
 
 Name of listener used by C3 to talk to Kafka
 
