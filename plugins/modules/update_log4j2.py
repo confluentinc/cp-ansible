@@ -141,7 +141,7 @@ def main():
     result = dict(changed=False, message='')
     module = AnsibleModule(argument_spec=module_args, supports_check_mode=True)
     if not HAS_YAML:
-        module.fail_json(msg="The python PyYAML module is required. Install it with 'pip install PyYAML'")
+        module.fail_json(msg="The python PyYAML module is required on Target nodes. Install it with 'pip install PyYAML'")
 
     path = module.params['path']
     size = module.params['size']
