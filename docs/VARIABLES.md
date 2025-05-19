@@ -2572,7 +2572,7 @@ Default:  >-
 
 ***
 
-### control_center_copy_files
+### control_center_next_gen_copy_files
 
 Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 
