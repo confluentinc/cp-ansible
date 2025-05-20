@@ -140,7 +140,7 @@ Default:  false
 
 ***
 
-### custom_log4j2
+### custom_log4j
 
 Boolean to configure Kraft, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 
@@ -6445,4 +6445,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-
