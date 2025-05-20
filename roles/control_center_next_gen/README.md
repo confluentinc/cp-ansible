@@ -1,7 +1,7 @@
 ## Introduction
 
 Ansible provides a simple way to deploy, manage, and configure the Confluent Platform services.
-This role confluent.control_center is used to deploy control center for Confluent Platform.
+This role confluent.control_center_next_gen is used to deploy control center next gen for Confluent Platform.
 We don't recommend using this role explicitly, we'd rather suggest to use the playbook confluent.platform.all
 
 ## Documentation
