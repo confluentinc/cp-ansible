@@ -289,12 +289,12 @@
 
 - name: Create Ksql log4j Config
   template:
-    src: ksql-server_log4j.properties.j2
+    src: ksql-server_log4j2.yaml.j2
     dest: "{{ksql.log4j_file}}"
     mode: '640'
     owner: "{{ksql_user}}"
     group: "{{ksql_group}}"
-  when: ksql_custom_log4j|bool
+  when: ksql_custom_log4j2|bool
   notify: restart ksql
   tags:
     - configuration
@@ -305,7 +305,7 @@
     path: "{{ logredactor_rule_path | dirname }}"
     state: directory
     mode: '755'
-  when: (ksql_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  when: (ksql_custom_log4j2|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
 
@@ -314,28 +314,48 @@
     src: "{{ logredactor_rule_path_local }}"
     dest: "{{ logredactor_rule_path }}"
     mode: '644'
-  when: (ksql_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  when: (ksql_custom_log4j2|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Check if Ksql log4j file exists
+  stat:
+    path: "{{ ksql.log4j_file }}"
+  register: log4j_file_stat
+  tags:
+    - log
+
+- name: Backup Ksql log4j file if it exists
+  copy:
+    src: "{{ ksql.log4j_file }}"
+    dest: "{{ ksql.log4j_file }}.bak"
+    remote_src: yes
+  when: log4j_file_stat.stat.exists
   tags:
     - log
 
 - name: Configure logredactor
-  include_role:
-    name: common
-    tasks_from: configure_logredactor.yml
-  vars:
-    log4j_file: "{{ksql.log4j_file}}"
-    logredactor_rule_var: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
-    logredactor_policy_refresh_interval_var: "{{logredactor_policy_refresh_interval}}"
-  with_items: "{{ ksql_logredactor_logger_specs_list }}"
-  when: (ksql_custom_log4j|bool) and (logredactor_enabled|bool)
+  confluent.platform.update_log4j2:
+    path: "{{ksql.log4j_file}}"
+    max: "{{ksql_max_log_files}}"
+    size: "{{ksql_log_file_size}}"
+    root_level: "{{ksql_log4j2_root_logger_level}}"
+    root_appenders: "{{ ksql_log4j2_root_appenders }}"
+    add_redactor: "{{ logredactor_enabled|bool }}"
+    redactor_refs: "{{ ksql_logredactor_logger_specs_list | map(attribute='appenderRefs') | list }}"
+    redactor_rules: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
+    redactor_policy_refresh_interval: "{{ logredactor_policy_refresh_interval }}"
+    redactor_logger_names: "{{ ksql_logredactor_logger_specs_list | map(attribute='logger_name') | list }}" 
+  when: ksql_custom_log4j2|bool and logredactor_enabled|bool
   tags:
+    - configuration
     - log
 
 - name: Restart ksql
   ansible.builtin.debug:
     msg: "restarting ksql"
   notify: restart ksql
-  when: (ksql_custom_log4j|bool) and (logredactor_enabled|bool) and (not ksql_skip_restarts|bool)
+  when: (ksql_custom_log4j2|bool) and (logredactor_enabled|bool) and (not ksql_skip_restarts|bool)
   tags:
     - log
 
