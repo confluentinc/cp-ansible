@@ -1,0 +1,40 @@
+---
+- name: Replace rootLogger
+  replace:
+    path: "{{log4j_file}}"
+    regexp: 'log4j.rootLogger=.*'
+    replace: 'log4j.rootLogger={{log4j_root_logger}}'
+  notify: "{{handler}}"
+
+- name: Replace DailyRollingFileAppender with RollingFileAppender
+  replace:
+    path: "{{log4j_file}}"
+    regexp: '=org.apache.log4j.DailyRollingFileAppender'
+    replace: '=org.apache.log4j.RollingFileAppender'
+  notify: "{{handler}}"
+
+- name: Remove Key log4j.appender.X.DatePattern
+  lineinfile:
+    path: "{{log4j_file}}"
+    state: absent
+    regexp: 'log4j.appender.*.DatePattern=.*'
+  notify: "{{handler}}"
+
+- name: Register Appenders
+  shell: |
+    grep RollingFileAppender {{log4j_file}} | cut -d '=' -f 1 | cut -d '.' -f 3
+  register: appenders_grep
+  changed_when: false
+  check_mode: false
+
+- name: Add Max Size Properties
+  lineinfile:
+    path: "{{log4j_file}}"
+    insertafter: "log4j.appender.{{ item[0] }}=org.apache.log4j.RollingFileAppender"
+    # in some log4j confs have the first character is lowercase (ie maxBackupIndex)
+    regexp: "log4j.appender.{{ item[0] }}.([{{ item[1].split('=')[0][0:1]|lower }}{{ item[1].split('=')[0][0:1]|upper }}]){{ item[1].split('=')[0][1:]}}=.*"
+    line: "log4j.appender.{{ item[0] }}.{{ item[1] }}"
+  with_nested:
+    - "{{appenders_grep.stdout_lines}}"
+    - [ 'Append=true', 'MaxBackupIndex={{ log4j_max_backup_index }}', 'MaxFileSize={{ log4j_max_file_size }}' ]
+  notify: "{{handler}}"
