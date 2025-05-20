@@ -140,7 +140,7 @@ Default:  false
 
 ***
 
-### custom_log4j2
+### custom_log4j
 
 Boolean to configure Kraft, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 
@@ -464,7 +464,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  4.24.0
+Default:  4.27.0
 
 ***
 
@@ -6445,4 +6445,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-
