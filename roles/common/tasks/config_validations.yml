@@ -162,13 +162,13 @@
 - assert:
     that:
       - auth_mode in ['ldap', 'ldap_with_oauth', 'oauth', 'mtls', 'none']
-    fail_msg: "auth_mode must be one of 'ldap', 'ldap_with_oauth', 'oauth', 'none'"
+    fail_msg: "auth_mode must be one of 'ldap', 'ldap_with_oauth', 'oauth', 'mtls', 'none'"
   tags: validate
 
 - assert:
     that:
       - auth_mode in ['ldap', 'ldap_with_oauth', 'oauth', 'mtls']
-    fail_msg: "When RBAC is enabled, auth_mode must be one of 'ldap', 'ldap_with_oauth', 'oauth'"
+    fail_msg: "When RBAC is enabled, auth_mode must be one of 'ldap', 'ldap_with_oauth', 'oauth', 'mtls'"
   when:
     - rbac_enabled|bool
   tags: validate
@@ -191,8 +191,25 @@
 
 - assert:
     that:
+      - rbac_enabled|bool
+    fail_msg: "When we have file based user store enabled we must have MDS and thus RBAC also must be enabled"
+  when:
+    - mds_file_based_user_store_enabled|bool
+  tags: validate
+
+- assert:
+    that:
+      - mds_file_based_user_store_src_path != ''
+      - mds_file_based_user_store_dest_path != ''
+    fail_msg: "When mds_file_based_user_store_enabled is true we must also define  mds_file_based_user_store_src_path and mds_file_based_user_store_dest_path"
+  when:
+    - mds_file_based_user_store_enabled|bool
+  tags: validate
+
+- assert:
+    that:
       - mds_ssl_client_authentication != 'none'
-    fail_msg: "When auth mode is mtls mds must have ssl client authentication is set to required or requested"
+    fail_msg: "When auth mode is mtls, mds must have ssl client authentication is set to required or requested"
   when:
     - auth_mode == 'mtls'
   tags: validate
@@ -280,4 +297,40 @@
   when:
     - ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) | bool
     - sasl_protocol is defined and (sasl_protocol | confluent.platform.split_to_list)[0] in ['scram', 'scram256']
+  tags: validate
+
+- name: Assert mTLS is enabled only if SSL is enabled for Prometheus
+  assert:
+    that:
+      - not control_center_next_gen_dependency_prometheus_mtls_enabled | bool or control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+    fail_msg: "control_center_next_gen_dependency_prometheus_mtls_enabled must only be true if control_center_next_gen_dependency_prometheus_ssl_enabled is also true."
+  tags: validate
+
+- name: Assert mTLS is enabled only if SSL is enabled for Alertmanager
+  assert:
+    that:
+      - not control_center_next_gen_dependency_alertmanager_mtls_enabled | bool or control_center_next_gen_dependency_alertmanager_ssl_enabled | bool
+    fail_msg: "control_center_next_gen_dependency_alertmanager_mtls_enabled must only be true if control_center_next_gen_dependency_alertmanager_ssl_enabled is also true."
+  tags: validate
+
+- name: Validate Alertmanager TLS/mTLS Configuration
+  assert:
+    that:
+      - not control_center_next_gen_dependency_alertmanager_mtls_enabled | bool or control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+      - not control_center_next_gen_dependency_alertmanager_ssl_enabled | bool or control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+    fail_msg: "Alertmanager mTLS and TLS must not be enabled when Prometheus TLS is disabled."
+  tags: validate
+
+- name: Validate Prometheus TLS/mTLS/Basic Auth Configuration
+  assert:
+    that:
+      - not (control_center_next_gen_dependency_prometheus_ssl_enabled | bool and control_center_next_gen_dependency_prometheus_mtls_enabled | bool and control_center_next_gen_dependency_prometheus_basic_auth_enabled | bool)
+    fail_msg: "Prometheus SSL, mTLS, and Basic Auth cannot all be enabled simultaneously."
+  tags: validate
+
+- name: Validate Alertmanager TLS/mTLS/Basic Auth Configuration
+  assert:
+    that:
+      - not (control_center_next_gen_dependency_alertmanager_ssl_enabled | bool and control_center_next_gen_dependency_alertmanager_mtls_enabled | bool and control_center_next_gen_dependency_alertmanager_basic_auth_enabled | bool)
+    fail_msg: "Alertmanager SSL, mTLS, and Basic Auth cannot all be enabled simultaneously."
   tags: validate

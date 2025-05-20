@@ -163,6 +163,21 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
+  - name: control-center-next-gen
+    hostname: control-center-next-gen.confluent
+    groups:
+      - control_center_next_gen
+      - control_center_next_gen_migration
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9022:9022"
+    networks:
+      - name: confluent
     # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
   - name: controller1-mig
     hostname: controller1-mig.confluent
@@ -208,8 +223,23 @@ provisioner:
       all:
         scenario_name: oauth-rbac-mtls-provided-ubuntu
 
+        rbac_super_users:
+          - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker
+          - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_controller
+          - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_controller_migration
+          - User:CN=kafka_broker,OU=TEST,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
+          - User:CN=kafka_controller,OU=TEST,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
+          - User:CN=kafka_controller_migration,OU=TEST,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
+
         ssl_enabled: true
         ssl_mutual_auth_enabled: true
+        control_center_next_gen_port: 9022
+        control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_mtls_enabled: true
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+        control_center_next_gen_dependency_alertmanager_ssl_enabled: true
+        control_center_next_gen_dependency_alertmanager_mtls_enabled: true
+        control_center_next_gen_dependency_alertmanager_basic_auth_enabled: false
 
         ssl_provided_keystore_and_truststore: true
         ssl_keystore_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}.keystore.jks"
@@ -252,6 +282,9 @@ provisioner:
         control_center_oauth_user: control_center
         control_center_oauth_password: my-secret
 
+        control_center_next_gen_oauth_user: control_center
+        control_center_next_gen_oauth_password: my-secret
+
         ksql_oauth_user: ksql
         ksql_oauth_password: my-secret
 
@@ -277,6 +310,9 @@ provisioner:
 
         control_center_ldap_user: control_center
         control_center_ldap_password: password
+
+        control_center_next_gen_ldap_user: control_center
+        control_center_next_gen_ldap_password: password
 
         rbac_component_additional_system_admins:
           - User:user1
@@ -334,8 +370,12 @@ provisioner:
             password: "{{ksql_ldap_password}}"
             uid: 9996
             guid: 96
-          - username: "{{control_center_ldap_user}}"
-            password: "{{control_center_ldap_password}}"
+#          - username: "{{control_center_ldap_user}}"
+#            password: "{{control_center_ldap_password}}"
+#            uid: 9995
+#            guid: 95
+          - username: "{{control_center_next_gen_ldap_user}}"
+            password: "{{control_center_next_gen_ldap_password}}"
             uid: 9995
             guid: 95
           - username: "{{kafka_rest_ldap_user}}"
