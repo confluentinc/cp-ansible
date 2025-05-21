@@ -388,9 +388,9 @@ Validates ssl.client.authentication is set to REQUIRED.
 
 ***
 
-### molecule/mini-setup-ldap-mtls
+### molecule/mini-setup-ldap-mtls-fips
 
-#### Scenario mini-setup-ldap-mtls test's the following:
+#### Scenario mini-setup-ldap-mtls-fips test's the following:
 
 Installs Confluent Platform Cluster on ubi9.
 
@@ -400,7 +400,7 @@ MDS accepts LDAP credentials and mTLS certs.
 
 LDAP based login to C3.
 
-#### Scenario mini-setup-ldap-mtls verify test's the following:
+#### Scenario mini-setup-ldap-mtls-fips verify test's the following:
 
 Validates that SSL Protocol is set.
 
@@ -419,6 +419,24 @@ RBAC over mTLS enabled.
 File based login to C3 using overrides.
 
 #### Scenario mini-setup-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-mtls-fips
+
+#### Scenario mini-setup-mtls-fips test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS enabled.
+
+File based login to C3 using overrides.
+
+#### Scenario mini-setup-mtls-fips verify test's the following:
 
 Validates that SSL Protocol is set.
 
@@ -604,8 +622,6 @@ Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
 
-Java 21.
-
 #### Scenario mtls-ubuntu verify test's the following:
 
 Validates that protocol is set to SSl across all components.
@@ -731,6 +747,62 @@ Validates mapping rules for ACLs.
 Validates ACL users.
 
 Validated ACL creation.
+
+***
+
+### molecule/oauth-plain-archive
+
+#### Scenario oauth-plain-archive test's the following:
+
+Installation of Confluent Platform on RHEL9.
+
+SASL Plain enabled.
+
+Control Plane listener enabled.
+
+Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
+
+Custom Service Unit overrides.
+
+Custom log4j appender names.
+
+#### Scenario oauth-plain-archive verify test's the following:
+
+Validates that custom log4j appenders are present on each component.
+
+Validates that Service Description has been overridden.
+
+Validates that SASL Plaintext protocol is set across components.
+
+Validates that Connectors are present on Kafka Connect.
+
+***
+
+### molecule/oauth-plain-debian12
+
+#### Scenario oauth-plain-debian12 test's the following:
+
+Installation of Confluent Platform on Debian12.
+
+SASL Plain enabled.
+
+Control Plane listener enabled.
+
+Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
+
+Custom Service Unit overrides.
+
+Custom log4j appender names.
+
+#### Scenario oauth-plain-debian12 verify test's the following:
+
+Validates that custom log4j appenders are present on each component.
+
+Validates that Service Description has been overridden.
+
+Validates that SASL Plaintext protocol is set across components.
+
+Validates that Connectors are present on Kafka Connect.
 
 ***
 
