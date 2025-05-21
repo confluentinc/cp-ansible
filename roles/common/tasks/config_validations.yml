@@ -305,13 +305,49 @@
   when: custom_log4j is defined
   tags: validate
 
-#- name: Fail if <group>_log4j_root_logger is defined for any group
-#  assert:
-#    that:
-#      - (item + '_log4j_root_logger') not in vars
-#    fail_msg: "{{ item }}_log4j_root_logger is defined! Log4j1 is not supported in CP-Ansible 8.x versions. Please remove this variable from your inventory file."
-#  loop: "{{ group_names }}"
-#  tags: validate
+- name: Fail if <group>_log4j_root_logger is defined for any group
+  assert:
+    that:
+      - (item + '_log4j_root_logger') not in vars
+    fail_msg: "{{ item }}_log4j_root_logger is defined! Log4j1 is not supported in CP-Ansible 8.x versions. Please remove this variable from your inventory file."
+  loop: "{{ group_names }}"
+  tags: validate
+
+- name: Assert mTLS is enabled only if SSL is enabled for Prometheus
+  assert:
+    that:
+      - not control_center_next_gen_dependency_prometheus_mtls_enabled | bool or control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+    fail_msg: "control_center_next_gen_dependency_prometheus_mtls_enabled must only be true if control_center_next_gen_dependency_prometheus_ssl_enabled is also true."
+  tags: validate
+
+- name: Assert mTLS is enabled only if SSL is enabled for Alertmanager
+  assert:
+    that:
+      - not control_center_next_gen_dependency_alertmanager_mtls_enabled | bool or control_center_next_gen_dependency_alertmanager_ssl_enabled | bool
+    fail_msg: "control_center_next_gen_dependency_alertmanager_mtls_enabled must only be true if control_center_next_gen_dependency_alertmanager_ssl_enabled is also true."
+  tags: validate
+
+- name: Validate Alertmanager TLS/mTLS Configuration
+  assert:
+    that:
+      - not control_center_next_gen_dependency_alertmanager_mtls_enabled | bool or control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+      - not control_center_next_gen_dependency_alertmanager_ssl_enabled | bool or control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+    fail_msg: "Alertmanager mTLS and TLS must not be enabled when Prometheus TLS is disabled."
+  tags: validate
+
+- name: Validate Prometheus TLS/mTLS/Basic Auth Configuration
+  assert:
+    that:
+      - not (control_center_next_gen_dependency_prometheus_ssl_enabled | bool and control_center_next_gen_dependency_prometheus_mtls_enabled | bool and control_center_next_gen_dependency_prometheus_basic_auth_enabled | bool)
+    fail_msg: "Prometheus SSL, mTLS, and Basic Auth cannot all be enabled simultaneously."
+  tags: validate
+
+- name: Validate Alertmanager TLS/mTLS/Basic Auth Configuration
+  assert:
+    that:
+      - not (control_center_next_gen_dependency_alertmanager_ssl_enabled | bool and control_center_next_gen_dependency_alertmanager_mtls_enabled | bool and control_center_next_gen_dependency_alertmanager_basic_auth_enabled | bool)
+    fail_msg: "Alertmanager SSL, mTLS, and Basic Auth cannot all be enabled simultaneously."
+  tags: validate
 
 - name: Assert mTLS is enabled only if SSL is enabled for Prometheus
   assert:
