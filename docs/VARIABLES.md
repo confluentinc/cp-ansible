@@ -16,7 +16,7 @@ Default:  8.0.0
 
 Version of Confluent Control Center Next Gen to install
 
-Default:  2.0.0
+Default:  2.2.0
 
 ***
 
@@ -5622,7 +5622,7 @@ Default:  "https://packages.confluent.io"
 
 Confluent independent release packages RPM and Debian Package Repositories
 
-Default:  "{{confluent_common_repository_baseurl}}"
+Default:  "https://packages.confluent.io"
 
 ***
 
