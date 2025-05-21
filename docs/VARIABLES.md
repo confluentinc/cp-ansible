@@ -152,7 +152,7 @@ Default:  false
 
 Boolean to configure Kraft, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 
-Default:  false
+Default:  true
 
 ***
 
@@ -284,14 +284,6 @@ Default:  3000
 
 ***
 
-### required_total_memory_mb_control_center
-
-Variable to define the minimum amount of memory in MB required to run Control Center. Calculated as default heap size plus 1GB for OS.
-
-Default:  7000
-
-***
-
 ### required_total_memory_mb_kafka_connect_replicator
 
 Variable to define the minimum amount of memory in MB required to run Kafka Connect Replicator. Calculated as default heap size plus 1GB for OS.
@@ -372,14 +364,6 @@ Default:  "{{health_checks_enabled}}"
 
 ***
 
-### control_center_health_checks_enabled
-
-Boolean to enable health checks on Control Center
-
-Default:  "{{health_checks_enabled}}"
-
-***
-
 ### control_center_next_gen_health_checks_enabled
 
 Boolean to enable health checks on Control Center
@@ -392,7 +376,7 @@ Default:  "{{health_checks_enabled}}"
 
 Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
 
-Default:  "{{ 'control_center' in groups or 'control_center_next_gen' in groups }}"
+Default:  "{{ 'control_center_next_gen' in groups }}"
 
 ***
 
@@ -1200,7 +1184,7 @@ Default:  "{{ [ groups['kafka_controller'] | default(['localhost']) | length, de
 
 Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
-Default:  "{{ confluent_server_enabled and ('control_center' in groups or 'control_center_next_gen' in groups) }}"
+Default:  "{{ confluent_server_enabled and 'control_center_next_gen' in groups }}"
 
 ***
 
@@ -1432,7 +1416,7 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, defaul
 
 Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
-Default:  "{{ confluent_server_enabled and ('control_center' in groups or 'control_center_next_gen' in groups) }}"
+Default:  "{{ confluent_server_enabled and 'control_center_next_gen' in groups }}"
 
 ***
 
@@ -2492,118 +2476,6 @@ Default:  "{{ auth_mode }}"
 
 ***
 
-### control_center_config_prefix
-
-Default Control Center config prefix. Only valid to customize when installation_method: archive
-
-Default:  "{{ config_prefix }}/confluent-control-center"
-
-***
-
-### control_center_user
-
-Set this variable to customize the Linux User that the Control Center Service runs with. Default user is cp-control-center.
-
-Default:  "{{control_center_default_user}}"
-
-***
-
-### control_center_group
-
-Set this variable to customize the Linux Group that the Control Center Service user belongs to. Default group is confluent.
-
-Default:  "{{control_center_default_group}}"
-
-***
-
-### control_center_port
-
-Port Control Center exposed over
-
-Default:  9021
-
-***
-
-### control_center_listener_hostname
-
-Interface on host for Control Center to listen on
-
-Default:  "0.0.0.0"
-
-***
-
-### control_center_ssl_enabled
-
-Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
-
-Default:  "{{ssl_enabled}}"
-
-***
-
-### control_center_mds_cert_auth_only
-
-Property of Control Center as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
-
-Default:  false
-
-***
-
-### control_center_authentication_type
-
-Control Center Authentication. Available options: [basic, none].
-
-Default:  none
-
-***
-
-### control_center_log_dir
-
-Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
-
-Default:  "{{control_center_default_log_dir}}"
-
-***
-
-### control_center_next_gen_kafka_listener_name
-
-Name of listener used by C3 to talk to Kafka
-
-Default:  >-
-
-***
-
-### control_center_next_gen_copy_files
-
-Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
-
-Default:  []
-
-***
-
-### control_center_default_internal_replication_factor
-
-Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
-
-Default:  "{{ 3 if ccloud_kafka_enabled|bool else
-
-***
-
-### control_center_custom_properties
-
-Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
-
-Default:  {}
-
-***
-
-### control_center_skip_restarts
-
-Boolean used for disabling of systemd service restarts when rootless install is executed
-
-Default:  "{{ skip_restarts }}"
-
-***
-
 ### control_center_next_gen_config_prefix
 
 Default Control Center config prefix. Only valid to customize when installation_method: archive
@@ -2624,7 +2496,7 @@ Default:  "/opt/confluent-control-center/dependencies"
 
 Set this variable to customize the Linux User that the Control Center Service runs with. Default user is cp-control-center.
 
-Default:  "{{control_center_default_user}}"
+Default:  "{{control_center_next_gen_default_user}}"
 
 ***
 
@@ -2632,7 +2504,7 @@ Default:  "{{control_center_default_user}}"
 
 Set this variable to customize the Linux Group that the Control Center Service user belongs to. Default group is confluent.
 
-Default:  "{{control_center_default_group}}"
+Default:  "{{control_center_next_gen_default_group}}"
 
 ***
 
@@ -2678,7 +2550,7 @@ Default:  none
 
 ### control_center_next_gen_log_dir
 
-Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
+Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center_next_gen.appender_log_path is deprecated.
 
 Default:  "{{control_center_next_gen_default_log_dir}}"
 
@@ -2689,6 +2561,14 @@ Default:  "{{control_center_next_gen_default_log_dir}}"
 Set this variable to customize the directory that Control Center writes data files to. Default location is /var/lib/confluent/control-center.
 
 Default:  "/var/lib/confluent/control-center"
+
+***
+
+### control_center_next_gen_kafka_listener_name
+
+Name of listener used by C3 to talk to Kafka
+
+Default:  >-
 
 ***
 
@@ -2710,7 +2590,7 @@ Default:  "{{ 3 if ccloud_kafka_enabled|bool else
 
 ### control_center_next_gen_custom_properties
 
-Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
+Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center_next_gen.properties is deprecated.
 
 Default:  {}
 
@@ -3308,46 +3188,6 @@ Default:  "{{ kafka_rest_oauth_user }}"
 
 ***
 
-### control_center_ldap_user
-
-LDAP User for Control Center to authenticate as
-
-Default:  control-center
-
-***
-
-### control_center_ldap_password
-
-Password to control_center_ldap_user LDAP User
-
-Default:  password
-
-***
-
-### control_center_oauth_user
-
-OAuth Client Id for Control Center to authenticate as
-
-Default:  control-center
-
-***
-
-### control_center_oauth_password
-
-Client Secret for control_center_oauth_user
-
-Default:  password
-
-***
-
-### control_center_oauth_principal
-
-Service principal for Control Center client in IdPserver. Defaults to Control Center Client Id
-
-Default:  "{{ control_center_oauth_user }}"
-
-***
-
 ### control_center_next_gen_ldap_user
 
 LDAP User for Control Center (Next Gen) to authenticate as
@@ -3636,7 +3476,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ***
 
-### control_center_additional_system_admins
+### control_center_next_gen_additional_system_admins
 
 List of principals to be granted system admin Role Bindings on the Control Center Cluster
 
@@ -3876,7 +3716,7 @@ Default:  []
 
 ***
 
-### control_center_secrets_protection_enabled
+### control_center_next_gen_secrets_protection_enabled
 
 Boolean to enable secrets protection in Control Center.
 
@@ -3884,7 +3724,7 @@ Default:  "{{secrets_protection_enabled}}"
 
 ***
 
-### control_center_secrets_protection_encrypt_passwords
+### control_center_next_gen_secrets_protection_encrypt_passwords
 
 Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Control Center.
 
@@ -3892,9 +3732,9 @@ Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
-### control_center_secrets_protection_encrypt_properties
+### control_center_next_gen_secrets_protection_encrypt_properties
 
-List of Control Center properties to encrypt. Can be used in addition to control_center_secrets_protection_encrypt_passwords.
+List of Control Center properties to encrypt. Can be used in addition to control_center_next_gen_secrets_protection_encrypt_passwords.
 
 Default:  []
 
@@ -4076,22 +3916,6 @@ Default:  "{{ksql_telemetry_enabled}}"
 
 ***
 
-### control_center_telemetry_enabled
-
-Boolean to configure Telemetry on Control Center. Must also set telemetry_api_key and telemetry_api_secret
-
-Default:  "{{telemetry_enabled}}"
-
-***
-
-### control_center_telemetry_ansible_labels_enabled
-
-Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
-
-Default:  "{{control_center_telemetry_enabled}}"
-
-***
-
 ### control_center_next_gen_telemetry_enabled
 
 Boolean to configure Telemetry on Control Center. Must also set telemetry_api_key and telemetry_api_secret
@@ -4265,22 +4089,6 @@ Default:  "{{ kafka_rest_basic_users.admin.principal }}"
 Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{ kafka_rest_basic_users.admin.password }}"
-
-***
-
-### control_center_health_check_user
-
-User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
-
-Default:  "{{ control_center_basic_users.admin.principal }}"
-
-***
-
-### control_center_health_check_password
-
-Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
-
-Default:  "{{ control_center_basic_users.admin.password }}"
 
 ***
 
@@ -5556,14 +5364,6 @@ Default:  "{{deployment_strategy}}"
 
 ***
 
-### control_center_deployment_strategy
-
-Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
-
-Default:  "{{deployment_strategy}}"
-
-***
-
 ### control_center_next_gen_deployment_strategy
 
 Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
@@ -5639,14 +5439,6 @@ Default:  "{{pause_rolling_deployment}}"
 ### ksql_pause_rolling_deployment
 
 Boolean to Pause Rolling Deployment after each ksqlDB Node starts up.
-
-Default:  "{{pause_rolling_deployment}}"
-
-***
-
-### control_center_pause_rolling_deployment
-
-Boolean to Pause Rolling Deployment after each Control Center Node starts up.
 
 Default:  "{{pause_rolling_deployment}}"
 
@@ -5986,100 +5778,6 @@ Default:  true
 
 ***
 
-# control_center
-
-Below are the supported variables for the role control_center
-
-***
-
-### control_center_custom_log4j
-
-Boolean to reconfigure Control Center's logging with RollingFileAppender and log cleanup
-
-Default:  "{{ custom_log4j }}"
-
-***
-
-### control_center_log4j_root_logger
-
-Root logger within Control Center's log4j config. Only honored if control_center_custom_log4j: true
-
-Default:  "INFO, main"
-
-***
-
-### control_center_max_log_files
-
-Max number of log files generated by Control Center. Only honored if control_center_custom_log4j: true
-
-Default:  10
-
-***
-
-### control_center_log_file_size
-
-Max size of a log file generated by Control Center. Only honored if control_center_custom_log4j: true
-
-Default:  100MB
-
-***
-
-### control_center_logredactor_logger_specs_list
-
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
-
-Default: 
-
-***
-
-### control_center_custom_java_args
-
-Custom Java Args to add to the Control Center Process
-
-Default:  ""
-
-***
-
-### control_center_rocksdb_path
-
-Full Path to the RocksDB Data Directory. If left as empty string, cp-ansible will not configure RocksDB
-
-Default:  ""
-
-***
-
-### control_center_service_overrides
-
-Overrides to the Service Section of Control Center Systemd File. This variable is a dictionary.
-
-Default: 
-
-***
-
-### control_center_service_environment_overrides
-
-Environment Variables to be added to the Control Center Service. This variable is a dictionary.
-
-Default: 
-
-***
-
-### control_center_service_unit_overrides
-
-Overrides to the Unit Section of Control Center Systemd File. This variable is a dictionary.
-
-Default: 
-
-***
-
-### control_center_health_check_delay
-
-Time in seconds to wait before starting Control Center Health Checks.
-
-Default:  30
-
-***
-
 # control_center_next_gen
 
 Below are the supported variables for the role control_center_next_gen
@@ -6090,7 +5788,7 @@ Below are the supported variables for the role control_center_next_gen
 
 Boolean to reconfigure Control Center Next Gen's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ custom_log4j }}"
+Default:  "{{ custom_log4j2 }}"
 
 ***
 
@@ -6278,7 +5976,7 @@ Default:  100MB
 
 ### kafka_broker_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
 Default: 
 
@@ -6388,7 +6086,7 @@ Default:  100MB
 
 ### kafka_controller_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
 Default: 
 
@@ -6498,7 +6196,7 @@ Default:  100MB
 
 ### kafka_connect_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
 Default: 
 
@@ -6600,7 +6298,7 @@ Default:  100MB
 
 ### kafka_rest_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
 Default: 
 
@@ -6694,7 +6392,7 @@ Default:  10MB
 
 ### ksql_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
 Default: 
 
@@ -6796,7 +6494,7 @@ Default:  100MB
 
 ### schema_registry_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
 Default: 
 

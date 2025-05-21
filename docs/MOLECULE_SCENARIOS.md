@@ -388,26 +388,6 @@ Validates ssl.client.authentication is set to REQUIRED.
 
 ***
 
-### molecule/mini-setup-ldap-mtls
-
-#### Scenario mini-setup-ldap-mtls test's the following:
-
-Installs Confluent Platform Cluster on ubi9.
-
-RBAC over mTLS+LDAP enabled.
-
-MDS accepts LDAP credentials and mTLS certs.
-
-LDAP based login to C3.
-
-#### Scenario mini-setup-ldap-mtls verify test's the following:
-
-Validates that SSL Protocol is set.
-
-Validates ssl.client.authentication is set to REQUIRED.
-
-***
-
 ### molecule/mini-setup-ldap-mtls-fips
 
 #### Scenario mini-setup-ldap-mtls-fips test's the following:
