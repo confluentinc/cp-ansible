@@ -756,10 +756,6 @@ kafka_broker_properties:
       confluent.http.server.ssl.keystore.type: BCFKS
       confluent.http.server.ssl.truststore.type: BCFKS
       confluent.http.server.http2.enabled: false
-  embedded_rest_proxy_fips:
-    enabled: "{{ kafka_broker_rest_proxy_enabled and fips_enabled }}"
-    properties:
-      confluent.metadata.server.sni.host.check.enabled: false #this is ERP property and not MDS property
   embedded_rest_proxy_mtls:
     enabled: "{{ kafka_broker_rest_proxy_enabled and kafka_broker_rest_ssl_enabled and ssl_client_authentication != 'none' }}"
     properties:
@@ -1253,6 +1249,8 @@ kafka_connect_properties:
       confluent.monitoring.interceptor.topic: _confluent-monitoring
       producer.confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_connect_bootstrap_servers }}"
       consumer.confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_connect_bootstrap_servers }}"
+      consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
+      producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
   producer_monitoring_interceptor_client:
     enabled: "{{ kafka_connect_monitoring_interceptors_enabled|bool }}"
     properties: "{{ kafka_broker_listeners[kafka_connect_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
@@ -1522,6 +1520,8 @@ ksql_properties:
     enabled: "{{ ksql_monitoring_interceptors_enabled|bool }}"
     properties:
       confluent.monitoring.interceptor.topic: _confluent-monitoring
+      producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+      consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
       confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else ksql_bootstrap_servers }}"
   monitoring_interceptor_client:
     enabled: "{{ ksql_monitoring_interceptors_enabled|bool }}"
@@ -1729,6 +1729,8 @@ kafka_rest_properties:
     enabled: "{{ kafka_rest_monitoring_interceptors_enabled|bool }}"
     properties:
       confluent.monitoring.interceptor.topic: _confluent-monitoring
+      producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
+      consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
       client.confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_rest_bootstrap_servers }}"
   monitoring_interceptor_client:
     enabled: "{{ kafka_rest_monitoring_interceptors_enabled|bool }}"
@@ -1946,7 +1948,7 @@ control_center_next_gen_properties:
   broker_embedded_rest_endpoint:
     enabled: "{{kafka_broker_rest_proxy_enabled or rbac_enabled }}"
     properties:
-      confluent.controlcenter.streams.cprest.url: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_and_format_hostnames(hostvars) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
+      confluent.controlcenter.streams.cprest.url: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
   kafka_client:
     enabled: true # ignore login callback handler related props using omit_oauth_configs when talking to internal_token listener
     properties: "{{ kafka_broker_listeners[control_center_next_gen_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
@@ -2271,6 +2273,8 @@ kafka_connect_replicator_monitoring_interceptor_properties:
       confluent.monitoring.interceptor.topic: _confluent-monitoring
       producer.confluent.monitoring.interceptor.bootstrap.servers: "{{kafka_connect_replicator_monitoring_interceptor_bootstrap_servers}}"
       consumer.confluent.monitoring.interceptor.bootstrap.servers: "{{kafka_connect_replicator_monitoring_interceptor_bootstrap_servers}}"
+      consumer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor
+      producer.interceptor.classes: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
   rbac_external_client:
     enabled: "{{kafka_connect_replicator_monitoring_interceptor_rbac_enabled and kafka_connect_replicator_monitoring_interceptor_erp_tls_enabled }}"
     properties:
