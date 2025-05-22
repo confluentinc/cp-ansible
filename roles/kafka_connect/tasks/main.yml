@@ -212,6 +212,7 @@
     truststore_storepass: "{{kafka_connect_truststore_storepass}}"
     truststore_path: "{{kafka_connect_truststore_path}}"
     create_bouncy_castle_keystore: false
+    restart_handler_name: "restart connect distributed"
   when:
     - oauth_enabled|bool or schema_registry_oauth_enabled|bool or kafka_rest_oauth_enabled|bool or kafka_connect_oauth_enabled|bool or kafka_connect_replicator_oauth_enabled|bool
     - oauth_idp_cert_path != ""
@@ -272,17 +273,54 @@
     - filesystem
     - log
 
-- name: Update Connect log4j Config for Log Cleanup
-  include_role:
-    name: common
-    tasks_from: update_log4j.yml
-  vars:
-    log4j_file: "{{kafka_connect.log4j_file}}"
-    log4j_max_backup_index: "{{kafka_connect_max_log_files}}"
-    log4j_max_file_size: "{{kafka_connect_log_file_size}}"
-    log4j_root_logger: "{{kafka_connect_log4j_root_logger}}"
-    handler: "restart connect distributed"
-  when: kafka_connect_custom_log4j|bool
+- name: Create logredactor rule file directory
+  file:
+    path: "{{ logredactor_rule_path | dirname }}"
+    state: directory
+    mode: '755'
+  when: (kafka_connect_custom_log4j2|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ logredactor_rule_path_local }}"
+    dest: "{{ logredactor_rule_path }}"
+    mode: '644'
+  when: (kafka_connect_custom_log4j2|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Check if Connect log4j file exists
+  stat:
+    path: "{{ kafka_connect.log4j_file }}"
+  register: log4j_file_stat
+  tags:
+    - log
+
+- name: Backup Connect log4j file if it exists
+  copy:
+    src: "{{ kafka_connect.log4j_file }}"
+    dest: "{{ kafka_connect.log4j_file }}.bak"
+    remote_src: true
+  when: log4j_file_stat.stat.exists
+  tags:
+    - log
+
+- name: Update log4j Config for Log Cleanup
+  confluent.platform.update_log4j2:
+    path: "{{kafka_connect.log4j_file}}"
+    max: "{{kafka_connect_max_log_files}}"
+    size: "{{kafka_connect_log_file_size}}"
+    root_level: "{{kafka_connect_log4j2_root_logger_level}}"
+    root_appenders: "{{ kafka_connect_log4j2_root_appenders }}"
+    add_redactor: "{{ logredactor_enabled|bool }}"
+    redactor_refs: "{{ kafka_connect_logredactor_logger_specs_list | map(attribute='appenderRefs') | list }}"
+    redactor_rules: "{{ (logredactor_rule_url == '') | ternary(logredactor_rule_path, logredactor_rule_url) }}"
+    redactor_policy_refresh_interval: "{{ logredactor_policy_refresh_interval }}"
+    redactor_logger_names: "{{ kafka_connect_logredactor_logger_specs_list | map(attribute='logger_name') | list }}"
+  notify: restart connect distributed
+  when: kafka_connect_custom_log4j2|bool
   tags:
     - configuration
     - log
@@ -297,42 +335,11 @@
     - filesystem
     - log
 
-- name: Create logredactor rule file directory
-  file:
-    path: "{{ logredactor_rule_path | dirname }}"
-    state: directory
-    mode: '755'
-  when: (kafka_connect_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
-  tags:
-    - log
-
-- name: Copy logredactor rule file from control node to component node
-  copy:
-    src: "{{ logredactor_rule_path_local }}"
-    dest: "{{ logredactor_rule_path }}"
-    mode: '644'
-  when: (kafka_connect_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
-  tags:
-    - log
-
-- name: Configure logredactor
-  include_role:
-    name: common
-    tasks_from: configure_logredactor.yml
-  vars:
-    log4j_file: "{{kafka_connect.log4j_file}}"
-    logredactor_rule_var: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
-    logredactor_policy_refresh_interval_var: "{{logredactor_policy_refresh_interval}}"
-  with_items: "{{ kafka_connect_logredactor_logger_specs_list }}"
-  when: (kafka_connect_custom_log4j|bool) and (logredactor_enabled|bool)
-  tags:
-    - log
-
 - name: Restart kafka connect
   ansible.builtin.debug:
     msg: "restarting kafka connect"
   notify: restart connect distributed
-  when: (kafka_connect_custom_log4j|bool) and (logredactor_enabled|bool) and (not kafka_connect_skip_restarts|bool)
+  when: (kafka_connect_custom_log4j2|bool) and (logredactor_enabled|bool) and (not kafka_connect_skip_restarts|bool)
   tags:
     - log
 
@@ -443,9 +450,9 @@
       - kafka_rest
       - kafka_rest_parallel
       - kafka_rest_serial
-      - control_center
-      - control_center_parallel
-      - control_center_serial
+      - control_center_next_gen
+      - control_center_next_gen_parallel
+      - control_center_next_gen_serial
       - ksql
       - ksql_parallel
       - ksql_serial

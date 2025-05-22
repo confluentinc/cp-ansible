@@ -35,7 +35,8 @@ class FilterModule(object):
             'is_ipv6': self.is_ipv6,
             'format_hostname': self.format_hostname,
             'resolve_and_format_hostname': self.resolve_and_format_hostname,
-            'resolve_and_format_hostnames': self.resolve_and_format_hostnames
+            'resolve_and_format_hostnames': self.resolve_and_format_hostnames,
+            'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
@@ -230,8 +231,18 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.ssl.keystore.password'] = str(kafka_broker_keystore_storepass)
                 final_dict['listener.name.' + listener_name + '.ssl.key.password'] = str(kafka_broker_keystore_keypass)
 
-                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = \
-                    listeners_dict[listener].get('ssl_client_authentication', default_ssl_client_authentication)
+                # we check 3 places for ssl_client_authentication
+                # 1 listener dict ssl_client_authentication (listener level new variable)
+                # 2 listener dict ssl_mutual_auth_enabled (listener level deprecated variable)
+                # 3 default_ssl_client_authentication (global level new variable)
+                mtls_mode = listeners_dict[listener].get('ssl_client_authentication', 'none')
+                if mtls_mode == 'none':
+                    if listeners_dict[listener].get('ssl_mutual_auth_enabled', False):
+                        mtls_mode = 'required'
+                    else:
+                        mtls_mode = default_ssl_client_authentication
+
+                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = mtls_mode
                 final_dict['listener.name.' + listener_name + '.ssl.principal.mapping.rules'] = \
                     ','.join(listeners_dict[listener].get('principal_mapping_rules', default_principal_mapping_rules))
 
@@ -370,6 +381,13 @@ class FilterModule(object):
         if normalize_sasl_protocols[0] == 'GSSAPI' and not omit_jaas_configs:
             final_dict[config_prefix + 'sasl.jaas.config'] = 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' +\
                 keytab_path + '\" principal=\"' + kerberos_principal + '\";'
+
+        if listener_dict.get('name', '').lower() == 'internal_token':  # other oauth configs should be omitted
+            # Not adding this config always when normalize_sasl_protocols[0] == 'OAUTHBEARER'
+            # This is because it is not getting added for ERP currently due to omit_oauth_configs currently.
+            final_dict[config_prefix + 'sasl.mechanism'] = 'OAUTHBEARER'
+            final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule \
+                required metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
 
         if not omit_oauth_configs:
             if normalize_sasl_protocols[0] == 'OAUTHBEARER' and not oauth_enabled:
@@ -554,3 +572,14 @@ class FilterModule(object):
                 # Remaining rules in the list are ignored when match is found
                 break
         return principal_mapping_value
+
+    def c3_generate_salt_and_hash(self, users_dict):
+        import getpass
+        import bcrypt
+        username_with_hashed_passwords = {}
+        for user in users_dict:
+            if users_dict[user].get('principal') and users_dict[user].get('password'):
+                username_with_hashed_passwords[users_dict[user]['principal']] = bcrypt.hashpw(
+                    users_dict[user].get('password').encode("utf-8"), bcrypt.gensalt()
+                ).decode()
+        return username_with_hashed_passwords

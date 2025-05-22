@@ -89,11 +89,11 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: control-center1
-    hostname: control-center1.confluent
+  - name: control-center-next-gen
+    hostname: control-center-next-gen.confluent
     groups:
-      - control_center
-      - control_center_migration
+      - control_center_next_gen
+      - control_center_next_gen_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-tar.j2
     command: ""
@@ -101,7 +101,7 @@ platforms:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     published_ports:
-      - "9021:9021"
+      - "9022:9022"
     networks:
       - name: confluent
     # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
@@ -123,6 +123,10 @@ provisioner:
   inventory:
     group_vars:
       all:
+        control_center_next_gen_port: 9022
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+        control_center_next_gen_dependency_alertmanager_basic_auth_enabled: true
+
         # Validating custom port works on ERP.
         mds_port: 7000
         # Validating that cluster naming is disabled when RBAC is not present.
@@ -147,6 +151,13 @@ provisioner:
         kafka_broker_custom_client_properties:
           abc: xyz
 
+        kafka_broker_custom_listeners:
+          client_listener:
+            name: CLIENT
+            port: 9093
+            ssl_enabled: true
+            ssl_mutual_auth_enabled: true # checking if deprecated property is also working
+
          # To run the FileStream connector, you must add the filestream-connectors path in the plugin.path
         kafka_connect_custom_properties:
           plugin.path: "{{binary_base_path}}/share/java/connect_plugins,{{binary_base_path}}/share/filestream-connectors,/usr/share/java/connect_plugins"
@@ -157,7 +168,7 @@ provisioner:
         kafka_rest_log_dir: /rp/logs
         kafka_connect_log_dir: /connect/logs
         ksql_log_dir: /ksql/logs/
-        control_center_log_dir: /c3/logs
+        control_center_next_gen_log_dir: /c3/logs
 
         logredactor_enabled: true
         logredactor_rule_path_local: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/rules.json"
