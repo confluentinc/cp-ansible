@@ -1,0 +1,183 @@
+---
+##
+## The following is an example inventory file of the configuration required for setting up Confluent Platform with RBAC over LDAP. And then migrating to mTLS
+## Principals extracted from certs and ldap credentials are given role bindings.
+## Extra configs added to keep cp service to service communication over certs only and not use LDAP credentials there.
+## External clients of kafka or other services can use LDAP credentials to communicate with the cluster
+## Migrate Control Center from LDAP to SSO
+
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: ec2-user
+    ansible_become: true
+    ansible_ssh_private_key_file: /home/ec2-user/guest.pem
+    ansible_python_interpreter: /usr/bin/python3
+
+    deployment_strategy: rolling
+
+    ## TLS Configuration
+    ssl_enabled: true
+    # 3 ways to handle ssl
+    # Self Signed Certs (Default) Not recommended for production clusters
+    # Custom Certs
+    # Set ssl_custom_certs, ssl_ca_cert_filepath, ssl_signed_cert_filepath, ssl_key_filepath, ssl_key_password & ssl_custom_certs_remote_src(optional)
+    # Provided Keystore Truststore
+    # Set ssl_provided_keystore_and_truststore, ssl_keystore_and_truststore_custom_password, ssl_keystore_filepath, ssl_keystore_key_password, ssl_keystore_store_password, ssl_keystore_alias, ssl_truststore_filepath, ssl_truststore_password, ssl_truststore_ca_cert_alias and ssl_provided_keystore_and_truststore_remote_src (optional)
+
+    rbac_enabled: true # if no auth_mode defined that implies ldap
+
+    # LDAP users
+    mds_super_user: mds
+    mds_super_user_password: password
+    schema_registry_ldap_user: schema-registry1
+    schema_registry_ldap_password: password
+    kafka_connect_ldap_user: kafka-connect1
+    kafka_connect_ldap_password: password
+    ksql_ldap_user: ksql1
+    ksql_ldap_password: password
+    kafka_rest_ldap_user: kafka-rest1
+    kafka_rest_ldap_password: password
+    control_center_ldap_user: control-center1
+    control_center_ldap_password: password
+
+    # LDAP configs
+    kafka_broker_custom_properties:
+      ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+      ldap.com.sun.jndi.ldap.read.timeout: 3000
+      ldap.java.naming.provider.url: ldap://ldap1:389
+      ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
+      ldap.java.naming.security.credentials: password
+      ldap.java.naming.security.authentication: simple
+      ldap.user.search.base: OU=rbac,DC=example,DC=com
+      ldap.group.search.base: OU=rbac,DC=example,DC=com
+      ldap.user.name.attribute: uid
+      ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+      ldap.group.name.attribute: cn
+      ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+      ldap.user.object.class: account
+
+    ######################################################
+    ####################### STEP 1 #######################
+    ######################################################
+
+    # Enable mTLS on MDS, Kafka Listeners and CP components
+    mds_ssl_client_authentication: requested  # <required/requested/none>
+    # Must be defined in all section as all components need to know its value for assigning role bindings
+    # While upgrades we should not go to required directly as all CP components talking to MDS will starting failing.
+    # Thus we go to requested mode. Now when ansible playbook updates all CP components they know MDS has mTLS and thus send certs.
+
+    ssl_client_authentication: requested  # <required/requested/none>
+    # Sets mtls on kafka broker listeners, and also acts as default value for other components kafka_controller_ssl_client_authentication, schema_registry_ssl_client_authentication, kafka_rest_ssl_client_authentication, kafka_connect_ssl_client_authentication, kafka_connect_replicator_ssl_client_authentication
+    kafka_controller_ssl_client_authentication: requested
+    schema_registry_ssl_client_authentication: requested
+    kafka_rest_ssl_client_authentication: requested
+    kafka_connect_ssl_client_authentication: requested
+    kafka_connect_replicator_ssl_client_authentication: requested
+    # These will all turn on due ssl_client_authentication. So we can set any of them to none if we dont want that component to enforce ssl client authentication(mTLS) on its clients.
+
+    zookeeper_ssl_mutual_auth_enabled: false
+    # Be CAREFUL HERE. This can alter zookeeper-kafka communication.
+    # So if before upgrade there is no mTLS between zookeeper and kafka this should be set to false EXPLICITLY
+    # If there is mTLS between zookeeper and kafka then this should be set to true.
+    # Objective is to keep the communication between zookeeper and kafka same as it was.
+
+    kafka_broker_custom_listeners:
+      broker:
+        name: BROKER
+        port: 9093
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
+        sasl_protocol: none
+      external1: # here we are not defining mTLS related vars thus it takes from ssl_client_authentication and turns it on in requested mode
+        name: EXTERNAL1
+        port: 9093
+        ssl_enabled: true
+        sasl_protocol: scram
+      external2: # here we are explicitly setting mtls false by defining both ssl_mutual_auth_enabled, ssl_client_authentication
+        name: EXTERNAL2
+        port: 9094
+        ssl_enabled: true
+        sasl_protocol: plain
+        ssl_mutual_auth_enabled: false
+        ssl_client_authentication: none
+      mtls: # creating a new mTLS only listener
+        name: MTLS
+        port: 9095
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
+        ssl_client_authentication: required
+        sasl_protocol: none
+
+    # This defines principal mapping rules. Optional to define.
+    # But if we want the certificate CN to get modified while defining the principal then we should define them now.
+    # In step0 file we had principal mapping rule added via overrides. Since this principal_mapping_rules was not a first class support earlier.
+    # Now since we have it as first class support we should use it, this gets propogated to kafka listeners and all other CP components.
+    # Be careful to not accidentally change the Principal mapping rules getting used in interbroker communication before this upgrade.
+    # They should remain the same for inter broker communication to work seamlessly
+    principal_mapping_rules:
+      - "RULE:.*CN=([a-zA-Z0-9.-_]*).*$/$1/"
+      - "DEFAULT"
+
+    # These variables will make CP component to MDS communication over mTLS. If not set then CP component to MDS communication would be running over LDAP+mTLS. It is our choice to enable them
+    kafka_broker_rest_proxy_mds_cert_auth_only: true
+    schema_registry_mds_cert_auth_only: true
+    kafka_connect_mds_cert_auth_only: true
+    kafka_rest_mds_cert_auth_only: true
+    control_center_mds_cert_auth_only: true
+
+    # These principals are the principals of broker, rest proxy, schema registry and connect talking to MDS.
+    # For me cert CN is of the form C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker
+    # Thus applying the principal mapping rules gave me the following principals
+    impersonation_super_users:
+      - 'kafka_broker'
+      - 'kafka_rest'
+      - 'schema_registry'
+      - 'kafka_connect'
+    # In case CP component to MDS communication is happening over LDAP+mTLS (can happen if the above _cert_auth_only vars are not set to true) then we should add ldap principals here
+
+
+    # The following variables are to switch CP component to Kafka communication from internal listener(running oauthbearer+mtls) to mtls only.
+    # Not a mandatory step
+    schema_registry_kafka_listener_name: mtls
+    ksql_kafka_listener_name: mtls
+    kafka_connect_kafka_listener_name: mtls
+    kafka_rest_kafka_listener_name: mtls
+    control_center_kafka_listener_name: mtls
+
+
+# Either zookeeper
+zookeeper:
+  hosts:
+    ec2-34-219-110-48.us-west-2.compute.amazonaws.com:
+    ec2-18-237-72-224.us-west-2.compute.amazonaws.com:
+    ec2-35-161-39-212.us-west-2.compute.amazonaws.com:
+
+# Or kafka_controller (kraft controller)
+kafka_controller:
+  hosts:
+    ec2-34-219-110-48.us-west-2.compute.amazonaws.com:
+    ec2-18-237-72-224.us-west-2.compute.amazonaws.com:
+    ec2-35-161-39-212.us-west-2.compute.amazonaws.com:
+
+kafka_broker:
+  hosts:
+    ec2-34-211-33-32.us-west-2.compute.amazonaws.com:
+    ec2-35-89-77-112.us-west-2.compute.amazonaws.com:
+    ec2-35-163-80-4.us-west-2.compute.amazonaws.com:
+
+schema_registry:
+  hosts:
+    ec2-34-212-49-238.us-west-2.compute.amazonaws.com:
+
+kafka_connect:
+  hosts:
+    ec2-35-93-21-143.us-west-2.compute.amazonaws.com:
+
+kafka_rest:
+  hosts:
+    ec2-34-222-41-249.us-west-2.compute.amazonaws.com:
+
+control_center:
+  hosts:
+    ec2-35-87-151-33.us-west-2.compute.amazonaws.com:

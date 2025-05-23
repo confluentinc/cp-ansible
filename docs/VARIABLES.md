@@ -464,7 +464,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  4.5.0
+Default:  4.7.0
 
 ***
 
@@ -1564,6 +1564,14 @@ Default:  "{{schema_registry_default_log_dir}}"
 
 ***
 
+### schema_registry_kafka_listener_name
+
+Name of listener used by Schema Registry to talk to Kafka
+
+Default:  internal
+
+***
+
 ### schema_registry_jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on schema registry
@@ -1769,6 +1777,14 @@ Default:  "{{ 'mtls' if kafka_rest_ssl_mutual_auth_enabled else 'none' }}"
 Set this variable to customize the directory that the Rest Proxy writes log files to. Default location is /var/log/confluent/kafka-rest. NOTE- kafka_rest.appender_log_path is deprecated.
 
 Default:  "{{kafka_rest_default_log_dir}}"
+
+***
+
+### kafka_rest_kafka_listener_name
+
+Name of listener used by Kafka Rest to talk to Kafka
+
+Default:  internal
 
 ***
 
@@ -1993,6 +2009,14 @@ Default:  "{{ 'mtls' if kafka_connect_ssl_mutual_auth_enabled|bool else 'none' }
 Set this variable to customize the directory that Kafka Connect writes log files to. Default location is /var/log/kafka. NOTE- kafka_connect.appender_log_path is deprecated.
 
 Default:  "{{kafka_connect_default_log_dir}}"
+
+***
+
+### kafka_connect_kafka_listener_name
+
+Name of listener used by Kafka Connect to talk to Kafka
+
+Default:  internal
 
 ***
 
@@ -2268,6 +2292,14 @@ Default:  "{{ksql_default_log_dir}}"
 
 ***
 
+### ksql_kafka_listener_name
+
+Name of listener used by Schema Registry to talk to Kafka
+
+Default:  internal
+
+***
+
 ### ksql_jolokia_enabled
 
 Boolean to enable Jolokia Agent installation and configuration on ksqlDB
@@ -2492,6 +2524,14 @@ Default:  "{{control_center_default_log_dir}}"
 
 ***
 
+### control_center_kafka_listener_name
+
+Name of listener used by C3 to talk to Kafka
+
+Default:  internal
+
+***
+
 ### control_center_copy_files
 
 Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
@@ -2569,6 +2609,14 @@ Default:  false
 Port to expose MDS Server API on
 
 Default:  8090
+
+***
+
+### internal_token_port
+
+Internal Token listener Port
+
+Default:  9088
 
 ***
 
@@ -2692,9 +2740,41 @@ Default:  none
 
 ***
 
+### mds_file_based_user_store_enabled
+
+Boolean to enable file based user store on MDS. Can be helpful in case of no SSO in Control Center. When setting this true we must also define mds_file_based_user_store_src_path and mds_file_based_user_store_dest_path.
+
+Default:  false
+
+***
+
+### mds_file_based_user_store_src_path
+
+Path to the file containing the user store for MDS. This must be defined when mds_file_based_user_store_enabled is true. The file must have the format where each entry is newline seperated and in each entry we have username and password separated by a colon. For example: admin: admin-secret
+
+Default:  ""
+
+***
+
+### mds_file_based_user_store_remote_src
+
+Boolean to indicate if the user store file is present on the control node or remote host. If false, the file will be copied from the control node to the target host. If true it will be moved from src to dst path on the target host.
+
+Default:  false
+
+***
+
+### mds_file_based_user_store_dest_path
+
+Path of the destination file on the target host i.e MDS server. Should be a file path and not a directory.
+
+Default:  ""
+
+***
+
 ### auth_mode
 
-Authorization mode on all cp components. Possible values are ldap, oauth, ldap_with_oauth and none. Set this to oauth for OAuth cluster and ldap_with_oauth for cluster with both ldap and oauth support. When set to oauth or ldap_with_oauth, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_superuser_client_id, oauth_superuser_client_password.
+Authorization mode on all cp components. Possible values are ldap, oauth, ldap_with_oauth, mtls and none. Set this to oauth for OAuth cluster and ldap_with_oauth for cluster with both ldap and oauth support. When set to oauth or ldap_with_oauth, you must set oauth_jwks_uri, oauth_token_uri, oauth_issuer_url, oauth_superuser_client_id, oauth_superuser_client_password. When MDS only has mTLS and no user store then set it to mTLS. In case of OAuth/LDAP + mTLS keep it to ldap/oauth
 
 Default:  "{% if rbac_enabled|bool %}ldap{% else %}none{% endif %}"
 
@@ -5406,7 +5486,7 @@ Default:  ""
 
 Base URL for Confluent's RPM and Debian Package Repositories
 
-Default:  "https://packages.confluent.io"
+Default:  "http://confluent-platform-hotfixes-891377121322-us-west-2.s3-website-us-west-2.amazonaws.com/7.9.0-cp1"
 
 ***
 
@@ -5502,7 +5582,7 @@ Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jv
 
 Version of JmxExporter Agent Jar to Donwload
 
-Default:  0.12.0
+Default:  1.0.1
 
 ***
 
