@@ -1,11 +1,94 @@
----
-- set_fact:
-    idp_body: [["grant_type", "client_credentials"]]
-  when: oauth|bool
+- name: Copy private key to remote host
+  copy:
+    src: "{{ oauth_client_assertion_private_key_file }}"
+    dest: /tmp/oauth_private_key.pem
+    mode: '0600'
+  when: oauth|bool and oauth_client_assertion_enabled|bool
+
+- name: Read private key content
+  slurp:
+    src: /tmp/oauth_private_key.pem
+  register: private_key_file
+  when: oauth|bool and oauth_client_assertion_enabled|bool
+
+
+- name: Get current timestamp for JWT
+  command: date +%s
+  register: current_epoch
+  changed_when: false
+
+- name: Generate JWT claim set
+  set_fact:
+    jwt_claims: >-
+      {{
+        {
+          "iss": oauth_client_assertion_issuer,
+          "sub": oauth_client_assertion_sub,
+          "aud": oauth_client_assertion_audience,
+          "jti": current_epoch.stdout ~ '-' ~ 100000 | random,
+          "iat": current_epoch.stdout | int,
+          "exp": (current_epoch.stdout | int + 300)
+        }
+      }}
+  when: oauth|bool and oauth_client_assertion_enabled|bool
+
+- name: Create JWT header and payload
+  set_fact:
+    jwt_header: '{{ {"alg": "RS256", "typ": "JWT"} | to_json | b64encode }}'
+    jwt_payload: '{{ jwt_claims | to_json | b64encode }}'
+  when: oauth|bool and oauth_client_assertion_enabled|bool
+
+- name: Create JWT signing input
+  set_fact:
+    jwt_signing_input: "{{ jwt_header }}.{{ jwt_payload }}"
+  when: oauth|bool and oauth_client_assertion_enabled|bool
+
+- name: Write signing input to temp file
+  copy:
+    dest: /tmp/jwt_input.txt
+    content: "{{ jwt_signing_input }}"
+  when: oauth|bool and oauth_client_assertion_enabled|bool
+
+- name: Sign JWT using OpenSSL
+  command: >
+    openssl dgst -sha256 -sign /tmp/oauth_private_key.pem -out /tmp/jwt.sig /tmp/jwt_input.txt
+  when: oauth|bool and oauth_client_assertion_enabled|bool
+
+- name: Read JWT signature
+  slurp:
+    src: /tmp/jwt.sig
+  register: jwt_sig
+  when: oauth|bool and oauth_client_assertion_enabled|bool
+
+- name: Encode signature in base64url
+  set_fact:
+    jwt_signature: "{{ jwt_sig.content | b64decode | b64encode | regex_replace('\\+', '-') | regex_replace('/', '_') | regex_replace('=+$', '') }}"
+  when: oauth|bool and oauth_client_assertion_enabled|bool
+
+- name: Combine final JWT
+  set_fact:
+    client_assertion_jwt: "{{ jwt_signing_input }}.{{ jwt_signature }}"
+  when: oauth|bool and oauth_client_assertion_enabled|bool
 
 - set_fact:
-    idp_body: "{{ idp_body + [['scope', oauth_groups_scope ]]}}"
-  when: oauth|bool and oauth_groups_scope != 'none'
+    idp_body: >-
+      {{
+        [
+          ['grant_type', 'client_credentials']
+        ]
+        + (
+            [['scope', oauth_groups_scope]]
+            if oauth_groups_scope != 'none' else []
+          )
+        + (
+            [
+              ['client_assertion_type', 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'],
+              ['client_assertion', client_assertion_jwt]
+            ]
+            if oauth_client_assertion_enabled | default(false) else []
+          )
+      }}
+  when: oauth|bool
 
 - set_fact:
     send_client_cert: "{{ mds_ssl_client_authentication in ['required', 'requested'] }}"
@@ -17,9 +100,6 @@
     validate_certs: false
     return_content: true
     status_code: 200
-    url_username: "{{ oauth_user }}"
-    url_password: "{{ oauth_password }}"
-    force_basic_auth: true
     headers:
       Content-Type: application/x-www-form-urlencoded
     body_format: form-urlencoded
