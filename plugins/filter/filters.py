@@ -417,8 +417,8 @@ class FilterModule(object):
                         final_dict[config_prefix + 'sasl.oauthbearer.assertion.private.key.passphrase'] = assertion_config['client_assertion_private_key_passphrase']
                     if assertion_config.get('client_assertion_template_file') != 'none':
                         final_dict[config_prefix + 'sasl.oauthbearer.assertion.template.file'] = assertion_config['client_assertion_template_file']
-                    if assertion_config.get('client_assertion_jwt_id') != 'none':
-                        final_dict[config_prefix + 'sasl.oauthbearer.assertion.claim.jti.include'] = assertion_config['client_assertion_jwt_id']
+                    if assertion_config.get('client_assertion_jti_include') != 'none':
+                        final_dict[config_prefix + 'sasl.oauthbearer.assertion.claim.jti.include'] = assertion_config['client_assertion_jti_include']
                     if assertion_config.get('client_assertion_not_before') != 'none':
                         final_dict[config_prefix + 'sasl.oauthbearer.assertion.claim.nbf.include'] = assertion_config['client_assertion_not_before']
                     if assertion_config.get('client_assertion_file') != 'none':

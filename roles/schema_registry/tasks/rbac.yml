@@ -28,32 +28,6 @@
 - set_fact:
     send_client_cert: "{{ mds_ssl_client_authentication in ['required', 'requested'] }}"
 
-- name: Grant SystemAdmin role to superuser_assertion
-  uri:
-    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:superuser_assertion/roles/SystemAdmin"
-    method: POST
-    validate_certs: false
-    headers:
-      Content-Type: application/json
-      Authorization: "Bearer {{ authorization_token }}"
-    client_cert: "{{ schema_registry_cert_path if send_client_cert|bool else omit }}"
-    client_key: "{{ schema_registry_key_path if send_client_cert|bool else omit }}"
-    body_format: json
-    body: >
-      {
-        "clusters": {
-          "kafka-cluster": "{{kafka_cluster_id}}",
-          "schema-registry-cluster": "{{schema_registry_final_properties['schema.registry.group.id']}}"
-        }
-      }
-    status_code: 204
-  register: superuser_mds_result
-  until: superuser_mds_result.status == 204
-  retries: "{{ mds_retries }}"
-  delay: 5
-  no_log: "{{mask_secrets|bool}}"
-  when: not ansible_check_mode
-
 - name: Grant role System Admin to Additional Schema Registry users/groups
   uri:
     url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/{% if 'User' not in item and 'Group' not in item %}User:{% endif %}{{item}}/roles/SystemAdmin"
