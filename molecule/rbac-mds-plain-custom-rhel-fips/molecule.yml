@@ -6,6 +6,8 @@
 ### SASL PLAIN enabled on both clusters.
 ### Kafka Broker Customer Listener.
 ### RBAC Additional System Admin.
+### SSO authentication using OIDC in Control center using KeyCloak IdP
+### FIPS enabled on both clusters.
 
 driver:
   name: docker
@@ -28,8 +30,8 @@ platforms:
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
       - mds
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -41,8 +43,8 @@ platforms:
     groups:
       - kafka_broker
       - mds
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -54,8 +56,8 @@ platforms:
     groups:
       - kafka_broker
       - mds
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -68,8 +70,8 @@ platforms:
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -81,8 +83,8 @@ platforms:
     groups:
       - kafka_broker2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -94,8 +96,8 @@ platforms:
     groups:
       - kafka_broker2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -107,8 +109,8 @@ platforms:
     groups:
       - kafka_broker2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -120,8 +122,8 @@ platforms:
     groups:
       - schema_registry2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -133,8 +135,8 @@ platforms:
     groups:
       - kafka_rest2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -146,8 +148,8 @@ platforms:
     groups:
       - kafka_connect2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -159,8 +161,8 @@ platforms:
     groups:
       - ksql2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -172,8 +174,8 @@ platforms:
     groups:
       - control_center2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel9-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -188,11 +190,11 @@ provisioner:
   inventory:
     group_vars:
       all:
-        scenario_name: rbac-mds-plain-custom-rhel
+        scenario_name: rbac-mds-plain-custom-rhel-fips
 
         ssl_enabled: true
         sasl_protocol: plain
-
+        fips_enabled: true
         ssl_custom_certs: true
         ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
         ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
@@ -200,6 +202,7 @@ provisioner:
         ssl_key_password: keypass
 
         rbac_enabled: true
+        sso_mode: oidc
 
         kafka_broker_custom_log4j: false
 
@@ -240,6 +243,17 @@ provisioner:
           - User:user1
 
       mds:
+
+        # necessary configs in MDS server for sso in C3
+        sso_groups_claim: groups
+        sso_sub_claim: sub
+        sso_issuer_url: http://ec2-35-166-19-61.us-west-2.compute.amazonaws.com:8080/auth/realms/cpsso
+        sso_jwks_uri: http://ec2-35-166-19-61.us-west-2.compute.amazonaws.com:8080/auth/realms/cpsso/protocol/openid-connect/certs
+        sso_authorize_uri: http://ec2-35-166-19-61.us-west-2.compute.amazonaws.com:8080/auth/realms/cpsso/protocol/openid-connect/auth
+        sso_token_uri: http://ec2-35-166-19-61.us-west-2.compute.amazonaws.com:8080/auth/realms/cpsso/protocol/openid-connect/token
+        sso_client_id: ${KEYCLOAK_CLIENT:-user}
+        sso_client_password: ${KEYCLOAK_PASSWORD:-pass}
+
         kafka_broker_custom_properties:
           ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
           ldap.com.sun.jndi.ldap.read.timeout: 3000

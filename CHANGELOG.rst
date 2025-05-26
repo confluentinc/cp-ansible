@@ -4,7 +4,7 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-v7.4.9
+v7.5.8
 ======
 
 Notable enhancements
@@ -22,7 +22,7 @@ Notable fixes
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
 
-v7.4.8
+v7.5.7
 ======
 
 Notable enhancements
@@ -31,7 +31,7 @@ Notable enhancements
 - Improved error handling in connectors.
 - Fixed the ownership of data directory files in kraft controllers and brokers.
 
-v7.4.7
+v7.5.6
 ======
 
 Notable enhancements
@@ -44,7 +44,7 @@ Notable fixes
 
 - Critical security and vulnerability issues were fixed
 
-v7.4.6
+v7.5.5
 ======
 
 Notable fixes
@@ -52,7 +52,7 @@ Notable fixes
 
 - Ansible playbooks use archive debian10 repo since debian 10 reached EOL.
 
-v7.4.5
+v7.5.4
 ======
 
 Notable enhancements
@@ -67,7 +67,15 @@ Notable fixes
 - Connect and Ksqldb clusters are correctly registered even for co-located components
 - Critical security and vulnerability issues were fixed
 
-v7.4.4
+v7.5.3
+======
+
+Notable fixes
+-------------
+
+- Critical security and vulnerability issues were fixed.
+
+v7.5.2
 ======
 
 Notable fixes
@@ -76,16 +84,7 @@ Notable fixes
 - Critical security and vulnerability issues were fixed.
 
 
-v7.4.3
-======
-
-Notable fixes
--------------
-
-- Critical security and vulnerability issues were fixed.
-
-
-v7.4.2
+v7.5.1
 ======
 
 Notable enhancements
@@ -95,6 +94,20 @@ Notable enhancements
 - Fixed bugs in discovery to generate inventory file with appropriate security protocols
 - Ansible builtin File mode is now string instead of octal
 
+v7.5.0
+======
+
+New features
+-------------
+
+- Configure single sign-on (SSO) authentication for Control Center using OpenID Connect (OIDC)
+- Enable FIPS on Confluent Platform(CP) for RHEL8 & RHEL9 using cp-ansible.
+
+Notable enhancements
+-------------
+
+- Added capability to discover multiple workers in the connect cluster in discovery
+- Added support to specify ansible_password in discovery
 
 v7.4.1
 ======

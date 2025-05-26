@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.4.9
+Default:  7.5.8
 
 ***
 
@@ -134,7 +134,7 @@ Default:  false
 
 ### fips_enabled
 
-Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8 or 11. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
+Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true. Refer CP-Ansible docs for prerequisites.
 
 Default:  false
 
@@ -2385,6 +2385,94 @@ Default:  8090
 Boolean to configure TLS encryption on the Broker Rest endpoint. NOTE- mds_ssl_enabled is now deprecated
 
 Default:  "{{mds_ssl_enabled}}"
+
+***
+
+### sso_mode
+
+SSO mode for C3. Possible values: oidc, not supported in ccs. If enabling oidc you must set  sso_groups_claim, sso_sub_claim, sso_jwks_uri, sso_authorize_uri, sso_token_uri, sso_issuer_url, sso_client_id, sso_client_password in MDS
+
+Default:  none
+
+***
+
+### sso_groups_claim
+
+Groups in JWT
+
+Default:  groups
+
+***
+
+### sso_sub_claim
+
+Sub in JWT
+
+Default:  sub
+
+***
+
+### sso_issuer_url
+
+The issuer url, which is typically the authorization server's URL. This value is used to compare to issuer claim in the JWT token for verification
+
+Default:  none
+
+***
+
+### sso_jwks_uri
+
+JSON Web Key Set (JWKS) URI
+
+Default:  none
+
+***
+
+### sso_authorize_uri
+
+Endpoint for an OAuth authorization request
+
+Default:  none
+
+***
+
+### sso_token_uri
+
+IdP token endpoint, from where a token is requested by MDS
+
+Default:  none
+
+***
+
+### sso_client_id
+
+Client id for authorize and token request to Idp
+
+Default:  none
+
+***
+
+### sso_client_password
+
+Client password for authorize and token request to Idp
+
+Default:  none
+
+***
+
+### sso_groups_scope
+
+If any additional scope is needed to include groups in the token, this config is optional based on Idp. Possible values: groups,openid,offline_access etc.
+
+Default:  none
+
+***
+
+### sso_refresh_token
+
+Configures whether offline_access scope would be requested in the authorization URI, Set this to false if offline tokens are not allowed for the user or client in IdP
+
+Default:  true
 
 ***
 

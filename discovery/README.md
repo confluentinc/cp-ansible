@@ -112,16 +112,25 @@ hosts:
 ```
 
 #### Command Line options
-##### verbose
+##### verbosity
 To get the verbose output from script and Ansible you can set the verbosity level between 0 to 4. Where 4 means more verbose.
+```shell
+python discovery/main.py --input discovery/hosts.yml --verbosity 4
+```
 ##### limit
 Use limit flag to limit the discovery for specified list of hosts
+```shell
+python discovery/main.py --input discovery/hosts.yml --limit host1,host2
+```
 ##### output_file
 Use this flag to specify output inventory file name. Default value is inventory.yml
-
 ```shell
-python discovery/main.py --input discovery/hosts.yml --verbose 4 --limit host1,host2
+python discovery/main.py --input discovery/hosts.yml --output inventory.yml
 ```
+#### multi_threaded
+To run the discovery scripts in multi threaded environment. Default is True
+
+
 ### FQA
 * **Can I use it for older CP versions**  
 Ideally we should be using the discovery from the branch which maps to the CP cluster. However, to onboard existing cluster, one can use the latest disvoery code and use **--from_version** parameter to specify the CP cluster version
