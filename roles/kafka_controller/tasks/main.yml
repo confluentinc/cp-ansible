@@ -294,17 +294,56 @@
   tags:
     - filesystem
 
+- name: Create logredactor rule file directory
+  file:
+    path: "{{ logredactor_rule_path | dirname }}"
+    state: directory
+    mode: '755'
+  when: (kafka_controller_custom_log4j2|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+    - privileged
+
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ logredactor_rule_path_local }}"
+    dest: "{{ logredactor_rule_path }}"
+    mode: '644'
+  when: (kafka_controller_custom_log4j2|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+    - privileged
+
+- name: Check if Controller log4j file exists
+  stat:
+    path: "{{ kafka_controller.log4j_file }}"
+  register: log4j_file_stat
+  tags:
+    - log
+
+- name: Backup Controller log4j file if it exists
+  copy:
+    src: "{{ kafka_controller.log4j_file }}"
+    dest: "{{ kafka_controller.log4j_file }}.bak"
+    remote_src: true
+  when: log4j_file_stat.stat.exists
+  tags:
+    - log
+
 - name: Update Kafka log4j Config for Log Cleanup
-  include_role:
-    name: common
-    tasks_from: update_log4j.yml
-  vars:
-    log4j_file: "{{kafka_controller.log4j_file}}"
-    log4j_max_backup_index: "{{kafka_controller_max_log_files}}"
-    log4j_max_file_size: "{{kafka_controller_log_file_size}}"
-    log4j_root_logger: "{{kafka_controller_log4j_root_logger}}"
-    handler: "restart Kafka Controller"
-  when: kafka_controller_custom_log4j|bool
+  confluent.platform.update_log4j2:
+    path: "{{kafka_controller.log4j_file}}"
+    max: "{{kafka_controller_max_log_files}}"
+    size: "{{kafka_controller_log_file_size}}"
+    root_level: "{{kafka_controller_log4j2_root_logger_level}}"
+    root_appenders: "{{ kafka_controller_log4j2_root_appenders }}"
+    add_redactor: "{{ logredactor_enabled|bool }}"
+    redactor_refs: "{{ kafka_controller_logredactor_logger_specs_list | map(attribute='appenderRefs') | list  }}"
+    redactor_rules: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
+    redactor_policy_refresh_interval: "{{logredactor_policy_refresh_interval}}"
+    redactor_logger_names: "{{ kafka_controller_logredactor_logger_specs_list | map(attribute='logger_name') | list }}"
+  notify: restart Kafka Controller
+  when: kafka_controller_custom_log4j2|bool
   tags:
     - configuration
     - log
@@ -320,44 +359,11 @@
     - log
     - privileged
 
-- name: Create logredactor rule file directory
-  file:
-    path: "{{ logredactor_rule_path | dirname }}"
-    state: directory
-    mode: '755'
-  when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
-  tags:
-    - log
-    - privileged
-
-- name: Copy logredactor rule file from control node to component node
-  copy:
-    src: "{{ logredactor_rule_path_local }}"
-    dest: "{{ logredactor_rule_path }}"
-    mode: '644'
-  when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
-  tags:
-    - log
-    - privileged
-
-- name: Configure logredactor
-  include_role:
-    name: common
-    tasks_from: configure_logredactor.yml
-  vars:
-    log4j_file: "{{kafka_controller.log4j_file}}"
-    logredactor_rule_var: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
-    logredactor_policy_refresh_interval_var: "{{logredactor_policy_refresh_interval}}"
-  with_items: "{{ kafka_controller_logredactor_logger_specs_list }}"
-  when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool)
-  tags:
-    - log
-
 - name: Restart kafka Controller
   ansible.builtin.debug:
     msg: "restarting kafka controller"
   notify: restart Kafka Controller
-  when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool) and (not kafka_controller_skip_restarts|bool)
+  when: (kafka_controller_custom_log4j2|bool) and (logredactor_enabled|bool) and (not kafka_controller_skip_restarts|bool)
   tags:
     - log
 
