@@ -13,7 +13,7 @@
   when:
     - oauth|bool
     - oauth_client_assertion_enabled|bool
-    - oauth_client_assertion_private_key_passphrase is defined
+    - oauth_client_assertion_private_key_passphrase != 'none'
 
 # Step 1: Convert PEM to PKCS#8 with passphrase or copy as is if no passphrase
 - name: Convert PEM to PKCS#8 if passphrase provided
@@ -26,7 +26,7 @@
   when:
     - oauth|bool
     - oauth_client_assertion_enabled|bool
-    - oauth_client_assertion_private_key_passphrase is defined and oauth_client_assertion_private_key_passphrase != 'none'
+    - oauth_client_assertion_private_key_passphrase != 'none'
 
 - name: Copy private key as PEM if no passphrase
   copy:
@@ -36,7 +36,7 @@
   when:
     - oauth|bool
     - oauth_client_assertion_enabled|bool
-    - oauth_client_assertion_private_key_passphrase is not defined
+    - oauth_client_assertion_private_key_passphrase == 'none'
 
 # Step 2: Set path to private key to use for signing
 - name: Set private key path
@@ -44,7 +44,7 @@
     oauth_private_key_path: >-
       {{
         '/tmp/oauth_private_key_pkcs8.pem'
-        if oauth_client_assertion_private_key_passphrase is defined and oauth_client_assertion_private_key_passphrase != 'none'
+        if oauth_client_assertion_private_key_passphrase != 'none'
         else '/tmp/oauth_private_key.pem'
       }}
   when:
@@ -83,8 +83,8 @@
               "sub": oauth_client_assertion_sub,
               "aud": oauth_client_assertion_audience,
               "jti": (current_epoch.stdout | string) ~ '-' ~ (100000 | random | string),
-              "iat": current_epoch.stdout | int,
-              "exp": (current_epoch.stdout | int + 300)
+              "iat": current_epoch.stdout | int - 5,
+              "exp": (current_epoch.stdout | int + 295)
             }
           }}
 
@@ -106,10 +106,10 @@
       command: >
         openssl dgst -sha256
         -sign {{ oauth_private_key_path }}
-        -passin pass:{{ oauth_client_assertion_key_passphrase }}
+        -passin pass:{{ oauth_client_assertion_private_key_passphrase }}
         -out /tmp/jwt.sig
         /tmp/jwt_input.txt
-      when: oauth|bool and oauth_client_assertion_enabled|bool and oauth_client_assertion_key_passphrase is defined and oauth_client_assertion_key_passphrase != 'none'
+      when: oauth|bool and oauth_client_assertion_enabled|bool and oauth_client_assertion_private_key_passphrase != 'none'
 
     - name: Sign JWT using OpenSSL without passphrase
       command: >
@@ -117,7 +117,7 @@
         -sign {{ oauth_private_key_path }}
         -out /tmp/jwt.sig
         /tmp/jwt_input.txt
-      when: oauth|bool and oauth_client_assertion_enabled|bool and (oauth_client_assertion_key_passphrase is not defined or oauth_client_assertion_key_passphrase == 'none')
+      when: oauth|bool and oauth_client_assertion_enabled|bool and ( oauth_client_assertion_private_key_passphrase == 'none')
 
     - name: Read JWT signature
       slurp:
