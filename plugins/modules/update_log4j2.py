@@ -46,12 +46,16 @@ options:
         default: false
         description:
             - Whether to add/update a Rewrite appender with RedactorPolicy.
+            - When enabled, uses 1-to-1 mapping between redactor_logger_names and redactor_refs.
+            - Each logger in redactor_logger_names[i] will have redactor_refs[i] removed from its AppenderRef and replaced with RedactorAppender.
     redactor_refs:
         type: list
         elements: str
         required: false
         description:
             - List of appender names the RedactorAppender should reference.
+            - Must have the same length as redactor_logger_names for 1-to-1 mapping.
+            - redactor_logger_names[i] will have redactor_refs[i] removed from its AppenderRef.
     redactor_rules:
         type: str
         required: false
@@ -91,15 +95,20 @@ EXAMPLES = '''
     max: 10
     root_level: INFO
     root_appenders:
-      - RollingFile
+      - ConnectAppender
+      - STDOUT
     add_redactor: true
     redactor_refs:
-      - RollingFile
-      - STDOUT
+      - ConnectAppender
+      - FileAppender
     redactor_rules: /etc/kafka/redactor-rules.json
     redactor_logger_names:
+      - Root
       - org.apache.kafka
-      - org.reflections
+# Result: 1-to-1 mapping
+# Root logger: ConnectAppender removed, gets [STDOUT, RedactorAppender]
+# org.apache.kafka logger: FileAppender removed, gets [RedactorAppender] + any existing non-FileAppender refs
+# RedactorAppender handles both ConnectAppender and FileAppender with redaction
 '''
 
 RETURN = '''
@@ -121,6 +130,40 @@ except ImportError:
     HAS_YAML = False
 else:
     HAS_YAML = True
+
+
+def update_logger_appender_refs(logger, logger_redacted_appender, redactor_name):
+    """
+    Update a logger's AppenderRef list by removing the redacted appender and adding the redactor appender.
+
+    Args:
+        logger: The logger dictionary to update
+        logger_redacted_appender: The appender to remove from this logger
+        redactor_name: The redactor appender name to add
+
+    Returns:
+        bool: True if the logger was changed, False otherwise
+    """
+    # Ensure AppenderRef is a list
+    if 'AppenderRef' not in logger:
+        logger['AppenderRef'] = []
+    elif isinstance(logger['AppenderRef'], dict):
+        logger['AppenderRef'] = [logger['AppenderRef']]
+
+    # Remove this logger's specific redacted appender and add redactor appender
+    current_refs = [ref.get('ref') for ref in logger['AppenderRef']]
+    # Keep only appenders that are NOT this logger's redacted appender
+    filtered_refs = [ref for ref in current_refs if ref != logger_redacted_appender]
+    # Add redactor if not already present
+    if redactor_name not in filtered_refs:
+        filtered_refs.append(redactor_name)
+
+    # Update AppenderRef if changed
+    new_refs = [{'ref': ref} for ref in filtered_refs]
+    if logger['AppenderRef'] != new_refs:
+        logger['AppenderRef'] = new_refs
+        return True
+    return False
 
 
 def main():
@@ -162,6 +205,10 @@ def main():
             module.fail_json(msg="redactor_refs is required when add_redactor=true", **result)
         if not redactor_rules:
             module.fail_json(msg="redactor_rules is required when add_redactor=true", **result)
+        if not redactor_logger_names:
+            module.fail_json(msg="redactor_logger_names is required when add_redactor=true", **result)
+        if len(redactor_refs) != len(redactor_logger_names):
+            module.fail_json(msg=f"number of appenderRefs ({len(redactor_refs)}) and logger_name ({len(redactor_logger_names)}) must be equal", **result)
 
     if not os.path.exists(path):
         module.fail_json(msg=f"File {path} does not exist.", **result)
@@ -216,24 +263,13 @@ def main():
             root_logger['level'] = root_level
             changed = True
 
-        # Update AppenderRef always
-        new_refs = [{'ref': ref} for ref in root_appenders]
-        if root_logger.get('AppenderRef', []) != new_refs:
-            root_logger['AppenderRef'] = new_refs
-            changed = True
-
-        # Add redactor appender to Root if requested
-        if add_redactor:
-            # Make sure AppenderRef exists and is a list
-            if 'AppenderRef' not in root_logger:
-                root_logger['AppenderRef'] = []
-            elif not isinstance(root_logger['AppenderRef'], list):
-                # If it's a single element, convert to list
-                root_logger['AppenderRef'] = [root_logger['AppenderRef']]
-
-            # Check if redactor is already in the list
-            if not any(ref.get('ref') == redactor_name for ref in root_logger['AppenderRef']):
-                root_logger['AppenderRef'].append({'ref': redactor_name})
+        # Only update root logger appenders if redactor is NOT enabled
+        # If redactor is enabled, root logger will be handled in the redactor logger loop
+        if not add_redactor:
+            # Update AppenderRef
+            new_refs = [{'ref': ref} for ref in root_appenders]
+            if root_logger.get('AppenderRef', []) != new_refs:
+                root_logger['AppenderRef'] = new_refs
                 changed = True
 
     # Add or update Rewrite appender with RedactorPolicy if requested
@@ -276,9 +312,16 @@ def main():
 
             # For each specified logger, ensure it has the redactor appender
             loggers_list = data['Configuration']['Loggers']['Logger']
-            for logger_name in redactor_logger_names:
-                # Skip 'Root' logger as we've handled it above specifically
+            for i, logger_name in enumerate(redactor_logger_names):
+                # Get the corresponding appender for this logger
+                logger_redacted_appender = redactor_refs[i]
+
+                # Handle Root logger specially
                 if logger_name == 'Root':
+                    root_logger = data['Configuration']['Loggers']['Root']
+                    # Update the root logger's appender references
+                    if update_logger_appender_refs(root_logger, logger_redacted_appender, redactor_name):
+                        changed = True
                     continue
 
                 # Find the logger by name (case sensitive match)
@@ -286,20 +329,13 @@ def main():
                 for logger in loggers_list:
                     if logger.get('name') == logger_name:
                         found = True
-                        # Ensure AppenderRef is a list
-                        if 'AppenderRef' not in logger:
-                            logger['AppenderRef'] = []
-                        elif isinstance(logger['AppenderRef'], dict):
-                            logger['AppenderRef'] = [logger['AppenderRef']]
-
-                        # Check if redactor is already in the list
-                        if not any(ref.get('ref') == redactor_name for ref in logger['AppenderRef']):
-                            logger['AppenderRef'].append({'ref': redactor_name})
+                        # Update the logger's appender references
+                        if update_logger_appender_refs(logger, logger_redacted_appender, redactor_name):
                             changed = True
                         break
 
                 # If logger not found, add it (with exact name, preserving case)
-                if not found and logger_name != 'Root':
+                if not found:
                     new_logger = {
                         'name': logger_name,
                         'level': 'info',  # Default level
@@ -320,10 +356,13 @@ def main():
         result['message'] = f"Updated {path}: removed TimeBasedTriggeringPolicy and added/updated SizeBasedTriggeringPolicy for all RollingFile appenders."
         if root_level:
             result['message'] += f" Set root logger level to {root_level}."
-        result['message'] += f" Set root logger appenders to {root_appenders}."
+
+        # Update message for root logger appenders
+        if not add_redactor:
+            result['message'] += f" Set root logger appenders to {root_appenders}."
 
         if add_redactor:
-            result['message'] += f" Added/updated Rewrite appender '{redactor_name}' with RedactorPolicy and applied to {len(redactor_logger_names)} logger(s)."
+            result['message'] += f" Added/updated Rewrite appender '{redactor_name}', referencing {redactor_refs} to {len(redactor_logger_names)} logger(s)."
     else:
         result['message'] = "No changes needed."
 
