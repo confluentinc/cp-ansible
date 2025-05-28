@@ -158,7 +158,7 @@ Default:  true
 
 ### logredactor_enabled
 
-Boolean to enable logredactor for all components. Works only when enabled along with custom_log4j. If enabled, ensure correct value of logredactor_rule_path/url
+Boolean to enable logredactor for all components. Works only when enabled along with custom_log4j2. If enabled, ensure correct value of logredactor_rule_path/url
 
 Default:  false
 
@@ -174,7 +174,7 @@ Default:  ""
 
 ### logredactor_rule_path
 
-Full path and name of the rules file on all components. This is the location which will be referenced in the log4j property file on the redactor appender. Not required if logredactor_rule_url is specified.
+Full path and name of the rules file on all components. This is the location which will be referenced in the log4j2 property file on the redactor appender. Not required if logredactor_rule_url is specified.
 
 Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/{{ config_prefix }}/rules.json"
 

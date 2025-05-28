@@ -328,12 +328,43 @@ class FilterModule(object):
 
         return final_dict
 
+    def _get_oauth_jaas_config(self, client_id, client_secret, oauth_groups_scope, truststore_path=None, truststore_storepass=None):
+        """Helper method to generate OAuth JAAS config with common patterns"""
+        config = f'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"{client_id}\"'
+        if client_secret:
+            config += f' clientSecret=\"{client_secret}\"'
+        if oauth_groups_scope != 'none':
+            config += f' scope=\"{oauth_groups_scope}\"'
+        if truststore_path and truststore_storepass:
+            config += f' ssl.truststore.location=\"{truststore_path}\" ssl.truststore.password=\"{truststore_storepass}\"'
+        config += ';'
+        return config
+
+    def _configure_oauth_assertion(self, final_dict, config_prefix, assertion_config):
+        """Helper method to configure OAuth assertion properties"""
+        assertion_props = {
+            'client_assertion_issuer': 'sasl.oauthbearer.assertion.claim.iss',
+            'client_assertion_sub': 'sasl.oauthbearer.assertion.claim.sub',
+            'client_assertion_audience': 'sasl.oauthbearer.assertion.claim.aud',
+            'client_assertion_private_key_file': 'sasl.oauthbearer.assertion.private.key.file',
+            'client_assertion_private_key_passphrase': 'sasl.oauthbearer.assertion.private.key.passphrase',
+            'client_assertion_template_file': 'sasl.oauthbearer.assertion.template.file',
+            'client_assertion_jti_include': 'sasl.oauthbearer.assertion.claim.jti.include',
+            'client_assertion_not_before': 'sasl.oauthbearer.assertion.claim.nbf.include',
+            'client_assertion_file': 'sasl.oauthbearer.assertion.file'
+        }
+
+        for prop, config_key in assertion_props.items():
+            if assertion_config.get(prop) != 'none':
+                final_dict[config_prefix + config_key] = assertion_config[prop]
+
     def client_properties(self, listener_dict, default_ssl_enabled, bouncy_castle_keystore, default_ssl_mutual_auth_enabled, default_sasl_protocol,
                           config_prefix, truststore_path, truststore_storepass, public_certificates_enabled, keystore_path, keystore_storepass,
                           keystore_keypass, omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
                           sasl_scram256_username, sasl_scram256_password, kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
                           omit_oauth_configs, oauth_username, oauth_password, mds_bootstrap_server_urls, oauth_enabled, oauth_superuser_client_id,
-                          oauth_superuser_client_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, kraft_listener):
+                          oauth_superuser_client_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, kraft_listener,
+                          assertion_config=None):
         # For any kafka client's properties: Takes in a single kafka listener and output properties to connect to that listener
         # Other inputs help fill out the properties
         final_dict = {
@@ -403,26 +434,18 @@ class FilterModule(object):
                 final_dict[config_prefix + 'sasl.login.connect.timeout'] = '15000'
                 final_dict[config_prefix + 'sasl.oauthbearer.token.endpoint.url'] = oauth_token_uri
 
-                if (oauth_groups_scope == 'none' and (not idp_self_signed)):
-                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                        'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + '\";'
+                if assertion_config and assertion_config.get('enabled'):
+                    self._configure_oauth_assertion(final_dict, config_prefix, assertion_config)
+                    client_id = assertion_config['client_assertion_id']
+                    client_secret = None
+                else:
+                    client_id = oauth_superuser_client_id
+                    client_secret = oauth_superuser_client_password
 
-                if (oauth_groups_scope != 'none' and (not idp_self_signed)):
-                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                        'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + \
-                        '\" scope=\"' + oauth_groups_scope + '\";'
-
-                if oauth_groups_scope == 'none' and idp_self_signed:
-                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                        'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + \
-                        '\" ssl.truststore.location=\"' + \
-                        truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
-
-                if oauth_groups_scope != 'none' and idp_self_signed:
-                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                        'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + \
-                        '\" scope=\"' + oauth_groups_scope + \
-                        '\" ssl.truststore.location=\"' + truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
+                truststore_config = (truststore_path, truststore_storepass) if idp_self_signed else (None, None)
+                final_dict[config_prefix + 'sasl.jaas.config'] = self._get_oauth_jaas_config(
+                    client_id, client_secret, oauth_groups_scope, *truststore_config
+                )
 
         return final_dict
 
