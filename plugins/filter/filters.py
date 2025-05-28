@@ -353,7 +353,7 @@ class FilterModule(object):
             'client_assertion_not_before': 'sasl.oauthbearer.assertion.claim.nbf.include',
             'client_assertion_file': 'sasl.oauthbearer.assertion.file'
         }
-        
+
         for prop, config_key in assertion_props.items():
             if assertion_config.get(prop) != 'none':
                 final_dict[config_prefix + config_key] = assertion_config[prop]
