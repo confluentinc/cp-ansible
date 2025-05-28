@@ -1800,7 +1800,7 @@ Default:  "{{kafka_rest_default_log_dir}}"
 
 Name of listener used by Kafka Rest to talk to Kafka
 
-Default:  >-
+Default:  internal
 
 ***
 
@@ -2568,7 +2568,7 @@ Default:  "/var/lib/confluent/control-center"
 
 Name of listener used by C3 to talk to Kafka
 
-Default:  >-
+Default:  internal
 
 ***
 
