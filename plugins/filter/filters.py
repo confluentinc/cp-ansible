@@ -331,16 +331,12 @@ class FilterModule(object):
     def _get_oauth_jaas_config(self, client_id, client_secret, oauth_groups_scope, truststore_path=None, truststore_storepass=None):
         """Helper method to generate OAuth JAAS config with common patterns"""
         config = f'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"{client_id}\"'
-        
         if client_secret:
             config += f' clientSecret=\"{client_secret}\"'
-            
         if oauth_groups_scope != 'none':
             config += f' scope=\"{oauth_groups_scope}\"'
-            
         if truststore_path and truststore_storepass:
             config += f' ssl.truststore.location=\"{truststore_path}\" ssl.truststore.password=\"{truststore_storepass}\"'
-            
         config += ';'
         return config
 
@@ -418,8 +414,8 @@ class FilterModule(object):
                 keytab_path + '\" principal=\"' + kerberos_principal + '\";'
 
         if listener_dict.get('name', '').lower() == 'internal_token':  # other oauth configs should be omitted
-        # Not adding this config always when normalize_sasl_protocols[0] == 'OAUTHBEARER'
-        # This is because it is not getting added for ERP currently due to omit_oauth_configs currently.
+            # Not adding this config always when normalize_sasl_protocols[0] == 'OAUTHBEARER'
+            # This is because it is not getting added for ERP currently due to omit_oauth_configs currently.
             final_dict[config_prefix + 'sasl.mechanism'] = 'OAUTHBEARER'
             final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule \
                 required metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
