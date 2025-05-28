@@ -17,11 +17,10 @@ confluent_control_center_next_gen_base_path: "{{ ((config_base_path,('confluent-
 
 confluent_control_center_next_gen_binary_base_path: "{{ ((config_base_path,('confluent-control-center-next-gen-',confluent_control_center_next_gen_archive_version) | join) | path_join) if installation_method == 'archive' else '/usr' }}"
 
-### Runs kafka in Kraft mode if controller is present
-kraft_enabled: "{{ true if 'kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0 else false }}"
+### Runs kafka in Kraft mode 8.0.x onwards
+kraft_enabled: true
 
 #### Config prefix paths ####
-zookeeper_config_prefix_path: "{{ zookeeper_config_prefix.strip('/') }}"
 kafka_controller_config_prefix_path: "{{ kafka_controller_config_prefix.strip('/') }}"
 kafka_broker_config_prefix_path: "{{ kafka_broker_config_prefix.strip('/') }}"
 schema_registry_config_prefix_path: "{{ schema_registry_config_prefix.strip('/') }}"
@@ -190,82 +189,6 @@ control_center_next_gen_oauth_client_assertion_config:
   client_assertion_file: "{{ control_center_next_gen_oauth_client_assertion_file_dest_path }}"
   client_assertion_id: "{{control_center_next_gen_oauth_client_assertion_id}}"
 
-#### Zookeeper Variables ####
-zookeeper_service_name: confluent-zookeeper
-zookeeper_main_package: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
-zookeeper_default_user: cp-kafka
-zookeeper_default_group: confluent
-zookeeper_default_log_dir: /var/log/kafka
-zookeeper:
-  server_start_file: "{{ binary_base_path }}/bin/zookeeper-server-start"
-  config_file: "{{ (config_base_path, zookeeper_config_prefix_path, 'zookeeper.properties') | path_join }}"
-  systemd_file: "{{systemd_base_dir}}/{{zookeeper_service_name}}.service"
-  systemd_override: /etc/systemd/system/{{zookeeper_service_name}}.service.d/override.conf
-  log4j_file: "{{ (base_path, 'etc/kafka/zookeeper-log4j2.yaml' ) | path_join }}"
-  jaas_file: "{{ (config_base_path, zookeeper_config_prefix_path, 'zookeeper_jaas.conf') | path_join }}"
-
-zookeeper_properties:
-  defaults:
-    enabled: true
-    properties:
-      maxClientCnxns: 0
-      initLimit: 5
-      syncLimit: 2
-      autopurge.snapRetainCount: 10
-      autopurge.purgeInterval: 1
-      dataDir: /var/lib/zookeeper
-      admin.enableServer: "false"
-  non_secure:
-    enabled: "{{ not zookeeper_ssl_enabled }}"
-    properties:
-      clientPort: "{{zookeeper_client_port}}"
-  client_ssl:
-    enabled: "{{ zookeeper_ssl_enabled }}"
-    properties:
-      secureClientPort: "{{zookeeper_client_port}}"
-      serverCnxnFactory: org.apache.zookeeper.server.NettyServerCnxnFactory
-      authProvider.x509: org.apache.zookeeper.server.auth.X509AuthenticationProvider
-      ssl.keyStore.location: "{{zookeeper_keystore_path}}"
-      ssl.keyStore.password: "{{zookeeper_keystore_storepass}}"
-      ssl.trustStore.location: "{{zookeeper_truststore_path}}"
-      ssl.trustStore.password: "{{zookeeper_truststore_storepass}}"
-      ssl.clientAuth: "{{ 'need' if zookeeper_client_authentication_type == 'mtls' else 'none' }}"
-  client_sasl:
-    enabled: "{{ zookeeper_client_authentication_type in ['kerberos', 'digest'] or zookeeper_quorum_authentication_type in ['digest', 'digest_over_tls'] }}"
-    properties:
-      authProvider.sasl: org.apache.zookeeper.server.auth.SASLAuthenticationProvider
-  client_sasl_kerberos:
-    enabled: "{{ zookeeper_client_authentication_type == 'kerberos' }}"
-    properties:
-      kerberos.removeHostFromPrincipal: 'true'
-      kerberos.removeRealmFromPrincipal: 'true'
-  quorum_ssl:
-    enabled: "{{ zookeeper_quorum_authentication_type in ['mtls', 'digest_over_tls'] }}"
-    properties:
-      sslQuorum: "true"
-      ssl.quorum.keyStore.location: "{{zookeeper_keystore_path}}"
-      ssl.quorum.keyStore.password: "{{zookeeper_keystore_storepass}}"
-      ssl.quorum.trustStore.location: "{{zookeeper_truststore_path}}"
-      ssl.quorum.trustStore.password: "{{zookeeper_truststore_storepass}}"
-  quorum_sasl:
-    enabled: "{{ zookeeper_quorum_authentication_type in ['digest', 'digest_over_tls'] }}"
-    properties:
-      quorum.auth.enableSasl: true
-      quorum.auth.learnerRequireSasl: true
-      quorum.auth.serverRequireSasl: true
-      quorum.auth.learner.saslLoginContext: QuorumLearner
-      quorum.auth.server.saslLoginContext: QuorumServer
-  servers:
-    enabled: true
-    properties: "{{ zookeeper_servers | confluent.platform.split_to_dict }}"
-
-# Used only by zookeeper properties
-zookeeper_servers: "{% for host in groups['zookeeper'] %}{% if loop.index > 1%},{% endif %}server.{{ hostvars[host]['zookeeper_id'] | default(groups.zookeeper.index(host) + 1)}}={{ zookeeper_current_node_hostname if host == inventory_hostname else hostvars[host]|confluent.platform.resolve_hostname }}:{{zookeeper_peer_port}}:{{zookeeper_leader_port}}{% endfor %}"
-
-zookeeper_combined_properties: "{{ zookeeper_properties | confluent.platform.combine_properties }}"
-
-zookeeper_final_properties: "{{ zookeeper_combined_properties | combine(zookeeper_custom_properties) }}"
-
 #### Kafka controller variables
 kafka_controller_service_name: "confluent-kcontroller"
 kafka_controller_main_package: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
@@ -316,28 +239,6 @@ kafka_controller_properties:
       listeners: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
       node.id: "{{ node_id|default(groups.kafka_controller.index(inventory_hostname)|int + 9991) if inventory_hostname in groups.kafka_controller else 0}}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
-  migration_mode:
-    enabled: "{{ kraft_migration }}"
-    properties:
-      zookeeper.connection.timeout.ms: 18000
-      zookeeper.metadata.migration.enable: "true"
-      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
-  migration_ssl:
-    enabled: "{{ zookeeper_ssl_enabled and kraft_migration|bool}}"
-    properties:
-      zookeeper.ssl.client.enable: 'true'
-      zookeeper.clientCnxnSocket: org.apache.zookeeper.ClientCnxnSocketNetty
-      zookeeper.ssl.truststore.location: "{{kafka_controller_pkcs12_truststore_path}}"
-      zookeeper.ssl.truststore.password: "{{kafka_controller_truststore_storepass}}"
-  migration_mtls:
-    enabled: "{{ zookeeper_client_authentication_type == 'mtls' and kraft_migration|bool }}"
-    properties:
-      zookeeper.ssl.keystore.location: "{{kafka_controller_pkcs12_keystore_path}}"
-      zookeeper.ssl.keystore.password: "{{kafka_controller_keystore_storepass}}"
-  migration_acls:
-    enabled: "{{ zookeeper_client_authentication_type in ['kerberos', 'digest'] and kraft_migration|bool }}"
-    properties:
-      zookeeper.set.acl: 'true'
   broker_listener:
     enabled: true
     properties: "{{  {'broker_listener': kafka_broker_listeners[kafka_broker_inter_broker_listener_name]} | confluent.platform.listener_properties(ssl_enabled, fips_enabled, ssl_client_authentication, principal_mapping_rules, sasl_protocol,
@@ -548,7 +449,6 @@ kafka_broker:
   server_start_file: "{{ binary_base_path }}/bin/kafka-server-start"
   config_file: "{{ (config_base_path, kafka_broker_config_prefix_path, 'server.properties') | path_join }}"
   client_config_file: "{{ (config_base_path, kafka_broker_config_prefix_path, 'client.properties') | path_join }}"
-  zookeeper_tls_client_config_file: "{{ (config_base_path, kafka_broker_config_prefix_path, 'zookeeper-tls-client.properties') | path_join }}"
   systemd_file: "{{systemd_base_dir}}/{{kafka_broker_service_name}}.service"
   systemd_override: /etc/systemd/system/{{kafka_broker_service_name}}.service.d/override.conf
   log4j_file: "{{ (base_path, 'etc/kafka/log4j2.yaml') | path_join }}"
@@ -589,17 +489,6 @@ kafka_broker_properties:
       kafka.rest.enable: "{{kafka_broker_rest_proxy_enabled|string|lower}}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
       confluent.cluster.link.metadata.topic.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
-  migration_mode:
-    enabled: "{{ kraft_enabled|bool and kraft_migration|bool }}"
-    properties:
-      zookeeper.connection.timeout.ms: 18000
-      zookeeper.metadata.migration.enable: "true"
-      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
-      inter.broker.protocol.version: 3.9
-      confluent.cluster.link.metadata.topic.enable: "true"
-  non_migration_mode:
-    enabled: "{{ kraft_enabled|bool and not kraft_migration|bool }}"
-    properties:
       process.roles: broker
   broker_on_controller:
     enabled: "{{kraft_enabled|bool}}"
@@ -608,13 +497,6 @@ kafka_broker_properties:
       controller.listener.names: "{{kafka_controller_listeners['controller']['name']}}"
       listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %},{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
       listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['ip'] | default('') }}:{{ listener['value']['port'] }}{% endfor %}"
-  broker_on_zookeeper:
-    enabled: "{{not kraft_enabled|bool}}"
-    properties:
-      listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['ip'] | default('') | confluent.platform.format_hostname }}:{{ listener['value']['port'] }}{% endfor %}"
-      listener.security.protocol.map: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
-      zookeeper.connection.timeout.ms: 18000
-      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
   controller_sasl:
     enabled: "{{ kraft_enabled|bool and 'none' not in (kafka_controller_listeners['controller']['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol) }}"
     properties:
@@ -631,7 +513,7 @@ kafka_broker_properties:
       # broker.id logic depends on inventory hostname being in kafka_broker host list, defaulting to 0 if non kafka broker host
       broker.id: "{{ broker_id | default( groups.kafka_broker.index(inventory_hostname) + 1 ) if inventory_hostname in groups.kafka_broker else 0 }}"
   ssl:
-    enabled: "{{ zookeeper_ssl_enabled|bool or
+    enabled: "{{ kafka_controller_ssl_enabled|bool or
     kafka_broker_listeners | confluent.platform.ssl_required(ssl_enabled) or
     kafka_broker_rest_ssl_enabled|bool or
     mds_broker_listener.ssl_enabled|bool or
@@ -676,22 +558,6 @@ kafka_broker_properties:
     enabled: "{{ 'GSSAPI' in kafka_sasl_enabled_mechanisms }}"
     properties:
       sasl.kerberos.service.name: "{{kerberos_kafka_broker_primary}}"
-  zk_ssl:
-    enabled: "{{ zookeeper_ssl_enabled and (not kraft_enabled|bool or ( kraft_enabled|bool and kraft_migration|bool ))}}"
-    properties:
-      zookeeper.ssl.client.enable: 'true'
-      zookeeper.clientCnxnSocket: org.apache.zookeeper.ClientCnxnSocketNetty
-      zookeeper.ssl.truststore.location: "{{kafka_broker_pkcs12_truststore_path}}"
-      zookeeper.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
-  zk_mtls:
-    enabled: "{{ zookeeper_client_authentication_type == 'mtls' and (not kraft_enabled|bool or ( kraft_enabled|bool and kraft_migration|bool ))}}"
-    properties:
-      zookeeper.ssl.keystore.location: "{{kafka_broker_pkcs12_keystore_path}}"
-      zookeeper.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
-  zk_acls:
-    enabled: "{{ zookeeper_client_authentication_type in ['kerberos', 'digest'] and (not kraft_enabled|bool or ( kraft_enabled|bool and kraft_migration|bool ))}}"
-    properties:
-      zookeeper.set.acl: 'true'
   sr:
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups }}"
     properties:
@@ -780,7 +646,7 @@ kafka_broker_properties:
     enabled: "{{ rbac_enabled }}"
     properties:
       authorizer.class.name: io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer
-      confluent.authorizer.access.rule.providers: CONFLUENT,{{ "ZK_ACL" if ((not kraft_enabled|bool) or kraft_migration|bool) else "KRAFT_ACL" }}
+      confluent.authorizer.access.rule.providers: CONFLUENT,KRAFT_ACL
       super.users: >-
         {{
            ('ldap' in auth_mode) | ternary("User:" + mds_super_user|default('mds'), "") +
