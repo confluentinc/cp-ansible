@@ -5,53 +5,7 @@
     state: directory
     mode: '0755'
 
-- name: Copy PKCS#8 private key to remote host
-  copy:
-    src: "{{ oauth_client_assertion_private_key_file }}"
-    dest: /tmp/private_key_pkcs8.pem
-    mode: '0600'
-  when:
-    - oauth|bool
-    - oauth_client_assertion_enabled|bool
-    - oauth_client_assertion_private_key_passphrase != 'none'
-
-# Step 1: Convert PEM to PKCS#8 with passphrase or copy as is if no passphrase
-- name: Convert PEM to PKCS#8 if passphrase provided
-  command: >
-    openssl pkcs8 -topk8 -inform PEM -outform PEM
-    -in /tmp/private_key_pkcs8.pem
-    -out /tmp/oauth_private_key_pkcs8.pem
-    -passin pass:{{ oauth_client_assertion_private_key_passphrase }}
-    -passout pass:{{ oauth_client_assertion_private_key_passphrase }}
-  when:
-    - oauth|bool
-    - oauth_client_assertion_enabled|bool
-    - oauth_client_assertion_private_key_passphrase != 'none'
-
-- name: Copy private key as PEM if no passphrase
-  copy:
-    src: "{{ oauth_client_assertion_private_key_file }}"
-    dest: /tmp/oauth_private_key.pem
-    mode: '0600'
-  when:
-    - oauth|bool
-    - oauth_client_assertion_enabled|bool
-    - oauth_client_assertion_private_key_passphrase == 'none'
-
-# Step 2: Set path to private key to use for signing
-- name: Set private key path
-  set_fact:
-    oauth_private_key_path: >-
-      {{
-        '/tmp/oauth_private_key_pkcs8.pem'
-        if oauth_client_assertion_private_key_passphrase != 'none'
-        else '/tmp/oauth_private_key.pem'
-      }}
-  when:
-    - oauth|bool
-    - oauth_client_assertion_enabled|bool
-
-# Step 3: Use third-party JWT assertion if provided (file or variable), else generate locally
+# Step 1: Use third-party JWT assertion if provided (file or variable), else generate locally
 - block:
     - name: Read third-party JWT assertion from file
       slurp:
@@ -105,7 +59,7 @@
     - name: Sign JWT using OpenSSL with passphrase
       command: >
         openssl dgst -sha256
-        -sign {{ oauth_private_key_path }}
+        -sign {{ oauth_client_assertion_private_key_file }}
         -passin pass:{{ oauth_client_assertion_private_key_passphrase }}
         -out /tmp/jwt.sig
         /tmp/jwt_input.txt
@@ -114,7 +68,7 @@
     - name: Sign JWT using OpenSSL without passphrase
       command: >
         openssl dgst -sha256
-        -sign {{ oauth_private_key_path }}
+        -sign {{ oauth_client_assertion_private_key_file }}
         -out /tmp/jwt.sig
         /tmp/jwt_input.txt
       when: oauth|bool and oauth_client_assertion_enabled|bool and ( oauth_client_assertion_private_key_passphrase == 'none')
@@ -137,7 +91,7 @@
     - oauth_client_assertion_enabled|bool
     - oauth_client_assertion_file == 'none'  # Only generate if no third-party JWT
 
-# Step 4: Prepare token request body
+# Step 2: Prepare token request body
 - set_fact:
     idp_body: >-
       {{
@@ -162,7 +116,7 @@
       }}
   when: oauth | bool
 
-# Step 5: Send token request
+# Step 3: Send token request
 - name: Get Authorization Token from Identity Provider (OAuth)
   uri:
     url: "{{ oauth_token_uri }}"
@@ -225,7 +179,7 @@
     - cluster_id_source | default('erp') == 'erp'
     - auth_mode == 'mtls' or cert_auth_only_enabled|bool
 
-# Step 6: Set the authorization_token from whichever token source is applicable
+# Step 4: Set the authorization_token from whichever token source is applicable
 - name: Set Authorization Token
   set_fact:
     authorization_token: >-
