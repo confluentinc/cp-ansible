@@ -22,13 +22,17 @@ schema_registry_log_file_size: 100MB
 schema_registry_logredactor_logger_specs_list:
   - { logger_name: "Root", appenderRefs: "file" }
 
+schema_registry_oauth_urls_list: "{{ [oauth_token_uri, oauth_jwks_uri] | select('!=', none) | join(',') }}"
+
+schema_registry_oauth_urls_java_arg: "{% if not whitelist_explicit_oauth_urls|bool %}-Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=*{% else %}-Dorg.apache.kafka.sasl.oauthbearer.allowed.urls={{schema_registry_oauth_urls_list}}{% endif %}"
+
 schema_registry_java_args:
   - "{% if schema_registry_ssl_enabled|bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
   - "{% if schema_registry_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=config={{schema_registry_jolokia_config}}{% endif %}"
   - "{% if schema_registry_jmxexporter_enabled|bool %}-javaagent:{{jmxexporter_jar_path}}={{schema_registry_jmxexporter_port}}:{{schema_registry_jmxexporter_config_path}}{% endif %}"
   - "{% if schema_registry_authentication_type == 'basic' %}-Djava.security.auth.login.config={{schema_registry.jaas_file}}{% endif %}"
   - "{% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
-  - "-Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=*"
+  - "{% if oauth_token_uri != none or oauth_jwks_uri != none %}{{ schema_registry_oauth_urls_java_arg }}{% endif %}"
 
 ### Custom Java Args to add to the Schema Registry Process
 schema_registry_custom_java_args: ""
