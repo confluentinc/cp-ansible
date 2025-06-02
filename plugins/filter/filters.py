@@ -436,7 +436,7 @@ class FilterModule(object):
 
                 if assertion_config and assertion_config.get('enabled'):
                     self._configure_oauth_assertion(final_dict, config_prefix, assertion_config)
-                    client_id = assertion_config['client_assertion_id']
+                    client_id = oauth_superuser_client_id
                     client_secret = None
                 else:
                     client_id = oauth_superuser_client_id
