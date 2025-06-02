@@ -72,13 +72,13 @@ fips_enabled: false
 ### Boolean to configure Kraft, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 custom_log4j2: true
 
-### Boolean to enable logredactor for all components. Works only when enabled along with custom_log4j. If enabled, ensure correct value of logredactor_rule_path/url
+### Boolean to enable logredactor for all components. Works only when enabled along with custom_log4j2. If enabled, ensure correct value of logredactor_rule_path/url
 logredactor_enabled: false
 
 ### Location of the logredactor rules file on the control node. Ensure that the rules files exist here if logredactor enabled. This'll be copied to logredactor_host_rule_path for all components. Not required if logredactor_rule_url is specified.
 logredactor_rule_path_local: ""
 
-### Full path and name of the rules file on all components. This is the location which will be referenced in the log4j property file on the redactor appender. Not required if logredactor_rule_url is specified.
+### Full path and name of the rules file on all components. This is the location which will be referenced in the log4j2 property file on the redactor appender. Not required if logredactor_rule_url is specified.
 logredactor_rule_path: "{{ archive_config_base_path if installation_method == 'archive' else '' }}/{{ config_prefix }}/rules.json"
 
 ### URL that contains or redirects to the redaction rules. If not "", this will be used to fetch rules and logredactor_rule_path will be ignored.
@@ -109,9 +109,6 @@ open_file_limit: 500000
 ### Variable to define minimum free disk space in MB for installation.
 required_disk_space_mb: 1000
 
-### Variable to define the minimum amount of memory in MB required to run zookeeper.  Calculated as default heap size plus 1GB for OS.
-required_total_memory_mb_zookeeper: 2000
-
 ### Variable to define the minimum amount of memory in MB required to run kafka controller. Calculated as default heap size plus 1GB for OS.
 required_total_memory_mb_kafka_controller: 7000
 
@@ -138,9 +135,6 @@ confluent_server_enabled: true
 
 ### Boolean to enable health checks on all components
 health_checks_enabled: true
-
-### Boolean to enable health checks on Zookeeper
-zookeeper_health_checks_enabled: "{{health_checks_enabled}}"
 
 ### Boolean to enable health checks on Kafka
 kafka_controller_health_checks_enabled: "{{health_checks_enabled}}"
@@ -322,125 +316,6 @@ skip_restarts: false
 
 ### Variable to set the user login shell for all custom user created per component by cp-ansible.
 user_login_shell: /sbin/nologin
-
-# Zookeeper Variables
-
-### Default Zookeeper config prefix. Note - Only valid to customize when installation_method: archive
-zookeeper_config_prefix: "{{ config_prefix }}/kafka"
-
-### Set this variable to customize the Linux User that the Zookeeper Service runs with. Default user is cp-kafka.
-zookeeper_user: "{{zookeeper_default_user}}"
-
-### Set this variable to customize the Linux Group that the Zookeeper Service user belongs to. Default group is confluent.
-zookeeper_group: "{{zookeeper_default_group}}"
-
-### Boolean to configure zookeeper with TLS Encryption. Also manages Java Keystore creation
-zookeeper_ssl_enabled: "{{ssl_enabled}}"
-
-### Deprecated- Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
-zookeeper_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
-
-### Deprecated- SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
-zookeeper_sasl_protocol: "{{ 'kerberos' if 'kerberos' in (sasl_protocol | confluent.platform.split_to_list) else 'none' }}"
-
-### Authentication to put on ZK Server to Server connections. Available options: [mtls, digest, digest_over_tls].
-zookeeper_quorum_authentication_type: "{% if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled %}mtls{% elif zookeeper_sasl_protocol == 'digest' %}digest{% else %}none{% endif %}"
-
-### Authentication to put on ZK Client to Server connections. This is Kafka's connection to ZK. Available options: [mtls, digest, kerberos].
-zookeeper_client_authentication_type: "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
-
-### Port for Kafka to Zookeeper connections
-zookeeper_client_port: "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
-
-### Set this variable to customize the directory that Zookeeper writes log files to. Default location is /var/log/kafka. NOTE- zookeeper.log_path is deprecated.
-zookeeper_log_dir: "{{zookeeper_default_log_dir}}"
-
-### Chroot path in Zookeeper used by Kafka. Defaults to no chroot. Must begin with a /
-zookeeper_chroot: ""
-
-zookeeper_packages:
-  - confluent-common
-  - confluent-rest-utils
-  - confluent-metadata-service
-  - confluent-ce-kafka-http-server
-  - confluent-kafka-rest
-  - confluent-server-rest
-  - confluent-telemetry
-  - "{{ zookeeper_main_package }}"
-
-zookeeper_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/zookeeper.truststore.jks{% endif %}"
-zookeeper_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/zookeeper.keystore.jks{% endif %}"
-zookeeper_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
-zookeeper_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
-zookeeper_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else zookeeper_keystore_storepass }}"
-zookeeper_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
-zookeeper_cert_path: "{{ ssl_file_dir_final }}/zookeeper.crt"
-zookeeper_key_path: "{{ ssl_file_dir_final }}/zookeeper.key"
-zookeeper_export_certs: "{{ True if zookeeper_client_authentication_type == 'mtls' or zookeeper_quorum_authentication_type in ['mtls', 'digest_over_tls'] else False }}"
-zookeeper_keytab_path: /etc/security/keytabs/zookeeper.keytab
-
-### Boolean to enable Jolokia Agent installation and configuration on zookeeper
-zookeeper_jolokia_enabled: "{{jolokia_enabled}}"
-
-### Port to expose jolokia metrics. Beware of port collisions if colocating components on same host
-zookeeper_jolokia_port: 7770
-
-### Boolean to enable TLS encryption on Zookeeper jolokia metrics
-zookeeper_jolokia_ssl_enabled: "{{ zookeeper_ssl_enabled }}"
-
-### Path on Zookeeper host for Jolokia Configuration file
-zookeeper_jolokia_config: "{{ (config_base_path, zookeeper_config_prefix_path, 'zookeeper_jolokia.properties') | path_join }}"
-
-### Authentication Mode for Zookeeper's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set zookeeper_jolokia_user and zookeeper_jolokia_password
-zookeeper_jolokia_auth_mode: "{{jolokia_auth_mode}}"
-
-### Username for Zookeeper's Jolokia Agent when using Basic Auth
-zookeeper_jolokia_user: "{{jolokia_user}}"
-
-### Password for Zookeeper's Jolokia Agent when using Basic Auth
-zookeeper_jolokia_password: "{{jolokia_password}}"
-
-### Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
-zookeeper_jmxexporter_enabled: "{{jmxexporter_enabled}}"
-
-### Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
-zookeeper_jmxexporter_port: 8079
-
-### Path on Ansible Controller for Zookeeper jmx config file. Only necessary to set for custom config.
-zookeeper_jmxexporter_config_source_path: zookeeper.yml
-
-### Destination path for Zookeeper jmx config file
-zookeeper_jmxexporter_config_path: /opt/prometheus/zookeeper.yml
-
-zookeeper_health_check_command: "{{ binary_base_path }}/bin/kafka-run-class
-{% if zookeeper_ssl_enabled|bool %}
--Dzookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
--Dzookeeper.ssl.trustStore.location={{zookeeper_truststore_path}}
--Dzookeeper.ssl.trustStore.password={{zookeeper_truststore_storepass}}
--Dzookeeper.ssl.keyStore.location={{zookeeper_keystore_path}}
--Dzookeeper.ssl.keyStore.password={{zookeeper_keystore_storepass}}
--Dzookeeper.client.secure=true
-{% endif %}
-org.apache.zookeeper.client.FourLetterWordMain {{zookeeper_health_check_host | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname) }} {{zookeeper_client_port}} srvr
-{% if zookeeper_ssl_enabled|bool %}true{% endif %}"
-
-zookeeper_current_node_hostname: "{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}"
-
-### Zookeeper peer port
-zookeeper_peer_port: 2888
-
-### Zookeeper leader port
-zookeeper_leader_port: 3888
-
-### Use to copy files from control node to zookeeper hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
-zookeeper_copy_files: []
-
-# User provided properties, merged into the final properties dictionary with precedence
-### Use to set custom zookeeper properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- zookeeper.properties is deprecated.
-zookeeper_custom_properties: {}
-
-### Boolean used for disabling of systemd service restarts when rootless install is executed
-zookeeper_skip_restarts: "{{ skip_restarts }}"
 
 #### kafka Controller variables ####
 
@@ -943,12 +818,13 @@ kafka_rest_export_certs: "{{ True if kafka_rest_authentication_type == 'mtls' el
 kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
 
 ### Name of listener used by Kafka Rest to talk to Kafka
-kafka_rest_kafka_listener_name: >-
-  {%- if rbac_enabled|bool and auth_mode=='mtls' -%}
-    internal_token
-  {%- else -%}
-    internal
-  {%- endif -%}
+kafka_rest_kafka_listener_name: internal
+
+kafka_rest_client_kafka_listener_name: "{{ 'internal_token' if mds_ssl_client_authentication != 'none' else kafka_rest_kafka_listener_name }}"
+
+kafka_rest_license_kafka_listener_name: "{{ kafka_rest_kafka_listener_name }}"
+
+kafka_rest_monitoring_interceptor_kafka_listener_name: "{{ kafka_rest_kafka_listener_name }}"
 
 ### Boolean to enable Jolokia Agent installation and configuration on Rest Proxy
 kafka_rest_jolokia_enabled: "{{jolokia_enabled}}"
@@ -1323,13 +1199,13 @@ control_center_next_gen_cert_path: "{{ ssl_file_dir_final }}/control_center_next
 control_center_next_gen_key_path: "{{ ssl_file_dir_final }}/control_center_next_gen.key"
 control_center_next_gen_export_certs: "{{ssl_mutual_auth_enabled}}"
 control_center_next_gen_keytab_path: /etc/security/keytabs/control_center_next_gen.keytab
-### Name of listener used by C3 to talk to Kafka
-control_center_next_gen_kafka_listener_name: >-
-  {%- if rbac_enabled|bool and auth_mode=='mtls' -%}
-    internal_token
-  {%- else -%}
-    internal
-  {%- endif -%}
+
+### Name of listener used by C3 Next Gen to talk to Kafka
+control_center_next_gen_kafka_listener_name: internal
+
+control_center_next_gen_streams_kafka_listener_name: "{{ 'internal_token' if mds_ssl_client_authentication != 'none' else control_center_next_gen_kafka_listener_name }}"
+
+control_center_next_gen_monitoring_interceptor_kafka_listener_name: "{{ control_center_next_gen_kafka_listener_name }}"
 
 control_center_next_gen_dependency_prometheus_schema: "{{ 'https' if control_center_next_gen_dependency_prometheus_ssl_enabled|bool else 'http' }}"
 control_center_next_gen_dependency_prometheus_host: "{{ (groups.get('control_center_next_gen') if groups.get('control_center_next_gen') else ['localhost']) | confluent.platform.resolve_hostnames(hostvars) | first }}"
@@ -1501,14 +1377,6 @@ sasl_plain_users: {}
 
 sasl_plain_users_final: "{{ _sasl_plain_users | combine(sasl_plain_users, recursive=True) }}"
 
-zookeeper_digest_users:
-  admin:
-    principal: admin
-    password: admin-secret
-  kafka_broker:
-    principal: kafka_broker
-    password: kafka_broker-secret
-
 kafka_broker_rest_proxy_basic_users:
   admin:
     principal: admin
@@ -1644,6 +1512,39 @@ oauth_superuser_client_id: none
 ### Client secret for authorize and token request to IdP via cp components
 oauth_superuser_client_password: none
 
+### Boolean to enable OAuth client assertion
+oauth_superuser_client_assertion_enabled: False
+
+### Path to the file containing the client assertion
+oauth_superuser_client_assertion_file: none
+
+### Not before time for the client assertion
+oauth_superuser_client_assertion_not_before: none
+
+### Audience for the client assertion
+oauth_superuser_client_assertion_audience: none
+
+### Issuer for the client assertion
+oauth_superuser_client_assertion_issuer: none
+
+### Subject for the client assertion
+oauth_superuser_client_assertion_sub: none
+
+### Scope for the client assertion
+oauth_superuser_client_assertion_scope: none
+
+### Path to the file containing the private key for the client assertion
+oauth_superuser_client_assertion_private_key_file: none
+
+### Passphrase for the private key for the client assertion
+oauth_superuser_client_assertion_private_key_passphrase: none
+
+### JTI for the client assertion
+oauth_superuser_client_assertion_jti_include: none
+
+### Path to the file containing the template for the client assertion
+oauth_superuser_client_assertion_template_file: none
+
 ### Service principal for OAuth client in IdPserver. Defaults to client id. Needs to be modified based on OAuth JWT token's field pointed by oauth_sub_claim
 oauth_superuser_principal: "{{oauth_superuser_client_id}}"
 
@@ -1704,6 +1605,39 @@ kafka_broker_oauth_user: "{{oauth_superuser_client_id}}"
 ### Client Secret for kafka_broker_oauth_user
 kafka_broker_oauth_password: "{{oauth_superuser_client_password}}"
 
+### Boolean to enable OAuth client assertion
+kafka_broker_oauth_client_assertion_enabled: "{{oauth_superuser_client_assertion_enabled}}"
+
+### Path to the file containing the client assertion
+kafka_broker_oauth_client_assertion_file: "{{oauth_superuser_client_assertion_file}}"
+
+### Not before time for the client assertion
+kafka_broker_oauth_client_assertion_not_before: "{{oauth_superuser_client_assertion_not_before}}"
+
+### Audience for the client assertion
+kafka_broker_oauth_client_assertion_audience: "{{oauth_superuser_client_assertion_audience}}"
+
+### Issuer for the client assertion
+kafka_broker_oauth_client_assertion_issuer: "{{oauth_superuser_client_assertion_issuer}}"
+
+### Subject for the client assertion
+kafka_broker_oauth_client_assertion_sub: "{{oauth_superuser_client_assertion_sub}}"
+
+### Scope for the client assertion
+kafka_broker_oauth_client_assertion_scope: "{{oauth_superuser_client_assertion_scope}}"
+
+### Path to the file containing the private key for the client assertion
+kafka_broker_oauth_client_assertion_private_key_file: "{{oauth_superuser_client_assertion_private_key_file}}"
+
+### Passphrase for the private key for the client assertion
+kafka_broker_oauth_client_assertion_private_key_passphrase: "{{oauth_superuser_client_assertion_private_key_passphrase}}"
+
+### JTI for the client assertion
+kafka_broker_oauth_client_assertion_jti_include: "{{oauth_superuser_client_assertion_jti_include}}"
+
+### Path to the file containing the template for the client assertion
+kafka_broker_oauth_client_assertion_template_file: "{{oauth_superuser_client_assertion_template_file}}"
+
 ### LDAP User for Kafkas Embedded Rest Service to authenticate as
 kafka_controller_ldap_user: "{{mds_super_user}}"
 
@@ -1715,6 +1649,39 @@ kafka_controller_oauth_user: "{{oauth_superuser_client_id}}"
 
 ### Client Secret to kafka_controller_oauth_user
 kafka_controller_oauth_password: "{{oauth_superuser_client_password}}"
+
+### Boolean to enable OAuth client assertion
+kafka_controller_oauth_client_assertion_enabled: "{{oauth_superuser_client_assertion_enabled}}"
+
+### Path to the file containing the client assertion
+kafka_controller_oauth_client_assertion_file: "{{oauth_superuser_client_assertion_file}}"
+
+### Not before time for the client assertion
+kafka_controller_oauth_client_assertion_not_before: "{{oauth_superuser_client_assertion_not_before}}"
+
+### Audience for the client assertion
+kafka_controller_oauth_client_assertion_audience: "{{oauth_superuser_client_assertion_audience}}"
+
+### Issuer for the client assertion
+kafka_controller_oauth_client_assertion_issuer: "{{oauth_superuser_client_assertion_issuer}}"
+
+### Subject for the client assertion
+kafka_controller_oauth_client_assertion_sub: "{{oauth_superuser_client_assertion_sub}}"
+
+### Scope for the client assertion
+kafka_controller_oauth_client_assertion_scope: "{{oauth_superuser_client_assertion_scope}}"
+
+### Path to the file containing the private key for the client assertion
+kafka_controller_oauth_client_assertion_private_key_file: "{{oauth_superuser_client_assertion_private_key_file}}"
+
+### Passphrase for the private key for the client assertion
+kafka_controller_oauth_client_assertion_private_key_passphrase: "{{oauth_superuser_client_assertion_private_key_passphrase}}"
+
+### JTI for the client assertion
+kafka_controller_oauth_client_assertion_jti_include: "{{oauth_superuser_client_assertion_jti_include}}"
+
+### Path to the file containing the template for the client assertion
+kafka_controller_oauth_client_assertion_template_file: "{{oauth_superuser_client_assertion_template_file}}"
 
 ### Unique advertised hostname for Metadata Server
 mds_advertised_listener_hostname: ""
@@ -1731,6 +1698,39 @@ schema_registry_oauth_user: schema-registry
 ### Client Secret for schema_registry_oauth_user
 schema_registry_oauth_password: password
 
+### Boolean to enable OAuth client assertion
+schema_registry_oauth_client_assertion_enabled: False
+
+### Path to the file containing the client assertion
+schema_registry_oauth_client_assertion_file: none
+
+### Not before time for the client assertion
+schema_registry_oauth_client_assertion_not_before: none
+
+### Audience for the client assertion
+schema_registry_oauth_client_assertion_audience: none
+
+### Issuer for the client assertion
+schema_registry_oauth_client_assertion_issuer: none
+
+### Subject for the client assertion
+schema_registry_oauth_client_assertion_sub: none
+
+### Scope for the client assertion
+schema_registry_oauth_client_assertion_scope: none
+
+### Path to the file containing the private key for the client assertion
+schema_registry_oauth_client_assertion_private_key_file: none
+
+### Passphrase for the private key for the client assertion
+schema_registry_oauth_client_assertion_private_key_passphrase: none
+
+### JTI for the client assertion
+schema_registry_oauth_client_assertion_jti_include: none
+
+### Path to the file containing the template for the client assertion
+schema_registry_oauth_client_assertion_template_file: none
+
 ### Service principal for SR client in IdPserver. Defaults to SR Client Id
 schema_registry_oauth_principal: "{{ schema_registry_oauth_user }}"
 
@@ -1745,6 +1745,39 @@ kafka_connect_oauth_user: connect
 
 ### Client Secret for kafka_connect_oauth_user
 kafka_connect_oauth_password: password
+
+### Boolean to enable OAuth client assertion
+kafka_connect_oauth_client_assertion_enabled: False
+
+### Path to the file containing the client assertion
+kafka_connect_oauth_client_assertion_file: none
+
+### Not before time for the client assertion
+kafka_connect_oauth_client_assertion_not_before: none
+
+### Audience for the client assertion
+kafka_connect_oauth_client_assertion_audience: none
+
+### Issuer for the client assertion
+kafka_connect_oauth_client_assertion_issuer: none
+
+### Subject for the client assertion
+kafka_connect_oauth_client_assertion_sub: none
+
+### Scope for the client assertion
+kafka_connect_oauth_client_assertion_scope: none
+
+### Path to the file containing the private key for the client assertion
+kafka_connect_oauth_client_assertion_private_key_file: none
+
+### Passphrase for the private key for the client assertion
+kafka_connect_oauth_client_assertion_private_key_passphrase: none
+
+### JTI for the client assertion
+kafka_connect_oauth_client_assertion_jti_include: none
+
+### Path to the file containing the template for the client assertion
+kafka_connect_oauth_client_assertion_template_file: none
 
 ### Service principal for Connect client in IdPserver. Defaults to Connect Client Id
 kafka_connect_oauth_principal: "{{ kafka_connect_oauth_user }}"
@@ -1761,6 +1794,39 @@ ksql_oauth_user: ksql
 ### Client Secret for ksql_oauth_user
 ksql_oauth_password: password
 
+### Boolean to enable OAuth client assertion
+ksql_oauth_client_assertion_enabled: False
+
+### Path to the file containing the client assertion
+ksql_oauth_client_assertion_file: none
+
+### Not before time for the client assertion
+ksql_oauth_client_assertion_not_before: none
+
+### Audience for the client assertion
+ksql_oauth_client_assertion_audience: none
+
+### Issuer for the client assertion
+ksql_oauth_client_assertion_issuer: none
+
+### Subject for the client assertion
+ksql_oauth_client_assertion_sub: none
+
+### Scope for the client assertion
+ksql_oauth_client_assertion_scope: none
+
+### Path to the file containing the private key for the client assertion
+ksql_oauth_client_assertion_private_key_file: none
+
+### Passphrase for the private key for the client assertion
+ksql_oauth_client_assertion_private_key_passphrase: none
+
+### JTI for the client assertion
+ksql_oauth_client_assertion_jti_include: none
+
+### Path to the file containing the template for the client assertion
+ksql_oauth_client_assertion_template_file: none
+
 ### Service principal for Ksql client in IdPserver. Defaults to Ksql Client Id
 ksql_oauth_principal: "{{ ksql_oauth_user }}"
 
@@ -1775,6 +1841,39 @@ kafka_rest_oauth_user: kafka-rest
 
 ### Client Secret for kafka_rest_oauth_user
 kafka_rest_oauth_password: password
+
+### Boolean to enable OAuth client assertion
+kafka_rest_oauth_client_assertion_enabled: False
+
+### Path to the file containing the client assertion
+kafka_rest_oauth_client_assertion_file: none
+
+### Not before time for the client assertion
+kafka_rest_oauth_client_assertion_not_before: none
+
+### Audience for the client assertion
+kafka_rest_oauth_client_assertion_audience: none
+
+### Issuer for the client assertion
+kafka_rest_oauth_client_assertion_issuer: none
+
+### Subject for the client assertion
+kafka_rest_oauth_client_assertion_sub: none
+
+### Scope for the client assertion
+kafka_rest_oauth_client_assertion_scope: none
+
+### Path to the file containing the private key for the client assertion
+kafka_rest_oauth_client_assertion_private_key_file: none
+
+### Passphrase for the private key for the client assertion
+kafka_rest_oauth_client_assertion_private_key_passphrase: none
+
+### JTI for the client assertion
+kafka_rest_oauth_client_assertion_jti_include: none
+
+### Path to the file containing the template for the client assertion
+kafka_rest_oauth_client_assertion_template_file: none
 
 ### Service principal for Rest Proxy client in IdPserver. Defaults to Rest proxy Client Id
 kafka_rest_oauth_principal: "{{ kafka_rest_oauth_user }}"
@@ -1791,7 +1890,40 @@ control_center_next_gen_oauth_user: control-center
 ### Client Secret for control_center_next_gen_oauth_user
 control_center_next_gen_oauth_password: password
 
-### Service principal for Control Center (Next Gen) client in IdPserver. Defaults to Control Center Client Id
+### Boolean to enable OAuth client assertion
+control_center_next_gen_oauth_client_assertion_enabled: False
+
+### Path to the file containing the client assertion
+control_center_next_gen_oauth_client_assertion_file: none
+
+### Not before time for the client assertion
+control_center_next_gen_oauth_client_assertion_not_before: none
+
+### Audience for the client assertion
+control_center_next_gen_oauth_client_assertion_audience: none
+
+### Issuer for the client assertion
+control_center_next_gen_oauth_client_assertion_issuer: none
+
+### Subject for the client assertion
+control_center_next_gen_oauth_client_assertion_sub: none
+
+### Scope for the client assertion
+control_center_next_gen_oauth_client_assertion_scope: none
+
+### Path to the file containing the private key for the client assertion
+control_center_next_gen_oauth_client_assertion_private_key_file: none
+
+### Passphrase for the private key for the client assertion
+control_center_next_gen_oauth_client_assertion_private_key_passphrase: none
+
+### JTI for the client assertion
+control_center_next_gen_oauth_client_assertion_jti_include: none
+
+### Path to the file containing the template for the client assertion
+control_center_next_gen_oauth_client_assertion_template_file: none
+
+### Service principal for Control Center (Next Gen) client in IdPserver. Defaults to Control Center (Next Gen) Client Id
 control_center_next_gen_oauth_principal: "{{ control_center_next_gen_oauth_user }}"
 
 ### LDAP User for Confluent Replicator to authenticate as
@@ -1805,6 +1937,39 @@ kafka_connect_replicator_oauth_user: replicator
 
 ### Client Secret for kafka_connect_replicator_oauth_user OAuth User
 kafka_connect_replicator_oauth_password: password
+
+### Boolean to enable OAuth client assertion
+kafka_connect_replicator_oauth_client_assertion_enabled: False
+
+### Path to the file containing the client assertion
+kafka_connect_replicator_oauth_client_assertion_file: none
+
+### Not before time for the client assertion
+kafka_connect_replicator_oauth_client_assertion_not_before: none
+
+### Audience for the client assertion
+kafka_connect_replicator_oauth_client_assertion_audience: none
+
+### Issuer for the client assertion
+kafka_connect_replicator_oauth_client_assertion_issuer: none
+
+### Subject for the client assertion
+kafka_connect_replicator_oauth_client_assertion_sub: none
+
+### Scope for the client assertion
+kafka_connect_replicator_oauth_client_assertion_scope: none
+
+### Path to the file containing the private key for the client assertion
+kafka_connect_replicator_oauth_client_assertion_private_key_file: none
+
+### Passphrase for the private key for the client assertion
+kafka_connect_replicator_oauth_client_assertion_private_key_passphrase: none
+
+### JTI for the client assertion
+kafka_connect_replicator_oauth_client_assertion_jti_include: none
+
+### Path to the file containing the template for the client assertion
+kafka_connect_replicator_oauth_client_assertion_template_file: none
 
 ### Service principal for kafka_connect_replicator client in IdPserver. Defaults to Connect Replicator Client Id
 kafka_connect_replicator_oauth_principal: "{{ kafka_connect_replicator_oauth_user }}"
@@ -1821,6 +1986,39 @@ kafka_connect_replicator_consumer_oauth_user: "{{ kafka_connect_replicator_oauth
 ### Client Secret for kafka_connect_replicator_consumer_oauth_user OAuth User
 kafka_connect_replicator_consumer_oauth_password: "{{ kafka_connect_replicator_oauth_password }}"
 
+### Boolean to enable OAuth client assertion
+kafka_connect_replicator_consumer_oauth_client_assertion_enabled: "{{ kafka_connect_replicator_oauth_client_assertion_enabled }}"
+
+### Path to the file containing the client assertion
+kafka_connect_replicator_consumer_oauth_client_assertion_file: "{{ kafka_connect_replicator_oauth_client_assertion_file }}"
+
+### Not before time for the client assertion
+kafka_connect_replicator_consumer_oauth_client_assertion_not_before: "{{ kafka_connect_replicator_oauth_client_assertion_not_before }}"
+
+### Audience for the client assertion
+kafka_connect_replicator_consumer_oauth_client_assertion_audience: "{{ kafka_connect_replicator_oauth_client_assertion_audience }}"
+
+### Issuer for the client assertion
+kafka_connect_replicator_consumer_oauth_client_assertion_issuer: "{{ kafka_connect_replicator_oauth_client_assertion_issuer }}"
+
+### Subject for the client assertion
+kafka_connect_replicator_consumer_oauth_client_assertion_sub: "{{ kafka_connect_replicator_oauth_client_assertion_sub }}"
+
+### Scope for the client assertion
+kafka_connect_replicator_consumer_oauth_client_assertion_scope: "{{ kafka_connect_replicator_oauth_client_assertion_scope }}"
+
+### Path to the file containing the private key for the client assertion
+kafka_connect_replicator_consumer_oauth_client_assertion_private_key_file: "{{ kafka_connect_replicator_oauth_client_assertion_private_key_file }}"
+
+### Passphrase for the private key for the client assertion
+kafka_connect_replicator_consumer_oauth_client_assertion_private_key_passphrase: "{{ kafka_connect_replicator_oauth_client_assertion_private_key_passphrase }}"
+
+### JTI for the client assertion
+kafka_connect_replicator_consumer_oauth_client_assertion_jti_include: "{{ kafka_connect_replicator_oauth_client_assertion_jti_include }}"
+
+### Path to the file containing the template for the client assertion
+kafka_connect_replicator_consumer_oauth_client_assertion_template_file: "{{ kafka_connect_replicator_oauth_client_assertion_template_file }}"
+
 ### Service principal for kafka_connect_consumer_replicator client in IdPserver. Defaults to Connect Replicator Consumer Client Id
 kafka_connect_replicator_consumer_oauth_principal: "{{ kafka_connect_replicator_consumer_oauth_user }}"
 
@@ -1836,6 +2034,39 @@ kafka_connect_replicator_producer_oauth_user: "{{ kafka_connect_replicator_oauth
 ### Client Secret for kafka_connect_replicator_producer_oauth_user OAuth User
 kafka_connect_replicator_producer_oauth_password: "{{ kafka_connect_replicator_oauth_password }}"
 
+### Boolean to enable OAuth client assertion
+kafka_connect_replicator_producer_oauth_client_assertion_enabled: "{{ kafka_connect_replicator_oauth_client_assertion_enabled }}"
+
+### Path to the file containing the client assertion
+kafka_connect_replicator_producer_oauth_client_assertion_file: "{{ kafka_connect_replicator_oauth_client_assertion_file }}"
+
+### Not before time for the client assertion
+kafka_connect_replicator_producer_oauth_client_assertion_not_before: "{{ kafka_connect_replicator_oauth_client_assertion_not_before }}"
+
+### Audience for the client assertion
+kafka_connect_replicator_producer_oauth_client_assertion_audience: "{{ kafka_connect_replicator_oauth_client_assertion_audience }}"
+
+### Issuer for the client assertion
+kafka_connect_replicator_producer_oauth_client_assertion_issuer: "{{ kafka_connect_replicator_oauth_client_assertion_issuer }}"
+
+### Subject for the client assertion
+kafka_connect_replicator_producer_oauth_client_assertion_sub: "{{ kafka_connect_replicator_oauth_client_assertion_sub }}"
+
+### Scope for the client assertion
+kafka_connect_replicator_producer_oauth_client_assertion_scope: "{{ kafka_connect_replicator_oauth_client_assertion_scope }}"
+
+### Path to the file containing the private key for the client assertion
+kafka_connect_replicator_producer_oauth_client_assertion_private_key_file: "{{ kafka_connect_replicator_oauth_client_assertion_private_key_file }}"
+
+### Passphrase for the private key for the client assertion
+kafka_connect_replicator_producer_oauth_client_assertion_private_key_passphrase: "{{ kafka_connect_replicator_oauth_client_assertion_private_key_passphrase }}"
+
+### JTI for the client assertion
+kafka_connect_replicator_producer_oauth_client_assertion_jti_include: "{{ kafka_connect_replicator_oauth_client_assertion_jti_include }}"
+
+### Path to the file containing the template for the client assertion
+kafka_connect_replicator_producer_oauth_client_assertion_template_file: "{{ kafka_connect_replicator_oauth_client_assertion_template_file }}"
+
 ### Service principal for kafka_connect_producer_replicator client in IdPserver. Defaults to Connect Replicator Producer Client Id
 kafka_connect_replicator_producer_oauth_principal: "{{ kafka_connect_replicator_producer_oauth_user }}"
 
@@ -1850,6 +2081,39 @@ kafka_connect_replicator_monitoring_interceptor_oauth_user: "{{ kafka_connect_re
 
 ### Client Secret for kafka_connect_replicator_monitoring_interceptor_oauth_user OAuth User
 kafka_connect_replicator_monitoring_interceptor_oauth_password: "{{ kafka_connect_replicator_oauth_password }}"
+
+### Boolean to enable OAuth client assertion
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_enabled: "{{ kafka_connect_replicator_oauth_client_assertion_enabled }}"
+
+### Path to the file containing the client assertion
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_file: "{{ kafka_connect_replicator_oauth_client_assertion_file }}"
+
+### Not before time for the client assertion
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_not_before: "{{ kafka_connect_replicator_oauth_client_assertion_not_before }}"
+
+### Audience for the client assertion
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_audience: "{{ kafka_connect_replicator_oauth_client_assertion_audience }}"
+
+### Issuer for the client assertion
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_issuer: "{{ kafka_connect_replicator_oauth_client_assertion_issuer }}"
+
+### Subject for the client assertion
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_sub: "{{ kafka_connect_replicator_oauth_client_assertion_sub }}"
+
+### Scope for the client assertion
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_scope: "{{ kafka_connect_replicator_oauth_client_assertion_scope }}"
+
+### Path to the file containing the private key for the client assertion
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_private_key_file: "{{ kafka_connect_replicator_oauth_client_assertion_private_key_file }}"
+
+### Passphrase for the private key for the client assertion
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_private_key_passphrase: "{{ kafka_connect_replicator_oauth_client_assertion_private_key_passphrase }}"
+
+### JTI for the client assertion
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_jti_include: "{{ kafka_connect_replicator_oauth_client_assertion_jti_include }}"
+
+### Path to the file containing the template for the client assertion
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_template_file: "{{ kafka_connect_replicator_oauth_client_assertion_template_file }}"
 
 ### Service principal for kafka_connect_replicator_monitoring_interceptor client in IdPserver. Defaults to Connect Replicator Monitoring Interceptor Client Id
 kafka_connect_replicator_monitoring_interceptor_oauth_principal: "{{ kafka_connect_replicator_monitoring_interceptor_oauth_user }}"
@@ -2373,6 +2637,28 @@ kafka_connect_replicator_erp_oauth_user: ""
 ### Set this variable to the Client Secret of OAuth Client for the Embedded Rest Proxy user, to configure RBAC.
 kafka_connect_replicator_erp_oauth_password: ""
 
+kafka_connect_replicator_erp_oauth_client_assertion_enabled: False
+
+kafka_connect_replicator_erp_oauth_client_assertion_file: None
+
+kafka_connect_replicator_erp_oauth_client_assertion_not_before: None
+
+kafka_connect_replicator_erp_oauth_client_assertion_audience: None
+
+kafka_connect_replicator_erp_oauth_client_assertion_issuer: None
+
+kafka_connect_replicator_erp_oauth_client_assertion_sub: None
+
+kafka_connect_replicator_erp_oauth_client_assertion_scope: None
+
+kafka_connect_replicator_erp_oauth_client_assertion_private_key_file: None
+
+kafka_connect_replicator_erp_oauth_client_assertion_private_key_passphrase: None
+
+kafka_connect_replicator_erp_oauth_client_assertion_jti_include: None
+
+kafka_connect_replicator_erp_oauth_client_assertion_template_file: None
+
 ### Set this variable to the Cluster ID for the kafka cluster which you are interacting with.
 kafka_connect_replicator_kafka_cluster_id: ""
 
@@ -2467,6 +2753,29 @@ kafka_connect_replicator_consumer_erp_oauth_user: "{{ kafka_connect_replicator_e
 ### Set this variable to the Client Secret of the OAuth Client for the Embedded Rest Proxy user, to configure RBAC.
 kafka_connect_replicator_consumer_erp_oauth_password: "{{ kafka_connect_replicator_erp_oauth_password }}"
 
+kafka_connect_replicator_consumer_erp_oauth_client_assertion_enabled: "{{ kafka_connect_replicator_erp_oauth_client_assertion_enabled }}"
+
+kafka_connect_replicator_consumer_erp_oauth_client_assertion_file: "{{ kafka_connect_replicator_erp_oauth_client_assertion_file }}"
+
+kafka_connect_replicator_consumer_erp_oauth_client_assertion_not_before: "{{ kafka_connect_replicator_erp_oauth_client_assertion_not_before }}"
+
+kafka_connect_replicator_consumer_erp_oauth_client_assertion_audience: "{{ kafka_connect_replicator_erp_oauth_client_assertion_audience }}"
+
+kafka_connect_replicator_consumer_erp_oauth_client_assertion_issuer: "{{ kafka_connect_replicator_erp_oauth_client_assertion_issuer }}"
+
+kafka_connect_replicator_consumer_erp_oauth_client_assertion_sub: "{{ kafka_connect_replicator_erp_oauth_client_assertion_sub }}"
+
+kafka_connect_replicator_consumer_erp_oauth_client_assertion_scope: "{{ kafka_connect_replicator_erp_oauth_client_assertion_scope }}"
+
+kafka_connect_replicator_consumer_erp_oauth_client_assertion_private_key_file: "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_file }}"
+
+kafka_connect_replicator_consumer_erp_oauth_client_assertion_private_key_passphrase: "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_passphrase }}"
+
+kafka_connect_replicator_consumer_erp_oauth_client_assertion_jti_include: "{{ kafka_connect_replicator_erp_oauth_client_assertion_jti_include }}"
+
+### Path to the file containing the template for the client assertion
+kafka_connect_replicator_consumer_erp_oauth_client_assertion_template_file: "{{ kafka_connect_replicator_erp_oauth_client_assertion_template_file }}"
+
 ### Set this variable to the Cluster ID for the kafka cluster which you are interacting with.
 kafka_connect_replicator_consumer_kafka_cluster_id: ""
 
@@ -2560,6 +2869,29 @@ kafka_connect_replicator_producer_erp_oauth_user: "{{ kafka_connect_replicator_e
 
 ### Set this variable to the Client Secret of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
 kafka_connect_replicator_producer_erp_oauth_password: "{{ kafka_connect_replicator_erp_oauth_password }}"
+
+kafka_connect_replicator_producer_erp_oauth_client_assertion_enabled: "{{ kafka_connect_replicator_erp_oauth_client_assertion_enabled }}"
+
+kafka_connect_replicator_producer_erp_oauth_client_assertion_file: "{{ kafka_connect_replicator_erp_oauth_client_assertion_file }}"
+
+kafka_connect_replicator_producer_erp_oauth_client_assertion_not_before: "{{ kafka_connect_replicator_erp_oauth_client_assertion_not_before }}"
+
+kafka_connect_replicator_producer_erp_oauth_client_assertion_audience: "{{ kafka_connect_replicator_erp_oauth_client_assertion_audience }}"
+
+kafka_connect_replicator_producer_erp_oauth_client_assertion_issuer: "{{ kafka_connect_replicator_erp_oauth_client_assertion_issuer }}"
+
+kafka_connect_replicator_producer_erp_oauth_client_assertion_sub: "{{ kafka_connect_replicator_erp_oauth_client_assertion_sub }}"
+
+kafka_connect_replicator_producer_erp_oauth_client_assertion_scope: "{{ kafka_connect_replicator_erp_oauth_client_assertion_scope }}"
+
+kafka_connect_replicator_producer_erp_oauth_client_assertion_private_key_file: "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_file }}"
+
+kafka_connect_replicator_producer_erp_oauth_client_assertion_private_key_passphrase: "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_passphrase }}"
+
+kafka_connect_replicator_producer_erp_oauth_client_assertion_jti_include: "{{ kafka_connect_replicator_erp_oauth_client_assertion_jti_include }}"
+
+### Path to the file containing the template for the client assertion
+kafka_connect_replicator_producer_erp_oauth_client_assertion_template_file: "{{ kafka_connect_replicator_erp_oauth_client_assertion_template_file }}"
 
 ### Set this variable to the Cluster ID for the kafka cluster which you are interacting with. Defaults to match kafka_connect_replicator_kafka_cluster_id.
 kafka_connect_replicator_producer_kafka_cluster_id: "{{ kafka_connect_replicator_kafka_cluster_id }}"
@@ -2664,6 +2996,39 @@ kafka_connect_replicator_monitoring_interceptor_erp_oauth_user: "{{ kafka_connec
 ### Set this variable to the Client Secret of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
 kafka_connect_replicator_monitoring_interceptor_erp_oauth_password: "{{ kafka_connect_replicator_erp_oauth_password }}"
 
+### Boolean to enable OAuth client assertion
+kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_enabled: "{{ kafka_connect_replicator_erp_oauth_client_assertion_enabled }}"
+
+### Path to the file containing the client assertion
+kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_file: "{{ kafka_connect_replicator_erp_oauth_client_assertion_file }}"
+
+### Not before time for the client assertion
+kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_not_before: "{{ kafka_connect_replicator_erp_oauth_client_assertion_not_before }}"
+
+### Audience for the client assertion
+kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_audience: "{{ kafka_connect_replicator_erp_oauth_client_assertion_audience }}"
+
+### Issuer for the client assertion
+kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_issuer: "{{ kafka_connect_replicator_erp_oauth_client_assertion_issuer }}"
+
+### Subject for the client assertion
+kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_sub: "{{ kafka_connect_replicator_erp_oauth_client_assertion_sub }}"
+
+### Scope for the client assertion
+kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_scope: "{{ kafka_connect_replicator_erp_oauth_client_assertion_scope }}"
+
+### Path to the file containing the private key for the client assertion
+kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_private_key_file: "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_file }}"
+
+### Passphrase for the private key for the client assertion
+kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_private_key_passphrase: "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_passphrase }}"
+
+### JTI for the client assertion
+kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_jti_include: "{{ kafka_connect_replicator_erp_oauth_client_assertion_jti_include }}"
+
+### Path to the file containing the template for the client assertion
+kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_template_file: "{{ kafka_connect_replicator_erp_oauth_client_assertion_template_file }}"
+
 ### Set this variable to the Cluster ID for the kafka cluster which you are interacting with. Defaults to match kafka_connect_replicator_kafka_cluster_id.
 kafka_connect_replicator_monitoring_interceptor_kafka_cluster_id: "{{ kafka_connect_replicator_kafka_cluster_id }}"
 
@@ -2675,9 +3040,6 @@ kafka_connect_replicator_monitoring_interceptor_erp_pem_file: "{{ kafka_connect_
 
 ### Set this variable to override the default location of the public pem file for connecting to the ERP when RBAC is enabled.
 kafka_connect_replicator_monitoring_interceptor_rbac_enabled_public_pem_path: "{{ kafka_connect_replicator_rbac_enabled_public_pem_path }}"
-
-### Deployment strategy for Zookeeper. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
-zookeeper_deployment_strategy: "{{deployment_strategy}}"
 
 ### Deployment strategy for Kafka controller. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 kafka_controller_deployment_strategy: "{{deployment_strategy}}"
@@ -2702,9 +3064,6 @@ kafka_connect_replicator_deployment_strategy: "{{deployment_strategy}}"
 
 ### Boolean to Pause Rolling Deployment after each Node starts up for all Components.
 pause_rolling_deployment: false
-
-### Boolean to Pause Rolling Deployment after each Zookeeper Node starts up.
-zookeeper_pause_rolling_deployment: "{{pause_rolling_deployment}}"
 
 ### Boolean to Pause Rolling Deployment after each Kafka controller Node starts up.
 kafka_controller_pause_rolling_deployment: "{{pause_rolling_deployment}}"
@@ -2779,3 +3138,81 @@ ccloud_schema_registry_secret: yyyyyy
 
 kafka_sasl_enabled_mechanisms: >-
   {{ (kafka_broker_sasl_enabled_mechanisms + kafka_controller_sasl_enabled_mechanisms) | unique if kraft_enabled|bool else kafka_broker_sasl_enabled_mechanisms }}
+
+oauth_superuser_client_assertion_private_key_file_dest_path: "{{ (oauth_superuser_client_assertion_private_key_file != 'none') | ternary(kafka_broker.config_file | dirname ~ '/oauth_client_assertion_private_key.pem', 'none') }}"
+
+oauth_superuser_client_assertion_template_file_dest_path: "{{ (oauth_superuser_client_assertion_template_file != 'none') | ternary(kafka_broker.config_file | dirname ~ '/oauth_client_assertion_template.pem', 'none') }}"
+
+oauth_superuser_client_assertion_file_dest_path: "{{ (oauth_superuser_client_assertion_file != 'none') | ternary(kafka_broker.config_file | dirname ~ '/oauth_client_assertion.txt', 'none') }}"
+
+ksql_oauth_client_assertion_private_key_file_dest_path: "{{ (ksql_oauth_client_assertion_private_key_file != 'none') | ternary(ksql.config_file | dirname ~ '/oauth_client_assertion_private_key.pem', 'none') }}"
+
+ksql_oauth_client_assertion_template_file_dest_path: "{{ (ksql_oauth_client_assertion_template_file != 'none') | ternary(ksql.config_file | dirname ~ '/oauth_client_assertion_template.pem', 'none') }}"
+
+ksql_oauth_client_assertion_file_dest_path: "{{ (ksql_oauth_client_assertion_file != 'none') | ternary(ksql.config_file | dirname ~ '/oauth_client_assertion.txt', 'none') }}"
+
+kafka_connect_oauth_client_assertion_private_key_file_dest_path: "{{ (kafka_connect_oauth_client_assertion_private_key_file != 'none') | ternary(kafka_connect.config_file | dirname ~ '/oauth_client_assertion_private_key.pem', 'none') }}"
+
+kafka_connect_oauth_client_assertion_template_file_dest_path: "{{ (kafka_connect_oauth_client_assertion_template_file != 'none') | ternary(kafka_connect.config_file | dirname ~ '/oauth_client_assertion_template.pem', 'none') }}"
+
+kafka_connect_oauth_client_assertion_file_dest_path: "{{ (kafka_connect_oauth_client_assertion_file != 'none') | ternary(kafka_connect.config_file | dirname ~ '/oauth_client_assertion.txt', 'none') }}"
+
+kafka_rest_oauth_client_assertion_private_key_file_dest_path: "{{ (kafka_rest_oauth_client_assertion_private_key_file != 'none') | ternary(kafka_rest.config_file | dirname ~ '/oauth_client_assertion_private_key.pem', 'none') }}"
+
+kafka_rest_oauth_client_assertion_template_file_dest_path: "{{ (kafka_rest_oauth_client_assertion_template_file != 'none') | ternary(kafka_rest.config_file | dirname ~ '/oauth_client_assertion_template.pem', 'none') }}"
+
+kafka_rest_oauth_client_assertion_file_dest_path: "{{ (kafka_rest_oauth_client_assertion_file != 'none') | ternary(kafka_rest.config_file | dirname ~ '/oauth_client_assertion.txt', 'none') }}"
+
+control_center_next_gen_oauth_client_assertion_private_key_file_dest_path: "{{ (control_center_next_gen_oauth_client_assertion_private_key_file != 'none') | ternary(control_center_next_gen.config_file | dirname ~ '/oauth_client_assertion_private_key.pem', 'none') }}"
+
+control_center_next_gen_oauth_client_assertion_template_file_dest_path: "{{ (control_center_next_gen_oauth_client_assertion_template_file != 'none') | ternary(control_center_next_gen.config_file | dirname ~ '/oauth_client_assertion_template.pem', 'none') }}"
+
+control_center_next_gen_oauth_client_assertion_file_dest_path: "{{ (control_center_next_gen_oauth_client_assertion_file != 'none') | ternary(control_center_next_gen.config_file | dirname ~ '/oauth_client_assertion.txt', 'none') }}"
+
+schema_registry_oauth_client_assertion_private_key_file_dest_path: "{{ (schema_registry_oauth_client_assertion_private_key_file != 'none') | ternary(schema_registry.config_file | dirname ~ '/oauth_client_assertion_private_key.pem', 'none') }}"
+
+schema_registry_oauth_client_assertion_template_file_dest_path: "{{ (schema_registry_oauth_client_assertion_template_file != 'none') | ternary(schema_registry.config_file | dirname ~ '/oauth_client_assertion_template.pem', 'none') }}"
+
+schema_registry_oauth_client_assertion_file_dest_path: "{{ (schema_registry_oauth_client_assertion_file != 'none') | ternary(schema_registry.config_file | dirname ~ '/oauth_client_assertion.txt', 'none') }}"
+
+kafka_connect_replicator_oauth_client_assertion_private_key_file_dest_path: "{{ (kafka_connect_replicator_oauth_client_assertion_private_key_file != 'none') | ternary(kafka_connect_replicator.replication_config_file  | dirname ~ '/oauth_client_assertion_private_key.pem', 'none') }}"
+
+kafka_connect_replicator_oauth_client_assertion_template_file_dest_path: "{{ (kafka_connect_replicator_oauth_client_assertion_template_file != 'none') | ternary(kafka_connect_replicator.replication_config_file  | dirname ~ '/oauth_client_assertion_template.pem', 'none') }}"
+
+kafka_connect_replicator_oauth_client_assertion_file_dest_path: "{{ (kafka_connect_replicator_oauth_client_assertion_file != 'none') | ternary(kafka_connect_replicator.replication_config_file  | dirname ~ '/oauth_client_assertion.txt', 'none') }}"
+
+kafka_controller_oauth_client_assertion_private_key_file_dest_path: "{{ (kafka_controller_oauth_client_assertion_private_key_file != 'none') | ternary(kafka_controller.config_file | dirname ~ '/oauth_client_assertion_private_key.pem', 'none') }}"
+
+kafka_controller_oauth_client_assertion_template_file_dest_path: "{{ (kafka_controller_oauth_client_assertion_template_file != 'none') | ternary(kafka_controller.config_file | dirname ~ '/oauth_client_assertion_template.pem', 'none') }}"
+
+kafka_controller_oauth_client_assertion_file_dest_path: "{{ (kafka_controller_oauth_client_assertion_file != 'none') | ternary(kafka_controller.config_file | dirname ~ '/oauth_client_assertion.txt', 'none') }}"
+
+kafka_broker_oauth_client_assertion_private_key_file_dest_path: "{{ (kafka_broker_oauth_client_assertion_private_key_file != 'none') | ternary(kafka_broker.config_file | dirname ~ '/oauth_client_assertion_private_key.pem', 'none') }}"
+
+kafka_broker_oauth_client_assertion_template_file_dest_path: "{{ (kafka_broker_oauth_client_assertion_template_file != 'none') | ternary(kafka_broker.config_file | dirname ~ '/oauth_client_assertion_template.pem', 'none') }}"
+
+kafka_broker_oauth_client_assertion_file_dest_path: "{{ (kafka_broker_oauth_client_assertion_file != 'none') | ternary(kafka_broker.config_file | dirname ~ '/oauth_client_assertion.txt', 'none') }}"
+
+kafka_connect_replicator_consumer_oauth_client_assertion_private_key_file_dest_path: "{{ (kafka_connect_replicator_consumer_oauth_client_assertion_private_key_file != 'none') | ternary(kafka_connect_replicator.replication_config_file  | dirname ~ '/oauth_client_assertion_private_key.pem', 'none') }}"
+
+kafka_connect_replicator_consumer_oauth_client_assertion_template_file_dest_path: "{{ (kafka_connect_replicator_consumer_oauth_client_assertion_template_file != 'none') | ternary(kafka_connect_replicator.replication_config_file  | dirname ~ '/oauth_client_assertion_template.pem', 'none') }}"
+
+kafka_connect_replicator_consumer_oauth_client_assertion_file_dest_path: "{{ (kafka_connect_replicator_consumer_oauth_client_assertion_file != 'none') | ternary(kafka_connect_replicator.replication_config_file  | dirname ~ '/oauth_client_assertion.txt', 'none') }}"
+
+kafka_connect_replicator_producer_oauth_client_assertion_private_key_file_dest_path: "{{ (kafka_connect_replicator_producer_oauth_client_assertion_private_key_file != 'none') | ternary(kafka_connect_replicator.replication_config_file  | dirname ~ '/oauth_client_assertion_private_key.pem', 'none') }}"
+
+kafka_connect_replicator_producer_oauth_client_assertion_template_file_dest_path: "{{ (kafka_connect_replicator_producer_oauth_client_assertion_template_file != 'none') | ternary(kafka_connect_replicator.replication_config_file  | dirname ~ '/oauth_client_assertion_template.pem', 'none') }}"
+
+kafka_connect_replicator_producer_oauth_client_assertion_file_dest_path: "{{ (kafka_connect_replicator_producer_oauth_client_assertion_file != 'none') | ternary(kafka_connect_replicator.replication_config_file  | dirname ~ '/oauth_client_assertion.txt', 'none') }}"
+
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_private_key_file_dest_path: "{{ (kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_private_key_file != 'none') | ternary(kafka_connect_replicator.replication_config_file  | dirname ~ '/oauth_client_assertion_private_key.pem', 'none') }}"
+
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_template_file_dest_path: "{{ (kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_template_file != 'none') | ternary(kafka_connect_replicator.replication_config_file  | dirname ~ '/oauth_client_assertion_template.pem', 'none') }}"
+
+kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_file_dest_path: "{{ (kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_file != 'none') | ternary(kafka_connect_replicator.replication_config_file  | dirname ~ '/oauth_client_assertion.txt', 'none') }}"
+
+kafka_broker_sr_oauth_client_assertion_private_key_file_dest_path: "{{ (schema_registry_oauth_client_assertion_private_key_file != 'none') | ternary(kafka_broker.config_file | dirname ~ '/sr-oauth_client_assertion_private_key.pem', 'none') }}"
+
+kafka_broker_sr_oauth_client_assertion_template_file_dest_path: "{{ (schema_registry_oauth_client_assertion_template_file != 'none') | ternary(kafka_broker.config_file | dirname ~ '/sr-oauth_client_assertion_template.pem', 'none') }}"
+
+kafka_broker_sr_oauth_client_assertion_file_dest_path: "{{ (schema_registry_oauth_client_assertion_file != 'none') | ternary(kafka_broker.config_file | dirname ~ '/sr-oauth_client_assertion.txt', 'none') }}"
