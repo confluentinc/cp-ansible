@@ -22,13 +22,20 @@ kafka_controller_log_file_size: 100MB
 kafka_controller_logredactor_logger_specs_list:
   - { logger_name: "Root", appenderRefs: "KafkaAppender" }
 
+kafka_controller_oauth_urls_java_arg: >
+  {% if not whitelist_explicit_oauth_urls|bool %}
+  -Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=*
+  {% else %}
+  -Dorg.apache.kafka.sasl.oauthbearer.allowed.urls={{ oauth_token_uri }},{{ oauth_jwks_uri }}
+  {% endif %}
+
 kafka_controller_java_args:
   - "{% if kafka_controller_listeners | confluent.platform.ssl_required(kafka_controller_ssl_enabled) | bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
   - "{% if 'GSSAPI' in kafka_sasl_enabled_mechanisms %}-Djava.security.auth.login.config={{kafka_controller.jaas_file}}{% endif %}"
   - "{% if kafka_controller_jolokia_enabled|bool %}-javaagent:{{jolokia_jar_path}}=config={{kafka_controller_jolokia_config}}{% endif %}"
   - "{% if kafka_controller_jmxexporter_enabled|bool %}-javaagent:{{jmxexporter_jar_path}}={{kafka_controller_jmxexporter_port}}:{{kafka_controller_jmxexporter_config_path}}{% endif %}"
   - "{% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
-  - "-Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=*"
+  - "{% if oauth_token_uri != none or oauth_jwks_uri != none %}{{ kafka_controller_oauth_urls_java_arg }}{% endif %}"
 
 ### Custom Java Args to add to the Kafka Process
 kafka_controller_custom_java_args: ""
