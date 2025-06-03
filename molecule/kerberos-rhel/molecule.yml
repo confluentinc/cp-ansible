@@ -18,11 +18,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}1
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+  - name: controller1
+    hostname: controller1.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
     image: oraclelinux:9-slim
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -31,11 +30,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}2
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
+  - name: controller2
+    hostname: controller2.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
     image: oraclelinux:9-slim
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -48,7 +46,6 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: oraclelinux:9-slim
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -61,7 +58,6 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: oraclelinux:9-slim
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -74,7 +70,6 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: oraclelinux:9-slim
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -145,34 +140,9 @@ platforms:
       - "9022:9022"
     networks:
       - name: confluent
-    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  - name: controller1-mig
-    hostname: controller1-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: oraclelinux:9-slim
-    dockerfile: ../Dockerfile-rhel-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
-  - name: controller2-mig
-    hostname: controller2-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: oraclelinux:9-slim
-    dockerfile: ../Dockerfile-rhel-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
 provisioner:
   playbooks:
-    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
+    converge: ../collections_converge.yml
   inventory:
     group_vars:
       all:
@@ -199,9 +169,6 @@ provisioner:
               file: "/etc/kafka/connect-distributed.properties"
               topics: "test_topic"
 
-      zookeeper:
-        zookeeper_kerberos_principal: "zk/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
       kafka_controller:
         kafka_controller_kerberos_principal: "kafka-a/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         kafka_controller_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_controller-{{inventory_hostname}}.keytab"
@@ -231,24 +198,11 @@ provisioner:
 
         kerberos_principals:
           # Wish there was a better way to create this list, this will do for now
-          # zookeeper keytabs and principal is not  used in Kraft mode, it will be removed once we drop zookeeper support
-          - principal: "zk/zookeeper1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
-
-          - principal: "zk/zookeeper2.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/zookeeper-zookeeper2.keytab"
-
           - principal: "kafka-a/controller1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_controller-controller1.keytab"
 
-          - principal: "kafka-a/controller1-mig.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/kafka_controller-controller1-mig.keytab"
-
           - principal: "kafka-a/controller2.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_controller-controller2.keytab"
-
-          - principal: "kafka-a/controller2-mig.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/kafka_controller-controller2-mig.keytab"
 
           - principal: "kafka-a/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
