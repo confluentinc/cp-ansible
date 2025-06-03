@@ -330,7 +330,9 @@ class FilterModule(object):
 
     def _get_oauth_jaas_config(self, client_id, client_secret, oauth_groups_scope, truststore_path=None, truststore_storepass=None):
         """Helper method to generate OAuth JAAS config with common patterns"""
-        config = f'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"{client_id}\"'
+        config = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required'
+        if client_id:
+            config += f' clientId=\"{client_id}\"'
         if client_secret:
             config += f' clientSecret=\"{client_secret}\"'
         if oauth_groups_scope != 'none':
