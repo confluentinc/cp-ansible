@@ -582,12 +582,12 @@ kafka_broker_properties:
   sr_oauth:
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_oauth_enabled }}"
     properties:
-      confluent.bearer.auth.credentials.source: OAUTHBEARER
       confluent.bearer.auth.issuer.endpoint.url: "{{ oauth_token_uri }}"
       confluent.bearer.auth.client.id: "{{ schema_registry_oauth_user }}"
   sr_oauth_secret:
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_oauth_enabled and (not schema_registry_oauth_client_assertion_enabled) }}"
     properties:
+      confluent.bearer.auth.credentials.source: OAUTHBEARER
       confluent.bearer.auth.client.secret: "{{ schema_registry_oauth_password }}"
   sr_oauth_scope:
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_oauth_enabled and oauth_groups_scope!='none' and (not schema_registry_oauth_client_assertion_enabled) }}"
@@ -605,6 +605,7 @@ kafka_broker_properties:
   sr_oauth_local_client_assertion:
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_oauth_enabled and schema_registry_oauth_client_assertion_enabled and schema_registry_oauth_client_assertion_file == 'none' }}"
     properties:
+      confluent.bearer.auth.credentials.source: OAUTHBEARER_CLIENTASSERTION
       confluent.bearer.assertion.claim.iss: "{{schema_registry_oauth_client_assertion_issuer}}"
       confluent.bearer.assertion.claim.sub: "{{schema_registry_oauth_client_assertion_sub}}"
       confluent.bearer.assertion.claim.aud: "{{schema_registry_oauth_client_assertion_audience}}"
@@ -1106,10 +1107,10 @@ schema_registry_properties:
       confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
       confluent.metadata.oauthbearer.login.client.id: "{{schema_registry_oauth_user}}"
       confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
-      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
   rbac_oauth_secret:
     enabled: "{{rbac_enabled and oauth_enabled and (not schema_registry_mds_cert_auth_only|bool) and (not schema_registry_oauth_client_assertion_enabled) }}"
     properties:
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
       confluent.metadata.oauthbearer.login.client.secret: "{{schema_registry_oauth_password}}"
   rbac_oauth_scope:
     enabled: "{{rbac_enabled and oauth_enabled and oauth_groups_scope!='none' and (not schema_registry_mds_cert_auth_only|bool) and (not schema_registry_oauth_client_assertion_enabled) }}"
@@ -1122,6 +1123,7 @@ schema_registry_properties:
   rbac_oauth_local_client_assertion:
     enabled: "{{rbac_enabled and oauth_enabled and schema_registry_oauth_client_assertion_enabled and schema_registry_oauth_client_assertion_file == 'none' and (not schema_registry_mds_cert_auth_only|bool)}}"
     properties:
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER_CLIENTASSERTION
       confluent.metadata.oauthbearer.assertion.claim.iss: "{{schema_registry_oauth_client_assertion_issuer}}"
       confluent.metadata.oauthbearer.assertion.claim.sub: "{{schema_registry_oauth_client_assertion_sub}}"
       confluent.metadata.oauthbearer.assertion.claim.aud: "{{schema_registry_oauth_client_assertion_audience}}"
@@ -1374,10 +1376,10 @@ kafka_connect_properties:
       confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
       confluent.metadata.oauthbearer.login.client.id: "{{kafka_connect_oauth_user}}"
       confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
-      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
   rbac_oauth_secret:
     enabled: "{{ rbac_enabled and oauth_enabled and (not kafka_connect_mds_cert_auth_only) and (not kafka_connect_oauth_client_assertion_enabled) }}"
     properties:
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
       confluent.metadata.oauthbearer.login.client.secret: "{{kafka_connect_oauth_password}}"
   rbac_oauth_scope:
     enabled: "{{rbac_enabled and oauth_enabled and oauth_groups_scope!='none' and (not kafka_connect_mds_cert_auth_only) and (not kafka_connect_oauth_client_assertion_enabled) }}"
@@ -1390,6 +1392,7 @@ kafka_connect_properties:
   rbac_oauth_local_client_assertion:
     enabled: "{{rbac_enabled and oauth_enabled and kafka_connect_oauth_client_assertion_enabled and kafka_connect_oauth_client_assertion_file =='none' and (not kafka_connect_mds_cert_auth_only) }}"
     properties:
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER_CLIENTASSERTION
       confluent.metadata.oauthbearer.assertion.claim.iss: "{{kafka_connect_oauth_client_assertion_issuer}}"
       confluent.metadata.oauthbearer.assertion.claim.sub: "{{kafka_connect_oauth_client_assertion_sub}}"
       confluent.metadata.oauthbearer.assertion.claim.aud: "{{kafka_connect_oauth_client_assertion_audience}}"
@@ -1598,8 +1601,40 @@ ksql_properties:
       sasl.mechanism: OAUTHBEARER
       sasl.login.callback.handler.class: org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler
       sasl.oauthbearer.token.endpoint.url: "{{oauth_token_uri}}"
+  kafka_sasl_oauth_secret_jaas:
+    enabled: "{{ ((kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'OAUTHBEARER' ) and oauth_enabled and (not ksql_oauth_client_assertion_enabled) }}"
+    properties:
       sasl.jaas.config: |-
         org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId="{{ksql_oauth_user}}" clientSecret="{{ksql_oauth_password}}" {% if oauth_groups_scope!='none' %}scope="{{oauth_groups_scope}}"{% endif %} {% if idp_self_signed %}ssl.truststore.location="{{ksql_truststore_path}}" ssl.truststore.password="{{ksql_truststore_storepass}}"{% endif %};
+  kafka_sasl_oauth_third_party_client_assertion:
+    enabled: "{{ ((kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'OAUTHBEARER' ) and oauth_enabled and ksql_oauth_client_assertion_enabled and ksql_oauth_client_assertion_file !='none' }}"
+    properties:
+      sasl.oauthbearer.assertion.file: "{{ksql_oauth_client_assertion_file_dest_path}}"
+  kafka_sasl_oauth_local_client_assertion:
+    enabled: "{{ ((kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'OAUTHBEARER' ) and oauth_enabled and ksql_oauth_client_assertion_enabled and ksql_oauth_client_assertion_file =='none' }}"
+    properties:
+      sasl.oauthbearer.assertion.claim.iss: "{{ksql_oauth_client_assertion_issuer}}"
+      sasl.oauthbearer.assertion.claim.sub: "{{ksql_oauth_client_assertion_sub}}"
+      sasl.oauthbearer.assertion.claim.aud: "{{ksql_oauth_client_assertion_audience}}"
+      sasl.oauthbearer.assertion.private.key.file: "{{ ksql_oauth_client_assertion_private_key_file_dest_path }}"
+      sasl.jaas.config: |-
+        org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId="{{ksql_oauth_user}}" {% if oauth_groups_scope!='none' %}scope="{{oauth_groups_scope}}"{% endif %} {% if idp_self_signed %}ssl.truststore.location="{{ksql_truststore_path}}" ssl.truststore.password="{{ksql_truststore_storepass}}"{% endif %};
+  kafka_sasl_oauth_client_assertion_template_file:
+    enabled: "{{ ((kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'OAUTHBEARER' ) and oauth_enabled and ksql_oauth_client_assertion_enabled and ksql_oauth_client_assertion_file =='none'  and ksql_oauth_client_assertion_template_file != 'none'}}"
+    properties:
+      sasl.oauthbearer.assertion.template.file: "{{ ksql_oauth_client_assertion_template_file_dest_path }}"
+  kafka_sasl_oauth_client_assertion_passphrase:
+    enabled: "{{ ((kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'OAUTHBEARER' ) and oauth_enabled and ksql_oauth_client_assertion_enabled and ksql_oauth_client_assertion_file =='none'  and ksql_oauth_client_assertion_private_key_passphrase != 'none'}}"
+    properties:
+      sasl.oauthbearer.assertion.private.key.passphrase: "{{ksql_oauth_client_assertion_private_key_passphrase}}"
+  kafka_sasl_oauth_client_assertion_jti_include:
+    enabled: "{{ ((kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'OAUTHBEARER' ) and oauth_enabled and ksql_oauth_client_assertion_enabled and ksql_oauth_client_assertion_file =='none'  and ksql_oauth_client_assertion_jti_include != 'none'}}"
+    properties:
+      sasl.oauthbearer.assertion.claim.jti.include: "{{ksql_oauth_client_assertion_jti_include}}"
+  kafka_sasl_oauth_client_assertion_nbf_include:
+    enabled: "{{ ((kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'OAUTHBEARER' ) and oauth_enabled and ksql_oauth_client_assertion_enabled and ksql_oauth_client_assertion_file =='none'  and ksql_oauth_client_assertion_not_before != 'none'}}"
+    properties:
+      sasl.oauthbearer.assertion.claim.nbf.include: "{{ksql_oauth_client_assertion_not_before}}"
   sr:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
@@ -1625,12 +1660,12 @@ ksql_properties:
   sr_oauth:
     enabled: "{{ 'schema_registry' in groups and schema_registry_oauth_enabled and (not ldap_with_oauth_enabled)}}"
     properties:
-      ksql.schema.registry.bearer.auth.credentials.source: OAUTHBEARER
       ksql.schema.registry.bearer.auth.client.id: "{{ksql_oauth_user}}"
       ksql.schema.registry.bearer.auth.issuer.endpoint.url: "{{oauth_token_uri}}"
   sr_oauth_secret:
     enabled: "{{ 'schema_registry' in groups and schema_registry_oauth_enabled and (not ldap_with_oauth_enabled) and (not ksql_oauth_client_assertion_enabled) }}"
     properties:
+      ksql.schema.registry.bearer.auth.credentials.source: OAUTHBEARER
       ksql.schema.registry.bearer.auth.client.secret: "{{ksql_oauth_password}}"
   sr_oauth_scope:
     enabled: "{{ 'schema_registry' in groups and schema_registry_oauth_enabled and (not ldap_with_oauth_enabled) and oauth_groups_scope!='none' and (not ksql_oauth_client_assertion_enabled) }}"
@@ -1648,6 +1683,7 @@ ksql_properties:
   sr_oauth_local_client_assertion:
     enabled: "{{ 'schema_registry' in groups and schema_registry_oauth_enabled and ksql_oauth_client_assertion_file =='none' and ksql_oauth_client_assertion_enabled and (not ldap_with_oauth_enabled)}}"
     properties:
+      ksql.schema.registry.bearer.auth.credentials.source: OAUTHBEARER_CLIENTASSERTION
       ksql.schema.registry.bearer.assertion.claim.iss: "{{ksql_oauth_client_assertion_issuer}}"
       ksql.schema.registry.bearer.assertion.claim.sub: "{{ksql_oauth_client_assertion_sub}}"
       ksql.schema.registry.bearer.assertion.claim.aud: "{{ksql_oauth_client_assertion_audience}}"
@@ -1697,13 +1733,13 @@ ksql_properties:
     properties:
       confluent.metadata.oauthbearer.login.client.id: "{{ksql_oauth_user}}"
       confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
-      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
       confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
       ksql.security.extension.class: io.confluent.ksql.security.KsqlConfluentSecurityExtension
       ksql.authentication.plugin.class: io.confluent.ksql.security.VertxAuthenticationHandlerPlugin
   rbac_oauth_secret:
     enabled: "{{ rbac_enabled and oauth_enabled and (not ksql_mds_cert_auth_only ) and (not ksql_oauth_client_assertion_enabled) }}"
     properties:
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
       confluent.metadata.oauthbearer.login.client.secret: "{{ksql_oauth_password}}"
   rbac_oauth_scope:
     enabled: "{{ rbac_enabled and oauth_enabled and oauth_groups_scope!='none' and (not ksql_mds_cert_auth_only) and (not ksql_oauth_client_assertion_enabled) }}"
@@ -1716,10 +1752,11 @@ ksql_properties:
   rbac_oauth_local_client_assertion:
     enabled: "{{rbac_enabled and oauth_enabled and ksql_oauth_client_assertion_enabled and ksql_oauth_client_assertion_file =='none' and (not ksql_mds_cert_auth_only ) }}"
     properties:
-      confluent.metadata.assertion.claim.iss: "{{ksql_oauth_client_assertion_issuer}}"
-      confluent.metadata.assertion.claim.sub: "{{ksql_oauth_client_assertion_sub}}"
-      confluent.metadata.assertion.claim.aud: "{{ksql_oauth_client_assertion_audience}}"
-      confluent.metadata.assertion.private.key.file: "{{ ksql_oauth_client_assertion_private_key_file_dest_path }}"
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER_CLIENTASSERTION
+      confluent.metadata.oauthbearer.assertion.claim.iss: "{{ksql_oauth_client_assertion_issuer}}"
+      confluent.metadata.oauthbearer.assertion.claim.sub: "{{ksql_oauth_client_assertion_sub}}"
+      confluent.metadata.oauthbearer.assertion.claim.aud: "{{ksql_oauth_client_assertion_audience}}"
+      confluent.metadata.oauthbearer.assertion.private.key.file: "{{ ksql_oauth_client_assertion_private_key_file_dest_path }}"
   rbac_oauth_local_client_assertion_template_file:
     enabled: "{{rbac_enabled and oauth_enabled and ksql_oauth_client_assertion_enabled and ksql_oauth_client_assertion_file =='none' and (not ksql_mds_cert_auth_only ) and ksql_oauth_client_assertion_template_file != 'none'}}"
     properties:
@@ -1942,10 +1979,10 @@ kafka_rest_properties:
       confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
       confluent.metadata.oauthbearer.login.client.id: "{{kafka_rest_oauth_user}}"
       confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
-      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
   rbac_oauth_secret:
     enabled: "{{ rbac_enabled and oauth_enabled and (not kafka_rest_mds_cert_auth_only) and (not kafka_rest_oauth_client_assertion_enabled) }}"
     properties:
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
       confluent.metadata.oauthbearer.login.client.secret: "{{kafka_rest_oauth_password}}"
   rbac_oauth_scope:
     enabled: "{{rbac_enabled and oauth_enabled and oauth_groups_scope!='none' and (not kafka_rest_mds_cert_auth_only) and (not kafka_rest_oauth_client_assertion_enabled) }}"
@@ -1958,6 +1995,7 @@ kafka_rest_properties:
   rbac_oauth_local_client_assertion:
     enabled: "{{rbac_enabled and oauth_enabled and kafka_rest_oauth_client_assertion_enabled and kafka_rest_oauth_client_assertion_file =='none' and (not kafka_rest_mds_cert_auth_only) }}"
     properties:
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER_CLIENTASSERTION
       confluent.metadata.oauthbearer.assertion.claim.iss: "{{kafka_rest_oauth_client_assertion_issuer}}"
       confluent.metadata.oauthbearer.assertion.claim.sub: "{{kafka_rest_oauth_client_assertion_sub}}"
       confluent.metadata.oauthbearer.assertion.claim.aud: "{{kafka_rest_oauth_client_assertion_audience}}"
@@ -2216,11 +2254,11 @@ control_center_next_gen_properties:
   sr_oauth:
     enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) }}"
     properties:
-      confluent.controlcenter.schema.registry.bearer.auth.credentials.source: OAUTHBEARER
       confluent.controlcenter.schema.registry.oauthbearer.login.client.id: "{{ control_center_next_gen_oauth_user }}"
   sr_oauth_secret:
     enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) and (not control_center_next_gen_oauth_client_assertion_enabled) }}"
     properties:
+      confluent.controlcenter.schema.registry.bearer.auth.credentials.source: OAUTHBEARER
       confluent.controlcenter.schema.registry.oauthbearer.login.client.secret: "{{ control_center_next_gen_oauth_password }}"
   sr_oauth_scope:
     enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) and oauth_groups_scope!='none' and (not control_center_next_gen_oauth_client_assertion_enabled) }}"
@@ -2233,6 +2271,7 @@ control_center_next_gen_properties:
   sr_oauth_local_client_assertion:
     enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) and control_center_next_gen_oauth_client_assertion_enabled and control_center_next_gen_oauth_client_assertion_file == 'none' }}"
     properties:
+      confluent.controlcenter.schema.registry.bearer.auth.credentials.source: OAUTHBEARER_CLIENTASSERTION
       confluent.controlcenter.schema.registry.oauthbearer.assertion.claim.iss: "{{ control_center_next_gen_oauth_client_assertion_issuer }}"
       confluent.controlcenter.schema.registry.oauthbearer.assertion.claim.sub: "{{ control_center_next_gen_oauth_client_assertion_sub }}"
       confluent.controlcenter.schema.registry.oauthbearer.assertion.claim.aud: "{{ control_center_next_gen_oauth_client_assertion_audience }}"
@@ -2269,7 +2308,7 @@ control_center_next_gen_properties:
         control_center_next_gen_keystore_path, control_center_next_gen_keystore_storepass, control_center_next_gen_keystore_keypass, ksql_oauth_enabled, rbac_enabled,
         control_center_next_gen_oauth_user, control_center_next_gen_oauth_password, oauth_groups_scope, idp_self_signed) }}"
   oauth:
-    enabled: "{{oauth_enabled or schema_registry_oauth_enabled or kafka_connect_oauth_enabled}}"
+    enabled: "{{oauth_enabled or schema_registry_oauth_enabled or kafka_connect_oauth_enabled or ksql_oauth_enabled}}"
     properties:
       confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
   rbac:
@@ -2461,10 +2500,10 @@ kafka_connect_replicator_properties:
       confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
       confluent.metadata.oauthbearer.login.client.id: "{{kafka_connect_replicator_oauth_user}}"
       confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
-      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
   rbac_oauth_secret:
     enabled: "{{kafka_connect_replicator_rbac_enabled and oauth_enabled and (not kafka_connect_replicator_mds_cert_auth_only) and (not kafka_connect_replicator_oauth_client_assertion_enabled) }}"
     properties:
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
       confluent.metadata.oauthbearer.login.client.secret: "{{kafka_connect_replicator_oauth_password}}"
   rbac_oauth_scope:
     enabled: "{{kafka_connect_replicator_rbac_enabled and oauth_enabled and oauth_groups_scope!='none' and (not kafka_connect_replicator_mds_cert_auth_only) and (not kafka_connect_replicator_oauth_client_assertion_enabled) }}"
@@ -2473,14 +2512,15 @@ kafka_connect_replicator_properties:
   rbac_oauth_third_party_client_assertion:
     enabled: "{{kafka_connect_replicator_rbac_enabled and oauth_enabled and kafka_connect_replicator_oauth_client_assertion_enabled and kafka_connect_replicator_oauth_client_assertion_file !='none' and (not kafka_connect_replicator_mds_cert_auth_only) }}"
     properties:
-      confluent.metadata.assertion.file: "{{ kafka_connect_replicator_oauth_client_assertion_file_dest_path }}"
+      confluent.metadata.oauthbearer.assertion.file: "{{ kafka_connect_replicator_oauth_client_assertion_file_dest_path }}"
   rbac_oauth_local_client_assertion:
     enabled: "{{kafka_connect_replicator_rbac_enabled and oauth_enabled and kafka_connect_replicator_oauth_client_assertion_enabled and kafka_connect_replicator_oauth_client_assertion_file =='none' and (not kafka_connect_replicator_mds_cert_auth_only) }}"
     properties:
-      confluent.metadata.assertion.claim.iss: "{{kafka_connect_replicator_oauth_client_assertion_issuer}}"
-      confluent.metadata.assertion.claim.sub: "{{kafka_connect_replicator_oauth_client_assertion_sub}}"
-      confluent.metadata.assertion.claim.aud: "{{kafka_connect_replicator_oauth_client_assertion_audience}}"
-      confluent.metadata.assertion.private.key.file: "{{ kafka_connect_replicator_oauth_client_assertion_private_key_file_dest_path }}"
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER_CLIENTASSERTION
+      confluent.metadata.oauthbearer.assertion.claim.iss: "{{kafka_connect_replicator_oauth_client_assertion_issuer}}"
+      confluent.metadata.oauthbearer.assertion.claim.sub: "{{kafka_connect_replicator_oauth_client_assertion_sub}}"
+      confluent.metadata.oauthbearer.assertion.claim.aud: "{{kafka_connect_replicator_oauth_client_assertion_audience}}"
+      confluent.metadata.oauthbearer.assertion.private.key.file: "{{ kafka_connect_replicator_oauth_client_assertion_private_key_file_dest_path }}"
   rbac_oauth_local_client_assertion_template_file:
     enabled: "{{kafka_connect_replicator_rbac_enabled and oauth_enabled and kafka_connect_replicator_oauth_client_assertion_enabled and kafka_connect_replicator_oauth_client_assertion_file =='none' and (not kafka_connect_replicator_mds_cert_auth_only) and kafka_connect_replicator_oauth_client_assertion_template_file != 'none'}}"
     properties:
