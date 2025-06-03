@@ -21,11 +21,15 @@ control_center_next_gen_log_file_size: 100MB
 control_center_next_gen_logredactor_logger_specs_list:
   - { logger_name: "Root", appenderRefs: "Main" }
 
+control_center_next_gen_oauth_urls_list: "{{ [oauth_token_uri, oauth_jwks_uri] | select('!=', 'none') | join(',') }}"
+
+control_center_next_gen_oauth_urls_java_arg: "{% if not whitelist_explicit_oauth_urls|bool %}-Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=*{% else %}-Dorg.apache.kafka.sasl.oauthbearer.allowed.urls={{control_center_next_gen_oauth_urls_list}}{% endif %}"
+
 control_center_next_gen_java_args:
   - "{% if control_center_next_gen_ssl_enabled|bool %}-Djdk.tls.ephemeralDHKeySize=2048{% endif %}"
   - "{% if control_center_next_gen_authentication_type == 'basic' %}-Djava.security.auth.login.config={{control_center_next_gen.jaas_file}}{% endif %}"
   - "{% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
-  - "-Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=*"
+  - "{%  if control_center_next_gen_oauth_urls_list != '' %}{{ control_center_next_gen_oauth_urls_java_arg }}{% endif %}"
 
 ### Custom Java Args to add to the Control Center Next Gen Process
 control_center_next_gen_custom_java_args: ""
@@ -86,12 +90,16 @@ control_center_next_gen_dependency_prometheus_service_environment_overrides:
   # Data path environment variable is different between prometheus and alertmanager
   TSDB_PATH: "{{ control_center_next_gen_dep_prometheus.data_path }}"
   LOG_PATH: "{{ control_center_next_gen_dep_prometheus.log_path }}"
+  PROMETHEUS_HOST: "{{ control_center_next_gen_dep_prometheus.prometheus_web_listener_host }}"
+  PROMETHEUS_PORT: "{{ control_center_next_gen_dep_prometheus.prometheus_port }}"
 
 ### Environment Variables to be added to the AlertManager (Control Center Next Gen's dependency) Service. This variable is a dictionary.
 control_center_next_gen_dependency_alertmanager_service_environment_overrides:
   CONFIG_PATH: "{{ control_center_next_gen_dep_alertmanager.config_path }}"
   DATA_PATH: "{{ control_center_next_gen_dep_alertmanager.data_path }}"
   LOG_PATH: "{{ control_center_next_gen_dep_alertmanager.log_path }}"
+  ALERTMANAGER_HOST: "{{ control_center_next_gen_dep_alertmanager.alertmanager_web_listener_host }}"
+  ALERTMANAGER_PORT: "{{ control_center_next_gen_dep_alertmanager.alertmanager_port }}"
 
 ### Overrides to the Unit Section of Control Center Next Gen Systemd File. This variable is a dictionary.
 control_center_next_gen_service_unit_overrides:
