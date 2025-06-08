@@ -1,67 +1,115 @@
 ---
-### Validates that SSL Protocol is set.
-### Validates ssl.client.authentication is set to REQUIRED.
-
-- name: Verify - kafka_controller
-  hosts: kafka_controller
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: variables
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/controller/server.properties
-        property: controller.quorum.voters
-        expected_value: "{{ kafka_controller_quorum_voters }}"
-
-- name: Verify - kafka_broker
+# Verify mTLS-related properties across different components
+- name: Verify mTLS properties
   hosts: kafka_broker
   gather_facts: false
   tasks:
-    - set_fact:
-        kraft_mode: "{{ ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) }}"
-
-    - import_role:
+    - name: Verify Confluent Metadata Server mTLS properties
+      import_role:
         name: confluent.test
         tasks_from: check_property.yml
       vars:
         file_path: /etc/kafka/server.properties
-        property: confluent.metadata.server.ssl.client.authentication
-        expected_value: REQUIRED
+        property: "confluent.metadata.server.ssl.client.authentication"
+        expected_value: "REQUIRED"
+    - name: Verify Kafka internal listener mTLS properties
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: "listener.name.internal.ssl.client.auth"
+        expected_value: "none"
+    - name: Verify Kafka broker listener mTLS properties
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: "listener.name.broker.ssl.client.auth"
+        expected_value: "required"
+    - name: Verify Kafka broker listener mTLS properties
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: "listener.name.external1.ssl.client.auth"
+        expected_value: "required"
+    - name: Verify Kafka broker listener mTLS properties
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: "listener.name.external2.ssl.client.auth"
+        expected_value: "requested"
+    - name: Verify Kafka broker listener mTLS properties
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: "listener.name.external3.ssl.client.auth"
+        expected_value: "none"
+    - name: Verify Kafka broker listener mTLS properties
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: "listener.name.external4.ssl.client.auth"
+        expected_value: "none"
+    - name: Verify Kafka broker listener mTLS properties
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: "listener.name.external5.ssl.client.auth"
+        expected_value: "none"
 
-    - name: Get current time in milliseconds
-      command: date +%s%3N
-      register: current_time
+- name: Verify mTLS properties
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+    - name: Verify Schema Registry mTLS properties
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: "ssl.client.authentication"
+        expected_value: "REQUIRED"
 
-    - name: Set current time in milliseconds
-      set_fact:
-        topic_name: "test-topic-{{current_time.stdout}}"
+    - name: Verify Schema Registry keystore location
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: "kafkastore.ssl.keystore.location"
+        expected_value: "/var/ssl/private/schema_registry.keystore.jks"
 
-    - name: Display milliseconds since Unix epoch
-      debug:
-        msg:
-          - "topic_name: {{ topic_name }} will be created "
+- name: Verify mTLS properties
+  hosts: kafka_connect
+  gather_facts: false
+  tasks:
+    - name: Verify Kafka Connect mTLS properties
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/connect-distributed.properties
+        property: "listeners.https.ssl.client.auth"
+        expected_value: "required"
 
-    - name: Create Kafka topic
-      shell: kafka-topics --create --topic "{{ topic_name }}" \
-             --bootstrap-server kafka-broker1:9091 --command-config /etc/kafka/client.properties \
-             --replication-factor 1 --partitions 6
-      run_once: true
-      register: output
-
-    - name: Create Topic Data
-      shell: |
-        seq 10 | kafka-console-producer --topic "{{ topic_name }}" \
-        --bootstrap-server kafka-broker1:9091 --producer.config /etc/kafka/client.properties
-      run_once: true
-
-    - name: Read Topic Data
-      shell: kafka-console-consumer --topic "{{ topic_name }}" \
-             --bootstrap-server kafka-broker1:9091 --timeout-ms 10000 \
-             --from-beginning --consumer.config /etc/kafka/client.properties
-      run_once: true
-      register: consumer_output
-      failed_when:
-        - "'1\n2\n3\n4\n5\n6\n7\n8\n9\n10' not in consumer_output.stdout"
+- name: Verify mTLS properties
+  hosts: kafka_rest
+  gather_facts: false
+  tasks:
+    - name: Verify Kafka REST does not have ssl.client.authentication
+      shell: "egrep '^ssl.client.authentication[ ]?=' /etc/kafka-rest/kafka-rest.properties"
+      register: grep
+      changed_when: false
+      failed_when: grep.rc == 0

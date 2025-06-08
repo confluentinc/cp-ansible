@@ -315,7 +315,9 @@ class FilterModule(object):
             final_dict[config_prefix + 'ssl.truststore.password'] = str(truststore_storepass)
 
         if listener_dict.get('ssl_mutual_auth_enabled', False):
-            # if listener has mtls (required or requested) CP clients will to send certs talking to kafka listener
+            # If listener has mtls (required or requested) CP clients will to send certs talking to kafka listener
+            # We dont need to check ssl_client_authentication since it is consistent with ssl_mutual_auth_enabled
+            # We should not check global var since it may not be consistent with listener level ssl_mutual_auth_enabled
             final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
             final_dict[config_prefix + 'ssl.keystore.password'] = str(keystore_storepass)
             final_dict[config_prefix + 'ssl.key.password'] = str(keystore_keypass)
