@@ -1,0 +1,298 @@
+---
+# Step 0: Setup
+- name: Ensure temporary directory exists
+  file:
+    path: /tmp/oauth_temp
+    state: directory
+    mode: '0700'
+  when: oauth | bool and oauth_client_assertion_enabled | default(false) | bool
+
+# Step 1: Handle Third-party JWT Assertion
+- name: Use third-party JWT assertion
+  block:
+    - name: Validate third-party JWT file exists
+      stat:
+        path: "{{ oauth_client_assertion_file }}"
+      register: jwt_file_stat
+
+    - name: Fail if JWT file doesn't exist
+      fail:
+        msg: "JWT assertion file not found: {{ oauth_client_assertion_file }}"
+      when: not jwt_file_stat.stat.exists
+
+    - name: Read third-party JWT assertion
+      slurp:
+        src: "{{ oauth_client_assertion_file }}"
+      register: third_party_assertion
+      no_log: "{{ mask_secrets | bool }}"
+
+    - name: Set client assertion from file
+      set_fact:
+        client_assertion_jwt: "{{ third_party_assertion.content | b64decode | trim }}"
+      no_log: "{{ mask_secrets | bool }}"
+
+  when:
+    - oauth | bool
+    - oauth_client_assertion_enabled | default(false) | bool
+    - oauth_client_assertion_file | default('none') != 'none'
+
+# Step 2: Generate Local JWT Assertion
+- name: Generate local JWT assertion
+  block:
+    - name: Get current timestamp (fresh)
+      shell: date +%s
+      register: current_time_result
+      changed_when: false
+
+    - name: Set current timestamp
+      set_fact:
+        current_timestamp: "{{ current_time_result.stdout | int }}"
+
+    - name: Generate secure JTI
+      set_fact:
+        jwt_jti: "{{ current_timestamp }}-{{ 999999999 | random }}-{{ ansible_hostname | hash('md5') | truncate(8, true, '') }}"
+
+    # Handle JWT Template File
+    - name: Check if JWT template file exists
+      stat:
+        path: "{{ oauth_client_assertion_template_file }}"
+      register: jwt_template_stat
+      when: oauth_client_assertion_template_file | default('none') != 'none'
+
+    - name: Read JWT template file
+      slurp:
+        src: "{{ oauth_client_assertion_template_file }}"
+      register: jwt_template_content
+      no_log: "{{ mask_secrets | bool }}"
+      when:
+        - oauth_client_assertion_template_file | default('none') != 'none'
+        - jwt_template_stat.stat.exists
+
+    - name: Parse JWT template
+      set_fact:
+        jwt_template: "{{ jwt_template_content.content | b64decode | from_json }}"
+      no_log: "{{ mask_secrets | bool }}"
+      when:
+        - oauth_client_assertion_template_file | default('none') != 'none'
+        - jwt_template_stat.stat.exists
+
+    - name: Create JWT header from template
+      set_fact:
+        jwt_header: "{{ {
+          'alg': 'RS256',
+          'typ': 'JWT'
+        } | combine(jwt_template.headers | default({})) }}"
+      no_log: "{{ mask_secrets | bool }}"
+      when:
+        - oauth_client_assertion_template_file | default('none') != 'none'
+        - jwt_template_stat.stat.exists
+
+    - name: Create JWT claims from template and add timing
+      set_fact:
+        jwt_claims: "{{ {
+          'iss': oauth_client_assertion_issuer,
+          'sub': oauth_client_assertion_sub,
+          'aud': oauth_client_assertion_audience,
+          'jti': jwt_jti,
+          'iat': current_timestamp | int,
+          'exp': (current_timestamp | int) + 300
+        } | combine(jwt_template.payload | default({})) }}"
+      no_log: "{{ mask_secrets | bool }}"
+      when:
+        - oauth_client_assertion_template_file | default('none') != 'none'
+        - jwt_template_stat.stat.exists
+
+    - name: Create JWT header (fallback)
+      set_fact:
+        jwt_header:
+          alg: "RS256"
+          typ: "JWT"
+      when: oauth_client_assertion_template_file | default('none') == 'none'
+
+    - name: Create JWT claims with proper timing (fallback)
+      set_fact:
+        jwt_claims:
+          iss: "{{ oauth_client_assertion_issuer }}"
+          sub: "{{ oauth_client_assertion_sub }}"
+          aud: "{{ oauth_client_assertion_audience }}"
+          jti: "{{ jwt_jti }}"
+          iat: "{{ current_timestamp | int }}"
+          exp: "{{ (current_timestamp | int) + 300 }}"  # 5 minutes validity
+      no_log: "{{ mask_secrets | bool }}"
+      when: oauth_client_assertion_template_file | default('none') == 'none'
+
+    # Use proper base64url encoding
+    - name: Encode JWT header and payload (base64url)
+      set_fact:
+        jwt_header_encoded: "{{ jwt_header | to_json | b64encode | regex_replace('\\+', '-') | regex_replace('/', '_') | regex_replace('=+$', '') }}"
+        jwt_payload_encoded: "{{ jwt_claims | to_json | b64encode | regex_replace('\\+', '-') | regex_replace('/', '_') | regex_replace('=+$', '') }}"
+      no_log: "{{ mask_secrets | bool }}"
+
+    - name: Create signing input
+      set_fact:
+        jwt_signing_input: "{{ jwt_header_encoded }}.{{ jwt_payload_encoded }}"
+      no_log: "{{ mask_secrets | bool }}"
+
+    - name: Sign JWT with private key
+      shell: |
+        echo -n "{{ jwt_signing_input }}" | \
+        openssl dgst -sha256 -sign "{{ oauth_client_assertion_private_key_file }}" \
+        {% if oauth_client_assertion_private_key_passphrase | default('none') != 'none' %}-passin pass:"{{ oauth_client_assertion_private_key_passphrase }}"{% endif %} | \
+        base64 | tr -d '\n' | tr '+/' '-_' | tr -d '='
+      register: jwt_signature_result
+      no_log: "{{ mask_secrets | bool }}"
+
+    - name: Assemble final JWT
+      set_fact:
+        client_assertion_jwt: "{{ jwt_signing_input }}.{{ jwt_signature_result.stdout }}"
+      no_log: "{{ mask_secrets | bool }}"
+
+  when:
+    - oauth | bool
+    - oauth_client_assertion_enabled | default(false) | bool
+    - oauth_client_assertion_file | default('none') == 'none'
+
+# Step 3: Prepare OAuth request body
+- name: Initialize OAuth request body
+  set_fact:
+    idp_body: [["grant_type", "client_credentials"]]
+  when: oauth | bool
+
+- name: Add scope to request body
+  set_fact:
+    idp_body: "{{ idp_body + [['scope', oauth_groups_scope]] }}"
+  when:
+    - oauth | bool
+    - oauth_groups_scope != 'none'
+
+# Convert list format to dictionary for client assertion flow
+- name: Convert to dictionary format for client assertion
+  set_fact:
+    oauth_request_body: "{{ dict(idp_body) }}"
+  no_log: "{{ mask_secrets | bool }}"
+  when:
+    - oauth | bool
+    - oauth_client_assertion_enabled | default(false) | bool
+
+- name: Add JWT assertion to request body
+  set_fact:
+    oauth_request_body: "{{ oauth_request_body | combine({
+      'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+      'client_assertion': client_assertion_jwt
+    }) }}"
+  no_log: "{{ mask_secrets | bool }}"
+  when:
+    - oauth | bool
+    - oauth_client_assertion_enabled | default(false) | bool
+
+# Step 4: Set client certificate sending flag
+- name: Set client certificate sending flag
+  set_fact:
+    send_client_cert: "{{ mds_ssl_client_authentication in ['required', 'requested'] }}"
+
+# Step 5: OAuth Token Requests
+- name: Get Authorization Token from Identity Provider (Client Assertion)
+  uri:
+    url: "{{ oauth_token_uri }}"
+    method: POST
+    validate_certs: false
+    return_content: true
+    status_code: 200  # Only accept 200 as success
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    body_format: form-urlencoded
+    body: "{{ oauth_request_body }}"
+  register: auth_token_oauth
+  retries: 10
+  delay: 5
+  until: auth_token_oauth.status == 200
+  no_log: "{{ mask_secrets | bool }}"
+  when:
+    - oauth | bool
+    - oauth_client_assertion_enabled | default(false) | bool
+    - not cert_auth_only_enabled | bool
+
+- name: Get Authorization Token from Identity Provider (Basic Auth)
+  uri:
+    url: "{{ oauth_token_uri }}"
+    method: POST
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    url_username: "{{ oauth_user }}"
+    url_password: "{{ oauth_password }}"
+    force_basic_auth: true
+    headers:
+      Content-Type: application/x-www-form-urlencoded
+    body_format: form-urlencoded
+    body: "{{ idp_body }}"
+  register: auth_token_oauth1
+  until: auth_token_oauth1.status == 200
+  retries: 10
+  delay: 5
+  no_log: "{{mask_secrets|bool}}"
+  when:
+    - oauth|bool
+    - not oauth_client_assertion_enabled|bool
+    - not cert_auth_only_enabled|bool
+
+- name: Get Authorization Token from MDS
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/authenticate"
+    method: GET
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    url_username: "{{ldap_user}}"
+    url_password: "{{ldap_password}}"
+    client_cert: "{{ mtls_client_cert if send_client_cert|bool else omit }}"
+    client_key: "{{ mtls_client_key if send_client_cert|bool else omit }}"
+    force_basic_auth: true
+  register: auth_token_mds
+  until: auth_token_mds.status == 200
+  retries: "{{ mds_retries }}"
+  delay: 5
+  no_log: "{{mask_secrets|bool}}"
+  when:
+    - cluster_id_source | default('erp') == 'erp'
+    - not oauth|bool
+    - auth_mode != 'mtls'
+    - not cert_auth_only_enabled|bool
+
+- name: Get Authorization Token from MDS using mtls certs
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/authenticate"
+    method: GET
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    force_basic_auth: false
+    client_cert: "{{ mtls_client_cert if send_client_cert|bool else omit }}"
+    client_key: "{{ mtls_client_key if send_client_cert|bool else omit }}"
+  register: auth_token_mds_mtls
+  until: auth_token_mds_mtls.status == 200
+  retries: "{{ mds_retries }}"
+  delay: 5
+  no_log: "{{mask_secrets|bool}}"
+  when:
+    - cluster_id_source | default('erp') == 'erp'
+    - auth_mode == 'mtls' or cert_auth_only_enabled|bool
+
+- name: Get Authorization Token
+  set_fact:
+    authorization_token: >-
+      {%- if oauth|bool and not cert_auth_only_enabled|bool -%}
+        {{ (auth_token_oauth.content | from_json).access_token }}
+      {%- elif not oauth|bool and auth_mode != 'mtls' and not cert_auth_only_enabled|bool -%}
+        {{ (auth_token_mds.content | from_json).auth_token }}
+      {%- elif auth_mode == 'mtls' or cert_auth_only_enabled|bool -%}
+        {{ (auth_token_mds_mtls.content | from_json).auth_token }}
+      {%- endif -%}
+  no_log: "{{mask_secrets|bool}}"
+
+# Step 8: Cleanup
+- name: Clean up temporary files
+  file:
+    path: /tmp/oauth_temp
+    state: absent
+  when: oauth | bool and oauth_client_assertion_enabled | default(false) | bool
