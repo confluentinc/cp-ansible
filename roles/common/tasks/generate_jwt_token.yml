@@ -212,6 +212,15 @@
     - oauth_client_assertion_enabled | default(false) | bool
     - not cert_auth_only_enabled | bool
 
+# Only show content if it exists and task was successful
+- name: Debug auth_token_oauth.content (safe)
+  debug:
+    msg: "{{ auth_token_oauth.content }}"
+  when:
+    - auth_token_oauth is defined
+    - "'content' in auth_token_oauth"
+    - auth_token_oauth.get('status', 0) == 200
+
 - name: Get Authorization Token from Identity Provider (Basic Auth)
   uri:
     url: "{{ oauth_token_uri }}"
@@ -226,8 +235,8 @@
       Content-Type: application/x-www-form-urlencoded
     body_format: form-urlencoded
     body: "{{ idp_body }}"
-  register: auth_token_oauth_basic
-  until: auth_token_oauth_basic.status == 200
+  register: auth_token_oauth1
+  until: auth_token_oauth1.status == 200
   retries: 10
   delay: 5
   no_log: "{{mask_secrets|bool}}"
@@ -281,10 +290,8 @@
 - name: Get Authorization Token
   set_fact:
     authorization_token: >-
-      {%- if oauth|bool and (not cert_auth_only_enabled|bool) and oauth_client_assertion_enabled|bool -%}
+      {%- if oauth|bool and not cert_auth_only_enabled|bool -%}
         {{ (auth_token_oauth.content | from_json).access_token }}
-      {%- elif oauth|bool and not cert_auth_only_enabled|bool and not oauth_client_assertion_enabled|bool -%}
-        {{ (auth_token_oauth_basic.content | from_json).access_token }}
       {%- elif not oauth|bool and auth_mode != 'mtls' and not cert_auth_only_enabled|bool -%}
         {{ (auth_token_mds.content | from_json).auth_token }}
       {%- elif auth_mode == 'mtls' or cert_auth_only_enabled|bool -%}
