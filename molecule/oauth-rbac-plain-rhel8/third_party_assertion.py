@@ -11,20 +11,71 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PRIVATE_KEY_FILE = os.path.join(SCRIPT_DIR, "keycloak-tokenKeypair.pem")
 ALGORITHM = "RS256"
 EXPIRY_SECONDS = 300
-BROKER_CONTAINERS = ["kafka-broker1", "kafka-broker2", "kafka-broker3"]
-CONTROLLER_CONTAINERS = ["controller1", "controller2", "controller3"]
-KAFKAREST_CONTANERS = "kafka-rest1"
-KAFKACONNECT_CONTAINER = "kafka-connect1"
-KSQL_CONTAINER = "ksql1"
-SCHEMA_REGISTRY_CONTAINER = "schema-registry1"
+
+# Container configurations with base paths and required components
+CONTAINER_CONFIGS = {
+    # Broker containers
+    # "kafka-broker1": {
+    #     "base_path": "/tmp",
+    #     "components": ["mds_client", "kafka_client", "schema_registry_client", "monitoring_interceptor_client"]
+    # },
+    # "kafka-broker2": {
+    #     "base_path": "/tmp",
+    #     "components": ["mds_client", "kafka_client", "schema_registry_client", "monitoring_interceptor_client"]
+    # },
+    # "kafka-broker3": {
+    #     "base_path": "/tmp",
+    #     "components": ["mds_client", "kafka_client", "schema_registry_client", "monitoring_interceptor_client"]
+    # },
+    # # Controller containers
+    # "controller1": {
+    #     "base_path": "/tmp",
+    #     "components": ["mds_client", "kafka_client"]
+    # },
+    # "controller2": {
+    #     "base_path": "/tmp",
+    #     "components": ["mds_client", "kafka_client"]
+    # },
+    # "controller3": {
+    #     "base_path": "/tmp",
+    #     "components": ["mds_client", "kafka_client"]
+    # },
+    # # Service containers
+    # "kafka-rest1": {
+    #     "base_path": "/tmp",
+    #     "components": ["kafka_client", "schema_registry_client", "mds_client"]
+    # },
+    # "kafka-connect1": {
+    #     "base_path": "/tmp",
+    #     "components": ["kafka_client", "schema_registry_client", "mds_client"]
+    # },
+    "ksql1": {
+        "base_path": "/tmp",
+        "components": ["kafka_client", "schema_registry_client", "mds_client", "ksql_client"]
+    },
+
+}
+
+# Client ID mapping for different components
+COMPONENT_CLIENT_ID_MAP = {
+    "mds_client": "superuser",
+    "kafka_client": "kafka_broker",
+    "schema_registry_client": "schema_registry",
+    "monitoring_interceptor_client": "monitoring_interceptor",
+    "ksql_client": "ksql",
+    "kafka_connect_client": "kafka_connect",
+    "kafka_rest_client": "kafka_rest"
+}
 
 
 def load_private_key():
+    """Load the private key from file."""
     with open(PRIVATE_KEY_FILE, "r") as f:
         return f.read()
 
 
 def generate_token(client_id, custom_msg):
+    """Generate a JWT token for the given client ID."""
     now = int(time.time())
     now_ns = int(time.time() * 1e9)
     payload = {
@@ -43,6 +94,7 @@ def generate_token(client_id, custom_msg):
 
 
 def is_container_running(container_name):
+    """Check if a Docker container is running."""
     try:
         output = subprocess.check_output(["docker", "inspect", "-f", "{{.State.Running}}", container_name])
         return output.strip().decode("utf-8") == "true"
@@ -50,38 +102,127 @@ def is_container_running(container_name):
         return False
 
 
-def write_and_copy_token(client_id, container_name):
-    tmp_path = f"/tmp/{client_id}_client_assertion.jwt"
-    container_dest_path = f"/tmp/{client_id}_client_assertion.jwt"
+def create_directory_in_container(container_name, directory_path):
+    """Create directory in container if it doesn't exist."""
+    try:
+        subprocess.run([
+            "docker", "exec", container_name, 
+            "mkdir", "-p", directory_path
+        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"[WARNING] Failed to create directory {directory_path} in {container_name}: {e}")
+        return False
 
-    token = generate_token(client_id, container_name)
-    print(f"Generated token for {client_id}")
 
-    with open(tmp_path, "w") as f:
-        f.write(token)
-
-    if is_container_running(container_name):
-        try:
-            subprocess.run(["docker", "cp", tmp_path, f"{container_name}:{container_dest_path}"], check=True)
-            print(f"Copied token to {container_name}:{container_dest_path}")
-        except subprocess.CalledProcessError as e:
-            print(f"[ERROR] Failed to copy token to container {container_name}: {e}")
-    else:
+def write_and_copy_component_tokens(container_name, config):
+    """Generate and write component tokens directly to container."""
+    if not is_container_running(container_name):
         print(f"[WARNING] Container {container_name} is not running. Skipping.")
+        return
+
+    base_path = config["base_path"]
+    components = config["components"]
+    
+    # Create base directory in container
+    create_directory_in_container(container_name, base_path)
+    
+    print(f"\n--- Processing container: {container_name} ---")
+    
+    for component in components:
+        # Get client ID for this component
+        client_id = COMPONENT_CLIENT_ID_MAP.get(component, component)
+        
+        # Generate paths
+        filename = f"{component}.jwt"
+        container_dest_path = f"{base_path}/{filename}"
+        
+        # Generate token
+        token = generate_token(client_id, f"{container_name}-{component}")
+        print(f"  ✓ Generated token for {component} (client_id: {client_id})")
+        
+        # Write directly to container using docker exec
+        try:
+            subprocess.run([
+                "docker", "exec", container_name,
+                "sh", "-c", f"echo '{token}' > {container_dest_path}"
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"  ✓ Written directly to {container_name}:{container_dest_path}")
+        except subprocess.CalledProcessError as e:
+            print(f"  ✗ Failed to write to {container_name}:{container_dest_path}: {e}")
+
+
+def list_container_files(container_name, base_path):
+    """List files in container directory for verification."""
+    try:
+        output = subprocess.check_output([
+            "docker", "exec", container_name, 
+            "ls", "-la", base_path
+        ], stderr=subprocess.DEVNULL)
+        return output.decode("utf-8")
+    except subprocess.CalledProcessError:
+        return None
+
+
+def verify_tokens():
+    """Verify that tokens were created successfully."""
+    print("\n" + "="*60)
+    print("VERIFICATION - Files in containers:")
+    print("="*60)
+    
+    for container_name, config in CONTAINER_CONFIGS.items():
+        if is_container_running(container_name):
+            print(f"\n{container_name}:")
+            files_output = list_container_files(container_name, config["base_path"])
+            if files_output:
+                # Filter for .jwt files
+                lines = files_output.strip().split('\n')
+                jwt_files = [line for line in lines if '.jwt' in line]
+                if jwt_files:
+                    for line in jwt_files:
+                        print(f"  {line}")
+                else:
+                    print("  No JWT files found")
+            else:
+                print("  Unable to list files")
+        else:
+            print(f"\n{container_name}: NOT RUNNING")
 
 
 def main():
-    while True:
-        for container in BROKER_CONTAINERS:
-            write_and_copy_token("schema_registry", container)
-            write_and_copy_token("superuser", container)
-        for container in CONTROLLER_CONTAINERS:
-            write_and_copy_token("superuser", container)
-        write_and_copy_token("schema_registry", SCHEMA_REGISTRY_CONTAINER)
-        write_and_copy_token("kafka_connect", KAFKACONNECT_CONTAINER)
-        write_and_copy_token("kafka_rest", KAFKAREST_CONTANERS)
-        write_and_copy_token("ksql", KSQL_CONTAINER)
+    """Main execution function."""
+    print("JWT Token Generator for Confluent Platform Components")
+    print("="*60)
+    
+    # Process all containers
+    for container_name, config in CONTAINER_CONFIGS.items():
+        write_and_copy_component_tokens(container_name, config)
+    
+    # Verify the results
+    verify_tokens()
+    
+    print(f"\n{'='*60}")
+    print("Token generation completed!")
+    print(f"{'='*60}")
+
+
+def run_continuous():
+    """Run the token generation continuously."""
+    print("Starting continuous token generation...")
+    print("Press Ctrl+C to stop")
+    
+    try:
+        while True:
+            main()
+            print(f"\nSleeping for {EXPIRY_SECONDS - 60} seconds before next generation...")
+            time.sleep(EXPIRY_SECONDS - 60)  # Refresh before expiry
+    except KeyboardInterrupt:
+        print("\nStopping token generation...")
 
 
 if __name__ == "__main__":
+    # Run once
     main()
+    
+    #Uncomment the line below to run continuously
+    run_continuous()
