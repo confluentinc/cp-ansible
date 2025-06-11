@@ -348,7 +348,7 @@ class FilterModule(object):
         # Simple validation without isinstance
         if source_dict is None:
             return {}
-        
+
         # Try to copy and modify
         try:
             result_dict = source_dict.copy()
@@ -358,6 +358,7 @@ class FilterModule(object):
         except AttributeError:
             # If source_dict doesn't have copy method, it's not a dict
             raise TypeError("Piped value must be a dictionary")
+
     def _configure_oauth_assertion(self, final_dict, config_prefix, assertion_config):
         """Helper method to configure OAuth assertion properties"""
         assertion_props = {
