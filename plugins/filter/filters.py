@@ -37,6 +37,7 @@ class FilterModule(object):
             'resolve_and_format_hostname': self.resolve_and_format_hostname,
             'resolve_and_format_hostnames': self.resolve_and_format_hostnames,
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
+            'replace_client_assertion_file': self.replace_client_assertion_file,
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
@@ -342,6 +343,22 @@ class FilterModule(object):
         config += ';'
         return config
 
+    def replace_client_assertion_file(self, source_dict, value):
+        """Replace client_assertion_file value in a dictionary."""
+        # Simple validation without isinstance
+        if source_dict is None:
+            return {}
+
+        # Try to copy and modify
+        try:
+            result_dict = source_dict.copy()
+            if "client_assertion_file" in result_dict:
+                result_dict["client_assertion_file"] = value
+            return result_dict
+        except AttributeError:
+            # If source_dict doesn't have copy method, it's not a dict
+            raise TypeError("Piped value must be a dictionary")
+
     def _configure_oauth_assertion(self, final_dict, config_prefix, assertion_config):
         """Helper method to configure OAuth assertion properties"""
         assertion_props = {
@@ -352,7 +369,7 @@ class FilterModule(object):
             'client_assertion_private_key_passphrase': 'sasl.oauthbearer.assertion.private.key.passphrase',
             'client_assertion_template_file': 'sasl.oauthbearer.assertion.template.file',
             'client_assertion_jti_include': 'sasl.oauthbearer.assertion.claim.jti.include',
-            'client_assertion_not_before': 'sasl.oauthbearer.assertion.claim.nbf.include',
+            'client_assertion_nbf_include': 'sasl.oauthbearer.assertion.claim.nbf.include',
             'client_assertion_file': 'sasl.oauthbearer.assertion.file'
         }
 
