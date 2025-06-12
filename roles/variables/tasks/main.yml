@@ -1,19 +1,14 @@
 ---
 # This task ensures consistency between SSL mutual authentication and client authentication variables
 # across different components (Kafka, Schema Registry, Kafka Connect, etc.)
-#
+# and across different listeners in Kafka brokers.
 # Rules:
 # 1. If ssl_client_authentication is 'required' or 'requested', then ssl_mutual_auth_enabled must be true
-# 2. If ssl_mutual_auth_enabled is true, then ssl_client_authentication must be 'required'
+# 2. If ssl_mutual_auth_enabled is true and ssl_client_authentication is not defined/none, then ssl_client_authentication must be 'required'
 #
-# To disable mutual TLS (mTLS), both variables must be set:
+# To disable mutual TLS (mTLS) for any component of default kafka listener, both variables must be set:
 # - <component>_ssl_mutual_auth_enabled = false
 # - <component>_ssl_client_authentication = 'none'
-#
-# Valid values for client authentication:
-# - 'none': No client authentication
-# - 'required': Client authentication is required
-# - 'requested': Client authentication is requested but not required
 
 - name: Define component SSL variable pairs
   set_fact:
@@ -45,6 +40,20 @@
   when:
     - lookup('vars', item.mutual_auth_var)|bool
     - lookup('vars', item.client_auth_var) == 'none'
+
+# These are set for default listeners but not for custom listeners.
+# So in order to make custom listeners' mTLS variables consistent we must define them
+- name: Set default values for mTLS vars in Kafka broker listeners
+  set_fact:
+    kafka_broker_listeners: >-
+      {{ kafka_broker_listeners | combine({listener_name: kafka_broker_listeners[listener_name] | combine({
+        'ssl_mutual_auth_enabled': kafka_broker_listeners[listener_name].ssl_mutual_auth_enabled | default(false),
+        'ssl_client_authentication': kafka_broker_listeners[listener_name].ssl_client_authentication | default('none')
+      })}) }}
+  loop: "{{ kafka_broker_listeners.keys() | list }}"
+  loop_control:
+    loop_var: listener_name
+  when: kafka_broker_listeners is defined
 
 - name: Update SSL mutual authentication in Kafka broker listeners
   set_fact:
