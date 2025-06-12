@@ -1,0 +1,144 @@
+---
+# This task ensures consistency between SSL mutual authentication and client authentication variables
+# across different components (Kafka, Schema Registry, Kafka Connect, etc.)
+# and across different listeners in Kafka brokers.
+# Rules:
+# 1. If ssl_client_authentication is 'required' or 'requested', then ssl_mutual_auth_enabled must be true
+# 2. If ssl_mutual_auth_enabled is true and ssl_client_authentication is not defined/none, then ssl_client_authentication must be 'required'
+#
+# To disable mutual TLS (mTLS) for any component of default kafka listener, both variables must be set:
+# - <component>_ssl_mutual_auth_enabled = false
+# - <component>_ssl_client_authentication = 'none'
+
+- name: Define component SSL variable pairs
+  set_fact:
+    mtls_client_auth_pairs:
+      - mutual_auth_var: ssl_mutual_auth_enabled
+        client_auth_var: ssl_client_authentication
+      - mutual_auth_var: schema_registry_ssl_mutual_auth_enabled
+        client_auth_var: schema_registry_ssl_client_authentication
+      - mutual_auth_var: kafka_connect_ssl_mutual_auth_enabled
+        client_auth_var: kafka_connect_ssl_client_authentication
+      - mutual_auth_var: kafka_rest_ssl_mutual_auth_enabled
+        client_auth_var: kafka_rest_ssl_client_authentication
+      - mutual_auth_var: kafka_connect_replicator_ssl_mutual_auth_enabled
+        client_auth_var: kafka_connect_replicator_ssl_client_authentication
+
+- name: Define ssl_mutual_auth_enabled variables
+  set_fact:
+    "{{ item.mutual_auth_var }}": true
+  loop: "{{ mtls_client_auth_pairs }}"
+  when:
+    - lookup('vars', item.client_auth_var) in ['required','requested']
+    - not lookup('vars', item.mutual_auth_var)|bool
+  register: mutual_auth_result
+
+- name: Define ssl_client_authentication variables
+  set_fact:
+    "{{ item.client_auth_var }}": required
+  loop: "{{ mtls_client_auth_pairs }}"
+  when:
+    - lookup('vars', item.mutual_auth_var)|bool
+    - lookup('vars', item.client_auth_var) == 'none'
+
+# These are set for default listeners but not for custom listeners.
+# So in order to make custom listeners' mTLS variables consistent we must define them
+# Noteworthy difference between custom and default listeners is that custom listeners defaults to mtls false
+# vs the default listeners which defaults to global level mTLS vars. This behaviour is present alrady and is preserved via this change
+- name: Set default values for mTLS vars in Kafka broker listeners
+  set_fact:
+    kafka_broker_listeners: >-
+      {{ kafka_broker_listeners | combine({listener_name: kafka_broker_listeners[listener_name] | combine({
+        'ssl_mutual_auth_enabled': kafka_broker_listeners[listener_name].ssl_mutual_auth_enabled | default(ssl_mutual_auth_enabled),
+        'ssl_client_authentication': kafka_broker_listeners[listener_name].ssl_client_authentication | default(ssl_client_authentication)
+      })}) }}
+  loop: "{{ kafka_broker_listeners.keys() | list }}"
+  loop_control:
+    loop_var: listener_name
+  when: kafka_broker_listeners is defined
+
+- name: Update SSL mutual authentication in Kafka broker listeners
+  set_fact:
+    kafka_broker_listeners: "{{ kafka_broker_listeners | combine({listener_name: kafka_broker_listeners[listener_name] | combine({'ssl_mutual_auth_enabled': true})}) }}"
+  loop: "{{ kafka_broker_listeners.keys() | list }}"
+  loop_control:
+    loop_var: listener_name
+  when:
+    - kafka_broker_listeners is defined
+    - kafka_broker_listeners[listener_name].ssl_client_authentication in ['required', 'requested']
+    - not kafka_broker_listeners[listener_name].ssl_mutual_auth_enabled | bool
+
+- name: Update SSL client authentication in Kafka broker listeners
+  set_fact:
+    kafka_broker_listeners: "{{ kafka_broker_listeners | combine({listener_name: kafka_broker_listeners[listener_name] | combine({'ssl_client_authentication': 'required'})}) }}"
+  loop: "{{ kafka_broker_listeners.keys() | list }}"
+  loop_control:
+    loop_var: listener_name
+  when:
+    - kafka_broker_listeners is defined
+    - kafka_broker_listeners[listener_name].ssl_mutual_auth_enabled | bool
+    - kafka_broker_listeners[listener_name].ssl_client_authentication == 'none'
+
+- name: Define single listener SSL variable pairs
+  set_fact:
+    single_listener_mtls_pairs:
+      - listener_var: mds_broker_listener
+        default_mutual_auth: "{{ ssl_mutual_auth_enabled }}"
+        default_client_auth: "{{ ssl_client_authentication }}"
+      - listener_var: audit_logs_destination_listener
+        default_mutual_auth: "{{ ssl_mutual_auth_enabled }}"
+        default_client_auth: "{{ ssl_client_authentication }}"
+
+- name: Set default values for SSL fields in single listeners
+  set_fact:
+    "{{ item.listener_var }}": >-
+      {{ lookup('vars', item.listener_var) | combine({
+        'ssl_mutual_auth_enabled': lookup('vars', item.listener_var).ssl_mutual_auth_enabled | default(item.default_mutual_auth),
+        'ssl_client_authentication': lookup('vars', item.listener_var).ssl_client_authentication | default(item.default_client_auth)
+      }) }}
+  loop: "{{ single_listener_mtls_pairs }}"
+  when: lookup('vars', item.listener_var, default=None) is not none
+
+- name: Update SSL mutual authentication in single listeners
+  set_fact:
+    "{{ item.listener_var }}": "{{ lookup('vars', item.listener_var) | combine({'ssl_mutual_auth_enabled': true}) }}"
+  loop: "{{ single_listener_mtls_pairs }}"
+  when:
+    - lookup('vars', item.listener_var, default=None) is not none
+    - lookup('vars', item.listener_var).ssl_client_authentication in ['required', 'requested']
+    - not lookup('vars', item.listener_var).ssl_mutual_auth_enabled | bool
+
+- name: Update SSL client authentication in single listeners
+  set_fact:
+    "{{ item.listener_var }}": "{{ lookup('vars', item.listener_var) | combine({'ssl_client_authentication': 'required'}) }}"
+  loop: "{{ single_listener_mtls_pairs }}"
+  when:
+    - lookup('vars', item.listener_var, default=None) is not none
+    - lookup('vars', item.listener_var).ssl_mutual_auth_enabled | bool
+    - lookup('vars', item.listener_var).ssl_client_authentication == 'none'
+
+# The default values here are different from the global defaults because this variable doesnt have a default value unlike the others above
+- name: Set default values for SSL fields in Kafka Connect Replicator listener
+  set_fact:
+    kafka_connect_replicator_listener: >-
+      {{ kafka_connect_replicator_listener | combine({
+        'ssl_mutual_auth_enabled': kafka_connect_replicator_listener.ssl_mutual_auth_enabled | default(false),
+        'ssl_client_authentication': kafka_connect_replicator_listener.ssl_client_authentication | default('none')
+      }) }}
+  when: kafka_connect_replicator_listener is defined
+
+- name: Update SSL mutual authentication in Kafka Connect Replicator listener
+  set_fact:
+    kafka_connect_replicator_listener: "{{ kafka_connect_replicator_listener | combine({'ssl_mutual_auth_enabled': true}) }}"
+  when:
+    - kafka_connect_replicator_listener is defined
+    - kafka_connect_replicator_listener.ssl_client_authentication in ['required', 'requested']
+    - not kafka_connect_replicator_listener.ssl_mutual_auth_enabled | bool
+
+- name: Update SSL client authentication in Kafka Connect Replicator listener
+  set_fact:
+    kafka_connect_replicator_listener: "{{ kafka_connect_replicator_listener | combine({'ssl_client_authentication': 'required'}) }}"
+  when:
+    - kafka_connect_replicator_listener is defined
+    - kafka_connect_replicator_listener.ssl_mutual_auth_enabled | bool
+    - kafka_connect_replicator_listener.ssl_client_authentication == 'none'
