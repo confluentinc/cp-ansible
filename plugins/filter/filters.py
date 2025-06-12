@@ -204,7 +204,8 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.ssl.keystore.password'] = str(kafka_broker_keystore_storepass)
                 final_dict['listener.name.' + listener_name + '.ssl.key.password'] = str(kafka_broker_keystore_keypass)
 
-                # After changes to variables/tasks/main.yml, Listener will always have both ssl_client_authentication and ssl_mutual_auth_enabled defined and consistent
+                # After changes to variables/tasks/main.yml, Listener will always have both
+                # ssl_client_authentication and ssl_mutual_auth_enabled defined and consistent
                 # Thus we only check listener level ssl_client_authentication
                 # We dont need to check listener level ssl_mutual_auth_enabled as
                 # it is consistent with listener level ssl_client_authentication
