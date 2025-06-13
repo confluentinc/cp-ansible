@@ -57,7 +57,7 @@ This step enforces mTLS authentication:
 ## Important Notes
 
 1. Each step should be executed in sequence
-2. Step3, Step4 can be executred together
+2. Step3, Step4 can be executed together
 3. Do all the upgrades in rolling fashion to avoid downtime.
 4. Validate the cluster health after each step
 5. Ensure all clients are ready before enforcing mTLS
