@@ -464,7 +464,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  4.7.0
+Default:  4.5.0
 
 ***
 
@@ -502,7 +502,7 @@ Default:  365
 
 ### ssl_mutual_auth_enabled
 
-Deprecated. Use ssl_client_authentication instead. Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka.
+Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka. Use both ssl_mutual_auth_enabled and ssl_client_authentication together.
 
 Default:  false
 
@@ -1030,7 +1030,7 @@ Default:  "{{ssl_enabled}}"
 
 ### kafka_controller_ssl_mutual_auth_enabled
 
-Deprecated. Use kafka_controller_ssl_client_authentication instead. Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS. Use both kafka_controller_ssl_mutual_auth_enabled and kafka_controller_ssl_client_authentication together.
 
 Default:  "{{ssl_mutual_auth_enabled}}"
 
@@ -1038,7 +1038,7 @@ Default:  "{{ssl_mutual_auth_enabled}}"
 
 ### kafka_controller_ssl_client_authentication
 
-mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Use both kafka_controller_ssl_mutual_auth_enabled and kafka_controller_ssl_client_authentication together.
 
 Default:  "{{ssl_client_authentication}}"
 
@@ -1526,7 +1526,7 @@ Default:  "{{ssl_enabled}}"
 
 ### schema_registry_ssl_mutual_auth_enabled
 
-Deprecated- Boolean to enable mTLS Authentication on Schema Registry
+Boolean to enable mTLS Authentication on Schema Registry. Use both schema_registry_ssl_mutual_auth_enabled and schema_registry_ssl_client_authentication together.
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
 
@@ -1534,7 +1534,7 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ### schema_registry_ssl_client_authentication
 
-mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Use both schema_registry_ssl_mutual_auth_enabled and schema_registry_ssl_client_authentication together.
 
 Default:  "{{ssl_client_authentication}}"
 
@@ -1742,7 +1742,7 @@ Default:  "{{ssl_enabled}}"
 
 ### kafka_rest_ssl_mutual_auth_enabled
 
-Deprecated- Boolean to enable mTLS Authentication on Rest Proxy
+Boolean to enable mTLS Authentication on Rest Proxy. Use both kafka_rest_ssl_mutual_auth_enabled and kafka_rest_ssl_client_authentication together.
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
 
@@ -1750,7 +1750,7 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ### kafka_rest_ssl_client_authentication
 
-mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Use both kafka_rest_ssl_mutual_auth_enabled and kafka_rest_ssl_client_authentication together.
 
 Default:  "{{ssl_client_authentication}}"
 
@@ -1974,7 +1974,7 @@ Default:  "{{ssl_enabled}}"
 
 ### kafka_connect_ssl_mutual_auth_enabled
 
-Deprecated- Boolean to enable mTLS Authentication on Connect
+Boolean to enable mTLS Authentication on Connect. Use both kafka_connect_ssl_mutual_auth_enabled and kafka_connect_ssl_client_authentication together.
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
 
@@ -1982,7 +1982,7 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ### kafka_connect_ssl_client_authentication
 
-mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Use both kafka_connect_ssl_mutual_auth_enabled and kafka_connect_ssl_client_authentication together.
 
 Default:  "{{ssl_client_authentication}}"
 
@@ -4206,7 +4206,7 @@ Default:  false
 
 ### kafka_connect_replicator_ssl_mutual_auth_enabled
 
-Deprecated. Use kafka_connect_replicator_ssl_client_authentication instead. Boolean to enable mTLS Authentication on Kafka Connect Replicator.
+Use kafka_connect_replicator_ssl_client_authentication instead. Boolean to enable mTLS Authentication on Kafka Connect Replicator. Use both kafka_connect_replicator_ssl_mutual_auth_enabled and kafka_connect_replicator_ssl_client_authentication together.
 
 Default:  "{{ssl_mutual_auth_enabled}}"
 
@@ -4222,7 +4222,7 @@ Default:  false
 
 ### kafka_connect_replicator_ssl_client_authentication
 
-mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Boolean to enable mTLS Authentication on Kafka Connect Replicator. Use both kafka_connect_replicator_ssl_mutual_auth_enabled and kafka_connect_replicator_ssl_client_authentication together.
 
 Default:  "{{ssl_client_authentication}}"
 
@@ -5486,7 +5486,7 @@ Default:  ""
 
 Base URL for Confluent's RPM and Debian Package Repositories
 
-Default:  "http://confluent-platform-hotfixes-891377121322-us-west-2.s3-website-us-west-2.amazonaws.com/7.9.0-cp1"
+Default:  "https://packages.confluent.io"
 
 ***
 
@@ -5582,7 +5582,7 @@ Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jv
 
 Version of JmxExporter Agent Jar to Donwload
 
-Default:  1.0.1
+Default:  0.20.0
 
 ***
 
