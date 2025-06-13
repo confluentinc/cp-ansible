@@ -6,8 +6,8 @@ driver:
   name: docker
 platforms:
   # Unset env vars resolve to the empty string
-  - name: ${KRAFT_CONTROLLER:-zookeeper}1${JOB_BASE_NAME}${BUILD_NUMBER}
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
       - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
@@ -18,9 +18,9 @@ platforms:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
-  - name: kafka-broker1${JOB_BASE_NAME}${BUILD_NUMBER}
-    hostname: kafka-broker1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
       - kafka_broker_migration
@@ -31,9 +31,9 @@ platforms:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
-  - name: schema-registry1${JOB_BASE_NAME}${BUILD_NUMBER}
-    hostname: schema-registry1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
     groups:
       - schema_registry
       - schema_registry_migration
@@ -44,9 +44,9 @@ platforms:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
-  - name: kafka-rest1${JOB_BASE_NAME}${BUILD_NUMBER}
-    hostname: kafka-rest1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
       - kafka_rest_migration
@@ -57,9 +57,9 @@ platforms:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
-  - name: kafka-connect1${JOB_BASE_NAME}${BUILD_NUMBER}
-    hostname: kafka-connect1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
       - kafka_connect_migration
@@ -70,9 +70,9 @@ platforms:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
-  - name: ksql1${JOB_BASE_NAME}${BUILD_NUMBER}
-    hostname: ksql1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
     groups:
       - ksql
       - ksql_migration
@@ -83,9 +83,9 @@ platforms:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
-      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
-  - name: control-center1${JOB_BASE_NAME}${BUILD_NUMBER}
-    hostname: control-center1${JOB_BASE_NAME}${BUILD_NUMBER}.confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
     groups:
       - control_center
       - control_center_migration
@@ -100,7 +100,24 @@ platforms:
     published_ports:
       - "9021:9021"
     networks:
-      - name: confluent${JOB_BASE_NAME}${BUILD_NUMBER}
+      - name: confluent
+  - name: control-center-next-gen
+    hostname: control-center-next-gen.confluent
+    groups:
+      - control_center_next_gen
+      - control_center_next_gen_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    ## Commenting below to avoid port collision on jenkins server
+    ## Uncomment to view c3 in browser at localhost:9021
+    published_ports:
+      - "9022:9022"
+    networks:
+      - name: confluent
     # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
   - name: controller1-mig
     hostname: controller1-mig.confluent
@@ -120,6 +137,9 @@ provisioner:
   inventory:
     group_vars:
       all:
+        control_center_next_gen_port: 9022
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+        control_center_next_gen_dependency_alertmanager_basic_auth_enabled: true
         scenario_name: plaintext-basic-rhel
 
         # Kafka Rest API Basic Auth
@@ -129,6 +149,7 @@ provisioner:
         ksql_authentication_type: basic
         kafka_rest_authentication_type: basic
         control_center_authentication_type: basic
+        control_center_next_gen_authentication_type: basic
 
         kafka_broker_rest_proxy_basic_users:
           client:
@@ -164,6 +185,12 @@ provisioner:
             roles: client
 
         control_center_basic_users:
+          client:
+            principal: client
+            password: client-secret
+            roles: client
+
+        control_center_next_gen_basic_users:
           client:
             principal: client
             password: client-secret

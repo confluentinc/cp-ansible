@@ -1,5 +1,5 @@
 ---
-### Installs Confluent Platform Cluster on Ubuntu2204.
+### Installs Confluent Platform Cluster on Ubuntu2404.
 ### RBAC enabled.
 ### Provided user supplied keystore and truststore already present on the host
 ### MTLS enabled.
@@ -28,7 +28,7 @@ platforms:
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
       - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
-    image: geerlingguy/docker-ubuntu2204-ansible
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
     volumes:
@@ -41,7 +41,7 @@ platforms:
     groups:
       - kafka_broker
       - kafka_broker_migration
-    image: geerlingguy/docker-ubuntu2204-ansible
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
     volumes:
@@ -54,7 +54,7 @@ platforms:
     groups:
       - kafka_broker
       - kafka_broker_migration
-    image: geerlingguy/docker-ubuntu2204-ansible
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
     volumes:
@@ -67,7 +67,7 @@ platforms:
     groups:
       - kafka_broker
       - kafka_broker_migration
-    image: geerlingguy/docker-ubuntu2204-ansible
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
     volumes:
@@ -80,7 +80,7 @@ platforms:
     groups:
       - schema_registry
       - schema_registry_migration
-    image: geerlingguy/docker-ubuntu2204-ansible
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
     volumes:
@@ -93,7 +93,7 @@ platforms:
     groups:
       - kafka_rest
       - kafka_rest_migration
-    image: geerlingguy/docker-ubuntu2204-ansible
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
     volumes:
@@ -106,7 +106,7 @@ platforms:
     groups:
       - kafka_connect
       - kafka_connect_migration
-    image: geerlingguy/docker-ubuntu2204-ansible
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
     volumes:
@@ -119,7 +119,7 @@ platforms:
     groups:
       - ksql
       - ksql_migration
-    image: geerlingguy/docker-ubuntu2204-ansible
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
     volumes:
@@ -132,7 +132,7 @@ platforms:
     groups:
       - control_center
       - control_center_migration
-    image: geerlingguy/docker-ubuntu2204-ansible
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
     volumes:
@@ -142,13 +142,28 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
+  - name: control-center-next-gen1
+    hostname: control-center-next-gen1.confluent
+    groups:
+      - control_center_next_gen
+      - control_center_next_gen_migration
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java11.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9022:9022"
+    networks:
+      - name: confluent
   # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
   - name: controller1-mig
     hostname: controller1-mig.confluent
     groups:
       - kafka_controller_migration
       - cluster2
-    image: geerlingguy/docker-ubuntu2204-ansible
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
     volumes:
@@ -162,6 +177,12 @@ provisioner:
   inventory:
     group_vars:
       all:
+        control_center_next_gen_port: 9022
+        control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_mtls_enabled: true
+        control_center_next_gen_dependency_alertmanager_ssl_enabled: true
+        control_center_next_gen_dependency_alertmanager_mtls_enabled: true
+
         scenario_name: rbac-mds-mtls-existing-keystore-truststore-ubuntu
         ubuntu_java_package_name: openjdk-11-jdk
 
@@ -199,6 +220,9 @@ provisioner:
 
         control_center_ldap_user: control_center
         control_center_ldap_password: password
+
+        control_center_next_gen_ldap_user: control_center
+        control_center_next_ldap_password: password
 
         rbac_component_additional_system_admins:
           - User:user1
@@ -262,10 +286,10 @@ provisioner:
             password: "{{ksql_ldap_password}}"
             uid: 9996
             guid: 96
-          - username: "{{control_center_ldap_user}}"
-            password: "{{control_center_ldap_password}}"
-            uid: 9995
-            guid: 95
+#          - username: "{{control_center_ldap_user}}"
+#            password: "{{control_center_ldap_password}}"
+#            uid: 9995
+#            guid: 95
           - username: "{{kafka_rest_ldap_user}}"
             password: "{{kafka_rest_ldap_password}}"
             uid: 9994
@@ -345,6 +369,16 @@ provisioner:
         ssl_keystore_key_password: keystorepass
         ssl_keystore_store_password: keystorepass
         ssl_truststore_filepath: "/var/ssl/private/control_center.truststore.jks"
+        ssl_truststore_password: truststorepass
+        ssl_truststore_ca_cert_alias: CARoot
+        token_services_public_pem_file: "/var/ssl/private/public.pem"
+        token_services_private_pem_file: "/var/ssl/private/tokenKeypair.pem"
+
+      control_center_next_gen:
+        ssl_keystore_filepath: "/var/ssl/private/control_center_next_gen.keystore.jks"
+        ssl_keystore_key_password: keystorepass
+        ssl_keystore_store_password: keystorepass
+        ssl_truststore_filepath: "/var/ssl/private/control_center_next_gen.truststore.jks"
         ssl_truststore_password: truststorepass
         ssl_truststore_ca_cert_alias: CARoot
         token_services_public_pem_file: "/var/ssl/private/public.pem"

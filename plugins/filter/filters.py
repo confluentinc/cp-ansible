@@ -1,4 +1,5 @@
 import re
+import ipaddress
 
 DOCUMENTATION = '''
 ---
@@ -30,8 +31,34 @@ class FilterModule(object):
             'client_properties': self.client_properties,
             'c3_connect_properties': self.c3_connect_properties,
             'c3_ksql_properties': self.c3_ksql_properties,
-            'resolve_principal': self.resolve_principal
+            'resolve_principal': self.resolve_principal,
+            'is_ipv6': self.is_ipv6,
+            'format_hostname': self.format_hostname,
+            'resolve_and_format_hostname': self.resolve_and_format_hostname,
+            'resolve_and_format_hostnames': self.resolve_and_format_hostnames,
+            'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
         }
+
+    def resolve_and_format_hostname(self, hosts_hostvars_dict):
+        return self.format_hostname(self.resolve_hostname(hosts_hostvars_dict))
+
+    def resolve_and_format_hostnames(self, hosts, hostvars_dict):
+        hostnames = self.resolve_hostnames(hosts, hostvars_dict)
+        formatted_hostnames = []
+        for hostname in hostnames:
+            formatted_hostnames.append(self.format_hostname(hostname))
+        return formatted_hostnames
+
+    def is_ipv6(self, address):
+        try:
+            return isinstance(ipaddress.ip_address(address), ipaddress.IPv6Address)
+        except ValueError:
+            return False
+
+    def format_hostname(self, hostname):
+        if self.is_ipv6(hostname):
+            return f"[{hostname}]"
+        return hostname
 
     def normalize_sasl_protocol(self, protocols):
         # Returns a list of standardized values for sasl mechanism strings
@@ -419,7 +446,9 @@ class FilterModule(object):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + self.resolve_hostname(hostvars[host]) + ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
+                    urls.append(protocol + '://' +
+                                self.resolve_and_format_hostname(hostvars[host]) +
+                                ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
 
                 final_dict['confluent.controlcenter.connect.' + group_id + '.cluster'] = ','.join(urls)
 
@@ -444,7 +473,8 @@ class FilterModule(object):
         return final_dict
 
     def c3_ksql_properties(self, ksql_group_list, groups, hostvars, ssl_enabled, http_protocol, port,
-                           truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass):
+                           truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass,
+                           oauth_enabled, rbac_enabled, oauth_user, oauth_password, oauth_groups_scope, idp_self_signed):
         # For c3's ksql properties, inputs a list of ansible groups of ksql hosts, as well as their ssl settings
         # Outputs a properties dictionary with properties necessary to connect to each ksql group
         # Other inputs help fill out the properties
@@ -459,19 +489,36 @@ class FilterModule(object):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + self.resolve_hostname(hostvars[host]) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
-                    advertised_urls.append(protocol + '://' + hostvars[host].get('ksql_advertised_listener_hostname', self.resolve_hostname(hostvars[host])) +
-                                           ':' + str(hostvars[host].get('ksql_listener_port', port)))
+                    urls.append(protocol + '://' + self.resolve_and_format_hostname(hostvars[host]) +
+                                ':' + str(hostvars[host].get('ksql_listener_port', port)))
+                    advertised_urls.append(
+                        protocol + '://' +
+                        hostvars[host].get('ksql_advertised_listener_hostname',
+                                           self.resolve_and_format_hostname(hostvars[host])) +
+                        ':' + str(hostvars[host].get('ksql_listener_port', port))
+                    )
 
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.url'] = ','.join(urls)
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.advertised.url'] = ','.join(advertised_urls)
+                delegate_host = hostvars[groups[ansible_group][0]]
 
-                if hostvars[groups[ansible_group][0]].get('ksql_ssl_enabled', ssl_enabled):
+                if delegate_host.get('ksql_ssl_enabled', ssl_enabled):
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.location'] = truststore_path
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.password'] = str(truststore_storepass)
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.location'] = keystore_path
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.password'] = str(keystore_storepass)
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.key.password'] = str(keystore_keypass)
+
+                if delegate_host.get('ksql_oauth_enabled', oauth_enabled) and not rbac_enabled:
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.oauthbearer.login.client.id'] = oauth_user
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.oauthbearer.login.client.secret'] = oauth_password
+
+                if delegate_host.get('ksql_oauth_enabled', oauth_enabled) and not rbac_enabled and oauth_groups_scope != 'none':
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.oauthbearer.login.oauth.scope'] = oauth_groups_scope
+
+                if delegate_host.get('ksql_oauth_enabled', oauth_enabled) and not rbac_enabled and idp_self_signed:
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.location'] = truststore_path
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.password'] = truststore_storepass
 
         return final_dict
 
@@ -526,3 +573,14 @@ class FilterModule(object):
                 # Remaining rules in the list are ignored when match is found
                 break
         return principal_mapping_value
+
+    def c3_generate_salt_and_hash(self, users_dict):
+        import getpass
+        import bcrypt
+        username_with_hashed_passwords = {}
+        for user in users_dict:
+            if users_dict[user].get('principal') and users_dict[user].get('password'):
+                username_with_hashed_passwords[users_dict[user]['principal']] = bcrypt.hashpw(
+                    users_dict[user].get('password').encode("utf-8"), bcrypt.gensalt()
+                ).decode()
+        return username_with_hashed_passwords

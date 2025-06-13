@@ -84,22 +84,46 @@
 
     - name: Get broker ID's
       shell: >
-          kafka-metadata-quorum --command-config /etc/kafka/client.properties --bootstrap-server kafka-broker1:9091 describe --status | grep CurrentObservers | awk '{print $NF}'
-      register: quorum_output
+          kafka-metadata-quorum --command-config /etc/kafka/client.properties --bootstrap-server kafka-broker1:9091 describe --status | grep -oP '(?<=CurrentObservers:).*' | jq length
+      register: broker_cnt
       when: kraft_mode|bool
 
-    - name: Verify broker4 and broker5 not in the output
+    - name: Verify there are 5 brokers in quorum
       assert:
         that:
-          - "'1' in quorum_output.stdout"
-          - "'2' in quorum_output.stdout"
-          - "'3' in quorum_output.stdout"
-          - "'4' in quorum_output.stdout"
-          - "'5' in quorum_output.stdout"
+          - broker_cnt.stdout == "5"
       when: kraft_mode|bool
 
 - name: Verify - control_center
   hosts: control_center
+  gather_facts: false
+  tasks:
+    - name: Check line brokers list - Exact Match should have new brokers as well
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: bootstrap.servers
+        expected_value: kafka-broker1:9092,kafka-broker2:9092,kafka-broker3:9092,kafka-broker4:9092,kafka-broker5:9092
+
+    - name: Grep newly added broker names in proeprty file
+      shell: grep "^{{ property }}" {{ file_path }}
+      register: bootstrap_servers
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: bootstrap.servers
+
+    - name: Check broker4 in bootstrap Server urls
+      assert:
+        that: '"kafka-broker4" in bootstrap_servers.stdout'
+
+    - name: Check broker5 in bootstrap Server urls
+      assert:
+        that: '"kafka-broker5" in bootstrap_servers.stdout'
+
+- name: Verify - control_center_next_gen
+  hosts: control_center_next_gen
   gather_facts: false
   tasks:
     - name: Check line brokers list - Exact Match should have new brokers as well
