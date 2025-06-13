@@ -68,10 +68,15 @@ all:
 
     ssl_client_authentication: required  # <required/requested/none>
     # Sets mtls on kafka broker listeners, and also acts as default value for other components like kafka_controller_ssl_client_authentication, schema_registry_ssl_client_authentication, kafka_rest_ssl_client_authentication, kafka_connect_ssl_client_authentication, kafka_connect_replicator_ssl_client_authentication
+    kafka_controller_ssl_mutual_auth_enabled: true
     kafka_controller_ssl_client_authentication: required
+    schema_registry_ssl_mutual_auth_enabled: true
     schema_registry_ssl_client_authentication: required
+    kafka_rest_ssl_mutual_auth_enabled: true
     kafka_rest_ssl_client_authentication: required
+    kafka_connect_ssl_mutual_auth_enabled: true
     kafka_connect_ssl_client_authentication: required
+    kafka_connect_replicator_ssl_mutual_auth_enabled: true
     kafka_connect_replicator_ssl_client_authentication: required
     # These will all be set to required now.
 
@@ -119,9 +124,12 @@ all:
     kafka_rest_mds_cert_auth_only: true
     control_center_mds_cert_auth_only: true
 
-    # These principals are the principals of broker, rest proxy, schema registry and connect talking to MDS.
-    # For me cert CN is of the form C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker
-    # Thus applying the principal mapping rules gave me the following principals
+    # List of super user principals who can get an impersonation token on behalf of other users. We should add broker, rest proxy, schema registry and connect principals here.
+    # The Principal which is used for CP component to talk to MDS. Here that is cert principal.
+    # Needed for principal propogation for Rest Proxy and Control Center to work.
+    # To extract dn from cert check use openssl x509 -noout -subject -nameopt RFC2253 -in <cert>
+    # using this the dn would be something like 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker'
+    # Then applying the principal mapping rules it would give the principal kafka_broker
     impersonation_super_users:
       - 'kafka_broker'
       - 'kafka_rest'
@@ -129,6 +137,10 @@ all:
       - 'kafka_connect'
     # In case CP component to MDS communication is happening over LDAP+mTLS (can happen if the above _cert_auth_only vars are not set to true) then we should add ldap principals here
 
+    # Optional Config
+    # These users cant be impersonated by impersonation_super_users. Typically one might want to add super users here to stop any other user from impersonating it
+    impersonation_protected_users:
+      - 'super_user'
 
     # The following variables are to switch CP component to Kafka communication from internal listener(running oauthbearer+mtls) to mtls only.
     # Not a mandatory step

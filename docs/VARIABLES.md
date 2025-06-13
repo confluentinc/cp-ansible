@@ -518,7 +518,7 @@ Default:  365
 
 ### ssl_mutual_auth_enabled
 
-Deprecated. Use ssl_client_authentication instead. Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka.
+Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka. Use both ssl_mutual_auth_enabled and ssl_client_authentication together.
 
 Default:  false
 
@@ -1046,7 +1046,7 @@ Default:  "{{ssl_enabled}}"
 
 ### kafka_controller_ssl_mutual_auth_enabled
 
-Deprecated. Use kafka_controller_ssl_client_authentication instead. Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS. Use both kafka_controller_ssl_mutual_auth_enabled and kafka_controller_ssl_client_authentication together.
 
 Default:  "{{ssl_mutual_auth_enabled}}"
 
@@ -1054,7 +1054,7 @@ Default:  "{{ssl_mutual_auth_enabled}}"
 
 ### kafka_controller_ssl_client_authentication
 
-mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Use both kafka_controller_ssl_mutual_auth_enabled and kafka_controller_ssl_client_authentication together.
 
 Default:  "{{ssl_client_authentication}}"
 
@@ -1558,7 +1558,7 @@ Default:  "{{ssl_enabled}}"
 
 ### schema_registry_ssl_mutual_auth_enabled
 
-Deprecated- Boolean to enable mTLS Authentication on Schema Registry
+Boolean to enable mTLS Authentication on Schema Registry. Use both schema_registry_ssl_mutual_auth_enabled and schema_registry_ssl_client_authentication together.
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
 
@@ -1566,7 +1566,7 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ### schema_registry_ssl_client_authentication
 
-mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Use both schema_registry_ssl_mutual_auth_enabled and schema_registry_ssl_client_authentication together.
 
 Default:  "{{ssl_client_authentication}}"
 
@@ -1774,7 +1774,7 @@ Default:  "{{ssl_enabled}}"
 
 ### kafka_rest_ssl_mutual_auth_enabled
 
-Deprecated- Boolean to enable mTLS Authentication on Rest Proxy
+Boolean to enable mTLS Authentication on Rest Proxy. Use both kafka_rest_ssl_mutual_auth_enabled and kafka_rest_ssl_client_authentication together.
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
 
@@ -1782,7 +1782,7 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ### kafka_rest_ssl_client_authentication
 
-mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Use both kafka_rest_ssl_mutual_auth_enabled and kafka_rest_ssl_client_authentication together.
 
 Default:  "{{ssl_client_authentication}}"
 
@@ -2006,7 +2006,7 @@ Default:  "{{ssl_enabled}}"
 
 ### kafka_connect_ssl_mutual_auth_enabled
 
-Deprecated- Boolean to enable mTLS Authentication on Connect
+Boolean to enable mTLS Authentication on Connect. Use both kafka_connect_ssl_mutual_auth_enabled and kafka_connect_ssl_client_authentication together.
 
 Default:  "{{ ssl_mutual_auth_enabled }}"
 
@@ -2014,7 +2014,7 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 ### kafka_connect_ssl_client_authentication
 
-mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Use both kafka_connect_ssl_mutual_auth_enabled and kafka_connect_ssl_client_authentication together.
 
 Default:  "{{ssl_client_authentication}}"
 
@@ -2689,6 +2689,14 @@ Default:  "{{control_center_next_gen_default_log_dir}}"
 Set this variable to customize the directory that Control Center writes data files to. Default location is /var/lib/confluent/control-center.
 
 Default:  "/var/lib/confluent/control-center"
+
+***
+
+### control_center_next_gen_kafka_listener_name
+
+Name of listener used by C3 Next Gen to talk to Kafka
+
+Default:  internal
 
 ***
 
@@ -3968,7 +3976,7 @@ Default:  "{{kafka_controller_telemetry_enabled}}"
 
 user used to send telemetry data from Kafka to Control Center Next Gen
 
-Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled|bool %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
 
 ***
 
@@ -3976,7 +3984,7 @@ Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enable
 
 Password for the user used to send telemetry data from Kafka to Control Center Next Gen.
 
-Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled is defined %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled|bool %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
 
 ***
 
@@ -4000,7 +4008,7 @@ Default:  "{{kafka_broker_telemetry_enabled}}"
 
 user used to send telemetry data from Kafka to Control Center Next Gen
 
-Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled|bool %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
 
 ***
 
@@ -4008,7 +4016,7 @@ Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enable
 
 Password for the user used to send telemetry data from Kafka to Control Center Next Gen
 
-Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled is defined %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled|bool %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
 
 ***
 
@@ -4470,7 +4478,7 @@ Default:  false
 
 ### kafka_connect_replicator_ssl_mutual_auth_enabled
 
-Deprecated. Use kafka_connect_replicator_ssl_client_authentication instead. Boolean to enable mTLS Authentication on Kafka Connect Replicator.
+Use kafka_connect_replicator_ssl_client_authentication instead. Boolean to enable mTLS Authentication on Kafka Connect Replicator. Use both kafka_connect_replicator_ssl_mutual_auth_enabled and kafka_connect_replicator_ssl_client_authentication together.
 
 Default:  "{{ssl_mutual_auth_enabled}}"
 
@@ -4486,7 +4494,7 @@ Default:  false
 
 ### kafka_connect_replicator_ssl_client_authentication
 
-mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Boolean to enable mTLS Authentication on Kafka Connect Replicator. Use both kafka_connect_replicator_ssl_mutual_auth_enabled and kafka_connect_replicator_ssl_client_authentication together.
 
 Default:  "{{ssl_client_authentication}}"
 
@@ -5814,7 +5822,7 @@ Default:  ""
 
 Base URL for Confluent's RPM and Debian Package Repositories
 
-Default:  "http://confluent-platform-hotfixes-891377121322-us-west-2.s3-website-us-west-2.amazonaws.com/7.9.0-cp1"
+Default:  "https://packages.confluent.io"
 
 ***
 
@@ -5830,7 +5838,7 @@ Default:  "https://packages.confluent.io"
 
 Confluent independent release packages RPM and Debian Package Repositories
 
-Default:  "{{confluent_common_repository_baseurl}}"
+Default:  "https://packages.confluent.io"
 
 ***
 
