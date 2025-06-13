@@ -1,12 +1,12 @@
-# RBAC on LDAP to RBAC on mTLS Migration with SSO Integration
+# RBAC on OAuth to RBAC on mTLS Migration with SSO Integration
 
-This directory contains sample inventory files demonstrating the step-by-step migration process from LDAP to mTLS (mutual TLS) authentication with SSO integration for Confluent Platform.
+This directory contains sample inventory files demonstrating the step-by-step migration process from OAuth to mTLS (mutual TLS) authentication with SSO integration for Confluent Platform.
 
 ## Overview
 
 The migration process consists of four main steps:
 
-1. Initial LDAP Setup
+1. Initial OAuth Setup
 2. Enable mTLS
 3. Client Migration
 4. Enforce mTLS
@@ -15,19 +15,19 @@ The migration process consists of four main steps:
 ## Prerequisites
 
 - Confluent Platform cluster with RBAC enabled
-- LDAP server configured and accessible
+- OAuth server configured and accessible
 - SSL certificates for all components and their clients
 - SSO provider (for step 4)
 
 ## Migration Steps
 
-### Step 0: LDAP Setup
-File: `step0_ldap_setup.yml`
+### Step 0: OAuth Setup
+File: `step0_oauth_sso_setup.yml`
 
 This step sets up the initial Confluent Platform cluster with:
-- RBAC enabled over LDAP
+- RBAC enabled over OAuth
 - Service accounts for CP components
-- LDAP configuration for authentication
+- OAuth configuration for authentication
 - Basic security settings
 
 ### Step 1: Enable mTLS
@@ -38,7 +38,7 @@ This step enables mTLS in "requested" mode:
 - Sets up Kafka listeners with mTLS
 - Configures CP components to use mTLS
 - Configures CP components to MDS and Kafka communication over mTLS
-- Can still talk to Kafka/CP components without mTLS using LDAP
+- Can still talk to Kafka/CP components without mTLS using OAuth
 
 ### Step 2: Client Migration
 File: `step2_client_migration.yml`
@@ -53,14 +53,6 @@ File: `step3_required.yml`
 This step enforces mTLS authentication:
 - Changes mTLS mode from "requested" to "required"
 - Updates all components to require mTLS
-
-### Step 4: SSO Integration
-File: `step4_ldap_to_sso.yml`
-
-This step migrates Control Center from LDAP to SSO:
-- Configures SSO provider settings
-- Sets up OIDC authentication
-- Removes LDAP dependency for Control Center
 
 ## Important Notes
 
@@ -77,11 +69,12 @@ This step migrates Control Center from LDAP to SSO:
 
 Common issues and solutions:
 1. Certificate or Keystores not present in clients thus causing issue when mTLS is in required mode on server.
-2. Certificate principals may not have same RBAC roles as the LDAP principal thus causing Authorization issue.
+2. Certificate principals may not have same RBAC roles as the OAuth principal thus causing Authorization issue.
 3. Impersonation super users not defined thus throwing errors stating can't impersonate using xyz principal.
 
 
 ## Additional Resources
 
 - [mTLS Configuration Guide in CP-Ansible](https://docs.confluent.io/ansible/current/ansible-authorize.html#role-based-access-control-using-mtls)
-- [mTLS Guide in CP](https://docs.confluent.io/platform/8.0/security/authorization/rbac/mtls-rbac.html)
+- [mTLS Guide in CP](https://docs.confluent.io/platform/7.9/security/authorization/rbac/mtls-rbac.html)
+- [SSO Integration Guide](https://docs.confluent.io/platform/7.9/security/authentication/sso-for-c3/overview.html)
