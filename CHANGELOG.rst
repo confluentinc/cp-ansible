@@ -15,7 +15,6 @@ New features
 - CP Ansible now uses Confluent CLI instead of Confluent Hub Client for managing connectors.
 - Oauth client assertion (password less flow) capability is added in all CP components
 - Migration of existing clusters from LDAP or OAuth to RBAC mTLS is supported.
-- User can now explicitly whitelist IDP endpoints.
 
 Notable enhancements
 -------------
@@ -24,6 +23,7 @@ Notable enhancements
 - Java 21 is now supported.
 - Jetty upgraded from 9 to 12.
 - SNI headers are mandatory by default.
+- User can now explicitly whitelist IDP endpoints.
 
 Deprecations
 -------------
