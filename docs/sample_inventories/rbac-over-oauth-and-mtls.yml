@@ -26,9 +26,9 @@ all:
     rbac_enabled: true
     auth_mode: oauth  # This sets up MDS so that it can accept OAuth token. Due to mds_ssl_client_authentication MDS can also accept certs for authnz.
 
-    # ssl_mutual_auth_enabled: true  Deprecated in 7.8.x
+    ssl_mutual_auth_enabled: true
     ssl_client_authentication: required  # <required/requested/none>
-    # Sets mtls on kafka broker listeners
+    # Sets mTLS on kafka broker listeners, CP components also take the default value from these variables
 
     mds_ssl_client_authentication: required  # <required/requested/none>
     # Sets mtls on MDS server
@@ -40,26 +40,43 @@ all:
     # Default value is none
 
     # SR's clients dont have to send certs when they send any request to SR server
-    # Takes the default value from ssl_client_authentication. So if kept undefined in inventory it will be set to required as ssl_client_authentication is set to required
+    # Takes the default value from ssl_client_authentication, ssl_mutual_auth_enabled. So if kept undefined in inventory it will be set to required, true as ssl_client_authentication is set to required
     schema_registry_ssl_client_authentication: none
+    schema_registry_ssl_mutual_auth_enabled: false
 
     # Connect's clients must send certs when they send any request to Connect server
     kafka_connect_ssl_client_authentication: required
+    kafka_connect_ssl_mutual_auth_enabled: true
 
     # Standalone Rest Proxy's clients may send cert when they send any request to Rest Proxy server but not hard and fast.
     kafka_rest_ssl_client_authentication: requested
+    kafka_rest_ssl_mutual_auth_enabled: true
 
     kafka_broker_custom_listeners:
       puremtls:
         name: CERTONLY
         port: 9094
         ssl_client_authentication: required
+        ssl_mutual_auth_enabled: true
         ssl_enabled: true
         sasl_protocol: none
         # creating a listener with mtls only and no sasl protocol
 
+    # List of super user principals who can get an impersonation token on behalf of other users. We should add broker, rest proxy, schema registry and connect principals here.
+    # The Principal which is used for CP component to talk to MDS. Here that is cert principal.
+    # Needed for principal propogation for Rest Proxy and Control Center to work.
+    # To extract dn from cert check use openssl x509 -noout -subject -nameopt RFC2253 -in <cert>
+    # using this the dn would be something like 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker'
+    # Then applying the principal mapping rules it would give the principal kafka_broker
+    impersonation_super_users:
+      - 'kafka_broker'
+      - 'kafka_rest'
+      - 'schema_registry'
+      - 'kafka_connect'
+
     # Configs to send only certs and no oauth credentials to MDS
     # Not mandatory to use but should be used in case cp components to MDS communication should not be using oauthbearer and use just mTLS certs
+    # If we did not set these variables the impersonation super users would have OAuth clientid as principal instead of mTLS certs prinicpal.
     kafka_broker_rest_proxy_mds_cert_auth_only: true
     schema_registry_mds_cert_auth_only: true
     kafka_connect_mds_cert_auth_only: true
