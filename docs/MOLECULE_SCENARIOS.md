@@ -480,6 +480,34 @@ Validates ssl.client.authentication is set to REQUIRED.
 
 ***
 
+### molecule/mini-setup-partial-mtls
+
+#### Scenario mini-setup-partial-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS enabled.
+
+File based login to C3 using overrides.
+
+#### Scenario mini-setup-partial-mtls verify test's the following:
+
+***
+
+### molecule/mini-setup-partial-mtls2
+
+#### Scenario mini-setup-partial-mtls2 test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS enabled.
+
+File based login to C3 using overrides.
+
+#### Scenario mini-setup-partial-mtls2 verify test's the following:
+
+***
+
 ### molecule/mtls-custombundle-rhel-fips
 
 #### Scenario mtls-custombundle-rhel-fips test's the following:
@@ -489,8 +517,6 @@ Installation of Confluent Platform Edition on RHEL9.
 MTLS Enabled with custom certificates.
 
 Tests custom filtering properties for Secrets Protection.
-
-TLS is disabled for Zookeeper.
 
 FIPS enabled
 
