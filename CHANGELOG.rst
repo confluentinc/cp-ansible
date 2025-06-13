@@ -4,6 +4,34 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v8.0.0
+======
+New features
+-------------
+- Zookeeper support is dropped. Users should use KRaft Controller.
+- Old Control Center is dropped. Users should use Control Center Next Gen.
+- Support for IPv6 available in all cp components including Control Center Next Gen.
+- Support for log4j1 is dropped. Added support for log4j2.
+- CP Ansible now uses Confluent CLI instead of Confluent Hub Client for managing connectors.
+- Oauth client assertion (password less flow) capability is added in all CP components
+- Migration of existing clusters from LDAP or OAuth to RBAC mTLS is supported.
+
+Notable enhancements
+-------------
+- Updated the default Confluent CLI version to 4.26.0.
+- Ansible Versions 10 and 11 are now supported.
+- Java 21 is now supported.
+- Jetty upgraded from 9 to 12.
+- SNI headers are mandatory by default.
+- User can now explicitly whitelist IDP endpoints.
+
+Deprecations
+-------------
+- Confluent Hub Client is deprecated.
+- Java 8 and 11 are no longer supported.
+- Ansible Versions 7 and 8 are no longer supported.
+- Python version < 3.10 are no longer supported.
+
 v7.9.0
 ======
 
