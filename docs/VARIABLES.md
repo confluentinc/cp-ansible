@@ -2600,19 +2600,19 @@ Default:  none
 
 Boolean to enable OAuth client assertion
 
-Default:  False
+Default:  false
 
 ***
 
-### oauth_superuser_client_assertion_file
+### oauth_superuser_client_assertion_file_base_path
 
-Path to the file containing the client assertion
+Path to the Directory containing the client assertion
 
 Default:  none
 
 ***
 
-### oauth_superuser_client_assertion_not_before
+### oauth_superuser_client_assertion_nbf_include
 
 Not before time for the client assertion
 
@@ -2844,19 +2844,19 @@ Default:  "{{oauth_superuser_client_assertion_enabled}}"
 
 ***
 
-### kafka_broker_oauth_client_assertion_file
+### kafka_broker_oauth_client_assertion_file_base_path
 
-Path to the file containing the client assertion
+Path to the Directory containing the client assertion
 
-Default:  "{{oauth_superuser_client_assertion_file}}"
+Default:  "{{ oauth_superuser_client_assertion_file_base_path }}"
 
 ***
 
-### kafka_broker_oauth_client_assertion_not_before
+### kafka_broker_oauth_client_assertion_nbf_include
 
 Not before time for the client assertion
 
-Default:  "{{oauth_superuser_client_assertion_not_before}}"
+Default:  "{{oauth_superuser_client_assertion_nbf_include}}"
 
 ***
 
@@ -2964,19 +2964,19 @@ Default:  "{{oauth_superuser_client_assertion_enabled}}"
 
 ***
 
-### kafka_controller_oauth_client_assertion_file
+### kafka_controller_oauth_client_assertion_file_base_path
 
-Path to the file containing the client assertion
+Path to the Directory containing the client assertion
 
-Default:  "{{oauth_superuser_client_assertion_file}}"
+Default:  "{{oauth_superuser_client_assertion_file_base_path}}"
 
 ***
 
-### kafka_controller_oauth_client_assertion_not_before
+### kafka_controller_oauth_client_assertion_nbf_include
 
 Not before time for the client assertion
 
-Default:  "{{oauth_superuser_client_assertion_not_before}}"
+Default:  "{{oauth_superuser_client_assertion_nbf_include}}"
 
 ***
 
@@ -3088,19 +3088,19 @@ Default:  password
 
 Boolean to enable OAuth client assertion
 
-Default:  False
+Default:  false
 
 ***
 
-### schema_registry_oauth_client_assertion_file
+### schema_registry_oauth_client_assertion_file_base_path
 
-Path to the file containing the client assertion
+Path to the Directory containing the client assertion
 
 Default:  none
 
 ***
 
-### schema_registry_oauth_client_assertion_not_before
+### schema_registry_oauth_client_assertion_nbf_include
 
 Not before time for the client assertion
 
@@ -3216,19 +3216,19 @@ Default:  password
 
 Boolean to enable OAuth client assertion
 
-Default:  False
+Default:  false
 
 ***
 
-### kafka_connect_oauth_client_assertion_file
+### kafka_connect_oauth_client_assertion_file_base_path
 
-Path to the file containing the client assertion
+Path to the Directory containing the client assertion
 
 Default:  none
 
 ***
 
-### kafka_connect_oauth_client_assertion_not_before
+### kafka_connect_oauth_client_assertion_nbf_include
 
 Not before time for the client assertion
 
@@ -3344,19 +3344,19 @@ Default:  password
 
 Boolean to enable OAuth client assertion
 
-Default:  False
+Default:  false
 
 ***
 
-### ksql_oauth_client_assertion_file
+### ksql_oauth_client_assertion_file_base_path
 
-Path to the file containing the client assertion
+Path to the Directory containing the client assertion
 
 Default:  none
 
 ***
 
-### ksql_oauth_client_assertion_not_before
+### ksql_oauth_client_assertion_nbf_include
 
 Not before time for the client assertion
 
@@ -3472,19 +3472,19 @@ Default:  password
 
 Boolean to enable OAuth client assertion
 
-Default:  False
+Default:  false
 
 ***
 
-### kafka_rest_oauth_client_assertion_file
+### kafka_rest_oauth_client_assertion_file_base_path
 
-Path to the file containing the client assertion
+Path to the Directory containing the client assertion
 
 Default:  none
 
 ***
 
-### kafka_rest_oauth_client_assertion_not_before
+### kafka_rest_oauth_client_assertion_nbf_include
 
 Not before time for the client assertion
 
@@ -3600,19 +3600,19 @@ Default:  password
 
 Boolean to enable OAuth client assertion
 
-Default:  False
+Default:  false
 
 ***
 
-### control_center_next_gen_oauth_client_assertion_file
+### control_center_next_gen_oauth_client_assertion_file_base_path
 
-Path to the file containing the client assertion
+Path to the Directory containing the client assertion
 
 Default:  none
 
 ***
 
-### control_center_next_gen_oauth_client_assertion_not_before
+### control_center_next_gen_oauth_client_assertion_nbf_include
 
 Not before time for the client assertion
 
@@ -3728,19 +3728,19 @@ Default:  password
 
 Boolean to enable OAuth client assertion
 
-Default:  False
+Default:  false
 
 ***
 
-### kafka_connect_replicator_oauth_client_assertion_file
+### kafka_connect_replicator_oauth_client_assertion_file_base_path
 
-Path to the file containing the client assertion
+Path to the Directory containing the client assertion
 
 Default:  none
 
 ***
 
-### kafka_connect_replicator_oauth_client_assertion_not_before
+### kafka_connect_replicator_oauth_client_assertion_nbf_include
 
 Not before time for the client assertion
 
@@ -3860,19 +3860,19 @@ Default:  "{{ kafka_connect_replicator_oauth_client_assertion_enabled }}"
 
 ***
 
-### kafka_connect_replicator_consumer_oauth_client_assertion_file
+### kafka_connect_replicator_consumer_oauth_client_assertion_file_base_path
 
-Path to the file containing the client assertion
+Path to the Directory containing the client assertion
 
-Default:  "{{ kafka_connect_replicator_oauth_client_assertion_file }}"
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_file_base_path }}"
 
 ***
 
-### kafka_connect_replicator_consumer_oauth_client_assertion_not_before
+### kafka_connect_replicator_consumer_oauth_client_assertion_nbf_include
 
 Not before time for the client assertion
 
-Default:  "{{ kafka_connect_replicator_oauth_client_assertion_not_before }}"
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_nbf_include }}"
 
 ***
 
@@ -3988,19 +3988,19 @@ Default:  "{{ kafka_connect_replicator_oauth_client_assertion_enabled }}"
 
 ***
 
-### kafka_connect_replicator_producer_oauth_client_assertion_file
+### kafka_connect_replicator_producer_oauth_client_assertion_file_base_path
 
-Path to the file containing the client assertion
+Path to the Directory containing the client assertion
 
-Default:  "{{ kafka_connect_replicator_oauth_client_assertion_file }}"
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_file_base_path }}"
 
 ***
 
-### kafka_connect_replicator_producer_oauth_client_assertion_not_before
+### kafka_connect_replicator_producer_oauth_client_assertion_nbf_include
 
 Not before time for the client assertion
 
-Default:  "{{ kafka_connect_replicator_oauth_client_assertion_not_before }}"
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_nbf_include }}"
 
 ***
 
@@ -4116,19 +4116,19 @@ Default:  "{{ kafka_connect_replicator_oauth_client_assertion_enabled }}"
 
 ***
 
-### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_file
+### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_file_base_path
 
-Path to the file containing the client assertion
+Path to the Directory containing the client assertion
 
-Default:  "{{ kafka_connect_replicator_oauth_client_assertion_file }}"
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_file_base_path }}"
 
 ***
 
-### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_not_before
+### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_nbf_include
 
 Not before time for the client assertion
 
-Default:  "{{ kafka_connect_replicator_oauth_client_assertion_not_before }}"
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_nbf_include }}"
 
 ***
 
@@ -5428,6 +5428,94 @@ Default:  ""
 
 ***
 
+### kafka_connect_replicator_erp_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  None
+
+***
+
 ### kafka_connect_replicator_kafka_cluster_id
 
 Set this variable to the Cluster ID for the kafka cluster which you are interacting with.
@@ -5641,6 +5729,86 @@ Default:  "{{ kafka_connect_replicator_erp_oauth_user }}"
 Set this variable to the Client Secret of the OAuth Client for the Embedded Rest Proxy user, to configure RBAC.
 
 Default:  "{{ kafka_connect_replicator_erp_oauth_password }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_enabled }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_file_base_path }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_nbf_include }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_audience }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_issuer }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_sub }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_scope }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_file }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_passphrase }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_jti_include }}"
 
 ***
 
@@ -5865,6 +6033,70 @@ Default:  "{{ kafka_connect_replicator_erp_oauth_user }}"
 Set this variable to the Client Secret of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
 
 Default:  "{{ kafka_connect_replicator_erp_oauth_password }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_enabled }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_file_base_path }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_nbf_include }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_audience }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_issuer }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_sub }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_scope }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_file }}"
 
 ***
 
@@ -6124,19 +6356,19 @@ Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_enabled }}"
 
 ***
 
-### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_file
+### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_file_base_path
 
-Path to the file containing the client assertion
+Path to the Directory containing the client assertion
 
-Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_file }}"
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_file_base_path }}"
 
 ***
 
-### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_not_before
+### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_nbf_include
 
 Not before time for the client assertion
 
-Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_not_before }}"
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_nbf_include }}"
 
 ***
 
@@ -7551,4 +7783,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-
