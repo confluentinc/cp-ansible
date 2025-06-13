@@ -3452,7 +3452,7 @@ Default:  password
 
 ***
 
-### kafka_rest_oauth_user
+### kafka_rest_oauth_userdf
 
 OAuth Client Id for Rest Proxy to authenticate as
 
