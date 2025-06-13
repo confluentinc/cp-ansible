@@ -106,9 +106,12 @@ all:
     kafka_rest_mds_cert_auth_only: true
     control_center_mds_cert_auth_only: true
 
-    # These principals are the principals of broker, rest proxy, schema registry and connect talking to MDS.
-    # For me cert CN is of the form C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker
-    # Thus applying the principal mapping rules gave me the following principals
+    # List of super user principals who can get an impersonation token on behalf of other users. We should add broker, rest proxy, schema registry and connect principals here.
+    # The Principal which is used for CP component to talk to MDS. Here that is cert principal.
+    # Needed for principal propogation for Rest Proxy and Control Center to work.
+    # To extract dn from cert check use openssl x509 -noout -subject -nameopt RFC2253 -in <cert>
+    # using this the dn would be something like 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker'
+    # Then applying the principal mapping rules it would give the principal kafka_broker
     impersonation_super_users:
       - 'kafka_broker'
       - 'kafka_rest'
@@ -116,11 +119,14 @@ all:
       - 'kafka_connect'
     # In case CP component to MDS communication is happening over LDAP+mTLS (can happen if the above _cert_auth_only vars are not set to true) then we should add ldap principals here
 
+    # Optional Config
+    # These users cant be impersonated by impersonation_super_users. Typically one might want to add super users here to stop any other user from impersonating it
+    impersonation_protected_users:
+      - 'super_user'
 
     # The following variables are to switch CP component to Kafka communication from internal listener(running oauthbearer+mtls) to mtls only.
     # Not a mandatory step
     schema_registry_kafka_listener_name: mtls
-    ksql_kafka_listener_name: mtls
     kafka_connect_kafka_listener_name: mtls
     kafka_rest_kafka_listener_name: mtls
     control_center_kafka_listener_name: mtls
@@ -168,6 +174,6 @@ kafka_rest:
   hosts:
     ec2-34-222-41-249.us-west-2.compute.amazonaws.com:
 
-control_center:
+control_center_next_gen:
   hosts:
     ec2-35-87-151-33.us-west-2.compute.amazonaws.com:

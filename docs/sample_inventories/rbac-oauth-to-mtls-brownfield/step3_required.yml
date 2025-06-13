@@ -1,10 +1,10 @@
 ---
 ##
-## The following is an example inventory file of the configuration required for setting up Confluent Platform with RBAC over LDAP. And then migrating to mTLS
-## Principals extracted from certs and ldap credentials are given role bindings.
-## Extra configs added to keep cp service to service communication over certs only and not use LDAP credentials there.
-## External clients of kafka or other services can use LDAP credentials to communicate with the cluster
-## Migrate Control Center from LDAP to SSO
+## The following is an example inventory file of the configuration required for setting up Confluent Platform with RBAC over OAuth. And then migrating to mTLS
+## Principals extracted from certs and OAuth credentials are given role bindings.
+## Extra configs added to keep cp service to service communication over certs only and not use OAuth credentials there.
+## External clients of kafka or other services can use OAuth credentials to communicate with the cluster
+## Control Center is running on SSO since beginning
 
 all:
   vars:
@@ -25,37 +25,42 @@ all:
     # Provided Keystore Truststore
     # Set ssl_provided_keystore_and_truststore, ssl_keystore_and_truststore_custom_password, ssl_keystore_filepath, ssl_keystore_key_password, ssl_keystore_store_password, ssl_keystore_alias, ssl_truststore_filepath, ssl_truststore_password, ssl_truststore_ca_cert_alias and ssl_provided_keystore_and_truststore_remote_src (optional)
 
-    rbac_enabled: true # if no auth_mode defined that implies ldap
+    rbac_enabled: true
 
-    # LDAP users
-    mds_super_user: mds
-    mds_super_user_password: password
-    schema_registry_ldap_user: schema-registry1
-    schema_registry_ldap_password: password
-    kafka_connect_ldap_user: kafka-connect1
-    kafka_connect_ldap_password: password
-    ksql_ldap_user: ksql1
-    ksql_ldap_password: password
-    kafka_rest_ldap_user: kafka-rest1
-    kafka_rest_ldap_password: password
-    control_center_ldap_user: control-center1
-    control_center_ldap_password: password
+    # OAuth users
+    oauth_superuser_client_id: superuser
+    oauth_superuser_client_password: my-secret
+    schema_registry_oauth_user: schema_registry
+    schema_registry_oauth_password: my-secret
+    kafka_rest_oauth_user: kafka_rest
+    kafka_rest_oauth_password: my-secret
+    kafka_connect_oauth_user: kafka_connect
+    kafka_connect_oauth_password: my-secret
+    ksql_oauth_user: ksql
+    ksql_oauth_password: my-secret
+    control_center_oauth_user: control_center
+    control_center_oauth_password: my-secret
 
-    # LDAP configs
-    kafka_broker_custom_properties:
-      ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
-      ldap.com.sun.jndi.ldap.read.timeout: 3000
-      ldap.java.naming.provider.url: ldap://ldap1:389
-      ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
-      ldap.java.naming.security.credentials: password
-      ldap.java.naming.security.authentication: simple
-      ldap.user.search.base: OU=rbac,DC=example,DC=com
-      ldap.group.search.base: OU=rbac,DC=example,DC=com
-      ldap.user.name.attribute: uid
-      ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
-      ldap.group.name.attribute: cn
-      ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
-      ldap.user.object.class: account
+    # OAuth configs
+    oauth_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oauthcertfile.pem"
+    oauth_sub_claim: client_id
+    oauth_groups_claim: groups
+    oauth_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
+    oauth_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
+    oauth_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
+    oauth_expected_audience: Confluent,account,api://default
+
+    sso_mode: oidc
+    sso_groups_claim: groups
+    sso_sub_claim: sub
+    sso_groups_scope: groups # scope is optional, depending on the Idp
+    sso_issuer_url: <sso-idp-url>
+    sso_jwks_uri: <sso-idp-jkws-url>
+    sso_authorize_uri: <sso_authorize_uri>
+    sso_token_uri: <sso_token_uri>
+    sso_client_id: <sso_client_id>
+    sso_client_password: <sso_client_password>
+    sso_idp_cert_path: my-idp-cert.pem
 
     ######################################################
     ####################### STEP 3 #######################
@@ -111,7 +116,7 @@ all:
       - "RULE:.*CN=([a-zA-Z0-9.-_]*).*$$/$$1/"
       - "DEFAULT"
 
-    # These variables will make CP component to MDS communication over mTLS. If not set then CP component to MDS communication would be running over LDAP+mTLS. It is our choice to enable them
+    # These variables will make CP component to MDS communication over mTLS. If not set then CP component to MDS communication would be running over OAuth+mTLS. It is our choice to enable them
     kafka_broker_rest_proxy_mds_cert_auth_only: true
     schema_registry_mds_cert_auth_only: true
     kafka_connect_mds_cert_auth_only: true
@@ -129,7 +134,7 @@ all:
       - 'kafka_rest'
       - 'schema_registry'
       - 'kafka_connect'
-    # In case CP component to MDS communication is happening over LDAP+mTLS (can happen if the above _cert_auth_only vars are not set to true) then we should add ldap principals here
+    # In case CP component to MDS communication is happening over OAuth+mTLS (can happen if the above _cert_auth_only vars are not set to true) then we should add OAuth principals here
 
     # Optional Config
     # These users cant be impersonated by impersonation_super_users. Typically one might want to add super users here to stop any other user from impersonating it
@@ -143,6 +148,7 @@ all:
     kafka_connect_kafka_listener_name: mtls
     kafka_rest_kafka_listener_name: mtls
     control_center_kafka_listener_name: mtls
+
 
 kafka_controller:
   hosts:
