@@ -480,7 +480,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  4.5.0
+Default:  4.7.0
 
 ***
 
@@ -2692,6 +2692,14 @@ Default:  "/var/lib/confluent/control-center"
 
 ***
 
+### control_center_next_gen_kafka_listener_name
+
+Name of listener used by C3 Next Gen to talk to Kafka
+
+Default:  internal
+
+***
+
 ### control_center_next_gen_copy_files
 
 Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
@@ -3968,7 +3976,7 @@ Default:  "{{kafka_controller_telemetry_enabled}}"
 
 user used to send telemetry data from Kafka to Control Center Next Gen
 
-Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled|bool %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
 
 ***
 
@@ -3976,7 +3984,7 @@ Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enable
 
 Password for the user used to send telemetry data from Kafka to Control Center Next Gen.
 
-Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled is defined %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled|bool %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
 
 ***
 
@@ -4000,7 +4008,7 @@ Default:  "{{kafka_broker_telemetry_enabled}}"
 
 user used to send telemetry data from Kafka to Control Center Next Gen
 
-Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled|bool %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
 
 ***
 
@@ -4008,7 +4016,7 @@ Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enable
 
 Password for the user used to send telemetry data from Kafka to Control Center Next Gen
 
-Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled is defined %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
+Default:  "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled|bool %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
 
 ***
 
@@ -5830,7 +5838,7 @@ Default:  "https://packages.confluent.io"
 
 Confluent independent release packages RPM and Debian Package Repositories
 
-Default:  "{{confluent_common_repository_baseurl}}"
+Default:  "https://packages.confluent.io"
 
 ***
 
@@ -5918,7 +5926,7 @@ Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jv
 
 Version of JmxExporter Agent Jar to Donwload
 
-Default:  0.20.0
+Default:  1.0.1
 
 ***
 
