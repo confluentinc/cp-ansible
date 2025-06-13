@@ -8,29 +8,29 @@ v8.0.0
 ======
 New features
 -------------
-- Zookeeper support is dropped. Users should use KRaft Controller.
-- Old Control Center is dropped. Users should use Control Center Next Gen.
-- Support for IPv6 available in all cp components including Control Center Next Gen.
-- Support for log4j1 is dropped. Added support for log4j2.
+- Zookeeper support has been removed. All users must now use the KRaft Controller architecture.
+- Legacy Control Center has been deprecated. The Next Gen Control Center is now the default.
+- Full IPv6 support is now available across all Confluent Platform components, including Control Center Next Gen.
+- log4j1 support is removed — Components have been migrated to log4j2.
 - CP Ansible now uses Confluent CLI instead of Confluent Hub Client for managing connectors.
-- Oauth client assertion (password less flow) capability is added in all CP components
-- Migration of existing clusters from LDAP or OAuth to RBAC mTLS is supported.
+- OAuth client assertion support (i.e. passwordless authentication) is now available across all CP components.
+- Cluster migration to RBAC with mTLS is now supported for those currently using LDAP or OAuth authentication.
 
 Notable enhancements
 -------------
-- Updated the default Confluent CLI version to 4.26.0.
-- Ansible Versions 10 and 11 are now supported.
-- Java 21 is now supported.
-- Jetty upgraded from 9 to 12.
-- SNI headers are mandatory by default.
-- User can now explicitly whitelist IDP endpoints.
+- Default Confluent CLI version upgraded to v4.26.0.
+- Support added for Ansible versions 10 and 11.
+- Support added for Java 21.
+- Jetty upgraded from version 9 to version 12.
+- SNI headers are now required by default.
+- Users can now explicitly whitelist IdP endpoints.
 
 Deprecations
 -------------
-- Confluent Hub Client is deprecated.
-- Java 8 and 11 are no longer supported.
-- Ansible Versions 7 and 8 are no longer supported.
-- Python version < 3.10 are no longer supported.
+- Confluent Hub Client is now deprecated.
+- Java 8 and Java 11 are no longer supported.
+- Ansible versions 7 and 8 are no longer supported.
+- Python versions earlier than 3.10 are no longer supported.
 
 v7.9.0
 ======
