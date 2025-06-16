@@ -49,7 +49,7 @@ pip install wheel
 pip install pylint
 pip install "ansible==$ANSIBLE_VERSION"
 pip install yamllint
-pip install galaxy-importer
+pip install "galaxy-importer==0.4.29"
 pip install setuptools
 
 python --version
