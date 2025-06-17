@@ -388,9 +388,9 @@ Validates ssl.client.authentication is set to REQUIRED.
 
 ***
 
-### molecule/mini-setup-ldap-mtls
+### molecule/mini-setup-ldap-mtls-fips
 
-#### Scenario mini-setup-ldap-mtls test's the following:
+#### Scenario mini-setup-ldap-mtls-fips test's the following:
 
 Installs Confluent Platform Cluster on ubi9.
 
@@ -400,7 +400,7 @@ MDS accepts LDAP credentials and mTLS certs.
 
 LDAP based login to C3.
 
-#### Scenario mini-setup-ldap-mtls verify test's the following:
+#### Scenario mini-setup-ldap-mtls-fips verify test's the following:
 
 Validates that SSL Protocol is set.
 
@@ -419,6 +419,24 @@ RBAC over mTLS enabled.
 File based login to C3 using overrides.
 
 #### Scenario mini-setup-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-mtls-fips
+
+#### Scenario mini-setup-mtls-fips test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS enabled.
+
+File based login to C3 using overrides.
+
+#### Scenario mini-setup-mtls-fips verify test's the following:
 
 Validates that SSL Protocol is set.
 
@@ -485,6 +503,34 @@ SSO authentication using OIDC in Control center using Okta IdP.
 Validates that SSL Protocol is set.
 
 Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-partial-mtls
+
+#### Scenario mini-setup-partial-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS enabled.
+
+File based login to C3 using overrides.
+
+#### Scenario mini-setup-partial-mtls verify test's the following:
+
+***
+
+### molecule/mini-setup-partial-mtls2
+
+#### Scenario mini-setup-partial-mtls2 test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS enabled.
+
+File based login to C3 using overrides.
+
+#### Scenario mini-setup-partial-mtls2 verify test's the following:
 
 ***
 
