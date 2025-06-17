@@ -23,12 +23,12 @@ The services that can be installed from this repository are:
 
 ## Requirements
 
-Prerequisites for installing CP can be found at https://docs.confluent.io/ansible/current/ansible-requirements.html#general-requirements.
+Prerequisites for installing CP can be found at [General Requirements](https://docs.confluent.io/ansible/current/ansible-requirements.html#general-requirements).
 
 
 ## Installation
 
-You can install this collection from Ansible Automation Hub and Ansible Galaxy by following https://docs.confluent.io/ansible/current/ansible-download.html.
+You can install this collection from Ansible Automation Hub and Ansible Galaxy by following [Download Ansible Playbooks for Confluent Platform](https://docs.confluent.io/ansible/current/ansible-download.html).
 
 As an alternative to the recommended methods above, you can install the package directly from the source repository.
 
