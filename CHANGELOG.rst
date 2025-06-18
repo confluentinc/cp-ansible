@@ -4,6 +4,20 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.7.4
+======
+
+Notable enhancements
+-------------
+
+- JMX Exporter is upgraded to 0.20.0
+- Kafka to restart after adding sso cert to truststore
+
+Notable fixes
+-------------
+
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
 v7.7.3
 ======
 
