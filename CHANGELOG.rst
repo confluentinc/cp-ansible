@@ -10,7 +10,11 @@ v7.4.10
 Notable enhancements
 -------------
 
-- Ansible 9.x is now supported
+- Ansible 9.x is now supported.
+
+Notable fixes
+-------------
+
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
 v7.4.9
