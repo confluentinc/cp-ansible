@@ -4,6 +4,21 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.9.2
+======
+
+Notable enhancements
+-------------
+
+- Enabled support for brownfield migrations to RBAC over mTLs
+
+Notable fixes
+-------------
+
+- Added fallback on th value of ssl_mutual_auth_enabled if ssl_client_authentication is not defined
+- Resolved issue where component restart was not triggered after adding IDP certificates to the truststore.
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
 v7.9.1
 ======
 
