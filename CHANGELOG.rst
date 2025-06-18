@@ -11,7 +11,6 @@ Notable enhancements
 -------------
 
 - JMX Exporter is upgraded to 0.20.0
-- Enabled support for brownfield migrations to RBAC over mTLs
 
 Notable fixes
 -------------
