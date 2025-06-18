@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.7.3
+Default:  7.7.4
 
 ***
 
@@ -5326,7 +5326,7 @@ Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jv
 
 Version of JmxExporter Agent Jar to Donwload
 
-Default:  0.12.0
+Default:  0.20.0
 
 ***
 
