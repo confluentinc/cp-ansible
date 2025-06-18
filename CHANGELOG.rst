@@ -11,7 +11,13 @@ Notable enhancements
 -------------
 
 - JMX Exporter is upgraded to 0.20.0
-- Kafka to restart after adding sso cert to truststore
+- Enabled support for brownfield migrations to RBAC over mTLs
+
+Notable fixes
+-------------
+
+- Resolved issue where component restart was not triggered after adding IDP certificates to the truststore.
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
 Notable fixes
 -------------
