@@ -4,6 +4,22 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.8.3
+======
+
+Notable enhancements
+-------------
+
+- Enabled support for brownfield migrations to RBAC over mTLs
+- JMX Exporter is upgraded to 0.20.0
+
+Notable fixes
+-------------
+
+- added fallback on th value of ssl_mutual_auth_enabled if ssl_client_authentication is not defined
+- Fixed component restart trigger after adding IDP cert to truststore. - bug fix
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
 v7.8.2
 ======
 
