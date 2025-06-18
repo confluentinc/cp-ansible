@@ -19,6 +19,7 @@ Notable fixes
 - Added fallback on th value of ssl_mutual_auth_enabled if ssl_client_authentication is not defined
 - Resolved issue where component restart was not triggered after adding IDP certificates to the truststore.
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+- Fixed assignment of role binding to certificate principals which contain spaces in their names
 
 v7.8.2
 ======
