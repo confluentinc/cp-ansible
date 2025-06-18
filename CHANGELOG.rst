@@ -16,8 +16,8 @@ Notable enhancements
 Notable fixes
 -------------
 
-- added fallback on th value of ssl_mutual_auth_enabled if ssl_client_authentication is not defined
-- Fixed component restart trigger after adding IDP cert to truststore. - bug fix
+- Added fallback on th value of ssl_mutual_auth_enabled if ssl_client_authentication is not defined
+- Resolved issue where component restart was not triggered after adding IDP certificates to the truststore.
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
 v7.8.2
