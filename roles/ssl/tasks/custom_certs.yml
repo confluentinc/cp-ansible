@@ -12,22 +12,38 @@
     src: "{{ssl_signed_cert_filepath}}"
     dest: "{{ cert_path }}"
 
-- name: Create temp directory for CA certificates
+- name: Create temp directory for individual certificates
   tempfile:
     state: directory
-    suffix: ca_certs
-  register: temp_ca_dir
+    suffix: individual_certs
+  register: temp_dir
 
-- name: Split CA Bundle into Individual Certificates
+- name: Split CA Cert Bundle into Individual Certificates
   shell: |
-    awk 'BEGIN {n=0} /BEGIN CERTIFICATE/{n++} {print > "{{ temp_ca_dir.path }}/ca." n ".pem"}' {{ ca_cert_path }}
+    awk 'BEGIN {n=0} /BEGIN CERTIFICATE/{n++} {print > "{{ temp_dir.path }}/ca." n ".pem"}' {{ ca_cert_path }}
+  changed_when: false
+
+- name: Split Signed Cert Bundle - Extract Last Certificate
+  shell: |
+    awk '
+      /BEGIN CERTIFICATE/,/END CERTIFICATE/ {
+        cert = cert $0 "\n"
+      }
+      /END CERTIFICATE/ {
+        last_cert = cert
+        cert = ""
+      }
+      END {
+        print last_cert
+      }' {{ ssl_signed_cert_filepath }} > "{{ temp_dir.path }}/signed.last.pem"
   changed_when: false
 
 - name: Verify and Build Certificate Chain
   shell: |
-    for ca_file in {{ temp_ca_dir.path }}/ca.*.pem; do
-      if openssl verify -CAfile "$ca_file" {{ cert_path }}; then
-        # If verification succeeds, create the chain immediately
+    for ca_file in {{ temp_dir.path }}/ca.*.pem; do
+      # Verify using the last certificate from the chain
+      if openssl verify -CAfile "$ca_file" "{{ temp_dir.path }}/signed.last.pem"; then
+        # If verification succeeds, create the chain using original cert/chain
         cat {{ cert_path }} "$ca_file" > "{{ ssl_file_dir_final }}/{{ service_name }}.chain"
         echo "Chain completed with: $ca_file"
         exit 0
@@ -41,7 +57,7 @@
 
 - name: Cleanup Temp Directory
   file:
-    path: "{{ temp_ca_dir.path }}"
+    path: "{{ temp_dir.path }}"
     state: absent
   changed_when: false
 
