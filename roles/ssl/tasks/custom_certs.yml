@@ -12,22 +12,38 @@
     src: "{{ssl_signed_cert_filepath}}"
     dest: "{{ cert_path }}"
 
-- name: Slurp Signed Cert
-  slurp:
-    src: "{{ cert_path }}"
-  register: slurped_signed_cert
+- name: Create temp directory for CA certificates
+  tempfile:
+    state: directory
+    suffix: ca_certs
+  register: temp_ca_dir
 
-- name: Verify Cert Chain
-  community.crypto.certificate_complete_chain:
-    input_chain: "{{ slurped_signed_cert['content'] | b64decode }}"
-    root_certificates:
-      - "{{ ca_cert_path }}"
-  register: custom_cert_chain
+- name: Split CA Bundle into Individual Certificates
+  shell: |
+    awk 'BEGIN {n=0} /BEGIN CERTIFICATE/{n++} {print > "{{ temp_ca_dir.path }}/ca." n ".pem"}' {{ ca_cert_path }}
+  changed_when: false
 
-- name: Write Cert Chain
-  copy:
-    content: "{{ ''.join(custom_cert_chain.complete_chain) }}"
-    dest: "{{ ssl_file_dir_final }}/{{ service_name }}.chain"
+- name: Verify and Build Certificate Chain
+  shell: |
+    for ca_file in {{ temp_ca_dir.path }}/ca.*.pem; do
+      if openssl verify -CAfile "$ca_file" {{ cert_path }}; then
+        # If verification succeeds, create the chain immediately
+        cat {{ cert_path }} "$ca_file" > "{{ ssl_file_dir_final }}/{{ service_name }}.chain"
+        echo "Chain completed with: $ca_file"
+        exit 0
+      fi
+    done
+    echo "No valid CA found to complete the chain" >&2
+    exit 1
+  register: chain_result
+  failed_when: chain_result.rc != 0
+  changed_when: chain_result.rc == 0
+
+- name: Cleanup Temp Directory
+  file:
+    path: "{{ temp_ca_dir.path }}"
+    state: absent
+  changed_when: false
 
 - name: Copy Key to Host
   copy:
