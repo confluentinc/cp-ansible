@@ -212,7 +212,7 @@ ssl_enabled: false
 ### Set this variable to customize expiration days for certificate authority. Applies for all components of Confluent Platform.
 certificate_authority_expiration_days: 365
 
-### Deprecated. Use ssl_client_authentication instead. Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka.
+### Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka. Use both ssl_mutual_auth_enabled and ssl_client_authentication together.
 ssl_mutual_auth_enabled: false
 
 ### Kafka broker listeners and ERP server's config to enforce ssl client authentication. Options are none, requested(client may send certs or may not), required(client must send cert to server)
@@ -467,10 +467,10 @@ kafka_controller_port: 9093
 ### Boolean to configure controller with TLS Encryption. Also manages Java Keystore creation
 kafka_controller_ssl_enabled: "{{ssl_enabled}}"
 
-### Deprecated. Use kafka_controller_ssl_client_authentication instead. Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+### Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS. Use both kafka_controller_ssl_mutual_auth_enabled and kafka_controller_ssl_client_authentication together.
 kafka_controller_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
 
-### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Use both kafka_controller_ssl_mutual_auth_enabled and kafka_controller_ssl_client_authentication together.
 kafka_controller_ssl_client_authentication: "{{ssl_client_authentication}}"
 
 ### SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none, scram, scram256 (scram only when providing multiple values with first value being non-scram). You can provide a comma-separated list of at most two mechanisms to configure multiple listeners with different mechanisms. For example, 'plain,scram'. When configuring multiple values, you can provide values only from the following list: kerberos, plain, scram, scram256. First value of the list is used for controller-controller communication.
@@ -784,10 +784,10 @@ schema_registry_default_internal_replication_factor: "{{ 3 if ccloud_kafka_enabl
 ### Boolean to configure schema registry with TLS Encryption. Also manages Java Keystore creation
 schema_registry_ssl_enabled: "{{ssl_enabled}}"
 
-### Deprecated- Boolean to enable mTLS Authentication on Schema Registry
+### Boolean to enable mTLS Authentication on Schema Registry. Use both schema_registry_ssl_mutual_auth_enabled and schema_registry_ssl_client_authentication together.
 schema_registry_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 
-### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Use both schema_registry_ssl_mutual_auth_enabled and schema_registry_ssl_client_authentication together.
 schema_registry_ssl_client_authentication: "{{ssl_client_authentication}}"
 
 ### Property of SR as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
@@ -891,10 +891,10 @@ kafka_rest_port: 8082
 ### Boolean to configure Rest Proxy with TLS Encryption. Also manages Java Keystore creation
 kafka_rest_ssl_enabled: "{{ssl_enabled}}"
 
-### Deprecated- Boolean to enable mTLS Authentication on Rest Proxy
+### Boolean to enable mTLS Authentication on Rest Proxy. Use both kafka_rest_ssl_mutual_auth_enabled and kafka_rest_ssl_client_authentication together.
 kafka_rest_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 
-### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Use both kafka_rest_ssl_mutual_auth_enabled and kafka_rest_ssl_client_authentication together.
 kafka_rest_ssl_client_authentication: "{{ssl_client_authentication}}"
 
 ### Property of Rest Proxy as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
@@ -930,12 +930,13 @@ kafka_rest_export_certs: "{{ True if kafka_rest_authentication_type == 'mtls' el
 kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
 
 ### Name of listener used by Kafka Rest to talk to Kafka
-kafka_rest_kafka_listener_name: >-
-  {%- if rbac_enabled|bool and auth_mode=='mtls' -%}
-    internal_token
-  {%- else -%}
-    internal
-  {%- endif -%}
+kafka_rest_kafka_listener_name: internal
+
+kafka_rest_client_kafka_listener_name: "{{ 'internal_token' if mds_ssl_client_authentication != 'none' else kafka_rest_kafka_listener_name }}"
+
+kafka_rest_license_kafka_listener_name: "{{ kafka_rest_kafka_listener_name }}"
+
+kafka_rest_monitoring_interceptor_kafka_listener_name: "{{ kafka_rest_kafka_listener_name }}"
 
 ### Boolean to enable Jolokia Agent installation and configuration on Rest Proxy
 kafka_rest_jolokia_enabled: "{{jolokia_enabled}}"
@@ -1008,10 +1009,10 @@ kafka_connect_rest_port: 8083
 ### Boolean to configure Connect with TLS Encryption. Also manages Java Keystore creation
 kafka_connect_ssl_enabled: "{{ssl_enabled}}"
 
-### Deprecated- Boolean to enable mTLS Authentication on Connect
+### Boolean to enable mTLS Authentication on Connect. Use both kafka_connect_ssl_mutual_auth_enabled and kafka_connect_ssl_client_authentication together.
 kafka_connect_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
 
-### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Use both kafka_connect_ssl_mutual_auth_enabled and kafka_connect_ssl_client_authentication together.
 kafka_connect_ssl_client_authentication: "{{ssl_client_authentication}}"
 
 ### Property of Connect as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
@@ -1317,12 +1318,11 @@ control_center_export_certs: "{{ssl_mutual_auth_enabled}}"
 control_center_keytab_path: /etc/security/keytabs/control_center.keytab
 
 ### Name of listener used by C3 to talk to Kafka
-control_center_kafka_listener_name: >-
-  {%- if rbac_enabled|bool and auth_mode=='mtls' -%}
-    internal_token
-  {%- else -%}
-    internal
-  {%- endif -%}
+control_center_kafka_listener_name: internal
+
+control_center_streams_kafka_listener_name: "{{ 'internal_token' if mds_ssl_client_authentication != 'none' else control_center_kafka_listener_name }}"
+
+control_center_monitoring_interceptor_kafka_listener_name: "{{ control_center_kafka_listener_name }}"
 
 ### Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 control_center_copy_files: []
@@ -1336,6 +1336,109 @@ control_center_custom_properties: {}
 
 ### Boolean used for disabling of systemd service restarts when rootless install is executed
 control_center_skip_restarts: "{{ skip_restarts }}"
+
+# Control Center Next Gen Variables
+
+### Default Control Center config prefix. Only valid to customize when installation_method: archive
+control_center_next_gen_config_prefix: "{{ config_prefix }}/confluent-control-center"
+
+### Default Control Center's dependency (prometheus & alertmanager) config path
+control_center_next_gen_dependencies_config_path: "/opt/confluent-control-center/dependencies"
+
+### Set this variable to customize the Linux User that the Control Center Service runs with. Default user is cp-control-center.
+control_center_next_gen_user: "{{control_center_default_user}}"
+
+### Set this variable to customize the Linux Group that the Control Center Service user belongs to. Default group is confluent.
+control_center_next_gen_group: "{{control_center_default_group}}"
+
+### Port Control Center Next Gen Exposed over
+control_center_next_gen_port: 9021
+
+### Interface on host for Control Center to listen on
+control_center_next_gen_listener_hostname: "0.0.0.0"
+
+### Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
+control_center_next_gen_ssl_enabled: "{{ssl_enabled}}"
+
+### Property of Control Center as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
+control_center_next_gen_mds_cert_auth_only: false
+
+### Control Center Authentication. Available options: [basic, none].
+control_center_next_gen_authentication_type: none
+
+### Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
+control_center_next_gen_log_dir: "{{control_center_next_gen_default_log_dir}}"
+
+### Set this variable to customize the directory that Control Center writes data files to. Default location is /var/lib/confluent/control-center.
+control_center_next_gen_data_dir: "/var/lib/confluent/control-center"
+
+control_center_next_gen_packages:
+  - confluent-control-center-next-gen
+
+control_center_next_gen_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center_next_gen.truststore.jks{% endif %}"
+control_center_next_gen_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center_next_gen.keystore.jks{% endif %}"
+control_center_next_gen_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+control_center_next_gen_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+control_center_next_gen_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_next_gen_keystore_storepass }}"
+control_center_next_gen_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+control_center_next_gen_cert_path: "{{ ssl_file_dir_final }}/control_center_next_gen.crt"
+control_center_next_gen_key_path: "{{ ssl_file_dir_final }}/control_center_next_gen.key"
+control_center_next_gen_export_certs: "{{ssl_mutual_auth_enabled}}"
+control_center_next_gen_keytab_path: /etc/security/keytabs/control_center_next_gen.keytab
+
+### Name of listener used by C3 Next Gen to talk to Kafka
+control_center_next_gen_kafka_listener_name: internal
+
+control_center_next_gen_streams_kafka_listener_name: "{{ 'internal_token' if mds_ssl_client_authentication != 'none' else control_center_next_gen_kafka_listener_name }}"
+
+control_center_next_gen_monitoring_interceptor_kafka_listener_name: "{{ control_center_next_gen_kafka_listener_name }}"
+
+control_center_next_gen_dependency_prometheus_schema: "{{ 'https' if control_center_next_gen_dependency_prometheus_ssl_enabled|bool else 'http' }}"
+control_center_next_gen_dependency_prometheus_host: "{{ (groups.get('control_center_next_gen') if groups.get('control_center_next_gen') else ['localhost']) | confluent.platform.resolve_hostnames(hostvars) | first }}"
+control_center_next_gen_dependency_prometheus_port: 9090
+control_center_next_gen_dependency_prometheus_url: "{{control_center_next_gen_dependency_prometheus_schema}}://{{control_center_next_gen_dependency_prometheus_host}}:{{control_center_next_gen_dependency_prometheus_port}}"
+control_center_next_gen_dependency_prometheus_ssl_enabled: false
+control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+control_center_next_gen_dependency_prometheus_mtls_enabled: false
+control_center_next_gen_dependency_prometheus_service_name: control-center-next-gen
+control_center_next_gen_dependency_prometheus_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center_next_gen_dependency_prometheus.truststore.jks{% endif %}"
+control_center_next_gen_dependency_prometheus_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center_next_gen_dependency_prometheus.keystore.jks{% endif %}"
+control_center_next_gen_dependency_prometheus_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+control_center_next_gen_dependency_prometheus_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+control_center_next_gen_dependency_prometheus_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_next_gen_keystore_storepass }}"
+control_center_next_gen_dependency_prometheus_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+control_center_next_gen_dependency_prometheus_cert_path: "{{ ssl_file_dir_final }}/control_center_dependency_prometheus.crt"
+control_center_next_gen_dependency_prometheus_key_path: "{{ ssl_file_dir_final }}/control_center_dependency_prometheus.key"
+
+control_center_next_gen_dependency_alertmanager_schema: "{{ 'https' if control_center_next_gen_dependency_alertmanager_ssl_enabled|bool else 'http' }}"
+control_center_next_gen_dependency_alertmanager_host: "{{ (groups.get('control_center_next_gen') if groups.get('control_center_next_gen') else ['localhost']) | confluent.platform.resolve_hostnames(hostvars) | first }}"
+control_center_next_gen_dependency_alertmanager_port: 9093
+control_center_next_gen_dependency_alertmanager_url: "{{control_center_next_gen_dependency_alertmanager_schema}}://{{control_center_next_gen_dependency_alertmanager_host}}:{{control_center_next_gen_dependency_alertmanager_port}}"
+control_center_next_gen_dependency_alertmanager_ssl_enabled: false
+control_center_next_gen_dependency_alertmanager_basic_auth_enabled: false
+control_center_next_gen_dependency_alertmanager_mtls_enabled: false
+control_center_next_gen_dependency_alertmanager_service_name: control-center-next-gen
+control_center_next_gen_dependency_alertmanager_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center_next_gen_dependency_alertmanager.truststore.jks{% endif %}"
+control_center_next_gen_dependency_alertmanager_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/control_center_next_gen_dependency_alertmanager.keystore.jks{% endif %}"
+control_center_next_gen_dependency_alertmanager_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+control_center_next_gen_dependency_alertmanager_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+control_center_next_gen_dependency_alertmanager_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else control_center_next_gen_keystore_storepass }}"
+control_center_next_gen_dependency_alertmanager_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+control_center_next_gen_dependency_alertmanager_cert_path: "{{ ssl_file_dir_final }}/control_center_dependency_alertmanager.crt"
+control_center_next_gen_dependency_alertmanager_key_path: "{{ ssl_file_dir_final }}/control_center_dependency_alertmanager.key"
+
+### Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
+control_center_next_gen_copy_files: []
+
+### Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
+control_center_next_gen_default_internal_replication_factor: "{{ 3 if ccloud_kafka_enabled|bool else
+  [ groups['kafka_broker'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
+
+### Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
+control_center_next_gen_custom_properties: {}
+
+### Boolean used for disabling of systemd service restarts when rootless install is executed
+control_center_next_gen_skip_restarts: "{{ skip_restarts }}"
 
 # Hash merging not working with new approach
 _sasl_scram_users: "{
@@ -1971,11 +2074,23 @@ kafka_controller_telemetry_enabled: "{{telemetry_enabled}}"
 ### Boolean to send cp-ansible Telemetry Metrics from Kafka. Currently only sends cp-ansible version data
 kafka_controller_telemetry_ansible_labels_enabled: "{{kafka_controller_telemetry_enabled}}"
 
+### user used to send telemetry data from Kafka to Control Center Next Gen
+kafka_controller_telemetry_control_center_next_gen_user: "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled|bool %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
+
+### Password for the user used to send telemetry data from Kafka to Control Center Next Gen.
+kafka_controller_telemetry_control_center_next_gen_password: "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled|bool %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
+
 ### Boolean to configure Telemetry on Kafka. Must also set telemetry_api_key and telemetry_api_secret
 kafka_broker_telemetry_enabled: "{{telemetry_enabled}}"
 
 ### Boolean to send cp-ansible Telemetry Metrics from Kafka. Currently only sends cp-ansible version data
 kafka_broker_telemetry_ansible_labels_enabled: "{{kafka_broker_telemetry_enabled}}"
+
+### user used to send telemetry data from Kafka to Control Center Next Gen
+kafka_broker_telemetry_control_center_next_gen_user: "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled|bool %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}{% else %}dummy{% endif %}"
+
+### Password for the user used to send telemetry data from Kafka to Control Center Next Gen
+kafka_broker_telemetry_control_center_next_gen_password: "{% if control_center_next_gen_dependency_prometheus_basic_auth_enabled|bool %}{{control_center_next_gen_dependency_prometheus_basic_users.admin.password}}{% else %}dummy{% endif %}"
 
 ### Boolean to configure Telemetry on Schema Registry. Must also set telemetry_api_key and telemetry_api_secret
 schema_registry_telemetry_enabled: "{{telemetry_enabled}}"
@@ -2154,13 +2269,13 @@ kafka_connect_replicator_jolokia_ssl_enabled: "{{ kafka_connect_replicator_ssl_e
 ### Boolean that determines if a provided keystore and truststore are being used for Kafka Connect Replicator configuration.
 kafka_connect_replicator_ssl_provided_keystore_and_truststore: false
 
-### Deprecated. Use kafka_connect_replicator_ssl_client_authentication instead. Boolean to enable mTLS Authentication on Kafka Connect Replicator.
+### Use kafka_connect_replicator_ssl_client_authentication instead. Boolean to enable mTLS Authentication on Kafka Connect Replicator. Use both kafka_connect_replicator_ssl_mutual_auth_enabled and kafka_connect_replicator_ssl_client_authentication together.
 kafka_connect_replicator_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
 
 ### Property of Replicator as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
 kafka_connect_replicator_mds_cert_auth_only: false
 
-### mTLS server's config to enforce ssl client authentication. Options are none, requested, required
+### mTLS server's config to enforce ssl client authentication. Options are none, requested, required. Boolean to enable mTLS Authentication on Kafka Connect Replicator. Use both kafka_connect_replicator_ssl_mutual_auth_enabled and kafka_connect_replicator_ssl_client_authentication together.
 kafka_connect_replicator_ssl_client_authentication: "{{ssl_client_authentication}}"
 
 ### Boolean to enable TLS on Kafka Connect Replicator

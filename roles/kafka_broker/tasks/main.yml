@@ -168,6 +168,8 @@
     truststore_path: "{{kafka_broker_pkcs12_truststore_path}}"
     bcfks_truststore_path: "{{kafka_broker_bcfks_truststore_path}}"
     create_bouncy_castle_keystore: "{{fips_enabled}}"
+    restart_handler_name: "restart kafka" # adding cert to Truststore requires a restart of the service to get loaded
+    # cant directly call notify handler from include_role task.
   when:
     - oauth_enabled|bool or schema_registry_oauth_enabled|bool or kafka_rest_oauth_enabled|bool or kafka_connect_oauth_enabled|bool or kafka_connect_replicator_oauth_enabled|bool
     - oauth_idp_cert_path != ""
@@ -184,6 +186,8 @@
     truststore_path: "{{kafka_broker_pkcs12_truststore_path}}"
     bcfks_truststore_path: "{{kafka_broker_bcfks_truststore_path}}"
     create_bouncy_castle_keystore: "{{fips_enabled}}"
+    restart_handler_name: "restart kafka" # adding cert to Truststore requires a restart of the service to get loaded
+    # cant directly call notify handler from include_role task.
   when:
     - sso_mode != 'none'
     - sso_idp_cert_path != ""
@@ -428,7 +432,7 @@
 # Only runs with zookeeper
 - name: Create Zookeeper chroot
   shell: >
-    {{ binary_base_path }}/bin/zookeeper-shell {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} \
+    {{ binary_base_path }}/bin/zookeeper-shell {{ hostvars[groups['zookeeper'][0]] | confluent.platform.resolve_hostname }}:{{zookeeper_client_port}} \
       {% if zookeeper_ssl_enabled|bool %}-zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
       create {{zookeeper_chroot}} ""
   register: create_chroot
@@ -445,7 +449,7 @@
   shell: |
     {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
     {{ binary_base_path }}/bin/kafka-configs {% if zookeeper_ssl_enabled|bool %}--zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
-      --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
+      --zookeeper {{ hostvars[groups['zookeeper'][0]] | confluent.platform.resolve_hostname }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
       --add-config 'SCRAM-SHA-512=[password={{ item.value['password'] }}]' \
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram_users_final|dict2items }}"
@@ -460,7 +464,7 @@
   shell: |
     {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
     {{ binary_base_path }}/bin/kafka-configs {% if zookeeper_ssl_enabled|bool %}--zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
-      --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
+      --zookeeper {{ hostvars[groups['zookeeper'][0]] | confluent.platform.resolve_hostname }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
       --add-config 'SCRAM-SHA-256=[password={{ item.value['password'] }}]' \
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram256_users_final|dict2items }}"

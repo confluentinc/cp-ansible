@@ -115,6 +115,7 @@
   when: >
     kafka_rest_ssl_enabled|bool or
     ( kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool and not public_certificates_enabled|bool ) or
+    ( kafka_broker_listeners[kafka_rest_client_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool and not public_certificates_enabled|bool ) or
     ( mds_tls_enabled|bool and not public_certificates_enabled|bool ) or
     ( 'schema_registry' in groups and schema_registry_ssl_enabled|bool )
   tags: ssl
@@ -128,6 +129,8 @@
     kerberos_keytab_path: "{{kafka_rest_kerberos_keytab_path}}"
     kerberos_keytab_destination_path: "{{kafka_rest_keytab_path}}"
     kerberos_handler: "restart kafka-rest"
+  # not adding kafka_rest_client_kafka_listener_name in this when condn as either it is same as kafka_rest_kafka_listener_name or
+  # if different then it is internal_token where sasl protocol is oauth and not kerberos
   when: "'GSSAPI' in (kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)"
 
 - name: Copy Custom Kafka Rest Files
@@ -179,6 +182,7 @@
     truststore_storepass: "{{kafka_rest_truststore_storepass}}"
     truststore_path: "{{kafka_rest_truststore_path}}"
     create_bouncy_castle_keystore: false
+    restart_handler_name: "restart kafka-rest"
   when:
     - oauth_enabled|bool or schema_registry_oauth_enabled|bool or kafka_rest_oauth_enabled|bool or kafka_connect_oauth_enabled|bool or kafka_connect_replicator_oauth_enabled|bool
     - oauth_idp_cert_path != ""
@@ -198,7 +202,7 @@
 - name: Configure RBAC for mTLS User
   include_tasks: rbac.yml
   vars:
-    rest_user: "{{ks_extracted_principal}}"
+    rest_user: "{{ ks_extracted_principal | urlencode }}"
   when:
     - rbac_enabled|bool
     - mds_ssl_client_authentication != 'none'

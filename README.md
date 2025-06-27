@@ -23,12 +23,12 @@ The services that can be installed from this repository are:
 
 ## Requirements
 
-Prerequisites for installing CP can be found at https://docs.confluent.io/ansible/current/ansible-requirements.html#general-requirements.
+Prerequisites for installing CP can be found at [General Requirements](https://docs.confluent.io/ansible/current/ansible-requirements.html#general-requirements).
 
 
 ## Installation
 
-You can install this collection from Ansible Automation Hub and Ansible Galaxy by following https://docs.confluent.io/ansible/current/ansible-download.html.
+You can install this collection from Ansible Automation Hub and Ansible Galaxy by following [Download Ansible Playbooks for Confluent Platform](https://docs.confluent.io/ansible/current/ansible-download.html).
 
 As an alternative to the recommended methods above, you can install the package directly from the source repository.
 
@@ -58,6 +58,7 @@ If you would like to contribute to the CP-Ansible project, please refer to the [
 ## Support
 
 For any support request, please reach out to [Confluent Support Portal](https://support.confluent.io/).
+> **Disclaimer:** This collection contains a dependency on `community.crypto` that is currently not certified. If an issue is encountered that is determined to be caused by this unsupported module, the collection will not be supported under the Redhat support program. A certified and fully supported alternative will be introduced in a future release.
 
 ## Release Notes
 
