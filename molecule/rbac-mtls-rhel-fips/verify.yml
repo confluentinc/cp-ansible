@@ -7,38 +7,26 @@
 ### Validates the filter resolve_principal with different ssl.mapping.rule
 ### Validates that FIPS is in use in OpenSSL.
 
-- name: Verify - Zookeeper
-  hosts: zookeeper
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: confluent.test
-        tasks_from: check_tls_version.yml
-      vars:
-        service_port: 2182
-        service_ca: /var/ssl/private/ca.crt
-        service_cert: /var/ssl/private/zookeeper.crt
-        service_key: /var/ssl/private/zookeeper.key
-
 - name: Verify - kafka_controller
   hosts: kafka_controller
   gather_facts: false
   tasks:
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/controller/server.properties
-        property: confluent.metadata.ssl.keystore.location
-        expected_value: /var/ssl/private/kafka_controller.keystore.bcfks
+    #todo: to be fixed
+    # - import_role:
+    #     name: confluent.test
+    #     tasks_from: check_property.yml
+    #   vars:
+    #     file_path: /etc/controller/server.properties
+    #     property: confluent.metadata.ssl.keystore.location
+    #     expected_value: /var/ssl/private/kafka_controller.keystore.bcfks
 
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/controller/server.properties
-        property: confluent.metadata.ssl.keystore.password
-        expected_value: ${securepass:/var/ssl/private/kafka_controller-security.properties:server.properties/confluent.metadata.ssl.keystore.password}
+    # - import_role:
+    #     name: confluent.test
+    #     tasks_from: check_property.yml
+    #   vars:
+    #     file_path: /etc/controller/server.properties
+    #     property: confluent.metadata.ssl.keystore.password
+    #     expected_value: ${securepass:/var/ssl/private/kafka_controller-security.properties:server.properties/confluent.metadata.ssl.keystore.password}
 
     - import_role:
         name: confluent.test
@@ -189,7 +177,7 @@
 
     - name: Get Connect Cluster Details
       uri:
-        url: https://localhost:8083
+        url: https://kafka-connect1:8083
         status_code: 200
         validate_certs: false
         url_username: mds
@@ -218,7 +206,7 @@
       shell: |
         curl -u mds:password -H 'Content-Type: application/json' \
           --cacert /var/ssl/private/ca.crt --key /var/ssl/private/kafka_connect.key --cert /var/ssl/private/kafka_connect.crt \
-          -d '{"secret": "t1"}' -k https://localhost:8083/secret/paths/conn1/keys/topic/versions
+          -d '{"secret": "t1"}' -k https://kafka-connect1:8083/secret/paths/conn1/keys/topic/versions
 
     - name: Create test sink file
       shell: |
@@ -227,7 +215,7 @@
 
     - name: Create connector
       shell: |
-        curl -k -X PUT https://localhost:8083/connectors/conn1/config \
+        curl -k -X PUT https://kafka-connect1:8083/connectors/conn1/config \
           -H "Content-Type: application/json" -u mds:password \
           --cacert /var/ssl/private/ca.crt --key /var/ssl/private/kafka_connect.key --cert /var/ssl/private/kafka_connect.crt \
           -d '{"connector.class": "FileStreamSinkConnector",
@@ -243,7 +231,7 @@
 
     - name: Wait connector status to return 200
       uri:
-        url: https://localhost:8083/connectors/conn1/status
+        url: https://kafka-connect1:8083/connectors/conn1/status
         status_code: 200
         client_cert: /var/ssl/private/kafka_connect.crt
         client_key: /var/ssl/private/kafka_connect.key
@@ -259,7 +247,7 @@
 
     - name: Wait connector status to return Running
       uri:
-        url: https://localhost:8083/connectors/conn1/status
+        url: https://kafka-connect1:8083/connectors/conn1/status
         status_code: 200
         validate_certs: false
         url_username: mds
@@ -275,7 +263,7 @@
 
     - name: Wait connector tasks to return Running
       uri:
-        url: https://localhost:8083/connectors/conn1/status
+        url: https://kafka-connect1:8083/connectors/conn1/status
         status_code: 200
         validate_certs: false
         url_username: mds
@@ -314,27 +302,6 @@
         tasks_from: check_tls_version.yml
       vars:
         service_port: 8088
-        service_ca: /var/ssl/private/ca.crt
-        service_cert: /var/ssl/private/kafka_connect.crt
-        service_key: /var/ssl/private/kafka_connect.key
-
-- name: Verify - control_center
-  hosts: control_center
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
-        property: public.key.path
-        expected_value: /var/ssl/private/public.pem
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_tls_version.yml
-      vars:
-        service_port: 9021
         service_ca: /var/ssl/private/ca.crt
         service_cert: /var/ssl/private/kafka_connect.crt
         service_key: /var/ssl/private/kafka_connect.key

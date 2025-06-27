@@ -2,21 +2,18 @@
 ### Installation of Confluent Platform on RHEL8.
 ### Custom user set on each component.
 ### Custom log appender path on each component.
-### Zookeeper, Controller and Broker co-located while migration
+### Controller and Broker co-located while migration
 
 driver:
   name: docker
 platforms:
   # Unset env vars resolve to the empty string
-  - name: ${KRAFT_CONTROLLER:-zookeeper}1-kafka-broker1
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+  - name: controller1-kafka-broker1
+    hostname: controller1.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
       - kafka_broker
-      - kafka_broker_migration
-      - kafka_controller_migration
-    image: redhat/ubi8-minimal
+    image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -28,8 +25,7 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-      - schema_registry_migration
-    image: redhat/ubi8-minimal
+    image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -41,8 +37,7 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
-      - kafka_rest_migration
-    image: redhat/ubi8-minimal
+    image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -54,8 +49,7 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
-      - kafka_connect_migration
-    image: redhat/ubi8-minimal
+    image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -67,38 +61,19 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-      - ksql_migration
-    image: redhat/ubi8-minimal
+    image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
-    networks:
-      - name: confluent
-  - name: control-center1
-    hostname: control-center1.confluent
-    groups:
-      - control_center
-      - control_center_migration
-    image: redhat/ubi8-minimal
-    dockerfile: ../Dockerfile-rhel-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    # Commenting below to avoid port collision on jenkins server
-    # Uncomment to view c3 in browser at localhost:9021
-    published_ports:
-      - "9021:9021"
     networks:
       - name: confluent
   - name: control-center-next-gen
     hostname: control-center-next-gen.confluent
     groups:
       - control_center_next_gen
-      - control_center_next_gen_migration
-    image: redhat/ubi8-minimal
+    image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -110,24 +85,23 @@ platforms:
       - name: confluent
 provisioner:
   playbooks:
-    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
+    converge: ../collections_converge.yml
   inventory:
     group_vars:
       all:
         control_center_next_gen_port: 9022
         scenario_name: custom-user-plaintext-rhel
-        ${CONTROLLER_HOSTGROUP:-zookeeper}_log_dir: /kafka/logs/
+        kafka_controller_log_dir: /kafka/logs/
         kafka_broker_log_dir: /kafka/logs/
         schema_registry_log_dir: /kafka/logs/schemaregistry/
         kafka_rest_log_dir: /kafka/logs/kafkarest/
         ksql_log_dir: /kafka/logs/ksql/
         kafka_connect_log_dir: /kafka/logs/kafkaconnect/
-        control_center_log_dir: /kafka/logs/controlcenter/
         control_center_next_gen_log_dir: /kafka/logs/controlcenter/
         kafka_controller_jolokia_port: 7777
-      ${CONTROLLER_HOSTGROUP:-zookeeper}:
-        ${CONTROLLER_HOSTGROUP:-zookeeper}_user: cp-test
-        ${CONTROLLER_HOSTGROUP:-zookeeper}_group: cp-test-group
+      kafka_controller:
+        kafka_controller_user: cp-test
+        kafka_controller_group: cp-test-group
       # kafka_controller:
       #   kafka_controller_user: controller-test
       #   kafka_controller_group: cp-test-group
@@ -146,9 +120,6 @@ provisioner:
       kafka_connect:
         kafka_connect_user: connect-custom
         kafka_connect_group: connect-custom-group
-      control_center:
-        control_center_user: c3-custom
-        control_center_group: c3-custom-group
       control_center_next_gen:
         control_center_next_gen_user: c3-custom
         control_center_next_gen_group: c3-custom-group

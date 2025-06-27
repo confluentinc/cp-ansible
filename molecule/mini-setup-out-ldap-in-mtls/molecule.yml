@@ -20,11 +20,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}1
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+  - name: controller1
+    hostname: controller1.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -33,11 +32,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}2
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
+  - name: controller2
+    hostname: controller2.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -46,11 +44,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}3
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}3.confluent
+  - name: controller3
+    hostname: controller3.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -63,7 +60,6 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -76,7 +72,6 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -89,7 +84,6 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -102,7 +96,6 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-      - schema_registry_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -115,7 +108,6 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
-      - kafka_rest_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -128,7 +120,6 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
-      - kafka_connect_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -141,23 +132,7 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-      - ksql_migration
     image: redhat/ubi9-minimal
-    dockerfile: ../Dockerfile-rhel-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
-  - name: control-center1
-    hostname: control-center1.confluent
-    groups:
-      - control_center
-      - control_center_migration
-    image: redhat/ubi9-minimal
-    published_ports:
-      - "9021:9021"
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -169,7 +144,6 @@ platforms:
     hostname: control-center-next-gen.confluent
     groups:
       - control_center_next_gen
-      - control_center_next_gen_migration
     image: redhat/ubi9-minimal
     published_ports:
       - "9022:9022"
@@ -180,22 +154,9 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  - name: controller1-mig
-    hostname: controller1-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: redhat/ubi9-minimal
-    dockerfile: ../Dockerfile-rhel-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
 provisioner:
   playbooks:
-    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
+    converge: ../collections_converge.yml
   inventory:
     group_vars:
       all:
@@ -221,7 +182,6 @@ provisioner:
         kafka_connect_mds_cert_auth_only: true
         kafka_rest_mds_cert_auth_only: true
         ksql_mds_cert_auth_only: true
-        control_center_mds_cert_auth_only: true
         control_center_next_gen_mds_cert_auth_only: true
 
         kafka_broker_custom_listeners:
@@ -237,7 +197,6 @@ provisioner:
         kafka_connect_kafka_listener_name: puremtls
         kafka_rest_kafka_listener_name: puremtls
         ksql_kafka_listener_name: puremtls
-        control_center_kafka_listener_name: puremtls
         control_center_next_gen_kafka_listener_name: puremtls
 
         impersonation_super_users:
@@ -260,9 +219,6 @@ provisioner:
 
         kafka_rest_ldap_user: kafka-rest1
         kafka_rest_ldap_password: password
-
-        control_center_ldap_user: control-center1
-        control_center_ldap_password: password
 
         control_center_next_gen_ldap_user: control-center1
         control_center_next_gen_ldap_password: password
@@ -317,10 +273,6 @@ provisioner:
             password: "{{ksql_ldap_password}}"
             uid: 9996
             guid: 96
-#          - username: "{{control_center_ldap_user}}"
-#            password: "{{control_center_ldap_password}}"
-#            uid: 9995
-#            guid: 95
           - username: "{{control_center_next_gen_ldap_user}}"
             password: "{{control_center_next_gen_ldap_password}}"
             uid: 9995

@@ -429,6 +429,21 @@
   tags:
     - configuration
 
+- name: Copy client assertion files
+  include_role:
+    name: common
+    tasks_from: copy_client_assertion_files.yml
+  vars:
+    user: "{{kafka_connect_replicator_user}}"
+    group: "{{kafka_connect_replicator_group}}"
+    client_assertion_files:
+      - src: "{{ kafka_connect_replicator_oauth_client_assertion_private_key_file }}"
+        dest: "{{ kafka_connect_replicator_oauth_client_assertion_private_key_file_dest_path }}"
+      - src: "{{ kafka_connect_replicator_oauth_client_assertion_template_file }}"
+        dest: "{{ kafka_connect_replicator_oauth_client_assertion_template_file_dest_path }}"
+  tags:
+    - configuration
+
 - name: Create Logs Directory
   file:
     path: "{{kafka_connect_replicator_log_dir}}"
@@ -439,14 +454,30 @@
   tags:
     - filesystem
 
+- name: Check if Replicator log4j file exists
+  stat:
+    path: "{{ kafka_connect_replicator.log4j_file }}"
+  register: log4j_file_stat
+  tags:
+    - log
+
+- name: Backup Replicator log4j file if it exists
+  copy:
+    src: "{{ kafka_connect_replicator.log4j_file }}"
+    dest: "{{ kafka_connect_replicator.log4j_file }}.bak"
+    remote_src: true
+  when: log4j_file_stat.stat.exists
+  tags:
+    - log
+
 - name: Create Kafka Connect Replicator Log4j Config
   template:
-    src: kafka-connect-replicator-log4j.properties.j2
+    src: kafka-connect-replicator-log4j2.yaml.j2
     dest: "{{kafka_connect_replicator.log4j_file}}"
     mode: '640'
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
-  when: kafka_connect_replicator_custom_log4j|bool
+  when: kafka_connect_replicator_custom_log4j2|bool
   notify: Restart Kafka Connect Replicator
   tags:
     - configuration

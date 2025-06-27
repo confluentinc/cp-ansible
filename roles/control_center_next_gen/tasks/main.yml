@@ -291,10 +291,10 @@
     name: common
     tasks_from: copy_files.yml
   vars:
-    copy_files: "{{control_center_copy_files}}"
+    copy_files: "{{control_center_next_gen_copy_files}}"
     user: "{{control_center_next_gen_user}}"
     group: "{{control_center_next_gen_group}}"
-  when: control_center_copy_files | length > 0
+  when: control_center_next_gen_copy_files | length > 0
   tags:
     - configuration
 
@@ -313,7 +313,7 @@
 - name: Configure RBAC for OAuth User
   include_tasks: rbac.yml
   vars:
-    c3_user: "{{control_center_oauth_principal}}"
+    c3_user: "{{control_center_next_gen_oauth_principal}}"
   when: rbac_enabled|bool and oauth_enabled|bool
 
 - name: Configure RBAC for LDAP User
@@ -362,7 +362,7 @@
 
 - name: Create Control Center Next Gen Config directory
   file:
-    path: "{{ control_center.config_file | dirname }}"
+    path: "{{ control_center_next_gen.config_file | dirname }}"
     state: directory
     mode: '750'
     owner: "{{control_center_next_gen_user}}"
@@ -370,6 +370,21 @@
   tags:
     - configuration
     - filesystem
+
+- name: Copy client assertion files
+  include_role:
+    name: common
+    tasks_from: copy_client_assertion_files.yml
+  vars:
+    user: "{{control_center_next_gen_user}}"
+    group: "{{control_center_next_gen_group}}"
+    client_assertion_files:
+      - src: "{{ control_center_next_gen_oauth_client_assertion_private_key_file }}"
+        dest: "{{ control_center_next_gen_oauth_client_assertion_private_key_file_dest_path }}"
+      - src: "{{ control_center_next_gen_oauth_client_assertion_template_file }}"
+        dest: "{{ control_center_next_gen_oauth_client_assertion_template_file_dest_path }}"
+  tags:
+    - configuration
 
 - name: Create Control Center Next Gen Config
   template:
@@ -389,9 +404,9 @@
     tasks_from: secrets_protection.yml
   vars:
     final_properties: "{{ control_center_next_gen_final_properties }}"
-    encrypt_passwords: "{{ control_center_secrets_protection_encrypt_passwords }}"
-    encrypt_properties: "{{ control_center_secrets_protection_encrypt_properties }}"
-    config_path: "{{ control_center.config_file }}"
+    encrypt_passwords: "{{ control_center_next_gen_secrets_protection_encrypt_passwords }}"
+    encrypt_properties: "{{ control_center_next_gen_secrets_protection_encrypt_properties }}"
+    config_path: "{{ control_center_next_gen.config_file }}"
     secrets_file: "{{ control_center_next_gen_secrets_protection_file }}"
     secrets_file_owner: "{{ control_center_next_gen_user }}"
     secrets_file_group: "{{ control_center_next_gen_group }}"
@@ -400,7 +415,7 @@
   tags:
     - configuration
   when:
-    - control_center_secrets_protection_enabled|bool
+    - control_center_next_gen_secrets_protection_enabled|bool
     - rbac_enabled|bool or confluent_cli_version is version('3.0.0', '>=')
 
 - name: Create Control Center Next Gen Logs Directory
@@ -414,18 +429,56 @@
     - filesystem
     - log
 
-- name: Update Control Center Next Gen log4j Config for Log Cleanup
-  include_role:
-    name: common
-    tasks_from: update_log4j.yml
-  vars:
-    log4j_file: "{{control_center_next_gen.log4j_file}}"
-    log4j_max_backup_index: "{{control_center_next_gen_max_log_files}}"
-    log4j_max_file_size: "{{control_center_next_gen_log_file_size}}"
-    log4j_root_logger: "{{control_center_next_gen_log4j_root_logger}}"
-    handler: "restart control center next gen"
-  when: control_center_next_gen_custom_log4j|bool
+- name: Create logredactor rule file directory
+  file:
+    path: "{{ logredactor_rule_path | dirname }}"
+    state: directory
+    mode: '755'
+  when: (control_center_next_gen_custom_log4j2|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
+    - log
+
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ logredactor_rule_path_local }}"
+    dest: "{{ logredactor_rule_path }}"
+    mode: '644'
+  when: (control_center_next_gen_custom_log4j2|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Check if Control Center Next Gen log4j file exists
+  stat:
+    path: "{{ control_center_next_gen.log4j_file }}"
+  register: log4j_file_stat
+  tags:
+    - log
+
+- name: Backup Control Center Next Gen log4j file if it exists
+  copy:
+    src: "{{ control_center_next_gen.log4j_file }}"
+    dest: "{{ control_center_next_gen.log4j_file }}.bak"
+    remote_src: true
+  when: log4j_file_stat.stat.exists
+  tags:
+    - log
+
+- name: Update log4j Config for Log Cleanup
+  confluent.platform.update_log4j2:
+    path: "{{control_center_next_gen.log4j_file}}"
+    max: "{{control_center_next_gen_max_log_files}}"
+    size: "{{control_center_next_gen_log_file_size}}"
+    root_level: "{{control_center_next_gen_log4j2_root_logger_level}}"
+    root_appenders: "{{ control_center_next_gen_log4j2_root_appenders }}"
+    add_redactor: "{{ logredactor_enabled|bool }}"
+    redactor_refs: "{{ control_center_next_gen_logredactor_logger_specs_list | map(attribute='appenderRefs') | list }}"
+    redactor_rules: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
+    redactor_policy_refresh_interval: "{{ logredactor_policy_refresh_interval }}"
+    redactor_logger_names: "{{ control_center_next_gen_logredactor_logger_specs_list | map(attribute='logger_name') | list }}"
+  notify: restart control center next gen
+  when: control_center_next_gen_custom_log4j2|bool
+  tags:
+    - configuration
     - log
 
 - name: Set Permissions on Log4j Conf
@@ -438,42 +491,11 @@
     - filesystem
     - log
 
-- name: Create logredactor rule file directory
-  file:
-    path: "{{ logredactor_rule_path | dirname }}"
-    state: directory
-    mode: '755'
-  when: (control_center_next_gen_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
-  tags:
-    - log
-
-- name: Copy logredactor rule file from control node to component node
-  copy:
-    src: "{{ logredactor_rule_path_local }}"
-    dest: "{{ logredactor_rule_path }}"
-    mode: '640'
-  when: (control_center_next_gen_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
-  tags:
-    - log
-
-- name: Configure logredactor
-  include_role:
-    name: common
-    tasks_from: configure_logredactor.yml
-  vars:
-    log4j_file: "{{control_center_next_gen.log4j_file}}"
-    logredactor_rule_var: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
-    logredactor_policy_refresh_interval_var: "{{logredactor_policy_refresh_interval}}"
-  with_items: "{{ control_center_next_gen_logredactor_logger_specs_list }}"
-  when: (control_center_next_gen_custom_log4j|bool) and (logredactor_enabled|bool)
-  tags:
-    - log
-
 - name: Restart Control Center Next Gen
   ansible.builtin.debug:
     msg: "restarting control center"
   notify: restart control center next gen
-  when: (control_center_next_gen_custom_log4j|bool) and (logredactor_enabled|bool) and (not control_center_next_gen_skip_restarts|bool)
+  when: (control_center_next_gen_custom_log4j2|bool) and (logredactor_enabled|bool) and (not control_center_next_gen_skip_restarts|bool)
   tags:
     - log
 

@@ -6,7 +6,7 @@
 ### Validates LDAP authentication
 
 - name: Verify Java
-  hosts: all,!ldap_server,!kafka_controller_migration,!oauth_server  #Workaround to skip the task in migration test, need to remove in CP 8.0
+  hosts: all,!ldap_server,!oauth_server
   gather_facts: false
   tasks:
     - name: Get Java Version
@@ -42,7 +42,7 @@
       vars:
         file_path: /etc/kafka/server.properties
         property: metric.reporters
-        expected_value: io.confluent.metrics.reporter.ConfluentMetricsReporter
+        expected_value: io.confluent.telemetry.reporter.TelemetryReporter, io.confluent.metrics.reporter.ConfluentMetricsReporter
 
     - import_role:
         name: confluent.test
@@ -89,14 +89,6 @@
         tasks_from: check_property.yml
       vars:
         file_path: /etc/kafka-rest/kafka-rest.properties
-        property: producer.interceptor.classes
-        expected_value: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/kafka-rest/kafka-rest.properties
         property: confluent.metadata.basic.auth.user.info
         expected_value: ${securepass:/var/ssl/private/kafka-rest-security.properties:kafka-rest.properties/confluent.metadata.basic.auth.user.info}
 
@@ -111,14 +103,6 @@
         file_path: /etc/kafka/connect-distributed.properties
         property: ssl.truststore.location
         expected_value: /var/ssl/private/kafka_connect.truststore.jks
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/kafka/connect-distributed.properties
-        property: producer.interceptor.classes
-        expected_value: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
 
     - import_role:
         name: confluent.test
@@ -150,6 +134,14 @@
         ldap_user: "{{ kafka_connect_ldap_user }}"
         ldap_password: "{{ kafka_connect_ldap_password }}"
         cert_auth_only_enabled: false
+        oauth_client_assertion_enabled: "{{ kafka_connect_oauth_client_assertion_enabled }}"
+        oauth_client_assertion_issuer: "{{ kafka_connect_oauth_client_assertion_issuer }}"
+        oauth_client_assertion_sub: "{{ kafka_connect_oauth_client_assertion_sub }}"
+        oauth_client_assertion_audience: "{{ kafka_connect_oauth_client_assertion_audience }}"
+        oauth_client_assertion_private_key_file: "{{ kafka_connect_oauth_client_assertion_private_key_file_dest_path }}"
+        oauth_client_assertion_private_key_passphrase: "{{ kafka_connect_oauth_client_assertion_private_key_passphrase }}"
+        oauth_client_assertion_file: "{{ kafka_connect_oauth_client_assertion_file_dest_path }}"
+        oauth_client_assertion_template_file: "{{ kafka_connect_oauth_client_assertion_template_file_dest_path }}"
 
     - name: Get Connectors on connect cluster1
       uri:
@@ -219,14 +211,6 @@
         file_path: /etc/ksqldb/ksql-server.properties
         property: ssl.truststore.location
         expected_value: /var/ssl/private/ksql.truststore.jks
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/ksqldb/ksql-server.properties
-        property: producer.interceptor.classes
-        expected_value: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
 
     - import_role:
         name: confluent.test

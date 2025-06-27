@@ -1,4 +1,20 @@
 ---
+- name: Validate Zookeeper absence presence in Inventory
+  assert:
+    that:
+      - ('zookeeper' not in groups.keys() or groups['zookeeper'] | length == 0) | bool
+    fail_msg: >-
+      Zookeeper is not supported 8.0.0 onwards. Please ensure Zookeeper is not included in the inventory or configuration.
+  tags: validate
+
+- name: Validate ControlCenter (legacy) absence presence in Inventory
+  assert:
+    that:
+      - ('control_center' not in groups.keys() or groups['control_center'] | length == 0) | bool
+    fail_msg: >-
+      control_center (legacy) is not supported 8.0.0 onwards, please use control_center_next_gen going forward. Please ensure control_center is not included in the inventory or configuration.
+  tags: validate
+
 - name: Retrieve SSL public key hash from private key on Local Host
   shell:
     cmd: openssl pkey -pubout | openssl sha256
@@ -299,6 +315,20 @@
     - sasl_protocol is defined and (sasl_protocol | confluent.platform.split_to_list)[0] in ['scram', 'scram256']
   tags: validate
 
+- name: Fail if custom_log4j is defined for Log4j1
+  fail:
+    msg: "custom_log4j is defined in the inventory! Log4j1 is not supported in CP-Ansible 8.x versions. Please remove this variable from your inventory file."
+  when: custom_log4j is defined
+  tags: validate
+
+- name: Fail if <group>_log4j_root_logger is defined for any group
+  assert:
+    that:
+      - (item + '_log4j_root_logger') not in vars
+    fail_msg: "{{ item }}_log4j_root_logger is defined! Log4j1 is not supported in CP-Ansible 8.x versions. Please remove this variable from your inventory file."
+  loop: "{{ group_names }}"
+  tags: validate
+
 - name: Assert mTLS is enabled only if SSL is enabled for Prometheus
   assert:
     that:
@@ -333,4 +363,46 @@
     that:
       - not (control_center_next_gen_dependency_alertmanager_ssl_enabled | bool and control_center_next_gen_dependency_alertmanager_mtls_enabled | bool and control_center_next_gen_dependency_alertmanager_basic_auth_enabled | bool)
     fail_msg: "Alertmanager SSL, mTLS, and Basic Auth cannot all be enabled simultaneously."
+  tags: validate
+
+- name: Validate Control Center Next Gen host resolves to a single entry
+  vars:
+    c3_host_count: "{{ (groups.get('control_center_next_gen') if groups.get('control_center_next_gen') else ['localhost']) | length }}"
+  assert:
+    that:
+      - c3_host_count | int == 1
+    fail_msg: >-
+      Please ensure your 'control_center_next_gen' group or default resolves to a single host.
+    success_msg: "The list of resolved Control Center Next Gen hosts correctly contains a single entry."
+  when:
+    - "'control_center_next_gen' in groups"
+    - "groups['control_center_next_gen'] | length > 0"
+  tags:
+    - validate
+
+- name: Validate OAuth Client Assertion Required Fields
+  assert:
+    that:
+      - item.value.enabled | bool == false or (
+          (item.value.client_assertion_file != 'none') or
+          (item.value.client_assertion_issuer != 'none' and
+           item.value.client_assertion_sub != 'none' and
+           item.value.client_assertion_audience != 'none' and
+           item.value.client_assertion_private_key_file != 'none')
+        )
+    fail_msg: "When {{ item.key }} client assertion enabled is true, either provide client_assertion_file OR provide all of: issuer, sub, audience, and private key file"
+  loop: "{{ oauth_client_assertion_configs | dict2items }}"
+  vars:
+    oauth_client_assertion_configs:
+      ksql: "{{ ksql_oauth_client_assertion_config }}"
+      kafka_rest: "{{ kafka_rest_oauth_client_assertion_config }}"
+      kafka_connect: "{{ kafka_connect_oauth_client_assertion_config }}"
+      schema_registry: "{{ schema_registry_oauth_client_assertion_config }}"
+      kafka_controller: "{{ kafka_controller_oauth_client_assertion_config }}"
+      kafka_broker: "{{ kafka_broker_oauth_client_assertion_config }}"
+      kafka_connect_replicator: "{{ kafka_connect_replicator_oauth_client_assertion_config }}"
+      kafka_connect_replicator_producer: "{{ kafka_connect_replicator_producer_oauth_client_assertion_config }}"
+      kafka_connect_replicator_consumer: "{{ kafka_connect_replicator_consumer_oauth_client_assertion_config }}"
+      kafka_connect_replicator_monitoring_interceptor: "{{ kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_config }}"
+      control_center_next_gen: "{{ control_center_next_gen_oauth_client_assertion_config }}"
   tags: validate

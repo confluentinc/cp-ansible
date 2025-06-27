@@ -133,18 +133,6 @@
       changed_when: false
       failed_when: linecheck.rc != 0
 
-- name: Verify - control_center
-  hosts: control_center
-  gather_facts: false
-  tasks:
-    - name: Check mds is http
-      shell: |
-        grep -Fq "confluent.metadata.bootstrap.server.urls=http://kafka-broker" /etc/confluent-control-center/control-center-production.properties
-      register: linecheck
-      check_mode: false
-      changed_when: false
-      failed_when: linecheck.rc != 0
-
 - name: Verify - control_center_next_gen
   hosts: control_center_next_gen
   gather_facts: false
@@ -156,3 +144,31 @@
       check_mode: false
       changed_when: false
       failed_when: linecheck.rc != 0
+
+- name: Verify logredactor
+  hosts: kafka_connect:kafka_controller:kafka_broker:schema_registry:ksql:kafka_rest:control_center_next_gen
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Create a mapping of component and log file
+      set_fact:
+        component_log_file_mapping:
+          kafka-connect: "{{kafka_connect_log_dir}}/connect.log"
+          controller: "{{kafka_controller_log_dir}}/server.log"
+          kafka-broker: "{{kafka_broker_log_dir}}/server.log"
+          schema-registry: "{{schema_registry_log_dir}}/schema-registry.log"
+          ksql: "{{ksql_log_dir}}/ksql.log"
+          kafka-rest: "{{kafka_rest_log_dir}}/kafka-rest.log"
+          control-center-next-gen: "{{control_center_next_gen_log_dir}}/control-center.log"
+
+    - name: Parse out the component name
+      set_fact:
+        component: "{% if inventory_hostname == 'control-center-next-gen' %}{{inventory_hostname}}{% else %}{{inventory_hostname[:-1]}}{% endif %}"
+
+    - name: Confirm presence of redacted word in log file
+      shell: |
+        grep -m 1 "<he-who-must-not-be-named>" {{component_log_file_mapping[component]}}
+      register: output
+      failed_when: (output.rc == 1) or (output.rc == 2)
