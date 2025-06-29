@@ -41,22 +41,48 @@
       -extensions v3_req
   no_log: "{{mask_secrets|bool}}"
 
-- name: Slurp Signed Cert
-  slurp:
-    src: "{{ cert_path }}"
-  register: slurped_signed_cert
+- name: Split CA Cert Bundle into Individual Certificates
+  shell: |
+    awk 'BEGIN {n=0} /BEGIN CERTIFICATE/{n++} {print > "{{ temp_dir.path }}/ca." n ".pem"}' {{ ca_cert_path }}
+  changed_when: false
 
-- name: Verify Cert Chain
-  community.crypto.certificate_complete_chain:
-    input_chain: "{{ slurped_signed_cert['content'] | b64decode }}"
-    root_certificates:
-      - "{{ ca_cert_path }}"
-  register: self_signed_cert_chain
+- name: Split Signed Cert Bundle - Extract Last Certificate
+  shell: |
+    awk '
+      /BEGIN CERTIFICATE/,/END CERTIFICATE/ {
+        cert = cert $0 "\n"
+      }
+      /END CERTIFICATE/ {
+        last_cert = cert
+        cert = ""
+      }
+      END {
+        print last_cert
+      }' {{ cert_path }} > "{{ temp_dir.path }}/signed.last.pem"
+  changed_when: false
 
-- name: Write Cert Chain
-  copy:
-    content: "{{ ''.join(self_signed_cert_chain.complete_chain) }}"
-    dest: "{{ ssl_file_dir_final }}/{{ service_name }}.chain"
+- name: Verify and Build Certificate Chain
+  shell: |
+    for ca_file in {{ temp_dir.path }}/ca.*.pem; do
+      # Verify using the last certificate from the chain
+      if openssl verify -CAfile "$ca_file" "{{ temp_dir.path }}/signed.last.pem"; then
+        # If verification succeeds, create the chain using original cert/chain
+        cat {{ cert_path }} "$ca_file" > "{{ ssl_file_dir_final }}/{{ service_name }}.chain"
+        echo "Chain completed with: $ca_file"
+        exit 0
+      fi
+    done
+    echo "No valid CA found to complete the chain" >&2
+    exit 1
+  register: chain_result
+  failed_when: chain_result.rc != 0
+  changed_when: chain_result.rc == 0
+
+- name: Cleanup Temp Directory
+  file:
+    path: "{{ temp_dir.path }}"
+    state: absent
+  changed_when: false
 
 - name: Create Keystore and Truststore from Certs
   include_tasks: create_keystores_from_certs.yml
