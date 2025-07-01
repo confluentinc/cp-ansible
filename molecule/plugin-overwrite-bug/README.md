@@ -58,13 +58,6 @@ To validate the test is working correctly:
 - `verify.yml`: Verification tasks
 - `test-jars/ibm-mq-connector.jar`: Test JAR file (placeholder)
 
-## Integration
-
-This test case can be integrated into:
-- **CI/CD pipelines** (GitHub Actions, Jenkins, GitLab CI)
-- **Local development** testing
-- **Regression testing** to prevent the bug from reoccurring
-
 ## Troubleshooting
 
 ### Common Issues
