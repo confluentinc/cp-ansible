@@ -4,6 +4,9 @@ set -ex
 
 cd $PATH_TO_CPA
 
+# prepend the desired default python version to .python-version file
+{ echo "$PYTHON_VERSION"; cat .python-version 2>/dev/null || true; } > .python-version.tmp && mv .python-version.tmp .python-version
+
 pip install wheel
 pip install pylint
 pip install "ansible==$ANSIBLE_VERSION"
