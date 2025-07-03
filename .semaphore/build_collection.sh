@@ -4,9 +4,6 @@ set -ex
 
 cd $PATH_TO_CPA
 
-pyenv install 3.8 # installing 3.8 as it doesnt come preinstalled in semaphore node
-pyenv local $PYTHON_VERSION 3.9 3.8 3.10 3.11 3.12 # This creates .python-version file which lists all these versions.
-# 1st version in list will be 3.9 and also become the default version of python
 pip install wheel
 pip install pylint
 pip install "ansible==$ANSIBLE_VERSION"
