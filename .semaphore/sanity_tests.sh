@@ -42,9 +42,9 @@ fi
 
 sudo apt install -y shellcheck
 
-pyenv install 3.8
-pyenv local $PYTHON_VERSION 3.9 3.8 3.9 3.10 3.11 3.12 3.13 # This creates .python-version file which lists all these versions.
-# 1st version in list will be the one coming from $PYTHON_VERSION and also become the default version of python
+# prepend the desired default python version to .python-version file
+{ echo "$PYTHON_VERSION"; cat .python-version 2>/dev/null || true; } > .python-version.tmp && mv .python-version.tmp .python-version
+
 pip install wheel
 pip install pylint
 pip install "ansible==$ANSIBLE_VERSION"
