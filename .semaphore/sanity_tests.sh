@@ -58,9 +58,21 @@ ansible --version
 export PYTHON_INTERPRETER=$(which python)
 echo $PYTHON_INTERPRETER
 
-# Test1
+# # Test1
 export GALAXY_IMPORTER_CONFIG="$PATH_TO_CPA/galaxy-importer/galaxy-importer.cfg"
 python -m galaxy_importer.main $ARTEFACT
 
-# Test2
+# # Test2
 ansible-test sanity
+
+# Test3 - Custom set_fact Secret Leak Check
+echo "Running custom set_fact secret leak sanity check..."
+python3 $PATH_TO_CPA/.semaphore/setfact_secret_check.py
+
+echo "set_fact secret leak sanity check completed."
+
+# Test4 - Custom URI Authorization Check
+echo "Running custom URI authorization sanity check..."
+python3 $PATH_TO_CPA/.semaphore/uri_auth_check.py
+
+echo "URI authorization secret leak sanity check completed."
