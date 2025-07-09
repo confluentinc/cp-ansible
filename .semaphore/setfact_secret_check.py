@@ -31,8 +31,8 @@ def get_base_branch_from_galaxy():
         raise
 
 
-def get_changed_files_and_lines():
-    """Get files changed in the current PR and their changed line ranges."""
+def get_changed_files_and_content():
+    """Get files changed in the current PR and their actual changed content."""
     try:
         # Get the base branch from galaxy.yml or environment
         base_branch = os.environ.get('BASE_BRANCH') or get_base_branch_from_galaxy()
@@ -51,7 +51,6 @@ def get_changed_files_and_lines():
 
         if fetch_result.returncode != 0:
             print(f"Warning: Could not fetch branches: {fetch_result.stderr}")
-            # Try basic fetch
             subprocess.run(
                 ['git', 'fetch', 'origin'],
                 capture_output=True, text=True, cwd=collection_root, check=False
@@ -65,7 +64,6 @@ def get_changed_files_and_lines():
 
         if branch_check.returncode != 0:
             print(f"Base branch origin/{base_branch} not found, trying alternatives...")
-            # Try common base branches
             for alt_branch in ['main', 'master', 'develop']:
                 alt_check = subprocess.run(
                     ['git', 'rev-parse', f'origin/{alt_branch}'],
@@ -79,217 +77,110 @@ def get_changed_files_and_lines():
                 print("No valid base branch found, using HEAD~1 as fallback")
                 base_branch = None
 
-        # Get changed files with proper base branch comparison
+        # Get the diff content directly
         if base_branch:
-            # Try different diff strategies
             git_commands = [
-                ['git', 'diff', '--name-only', f'origin/{base_branch}...HEAD'],
-                ['git', 'diff', '--name-only', f'origin/{base_branch}', 'HEAD'],
-                ['git', 'diff', '--name-only', f'origin/{base_branch}..HEAD']
+                ['git', 'diff', f'origin/{base_branch}...HEAD'],
+                ['git', 'diff', f'origin/{base_branch}', 'HEAD'],
+                ['git', 'diff', f'origin/{base_branch}..HEAD']
             ]
         else:
-            # Fallback to recent commits
             git_commands = [
-                ['git', 'diff', '--name-only', 'HEAD~1...HEAD'],
-                ['git', 'diff', '--name-only', 'HEAD~5...HEAD']
+                ['git', 'diff', 'HEAD~1...HEAD'],
+                ['git', 'diff', 'HEAD~5...HEAD']
             ]
 
-        result = None
+        diff_content = None
         for cmd in git_commands:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, cwd=collection_root, check=False
             )
             if result.returncode == 0:
-                print(f"Successfully got changed files using: {' '.join(cmd)}")
+                print(f"Successfully got diff using: {' '.join(cmd)}")
+                diff_content = result.stdout
                 break
             else:
                 print(f"Failed command: {' '.join(cmd)}")
-                if result.stderr:
-                    print(f"Error: {result.stderr.strip()}")
 
-        if not result or result.returncode != 0:
-            print("Error: Could not determine changed files")
+        if not diff_content:
+            print("Error: Could not get diff content")
             return {}
 
-        changed_files = result.stdout.strip().split('\n')
-        changed_files = [f.strip() for f in changed_files if f.strip() and f.strip().endswith(('.yml', '.yaml'))]
-
-        if not changed_files:
-            print("No YAML files found in diff - this may be expected if no YAML files were changed")
-            return {}
-
-        print(f"Found {len(changed_files)} changed YAML files to check")
-
-        file_changes = {}
-        for file_path in changed_files:
-            full_path = os.path.join(collection_root, file_path) if not os.path.isabs(file_path) else file_path
-            if os.path.exists(full_path):
-                # Get line-level diff if we have a proper base branch
-                if base_branch:
-                    diff_result = subprocess.run(
-                        ['git', 'diff', '-U0', f'origin/{base_branch}...HEAD', file_path],
-                        capture_output=True, text=True, cwd=collection_root, check=False
-                    )
-                    if diff_result.returncode == 0:
-                        changed_lines = parse_diff_lines(diff_result.stdout)
-                        file_changes[full_path] = changed_lines
-                    else:
-                        file_changes[full_path] = set()
-                else:
-                    file_changes[full_path] = set()
-
-        return file_changes
+        return parse_diff_for_setfact(diff_content)
 
     except Exception as e:
         print(f"Error: Could not get git diff: {e}")
         return {}
 
 
-def parse_diff_lines(diff_output):
-    """Parse git diff output to extract changed line numbers."""
-    changed_lines = set()
-
-    for line in diff_output.split('\n'):
-        if line.startswith('@@'):
-            # Parse hunk header: @@ -old_start,old_count +new_start,new_count @@
+def parse_diff_for_setfact(diff_content):
+    """Parse git diff output to find set_fact usage in changed lines."""
+    issues = []
+    current_file = None
+    line_number = 0
+    
+    for line in diff_content.split('\n'):
+        # Track which file we're looking at
+        if line.startswith('diff --git'):
+            # Extract filename from "diff --git a/path/file.yml b/path/file.yml"
+            parts = line.split()
+            if len(parts) >= 4:
+                current_file = parts[3][2:]  # Remove "b/" prefix
+        
+        elif line.startswith('@@'):
+            # Parse hunk header to get line number: @@ -old_start,old_count +new_start,new_count @@
             match = re.search(r'@@\s*-\d+(?:,\d+)?\s*\+(\d+)(?:,(\d+))?\s*@@', line)
             if match:
-                start = int(match.group(1))
-                count = int(match.group(2)) if match.group(2) else 1
-                changed_lines.update(range(start, start + count))
-
-    return changed_lines
-
-
-def check_file_for_setfact_issues(file_path, changed_lines=None):
-    """Check a single YAML file for set_fact tasks that might leak secrets."""
-    issues = []
-
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-
-        # Parse YAML content
-        try:
-            parsed_content = yaml.safe_load(content)
-        except yaml.YAMLError as e:
-            return issues
-
-        if not parsed_content:
-            return issues
-
-        # Handle both single task and list of tasks
-        tasks = parsed_content if isinstance(parsed_content, list) else [parsed_content]
-
-        print(f"Debug: Found {len(tasks)} tasks in file")
-        print(f"Debug: Changed lines: {changed_lines}")
-
-        for i, task in enumerate(tasks):
-            if not isinstance(task, dict):
-                continue
-
-            # Check if this is a set_fact task
-            if is_setfact_task(task):
-                task_name = task.get('name', f'Task {i + 1}')
-                # Get line number from original content
-                line_number = get_task_line_number(content, task_name, i)
-
-                print(f"Debug: Found set_fact task '{task_name}' at line {line_number}")
-
-                # For set_fact tasks, report ALL instances in changed files
-                # Don't filter by line numbers since we want to review all set_fact usage
-                issues.append({
-                    'file': file_path,
-                    'task': task_name,
-                    'line': line_number,
-                    'has_no_log': has_no_log_protection(task),
-                    'message': 'set_fact task found - please verify no sensitive data is exposed and consider adding no_log if needed'
-                })
-
-    except Exception as e:
-        print(f"Warning: Could not parse {file_path}: {e}")
+                line_number = int(match.group(1)) - 1  # -1 because we'll increment before checking
+        
+        elif line.startswith('+') and not line.startswith('+++'):
+            # This is an added line
+            line_number += 1
+            line_content = line[1:]  # Remove the '+' prefix
+            
+            # Check if this line contains set_fact
+            if current_file and current_file.endswith(('.yml', '.yaml')):
+                if 'set_fact:' in line_content or 'ansible.builtin.set_fact:' in line_content:
+                    issues.append({
+                        'file': current_file,
+                        'line': line_number,
+                        'content': line_content.strip(),
+                        'message': 'set_fact task found in changed lines - please verify no sensitive data is exposed'
+                    })
+        
+        elif not line.startswith('-'):
+            # Context line or other line that affects line numbering
+            if line_number > 0:  # Only increment if we're tracking line numbers
+                line_number += 1
 
     return issues
-
-
-def is_setfact_task(task):
-    """Check if task is a set_fact task."""
-    return 'set_fact' in task or 'ansible.builtin.set_fact' in task
-
-
-def get_task_line_number(content, task_name, task_index):
-    """Get approximate line number for a task."""
-    lines = content.split('\n')
-    for i, line in enumerate(lines):
-        if task_name and task_name in line and 'name:' in line:
-            return i + 1
-    return task_index + 1
-
-
-def has_no_log_protection(task):
-    """Check if task has no_log protection."""
-    no_log = task.get('no_log', False)
-
-    # Check for the recommended pattern
-    if isinstance(no_log, str) and 'mask_secrets' in no_log:
-        return True
-
-    # Check for simple boolean true
-    if no_log is True:
-        return True
-
-    return False
 
 
 def main():
     """Main function to run the set_fact sanity check."""
     collection_root = os.environ.get('PATH_TO_CPA', os.getcwd())
 
-    # Get changed files and lines from git diff
-    changed_files = get_changed_files_and_lines()
+    # Get changed content from git diff
+    issues = get_changed_files_and_content()
 
-    if not changed_files:
-        print("No YAML files changed in this PR or could not determine changes.")
+    if not issues:
+        print("No set_fact tasks found in changed lines.")
         return 0
 
-    print(f"Debug: Files being checked:")
-    for file_path in changed_files.keys():
-        rel_path = os.path.relpath(file_path, collection_root)
-        print(f"  - {rel_path}")
+    print(f"Found {len(issues)} set_fact tasks in changed lines:")
+    print("=" * 60)
+    
+    for issue in issues:
+        print(f"File: {issue['file']}")
+        print(f"Line: ~{issue['line']}")
+        print(f"Content: {issue['content']}")
+        print(f"Issue: {issue['message']}")
+        print("-" * 60)
 
-    all_issues = []
-
-    for file_path, changed_lines in changed_files.items():
-        if os.path.exists(file_path):
-            print(f"Debug: Checking file {os.path.relpath(file_path, collection_root)}")
-            issues = check_file_for_setfact_issues(file_path, changed_lines)
-            if issues:
-                print(f"Debug: Found {len(issues)} set_fact tasks in this file")
-            else:
-                print(f"Debug: No set_fact tasks found in this file")
-            all_issues.extend(issues)
-
-    # Report results
-    if all_issues:
-        print("⚠️  set_fact Usage Warnings (Changed Files Only):")
-        print("=" * 60)
-        for issue in all_issues:
-            rel_path = os.path.relpath(issue['file'], collection_root)
-            print(f"File: {rel_path}")
-            print(f"Task: {issue['task']}")
-            print(f"Line: ~{issue['line']}")
-            print(f"Issue: {issue['message']}")
-            print(f"No Log Protection: {'✅ Yes' if issue['has_no_log'] else '❌ No'}")
-            print("-" * 60)
-
-        print(f"\nTotal set_fact tasks found in changed files: {len(all_issues)}")
-        print("⚠️  IMPORTANT: Please manually verify these set_fact tasks do not leak sensitive information!")
-        print("   Consider adding 'no_log: true' if they handle secrets.")
-        print("   These are warnings and will not fail the build.")
-        return 0  # Don't fail the build, just warn
-    else:
-        print("✅ No set_fact tasks found in changed files!")
-        return 0
+    print("⚠️  IMPORTANT: Please manually verify these set_fact tasks do not leak sensitive information!")
+    print("   Consider adding 'no_log: true' if they handle secrets.")
+    print("   These are warnings and will not fail the build.")
+    return 0  # Don't fail the build, just warn
 
 
 if __name__ == '__main__':
