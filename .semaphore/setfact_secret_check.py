@@ -44,48 +44,64 @@ def get_changed_files_and_lines():
 
         # First fetch the base branch to ensure it exists
         fetch_result = subprocess.run(
-            ['git', 'fetch', 'origin', base_branch],
+            ['git', 'fetch', 'origin', f'{base_branch}:{base_branch}'],
             capture_output=True, text=True, cwd=collection_root, check=False
         )
-        
+
         if fetch_result.returncode != 0:
             print(f"Warning: Could not fetch {base_branch}: {fetch_result.stderr}")
-
-        # Get changed files
-        result = subprocess.run(
-            ['git', 'diff', '--name-only', f'origin/{base_branch}...{current_branch}'],
-            capture_output=True, text=True, cwd=collection_root, check=False
-        )
-
-        if result.returncode != 0:
-            print(f"Warning: Could not get changed files: {result.stderr}")
-            print("Attempting fallback to HEAD~1...")
-            # Fallback to compare with previous commit
-            result = subprocess.run(
-                ['git', 'diff', '--name-only', 'HEAD~1...HEAD'],
+            # Try fetching without creating local branch
+            fetch_result = subprocess.run(
+                ['git', 'fetch', 'origin', base_branch],
                 capture_output=True, text=True, cwd=collection_root, check=False
             )
 
-        if result.returncode != 0:
-            print("Warning: Could not get changed files with fallback either")
+        # Get changed files - try multiple approaches
+        git_commands = [
+            ['git', 'diff', '--name-only', f'origin/{base_branch}...HEAD'],
+            ['git', 'diff', '--name-only', f'origin/{base_branch}'],
+            ['git', 'diff', '--name-only', 'HEAD~1...HEAD'],
+            ['git', 'diff', '--name-only', 'HEAD~10...HEAD']  # Last 10 commits as final fallback
+        ]
+
+        result = None
+        for cmd in git_commands:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, cwd=collection_root, check=False
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                print(f"Successfully got changed files using: {' '.join(cmd)}")
+                break
+            else:
+                print(f"Failed command: {' '.join(cmd)} - {result.stderr}")
+
+        if not result or result.returncode != 0:
+            print("Warning: Could not get changed files with any method")
             return {}
 
         changed_files = result.stdout.strip().split('\n')
-        changed_files = [f for f in changed_files if f.endswith('.yml') or f.endswith('.yaml')]
+        changed_files = [f for f in changed_files if f and f.endswith(('.yml', '.yaml'))]
+
+        if not changed_files:
+            print("No YAML files found in changes")
+            return {}
 
         file_changes = {}
         for file_path in changed_files:
-            full_path = os.path.join(collection_root, file_path)
+            full_path = os.path.join(collection_root, file_path) if not os.path.isabs(file_path) else file_path
             if os.path.exists(full_path):
                 # Get changed line numbers for this file
                 diff_result = subprocess.run(
-                    ['git', 'diff', '-U0', f'origin/{base_branch}...{current_branch}', file_path],
+                    ['git', 'diff', '-U0', 'HEAD~1...HEAD', file_path],
                     capture_output=True, text=True, cwd=collection_root, check=False
                 )
 
                 if diff_result.returncode == 0:
                     changed_lines = parse_diff_lines(diff_result.stdout)
                     file_changes[full_path] = changed_lines
+                else:
+                    # If diff fails, assume the whole file changed
+                    file_changes[full_path] = set()
 
         return file_changes
 
