@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python
 """
 set_fact Secret Leak Sanity Check
 Checks for set_fact tasks that might leak secrets in changed files.

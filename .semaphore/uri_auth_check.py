@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python
 """
 URI Authorization Sanity Check
 Checks for URI tasks with authorization that lack no_log protection.
