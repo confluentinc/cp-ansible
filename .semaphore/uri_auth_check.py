@@ -38,7 +38,7 @@ def is_uri_task_with_auth(task):
         return False
 
     # Check for direct authentication parameters
-    auth_params = ['url_username', 'url_password', 'force_basic_auth']
+    auth_params = ['Authorization']
     if any(param in uri_params for param in auth_params):
         return True
 
