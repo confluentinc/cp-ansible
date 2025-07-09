@@ -138,9 +138,7 @@ def parse_diff_for_setfact(diff_content):
             line_number += 1
             line_content = line[1:]  # Remove '+' prefix
 
-            if (current_file and
-                current_file.endswith(('.yml', '.yaml')) and
-                ('set_fact:' in line_content or 'ansible.builtin.set_fact:' in line_content)):
+            if (current_file and current_file.endswith(('.yml', '.yaml')) and ('set_fact:' in line_content or 'ansible.builtin.set_fact:' in line_content)):
 
                 issues.append({
                     'file': current_file,
