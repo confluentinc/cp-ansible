@@ -247,11 +247,21 @@ def main():
         print("No YAML files changed in this PR or could not determine changes.")
         return 0
 
+    print(f"Debug: Files being checked:")
+    for file_path in changed_files.keys():
+        rel_path = os.path.relpath(file_path, collection_root)
+        print(f"  - {rel_path}")
+
     all_issues = []
 
     for file_path, changed_lines in changed_files.items():
         if os.path.exists(file_path):
+            print(f"Debug: Checking file {os.path.relpath(file_path, collection_root)}")
             issues = check_file_for_setfact_issues(file_path, changed_lines)
+            if issues:
+                print(f"Debug: Found {len(issues)} set_fact tasks in this file")
+            else:
+                print(f"Debug: No set_fact tasks found in this file")
             all_issues.extend(issues)
 
     # Report results
