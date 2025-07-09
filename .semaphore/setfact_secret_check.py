@@ -42,49 +42,65 @@ def get_changed_files_and_lines():
         print(f"Comparing {current_branch} against base branch: {base_branch}")
         print(f"Working directory: {collection_root}")
 
-        # Check if we're in a shallow clone and unshallow if needed
-        shallow_check = subprocess.run(
-            ['git', 'rev-parse', '--is-shallow-repository'],
+        # First, fetch all remote branches with their history
+        print("Fetching remote branches...")
+        fetch_result = subprocess.run(
+            ['git', 'fetch', 'origin', '+refs/heads/*:refs/remotes/origin/*'],
             capture_output=True, text=True, cwd=collection_root, check=False
         )
 
-        if shallow_check.returncode == 0 and shallow_check.stdout.strip() == 'true':
-            print("Repository is shallow, attempting to unshallow...")
+        if fetch_result.returncode != 0:
+            print(f"Warning: Could not fetch branches: {fetch_result.stderr}")
+            # Try basic fetch
             subprocess.run(
-                ['git', 'fetch', '--unshallow'],
+                ['git', 'fetch', 'origin'],
                 capture_output=True, text=True, cwd=collection_root, check=False
             )
 
-        # Try to fetch all branches to get the base branch
-        fetch_all_result = subprocess.run(
-            ['git', 'fetch', 'origin'],
+        # Check if base branch exists
+        branch_check = subprocess.run(
+            ['git', 'rev-parse', f'origin/{base_branch}'],
             capture_output=True, text=True, cwd=collection_root, check=False
         )
 
-        if fetch_all_result.returncode == 0:
-            print("Successfully fetched all branches")
+        if branch_check.returncode != 0:
+            print(f"Base branch origin/{base_branch} not found, trying alternatives...")
+            # Try common base branches
+            for alt_branch in ['main', 'master', 'develop']:
+                alt_check = subprocess.run(
+                    ['git', 'rev-parse', f'origin/{alt_branch}'],
+                    capture_output=True, text=True, cwd=collection_root, check=False
+                )
+                if alt_check.returncode == 0:
+                    base_branch = alt_branch
+                    print(f"Using alternative base branch: {base_branch}")
+                    break
+            else:
+                print("No valid base branch found, using HEAD~1 as fallback")
+                base_branch = None
 
-        # Get changed files - try multiple approaches with better fallbacks
-        git_commands = [
-            ['git', 'diff', '--name-only', f'origin/{base_branch}...HEAD'],
-            ['git', 'diff', '--name-only', f'origin/{base_branch}..HEAD'],
-            ['git', 'diff', '--name-only', 'origin/main...HEAD'],
-            ['git', 'diff', '--name-only', 'origin/master...HEAD'],
-            ['git', 'diff', '--name-only', 'HEAD~1...HEAD'],
-            ['git', 'diff', '--name-only', 'HEAD~5...HEAD'],
-            ['git', 'diff', '--name-only', 'HEAD~10...HEAD'],
-            ['git', 'diff', '--name-only', '--diff-filter=AM', 'HEAD~1...HEAD'],  # Added/Modified files only
-            ['git', 'show', '--name-only', '--pretty=format:', 'HEAD'],  # Files in current commit
-            ['git', 'ls-files', '*.yml', '*.yaml']  # Final fallback - all YAML files
-        ]
+        # Get changed files with proper base branch comparison
+        if base_branch:
+            # Try different diff strategies
+            git_commands = [
+                ['git', 'diff', '--name-only', f'origin/{base_branch}...HEAD'],
+                ['git', 'diff', '--name-only', f'origin/{base_branch}', 'HEAD'],
+                ['git', 'diff', '--name-only', f'origin/{base_branch}..HEAD']
+            ]
+        else:
+            # Fallback to recent commits
+            git_commands = [
+                ['git', 'diff', '--name-only', 'HEAD~1...HEAD'],
+                ['git', 'diff', '--name-only', 'HEAD~5...HEAD']
+            ]
 
         result = None
         for cmd in git_commands:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, cwd=collection_root, check=False
             )
-            if result.returncode == 0 and result.stdout.strip():
-                print(f"Successfully got files using: {' '.join(cmd)}")
+            if result.returncode == 0:
+                print(f"Successfully got changed files using: {' '.join(cmd)}")
                 break
             else:
                 print(f"Failed command: {' '.join(cmd)}")
@@ -92,36 +108,35 @@ def get_changed_files_and_lines():
                     print(f"Error: {result.stderr.strip()}")
 
         if not result or result.returncode != 0:
-            print("Warning: Could not get changed files with any method")
+            print("Error: Could not determine changed files")
             return {}
 
         changed_files = result.stdout.strip().split('\n')
         changed_files = [f.strip() for f in changed_files if f.strip() and f.strip().endswith(('.yml', '.yaml'))]
 
         if not changed_files:
-            print("No YAML files found in changes, falling back to check roles directory")
-            # Final fallback: check for YAML files in roles directory
-            roles_result = subprocess.run(
-                ['find', 'roles', '-name', '*.yml', '-o', '-name', '*.yaml'],
-                capture_output=True, text=True, cwd=collection_root, check=False
-            )
-            if roles_result.returncode == 0:
-                changed_files = [f.strip() for f in roles_result.stdout.strip().split('\n') if f.strip()]
-                if changed_files:
-                    print(f"Found {len(changed_files)} YAML files in roles directory")
-
-        if not changed_files:
-            print("No YAML files found")
+            print("No YAML files found in diff - this may be expected if no YAML files were changed")
             return {}
 
-        print(f"Found {len(changed_files)} YAML files to check")
+        print(f"Found {len(changed_files)} changed YAML files to check")
 
         file_changes = {}
         for file_path in changed_files:
             full_path = os.path.join(collection_root, file_path) if not os.path.isabs(file_path) else file_path
             if os.path.exists(full_path):
-                # For line-level changes, just assume whole file if we can't get diff
-                file_changes[full_path] = set()
+                # Get line-level diff if we have a proper base branch
+                if base_branch:
+                    diff_result = subprocess.run(
+                        ['git', 'diff', '-U0', f'origin/{base_branch}...HEAD', file_path],
+                        capture_output=True, text=True, cwd=collection_root, check=False
+                    )
+                    if diff_result.returncode == 0:
+                        changed_lines = parse_diff_lines(diff_result.stdout)
+                        file_changes[full_path] = changed_lines
+                    else:
+                        file_changes[full_path] = set()
+                else:
+                    file_changes[full_path] = set()
 
         return file_changes
 
