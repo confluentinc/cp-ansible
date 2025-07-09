@@ -58,11 +58,11 @@ ansible --version
 export PYTHON_INTERPRETER=$(which python)
 echo $PYTHON_INTERPRETER
 
-# # Test1
+# Test1
 export GALAXY_IMPORTER_CONFIG="$PATH_TO_CPA/galaxy-importer/galaxy-importer.cfg"
 python -m galaxy_importer.main $ARTEFACT
 
-# # Test2
+# Test2
 ansible-test sanity
 
 # Test3 - Custom set_fact Secret Leak Check
