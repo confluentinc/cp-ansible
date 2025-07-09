@@ -181,6 +181,9 @@ def check_file_for_setfact_issues(file_path, changed_lines=None):
         # Handle both single task and list of tasks
         tasks = parsed_content if isinstance(parsed_content, list) else [parsed_content]
 
+        print(f"Debug: Found {len(tasks)} tasks in file")
+        print(f"Debug: Changed lines: {changed_lines}")
+
         for i, task in enumerate(tasks):
             if not isinstance(task, dict):
                 continue
@@ -191,8 +194,13 @@ def check_file_for_setfact_issues(file_path, changed_lines=None):
                 # Get line number from original content
                 line_number = get_task_line_number(content, task_name, i)
 
+                print(f"Debug: Found set_fact task '{task_name}' at line {line_number}")
+
                 # If we have changed lines info, only report if this task is in changed lines
-                if changed_lines is None or any(abs(line_number - changed_line) <= 5 for changed_line in changed_lines):
+                is_in_changed_lines = changed_lines is None or len(changed_lines) == 0 or any(abs(line_number - changed_line) <= 5 for changed_line in changed_lines)
+                print(f"Debug: Task is in changed lines: {is_in_changed_lines}")
+
+                if is_in_changed_lines:
                     issues.append({
                         'file': file_path,
                         'task': task_name,
