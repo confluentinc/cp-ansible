@@ -37,17 +37,37 @@ def get_changed_files_and_lines():
         # Get the base branch from galaxy.yml or environment
         base_branch = os.environ.get('BASE_BRANCH') or get_base_branch_from_galaxy()
         current_branch = os.environ.get('SEMAPHORE_GIT_PR_BRANCH', 'HEAD')
+        collection_root = os.environ.get('PATH_TO_CPA', os.getcwd())
 
         print(f"Comparing {current_branch} against base branch: {base_branch}")
+        print(f"Working directory: {collection_root}")
+
+        # First fetch the base branch to ensure it exists
+        fetch_result = subprocess.run(
+            ['git', 'fetch', 'origin', base_branch],
+            capture_output=True, text=True, cwd=collection_root, check=False
+        )
+        
+        if fetch_result.returncode != 0:
+            print(f"Warning: Could not fetch {base_branch}: {fetch_result.stderr}")
 
         # Get changed files
         result = subprocess.run(
             ['git', 'diff', '--name-only', f'origin/{base_branch}...{current_branch}'],
-            capture_output=True, text=True, cwd=os.environ.get('PATH_TO_CPA', os.getcwd()), check=False
+            capture_output=True, text=True, cwd=collection_root, check=False
         )
 
         if result.returncode != 0:
-            print("Warning: Could not get changed files")
+            print(f"Warning: Could not get changed files: {result.stderr}")
+            print("Attempting fallback to HEAD~1...")
+            # Fallback to compare with previous commit
+            result = subprocess.run(
+                ['git', 'diff', '--name-only', 'HEAD~1...HEAD'],
+                capture_output=True, text=True, cwd=collection_root, check=False
+            )
+
+        if result.returncode != 0:
+            print("Warning: Could not get changed files with fallback either")
             return {}
 
         changed_files = result.stdout.strip().split('\n')
@@ -55,16 +75,17 @@ def get_changed_files_and_lines():
 
         file_changes = {}
         for file_path in changed_files:
-            if os.path.exists(file_path):
+            full_path = os.path.join(collection_root, file_path)
+            if os.path.exists(full_path):
                 # Get changed line numbers for this file
                 diff_result = subprocess.run(
                     ['git', 'diff', '-U0', f'origin/{base_branch}...{current_branch}', file_path],
-                    capture_output=True, text=True, cwd=os.getcwd(), check=False
+                    capture_output=True, text=True, cwd=collection_root, check=False
                 )
 
                 if diff_result.returncode == 0:
                     changed_lines = parse_diff_lines(diff_result.stdout)
-                    file_changes[file_path] = changed_lines
+                    file_changes[full_path] = changed_lines
 
         return file_changes
 
