@@ -1,5 +1,5 @@
 ---
-confluent_ansible_branch: 7.2.14-post
+confluent_ansible_branch: 7.9.2-post
 
 systemd_base_dir: "{{'/lib/systemd/system' if ansible_os_family == 'Debian' else '/usr/lib/systemd/system'}}"
 
@@ -13,15 +13,38 @@ base_path: "{{ ((config_base_path,('confluent-',archive_version) | join) | path_
 
 binary_base_path: "{{ ((config_base_path,('confluent-',archive_version) | join) | path_join) if installation_method == 'archive' else '/usr' }}"
 
+confluent_control_center_next_gen_base_path: "{{ ((config_base_path,('confluent-control-center-next-gen-',confluent_control_center_next_gen_archive_version) | join) | path_join) if installation_method == 'archive' else '/' }}"
+
+confluent_control_center_next_gen_binary_base_path: "{{ ((config_base_path,('confluent-control-center-next-gen-',confluent_control_center_next_gen_archive_version) | join) | path_join) if installation_method == 'archive' else '/usr' }}"
+
+### Runs kafka in Kraft mode if controller is present
+kraft_enabled: "{{ true if 'kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0 else false }}"
+
 #### Config prefix paths ####
 zookeeper_config_prefix_path: "{{ zookeeper_config_prefix.strip('/') }}"
+kafka_controller_config_prefix_path: "{{ kafka_controller_config_prefix.strip('/') }}"
 kafka_broker_config_prefix_path: "{{ kafka_broker_config_prefix.strip('/') }}"
 schema_registry_config_prefix_path: "{{ schema_registry_config_prefix.strip('/') }}"
 kafka_rest_config_prefix_path: "{{ kafka_rest_config_prefix.strip('/') }}"
 kafka_connect_config_prefix_path: "{{ kafka_connect_config_prefix.strip('/') }}"
 ksql_config_prefix_path: "{{ ksql_config_prefix.strip('/') }}"
 control_center_config_prefix_path: "{{ control_center_config_prefix.strip('/') }}"
+control_center_next_gen_config_prefix_path: "{{ control_center_next_gen_config_prefix.strip('/') }}"
 kafka_connect_replicator_config_prefix_path: "{{ kafka_connect_replicator_config_prefix.strip('/') }}"
+
+# Jolokia vars
+kafka_broker_jolokia_java_arg_ssl_addon: ",keystore={{kafka_broker_keystore_path}},keystorePassword={{kafka_broker_keystore_storepass}},protocol=https"
+kafka_broker_jolokia_urp_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{ hostvars[inventory_hostname] | confluent.platform.resolve_and_format_hostname }}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
+kafka_broker_jolokia_active_controller_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{ hostvars[inventory_hostname] | confluent.platform.resolve_and_format_hostname }}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ActiveControllerCount"
+
+# OAuth vars
+oauth_enabled: "{{ 'oauth' in auth_mode }}"
+ldap_with_oauth_enabled: "{{ 'ldap_with_oauth' in auth_mode }}"
+schema_registry_oauth_enabled: "{{ 'oauth' in schema_registry_auth_mode }}"
+kafka_rest_oauth_enabled: "{{ 'oauth' in kafka_rest_auth_mode }}"
+kafka_connect_oauth_enabled: "{{ 'oauth' in kafka_connect_auth_mode }}"
+kafka_connect_replicator_oauth_enabled: "{{ 'oauth' in kafka_connect_replicator_auth_mode }}"
+ksql_oauth_enabled: "{{ 'oauth' in ksql_auth_mode }}"
 
 #### Zookeeper Variables ####
 zookeeper_service_name: confluent-zookeeper
@@ -99,6 +122,277 @@ zookeeper_combined_properties: "{{ zookeeper_properties | confluent.platform.com
 
 zookeeper_final_properties: "{{ zookeeper_combined_properties | combine(zookeeper_custom_properties) }}"
 
+#### Kafka controller variables
+kafka_controller_service_name: "confluent-kcontroller"
+kafka_controller_main_package: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
+kafka_controller_default_group: confluent
+kafka_controller_default_user: cp-kafka
+kafka_controller_default_log_dir: /var/log/controller
+kafka_controller:
+  server_start_file: "{{ binary_base_path }}/bin/kafka-server-start"
+  config_file: "{{ (config_base_path, kafka_controller_config_prefix_path, 'server.properties') | path_join }}"
+  client_config_file: "{{ (config_base_path, kafka_controller_config_prefix_path, 'client.properties') | path_join }}"
+  systemd_file: "{{systemd_base_dir}}/{{kafka_controller_service_name}}.service"
+  systemd_override: /etc/systemd/system/{{kafka_controller_service_name}}.service.d/override.conf
+  log4j_file: "{{ (base_path, 'etc/kafka/log4j.properties') | path_join }}"
+  jaas_file: "{{ (config_base_path, kafka_controller_config_prefix_path, 'kafka_server_jaas.conf') | path_join }}"
+
+kafka_controller_properties:
+  defaults:
+    enabled: true
+    properties:
+      group.initial.rebalance.delay.ms: 3000
+      log.retention.check.interval.ms: 300000
+      log.retention.hours: 168
+      log.segment.bytes: 1073741824
+      num.io.threads: 16
+      num.network.threads: 8
+      num.partitions: 1
+      num.recovery.threads.per.data.dir: 2
+      offsets.topic.replication.factor: "{{kafka_controller_default_internal_replication_factor}}"
+      socket.receive.buffer.bytes: 102400
+      socket.request.max.bytes: 104857600
+      socket.send.buffer.bytes: 102400
+      transaction.state.log.min.isr: "{{ [ 2, kafka_controller_default_internal_replication_factor|int ] | min }}"
+      transaction.state.log.replication.factor: "{{kafka_controller_default_internal_replication_factor}}"
+      confluent.ansible.managed: 'true'
+      confluent.license.topic: _confluent-command
+      confluent.license.topic.replication.factor: "{{kafka_controller_default_internal_replication_factor}}"
+      confluent.metadata.topic.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
+      confluent.balancer.topic.replication.factor: "{{kafka_controller_default_internal_replication_factor}}"
+      confluent.security.event.logger.exporter.kafka.topic.replicas: "{{audit_logs_destination_bootstrap_servers.split(',')|length if audit_logs_destination_enabled and rbac_enabled else kafka_controller_default_internal_replication_factor}}"
+      confluent.support.metrics.enable: "true"
+      confluent.support.customer.id: anonymous
+      log.dirs: "/var/lib/controller/data"
+      kafka.rest.enable: "{{kafka_controller_rest_proxy_enabled|string|lower}}"
+      process.roles: controller
+      controller.quorum.voters: "{{ kafka_controller_quorum_voters }}"
+      controller.listener.names: "{{kafka_controller_listeners['controller']['name']}}"
+      listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %},{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}"
+      listeners: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
+      node.id: "{{ node_id|default(groups.kafka_controller.index(inventory_hostname)|int + 9991) if inventory_hostname in groups.kafka_controller else 0}}"
+      inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
+  migration_mode:
+    enabled: "{{ kraft_migration }}"
+    properties:
+      zookeeper.connection.timeout.ms: 18000
+      zookeeper.metadata.migration.enable: "true"
+      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
+  migration_ssl:
+    enabled: "{{ zookeeper_ssl_enabled and kraft_migration|bool}}"
+    properties:
+      zookeeper.ssl.client.enable: 'true'
+      zookeeper.clientCnxnSocket: org.apache.zookeeper.ClientCnxnSocketNetty
+      zookeeper.ssl.truststore.location: "{{kafka_controller_pkcs12_truststore_path}}"
+      zookeeper.ssl.truststore.password: "{{kafka_controller_truststore_storepass}}"
+  migration_mtls:
+    enabled: "{{ zookeeper_client_authentication_type == 'mtls' and kraft_migration|bool }}"
+    properties:
+      zookeeper.ssl.keystore.location: "{{kafka_controller_pkcs12_keystore_path}}"
+      zookeeper.ssl.keystore.password: "{{kafka_controller_keystore_storepass}}"
+  migration_acls:
+    enabled: "{{ zookeeper_client_authentication_type in ['kerberos', 'digest'] and kraft_migration|bool }}"
+    properties:
+      zookeeper.set.acl: 'true'
+  broker_listener:
+    enabled: true
+    properties: "{{  {'broker_listener': kafka_broker_listeners[kafka_broker_inter_broker_listener_name]} | confluent.platform.listener_properties(ssl_enabled, fips_enabled, ssl_client_authentication, principal_mapping_rules, sasl_protocol,
+                    kafka_controller_truststore_path, kafka_controller_truststore_storepass, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
+                    plain_jaas_config, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'), kerberos_kafka_controller_primary,
+                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, oauth_sub_claim, rbac_enabled, false, false) }}"
+  kraft_sasl_plain:
+    enabled: "{{(kafka_controller_sasl_protocol | confluent.platform.split_to_list)[0] == 'plain'}}"
+    properties:
+      sasl.mechanism.controller.protocol: PLAIN
+  kraft_sasl_gssapi:
+    enabled: "{{(kafka_controller_sasl_protocol | confluent.platform.split_to_list)[0] == 'kerberos'}}"
+    properties:
+      sasl.mechanism.controller.protocol: GSSAPI
+  ssl:
+    enabled: "{{ kafka_controller_listeners | confluent.platform.ssl_required(kafka_controller_ssl_enabled) }}"
+    properties:
+      ssl.truststore.location: "{{kafka_controller_truststore_path}}"
+      ssl.truststore.password: "{{kafka_controller_truststore_storepass}}"
+      ssl.keystore.location: "{{kafka_controller_keystore_path}}"
+      ssl.keystore.password: "{{kafka_controller_keystore_storepass}}"
+      ssl.key.password: "{{kafka_controller_keystore_storepass}}"
+  principal_mapping_rules:
+    enabled: "{{ssl_enabled}}"
+    properties:
+      ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
+  fips:
+    enabled: "{{fips_enabled}}"
+    properties:
+      enable.fips: 'true'
+      security.providers: io.confluent.kafka.security.fips.provider.BcFipsProviderCreator,io.confluent.kafka.security.fips.provider.BcFipsJsseProviderCreator
+      ssl.keymanager.algorithm: PKIX
+      ssl.trustmanager.algorithm: PKIX
+      ssl.keystore.type: BCFKS
+      ssl.truststore.type: BCFKS
+      ssl.truststore.location: "{{kafka_controller_truststore_path}}"
+      ssl.truststore.password: "{{kafka_controller_truststore_storepass}}"
+      ssl.keystore.location: "{{kafka_controller_keystore_path}}"
+      ssl.keystore.password: "{{kafka_controller_keystore_storepass}}"
+      ssl.key.password: "{{kafka_controller_keystore_storepass}}"
+      ssl.enabled.protocols: TLSv1.2,TLSv1.3
+  sasl_enabled:
+    enabled: "{{ kafka_sasl_enabled_mechanisms|length > 0 }}"
+    properties:
+      sasl.enabled.mechanisms: "{% for mechanism in kafka_sasl_enabled_mechanisms %}{% if loop.index > 1%},{% endif %}{{ mechanism|upper }}{% endfor %}"
+  sasl_gssapi:
+    enabled: "{{ 'GSSAPI' in kafka_sasl_enabled_mechanisms }}"
+    properties:
+      sasl.kerberos.service.name: "{{kerberos_kafka_controller_primary}}"
+  inter_broker_sasl:
+    enabled: "{{ 'none' not in (kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol) }}"
+    properties:
+      sasl.mechanism.inter.broker.protocol: "{{ (kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] }}"
+  sr:
+    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups }}"
+    properties:
+      confluent.schema.registry.url: "{{schema_registry_url}}"
+  rbac:
+    enabled: "{{ rbac_enabled }}"
+    properties:
+      authorizer.class.name: io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer
+      confluent.authorizer.access.rule.providers: CONFLUENT,KRAFT_ACL
+      super.users: >-
+        {{
+           ('ldap' in auth_mode) | ternary("User:" + mds_super_user|default('mds'), "") +
+           (auth_mode == 'ldap_with_oauth') | ternary(";", "") +
+           ('oauth' in auth_mode) | ternary("User:" + oauth_superuser_principal, "")
+        }}
+  rbac_mds:
+    enabled: "{{rbac_enabled and not external_mds_enabled}}"
+    properties:
+      confluent.metadata.server.kraft.controller.enabled: true
+      confluent.metadata.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}}"
+  rbac_external_mds:
+    enabled: "{{rbac_enabled and external_mds_enabled}}"
+    properties:
+      confluent.metadata.bootstrap.servers: "{{mds_broker_bootstrap_servers}}"
+  rbac_external_mds_client:
+    enabled: "{{rbac_enabled}}"
+    properties: "{{ mds_broker_listener | confluent.platform.client_properties(ssl_enabled, fips_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+                            'confluent.metadata.', kafka_controller_truststore_path, kafka_controller_truststore_storepass, False, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
+                            false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
+                            kerberos_kafka_controller_primary, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
+                            false, kafka_controller_ldap_user, kafka_controller_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_controller_oauth_user, kafka_controller_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  rbac_external_mds_oauth_client:
+    enabled: "{{rbac_enabled and oauth_enabled and idp_self_signed}}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{kafka_controller_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{kafka_controller_truststore_storepass}}"
+  oauth_claim:
+    enabled: "{{oauth_enabled and oauth_groups_claim != 'none'}}"
+    properties:
+      confluent.oauth.groups.claim.name: "{{oauth_groups_claim}}"
+  listeners:
+    enabled: true
+    properties: "{{ kafka_controller_listeners | confluent.platform.listener_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_client_authentication, principal_mapping_rules, kafka_controller_sasl_protocol,
+                    kafka_controller_truststore_path, kafka_controller_truststore_storepass, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
+                    plain_jaas_config, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'), kerberos_kafka_controller_primary,
+                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, oauth_sub_claim, rbac_enabled, true, false) }}"
+  metrics_reporter:
+    enabled: "{{ kafka_controller_metrics_reporter_enabled|bool }}"
+    properties:
+      metric.reporters: "{% if kafka_controller_metrics_reporter_for_control_center_next_gen_enabled|bool %}io.confluent.telemetry.reporter.TelemetryReporter, io.confluent.metrics.reporter.ConfluentMetricsReporter{% else %}io.confluent.metrics.reporter.ConfluentMetricsReporter{% endif %}"
+      confluent.metrics.reporter.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}}"
+      confluent.metrics.reporter.topic.replicas: "{{kafka_broker_default_internal_replication_factor}}"
+  metrics_reporter_for_control_center_next_gen:
+    enabled: "{{ kafka_controller_metrics_reporter_for_control_center_next_gen_enabled|bool }}"
+    properties:
+      confluent.telemetry.exporter._c3.type: "http"
+      confluent.telemetry.exporter._c3.enabled: "true"
+      confluent.telemetry.exporter._c3.metrics.include: "io.confluent.kafka.server.request.(?!.*delta).*|io.confluent.kafka.server.server.broker.state|io.confluent.kafka.server.replica.manager.leader.count|io.confluent.kafka.server.request.queue.size|io.confluent.kafka.server.broker.topic.failed.produce.requests.rate.1.min|io.confluent.kafka.server.tier.archiver.total.lag|io.confluent.kafka.server.request.total.time.ms.p99|io.confluent.kafka.server.broker.topic.failed.fetch.requests.rate.1.min|io.confluent.kafka.server.broker.topic.total.fetch.requests.rate.1.min|io.confluent.kafka.server.partition.caught.up.replicas.count|io.confluent.kafka.server.partition.observer.replicas.count|io.confluent.kafka.server.tier.tasks.num.partitions.in.error|io.confluent.kafka.server.broker.topic.bytes.out.rate.1.min|io.confluent.kafka.server.request.total.time.ms.p95|io.confluent.kafka.server.controller.active.controller.count|io.confluent.kafka.server.session.expire.listener.zookeeper.disconnects.total|io.confluent.kafka.server.request.total.time.ms.p999|io.confluent.kafka.server.controller.active.broker.count|io.confluent.kafka.server.request.handler.pool.request.handler.avg.idle.percent.rate.1.min|io.confluent.kafka.server.session.expire.listener.zookeeper.disconnects.rate.1.min|io.confluent.kafka.server.controller.unclean.leader.elections.rate.1.min|io.confluent.kafka.server.replica.manager.partition.count|io.confluent.kafka.server.controller.unclean.leader.elections.total|io.confluent.kafka.server.partition.replicas.count|io.confluent.kafka.server.broker.topic.total.produce.requests.rate.1.min|io.confluent.kafka.server.controller.offline.partitions.count|io.confluent.kafka.server.socket.server.network.processor.avg.idle.percent|io.confluent.kafka.server.partition.under.replicated|io.confluent.kafka.server.log.log.start.offset|io.confluent.kafka.server.log.tier.size|io.confluent.kafka.server.log.size|io.confluent.kafka.server.tier.fetcher.bytes.fetched.total|io.confluent.kafka.server.request.total.time.ms.p50|io.confluent.kafka.server.tenant.consumer.lag.offsets|io.confluent.kafka.server.session.expire.listener.zookeeper.expires.rate.1.min|io.confluent.kafka.server.log.log.end.offset|io.confluent.kafka.server.broker.topic.bytes.in.rate.1.min|io.confluent.kafka.server.partition.under.min.isr|io.confluent.kafka.server.partition.in.sync.replicas.count|io.confluent.telemetry.http.exporter.batches.dropped|io.confluent.telemetry.http.exporter.items.total|io.confluent.telemetry.http.exporter.items.succeeded|io.confluent.telemetry.http.exporter.send.time.total.millis|io.confluent.kafka.server.controller.leader.election.rate.(?!.*delta).*|io.confluent.telemetry.http.exporter.batches.failed"
+      confluent.telemetry.exporter._c3.client.base.url: "{{control_center_next_gen_dependency_prometheus_url}}/api/v1/otlp"
+      confluent.telemetry.exporter._c3.client.compression: gzip
+      confluent.telemetry.exporter._c3.api.key: "{{kafka_controller_telemetry_control_center_next_gen_user}}"
+      confluent.telemetry.exporter._c3.api.secret: "{{kafka_controller_telemetry_control_center_next_gen_password}}"
+      confluent.telemetry.exporter._c3.buffer.pending.batches.max: 80
+      confluent.telemetry.exporter._c3.buffer.batch.items.max: 4000
+      confluent.telemetry.exporter._c3.buffer.inflight.submissions.max: 10
+      confluent.telemetry.metrics.collector.interval.ms: 60000
+      confluent.telemetry.remoteconfig._confluent.enabled: false
+      confluent.consumer.lag.emitter.enabled: "true"
+  metrics_reporter_for_control_center_next_gen_client:
+    enabled: "{{control_center_next_gen_dependency_prometheus_ssl_enabled}}"
+    properties:
+      confluent.telemetry.exporter._c3.https.ssl.protocol: TLSv1.2
+      confluent.telemetry.exporter._c3.https.ssl.truststore.location: "{{kafka_controller_truststore_path}}"
+      confluent.telemetry.exporter._c3.https.ssl.truststore.password: "{{kafka_controller_truststore_storepass}}"
+      # If FIPS set to BCFKS else JKS
+      confluent.telemetry.exporter._c3.https.ssl.truststore.type: "{% if fips_enabled|bool %}BCFKS{% else %}JKS{% endif %}"
+  metrics_reporter_for_control_center_next_gen_client_mtls:
+    enabled: "{{control_center_next_gen_dependency_prometheus_mtls_enabled}}"
+    properties:
+      confluent.telemetry.exporter._c3.https.ssl.keystore.location: "{{kafka_controller_keystore_path}}"
+      confluent.telemetry.exporter._c3.https.ssl.keystore.password: "{{kafka_controller_keystore_storepass}}"
+      confluent.telemetry.exporter._c3.https.ssl.key.password: "{{kafka_controller_keystore_keypass}}"
+      # If FIPS set to BCFKS else JKS
+      confluent.telemetry.exporter._c3.https.ssl.keystore.type: "{% if fips_enabled|bool %}BCFKS{% else %}JKS{% endif %}"
+  metrics_reporter_client:
+    enabled: "{{ kafka_controller_metrics_reporter_enabled|bool }}"
+    properties: "{{ kafka_broker_listeners[kafka_broker_inter_broker_listener_name] | confluent.platform.client_properties(ssl_enabled, fips_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+                    'confluent.metrics.reporter.', kafka_controller_truststore_path, kafka_controller_truststore_storepass, False, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
+                    false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
+                    kerberos_kafka_controller_primary, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
+                    false, kafka_controller_ldap_user, kafka_controller_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_controller_oauth_user, kafka_controller_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  telemetry:
+    enabled: "{{kafka_controller_telemetry_enabled}}"
+    properties:
+      confluent.telemetry.enabled: 'true'
+      confluent.telemetry.api.key: "{{telemetry_api_key}}"
+      confluent.telemetry.api.secret: "{{telemetry_api_secret}}"
+  telemetry_proxy:
+    enabled: "{{kafka_controller_telemetry_enabled and telemetry_proxy_url != ''}}"
+    properties:
+      confluent.telemetry.proxy.url: "{{telemetry_proxy_url}}"
+  telemetry_proxy_auth:
+    enabled: "{{kafka_controller_telemetry_enabled and telemetry_proxy_username != ''}}"
+    properties:
+      confluent.telemetry.proxy.username: "{{telemetry_proxy_username}}"
+      confluent.telemetry.proxy.password: "{{telemetry_proxy_password}}"
+  telemetry_labels:
+    enabled: "{{kafka_controller_telemetry_ansible_labels_enabled}}"
+    properties:
+      confluent.telemetry.labels.confluent.ansible.playbooks.version: "{{confluent_ansible_branch}}"
+  audit_logs_destination:
+    enabled: "{{audit_logs_destination_enabled and rbac_enabled}}"
+    properties:
+      confluent.security.event.logger.exporter.kafka.bootstrap.servers: "{{audit_logs_destination_bootstrap_servers}}"
+      confluent.security.event.logger.exporter.kafka.topic.create: 'false'
+  audit_logs_destination_client:
+    enabled: "{{audit_logs_destination_enabled and rbac_enabled}}"
+    properties: "{{ audit_logs_destination_listener | confluent.platform.client_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
+                    'confluent.security.event.logger.exporter.kafka.', kafka_controller_truststore_path, kafka_controller_truststore_storepass, False, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
+                    false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
+                    kerberos_kafka_controller_primary|default('kafka'), kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
+                    false, 'user', 'pass', mds_bootstrap_server_urls, oauth_enabled, kafka_controller_oauth_user, kafka_controller_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, true) }}"
+  audit_logs_destination_admin:
+    enabled: "{{audit_logs_destination_enabled and rbac_enabled and not external_mds_enabled}}"
+    properties:
+      confluent.security.event.logger.destination.admin.bootstrap.servers: "{{audit_logs_destination_bootstrap_servers}}"
+  audit_logs_destination_admin_client:
+    enabled: "{{audit_logs_destination_enabled and rbac_enabled and not external_mds_enabled}}"
+    properties: "{{ audit_logs_destination_listener | confluent.platform.client_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
+                    'confluent.security.event.logger.destination.admin.', kafka_controller_truststore_path, kafka_controller_truststore_storepass, False, kafka_controller_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
+                    false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
+                    kerberos_kafka_controller_primary|default('kafka'), kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
+                    false, 'user', 'pass', mds_bootstrap_server_urls, oauth_enabled, kafka_controller_oauth_user, kafka_controller_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, true) }}"
+
+kafka_controller_combined_properties: "{{kafka_controller_properties | confluent.platform.combine_properties}}"
+
+kafka_controller_final_properties: "{{ kafka_controller_combined_properties | combine(kafka_controller_custom_properties) }}"
+
+# A set of client properties against the controller listener for kafka health checks
+kafka_controller_default_client_properties: "{{ kafka_controller_listeners['controller'] | confluent.platform.client_properties(kafka_controller_ssl_enabled, False, kafka_controller_ssl_mutual_auth_enabled, kafka_controller_sasl_protocol,
+                            '', kafka_controller_pkcs12_truststore_path, kafka_controller_truststore_storepass, False, kafka_controller_pkcs12_keystore_path, kafka_controller_keystore_storepass, kafka_controller_keystore_keypass,
+                            false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
+                            kerberos_kafka_controller_primary, kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
+                            false, kafka_controller_ldap_user, kafka_controller_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_controller_oauth_user, kafka_controller_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, true) }}"
+
+kafka_controller_client_properties: "{{ kafka_controller_default_client_properties | combine(kafka_controller_custom_client_properties) }}"
 
 #### Kafka Broker Variables ####
 kafka_broker_service_name: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
@@ -138,7 +432,7 @@ kafka_broker_properties:
       socket.send.buffer.bytes: 102400
       transaction.state.log.min.isr: "{{ [ 2, kafka_broker_default_internal_replication_factor|int ] | min }}"
       transaction.state.log.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
-      zookeeper.connection.timeout.ms: 18000
+      advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname) | confluent.platform.format_hostname  }}:{{ listener['value']['port'] }}{% endfor %}"
       confluent.ansible.managed: 'true'
       confluent.license.topic: _confluent-command
       confluent.license.topic.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
@@ -147,17 +441,50 @@ kafka_broker_properties:
       confluent.security.event.logger.exporter.kafka.topic.replicas: "{{audit_logs_destination_bootstrap_servers.split(',')|length if audit_logs_destination_enabled and rbac_enabled else kafka_broker_default_internal_replication_factor}}"
       confluent.support.metrics.enable: "true"
       confluent.support.customer.id: anonymous
-      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
       log.dirs: "/var/lib/kafka/data"
-      listener.security.protocol.map: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
-      listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['ip'] | default('') }}:{{ listener['value']['port'] }}{% endfor %}"
-      advertised.listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['hostname'] | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname)  }}:{{ listener['value']['port'] }}{% endfor %}"
-      inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
       kafka.rest.enable: "{{kafka_broker_rest_proxy_enabled|string|lower}}"
+      inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
+      confluent.cluster.link.metadata.topic.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
+  migration_mode:
+    enabled: "{{ kraft_enabled|bool and kraft_migration|bool }}"
+    properties:
+      zookeeper.connection.timeout.ms: 18000
+      zookeeper.metadata.migration.enable: "true"
+      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
+      inter.broker.protocol.version: 3.9
+      confluent.cluster.link.metadata.topic.enable: "true"
+  non_migration_mode:
+    enabled: "{{ kraft_enabled|bool and not kraft_migration|bool }}"
+    properties:
+      process.roles: broker
+  broker_on_controller:
+    enabled: "{{kraft_enabled|bool}}"
+    properties:
+      controller.quorum.voters: "{{ kafka_controller_quorum_voters }}"
+      controller.listener.names: "{{kafka_controller_listeners['controller']['name']}}"
+      listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %},{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
+      listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['ip'] | default('') }}:{{ listener['value']['port'] }}{% endfor %}"
+  broker_on_zookeeper:
+    enabled: "{{not kraft_enabled|bool}}"
+    properties:
+      listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['ip'] | default('') | confluent.platform.format_hostname }}:{{ listener['value']['port'] }}{% endfor %}"
+      listener.security.protocol.map: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
+      zookeeper.connection.timeout.ms: 18000
+      zookeeper.connect: "{{ groups['zookeeper'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + zookeeper_client_port|string + ',') }}:{{zookeeper_client_port}}{{zookeeper_chroot}}"
+  controller_sasl:
+    enabled: "{{ kraft_enabled|bool and 'none' not in (kafka_controller_listeners['controller']['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol) }}"
+    properties:
+      sasl.mechanism.controller.protocol: "{{ (kafka_controller_sasl_protocol | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] }}"
+  controller_listener:
+    enabled: "{{ kraft_enabled|bool }}"
+    properties: "{{ kafka_controller_listeners | confluent.platform.listener_properties(kafka_controller_ssl_enabled, fips_enabled, kafka_controller_ssl_client_authentication, principal_mapping_rules, kafka_controller_sasl_protocol,
+                    kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
+                    plain_jaas_config, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'), kerberos_kafka_broker_primary,
+                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, oauth_sub_claim, rbac_enabled, false, false) }}"
   broker_id:
     enabled: "{{ inventory_hostname in groups.kafka_broker }}"
     properties:
-      # broker.id logic depends on inventory hostname being in kafka_broker host list, defaulting to 0 if non kafka host
+      # broker.id logic depends on inventory hostname being in kafka_broker host list, defaulting to 0 if non kafka broker host
       broker.id: "{{ broker_id | default( groups.kafka_broker.index(inventory_hostname) + 1 ) if inventory_hostname in groups.kafka_broker else 0 }}"
   ssl:
     enabled: "{{ zookeeper_ssl_enabled|bool or
@@ -172,6 +499,12 @@ kafka_broker_properties:
       ssl.keystore.location: "{{kafka_broker_keystore_path}}"
       ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
       ssl.key.password: "{{kafka_broker_keystore_storepass}}"
+  principal_mapping_rules:
+    enabled: "{{ssl_enabled}}"
+    properties:
+      # This config is needed to get correct super user in set_principal.yml
+      # Only setting rules on listener or mds or erp isnt enough
+      ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
   fips:
     enabled: "{{fips_enabled}}"
     properties:
@@ -186,39 +519,47 @@ kafka_broker_properties:
       ssl.keystore.location: "{{kafka_broker_keystore_path}}"
       ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
       ssl.key.password: "{{kafka_broker_keystore_storepass}}"
-      ssl.enabled.protocols: TLSv1.2
+      ssl.enabled.protocols: TLSv1.2,TLSv1.3
   inter_broker_sasl:
-    enabled: "{{ kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol != 'none' }}"
+    enabled: "{{ 'none' not in (kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol) }}"
     properties:
-      sasl.mechanism.inter.broker.protocol: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol}}"
+      sasl.mechanism.inter.broker.protocol: "{{ (kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] }}"
   sasl_enabled:
-    enabled: "{{ kafka_broker_sasl_enabled_mechanisms|length > 0 }}"
+    enabled: "{{ kafka_sasl_enabled_mechanisms|length > 0 }}"
     properties:
-      sasl.enabled.mechanisms: "{% for mechanism in kafka_broker_sasl_enabled_mechanisms %}{% if loop.index > 1%},{% endif %}{{ mechanism|upper }}{% endfor %}"
+      sasl.enabled.mechanisms: "{% for mechanism in kafka_sasl_enabled_mechanisms %}{% if loop.index > 1%},{% endif %}{{ mechanism|upper }}{% endfor %}"
   sasl_gssapi:
-    enabled: "{{ 'GSSAPI' in kafka_broker_sasl_enabled_mechanisms }}"
+    enabled: "{{ 'GSSAPI' in kafka_sasl_enabled_mechanisms }}"
     properties:
       sasl.kerberos.service.name: "{{kerberos_kafka_broker_primary}}"
   zk_ssl:
-    enabled: "{{ zookeeper_ssl_enabled }}"
+    enabled: "{{ zookeeper_ssl_enabled and (not kraft_enabled|bool or ( kraft_enabled|bool and kraft_migration|bool ))}}"
     properties:
       zookeeper.ssl.client.enable: 'true'
       zookeeper.clientCnxnSocket: org.apache.zookeeper.ClientCnxnSocketNetty
       zookeeper.ssl.truststore.location: "{{kafka_broker_pkcs12_truststore_path}}"
       zookeeper.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   zk_mtls:
-    enabled: "{{ zookeeper_client_authentication_type == 'mtls' }}"
+    enabled: "{{ zookeeper_client_authentication_type == 'mtls' and (not kraft_enabled|bool or ( kraft_enabled|bool and kraft_migration|bool ))}}"
     properties:
       zookeeper.ssl.keystore.location: "{{kafka_broker_pkcs12_keystore_path}}"
       zookeeper.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
   zk_acls:
-    enabled: "{{ zookeeper_client_authentication_type in ['kerberos', 'digest'] }}"
+    enabled: "{{ zookeeper_client_authentication_type in ['kerberos', 'digest'] and (not kraft_enabled|bool or ( kraft_enabled|bool and kraft_migration|bool ))}}"
     properties:
       zookeeper.set.acl: 'true'
   sr:
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups }}"
     properties:
       confluent.schema.registry.url: "{{schema_registry_url}}"
+  sr_mtls:
+    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_ssl_client_authentication != 'none' }}"
+    properties:
+      confluent.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      confluent.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
+      confluent.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
+      confluent.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
+      confluent.ssl.key.password: "{{kafka_broker_keystore_keypass}}"
   sr_ssl:
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_ssl_enabled }}"
     properties:
@@ -234,11 +575,27 @@ kafka_broker_properties:
       confluent.ssl.trustmanager.algorithm: PKIX
       confluent.ssl.keystore.type: BCFKS
       confluent.ssl.truststore.type: BCFKS
-  sr_rbac:
-    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and rbac_enabled }}"
+  sr_rbac_ldap:
+    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and rbac_enabled and schema_registry_auth_mode == 'ldap' }}"
     properties:
       confluent.basic.auth.credentials.source: USER_INFO
       confluent.basic.auth.user.info: "{{schema_registry_ldap_user | default('sr') }}:{{schema_registry_ldap_password | default('pass')}}"
+  sr_oauth:
+    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_oauth_enabled }}"
+    properties:
+      confluent.bearer.auth.credentials.source: OAUTHBEARER
+      confluent.bearer.auth.issuer.endpoint.url: "{{ oauth_token_uri }}"
+      confluent.bearer.auth.client.id: "{{ schema_registry_oauth_user }}"
+      confluent.bearer.auth.client.secret: "{{ schema_registry_oauth_password }}"
+  sr_oauth_scope:
+    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_oauth_enabled and oauth_groups_scope!='none'}}"
+    properties:
+      confluent.bearer.auth.scope: "{{ oauth_groups_scope }}"
+  sr_oauth_ssl:
+    enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_oauth_enabled and idp_self_signed}}"
+    properties:
+      confluent.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      confluent.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   sr_basic:
     # Should not turn on basic auth if rbac is enabled
     enabled: "{{ kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_authentication_type == 'basic'}}"
@@ -249,22 +606,46 @@ kafka_broker_properties:
     enabled: "{{ rbac_enabled }}"
     properties:
       authorizer.class.name: io.confluent.kafka.security.authorizer.ConfluentServerAuthorizer
-      confluent.authorizer.access.rule.providers: CONFLUENT,ZK_ACL
-      super.users: "User:{{ mds_super_user|default('mds') }}"
+      confluent.authorizer.access.rule.providers: CONFLUENT,{{ "ZK_ACL" if ((not kraft_enabled|bool) or kraft_migration|bool) else "KRAFT_ACL" }}
+      super.users: >-
+        {{
+           ('ldap' in auth_mode) | ternary("User:" + mds_super_user|default('mds'), "") +
+           (auth_mode == 'ldap_with_oauth') | ternary(";", "") +
+           ('oauth' in auth_mode) | ternary("User:" + oauth_superuser_principal, "")
+        }}
   rbac_mds:
     enabled: "{{ rbac_enabled and not external_mds_enabled }}"
     properties:
-      confluent.metadata.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname, True) }}:{{mds_port}}"
+      confluent.metadata.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname, True) |  confluent.platform.format_hostname}}:{{mds_port}}"
       confluent.metadata.server.listeners: "{{mds_http_protocol}}://0.0.0.0:{{mds_port}}"
       confluent.metadata.server.token.max.lifetime.ms: 3600000
       confluent.metadata.server.token.key.path: "{{rbac_enabled_private_pem_path}}"
       confluent.metadata.server.token.signature.algorithm: RS256
       confluent.metadata.server.authentication.method: BEARER
+  rbac_mds_oauth:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and oauth_enabled }}"
+    properties:
+      confluent.metadata.server.user.store: "{{ 'LDAP_WITH_OAUTH' if ldap_with_oauth_enabled|bool else 'OAUTH' }}"
+      confluent.metadata.server.oauthbearer.jwks.endpoint.url: "{{oauth_jwks_uri}}"
+      confluent.metadata.server.oauthbearer.expected.issuer: "{{oauth_issuer_url}}"
+      confluent.metadata.server.oauthbearer.sub.claim.name: "{{oauth_sub_claim}}"
+  rbac_mds_oauth_audience:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and oauth_enabled and oauth_expected_audience!= 'none' }}"
+    properties:
+      confluent.metadata.server.oauthbearer.expected.audience: "{{oauth_expected_audience}}"
+  rbac_mds_oauth_claim:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and oauth_enabled and oauth_groups_claim != 'none'}}"
+    properties:
+      confluent.metadata.server.oauthbearer.groups.claim.name: "{{oauth_groups_claim}}"
+  rbac_mds_ssl:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and oauth_enabled and mds_ssl_enabled and mds_ssl_client_authentication == 'none' }}"
+    properties:
+      confluent.metadata.server.ssl.endpoint.identification.algorithm: https
   rbac_mds_ldap:
-    enabled: "{{ rbac_enabled and not external_mds_enabled }}"
+    enabled: "{{ rbac_enabled and not external_mds_enabled and 'ldap' in auth_mode }}"
     # For backwards compatibility, need to make sure ldap_config var is honored
     properties: "{{ ldap_config | default('') | confluent.platform.split_newline_to_dict }}"
-  rbac_mds_ssl:
+  rbac_mds_rest_ssl:
     enabled: "{{ rbac_enabled and not external_mds_enabled and kafka_broker_rest_ssl_enabled }}"
     properties:
       confluent.metadata.server.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
@@ -272,6 +653,31 @@ kafka_broker_properties:
       confluent.metadata.server.ssl.key.password: "{{kafka_broker_keystore_keypass}}"
       confluent.metadata.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
       confluent.metadata.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
+  rbac_mds_principal_mapping:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and principal_mapping_rules != '' and mds_ssl_enabled|bool }}"
+    properties:
+      confluent.metadata.server.auth.ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
+  rbac_mds_mtls_only:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and mds_ssl_enabled|bool and auth_mode == 'mtls' and not mds_file_based_user_store_enabled|bool }}"
+    properties:
+      confluent.metadata.server.user.store: NONE
+  rbac_mds_file_store:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and mds_file_based_user_store_enabled|bool }}"
+    properties:
+      confluent.metadata.server.user.store: FILE
+      confluent.metadata.server.user.store.file.path: "{{ mds_file_based_user_store_dest_path }}"
+  rbac_mds_client_authentication:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and mds_ssl_enabled|bool and mds_ssl_client_authentication != 'none' }}"
+    properties:
+      confluent.metadata.server.ssl.client.authentication: "{{ mds_ssl_client_authentication | upper }}"
+  rbac_mds_impersonation_super_users:
+    enabled: "{{ rbac_enabled|bool and not external_mds_enabled|bool and impersonation_super_users|length > 0 }}"
+    properties:
+      confluent.metadata.server.impersonation.super.users: "{{impersonation_super_users | map('regex_replace', '^', 'User:') | join(';')}}"
+  rbac_mds_impersonation_protected_users:
+    enabled: "{{ rbac_enabled|bool and not external_mds_enabled|bool and impersonation_protected_users|length > 0 }}"
+    properties:
+      confluent.metadata.server.impersonation.protected.users: "{{impersonation_protected_users | map('regex_replace','^', 'User:') | join(';')}}"
   rbac_mds_ssl_fips:
     enabled: "{{ rbac_enabled and not external_mds_enabled and kafka_broker_rest_ssl_enabled and fips_enabled }}"
     properties:
@@ -279,6 +685,31 @@ kafka_broker_properties:
       confluent.metadata.server.ssl.trustmanager.algorithm: PKIX
       confluent.metadata.server.ssl.keystore.type: BCFKS
       confluent.metadata.server.ssl.truststore.type: BCFKS
+      confluent.metadata.server.http2.enabled: false
+  rbac_mds_sso:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and sso_mode != 'none' }}"
+    properties:
+      confluent.metadata.server.sso.mode: "{{ sso_mode }}"
+      confluent.oidc.idp.groups.claim.name: "{{ sso_groups_claim }}"
+      confluent.oidc.idp.sub.claim.name: "{{ sso_sub_claim }}"
+      confluent.oidc.idp.issuer: "{{ sso_issuer_url }}"
+      confluent.oidc.idp.jwks.endpoint.uri: "{{ sso_jwks_uri }}"
+      confluent.oidc.idp.authorize.base.endpoint.uri: "{{ sso_authorize_uri }}"
+      confluent.oidc.idp.token.base.endpoint.uri: "{{ sso_token_uri }}"
+      confluent.oidc.idp.client.id: "{{ sso_client_id }}"
+      confluent.oidc.idp.client.secret: "{{ sso_client_password }}"
+      confluent.oidc.idp.refresh.token.enabled: "{{ sso_refresh_token }}"
+      confluent.oidc.session.token.expiry.ms: 900000
+      confluent.oidc.session.max.timeout.ms: 21600000
+  rbac_mds_sso_scope:
+    enabled: "{{ rbac_enabled and not external_mds_enabled and sso_mode != 'none' and sso_groups_scope != 'none' }}"
+    properties:
+      confluent.oidc.idp.groups.claim.scope: "{{ sso_groups_scope }}"
+  rbac_mds_sso_ssl:
+    enabled: "{{ rbac_enabled and (not external_mds_enabled) and sso_mode != 'none' and sso_idp_cert_path != ''}}"
+    properties:
+      confluent.metadata.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      confluent.metadata.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   rbac_external_mds:
     enabled: "{{rbac_enabled and external_mds_enabled}}"
     properties:
@@ -289,12 +720,26 @@ kafka_broker_properties:
                             'confluent.metadata.', kafka_broker_truststore_path, kafka_broker_truststore_storepass, False, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                             false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
                             kerberos_kafka_broker_primary, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'),
-                            false, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls) }}"
+                            false, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_broker_oauth_user, kafka_broker_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  rbac_external_mds_oauth_client:
+    enabled: "{{ oauth_enabled and rbac_enabled and external_mds_enabled and idp_self_signed }}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
+  rbac_cli_sso:
+    enabled: "{{sso_cli}}"
+    properties:
+      confluent.oidc.idp.device.authorization.endpoint.uri: "{{ sso_device_authorization_uri }}"
+  rbac_oauth_ssl:
+    enabled: "{{ oauth_enabled and rbac_enabled and (not external_mds_enabled) and idp_self_signed }}"
+    properties:
+      confluent.metadata.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      confluent.metadata.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   embedded_rest_proxy:
     # Do not need duplicating confluent.metadata.server and confluent.http.server config, rely on mds configs when kafka is the mds
     enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) }}"
     properties:
-      confluent.http.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname, True) }}:{{mds_port}}"
+      confluent.http.server.advertised.listeners: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname] | confluent.platform.resolve_hostname , True)| confluent.platform.format_hostname }}:{{mds_port}}"
       confluent.http.server.listeners: "{{mds_http_protocol}}://0.0.0.0:{{mds_port}}"
   embedded_rest_proxy_ssl:
     enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_ssl_enabled }}"
@@ -305,12 +750,17 @@ kafka_broker_properties:
       confluent.http.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
       confluent.http.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   embedded_rest_proxy_ssl_fips:
-    enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_ssl_enabled and fips_enabled}}"
+    enabled: "{{ kafka_broker_rest_proxy_enabled and kafka_broker_rest_ssl_enabled and fips_enabled}}"
     properties:
       confluent.http.server.ssl.keymanager.algorithm: PKIX
       confluent.http.server.ssl.trustmanager.algorithm: PKIX
       confluent.http.server.ssl.keystore.type: BCFKS
       confluent.http.server.ssl.truststore.type: BCFKS
+      confluent.http.server.http2.enabled: false
+  embedded_rest_proxy_mtls:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and kafka_broker_rest_ssl_enabled and erp_ssl_client_authentication != 'none' }}"
+    properties:
+      kafka.rest.ssl.client.authentication: "{{ erp_ssl_client_authentication | upper }}"
   embedded_rest_proxy_basic:
     enabled: "{{ kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_proxy_authentication_type == 'basic' }}"
     properties:
@@ -322,52 +772,131 @@ kafka_broker_properties:
   embedded_rest_proxy_client_bootstrap:
     enabled: "{{ kafka_broker_rest_proxy_enabled }}"
     properties:
-      # Internal listener will be the token listener when rbac is enabled
-      kafka.rest.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners['internal']['port']|string + ',') }}:{{kafka_broker_listeners['internal']['port']}}"
+      kafka.rest.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_broker_rest_proxy_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_broker_rest_proxy_listener_name]['port']}}"
   embedded_rest_proxy_client:
     enabled: "{{ kafka_broker_rest_proxy_enabled }}"
-    properties: "{{ kafka_broker_listeners['internal'] | confluent.platform.client_properties(ssl_enabled, fips_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+    properties: "{{ kafka_broker_listeners[kafka_broker_rest_proxy_listener_name] | confluent.platform.client_properties(ssl_enabled, fips_enabled, ssl_mutual_auth_enabled, sasl_protocol,
                     'kafka.rest.client.', kafka_broker_truststore_path, kafka_broker_truststore_storepass, False, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                     false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
                     kerberos_kafka_broker_primary, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'),
-                    true, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls) }}"
+                    true, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_broker_oauth_user, kafka_broker_oauth_password, oauth_groups_scope, oauth_token_uri, false, false) }}"
   embedded_rest_proxy_rbac:
     enabled: "{{ kafka_broker_rest_proxy_enabled and rbac_enabled }}"
     properties:
       kafka.rest.kafka.rest.resource.extension.class: io.confluent.kafkarest.security.KafkaRestSecurityResourceExtension
-      kafka.rest.rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+      kafka.rest.rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
       kafka.rest.public.key.path: "{{rbac_enabled_public_pem_path}}"
       kafka.rest.confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
+  embedded_rest_proxy_rbac_ldap:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and rbac_enabled and auth_mode == 'ldap' and (not kafka_broker_rest_proxy_mds_cert_auth_only) }}"
+    properties:
       kafka.rest.confluent.metadata.basic.auth.user.info: "{{kafka_broker_ldap_user | default('kafka') }}:{{kafka_broker_ldap_password | default('pass')}}"
       kafka.rest.confluent.metadata.http.auth.credentials.provider: BASIC
+  embedded_rest_proxy_rbac_oauth:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and rbac_enabled and oauth_enabled and (not kafka_broker_rest_proxy_mds_cert_auth_only)}}"
+    properties:
+      kafka.rest.confluent.metadata.oauthbearer.login.client.id: "{{kafka_broker_oauth_user}}"
+      kafka.rest.confluent.metadata.oauthbearer.login.client.secret: "{{kafka_broker_oauth_password}}"
+      kafka.rest.confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
+  embedded_rest_proxy_rbac_oauth_scope:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and rbac_enabled and oauth_enabled and oauth_groups_scope!='none' and (not kafka_broker_rest_proxy_mds_cert_auth_only)}}"
+    properties:
+      kafka.rest.confluent.metadata.oauthbearer.login.oauth.scope: "{{ oauth_groups_scope }}"
+  embedded_rest_proxy_oauth:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and oauth_enabled }}"
+    properties:
+      kafka.rest.rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
+      kafka.rest.oauthbearer.jwks.endpoint.url: "{{ oauth_jwks_uri }}"
+      kafka.rest.oauthbearer.sub.claim.name: "{{ oauth_sub_claim }}"
+      kafka.rest.oauthbearer.expected.issuer: "{{ oauth_issuer_url }}"
+  embedded_rest_proxy_oauth_audience:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and oauth_enabled and oauth_expected_audience!='none' }}"
+    properties:
+      kafka.rest.oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
+  embedded_rest_proxy_oauth_claim:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and oauth_enabled and oauth_groups_claim!='none' }}"
+    properties:
+      kafka.rest.oauthbearer.groups.claim.name: "{{ oauth_groups_claim }}"
+  embedded_rest_proxy_oauth_ssl:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and oauth_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and idp_self_signed}}"
+    properties:
+      confluent.http.server.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      confluent.http.server.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
   embedded_rest_proxy_rbac_ssl:
     enabled: "{{rbac_enabled and mds_tls_enabled}}"
     properties:
       kafka.rest.confluent.metadata.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
       kafka.rest.confluent.metadata.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
+  embedded_rest_proxy_rbac_mtls:
+    enabled: "{{rbac_enabled and mds_tls_enabled and mds_ssl_client_authentication != 'none'}}"
+    # truststore is getting set in above ssl section
+    properties:
+      kafka.rest.confluent.metadata.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
+      kafka.rest.confluent.metadata.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
+      kafka.rest.confluent.metadata.ssl.key.password: "{{kafka_broker_keystore_keypass}}"
+  embedded_rest_proxy_principal_mapping_rules:
+    enabled: "{{ kafka_broker_rest_proxy_enabled and principal_mapping_rules != '' }}"
+    properties:
+      kafka.rest.auth.ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
+  oauth_claim:
+    enabled: "{{ oauth_enabled and oauth_groups_claim != 'none'}}"
+    properties:
+      confluent.oauth.groups.claim.name: "{{oauth_groups_claim}}"
   listeners:
     enabled: true
-    properties: "{{ kafka_broker_listeners | confluent.platform.listener_properties(ssl_enabled, fips_enabled, ssl_mutual_auth_enabled, sasl_protocol,
+    properties: "{{ kafka_broker_listeners | confluent.platform.listener_properties(ssl_enabled, fips_enabled, ssl_client_authentication, principal_mapping_rules, sasl_protocol,
                     kafka_broker_truststore_path, kafka_broker_truststore_storepass, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                     plain_jaas_config, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'), kerberos_kafka_broker_primary,
-                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path ) }}"
+                    sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, oauth_sub_claim, rbac_enabled, false, idp_self_signed) }}"
   controlplane_listener:
-    enabled: "{{ kafka_broker_configure_control_plane_listener|bool and kafka_broker_configure_multiple_listeners|bool }}"
+    enabled: "{{ kafka_broker_configure_control_plane_listener|bool and kafka_broker_configure_multiple_listeners|bool and not kraft_enabled|bool}}"
     properties:
       control.plane.listener.name: "{{(kafka_broker_listeners[kafka_broker_control_plane_listener_name]|default(kafka_broker_listeners[kafka_broker_inter_broker_listener_name]))['name']}}"
   metrics_reporter:
     enabled: "{{ kafka_broker_metrics_reporter_enabled|bool }}"
     properties:
-      metric.reporters: io.confluent.metrics.reporter.ConfluentMetricsReporter
+      metric.reporters: "{% if kafka_broker_metrics_reporter_for_control_center_next_gen_enabled|bool %}io.confluent.telemetry.reporter.TelemetryReporter, io.confluent.metrics.reporter.ConfluentMetricsReporter{% else %}io.confluent.metrics.reporter.ConfluentMetricsReporter{% endif %}"
       confluent.metrics.reporter.bootstrap.servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}}"
       confluent.metrics.reporter.topic.replicas: "{{kafka_broker_default_internal_replication_factor}}"
+  metrics_reporter_for_control_center_next_gen:
+    enabled: "{{ kafka_broker_metrics_reporter_for_control_center_next_gen_enabled|bool }}"
+    properties:
+      confluent.telemetry.exporter._c3.type: "http"
+      confluent.telemetry.exporter._c3.enabled: "true"
+      confluent.telemetry.exporter._c3.metrics.include: "io.confluent.kafka.server.request.(?!.*delta).*|io.confluent.kafka.server.server.broker.state|io.confluent.kafka.server.replica.manager.leader.count|io.confluent.kafka.server.request.queue.size|io.confluent.kafka.server.broker.topic.failed.produce.requests.rate.1.min|io.confluent.kafka.server.tier.archiver.total.lag|io.confluent.kafka.server.request.total.time.ms.p99|io.confluent.kafka.server.broker.topic.failed.fetch.requests.rate.1.min|io.confluent.kafka.server.broker.topic.total.fetch.requests.rate.1.min|io.confluent.kafka.server.partition.caught.up.replicas.count|io.confluent.kafka.server.partition.observer.replicas.count|io.confluent.kafka.server.tier.tasks.num.partitions.in.error|io.confluent.kafka.server.broker.topic.bytes.out.rate.1.min|io.confluent.kafka.server.request.total.time.ms.p95|io.confluent.kafka.server.controller.active.controller.count|io.confluent.kafka.server.session.expire.listener.zookeeper.disconnects.total|io.confluent.kafka.server.request.total.time.ms.p999|io.confluent.kafka.server.controller.active.broker.count|io.confluent.kafka.server.request.handler.pool.request.handler.avg.idle.percent.rate.1.min|io.confluent.kafka.server.session.expire.listener.zookeeper.disconnects.rate.1.min|io.confluent.kafka.server.controller.unclean.leader.elections.rate.1.min|io.confluent.kafka.server.replica.manager.partition.count|io.confluent.kafka.server.controller.unclean.leader.elections.total|io.confluent.kafka.server.partition.replicas.count|io.confluent.kafka.server.broker.topic.total.produce.requests.rate.1.min|io.confluent.kafka.server.controller.offline.partitions.count|io.confluent.kafka.server.socket.server.network.processor.avg.idle.percent|io.confluent.kafka.server.partition.under.replicated|io.confluent.kafka.server.log.log.start.offset|io.confluent.kafka.server.log.tier.size|io.confluent.kafka.server.log.size|io.confluent.kafka.server.tier.fetcher.bytes.fetched.total|io.confluent.kafka.server.request.total.time.ms.p50|io.confluent.kafka.server.tenant.consumer.lag.offsets|io.confluent.kafka.server.session.expire.listener.zookeeper.expires.rate.1.min|io.confluent.kafka.server.log.log.end.offset|io.confluent.kafka.server.broker.topic.bytes.in.rate.1.min|io.confluent.kafka.server.partition.under.min.isr|io.confluent.kafka.server.partition.in.sync.replicas.count|io.confluent.telemetry.http.exporter.batches.dropped|io.confluent.telemetry.http.exporter.items.total|io.confluent.telemetry.http.exporter.items.succeeded|io.confluent.telemetry.http.exporter.send.time.total.millis|io.confluent.kafka.server.controller.leader.election.rate.(?!.*delta).*|io.confluent.telemetry.http.exporter.batches.failed"
+      confluent.telemetry.exporter._c3.client.base.url: "{{control_center_next_gen_dependency_prometheus_url}}/api/v1/otlp"
+      confluent.telemetry.exporter._c3.client.compression: gzip
+      confluent.telemetry.exporter._c3.api.key: "{{kafka_broker_telemetry_control_center_next_gen_user}}"
+      confluent.telemetry.exporter._c3.api.secret: "{{kafka_broker_telemetry_control_center_next_gen_password}}"
+      confluent.telemetry.exporter._c3.buffer.pending.batches.max: 80
+      confluent.telemetry.exporter._c3.buffer.batch.items.max: 4000
+      confluent.telemetry.exporter._c3.buffer.inflight.submissions.max: 10
+      confluent.telemetry.metrics.collector.interval.ms: 60000
+      confluent.telemetry.remoteconfig._confluent.enabled: false
+      confluent.consumer.lag.emitter.enabled: "true"
+  metrics_reporter_for_control_center_next_gen_client:
+    enabled: "{{control_center_next_gen_dependency_prometheus_ssl_enabled}}"
+    properties:
+      confluent.telemetry.exporter._c3.https.ssl.protocol: TLSv1.2
+      confluent.telemetry.exporter._c3.https.ssl.truststore.location: "{{kafka_broker_truststore_path}}"
+      confluent.telemetry.exporter._c3.https.ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
+      # If FIPS set to BCFKS else JKS
+      confluent.telemetry.exporter._c3.https.ssl.truststore.type:  "{% if fips_enabled|bool %}BCFKS{% else %}JKS{% endif %}"
+  metrics_reporter_for_control_center_next_gen_client_mtls:
+    enabled: "{{control_center_next_gen_dependency_prometheus_mtls_enabled}}"
+    properties:
+      confluent.telemetry.exporter._c3.https.ssl.keystore.location: "{{kafka_broker_keystore_path}}"
+      confluent.telemetry.exporter._c3.https.ssl.keystore.password: "{{kafka_broker_keystore_storepass}}"
+      confluent.telemetry.exporter._c3.https.ssl.key.password: "{{kafka_broker_keystore_keypass}}"
+      # If FIPS set to BCFKS else JKS
+      confluent.telemetry.exporter._c3.https.ssl.keystore.type: "{% if fips_enabled|bool %}BCFKS{% else %}JKS{% endif %}"
   metrics_reporter_client:
     enabled: "{{ kafka_broker_metrics_reporter_enabled|bool }}"
     properties: "{{ kafka_broker_listeners[kafka_broker_inter_broker_listener_name] | confluent.platform.client_properties(ssl_enabled, fips_enabled, ssl_mutual_auth_enabled, sasl_protocol,
                     'confluent.metrics.reporter.', kafka_broker_truststore_path, kafka_broker_truststore_storepass, False, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                     false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
                     kerberos_kafka_broker_primary, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'),
-                    false, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls) }}"
+                    false, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_broker_oauth_user, kafka_broker_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   telemetry:
     enabled: "{{kafka_broker_telemetry_enabled}}"
     properties:
@@ -398,7 +927,7 @@ kafka_broker_properties:
                     'confluent.security.event.logger.exporter.kafka.', kafka_broker_truststore_path, kafka_broker_truststore_storepass, False, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                     false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
                     kerberos_kafka_broker_primary|default('kafka'), kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'),
-                    false, 'user', 'pass', mds_bootstrap_server_urls) }}"
+                    false, 'user', 'pass', mds_bootstrap_server_urls, oauth_enabled, kafka_broker_oauth_user, kafka_broker_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   audit_logs_destination_admin:
     enabled: "{{audit_logs_destination_enabled and rbac_enabled and not external_mds_enabled}}"
     properties:
@@ -409,7 +938,7 @@ kafka_broker_properties:
                     'confluent.security.event.logger.destination.admin.', kafka_broker_truststore_path, kafka_broker_truststore_storepass, False, kafka_broker_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                     false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
                     kerberos_kafka_broker_primary|default('kafka'), kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'),
-                    false, 'user', 'pass', mds_bootstrap_server_urls) }}"
+                    false, 'user', 'pass', mds_bootstrap_server_urls, oauth_enabled, kafka_broker_oauth_user, kafka_broker_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
 kafka_broker_combined_properties: "{{kafka_broker_properties | confluent.platform.combine_properties}}"
 
 kafka_broker_final_properties: "{{ kafka_broker_combined_properties | combine(kafka_broker_custom_properties) }}"
@@ -423,7 +952,7 @@ kafka_broker_default_client_properties: "{{ kafka_broker_listeners[kafka_broker_
                             '', kafka_broker_pkcs12_truststore_path, kafka_broker_truststore_storepass, False, kafka_broker_pkcs12_keystore_path, kafka_broker_keystore_storepass, kafka_broker_keystore_keypass,
                             false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
                             kerberos_kafka_broker_primary, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'),
-                            false, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls) }}"
+                            false, kafka_broker_ldap_user, kafka_broker_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_broker_oauth_user, kafka_broker_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
 
 kafka_broker_client_properties: "{{ kafka_broker_default_client_properties | combine(kafka_broker_custom_client_properties) }}"
 
@@ -443,8 +972,7 @@ schema_registry:
 
 schema_registry_http_protocol: "{{ 'https' if schema_registry_ssl_enabled|bool else 'http' }}"
 
-_schema_registry_url: "{{schema_registry_http_protocol}}://{{ (groups.get('schema_registry') if groups.get('schema_registry') else ['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + schema_registry_listener_port|string + ',' + schema_registry_http_protocol + '://') }}:{{schema_registry_listener_port}}"
-
+_schema_registry_url: "{{schema_registry_http_protocol}}://{{ (groups.get('schema_registry') if groups.get('schema_registry') else ['localhost']) | confluent.platform.resolve_and_format_hostnames(hostvars) | join(':' + schema_registry_listener_port|string + ',' + schema_registry_http_protocol + '://') }}:{{schema_registry_listener_port}}"
 schema_registry_url: "{{ ccloud_schema_registry_url if ccloud_schema_registry_enabled else _schema_registry_url }}"
 
 schema_registry_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost'])  | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[schema_registry_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[schema_registry_kafka_listener_name]['port']}}"
@@ -469,6 +997,10 @@ schema_registry_properties:
       ssl.keystore.location: "{{schema_registry_keystore_path}}"
       ssl.keystore.password: "{{schema_registry_keystore_storepass}}"
       ssl.key.password: "{{schema_registry_keystore_keypass}}"
+  principal_mapping_rules:
+    enabled: "{{schema_registry_ssl_enabled}}"
+    properties:
+      auth.ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
   truststore:
     enabled: "{{schema_registry_ssl_mutual_auth_enabled or mds_tls_enabled}}"
     properties:
@@ -477,7 +1009,7 @@ schema_registry_properties:
   mtls:
     enabled: "{{ schema_registry_authentication_type == 'mtls' }}"
     properties:
-      ssl.client.auth: 'true'
+      ssl.client.authentication: "{{ schema_registry_ssl_client_authentication | upper }}"
   basic:
     enabled: "{{ schema_registry_authentication_type == 'basic' }}"
     properties:
@@ -490,19 +1022,53 @@ schema_registry_properties:
                     'kafkastore.', schema_registry_truststore_path, schema_registry_truststore_storepass, public_certificates_enabled, schema_registry_keystore_path, schema_registry_keystore_storepass, schema_registry_keystore_keypass,
                     false, sasl_plain_users_final.schema_registry.principal, sasl_plain_users_final.schema_registry.password, sasl_scram_users_final.schema_registry.principal, sasl_scram_users_final.schema_registry.password, sasl_scram256_users_final.schema_registry.principal, sasl_scram256_users_final.schema_registry.password,
                     kerberos_kafka_broker_primary, schema_registry_keytab_path, schema_registry_kerberos_principal|default('kafka'),
-                    false, schema_registry_ldap_user, schema_registry_ldap_password, mds_bootstrap_server_urls) }}"
+                    false, schema_registry_ldap_user, schema_registry_ldap_password, mds_bootstrap_server_urls, oauth_enabled, schema_registry_oauth_user, schema_registry_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   rbac:
-    enabled: "{{rbac_enabled}}"
+    enabled: "{{ rbac_enabled }}"
     properties:
       schema.registry.resource.extension.class: io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension
       confluent.schema.registry.authorizer.class: io.confluent.kafka.schemaregistry.security.authorizer.rbac.RbacAuthorizer
-      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
       confluent.schema.registry.auth.mechanism: JETTY_AUTH
       public.key.path: "{{rbac_enabled_public_pem_path}}"
-      authentication.roles: "**"
       confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
+  rbac_ldap:
+    enabled: "{{ rbac_enabled and auth_mode == 'ldap' and (not schema_registry_mds_cert_auth_only|bool)}}"
+    properties:
       confluent.metadata.http.auth.credentials.provider: BASIC
       confluent.metadata.basic.auth.user.info: "{{ schema_registry_ldap_user | default('MISSING') }}:{{ schema_registry_ldap_password | default('MISSING')}}"
+  rbac_oauth:
+    enabled: "{{rbac_enabled and oauth_enabled and (not schema_registry_mds_cert_auth_only|bool)}}"
+    properties:
+      confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
+      confluent.metadata.oauthbearer.login.client.id: "{{schema_registry_oauth_user}}"
+      confluent.metadata.oauthbearer.login.client.secret: "{{schema_registry_oauth_password}}"
+      confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
+  rbac_oauth_scope:
+    enabled: "{{rbac_enabled and oauth_enabled and oauth_groups_scope!='none' and (not schema_registry_mds_cert_auth_only|bool) }}"
+    properties:
+      confluent.metadata.oauthbearer.login.oauth.scope: "{{oauth_groups_scope}}"
+  sr_oauth:
+    enabled: "{{schema_registry_oauth_enabled}}"
+    properties:
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
+      oauthbearer.jwks.endpoint.url: "{{oauth_jwks_uri}}"
+      oauthbearer.sub.claim.name: "{{ oauth_sub_claim }}"
+      oauthbearer.expected.issuer: "{{ oauth_issuer_url }}"
+  sr_oauth_claim:
+    enabled: "{{schema_registry_oauth_enabled and oauth_groups_claim!='none' }}"
+    properties:
+      oauthbearer.groups.claim.name: "{{ oauth_groups_claim }}"
+  sr_oauth_audience:
+    enabled: "{{schema_registry_oauth_enabled and oauth_expected_audience!='none' }}"
+    properties:
+      oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
+  sr_oauth_ssl:
+    enabled: "{{schema_registry_oauth_enabled and idp_self_signed}}"
+    properties:
+      ssl.truststore.location: "{{schema_registry_truststore_path}}"
+      ssl.truststore.password: "{{schema_registry_truststore_storepass}}"
   rbac_external_client:
     enabled: "{{ rbac_enabled and external_mds_enabled and mds_tls_enabled }}"
     properties:
@@ -513,8 +1079,20 @@ schema_registry_properties:
     properties:
       confluent.metadata.ssl.truststore.location: "{{schema_registry_truststore_path}}"
       confluent.metadata.ssl.truststore.password: "{{schema_registry_truststore_storepass}}"
-      confluent.metadata.ssl.endpoint.identification.algorithm:
-        HTTPS
+      confluent.metadata.ssl.endpoint.identification.algorithm: HTTPS
+  mds_mtls_client:
+    enabled: "{{ rbac_enabled and mds_ssl_client_authentication != 'none' }}"
+    properties:
+      confluent.metadata.ssl.keystore.location: "{{schema_registry_keystore_path}}"
+      confluent.metadata.ssl.keystore.password: "{{schema_registry_keystore_storepass}}"
+      confluent.metadata.ssl.key.password: "{{schema_registry_keystore_keypass}}"
+      confluent.metadata.ssl.truststore.location: "{{schema_registry_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{schema_registry_truststore_storepass}}"
+  oauth_mds_client:
+    enabled: "{{ oauth_enabled and rbac_enabled and idp_self_signed and (not schema_registry_mds_cert_auth_only) }}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{schema_registry_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{schema_registry_truststore_storepass}}"
   telemetry:
     enabled: "{{schema_registry_telemetry_enabled}}"
     properties:
@@ -614,7 +1192,11 @@ kafka_connect_properties:
   mtls:
     enabled: "{{ kafka_connect_authentication_type == 'mtls' }}"
     properties:
-      listeners.https.ssl.client.auth: required
+      listeners.https.ssl.client.auth: "{{ kafka_connect_ssl_client_authentication }}"
+  principal_mapping_rules:
+    enabled: "{{ssl_enabled}}"
+    properties:
+      auth.ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
   sr:
     enabled: "{{ 'schema_registry' in groups or ccloud_schema_registry_enabled|bool }}"
     properties:
@@ -622,6 +1204,7 @@ kafka_connect_properties:
       key.converter.schema.registry.url: "{{schema_registry_url}}"
   sr_ssl:
     enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool and not ccloud_schema_registry_enabled }}"
+    # This can also handle connect->sr communication over mtls
     properties:
       value.converter.schema.registry.ssl.truststore.location: "{{kafka_connect_truststore_path}}"
       value.converter.schema.registry.ssl.truststore.password: "{{kafka_connect_truststore_storepass}}"
@@ -646,21 +1229,21 @@ kafka_connect_properties:
                             '', kafka_connect_truststore_path, kafka_connect_truststore_storepass, public_certificates_enabled, kafka_connect_keystore_path, kafka_connect_keystore_storepass, kafka_connect_keystore_keypass,
                             false, sasl_plain_users_final.kafka_connect.principal, sasl_plain_users_final.kafka_connect.password, sasl_scram_users_final.kafka_connect.principal, sasl_scram_users_final.kafka_connect.password, sasl_scram256_users_final.kafka_connect.principal, sasl_scram256_users_final.kafka_connect.password,
                             kerberos_kafka_broker_primary, kafka_connect_keytab_path, kafka_connect_kerberos_principal|default('kafka'),
-                            false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls) }}"
+                            false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_connect_oauth_user, kafka_connect_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   producer:
     enabled: true
     properties: "{{ kafka_broker_listeners[kafka_connect_producer_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
                             'producer.', kafka_connect_truststore_path, kafka_connect_truststore_storepass, public_certificates_enabled, kafka_connect_keystore_path, kafka_connect_keystore_storepass, kafka_connect_keystore_keypass,
-                            rbac_enabled, sasl_plain_users_final.kafka_connect.principal, sasl_plain_users_final.kafka_connect.password, sasl_scram_users_final.kafka_connect.principal, sasl_scram_users_final.kafka_connect.password, sasl_scram256_users_final.kafka_connect.principal, sasl_scram256_users_final.kafka_connect.password,
+                            false, sasl_plain_users_final.kafka_connect.principal, sasl_plain_users_final.kafka_connect.password, sasl_scram_users_final.kafka_connect.principal, sasl_scram_users_final.kafka_connect.password, sasl_scram256_users_final.kafka_connect.principal, sasl_scram256_users_final.kafka_connect.password,
                             kerberos_kafka_broker_primary, kafka_connect_keytab_path, kafka_connect_kerberos_principal|default('kafka'),
-                            false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls) }}"
+                            false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls, oauth_enabled and not ldap_with_oauth_enabled, kafka_connect_oauth_user, kafka_connect_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   consumer:
     enabled: true
     properties: "{{ kafka_broker_listeners[kafka_connect_consumer_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
                             'consumer.', kafka_connect_truststore_path, kafka_connect_truststore_storepass, public_certificates_enabled, kafka_connect_keystore_path, kafka_connect_keystore_storepass, kafka_connect_keystore_keypass,
-                            rbac_enabled, sasl_plain_users_final.kafka_connect.principal, sasl_plain_users_final.kafka_connect.password, sasl_scram_users_final.kafka_connect.principal, sasl_scram_users_final.kafka_connect.password, sasl_scram256_users_final.kafka_connect.principal, sasl_scram256_users_final.kafka_connect.password,
+                            false, sasl_plain_users_final.kafka_connect.principal, sasl_plain_users_final.kafka_connect.password, sasl_scram_users_final.kafka_connect.principal, sasl_scram_users_final.kafka_connect.password, sasl_scram256_users_final.kafka_connect.principal, sasl_scram256_users_final.kafka_connect.password,
                             kerberos_kafka_broker_primary, kafka_connect_keytab_path, kafka_connect_kerberos_principal|default('kafka'),
-                            false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls) }}"
+                            false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls, oauth_enabled and not ldap_with_oauth_enabled, kafka_connect_oauth_user, kafka_connect_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   monitoring_interceptor:
     enabled: "{{ kafka_connect_monitoring_interceptors_enabled|bool }}"
     properties:
@@ -675,22 +1258,57 @@ kafka_connect_properties:
                             'producer.confluent.monitoring.interceptor.', kafka_connect_truststore_path, kafka_connect_truststore_storepass, public_certificates_enabled, kafka_connect_keystore_path, kafka_connect_keystore_storepass, kafka_connect_keystore_keypass,
                             false, sasl_plain_users_final.kafka_connect.principal, sasl_plain_users_final.kafka_connect.password, sasl_scram_users_final.kafka_connect.principal, sasl_scram_users_final.kafka_connect.password, sasl_scram256_users_final.kafka_connect.principal, sasl_scram256_users_final.kafka_connect.password,
                             kerberos_kafka_broker_primary, kafka_connect_keytab_path, kafka_connect_kerberos_principal|default('kafka'),
-                            false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls) }}"
+                            false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_connect_oauth_user, kafka_connect_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   consumer_monitoring_interceptor_client:
     enabled: "{{ kafka_connect_monitoring_interceptors_enabled|bool }}"
     properties: "{{ kafka_broker_listeners[kafka_connect_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
                             'consumer.confluent.monitoring.interceptor.', kafka_connect_truststore_path, kafka_connect_truststore_storepass, public_certificates_enabled, kafka_connect_keystore_path, kafka_connect_keystore_storepass, kafka_connect_keystore_keypass,
                             false, sasl_plain_users_final.kafka_connect.principal, sasl_plain_users_final.kafka_connect.password, sasl_scram_users_final.kafka_connect.principal, sasl_scram_users_final.kafka_connect.password, sasl_scram256_users_final.kafka_connect.principal, sasl_scram256_users_final.kafka_connect.password,
                             kerberos_kafka_broker_primary, kafka_connect_keytab_path, kafka_connect_kerberos_principal|default('kafka'),
-                            false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls) }}"
+                            false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_connect_oauth_user, kafka_connect_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   rbac:
     enabled: "{{rbac_enabled}}"
     properties:
-      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
       public.key.path: "{{rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
-      confluent.metadata.basic.auth.user.info: "{{kafka_connect_ldap_user| default('MISSING')}}:{{kafka_connect_ldap_password| default('MISSING')}}"
+  rbac_ldap:
+    enabled: "{{ rbac_enabled and auth_mode == 'ldap' and (not kafka_connect_mds_cert_auth_only) }}"
+    properties:
       confluent.metadata.http.auth.credentials.provider: BASIC
+      confluent.metadata.basic.auth.user.info: "{{kafka_connect_ldap_user| default('MISSING')}}:{{kafka_connect_ldap_password| default('MISSING')}}"
+  rbac_oauth:
+    enabled: "{{ rbac_enabled and oauth_enabled and (not kafka_connect_mds_cert_auth_only) }}"
+    properties:
+      confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
+      confluent.metadata.oauthbearer.login.client.id: "{{kafka_connect_oauth_user}}"
+      confluent.metadata.oauthbearer.login.client.secret: "{{kafka_connect_oauth_password}}"
+      confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
+  rbac_oauth_scope:
+    enabled: "{{rbac_enabled and oauth_enabled and oauth_groups_scope!='none' and (not kafka_connect_mds_cert_auth_only) }}"
+    properties:
+      confluent.metadata.oauthbearer.login.oauth.scope: "{{oauth_groups_scope}}"
+  kafka_connect_oauth:
+    enabled: "{{kafka_connect_oauth_enabled}}"
+    properties:
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
+      oauthbearer.jwks.endpoint.url: "{{oauth_jwks_uri}}"
+      oauthbearer.sub.claim.name: "{{ oauth_sub_claim }}"
+      oauthbearer.expected.issuer: "{{ oauth_issuer_url }}"
+  kafka_connect_oauth_claim:
+    enabled: "{{kafka_connect_oauth_enabled and oauth_groups_claim!='none' }}"
+    properties:
+      oauthbearer.groups.claim.name: "{{ oauth_groups_claim }}"
+  kafka_connect_oauth_audience:
+    enabled: "{{kafka_connect_oauth_enabled and oauth_expected_audience!='none' }}"
+    properties:
+      oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
+  kafka_connect_oauth_ssl:
+    enabled: "{{kafka_connect_oauth_enabled and idp_self_signed}}"
+    properties:
+      ssl.truststore.location: "{{kafka_connect_truststore_path}}"
+      ssl.truststore.password: "{{kafka_connect_truststore_storepass}}"
   rbac_external_client:
     enabled: "{{ rbac_enabled and external_mds_enabled and mds_tls_enabled }}"
     properties:
@@ -707,8 +1325,20 @@ kafka_connect_properties:
     properties:
       confluent.metadata.ssl.truststore.location: "{{kafka_connect_truststore_path}}"
       confluent.metadata.ssl.truststore.password: "{{kafka_connect_truststore_storepass}}"
-      confluent.metadata.ssl.endpoint.identification.algorithm:
-        HTTPS
+      confluent.metadata.ssl.endpoint.identification.algorithm: HTTPS
+  mds_mtls_client:
+    enabled: "{{ rbac_enabled and mds_ssl_client_authentication != 'none' }}"
+    properties:
+      confluent.metadata.ssl.keystore.location: "{{kafka_connect_keystore_path}}"
+      confluent.metadata.ssl.keystore.password: "{{kafka_connect_keystore_storepass}}"
+      confluent.metadata.ssl.key.password: "{{kafka_connect_keystore_keypass}}"
+      confluent.metadata.ssl.truststore.location: "{{kafka_connect_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{kafka_connect_truststore_storepass}}"
+  oauth_mds_client:
+    enabled: "{{ oauth_enabled and rbac_enabled and idp_self_signed }}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{kafka_connect_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{kafka_connect_truststore_storepass}}"
   secret_registry:
     enabled: "{{kafka_connect_secret_registry_enabled}}"
     properties:
@@ -725,7 +1355,7 @@ kafka_connect_properties:
                     'config.providers.secret.param.kafkastore.', kafka_connect_truststore_path, kafka_connect_truststore_storepass, public_certificates_enabled, kafka_connect_keystore_path, kafka_connect_keystore_storepass, kafka_connect_keystore_keypass,
                     false, sasl_plain_users_final.kafka_connect.principal, sasl_plain_users_final.kafka_connect.password, sasl_scram_users_final.kafka_connect.principal, sasl_scram_users_final.kafka_connect.password, sasl_scram256_users_final.kafka_connect.principal, sasl_scram256_users_final.kafka_connect.password,
                     kerberos_kafka_broker_primary, kafka_connect_keytab_path, kafka_connect_kerberos_principal|default('kafka'),
-                    false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls) }}"
+                    false, kafka_connect_ldap_user, kafka_connect_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_connect_oauth_user, kafka_connect_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   telemetry:
     enabled: "{{kafka_connect_telemetry_enabled}}"
     properties:
@@ -798,7 +1428,15 @@ ksql_properties:
   mtls:
     enabled: "{{ ksql_authentication_type == 'mtls' }}"
     properties:
-      ssl.client.auth: 'true'
+      # simply replacing old true with required. This fixes the non RBAC mTLS on ksqldb server
+      # when using auth: true also somehow works but it throws a warn
+      # WARN Unrecognized client authentication configuration true.  Falling back to NONE
+      # Despite this if we hit ksql endpoint it only works if we provide a client cert
+      ssl.client.authentication: REQUIRED
+  principal_mapping_rules:
+    enabled: "{{ssl_enabled}}"
+    properties:
+      ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
   basic:
     enabled: "{{ ksql_authentication_type == 'basic' }}"
     properties:
@@ -806,37 +1444,45 @@ ksql_properties:
       authentication.realm: KsqlServer
       authentication.roles: "{{ ksql_basic_users | confluent.platform.get_roles | unique | join(',') }}"
   kafka_sasl_plain:
-    enabled: "{{ kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'PLAIN' }}"
+    enabled: "{{ (kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'PLAIN' }}"
     properties:
       sasl.mechanism: PLAIN
       sasl.jaas.config: |-
         org.apache.kafka.common.security.plain.PlainLoginModule required username="{{sasl_plain_users_final.ksql.principal}}" password="{{sasl_plain_users_final.ksql.password}}";
   kafka_sasl_scram:
-    enabled: "{{ kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'SCRAM-SHA-512' }}"
+    enabled: "{{ (kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'SCRAM-SHA-512' }}"
     properties:
       sasl.mechanism: SCRAM-SHA-512
       sasl.jaas.config: |-
         org.apache.kafka.common.security.scram.ScramLoginModule required username="{{sasl_scram_users_final.ksql.principal}}" password="{{sasl_scram_users_final.ksql.password}}";
   kafka_sasl_scram256:
-    enabled: "{{ kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'SCRAM-SHA-256' }}"
+    enabled: "{{ (kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'SCRAM-SHA-256' }}"
     properties:
       sasl.mechanism: SCRAM-SHA-256
       sasl.jaas.config: |-
         org.apache.kafka.common.security.scram.ScramLoginModule required username="{{sasl_scram256_users_final.ksql.principal}}" password="{{sasl_scram256_users_final.ksql.password}}";
   kafka_sasl_gssapi:
-    enabled: "{{ kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'GSSAPI' }}"
+    enabled: "{{ (kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'GSSAPI' }}"
     properties:
       sasl.mechanism: GSSAPI
       sasl.kerberos.service.name: "{{kerberos_kafka_broker_primary}}"
       sasl.jaas.config: |-
         com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab="{{ksql_keytab_path}}" principal="{{ksql_kerberos_principal | default('ksql')}}";
-  kafka_sasl_oauth:
-    enabled: "{{ kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'OAUTHBEARER' }}"
+  kafka_sasl_ldap:
+    enabled: "{{ ((kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'OAUTHBEARER' ) and (auth_mode == 'ldap') }}"
     properties:
       sasl.mechanism: OAUTHBEARER
       sasl.login.callback.handler.class: io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler
       sasl.jaas.config: |-
         org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username="{{ksql_ldap_user | default('ksql')}}" password="{{ksql_ldap_password | default('pass')}}" metadataServerUrls="{{mds_bootstrap_server_urls}}";
+  kafka_sasl_oauth:
+    enabled: "{{ ((kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)[0] == 'OAUTHBEARER' ) and oauth_enabled }}"
+    properties:
+      sasl.mechanism: OAUTHBEARER
+      sasl.login.callback.handler.class: org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler
+      sasl.oauthbearer.token.endpoint.url: "{{oauth_token_uri}}"
+      sasl.jaas.config: |-
+        org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId="{{ksql_oauth_user}}" clientSecret="{{ksql_oauth_password}}" {% if oauth_groups_scope!='none' %}scope="{{oauth_groups_scope}}"{% endif %} {% if idp_self_signed %}ssl.truststore.location="{{ksql_truststore_path}}" ssl.truststore.password="{{ksql_truststore_storepass}}"{% endif %};
   sr:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
@@ -855,10 +1501,26 @@ ksql_properties:
       ksql.schema.registry.basic.auth.credentials.source: USER_INFO
       ksql.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users_final.admin.principal}}:{{schema_registry_basic_users_final.admin.password}}"
   sr_rbac:
-    enabled: "{{ 'schema_registry' in groups and rbac_enabled|bool }}"
+    enabled: "{{ 'schema_registry' in groups and rbac_enabled|bool and ((not schema_registry_oauth_enabled) or ldap_with_oauth_enabled)}}"
     properties:
       ksql.schema.registry.basic.auth.credentials.source: USER_INFO
       ksql.schema.registry.basic.auth.user.info: "{{ ksql_ldap_user | default('ksql') }}:{{ ksql_ldap_password | default('pass') }}"
+  sr_oauth:
+    enabled: "{{ 'schema_registry' in groups and schema_registry_oauth_enabled and (not ldap_with_oauth_enabled)}}"
+    properties:
+      ksql.schema.registry.bearer.auth.credentials.source: OAUTHBEARER
+      ksql.schema.registry.bearer.auth.client.id: "{{ksql_oauth_user}}"
+      ksql.schema.registry.bearer.auth.client.secret: "{{ksql_oauth_password}}"
+      ksql.schema.registry.bearer.auth.issuer.endpoint.url: "{{oauth_token_uri}}"
+  sr_oauth_scope:
+    enabled: "{{ 'schema_registry' in groups and schema_registry_oauth_enabled and (not ldap_with_oauth_enabled) and oauth_groups_scope!='none'}}"
+    properties:
+      ksql.schema.registry.bearer.auth.scope: "{{oauth_groups_scope}}"
+  sr_oauth_ssl:
+    enabled: "{{ 'schema_registry' in groups and schema_registry_oauth_enabled and (not ldap_with_oauth_enabled) and idp_self_signed }}"
+    properties:
+      ksql.schema.registry.ssl.truststore.location: "{{ksql_truststore_path}}"
+      ksql.schema.registry.ssl.truststore.password: "{{ksql_truststore_storepass}}"
   monitoring_interceptor:
     enabled: "{{ ksql_monitoring_interceptors_enabled|bool }}"
     properties:
@@ -872,16 +1534,53 @@ ksql_properties:
                             'confluent.monitoring.interceptor.', ksql_truststore_path, ksql_truststore_storepass, public_certificates_enabled, ksql_keystore_path, ksql_keystore_storepass, ksql_keystore_keypass,
                             false, sasl_plain_users_final.ksql.principal, sasl_plain_users_final.ksql.password, sasl_scram_users_final.ksql.principal, sasl_scram_users_final.ksql.password, sasl_scram256_users_final.ksql.principal, sasl_scram256_users_final.ksql.password,
                             kerberos_kafka_broker_primary, ksql_keytab_path, ksql_kerberos_principal|default('ksql'),
-                            false, ksql_ldap_user, ksql_ldap_password, mds_bootstrap_server_urls) }}"
+                            false, ksql_ldap_user, ksql_ldap_password, mds_bootstrap_server_urls, oauth_enabled and (not ldap_with_oauth_enabled), ksql_oauth_user, ksql_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   rbac:
     enabled: "{{rbac_enabled}}"
     properties:
-      ksql.security.extension.class: io.confluent.ksql.security.KsqlConfluentSecurityExtension
-      ksql.authentication.plugin.class: io.confluent.ksql.security.VertxBearerOrBasicAuthenticationPlugin
       public.key.path: "{{rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
+  rbac_ldap:
+    enabled: "{{ rbac_enabled and auth_mode == 'ldap' and (not ksql_mds_cert_auth_only) }}"
+    properties:
       confluent.metadata.basic.auth.user.info: "{{ ksql_ldap_user | default('ksql') }}:{{ ksql_ldap_password | default('pass') }}"
       confluent.metadata.http.auth.credentials.provider: BASIC
+      ksql.security.extension.class: io.confluent.ksql.security.KsqlConfluentSecurityExtension
+      ksql.authentication.plugin.class: io.confluent.ksql.security.VertxAuthenticationHandlerPlugin
+  rbac_oauth:
+    enabled: "{{ rbac_enabled and oauth_enabled and (not ksql_mds_cert_auth_only ) }}"
+    properties:
+      confluent.metadata.oauthbearer.login.client.id: "{{ksql_oauth_user}}"
+      confluent.metadata.oauthbearer.login.client.secret: "{{ksql_oauth_password}}"
+      confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
+      confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
+      ksql.security.extension.class: io.confluent.ksql.security.KsqlConfluentSecurityExtension
+      ksql.authentication.plugin.class: io.confluent.ksql.security.VertxAuthenticationHandlerPlugin
+  rbac_oauth_scope:
+    enabled: "{{ rbac_enabled and oauth_enabled and oauth_groups_scope!='none' and (not ksql_mds_cert_auth_only) }}"
+    properties:
+      confluent.metadata.oauthbearer.login.oauth.scope: "{{ oauth_groups_scope }}"
+  ksql_oauth:
+    enabled: "{{ksql_oauth_enabled}}"
+    properties:
+      ksql.authentication.plugin.class: io.confluent.ksql.security.VertxAuthenticationHandlerPlugin
+      oauthbearer.jwks.endpoint.url: "{{oauth_jwks_uri}}"
+      oauthbearer.sub.claim.name: "{{ oauth_sub_claim }}"
+      oauthbearer.expected.issuer: "{{ oauth_issuer_url }}"
+  ksql_oauth_claim:
+    enabled: "{{ksql_oauth_enabled and oauth_groups_scope!='none' }}"
+    properties:
+      oauthbearer.groups.claim.name: "{{ oauth_groups_claim }}"
+  ksql_oauth_audience:
+    enabled: "{{ksql_oauth_enabled and oauth_expected_audience!='none' }}"
+    properties:
+      oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
+  ksql_oauth_ssl:
+    enabled: "{{ksql_oauth_enabled and idp_self_signed}}"
+    properties:
+      ssl.truststore.location: "{{ksql_truststore_path}}"
+      ssl.truststore.password: "{{ksql_truststore_storepass}}"
   rbac_external_client:
     enabled: "{{rbac_enabled and external_mds_enabled and mds_tls_enabled }}"
     properties:
@@ -893,6 +1592,14 @@ ksql_properties:
       confluent.metadata.ssl.truststore.location: "{{ksql_truststore_path}}"
       confluent.metadata.ssl.truststore.password: "{{ksql_truststore_storepass}}"
       confluent.metadata.ssl.endpoint.identification.algorithm: HTTPS
+  mds_mtls_client:
+    enabled: "{{ rbac_enabled and mds_ssl_client_authentication != 'none' }}"
+    properties:
+      confluent.metadata.ssl.keystore.location: "{{ksql_keystore_path}}"
+      confluent.metadata.ssl.keystore.password: "{{ksql_keystore_keypass}}"
+      confluent.metadata.ssl.key.password: "{{ksql_keystore_keypass}}"
+      confluent.metadata.ssl.truststore.location: "{{ksql_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{ksql_truststore_storepass}}"
   telemetry:
     enabled: "{{ksql_telemetry_enabled}}"
     properties:
@@ -943,13 +1650,15 @@ kafka_rest_http_protocol: "{{ 'https' if kafka_rest_ssl_enabled|bool else 'http'
 
 kafka_rest_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_rest_kafka_listener_name]['port']}}"
 
+kafka_rest_client_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[kafka_rest_client_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[kafka_rest_client_kafka_listener_name]['port']}}" # this needs to be added only in sasl_ssl kafka client i.e rp client
+
 kafka_rest_properties:
   defaults:
     enabled: true
     properties:
       listeners: "{{kafka_rest_http_protocol}}://0.0.0.0:{{kafka_rest_port}}"
       host.name: "{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}"
-      bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_rest_bootstrap_servers }}"
+      bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_rest_client_bootstrap_servers }}"
       confluent.license.topic: _confluent-command
   id:
     enabled: "{{ inventory_hostname in groups.kafka_rest }}"
@@ -968,10 +1677,28 @@ kafka_rest_properties:
     properties:
       ssl.truststore.location: "{{kafka_rest_truststore_path}}"
       ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
+  principal_mapping_rules:
+    enabled: "{{kafka_rest_ssl_enabled}}"
+    properties:
+      auth.ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
   mtls:
     enabled: "{{ kafka_rest_authentication_type == 'mtls' }}"
     properties:
-      ssl.client.auth: 'true'
+      ssl.client.authentication: "{{ kafka_rest_ssl_client_authentication | upper }}"
+  mds_mtls:
+    # in case listener has oauth then we need to add oauth configs
+    # if mtls only listener it will anyway not add oauth configs
+    # this license client will use same configs as rest proxy in case there is no mtls on mds
+    enabled: "{{ rbac_enabled|bool and mds_ssl_client_authentication != 'none' }}"
+    properties: "{{ kafka_broker_listeners[kafka_rest_license_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
+                    'confluent.license.', kafka_rest_truststore_path, kafka_rest_truststore_storepass, public_certificates_enabled, kafka_rest_keystore_path, kafka_rest_keystore_storepass, kafka_rest_keystore_keypass,
+                    false, sasl_plain_users_final.kafka_rest.principal, sasl_plain_users_final.kafka_rest.password, sasl_scram_users_final.kafka_rest.principal, sasl_scram_users_final.kafka_rest.password, sasl_scram256_users_final.kafka_rest.principal, sasl_scram256_users_final.kafka_rest.password,
+                    kerberos_kafka_broker_primary, kafka_rest_keytab_path, kafka_rest_kerberos_principal|default('rp'),
+                    false, kafka_rest_ldap_user, kafka_rest_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_rest_oauth_user, kafka_rest_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  kafka_license_bootstrap_server:
+    enabled: "{{ rbac_enabled|bool and mds_ssl_client_authentication != 'none' }}"
+    properties:
+      confluent.license.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_rest_bootstrap_servers }}"
   basic:
     enabled: "{{ kafka_rest_authentication_type == 'basic' }}"
     properties:
@@ -980,11 +1707,12 @@ kafka_rest_properties:
       authentication.roles: "{{ kafka_rest_basic_users | confluent.platform.get_roles | unique | join(',') }}"
   kafka_client:
     enabled: true
-    properties: "{{ kafka_broker_listeners[kafka_rest_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
+    # ignore login callback handler related props using omit_oauth_configs when talking to internal_token listener
+    properties: "{{ kafka_broker_listeners[kafka_rest_client_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
                     'client.', kafka_rest_truststore_path, kafka_rest_truststore_storepass, public_certificates_enabled, kafka_rest_keystore_path, kafka_rest_keystore_storepass, kafka_rest_keystore_keypass,
                     false, sasl_plain_users_final.kafka_rest.principal, sasl_plain_users_final.kafka_rest.password, sasl_scram_users_final.kafka_rest.principal, sasl_scram_users_final.kafka_rest.password, sasl_scram256_users_final.kafka_rest.principal, sasl_scram256_users_final.kafka_rest.password,
                     kerberos_kafka_broker_primary, kafka_rest_keytab_path, kafka_rest_kerberos_principal|default('rp'),
-                    false, kafka_rest_ldap_user, kafka_rest_ldap_password, mds_bootstrap_server_urls) }}"
+                    kafka_rest_client_kafka_listener_name == 'internal_token' and auth_mode == 'mtls', kafka_rest_ldap_user, kafka_rest_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_rest_oauth_user, kafka_rest_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   kafka_client_password_protection:
     # Edge case for RP only- 'client' prefix not honored by secrets protection
     enabled: "{{ kafka_rest_secrets_protection_enabled }}"
@@ -1017,20 +1745,56 @@ kafka_rest_properties:
       client.confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else kafka_rest_bootstrap_servers }}"
   monitoring_interceptor_client:
     enabled: "{{ kafka_rest_monitoring_interceptors_enabled|bool }}"
-    properties: "{{ kafka_broker_listeners[kafka_rest_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
+    # ignore login callback handler related props using omit_oauth_configs when talking to internal_token listener
+    properties: "{{ kafka_broker_listeners[kafka_rest_monitoring_interceptor_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
                             'client.confluent.monitoring.interceptor.', kafka_rest_truststore_path, kafka_rest_truststore_storepass, public_certificates_enabled, kafka_rest_keystore_path, kafka_rest_keystore_storepass, kafka_rest_keystore_keypass,
                             false, sasl_plain_users_final.kafka_rest.principal, sasl_plain_users_final.kafka_rest.password, sasl_scram_users_final.kafka_rest.principal, sasl_scram_users_final.kafka_rest.password, sasl_scram256_users_final.kafka_rest.principal, sasl_scram256_users_final.kafka_rest.password,
                             kerberos_kafka_broker_primary, kafka_rest_keytab_path, kafka_rest_kerberos_principal|default('rp'),
-                            false, kafka_rest_ldap_user, kafka_rest_ldap_password, mds_bootstrap_server_urls) }}"
+                            kafka_rest_monitoring_interceptor_kafka_listener_name == 'internal_token' and auth_mode == 'mtls', kafka_rest_ldap_user, kafka_rest_ldap_password, mds_bootstrap_server_urls, oauth_enabled, kafka_rest_oauth_user, kafka_rest_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
   rbac:
     enabled: "{{rbac_enabled}}"
     properties:
       kafka.rest.resource.extension.class: io.confluent.kafkarest.security.KafkaRestSecurityResourceExtension
-      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
       public.key.path: "{{rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
-      confluent.metadata.basic.auth.user.info: "{{kafka_rest_ldap_user | default('rest') }}:{{kafka_rest_ldap_password | default('pass')}}"
+  rbac_ldap:
+    enabled: "{{ rbac_enabled and auth_mode == 'ldap' and (not kafka_rest_mds_cert_auth_only) }}"
+    properties:
       confluent.metadata.http.auth.credentials.provider: BASIC
+      confluent.metadata.basic.auth.user.info: "{{kafka_rest_ldap_user | default('rest') }}:{{kafka_rest_ldap_password | default('pass')}}"
+  rbac_oauth:
+    enabled: "{{ rbac_enabled and oauth_enabled and (not kafka_rest_mds_cert_auth_only) }}"
+    properties:
+      confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
+      confluent.metadata.oauthbearer.login.client.id: "{{kafka_rest_oauth_user}}"
+      confluent.metadata.oauthbearer.login.client.secret: "{{kafka_rest_oauth_password}}"
+      confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
+  rbac_oauth_scope:
+    enabled: "{{rbac_enabled and oauth_enabled and oauth_groups_scope!='none' and (not kafka_rest_mds_cert_auth_only) }}"
+    properties:
+      confluent.metadata.oauthbearer.login.oauth.scope: "{{oauth_groups_scope}}"
+  kafka_rest_oauth:
+    enabled: "{{kafka_rest_oauth_enabled}}"
+    properties:
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
+      oauthbearer.jwks.endpoint.url: "{{oauth_jwks_uri}}"
+      oauthbearer.sub.claim.name: "{{ oauth_sub_claim }}"
+      oauthbearer.expected.issuer: "{{ oauth_issuer_url }}"
+  kafka_rest_oauth_claim:
+    enabled: "{{kafka_rest_oauth_enabled and oauth_groups_claim!='none' }}"
+    properties:
+      oauthbearer.groups.claim.name: "{{ oauth_groups_claim }}"
+  kafka_rest_oauth_audience:
+    enabled: "{{kafka_rest_oauth_enabled and oauth_expected_audience!='none' }}"
+    properties:
+      oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
+  kafka_rest_oauth_ssl:
+    enabled: "{{kafka_rest_oauth_enabled and idp_self_signed}}"
+    properties:
+      ssl.truststore.location: "{{kafka_rest_truststore_path}}"
+      ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
   rbac_external_client:
     enabled: "{{rbac_enabled and external_mds_enabled and mds_tls_enabled }}"
     properties:
@@ -1044,6 +1808,19 @@ kafka_rest_properties:
       confluent.metadata.ssl.truststore.location: "{{kafka_rest_truststore_path}}"
       confluent.metadata.ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
       confluent.metadata.ssl.endpoint.identification.algorithm: HTTPS
+  mds_mtls_client:
+    enabled: "{{ rbac_enabled and mds_ssl_client_authentication != 'none' }}"
+    properties:
+      confluent.metadata.ssl.keystore.location: "{{kafka_rest_keystore_path}}"
+      confluent.metadata.ssl.keystore.password: "{{kafka_rest_keystore_keypass}}"
+      confluent.metadata.ssl.key.password: "{{kafka_rest_keystore_keypass}}"
+      confluent.metadata.ssl.truststore.location: "{{kafka_rest_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
+  oauth_mds_client:
+    enabled: "{{oauth_enabled and rbac_enabled and idp_self_signed }}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{kafka_rest_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{kafka_rest_truststore_storepass}}"
   telemetry:
     enabled: "{{kafka_rest_telemetry_enabled}}"
     properties:
@@ -1088,6 +1865,8 @@ control_center_http_protocol: "{{ 'https' if control_center_ssl_enabled|bool els
 
 control_center_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[control_center_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[control_center_kafka_listener_name]['port']}}"
 
+control_center_streams_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[control_center_streams_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[control_center_streams_kafka_listener_name]['port']}}" # this needs to be added only in sasl_ssl kafka client i.e streams
+
 control_center_properties:
   defaults:
     enabled: true
@@ -1098,9 +1877,9 @@ control_center_properties:
       confluent.metrics.topic.replication: "{{control_center_default_internal_replication_factor}}"
       confluent.monitoring.interceptor.topic.replication: "{{control_center_default_internal_replication_factor}}"
       confluent.controlcenter.command.topic.replication: "{{control_center_default_internal_replication_factor}}"
-      confluent.controlcenter.rest.listeners: "{{control_center_http_protocol}}://{{control_center_listener_hostname}}:{{control_center_port}}"
-      bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else control_center_bootstrap_servers }}"
-      confluent.controlcenter.streams.security.protocol: "{{kafka_broker_listeners[control_center_kafka_listener_name] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol) }}"
+      confluent.controlcenter.rest.listeners: "{{control_center_http_protocol}}://{{ control_center_listener_hostname | confluent.platform.format_hostname }}:{{control_center_port}}"
+      bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else control_center_streams_bootstrap_servers }}"
+      confluent.controlcenter.streams.security.protocol: "{{kafka_broker_listeners[control_center_streams_kafka_listener_name] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol) }}"
   ssl:
     enabled: "{{control_center_ssl_enabled or (kafka_broker_rest_proxy_enabled and mds_tls_enabled) }}"
     properties:
@@ -1109,6 +1888,10 @@ control_center_properties:
       confluent.controlcenter.rest.ssl.key.password: "{{control_center_keystore_keypass}}"
       confluent.controlcenter.rest.ssl.truststore.location: "{{control_center_truststore_path}}"
       confluent.controlcenter.rest.ssl.truststore.password: "{{control_center_truststore_storepass}}"
+  principal_mapping_rules:
+    enabled: "{{control_center_ssl_enabled}}"
+    properties:
+      ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
   basic:
     enabled: "{{ control_center_authentication_type == 'basic' }}"
     properties:
@@ -1120,21 +1903,33 @@ control_center_properties:
   broker_embedded_rest_endpoint:
     enabled: "{{kafka_broker_rest_proxy_enabled or rbac_enabled }}"
     properties:
-      confluent.controlcenter.streams.cprest.url: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
+      confluent.controlcenter.streams.cprest.url: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_and_format_hostnames(hostvars) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
   kafka_client:
-    enabled: true
-    properties: "{{ kafka_broker_listeners[control_center_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
+    enabled: true # ignore login callback handler related props using omit_oauth_configs when talking to internal_token listener
+    properties: "{{ kafka_broker_listeners[control_center_streams_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
                     'confluent.controlcenter.streams.', control_center_truststore_path, control_center_truststore_storepass, public_certificates_enabled, control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass,
                     false, sasl_plain_users_final.control_center.principal, sasl_plain_users_final.control_center.password, sasl_scram_users_final.control_center.principal, sasl_scram_users_final.control_center.password, sasl_scram256_users_final.control_center.principal, sasl_scram256_users_final.control_center.password,
                     kerberos_kafka_broker_primary, control_center_keytab_path, control_center_kerberos_principal|default('c3'),
-                    false, control_center_ldap_user, control_center_ldap_password, mds_bootstrap_server_urls) }}"
+                    control_center_streams_kafka_listener_name == 'internal_token', control_center_ldap_user, control_center_ldap_password, mds_bootstrap_server_urls, oauth_enabled, control_center_oauth_user, control_center_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  kafka_client_token_cert_lcbh:  # add the new login callback handler for c3 to kafka communication
+    enabled: "{{ control_center_streams_kafka_listener_name == 'internal_token' }}"
+    properties:
+      confluent.controlcenter.streams.sasl.login.callback.handler.class: io.confluent.kafka.clients.plugins.auth.token.TokenCertificateLoginCallbackHandler
   kafka_interceptors:
-    enabled: true
-    properties: "{{ kafka_broker_listeners[control_center_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
+    enabled: true # ignore login callback handler related props using omit_oauth_configs when talking to internal_token listener
+    properties: "{{ kafka_broker_listeners[control_center_monitoring_interceptor_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
                     'confluent.monitoring.interceptor.', control_center_truststore_path, control_center_truststore_storepass, public_certificates_enabled, control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass,
                     false, sasl_plain_users_final.control_center.principal, sasl_plain_users_final.control_center.password, sasl_scram_users_final.control_center.principal, sasl_scram_users_final.control_center.password, sasl_scram256_users_final.control_center.principal, sasl_scram256_users_final.control_center.password,
                     kerberos_kafka_broker_primary, control_center_keytab_path, control_center_kerberos_principal|default('c3'),
-                    false, control_center_ldap_user, control_center_ldap_password, mds_bootstrap_server_urls) }}"
+                    control_center_monitoring_interceptor_kafka_listener_name == 'internal_token', control_center_ldap_user, control_center_ldap_password, mds_bootstrap_server_urls, oauth_enabled, control_center_oauth_user, control_center_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  kafka_interceptors_bootstrap_server:
+    enabled: true
+    properties:
+      confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else control_center_bootstrap_servers }}"
+  kafka_interceptors_token_cert_lcbh: # add the new login callback handler for c3 to kafka communication
+    enabled: "{{ control_center_monitoring_interceptor_kafka_listener_name == 'internal_token' }}"
+    properties:
+      confluent.monitoring.interceptor.sasl.login.callback.handler.class: io.confluent.kafka.clients.plugins.auth.token.TokenCertificateLoginCallbackHandler
   sr:
     enabled: "{{ 'schema_registry' in groups }}"
     properties:
@@ -1152,35 +1947,85 @@ control_center_properties:
     properties:
       confluent.controlcenter.schema.registry.basic.auth.credentials.source: USER_INFO
       confluent.controlcenter.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users_final.admin.principal}}:{{schema_registry_basic_users_final.admin.password}}"
+  sr_oauth:
+    enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) }}"
+    properties:
+      confluent.controlcenter.schema.registry.bearer.auth.credentials.source: OAUTHBEARER
+      confluent.controlcenter.schema.registry.oauthbearer.login.client.id: "{{ control_center_oauth_user }}"
+      confluent.controlcenter.schema.registry.oauthbearer.login.client.secret: "{{ control_center_oauth_password }}"
+  sr_oauth_scope:
+    enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) and oauth_groups_scope!='none' }}"
+    properties:
+      confluent.controlcenter.schema.registry.oauthbearer.login.oauth.scope: "{{ oauth_groups_scope }}"
+  sr_oauth_ssl:
+    enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) and idp_self_signed }}"
+    properties:
+      confluent.controlcenter.schema.registry.ssl.truststore.location: "{{ control_center_truststore_path }}"
+      confluent.controlcenter.schema.registry.ssl.truststore.password: "{{ control_center_truststore_storepass }}"
   connect:
     enabled: "{{ kafka_connect_cluster_ansible_group_names | default(omit) | length > 0 }}"
     properties: "{{ kafka_connect_cluster_ansible_group_names | confluent.platform.c3_connect_properties(groups, hostvars, kafka_connect_ssl_enabled,
         kafka_connect_http_protocol, kafka_connect_rest_port, kafka_connect_group_id, control_center_truststore_path, control_center_truststore_storepass,
-        control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass) }}"
+        control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass, kafka_connect_oauth_enabled, rbac_enabled,
+        control_center_oauth_user, control_center_oauth_password, oauth_groups_scope, idp_self_signed) }}"
   ksql:
     enabled: "{{ ksql_cluster_ansible_group_names | default(omit) | length > 0 }}"
     properties: "{{ ksql_cluster_ansible_group_names | confluent.platform.c3_ksql_properties(groups, hostvars, ksql_ssl_enabled,
         ksql_http_protocol, ksql_listener_port, control_center_truststore_path, control_center_truststore_storepass,
-        control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass) }}"
+        control_center_keystore_path, control_center_keystore_storepass, control_center_keystore_keypass, ksql_oauth_enabled, rbac_enabled,
+        control_center_oauth_user, control_center_oauth_password, oauth_groups_scope, idp_self_signed) }}"
+  oauth:
+    enabled: "{{oauth_enabled or schema_registry_oauth_enabled or kafka_connect_oauth_enabled}}"
+    properties:
+      confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
   rbac:
     enabled: "{{rbac_enabled}}"
     properties:
       confluent.controlcenter.rest.authentication.method: BEARER
       public.key.path: "{{rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
+  rbac_ldap:
+    enabled: "{{rbac_enabled and auth_mode == 'ldap' and (not control_center_mds_cert_auth_only) }}"
+    properties:
       confluent.metadata.basic.auth.user.info: "{{ control_center_ldap_user | default('c3') }}:{{ control_center_ldap_password | default('pass') }}"
       confluent.metadata.http.auth.credentials.provider: BASIC
+  rbac_oauth:
+    enabled: "{{rbac_enabled and oauth_enabled and (not control_center_mds_cert_auth_only)}}"
+    properties:
+      confluent.metadata.oauthbearer.login.client.id: "{{ control_center_oauth_user }}"
+      confluent.metadata.oauthbearer.login.client.secret: "{{ control_center_oauth_password }}"
+  rbac_oauth_scope:
+    enabled: "{{rbac_enabled and oauth_enabled and oauth_groups_scope != 'none' and (not control_center_mds_cert_auth_only)}}"
+    properties:
+      confluent.metadata.oauthbearer.login.oauth.scope: "{{ oauth_groups_scope }}"
   rbac_external_client:
     enabled: "{{rbac_enabled and external_mds_enabled and mds_tls_enabled }}"
     properties:
       confluent.controlcenter.streams.ssl.truststore.location: "{{control_center_truststore_path}}"
       confluent.controlcenter.streams.ssl.truststore.password: "{{control_center_truststore_storepass}}"
+  rbac_mds_sso:
+    enabled: "{{ rbac_enabled and sso_mode != 'none' }}"
+    properties:
+      confluent.controlcenter.auth.sso.mode: "{{ sso_mode }}"
   mds_client:
     enabled: "{{rbac_enabled and mds_tls_enabled }}"
     properties:
       confluent.metadata.ssl.truststore.location: "{{control_center_truststore_path}}"
       confluent.metadata.ssl.truststore.password: "{{control_center_truststore_storepass}}"
       confluent.metadata.ssl.endpoint.identification.algorithm: HTTPS
+  mds_mtls_client:
+    enabled: "{{ rbac_enabled and mds_ssl_client_authentication != 'none' }}"
+    properties:
+      confluent.metadata.ssl.keystore.location: "{{control_center_keystore_path}}"
+      confluent.metadata.ssl.keystore.password: "{{control_center_keystore_keypass}}"
+      confluent.metadata.ssl.key.password: "{{control_center_keystore_keypass}}"
+      confluent.metadata.ssl.truststore.location: "{{control_center_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{control_center_truststore_storepass}}"
+  oauth_mds_client:
+    enabled: "{{rbac_enabled and oauth_enabled and idp_self_signed}}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{ control_center_truststore_path }}"
+      confluent.metadata.ssl.truststore.password: "{{ control_center_truststore_storepass }}"
   telemetry:
     enabled: "{{control_center_telemetry_enabled}}"
     properties:
@@ -1209,6 +2054,278 @@ control_center_properties:
 control_center_combined_properties: "{{control_center_properties | confluent.platform.combine_properties}}"
 
 control_center_final_properties: "{{ control_center_combined_properties | combine(control_center_custom_properties) }}"
+
+### Control Center Next Generation Variables ###
+control_center_next_gen_service_name: confluent-control-center
+control_center_next_gen_dep_prometheus_service_name: prometheus
+control_center_next_gen_dep_alertmanager_service_name: alertmanager
+control_center_next_gen_default_user: cp-control-center
+control_center_next_gen_default_group: confluent
+control_center_next_gen_default_log_dir: /var/log/confluent/control-center
+control_center_next_gen_dep_prometheus:
+  config_path: "{{control_center_next_gen_dependencies_config_path}}"
+  data_path: "{{control_center_next_gen_data_dir}}/prometheus"
+  log_path: "{{control_center_next_gen_log_dir}}"
+  server_start_file: "{{ confluent_control_center_next_gen_binary_base_path }}/bin/prometheus-start"
+  config_file: "{{control_center_next_gen_dependencies_config_path}}/prometheus-generated.yml"
+  recording_rules_config_file: "{{control_center_next_gen_dependencies_config_path}}/recording_rules-generated.yml"
+  trigger_rules_config_file: "{{control_center_next_gen_dependencies_config_path}}/trigger_rules-generated.yml"
+  web_config_file: "{{control_center_next_gen_dependencies_config_path}}/web-config-prom.yml"
+  systemd_file: "{{ (systemd_base_dir, (control_center_next_gen_dep_prometheus_service_name, '.service') | join) | path_join }}"
+  systemd_override: "{{ ('/etc/systemd/system', (control_center_next_gen_dep_prometheus_service_name, '.service.d') | join , 'override.conf') | path_join }}"
+control_center_next_gen_dep_alertmanager:
+  config_path: "{{control_center_next_gen_dependencies_config_path}}"
+  data_path: "{{control_center_next_gen_data_dir}}/alertmanager"
+  log_path: "{{control_center_next_gen_log_dir}}"
+  server_start_file: "{{ confluent_control_center_next_gen_binary_base_path }}/bin/alertmanager-start"
+  config_file: "{{control_center_next_gen_dependencies_config_path}}/alertmanager-generated.yml"
+  web_config_file: "{{control_center_next_gen_dependencies_config_path}}/web-config-am.yml"
+  systemd_file: "{{ (systemd_base_dir, (control_center_next_gen_dep_alertmanager_service_name, '.service') | join) | path_join }}"
+  systemd_override: "{{ ('/etc/systemd/system', (control_center_next_gen_dep_alertmanager_service_name, '.service.d') | join , 'override.conf') | path_join }}"
+control_center_next_gen:
+  server_start_file: "{{ confluent_control_center_next_gen_binary_base_path }}/bin/control-center-start"
+  config_file: "{{ (config_base_path, control_center_next_gen_config_prefix_path, 'control-center-production.properties') | path_join }}"
+  systemd_file: "{{ (systemd_base_dir, (control_center_next_gen_service_name, '.service') | join) | path_join }}"
+  systemd_override: "{{ ('/etc/systemd/system', (control_center_next_gen_service_name, '.service.d') | join , 'override.conf') | path_join }}"
+  log4j_file: "{{ (confluent_control_center_next_gen_base_path, 'etc/confluent-control-center/log4j-rolling.properties') | path_join }}"
+  jaas_file: "{{ (config_base_path, control_center_next_gen_config_prefix_path, 'jaas.conf') | path_join }}"
+  password_file: "{{ (config_base_path, control_center_next_gen_config_prefix_path, 'password.properties') | path_join }}"
+
+control_center_next_gen_http_protocol: "{{ 'https' if control_center_next_gen_ssl_enabled|bool else 'http' }}"
+
+control_center_next_gen_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[control_center_next_gen_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[control_center_next_gen_kafka_listener_name]['port']}}"
+
+control_center_next_gen_streams_bootstrap_servers: "{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + kafka_broker_listeners[control_center_next_gen_streams_kafka_listener_name]['port']|string + ',') }}:{{kafka_broker_listeners[control_center_next_gen_streams_kafka_listener_name]['port']}}" # this needs to be added only in sasl_ssl kafka client i.e streams
+
+control_center_next_gen_properties:
+  defaults:
+    enabled: true
+    properties:
+      confluent.controlcenter.streams.num.stream.threads: 12
+      confluent.controlcenter.data.dir: "{{control_center_next_gen_data_dir}}"
+      confluent.controlcenter.internal.topics.replication: "{{control_center_next_gen_default_internal_replication_factor}}"
+      confluent.metrics.topic.replication: "{{control_center_next_gen_default_internal_replication_factor}}"
+      confluent.monitoring.interceptor.topic.replication: "{{control_center_next_gen_default_internal_replication_factor}}"
+      confluent.controlcenter.command.topic.replication: "{{control_center_next_gen_default_internal_replication_factor}}"
+      confluent.controlcenter.rest.listeners: "{{control_center_next_gen_http_protocol}}://{{control_center_next_gen_listener_hostname}}:{{control_center_next_gen_port}}"
+      bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else control_center_next_gen_streams_bootstrap_servers }}"
+      confluent.controlcenter.streams.security.protocol: "{{kafka_broker_listeners[control_center_next_gen_streams_kafka_listener_name] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol) }}"
+      confluent.controlcenter.prometheus.enable: true
+      confluent.controlcenter.prometheus.url: "{{control_center_next_gen_dependency_prometheus_url}}"
+      confluent.controlcenter.alertmanager.url: "{{control_center_next_gen_dependency_alertmanager_url}}"
+      confluent.controlcenter.prometheus.config.file: "{{control_center_next_gen_dep_prometheus.config_file}}"
+      confluent.controlcenter.prometheus.rules.file: "{{control_center_next_gen_dep_prometheus.trigger_rules_config_file}}"
+      confluent.controlcenter.alertmanager.config.file: "{{control_center_next_gen_dep_alertmanager.config_file}}"
+  prometheus_client:
+    enabled: "{{control_center_next_gen_dependency_prometheus_ssl_enabled}}"
+    properties:
+      confluent.controlcenter.prometheus.ssl.truststore.location: "{{control_center_next_gen_dependency_prometheus_truststore_path}}"
+      confluent.controlcenter.prometheus.ssl.truststore.password: "{{control_center_next_gen_dependency_prometheus_truststore_storepass}}"
+      confluent.controlcenter.prometheus.alias.name: "{{control_center_next_gen_dependency_prometheus_service_name}}"
+  prometheus_client_basic:
+    enabled: "{{control_center_next_gen_dependency_prometheus_basic_auth_enabled}}"
+    properties:
+      confluent.controlcenter.prometheus.basic.auth.user.info: "{{kafka_broker_telemetry_control_center_next_gen_user}}:{{kafka_broker_telemetry_control_center_next_gen_password}}"
+  prometheus_client_mtls:
+    enabled: "{{control_center_next_gen_dependency_prometheus_ssl_enabled and control_center_next_gen_dependency_prometheus_mtls_enabled}}"
+    properties:
+      confluent.controlcenter.prometheus.ssl.keystore.location: "{{control_center_next_gen_dependency_prometheus_keystore_path}}"
+      confluent.controlcenter.prometheus.ssl.keystore.password: "{{control_center_next_gen_dependency_prometheus_keystore_storepass}}"
+      confluent.controlcenter.prometheus.ssl.key.password: "{{control_center_next_gen_dependency_prometheus_keystore_keypass}}"
+  alertmanager_client:
+    enabled: "{{control_center_next_gen_dependency_alertmanager_ssl_enabled}}"
+    properties:
+      confluent.controlcenter.alertmanager.ssl.truststore.location: "{{control_center_next_gen_dependency_alertmanager_truststore_path}}"
+      confluent.controlcenter.alertmanager.ssl.truststore.password: "{{control_center_next_gen_dependency_alertmanager_truststore_storepass}}"
+      confluent.controlcenter.alertmanager.alias.name: "{{control_center_next_gen_dependency_alertmanager_service_name}}"
+  alertmanager_client_basic:
+    enabled: "{{control_center_next_gen_dependency_alertmanager_basic_auth_enabled}}"
+    properties:
+      confluent.controlcenter.alertmanager.basic.auth.user.info: "{{control_center_next_gen_dependency_alertmanager_basic_users.admin.principal}}:{{control_center_next_gen_dependency_alertmanager_basic_users.admin.password}}"
+  alertmanager_client_mtls:
+    enabled: "{{control_center_next_gen_dependency_alertmanager_ssl_enabled and control_center_next_gen_dependency_alertmanager_mtls_enabled}}"
+    properties:
+      confluent.controlcenter.alertmanager.ssl.keystore.location: "{{control_center_next_gen_dependency_alertmanager_keystore_path}}"
+      confluent.controlcenter.alertmanager.ssl.keystore.password: "{{control_center_next_gen_dependency_alertmanager_keystore_storepass}}"
+      confluent.controlcenter.alertmanager.ssl.key.password: "{{control_center_next_gen_dependency_alertmanager_keystore_keypass}}"
+  ssl:
+    enabled: "{{control_center_next_gen_ssl_enabled or (kafka_broker_rest_proxy_enabled and mds_tls_enabled) }}"
+    properties:
+      confluent.controlcenter.rest.ssl.keystore.location: "{{control_center_next_gen_keystore_path}}"
+      confluent.controlcenter.rest.ssl.keystore.password: "{{control_center_next_gen_keystore_storepass}}"
+      confluent.controlcenter.rest.ssl.key.password: "{{control_center_next_gen_keystore_keypass}}"
+      confluent.controlcenter.rest.ssl.truststore.location: "{{control_center_next_gen_truststore_path}}"
+      confluent.controlcenter.rest.ssl.truststore.password: "{{control_center_next_gen_truststore_storepass}}"
+  principal_mapping_rules:
+    enabled: "{{control_center_next_gen_ssl_enabled}}"
+    properties:
+      ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
+  basic:
+    enabled: "{{ control_center_next_gen_authentication_type == 'basic' }}"
+    properties:
+      confluent.controlcenter.rest.authentication.method: BASIC
+      confluent.controlcenter.rest.authentication.realm: ControlCenter
+      confluent.controlcenter.rest.authentication.roles: "{{ (control_center_next_gen_basic_users|confluent.platform.get_roles + [ 'Restricted' ]) | unique | join(',') }}"
+      confluent.controlcenter.auth.restricted.roles: Restricted
+      confluent.controlcenter.auth.session.expiration.ms: 600000
+  broker_embedded_rest_endpoint:
+    enabled: "{{kafka_broker_rest_proxy_enabled or rbac_enabled }}"
+    properties:
+      confluent.controlcenter.streams.cprest.url: "{{mds_http_protocol}}://{{ groups['kafka_broker'] | default(['localhost']) | confluent.platform.resolve_hostnames(hostvars) | join(':' + mds_port|string + ',' + mds_http_protocol + '://') }}:{{mds_port}}"
+  kafka_client:
+    enabled: true
+    properties: "{{ kafka_broker_listeners[control_center_next_gen_streams_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
+                    'confluent.controlcenter.streams.', control_center_next_gen_truststore_path, control_center_next_gen_truststore_storepass, public_certificates_enabled, control_center_next_gen_keystore_path, control_center_next_gen_keystore_storepass, control_center_next_gen_keystore_keypass,
+                    false, sasl_plain_users_final.control_center_next_gen.principal, sasl_plain_users_final.control_center_next_gen.password, sasl_scram_users_final.control_center_next_gen.principal, sasl_scram_users_final.control_center_next_gen.password, sasl_scram256_users_final.control_center_next_gen.principal, sasl_scram256_users_final.control_center_next_gen.password,
+                    kerberos_kafka_broker_primary, control_center_next_gen_keytab_path, control_center_next_gen_kerberos_principal|default('c3'),
+                    control_center_next_gen_streams_kafka_listener_name == 'internal_token', control_center_next_gen_ldap_user, control_center_next_gen_ldap_password, mds_bootstrap_server_urls, oauth_enabled, control_center_next_gen_oauth_user, control_center_next_gen_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  kafka_client_token_cert_lcbh:  # add the new login callback handler for c3 to kafka communication
+    enabled: "{{ control_center_next_gen_streams_kafka_listener_name == 'internal_token' }}"
+    properties:
+      confluent.controlcenter.streams.sasl.login.callback.handler.class: io.confluent.kafka.clients.plugins.auth.token.TokenCertificateLoginCallbackHandler
+  kafka_interceptors:
+    enabled: true
+    properties: "{{ kafka_broker_listeners[control_center_next_gen_monitoring_interceptor_kafka_listener_name] | confluent.platform.client_properties(ssl_enabled, False, ssl_mutual_auth_enabled, sasl_protocol,
+                    'confluent.monitoring.interceptor.', control_center_next_gen_truststore_path, control_center_next_gen_truststore_storepass, public_certificates_enabled, control_center_next_gen_keystore_path, control_center_next_gen_keystore_storepass, control_center_next_gen_keystore_keypass,
+                    false, sasl_plain_users_final.control_center_next_gen.principal, sasl_plain_users_final.control_center_next_gen.password, sasl_scram_users_final.control_center_next_gen.principal, sasl_scram_users_final.control_center_next_gen.password, sasl_scram256_users_final.control_center_next_gen.principal, sasl_scram256_users_final.control_center_next_gen.password,
+                    kerberos_kafka_broker_primary, control_center_next_gen_keytab_path, control_center_next_gen_kerberos_principal|default('c3'),
+                    control_center_next_gen_monitoring_interceptor_kafka_listener_name == 'internal_token', control_center_next_gen_ldap_user, control_center_next_gen_ldap_password, mds_bootstrap_server_urls, oauth_enabled, control_center_next_gen_oauth_user, control_center_next_gen_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
+  kafka_interceptors_bootstrap_server:
+    enabled: true
+    properties:
+      confluent.monitoring.interceptor.bootstrap.servers: "{{ ccloud_kafka_bootstrap_servers if ccloud_kafka_enabled|bool else control_center_next_gen_bootstrap_servers }}"
+  kafka_interceptors_token_cert_lcbh: # add the new login callback handler for c3 to kafka communication
+    enabled: "{{ control_center_next_gen_monitoring_interceptor_kafka_listener_name == 'internal_token' }}"
+    properties:
+      confluent.monitoring.interceptor.sasl.login.callback.handler.class: io.confluent.kafka.clients.plugins.auth.token.TokenCertificateLoginCallbackHandler
+  sr:
+    enabled: "{{ 'schema_registry' in groups }}"
+    properties:
+      confluent.controlcenter.schema.registry.url: "{{schema_registry_url}}"
+  sr_ssl:
+    enabled: "{{ 'schema_registry' in groups and schema_registry_ssl_enabled|bool and not ccloud_schema_registry_enabled|bool }}"
+    properties:
+      confluent.controlcenter.schema.registry.schema.registry.ssl.truststore.location: "{{control_center_next_gen_truststore_path}}"
+      confluent.controlcenter.schema.registry.schema.registry.ssl.truststore.password: "{{control_center_next_gen_truststore_storepass}}"
+      confluent.controlcenter.schema.registry.schema.registry.ssl.keystore.location: "{{control_center_next_gen_keystore_path}}"
+      confluent.controlcenter.schema.registry.schema.registry.ssl.keystore.password: "{{control_center_next_gen_keystore_storepass}}"
+      confluent.controlcenter.schema.registry.schema.registry.ssl.key.password: "{{control_center_next_gen_keystore_keypass}}"
+  sr_basic:
+    enabled: "{{ ('schema_registry' in groups and schema_registry_authentication_type == 'basic') or ccloud_schema_registry_enabled|bool }}"
+    properties:
+      confluent.controlcenter.schema.registry.basic.auth.credentials.source: USER_INFO
+      confluent.controlcenter.schema.registry.basic.auth.user.info: "{{schema_registry_basic_users_final.admin.principal}}:{{schema_registry_basic_users_final.admin.password}}"
+  sr_oauth:
+    enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) }}"
+    properties:
+      confluent.controlcenter.schema.registry.bearer.auth.credentials.source: OAUTHBEARER
+      confluent.controlcenter.schema.registry.oauthbearer.login.client.id: "{{ control_center_next_gen_oauth_user }}"
+      confluent.controlcenter.schema.registry.oauthbearer.login.client.secret: "{{ control_center_next_gen_oauth_password }}"
+  sr_oauth_scope:
+    enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) and oauth_groups_scope!='none' }}"
+    properties:
+      confluent.controlcenter.schema.registry.oauthbearer.login.oauth.scope: "{{ oauth_groups_scope }}"
+  sr_oauth_ssl:
+    enabled: "{{ ('schema_registry' in groups and schema_registry_oauth_enabled|bool) and (not rbac_enabled|bool) and idp_self_signed }}"
+    properties:
+      confluent.controlcenter.schema.registry.ssl.truststore.location: "{{ control_center_next_gen_truststore_path }}"
+      confluent.controlcenter.schema.registry.ssl.truststore.password: "{{ control_center_next_gen_truststore_storepass }}"
+  connect:
+    enabled: "{{ kafka_connect_cluster_ansible_group_names | default(omit) | length > 0 }}"
+    properties: "{{ kafka_connect_cluster_ansible_group_names | confluent.platform.c3_connect_properties(groups, hostvars, kafka_connect_ssl_enabled,
+        kafka_connect_http_protocol, kafka_connect_rest_port, kafka_connect_group_id, control_center_next_gen_truststore_path, control_center_next_gen_truststore_storepass,
+        control_center_next_gen_keystore_path, control_center_next_gen_keystore_storepass, control_center_next_gen_keystore_keypass, kafka_connect_oauth_enabled, rbac_enabled,
+        control_center_next_gen_oauth_user, control_center_next_gen_oauth_password, oauth_groups_scope, idp_self_signed) }}"
+  ksql:
+    enabled: "{{ ksql_cluster_ansible_group_names | default(omit) | length > 0 }}"
+    properties: "{{ ksql_cluster_ansible_group_names | confluent.platform.c3_ksql_properties(groups, hostvars, ksql_ssl_enabled,
+        ksql_http_protocol, ksql_listener_port, control_center_next_gen_truststore_path, control_center_next_gen_truststore_storepass,
+        control_center_next_gen_keystore_path, control_center_next_gen_keystore_storepass, control_center_next_gen_keystore_keypass, ksql_oauth_enabled, rbac_enabled,
+        control_center_next_gen_oauth_user, control_center_next_gen_oauth_password, oauth_groups_scope, idp_self_signed) }}"
+  oauth:
+    enabled: "{{oauth_enabled or schema_registry_oauth_enabled or kafka_connect_oauth_enabled}}"
+    properties:
+      confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
+  rbac:
+    enabled: "{{rbac_enabled}}"
+    properties:
+      confluent.controlcenter.rest.authentication.method: BEARER
+      public.key.path: "{{rbac_enabled_public_pem_path}}"
+      confluent.metadata.bootstrap.server.urls: "{{mds_bootstrap_server_urls}}"
+  rbac_ldap:
+    enabled: "{{rbac_enabled and auth_mode == 'ldap' and (not control_center_next_gen_mds_cert_auth_only) }}"
+    properties:
+      confluent.metadata.basic.auth.user.info: "{{ control_center_next_gen_ldap_user | default('c3') }}:{{ control_center_next_gen_ldap_password | default('pass') }}"
+      confluent.metadata.http.auth.credentials.provider: BASIC
+  rbac_oauth:
+    enabled: "{{rbac_enabled and oauth_enabled and (not control_center_next_gen_mds_cert_auth_only)}}"
+    properties:
+      confluent.metadata.oauthbearer.login.client.id: "{{ control_center_next_gen_oauth_user }}"
+      confluent.metadata.oauthbearer.login.client.secret: "{{ control_center_next_gen_oauth_password }}"
+  rbac_oauth_scope:
+    enabled: "{{rbac_enabled and oauth_enabled and oauth_groups_scope != 'none' and (not control_center_next_gen_mds_cert_auth_only)}}"
+    properties:
+      confluent.metadata.oauthbearer.login.oauth.scope: "{{ oauth_groups_scope }}"
+  rbac_external_client:
+    enabled: "{{rbac_enabled and external_mds_enabled and mds_tls_enabled }}"
+    properties:
+      confluent.controlcenter.streams.ssl.truststore.location: "{{control_center_next_gen_truststore_path}}"
+      confluent.controlcenter.streams.ssl.truststore.password: "{{control_center_next_gen_truststore_storepass}}"
+  rbac_mds_sso:
+    enabled: "{{ rbac_enabled and sso_mode != 'none' }}"
+    properties:
+      confluent.controlcenter.auth.sso.mode: "{{ sso_mode }}"
+  mds_client:
+    enabled: "{{rbac_enabled and mds_tls_enabled }}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{control_center_next_gen_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{control_center_next_gen_truststore_storepass}}"
+      confluent.metadata.ssl.endpoint.identification.algorithm: HTTPS
+  mds_mtls_client:
+    enabled: "{{ rbac_enabled and mds_ssl_client_authentication != 'none' }}"
+    properties:
+      confluent.metadata.ssl.keystore.location: "{{control_center_next_gen_keystore_path}}"
+      confluent.metadata.ssl.keystore.password: "{{control_center_next_gen_keystore_keypass}}"
+      confluent.metadata.ssl.key.password: "{{control_center_next_gen_keystore_keypass}}"
+      confluent.metadata.ssl.truststore.location: "{{control_center_next_gen_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{control_center_next_gen_truststore_storepass}}"
+  oauth_mds_client:
+    enabled: "{{rbac_enabled and oauth_enabled and idp_self_signed}}"
+    properties:
+      confluent.metadata.ssl.truststore.location: "{{ control_center_next_gen_truststore_path }}"
+      confluent.metadata.ssl.truststore.password: "{{ control_center_next_gen_truststore_storepass }}"
+  telemetry:
+    enabled: "{{control_center_next_gen_telemetry_enabled}}"
+    properties:
+      confluent.telemetry.enabled: 'true'
+      confluent.telemetry.api.key: "{{telemetry_api_key}}"
+      confluent.telemetry.api.secret: "{{telemetry_api_secret}}"
+      metric.reporters: io.confluent.telemetry.reporter.TelemetryReporter
+  telemetry_proxy:
+    enabled: "{{control_center_next_gen_telemetry_enabled and telemetry_proxy_url != ''}}"
+    properties:
+      confluent.telemetry.proxy.url: "{{telemetry_proxy_url}}"
+  telemetry_proxy_auth:
+    enabled: "{{control_center_next_gen_telemetry_enabled and telemetry_proxy_username != ''}}"
+    properties:
+      confluent.telemetry.proxy.username: "{{telemetry_proxy_username}}"
+      confluent.telemetry.proxy.password: "{{telemetry_proxy_password}}"
+  telemetry_labels:
+    enabled: "{{control_center_next_gen_telemetry_ansible_labels_enabled}}"
+    properties:
+      confluent.telemetry.labels.confluent.ansible.playbooks.version: "{{confluent_ansible_branch}}"
+  ccloud:
+    enabled: "{{ccloud_kafka_enabled}}"
+    properties:
+      confluent.metrics.topic.max.message.bytes: 8388608
+
+control_center_next_gen_dependency_prometheus_basic_auth_users: "{{ control_center_next_gen_dependency_prometheus_basic_users | confluent.platform.c3_generate_salt_and_hash}}"
+
+control_center_next_gen_dependency_alertmanager_basic_auth_users: "{{ control_center_next_gen_dependency_alertmanager_basic_users | confluent.platform.c3_generate_salt_and_hash}}"
+
+control_center_next_gen_combined_properties: "{{control_center_next_gen_properties | confluent.platform.combine_properties}}"
+
+control_center_next_gen_final_properties: "{{ control_center_next_gen_combined_properties | combine(control_center_next_gen_custom_properties) }}"
 
 #### Kafka Connect Replicator Variables ####
 kafka_connect_replicator_service_name: kafka-connect-replicator
@@ -1259,14 +2376,56 @@ kafka_connect_replicator_properties:
       listeners.https.ssl.key.password: "{{kafka_connect_replicator_keystore_keypass}}"
       listeners.https.ssl.truststore.location: "{{kafka_connect_replicator_truststore_path}}"
       listeners.https.ssl.truststore.password: "{{kafka_connect_replicator_truststore_storepass}}"
+  principal_mapping_rules:
+    enabled: "{{ssl_enabled}}"
+    properties:
+      auth.ssl.principal.mapping.rules: "{{ principal_mapping_rules | join(',') }}"
+  mds_mtls_client:
+    enabled: "{{ kafka_connect_replicator_rbac_enabled and mds_ssl_client_authentication != 'none' }}"
+    properties:
+      confluent.metadata.ssl.keystore.location: "{{kafka_connect_replicator_keystore_path}}"
+      confluent.metadata.ssl.keystore.password: "{{kafka_connect_replicator_keystore_keypass}}"
+      confluent.metadata.ssl.key.password: "{{kafka_connect_replicator_keystore_keypass}}"
+      confluent.metadata.ssl.truststore.location: "{{kafka_connect_replicator_truststore_path}}"
+      confluent.metadata.ssl.truststore.password: "{{kafka_connect_replicator_truststore_storepass}}"
   rbac:
     enabled: "{{kafka_connect_replicator_rbac_enabled}}"
     properties:
-      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.InstallBearerOrBasicSecurityHandler
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
       public.key.path: "{{kafka_connect_replicator_rbac_enabled_public_pem_path}}"
       confluent.metadata.bootstrap.server.urls: "{{kafka_connect_replicator_erp_host}}"
+  rbac_ldap:
+    enabled: "{{ kafka_connect_replicator_rbac_enabled and auth_mode == 'ldap'  and (not kafka_connect_replicator_mds_cert_auth_only) }}"
+    properties:
       confluent.metadata.basic.auth.user.info: "{{kafka_connect_replicator_ldap_user | default('replicator') }}:{{kafka_connect_replicator_ldap_password | default('pass')}}"
       confluent.metadata.http.auth.credentials.provider: BASIC
+  rbac_oauth:
+    enabled: "{{kafka_connect_replicator_rbac_enabled and oauth_enabled and (not kafka_connect_replicator_mds_cert_auth_only)}}"
+    properties:
+      confluent.metadata.http.auth.credentials.provider: OAUTHBEARER
+      confluent.metadata.oauthbearer.login.client.id: "{{kafka_connect_replicator_oauth_user}}"
+      confluent.metadata.oauthbearer.login.client.secret: "{{kafka_connect_replicator_oauth_password}}"
+      confluent.metadata.oauthbearer.token.endpoint.url: "{{ oauth_token_uri }}"
+      confluent.metadata.oauthbearer.login.credentials.source: OAUTHBEARER
+  rbac_oauth_scope:
+    enabled: "{{kafka_connect_replicator_rbac_enabled and oauth_enabled and oauth_groups_scope!='none' and (not kafka_connect_replicator_mds_cert_auth_only) }}"
+    properties:
+      confluent.metadata.oauthbearer.login.oauth.scope: "{{oauth_groups_scope}}"
+  kafka_connect_replicator_oauth:
+    enabled: "{{kafka_connect_replicator_oauth_enabled}}"
+    properties:
+      rest.servlet.initializor.classes: io.confluent.common.security.jetty.initializer.AuthenticationHandler
+      oauthbearer.jwks.endpoint.url: "{{oauth_jwks_uri}}"
+      oauthbearer.sub.claim.name: "{{ oauth_sub_claim }}"
+      oauthbearer.expected.issuer: "{{ oauth_issuer_url }}"
+  kafka_connect_replicator_oauth_claim:
+    enabled: "{{kafka_connect_replicator_oauth_enabled and oauth_groups_claim!='none' }}"
+    properties:
+      oauthbearer.groups.claim.name: "{{ oauth_groups_claim }}"
+  kafka_connect_oauth_audience:
+    enabled: "{{kafka_connect_replicator_oauth_enabled and oauth_expected_audience!='none' }}"
+    properties:
+      oauthbearer.expected.audience: "{{ oauth_expected_audience }}"
   rbac_external_client:
     enabled: "{{kafka_connect_replicator_rbac_enabled and kafka_connect_replicator_erp_tls_enabled }}"
     properties:
@@ -1281,7 +2440,8 @@ kafka_connect_replicator_properties:
                 kafka_connect_replicator_keystore_storepass, kafka_connect_replicator_keystore_keypass, false, kafka_connect_replicator_sasl_plain_principal, kafka_connect_replicator_sasl_plain_password,
                 kafka_connect_replicator_sasl_scram_principal, kafka_connect_replicator_sasl_scram_password, kafka_connect_replicator_sasl_scram256_principal, kafka_connect_replicator_sasl_scram256_password,
                 kerberos_kafka_broker_primary, kafka_connect_replicator_keytab_path,
-                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls) }}"
+                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls,
+                oauth_enabled, kafka_connect_replicator_oauth_user, kafka_connect_replicator_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
 kafka_connect_replicator_combined_properties: "{{kafka_connect_replicator_properties | confluent.platform.combine_properties}}"
 kafka_connect_replicator_final_properties: "{{kafka_connect_replicator_combined_properties | combine(kafka_connect_replicator_custom_properties)}}"
 
@@ -1304,7 +2464,8 @@ kafka_connect_replicator_consumer_properties:
                 kafka_connect_replicator_keystore_storepass, kafka_connect_replicator_keystore_keypass, false, kafka_connect_replicator_consumer_sasl_plain_principal, kafka_connect_replicator_consumer_sasl_plain_password,
                 kafka_connect_replicator_consumer_sasl_scram_principal, kafka_connect_replicator_consumer_sasl_scram_password, kafka_connect_replicator_consumer_sasl_scram256_principal, kafka_connect_replicator_consumer_sasl_scram256_password,
                 kerberos_kafka_broker_primary, kafka_connect_replicator_keytab_path,
-                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls) }}"
+                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls,
+                oauth_enabled, kafka_connect_replicator_consumer_oauth_user, kafka_connect_replicator_consumer_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
 kafka_connect_replicator_consumer_combined_properties: "{{kafka_connect_replicator_consumer_properties | confluent.platform.combine_properties}}"
 kafka_connect_replicator_consumer_final_properties: "{{kafka_connect_replicator_consumer_combined_properties | combine(kafka_connect_replicator_consumer_custom_properties)}}"
 
@@ -1327,7 +2488,8 @@ kafka_connect_replicator_producer_properties:
                 kafka_connect_replicator_keystore_storepass, kafka_connect_replicator_keystore_keypass, false, kafka_connect_replicator_producer_sasl_plain_principal, kafka_connect_replicator_producer_sasl_plain_password,
                 kafka_connect_replicator_producer_sasl_scram_principal, kafka_connect_replicator_producer_sasl_scram_password, kafka_connect_replicator_producer_sasl_scram256_principal, kafka_connect_replicator_producer_sasl_scram256_password,
                 kerberos_kafka_broker_primary, kafka_connect_replicator_keytab_path,
-                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls) }}"
+                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls,
+                oauth_enabled, kafka_connect_replicator_producer_oauth_user, kafka_connect_replicator_producer_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
 kafka_connect_replicator_producer_combined_properties: "{{kafka_connect_replicator_producer_properties | confluent.platform.combine_properties}}"
 kafka_connect_replicator_producer_final_properties: "{{kafka_connect_replicator_producer_combined_properties | combine(kafka_connect_replicator_producer_custom_properties)}}"
 
@@ -1354,6 +2516,7 @@ kafka_connect_replicator_monitoring_interceptor_properties:
                 kafka_connect_replicator_keystore_storepass, kafka_connect_replicator_keystore_keypass, false, kafka_connect_replicator_monitoring_interceptor_sasl_plain_principal, kafka_connect_replicator_monitoring_interceptor_sasl_plain_password,
                 kafka_connect_replicator_monitoring_interceptor_sasl_scram_principal, kafka_connect_replicator_monitoring_interceptor_sasl_scram_password, kafka_connect_replicator_monitoring_interceptor_sasl_scram256_principal, kafka_connect_replicator_monitoring_interceptor_sasl_scram256_password,
                 kerberos_kafka_broker_primary, kafka_connect_replicator_keytab_path,
-                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls) }}"
+                kafka_connect_replicator_kerberos_principal|default('kafka'), false, kafka_connect_replicator_ldap_user, kafka_connect_replicator_ldap_password, mds_bootstrap_server_urls,
+                oauth_enabled, kafka_connect_replicator_monitoring_interceptor_oauth_user, kafka_connect_replicator_monitoring_interceptor_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false) }}"
 kafka_connect_replicator_monitoring_interceptor_combined_properties: "{{kafka_connect_replicator_monitoring_interceptor_properties | confluent.platform.combine_properties}}"
 kafka_connect_replicator_monitoring_interceptor_final_properties: "{{kafka_connect_replicator_monitoring_interceptor_combined_properties | combine(kafka_connect_replicator_monitoring_interceptor_custom_properties)}}"

@@ -1,9 +1,43 @@
 ---
+- name: Decide Where to delegate task of getting superuser token
+  set_fact:
+    delegation_target: >-
+      {%- if mds_ssl_client_authentication == 'none' -%}
+        {{ inventory_hostname }}
+      {%- elif external_mds_enabled|bool -%}
+        localhost
+      {%- else -%}
+        {{ groups['kafka_broker'][0] }}
+      {%- endif -%}
+
+- name: Get Authorization Token for Connect Replicator Consumer ERP User
+  import_role:
+    name: common
+    tasks_from: get_authorization_token.yml
+  vars:
+    oauth: "{{ kafka_connect_replicator_oauth_enabled }}"
+    oauth_user: "{{ kafka_connect_replicator_consumer_erp_oauth_user }}"
+    oauth_password: "{{ kafka_connect_replicator_consumer_erp_oauth_password }}"
+    ldap_user: "{{ kafka_connect_replicator_consumer_erp_admin_user }}"
+    ldap_password: "{{ kafka_connect_replicator_consumer_erp_admin_password }}"
+    mtls_client_cert: "{{ mds_super_user_external_cert_path if external_mds_enabled|bool else kafka_broker_cert_path }}"
+    mtls_client_key: "{{ mds_super_user_external_key_path if external_mds_enabled|bool else kafka_broker_key_path }}"
+    cert_auth_only_enabled: "{{ kafka_connect_replicator_mds_cert_auth_only|bool }}"
+  # For single cluster delegating this task to broker as in case of cert based token retrival only broker can get a super user token using its certs
+  # For Centralized MDS other clusters can't delegate to MDS cluster as that cluster may not have permissions to ssh into MDS, thus delegate to localhost
+  when: kafka_connect_replicator_consumer_rbac_enabled or kafka_connect_replicator_oauth_enabled
+  delegate_to: "{{ delegation_target }}"
+
+- set_fact:
+    send_client_cert: "{{ mds_ssl_client_authentication in ['required', 'requested'] }}"
+
 - name: Create SSL Certificate Directory
   file:
     path: /var/ssl/private/kafka_connect_replicator_consumer
     state: directory
     mode: '755'
+  tags:
+    - privileged
 
 - name: Check if MDS pem file exists on Ansible Controller
   stat:
@@ -33,14 +67,14 @@
 
 - name: Grant Confluent Replicator User Developer Read on White List Topics on Source Cluster
   uri:
-    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_consumer_ldap_user}}/roles/DeveloperRead/bindings"
+    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{replicator_consumer_user}}/roles/DeveloperRead/bindings"
     method: POST
     validate_certs: false
-    force_basic_auth: true
-    url_username: "{{kafka_connect_replicator_consumer_erp_admin_user}}"
-    url_password: "{{kafka_connect_replicator_consumer_erp_admin_password}}"
     headers:
       Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_replicator_consumer_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_replicator_consumer_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -67,14 +101,14 @@
 
 - name: Grant Confluent Replicator User Developer Manage on White List Topics on Source Cluster
   uri:
-    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_consumer_ldap_user}}/roles/DeveloperManage/bindings"
+    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{replicator_consumer_user}}/roles/DeveloperManage/bindings"
     method: POST
     validate_certs: false
-    force_basic_auth: true
-    url_username: "{{kafka_connect_replicator_consumer_erp_admin_user}}"
-    url_password: "{{kafka_connect_replicator_consumer_erp_admin_password}}"
     headers:
       Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_replicator_consumer_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_replicator_consumer_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -101,14 +135,14 @@
 
 - name: Grant Confluent Replicator User Developer Read on timestamp topic on Source Cluster
   uri:
-    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_consumer_ldap_user}}/roles/DeveloperRead/bindings"
+    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{replicator_consumer_user}}/roles/DeveloperRead/bindings"
     method: POST
     validate_certs: false
-    force_basic_auth: true
-    url_username: "{{kafka_connect_replicator_consumer_erp_admin_user}}"
-    url_password: "{{kafka_connect_replicator_consumer_erp_admin_password}}"
     headers:
       Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_replicator_consumer_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_replicator_consumer_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -134,14 +168,14 @@
 
 - name: Grant Confluent Replicator User Developer Manage on timestamp topic on Source Cluster
   uri:
-    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_consumer_ldap_user}}/roles/DeveloperManage/bindings"
+    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{replicator_consumer_user}}/roles/DeveloperManage/bindings"
     method: POST
     validate_certs: false
-    force_basic_auth: true
-    url_username: "{{kafka_connect_replicator_consumer_erp_admin_user}}"
-    url_password: "{{kafka_connect_replicator_consumer_erp_admin_password}}"
     headers:
       Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_replicator_consumer_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_replicator_consumer_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -167,14 +201,14 @@
 
 - name: Grant Confluent Replicator User Resource Owner on Group on Source Cluster
   uri:
-    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_consumer_ldap_user}}/roles/ResourceOwner/bindings"
+    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{replicator_consumer_user}}/roles/ResourceOwner/bindings"
     method: POST
     validate_certs: false
-    force_basic_auth: true
-    url_username: "{{kafka_connect_replicator_consumer_erp_admin_user}}"
-    url_password: "{{kafka_connect_replicator_consumer_erp_admin_password}}"
     headers:
       Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_replicator_consumer_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_replicator_consumer_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -202,14 +236,14 @@
 
 - name: Grant Confluent Replicator User Developer Read on White List Topics on Source Cluster
   uri:
-    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_consumer_ldap_user}}/roles/DeveloperRead/bindings"
+    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{replicator_consumer_user}}/roles/DeveloperRead/bindings"
     method: POST
     validate_certs: false
-    force_basic_auth: true
-    url_username: "{{kafka_connect_replicator_consumer_erp_admin_user}}"
-    url_password: "{{kafka_connect_replicator_consumer_erp_admin_password}}"
     headers:
       Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_replicator_consumer_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_replicator_consumer_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -234,14 +268,14 @@
 
 - name: Grant Confluent Replicator User Developer Manage on White List Topics on Source Cluster
   uri:
-    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_consumer_ldap_user}}/roles/DeveloperManage/bindings"
+    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{replicator_consumer_user}}/roles/DeveloperManage/bindings"
     method: POST
     validate_certs: false
-    force_basic_auth: true
-    url_username: "{{kafka_connect_replicator_consumer_erp_admin_user}}"
-    url_password: "{{kafka_connect_replicator_consumer_erp_admin_password}}"
     headers:
       Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_replicator_consumer_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_replicator_consumer_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -266,14 +300,14 @@
 
 - name: Grant Confluent Replicator User Developer Read on timestamp topic on Source Cluster
   uri:
-    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_consumer_ldap_user}}/roles/DeveloperRead/bindings"
+    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{replicator_consumer_user}}/roles/DeveloperRead/bindings"
     method: POST
     validate_certs: false
-    force_basic_auth: true
-    url_username: "{{kafka_connect_replicator_consumer_erp_admin_user}}"
-    url_password: "{{kafka_connect_replicator_consumer_erp_admin_password}}"
     headers:
       Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_replicator_consumer_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_replicator_consumer_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -297,14 +331,14 @@
 
 - name: Grant Confluent Replicator User Developer Manage on timestamp topic on Source Cluster
   uri:
-    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_consumer_ldap_user}}/roles/DeveloperManage/bindings"
+    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{replicator_consumer_user}}/roles/DeveloperManage/bindings"
     method: POST
     validate_certs: false
-    force_basic_auth: true
-    url_username: "{{kafka_connect_replicator_consumer_erp_admin_user}}"
-    url_password: "{{kafka_connect_replicator_consumer_erp_admin_password}}"
     headers:
       Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_replicator_consumer_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_replicator_consumer_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {
@@ -328,14 +362,14 @@
 
 - name: Grant Confluent Replicator User Resource Owner on Group on Source Cluster
   uri:
-    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{kafka_connect_replicator_consumer_ldap_user}}/roles/ResourceOwner/bindings"
+    url: "{{kafka_connect_replicator_consumer_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/principals/User:{{replicator_consumer_user}}/roles/ResourceOwner/bindings"
     method: POST
     validate_certs: false
-    force_basic_auth: true
-    url_username: "{{kafka_connect_replicator_consumer_erp_admin_user}}"
-    url_password: "{{kafka_connect_replicator_consumer_erp_admin_password}}"
     headers:
       Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_replicator_consumer_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_replicator_consumer_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       {

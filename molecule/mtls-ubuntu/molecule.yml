@@ -1,15 +1,16 @@
 ---
-### Installation of Confluent Platform on CentOS7.
+### Installation of Confluent Platform on Ubuntu2404.
 ### MTLS enabled.
 
 driver:
   name: docker
 platforms:
-  - name: zookeeper1
-    hostname: zookeeper1.confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper
-    image: geerlingguy/docker-ubuntu1804-ansible
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
     volumes:
@@ -21,7 +22,8 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-ubuntu1804-ansible
+      - kafka_broker_migration
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
     volumes:
@@ -33,7 +35,8 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-ubuntu1804-ansible
+      - kafka_broker_migration
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
     volumes:
@@ -45,7 +48,8 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-ubuntu1804-ansible
+      - kafka_broker_migration
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
     volumes:
@@ -57,7 +61,8 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-    image: geerlingguy/docker-ubuntu1804-ansible
+      - schema_registry_migration
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
     volumes:
@@ -69,7 +74,8 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
-    image: geerlingguy/docker-ubuntu1804-ansible
+      - kafka_rest_migration
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
     volumes:
@@ -81,7 +87,8 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
-    image: geerlingguy/docker-ubuntu1804-ansible
+      - kafka_connect_migration
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
     volumes:
@@ -93,7 +100,8 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-    image: geerlingguy/docker-ubuntu1804-ansible
+      - ksql_migration
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
     volumes:
@@ -105,7 +113,8 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
-    image: geerlingguy/docker-ubuntu1804-ansible
+      - control_center_migration
+    image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
     volumes:
@@ -115,11 +124,48 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
+  - name: control-center-next-gen
+    hostname: control-center-next-gen.confluent
+    groups:
+      - control_center_next_gen
+      - control_center_next_gen_migration
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9022:9022"
+    networks:
+      - name: confluent
+      # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
+        control_center_next_gen_port: 9022
+        control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_mtls_enabled: false
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+        control_center_next_gen_dependency_alertmanager_ssl_enabled: true
+        control_center_next_gen_dependency_alertmanager_mtls_enabled: false
+        control_center_next_gen_dependency_alertmanager_basic_auth_enabled: true
+
         ssl_enabled: true
         ssl_mutual_auth_enabled: true
         secrets_protection_enabled: true # To test secrets protection on cli v3 without rbac
-        confluent_cli_version: 3.2.1

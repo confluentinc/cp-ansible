@@ -1,8 +1,9 @@
 ---
-### Installs Zookeeper, Kafka Broker, Schema Registry on CentOS7
+### Installs Zookeeper, Kafka Broker, Schema Registry on RHEL8
 ### Digest authentication enabled.
-### SASL SCRAM enabled.
+### SASL PLAIN enabled.
 ### Customer Zookeeper Root.
+### Migration of Zk cluster with digest auth to Kraft cluster
 
 driver:
   name: docker
@@ -11,8 +12,9 @@ platforms:
     hostname: zookeeper1.confluent
     groups:
       - zookeeper
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+      - zookeeper_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -23,8 +25,9 @@ platforms:
     hostname: zookeeper2.confluent
     groups:
       - zookeeper
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+      - zookeeper_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -35,8 +38,9 @@ platforms:
     hostname: zookeeper3.confluent
     groups:
       - zookeeper
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+      - zookeeper_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -47,8 +51,9 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+      - kafka_broker_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -59,8 +64,9 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+      - kafka_broker_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -71,8 +77,9 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+      - kafka_broker_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -83,8 +90,22 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+      - schema_registry_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -92,6 +113,8 @@ platforms:
     networks:
       - name: confluent
 provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
@@ -99,6 +122,6 @@ provisioner:
 
         zookeeper_quorum_authentication_type: digest
         zookeeper_client_authentication_type: digest
-        sasl_protocol: scram
+        sasl_protocol: plain
 
         zookeeper_chroot: "/kafka"

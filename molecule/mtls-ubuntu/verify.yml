@@ -1,10 +1,34 @@
 ---
 ### Validates that protocol is set to SSl across all components.
 
+- name: Verify - kafka_controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: controller.quorum.voters
+        expected_value: "{{ kafka_controller_quorum_voters }}"
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: listener.security.protocol.map
+        expected_value: CONTROLLER:SSL,BROKER:SSL
+
 - name: Verify - kafka_broker
   hosts: kafka_broker
   gather_facts: false
   tasks:
+    - set_fact:
+        kraft_mode: "{{ ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) }}"
+
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
@@ -12,6 +36,15 @@
         file_path: /etc/kafka/server.properties
         property: listener.security.protocol.map
         expected_value: INTERNAL:SSL,BROKER:SSL
+      when: not kraft_mode|bool
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: listener.security.protocol.map
+        expected_value: CONTROLLER:SSL,INTERNAL:SSL,BROKER:SSL
+      when: kraft_mode|bool
 
 - name: Verify - schema_registry
   hosts: schema_registry
@@ -63,6 +96,18 @@
 
 - name: Verify - control_center
   hosts: control_center
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.streams.security.protocol
+        expected_value: SSL
+
+- name: Verify - control_center_next_gen
+  hosts: control_center_next_gen
   gather_facts: false
   tasks:
     - import_role:

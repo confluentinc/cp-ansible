@@ -16,7 +16,7 @@ openssl req -new -x509 \
     -keyout $CA_KEY \
     -out $CA_CRT \
     -days 365 \
-    -subj '/CN=test.confluent.io/OU=TEST/O=CONFLUENT/L=MountainView/S=Ca/C=US' \
+    -subj '/CN=test.confluent.io/OU=TEST TEAM/O=CONFLUENT/L=MountainView/S=Ca/C=US' \
     -passin pass:capassword \
     -passout pass:capassword
 
@@ -50,10 +50,12 @@ for line in `sed '/^$/d' $filename`; do
       service=${split_hostnames[0]}
       internal=${split_hostnames[1]}
       fqdn=$internal.confluent
-
+      ip_add=$(dig +short $internal)
+      if [ "$ip_add" = "" ]; then   # skip creating Zookeeper certs in Kraft mode and vice versa
+        continue
+      fi
       alias=$service.$internal
       KEYSTORE_FILENAME=$internal.keystore.jks
-
       CSR_FILENAME=$internal.csr
       CRT_SIGNED_FILENAME=$internal-ca1-signed.crt
       KEY_FILENAME=$internal-key.pem
@@ -67,7 +69,7 @@ for line in `sed '/^$/d' $filename`; do
       keytool -genkeypair -noprompt \
           -keystore $KEYSTORE_FILENAME \
           -alias $alias \
-          -dname "CN=$service,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US" \
+          -dname "CN=$service,OU=TEST TEAM,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US" \
           -ext $EXT \
           -keyalg RSA \
           -storetype $FORMAT \
@@ -118,6 +120,7 @@ subjectAltName = @alt_names
 [alt_names]
 DNS.1 = $internal
 DNS.2 = $fqdn
+IP.1 = $ip_add
 EOF
 )
 

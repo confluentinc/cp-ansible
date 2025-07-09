@@ -18,8 +18,6 @@
 
 - name: Install apt-transport-https
   shell: apt-get install apt-transport-https -y --force-yes
-  args:
-    warn: false
   register: install_apt_transport_result
   until: install_apt_transport_result is success  or ansible_check_mode
   retries: 5
@@ -27,8 +25,11 @@
 
 - name: Add Confluent Apt Key
   apt_key:
-    url: "{{confluent_common_repository_debian_key_url}}"
+    url: "{{item}}"
     state: present
+  loop:
+    - "{{confluent_common_repository_debian_key_url}}"
+    - "{{confluent_control_center_next_gen_repository_debian_key_url}}"
   register: apt_add_key_result
   until: apt_add_key_result is success
   retries: 5
@@ -39,10 +40,21 @@
   tags:
     - privileged
 
+- name: Ensure Custom Apt Repo is not in repos when repository_configuration is Confluent
+  file:
+    state: absent
+    path: /etc/apt/sources.list.d/custom_confluent.list
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+
 - name: Add Confluent Apt Repo
   apt_repository:
-    repo: "{{confluent_common_repository_debian_repository}}"
+    repo: "{{item}}"
     state: present
+  loop:
+    - "{{confluent_common_repository_debian_repository}}"
+    - "{{confluent_control_center_next_gen_repository_debian_repository}}"
   register: apt_add_result
   until: apt_add_result is success
   retries: 5
@@ -71,6 +83,23 @@
     - repository_configuration == 'confluent'
     - installation_method == "package"
 
+- name: Ensure Confluent Apt Repo is not in repos when repository_configuration is custom
+  apt_repository:
+    repo: "{{item}}"
+    state: absent
+  loop:
+    - "{{confluent_common_repository_debian_repository}}"
+    - "{{confluent_control_center_next_gen_repository_debian_repository}}"
+  when:
+    - repository_configuration == 'custom'
+
+- name: Ensure Confluent Clients Apt Repo is not in repos when repository_configuration is custom
+  apt_repository:
+    repo: "{{confluent_common_repository_debian_clients_repository}}"
+    state: absent
+  when:
+    - repository_configuration == 'custom'
+
 - name: Add Custom Apt Repo
   copy:
     src: "{{custom_apt_repo_filepath}}"
@@ -84,6 +113,9 @@
     - apt-get update
 
 - meta: flush_handlers
+
+- name: Custom Java Install
+  include_tasks: custom_java_install.yml
 
 - name: Copy in repo skip valid check
   copy:
@@ -191,6 +223,19 @@
     - repository_configuration == 'confluent'
     - ansible_distribution_release == "buster"
 
+- name: Install Java - bookworm
+  apt:
+    name: "{{ debian_java_package_name }}"
+    state: present
+  register: java_install_result
+  until: java_install_result is success
+  retries: 10
+  delay: 5
+  when:
+    - install_java|bool
+    - repository_configuration == 'confluent'
+    - ansible_distribution_release == "bookworm"
+
 - name: Install Java (Custom Repo)
   apt:
     name: "{{ debian_java_package_name }}"
@@ -213,21 +258,50 @@
       - curl
   tags: package
 
+- name: Get Java Version
+  shell: java -version
+  register: version_output
+  check_mode: false
+  changed_when: false
+
+- name: Print Java Version
+  debug:
+    msg: "Current Java Version is: {{version_output.stderr_lines[0]}}"
+
 - name: Install pip
   apt:
     name:
       - python3-pip
     state: present
   become: true
-  tags: package
+  tags:
+    - package
+    - pip-package
+  when: ansible_distribution_major_version != "12"
 
 - name: Upgrade pip
   ansible.builtin.pip:
     name: pip
     extra_args: --upgrade
-  tags: package
+  tags:
+    - package
+    - pip-package
+  when: ansible_distribution_major_version != "12"
 
 - name: Install pip packages
   ansible.builtin.pip:
     name: "{{pip_packages}}"
+  tags:
+    - package
+    - pip-package
+  when: ansible_distribution_major_version != "12"
+
+- name: Install pip packages using apt
+  apt:
+    name:
+      - "python3-{{item}}"
+    state: present
+  become: true
+  loop: "{{pip_packages}}"
   tags: package
+  when: ansible_distribution_major_version == "12"

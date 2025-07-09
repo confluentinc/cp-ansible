@@ -1,21 +1,40 @@
 ---
+- name: Decide Where to delegate task of getting superuser token
+  set_fact:
+    delegation_target: >-
+      {%- if mds_ssl_client_authentication == 'none' -%}
+        {{ inventory_hostname }}
+      {%- elif external_mds_enabled|bool -%}
+        localhost
+      {%- else -%}
+        {{ groups['kafka_broker'][0] }}
+      {%- endif -%}
+
 - name: Get Kafka Cluster Id
   import_role:
     name: common
     tasks_from: rbac_setup.yml
   vars:
     copy_certs: false
+    delegated_to_localhost: "{{ external_mds_enabled|bool }}"
+    erp_client_cert_path: "{{ kafka_connect_replicator_cert_path }}"
+    erp_client_key_path: "{{ kafka_connect_replicator_key_path }}"
+    cert_auth_only_enabled_for_rbac: "{{ kafka_connect_replicator_mds_cert_auth_only|bool }}"
+  delegate_to: "{{ delegation_target }}"
+  # For single cluster delegating this task to broker as in case of cert based token retrival only broker can get a super user token using its certs
+  # For Centralized MDS other clusters can't delegate to MDS cluster as that cluster may not have permissions to ssh into MDS, thus delegate to localhost
+
 
 - name: Register Kafka Replicator Cluster
   uri:
     url: "{{kafka_connect_replicator_erp_host.split(',')[0]| default('localhost:8090')}}/security/1.0/registry/clusters"
     method: POST
     validate_certs: false
-    force_basic_auth: true
-    url_username: "{{kafka_connect_replicator_erp_admin_user}}"
-    url_password: "{{kafka_connect_replicator_erp_admin_password}}"
     headers:
       Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_replicator_cert_path }}"
+    client_key: "{{ kafka_connect_replicator_key_path }}"
     body_format: json
     body: >
       [
@@ -35,3 +54,6 @@
     status_code: 204
   run_once: true
   register: output
+  until: output.status == 204
+  retries: 20
+  delay: 10

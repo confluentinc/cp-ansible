@@ -1,9 +1,24 @@
 ---
 # Cannot use Block/Rescue in Ansible Handlers: https://github.com/ansible/ansible/issues/14270
 # Implementing try/catch logic with ignore_errors and conditionals
+- name: Get Authorization Token for ksqlDB User
+  import_role:
+    name: common
+    tasks_from: get_authorization_token.yml
+  vars:
+    oauth: "{{ ksql_oauth_enabled }}"
+    oauth_user: "{{ ksql_oauth_user }}"
+    oauth_password: "{{ ksql_oauth_password }}"
+    ldap_user: "{{ ksql_ldap_user }}"
+    ldap_password: "{{ ksql_ldap_password }}"
+    mtls_client_cert: "{{ ksql_cert_path }}"
+    mtls_client_key: "{{ ksql_key_path }}"
+    cert_auth_only_enabled: "{{ ksql_mds_cert_auth_only|bool }}"
+  when: rbac_enabled or ksql_oauth_enabled
+
 - name: Wait for API to return 200
   uri:
-    url: "{{ksql_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{ksql_listener_port}}/info"
+    url: "{{ksql_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_and_format_hostname }}:{{ksql_listener_port}}/info"
     status_code: 200
     validate_certs: false
     # Basic auth header is redundant for non rbac install
@@ -14,15 +29,37 @@
   until: result1.status == 200
   retries: 40
   delay: 5
-  when: ksql_authentication_type != 'mtls'
+  when:
+    - ksql_authentication_type != 'mtls'
+    - not ( rbac_enabled or ksql_oauth_enabled)
   ignore_errors: true
+
+- name: Wait for API to return 200
+  uri:
+    url: "{{ksql_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_and_format_hostname }}:{{ksql_listener_port}}/info"
+    status_code: 200
+    validate_certs: false
+    headers:
+      Authorization: "Bearer {{ authorization_token }}"
+  register: result1_oauth
+  until: result1_oauth.status == 200
+  retries: 40
+  delay: 5
+  when:
+    - ksql_authentication_type != 'mtls'
+    - rbac_enabled or ksql_oauth_enabled
+  no_log: "{{mask_secrets|bool}}"
+  ignore_errors: true
+
+- set_fact:
+    certs_chain: "{{ssl_file_dir_final}}/ksql.chain"
 
 - name: Wait for API to return 200 - mTLS
   uri:
-    url: "{{ksql_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{ksql_listener_port}}/info"
+    url: "{{ksql_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_and_format_hostname }}:{{ksql_listener_port}}/info"
     status_code: 200
     validate_certs: false
-    client_cert: "{{ksql_cert_path}}"
+    client_cert: "{{ ksql_cert_path if ssl_provided_keystore_and_truststore else certs_chain }}"
     client_key: "{{ksql_key_path}}"
     # Basic auth header is redundant for non rbac install
     url_username: "{{ksql_health_check_user}}"
@@ -32,7 +69,27 @@
   until: result2.status == 200
   retries: 40
   delay: 5
-  when: ksql_authentication_type == 'mtls'
+  when:
+    - ksql_authentication_type == 'mtls'
+    - not (rbac_enabled or ksql_oauth_enabled)
+  ignore_errors: true
+
+- name: Wait for API to return 200 - mTLS
+  uri:
+    url: "{{ksql_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_and_format_hostname }}:{{ksql_listener_port}}/info"
+    status_code: 200
+    validate_certs: false
+    client_cert: "{{ ksql_cert_path if ssl_provided_keystore_and_truststore else certs_chain }}"
+    client_key: "{{ksql_key_path}}"
+    headers:
+      Authorization: "Bearer {{ authorization_token }}"
+  register: result2_oauth
+  until: result2_oauth.status == 200
+  retries: 40
+  delay: 5
+  when:
+    - ksql_authentication_type == 'mtls'
+    - rbac_enabled or ksql_oauth_enabled
   ignore_errors: true
 
 - name: Fetch Log Files and Error out

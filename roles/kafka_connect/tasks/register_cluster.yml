@@ -1,4 +1,15 @@
 ---
+- name: Decide Where to delegate task of getting superuser token
+  set_fact:
+    delegation_target: >-
+      {%- if mds_ssl_client_authentication == 'none' -%}
+        {{ inventory_hostname }}
+      {%- elif external_mds_enabled|bool -%}
+        localhost
+      {%- else -%}
+        {{ groups['kafka_broker'][0] }}
+      {%- endif -%}
+
 - name: Get Kafka Cluster Id
   import_role:
     name: common
@@ -6,10 +17,17 @@
   when: rbac_enabled
   vars:
     copy_certs: false
+    delegated_to_localhost: "{{ external_mds_enabled|bool }}"
+    erp_client_cert_path: "{{ kafka_connect_cert_path }}"
+    erp_client_key_path: "{{ kafka_connect_key_path }}"
+    cert_auth_only_enabled_for_rbac: "{{ kafka_connect_mds_cert_auth_only|bool }}"
+  delegate_to: "{{ delegation_target }}"
+  # For single cluster delegating this task to broker as in case of cert based token retrival only broker can get a super user token using its certs
+  # For Centralized MDS other clusters can't delegate to MDS cluster as that cluster may not have permissions to ssh into MDS, thus delegate to localhost
 
 - name: Fetch Kafka Connect Cluster Groups
   set_fact:
-    active_kafka_connect_groups: "{{ (((active_kafka_connect_groups | default([])) + hostvars[item].group_names) | difference('kafka_connect'+'kafka_connect_parallel'+'kafka_connect_serial'+ 'kafka_broker'+ 'kafka_broker_parallel'+'kafka_broker_serial'+'ksql'+ 'ksql_parallel'+'ksql_serial'+'control_center'+'control_center_parallel'+'control_center_serial'+'schema_registry'+'zookeeper'+'zookeeper_parallel'+'zookeeper_serial'+'kafka_rest'+'kafka_rest_parallel'+'kafka_rest_serial')) | default(['kafka_connect'], true) }}"
+    active_kafka_connect_groups: "{{ (((active_kafka_connect_groups | default([])) + hostvars[item].group_names) | difference('kafka_connect'+'kafka_connect_parallel'+'kafka_connect_serial'+ 'kafka_broker'+ 'kafka_broker_parallel'+'kafka_broker_serial'+'ksql'+ 'ksql_parallel'+'ksql_serial'+'control_center'+'control_center_parallel'+'control_center_serial'+'schema_registry'+'zookeeper'+'zookeeper_parallel'+'zookeeper_serial'+'kafka_rest'+'kafka_rest_parallel'+'kafka_rest_serial'+'kafka_controller'+'kafka_controller_parallel'+'kafka_controller_serial')) | default(['kafka_connect'], true) }}"
   with_items: "{{ ansible_play_hosts }}"
 
 - name: Register Kafka Connect Cluster
@@ -22,11 +40,11 @@
     url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/registry/clusters"
     method: POST
     validate_certs: false
-    force_basic_auth: true
-    url_username: "{{mds_super_user}}"
-    url_password: "{{mds_super_user_password}}"
     headers:
       Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_connect_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_connect_key_path if send_client_cert|bool else omit }}"
     body_format: json
     body: >
       [
@@ -46,7 +64,7 @@
   register: output
   until: output.status == 204
   retries: "{{ mds_retries }}"
-  delay: 5
+  delay: 10
   when:
     - hostvars[item].get("rbac_enabled", false)|bool
     - hostvars[item].kafka_connect_cluster_name is defined

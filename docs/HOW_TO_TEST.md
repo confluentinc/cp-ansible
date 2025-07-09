@@ -88,6 +88,30 @@ Simply run:
 molecule destroy -s <scenario name>
 ```
 
+### Running in kraft mode
+
+Simply run:
+
+```
+molecule --env-file molecule/kraft.yml converge -s <scenario name>
+```
+
+### Running on ARM64 architecture machine
+
+Simply run:
+
+```
+molecule --env-file molecule/arm.yml converge -s <scenario name>
+```
+
+### Running in kraft mode on ARM64 architecture machine
+
+Simply run:
+
+```
+molecule --env-file molecule/arm_kraft.yml converge -s <scenario name>
+```
+
 ## Creating and Modifying Scenarios
 
 When developing new features you can create a new scenario simply by duplicating the default one and customizing. Edit the verify.yml to have test assertions for your scenario.
@@ -128,3 +152,22 @@ alias molecule="docker run -it --rm --dns="8.8.8.8" -v "/var/run/docker.sock:/va
 ```
 
 Now the molecule command will run a container, but function as it should.
+
+### Tmp error on local directory creation
+```
+Failed to create temporary directory.In some cases, you may have been able to authenticate and did not have permissions on the target directory. Consider changing the remote tmp path in ansible.cfg to a path rooted in \"/tmp\", for more error information use -vvv. Failed command was: ( umask 77 && mkdir -p \"` echo ~/.ansible/tmp `\"&& mkdir \"` echo ~/.ansible/tmp/ansible-tmp-1742449792.4660301-47063-61652057409139 `\" && echo ansible-tmp-1742449792.4660301-47063-61652057409139=\"` echo ~/.ansible/tmp/ansible-tmp-1742449792.4660301-47063-61652057409139 `\" ), exited with result 1
+```
+1. Try a different directory for the temporary directory.
+```
+in this file molecule/<scenario_name>/molecule.yml
+provisioner:
+  config_options:
+    defaults:
+      debug: true
+      remote_tmp: /tmp
+```
+2. Do a clean molecule destroy and running coverage again 
+```
+molecule destroy -s <scenario name>
+molecule converge -s <scenario name>
+```

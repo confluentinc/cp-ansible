@@ -1,4 +1,5 @@
 import re
+import ipaddress
 
 DOCUMENTATION = '''
 ---
@@ -16,6 +17,7 @@ class FilterModule(object):
             'kafka_protocol_defaults': self.kafka_protocol_defaults,
             'get_sasl_mechanisms': self.get_sasl_mechanisms,
             'get_hostnames': self.get_hostnames,
+            'split_to_list': self.split_to_list,
             'get_roles': self.get_roles,
             'resolve_hostname': self.resolve_hostname,
             'resolve_hostnames': self.resolve_hostnames,
@@ -29,41 +31,88 @@ class FilterModule(object):
             'client_properties': self.client_properties,
             'c3_connect_properties': self.c3_connect_properties,
             'c3_ksql_properties': self.c3_ksql_properties,
-            'resolve_principal': self.resolve_principal
+            'resolve_principal': self.resolve_principal,
+            'is_ipv6': self.is_ipv6,
+            'format_hostname': self.format_hostname,
+            'resolve_and_format_hostname': self.resolve_and_format_hostname,
+            'resolve_and_format_hostnames': self.resolve_and_format_hostnames,
+            'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
         }
 
-    def normalize_sasl_protocol(self, protocol):
-        # Returns standardized value for sasl mechanism string
-        normalized = 'GSSAPI' if protocol.lower() == 'kerberos' \
-            else 'SCRAM-SHA-512' if protocol.upper() == 'SCRAM' \
-            else 'SCRAM-SHA-256' if protocol.lower() == 'scram256' \
-            else 'PLAIN' if protocol.upper() == 'PLAIN' \
-            else 'OAUTHBEARER' if protocol.upper() == 'OAUTH' \
-            else 'none'
-        return normalized
+    def resolve_and_format_hostname(self, hosts_hostvars_dict):
+        return self.format_hostname(self.resolve_hostname(hosts_hostvars_dict))
 
-    def kafka_protocol_normalized(self, sasl_protocol_normalized, ssl_enabled):
+    def resolve_and_format_hostnames(self, hosts, hostvars_dict):
+        hostnames = self.resolve_hostnames(hosts, hostvars_dict)
+        formatted_hostnames = []
+        for hostname in hostnames:
+            formatted_hostnames.append(self.format_hostname(hostname))
+        return formatted_hostnames
+
+    def is_ipv6(self, address):
+        try:
+            return isinstance(ipaddress.ip_address(address), ipaddress.IPv6Address)
+        except ValueError:
+            return False
+
+    def format_hostname(self, hostname):
+        if self.is_ipv6(hostname):
+            return f"[{hostname}]"
+        return hostname
+
+    def normalize_sasl_protocol(self, protocols):
+        # Returns a list of standardized values for sasl mechanism strings
+        protocol_list = self.split_to_list(protocols)
+
+        normalized_protocols = []
+        for protocol in protocol_list:
+            if protocol.lower() == 'kerberos':
+                normalized = 'GSSAPI'
+            elif protocol.upper() == 'SCRAM':
+                normalized = 'SCRAM-SHA-512'
+            elif protocol.lower() == 'scram256':
+                normalized = 'SCRAM-SHA-256'
+            elif protocol.upper() == 'PLAIN':
+                normalized = 'PLAIN'
+            elif protocol.upper() == 'OAUTH':
+                normalized = 'OAUTHBEARER'
+            else:
+                normalized = 'none'
+            normalized_protocols.append(normalized)
+        return normalized_protocols
+
+    def kafka_protocol_normalized(self, sasl_protocols_normalized, ssl_enabled):
         # Joins a sasl mechanism and tls setting to return a kafka protocol
-        kafka_protocol = 'SASL_SSL' if ssl_enabled is True \
-            and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-512', 'SCRAM-SHA-256', 'OAUTHBEARER'] \
-            else 'SASL_PLAINTEXT' if ssl_enabled is False \
-            and sasl_protocol_normalized in ['GSSAPI', 'PLAIN', 'SCRAM-SHA-512', 'SCRAM-SHA-256', 'OAUTHBEARER'] \
-            else 'SSL' if ssl_enabled is True and sasl_protocol_normalized == 'none' \
-            else 'PLAINTEXT'
+        required_mechanisms = ['GSSAPI', 'PLAIN', 'SCRAM-SHA-512', 'SCRAM-SHA-256', 'OAUTHBEARER']
+
+        if ssl_enabled and self.all_elements_present(sasl_protocols_normalized, required_mechanisms):
+            kafka_protocol = 'SASL_SSL'
+        elif not ssl_enabled and self.all_elements_present(sasl_protocols_normalized, required_mechanisms):
+            kafka_protocol = 'SASL_PLAINTEXT'
+        elif ssl_enabled and 'none' in sasl_protocols_normalized:
+            kafka_protocol = 'SSL'
+        else:
+            kafka_protocol = 'PLAINTEXT'
         return kafka_protocol
+
+    def split_to_list(self, string):
+        return re.sub(r"[ \t]", "", string).split(',')
+
+    def all_elements_present(self, sasl_protocols_normalized, required_mechanisms):
+        return all(protocol in required_mechanisms for protocol in sasl_protocols_normalized)
 
     def kafka_protocol(self, sasl_protocol, ssl_enabled):
         # Joins a sasl mechanism and tls setting to return a kafka protocol
-        sasl_protocol_normalized = self.normalize_sasl_protocol(sasl_protocol)
-        kafka_protocol = self.kafka_protocol_normalized(sasl_protocol_normalized, ssl_enabled)
+        sasl_protocols_normalized = self.normalize_sasl_protocol(sasl_protocol)
+        kafka_protocol = self.kafka_protocol_normalized(sasl_protocols_normalized, ssl_enabled)
         return kafka_protocol
 
     def kafka_protocol_defaults(self, listener, default_ssl_enabled, default_sasl_protocol):
         # Joins a sasl mechanism and tls setting and their default values, to return a kafka protocol
         ssl_enabled = listener.get('ssl_enabled', default_ssl_enabled)
         sasl_protocol = listener.get('sasl_protocol', default_sasl_protocol)
-        sasl_protocol_normalized = self.normalize_sasl_protocol(sasl_protocol)
-        kafka_protocol = self.kafka_protocol_normalized(sasl_protocol_normalized, ssl_enabled)
+        sasl_protocols_normalized = self.normalize_sasl_protocol(sasl_protocol)
+        kafka_protocol = self.kafka_protocol_normalized(sasl_protocols_normalized, ssl_enabled)
         return kafka_protocol
 
     def get_sasl_mechanisms(self, listeners_dict, default_sasl_protocol):
@@ -71,7 +120,7 @@ class FilterModule(object):
         mechanisms = []
         for listener in listeners_dict:
             sasl_protocol = listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)
-            mechanisms = mechanisms + [self.normalize_sasl_protocol(sasl_protocol)]
+            mechanisms = mechanisms + self.normalize_sasl_protocol(sasl_protocol)
         return mechanisms
 
     def get_hostnames(self, listeners_dict, default_hostname):
@@ -156,22 +205,25 @@ class FilterModule(object):
         return final_dict
 
     def listener_properties(self, listeners_dict, default_ssl_enabled,
-                            bouncy_castle_keystore, default_ssl_mutual_auth_enabled,
-                            default_sasl_protocol, kafka_broker_truststore_path,
-                            kafka_broker_truststore_storepass,
+                            bouncy_castle_keystore, default_ssl_client_authentication,
+                            default_principal_mapping_rules, default_sasl_protocol,
+                            kafka_broker_truststore_path, kafka_broker_truststore_storepass,
                             kafka_broker_keystore_path,
                             kafka_broker_keystore_storepass,
                             kafka_broker_keystore_keypass,
                             plain_jaas_config, keytab_path,
                             kerberos_principal, kerberos_primary,
                             scram_user, scram_password, scram256_user,
-                            scram256_password, oauth_pem_path):
+                            scram256_password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience,
+                            oauth_sub_claim, rbac_enabled, kraft_listener, idp_self_signed):
         # For kafka broker properties: Takes listeners dictionary and outputs all properties based on the listeners' settings
         # Other inputs help fill out the properties
         final_dict = {}
         for listener in listeners_dict:
             listener_name = listeners_dict[listener].get('name').lower()
-
+            sasl_protocol = listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)
+            normalize_sasl_protocols = self.normalize_sasl_protocol(sasl_protocol)
+            final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = ','.join(normalize_sasl_protocols)
             if listeners_dict[listener].get('ssl_enabled', default_ssl_enabled):
                 final_dict['listener.name.' + listener_name + '.ssl.truststore.location'] = kafka_broker_truststore_path
                 final_dict['listener.name.' + listener_name + '.ssl.truststore.password'] = str(kafka_broker_truststore_storepass)
@@ -179,47 +231,98 @@ class FilterModule(object):
                 final_dict['listener.name.' + listener_name + '.ssl.keystore.password'] = str(kafka_broker_keystore_storepass)
                 final_dict['listener.name.' + listener_name + '.ssl.key.password'] = str(kafka_broker_keystore_keypass)
 
+                # After changes to variables/tasks/main.yml, Listener will always have both
+                # ssl_client_authentication and ssl_mutual_auth_enabled defined and consistent
+                # Thus we only check listener level ssl_client_authentication
+                # We dont need to check listener level ssl_mutual_auth_enabled as
+                # it is consistent with listener level ssl_client_authentication
+                # We should not check global var since if user wants to turn off mtls on a particular
+                # listener we dont want to turn it on based on global var
+                mtls_mode = listeners_dict[listener].get('ssl_client_authentication', 'none')
+
+                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = mtls_mode
+                final_dict['listener.name.' + listener_name + '.ssl.principal.mapping.rules'] = \
+                    ','.join(listeners_dict[listener].get('principal_mapping_rules', default_principal_mapping_rules))
+
             if bouncy_castle_keystore:
                 final_dict['listener.name.' + listener_name + '.ssl.keymanager.algorithm'] = 'PKIX'
                 final_dict['listener.name.' + listener_name + '.ssl.trustmanager.algorithm'] = 'PKIX'
                 final_dict['listener.name.' + listener_name + '.ssl.keystore.type'] = 'BCFKS'
                 final_dict['listener.name.' + listener_name + '.ssl.truststore.type'] = 'BCFKS'
-                final_dict['listener.name.' + listener_name + '.ssl.enabled.protocols'] = 'TLSv1.2'
+                final_dict['listener.name.' + listener_name + '.ssl.enabled.protocols'] = 'TLSv1.2,TLSv1.3'
 
-            if listeners_dict[listener].get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
-                final_dict['listener.name.' + listener_name + '.ssl.client.auth'] = 'required'
-
-            if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'PLAIN':
-                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'PLAIN'
+            if 'PLAIN' in normalize_sasl_protocols:
                 final_dict['listener.name.' + listener_name + '.plain.sasl.jaas.config'] = plain_jaas_config
 
-            if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI':
-                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'GSSAPI'
+            if 'GSSAPI' in normalize_sasl_protocols:
                 final_dict['listener.name.' + listener_name + '.sasl.kerberos.service.name'] = kerberos_primary
                 final_dict['listener.name.' + listener_name + '.gssapi.sasl.jaas.config'] =\
                     'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' +\
                     keytab_path + '\" principal=\"' + kerberos_principal + '\";'
 
-            if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'SCRAM-SHA-512':
-                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'SCRAM-SHA-512'
+            if 'SCRAM-SHA-512' in normalize_sasl_protocols:
                 final_dict['listener.name.' + listener_name + '.scram-sha-512.sasl.jaas.config'] =\
                     'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' +\
                     scram_user + '\" password=\"' + str(scram_password) + '\";'
 
-            if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'SCRAM-SHA-256':
-                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'SCRAM-SHA-256'
+            if 'SCRAM-SHA-256' in normalize_sasl_protocols:
                 final_dict['listener.name.' + listener_name + '.scram-sha-256.sasl.jaas.config'] =\
                     'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' +\
                     scram256_user + '\" password=\"' + scram256_password + '\";'
 
-            if self.normalize_sasl_protocol(listeners_dict[listener].get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER':
-                final_dict['listener.name.' + listener_name + '.sasl.enabled.mechanisms'] = 'OAUTHBEARER'
+            if 'OAUTHBEARER' in normalize_sasl_protocols:
+                final_dict['listener.name.' + listener_name + '.principal.builder.class'] =\
+                    'io.confluent.kafka.security.authenticator.OAuthKafkaPrincipalBuilder'
+
+            if 'OAUTHBEARER' in normalize_sasl_protocols and not oauth_enabled:
+                final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
+                    'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + rbac_enabled_public_pem_path + '\";'
                 final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.server.callback.handler.class'] =\
                     'io.confluent.kafka.server.plugins.auth.token.TokenBearerValidatorCallbackHandler'
                 final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.login.callback.handler.class'] =\
                     'io.confluent.kafka.server.plugins.auth.token.TokenBearerServerLoginCallbackHandler'
-                final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
-                    'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + oauth_pem_path + '\";'
+
+            if 'OAUTHBEARER' in normalize_sasl_protocols and \
+                    oauth_enabled and rbac_enabled:
+                final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.server.callback.handler.class'] =\
+                    'io.confluent.kafka.server.plugins.auth.token.CompositeBearerValidatorCallbackHandler'
+                final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.jwks.endpoint.url'] = oauth_jwks_uri
+                final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.sub.claim.name'] = oauth_sub_claim
+
+            if 'OAUTHBEARER' in normalize_sasl_protocols \
+                    and oauth_enabled and not rbac_enabled:
+                final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.server.callback.handler.class'] =\
+                    'org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerValidatorCallbackHandler'
+                final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.jwks.endpoint.url'] = oauth_jwks_uri
+                final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.sub.claim.name'] = oauth_sub_claim
+
+            if 'OAUTHBEARER' in normalize_sasl_protocols and \
+                    oauth_enabled:
+                if rbac_enabled and idp_self_signed:
+                    final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
+                        'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + \
+                        rbac_enabled_public_pem_path + '\" ssl.truststore.location=\"' + kafka_broker_truststore_path + \
+                        '\" ssl.truststore.password=\"' + kafka_broker_truststore_storepass + '\" unsecuredLoginStringClaim_sub="thePrincipalName";'
+                if (rbac_enabled and (not idp_self_signed)):
+                    final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
+                        'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required publicKeyPath=\"' + \
+                        rbac_enabled_public_pem_path + '\" unsecuredLoginStringClaim_sub="thePrincipalName";'
+                if ((not rbac_enabled) and idp_self_signed):
+                    final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
+                        'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required' + \
+                        ' ssl.truststore.location=\"' + kafka_broker_truststore_path + \
+                        '\" ssl.truststore.password=\"' + kafka_broker_truststore_storepass + '\" unsecuredLoginStringClaim_sub="thePrincipalName";'
+                if ((not rbac_enabled) and (not idp_self_signed)):
+                    final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.jaas.config'] =\
+                        'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required unsecuredLoginStringClaim_sub="thePrincipalName";'
+
+            if 'OAUTHBEARER' in normalize_sasl_protocols and \
+                    oauth_enabled and oauth_expected_audience != 'none':
+                final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.expected.audience'] = oauth_expected_audience
+
+            if kraft_listener and (rbac_enabled or oauth_enabled):
+                final_dict['listener.name.' + listener_name + '.principal.builder.class'] =\
+                    'io.confluent.kafka.security.authenticator.OAuthKafkaPrincipalBuilder'
 
         return final_dict
 
@@ -227,7 +330,8 @@ class FilterModule(object):
                           config_prefix, truststore_path, truststore_storepass, public_certificates_enabled, keystore_path, keystore_storepass,
                           keystore_keypass, omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
                           sasl_scram256_username, sasl_scram256_password, kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
-                          omit_oauth_configs, oauth_username, oauth_password, mds_bootstrap_server_urls):
+                          omit_oauth_configs, oauth_username, oauth_password, mds_bootstrap_server_urls, oauth_enabled, oauth_superuser_client_id,
+                          oauth_superuser_client_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, kraft_listener):
         # For any kafka client's properties: Takes in a single kafka listener and output properties to connect to that listener
         # Other inputs help fill out the properties
         final_dict = {
@@ -238,7 +342,10 @@ class FilterModule(object):
             final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
             final_dict[config_prefix + 'ssl.truststore.password'] = str(truststore_storepass)
 
-        if listener_dict.get('ssl_mutual_auth_enabled', default_ssl_mutual_auth_enabled):
+        if listener_dict.get('ssl_mutual_auth_enabled', False):
+            # If listener has mtls (required or requested) CP clients will to send certs talking to kafka listener
+            # We dont need to check ssl_client_authentication since it is consistent with ssl_mutual_auth_enabled
+            # We should not check global var since it may not be consistent with listener level ssl_mutual_auth_enabled
             final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
             final_dict[config_prefix + 'ssl.keystore.password'] = str(keystore_storepass)
             final_dict[config_prefix + 'ssl.key.password'] = str(keystore_keypass)
@@ -249,44 +356,80 @@ class FilterModule(object):
             final_dict[config_prefix + 'ssl.keystore.type'] = 'BCFKS'
             final_dict[config_prefix + 'ssl.truststore.type'] = 'BCFKS'
 
-        if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'PLAIN' and not omit_jaas_configs:
+        sasl_protocols = listener_dict.get('sasl_protocol', default_sasl_protocol)
+        normalize_sasl_protocols = self.normalize_sasl_protocol(sasl_protocols)
+        if normalize_sasl_protocols[0] == 'PLAIN' and not omit_jaas_configs:
             final_dict[config_prefix + 'sasl.mechanism'] = 'PLAIN'
             final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.plain.PlainLoginModule required username=\"' +\
                 sasl_plain_username +\
                 '\" password=\"' +\
                 str(sasl_plain_password) + '\";'
 
-        if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'SCRAM-SHA-512' and not omit_jaas_configs:
+        if normalize_sasl_protocols[0] == 'SCRAM-SHA-512' and not omit_jaas_configs and not kraft_listener:
             final_dict[config_prefix + 'sasl.mechanism'] = 'SCRAM-SHA-512'
             final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' +\
                 sasl_scram_username + '\" password=\"' + str(sasl_scram_password) + '\";'
 
-        if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'SCRAM-SHA-256' and not omit_jaas_configs:
+        if normalize_sasl_protocols[0] == 'SCRAM-SHA-256' and not omit_jaas_configs and not kraft_listener:
             final_dict[config_prefix + 'sasl.mechanism'] = 'SCRAM-SHA-256'
             final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.scram.ScramLoginModule required username=\"' +\
                 sasl_scram256_username + '\" password=\"' + sasl_scram256_password + '\";'
 
-        if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI':
+        if normalize_sasl_protocols[0] == 'GSSAPI':
             final_dict[config_prefix + 'sasl.mechanism'] = 'GSSAPI'
             final_dict[config_prefix + 'sasl.kerberos.service.name'] = kerberos_kafka_broker_primary
 
-        if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'GSSAPI' and not omit_jaas_configs:
+        if normalize_sasl_protocols[0] == 'GSSAPI' and not omit_jaas_configs:
             final_dict[config_prefix + 'sasl.jaas.config'] = 'com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"' +\
                 keytab_path + '\" principal=\"' + kerberos_principal + '\";'
 
+        if listener_dict.get('name', '').lower() == 'internal_token':  # other oauth configs should be omitted
+            # Not adding this config always when normalize_sasl_protocols[0] == 'OAUTHBEARER'
+            # This is because it is not getting added for ERP currently due to omit_oauth_configs currently.
+            final_dict[config_prefix + 'sasl.mechanism'] = 'OAUTHBEARER'
+            final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule \
+                required metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
+
         if not omit_oauth_configs:
-            if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER':
+            if normalize_sasl_protocols[0] == 'OAUTHBEARER' and not oauth_enabled:
                 final_dict[config_prefix + 'sasl.mechanism'] = 'OAUTHBEARER'
                 final_dict[config_prefix + 'sasl.login.callback.handler.class'] = 'io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler'
-
-            if self.normalize_sasl_protocol(listener_dict.get('sasl_protocol', default_sasl_protocol)) == 'OAUTHBEARER' and not omit_jaas_configs:
                 final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required username=\"' +\
                     oauth_username + '\" password=\"' + str(oauth_password) + '\" metadataServerUrls=\"' + mds_bootstrap_server_urls + '\";'
+
+            if normalize_sasl_protocols[0] == 'OAUTHBEARER' and oauth_enabled:
+                final_dict[config_prefix + 'sasl.mechanism'] = 'OAUTHBEARER'
+                final_dict[config_prefix + 'sasl.login.callback.handler.class'] =\
+                    'org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler'
+                final_dict[config_prefix + 'sasl.login.connect.timeout'] = '15000'
+                final_dict[config_prefix + 'sasl.oauthbearer.token.endpoint.url'] = oauth_token_uri
+
+                if (oauth_groups_scope == 'none' and (not idp_self_signed)):
+                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
+                        'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + '\";'
+
+                if (oauth_groups_scope != 'none' and (not idp_self_signed)):
+                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
+                        'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + \
+                        '\" scope=\"' + oauth_groups_scope + '\";'
+
+                if oauth_groups_scope == 'none' and idp_self_signed:
+                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
+                        'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + \
+                        '\" ssl.truststore.location=\"' + \
+                        truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
+
+                if oauth_groups_scope != 'none' and idp_self_signed:
+                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
+                        'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + \
+                        '\" scope=\"' + oauth_groups_scope + \
+                        '\" ssl.truststore.location=\"' + truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
 
         return final_dict
 
     def c3_connect_properties(self, connect_group_list, groups, hostvars, ssl_enabled, http_protocol, port, default_connect_group_id,
-                              truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass):
+                              truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass,
+                              oauth_enabled, rbac_enabled, oauth_user, oauth_password, oauth_groups_scope, idp_self_signed):
         # For c3's connect properties, inputs a list of ansible groups of connect hosts, as well as their ssl settings
         # Outputs a properties dictionary with properties necessary to connect to each connect group
         # Other inputs help fill out the properties
@@ -303,7 +446,9 @@ class FilterModule(object):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + self.resolve_hostname(hostvars[host]) + ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
+                    urls.append(protocol + '://' +
+                                self.resolve_and_format_hostname(hostvars[host]) +
+                                ':' + str(hostvars[host].get('kafka_connect_rest_port', port)))
 
                 final_dict['confluent.controlcenter.connect.' + group_id + '.cluster'] = ','.join(urls)
 
@@ -314,10 +459,22 @@ class FilterModule(object):
                     final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.keystore.password'] = keystore_storepass
                     final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.key.password'] = keystore_keypass
 
+                if delegate_host.get('kafka_connect_oauth_enabled', oauth_enabled) and not rbac_enabled:
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.oauthbearer.login.client.id'] = oauth_user
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.oauthbearer.login.client.secret'] = oauth_password
+
+                if delegate_host.get('kafka_connect_oauth_enabled', oauth_enabled) and not rbac_enabled and oauth_groups_scope != 'none':
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.oauthbearer.login.oauth.scope'] = oauth_groups_scope
+
+                if delegate_host.get('kafka_connect_oauth_enabled', oauth_enabled) and not rbac_enabled and idp_self_signed:
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.truststore.location'] = truststore_path
+                    final_dict['confluent.controlcenter.connect.' + group_id + '.ssl.truststore.password'] = truststore_storepass
+
         return final_dict
 
     def c3_ksql_properties(self, ksql_group_list, groups, hostvars, ssl_enabled, http_protocol, port,
-                           truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass):
+                           truststore_path, truststore_storepass, keystore_path, keystore_storepass, keystore_keypass,
+                           oauth_enabled, rbac_enabled, oauth_user, oauth_password, oauth_groups_scope, idp_self_signed):
         # For c3's ksql properties, inputs a list of ansible groups of ksql hosts, as well as their ssl settings
         # Outputs a properties dictionary with properties necessary to connect to each ksql group
         # Other inputs help fill out the properties
@@ -332,19 +489,36 @@ class FilterModule(object):
                         protocol = 'https'
                     else:
                         protocol = 'http'
-                    urls.append(protocol + '://' + self.resolve_hostname(hostvars[host]) + ':' + str(hostvars[host].get('ksql_listener_port', port)))
-                    advertised_urls.append(protocol + '://' + hostvars[host].get('ksql_advertised_listener_hostname', self.resolve_hostname(hostvars[host])) +
-                                           ':' + str(hostvars[host].get('ksql_listener_port', port)))
+                    urls.append(protocol + '://' + self.resolve_and_format_hostname(hostvars[host]) +
+                                ':' + str(hostvars[host].get('ksql_listener_port', port)))
+                    advertised_urls.append(
+                        protocol + '://' +
+                        hostvars[host].get('ksql_advertised_listener_hostname',
+                                           self.resolve_and_format_hostname(hostvars[host])) +
+                        ':' + str(hostvars[host].get('ksql_listener_port', port))
+                    )
 
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.url'] = ','.join(urls)
                 final_dict['confluent.controlcenter.ksql.' + ansible_group + '.advertised.url'] = ','.join(advertised_urls)
+                delegate_host = hostvars[groups[ansible_group][0]]
 
-                if hostvars[groups[ansible_group][0]].get('ksql_ssl_enabled', ssl_enabled):
+                if delegate_host.get('ksql_ssl_enabled', ssl_enabled):
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.location'] = truststore_path
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.password'] = str(truststore_storepass)
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.location'] = keystore_path
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.keystore.password'] = str(keystore_storepass)
                     final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.key.password'] = str(keystore_keypass)
+
+                if delegate_host.get('ksql_oauth_enabled', oauth_enabled) and not rbac_enabled:
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.oauthbearer.login.client.id'] = oauth_user
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.oauthbearer.login.client.secret'] = oauth_password
+
+                if delegate_host.get('ksql_oauth_enabled', oauth_enabled) and not rbac_enabled and oauth_groups_scope != 'none':
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.oauthbearer.login.oauth.scope'] = oauth_groups_scope
+
+                if delegate_host.get('ksql_oauth_enabled', oauth_enabled) and not rbac_enabled and idp_self_signed:
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.location'] = truststore_path
+                    final_dict['confluent.controlcenter.ksql.' + ansible_group + '.ssl.truststore.password'] = truststore_storepass
 
         return final_dict
 
@@ -367,6 +541,11 @@ class FilterModule(object):
         common_names = common_names.split("\n")
         # Get the default mapping value which is string representation of certificate
         principal_mapping_value = common_names[0]
+
+        # When no extra rules just return the full common names string
+        if rules == "DEFAULT":
+            return principal_mapping_value
+
         # Get all the rules and apply one by one on given Dname
         list_of_rules = rules.split("RULE:")
         list_of_rules = [i for i in list_of_rules if i]
@@ -394,3 +573,14 @@ class FilterModule(object):
                 # Remaining rules in the list are ignored when match is found
                 break
         return principal_mapping_value
+
+    def c3_generate_salt_and_hash(self, users_dict):
+        import getpass
+        import bcrypt
+        username_with_hashed_passwords = {}
+        for user in users_dict:
+            if users_dict[user].get('principal') and users_dict[user].get('password'):
+                username_with_hashed_passwords[users_dict[user]['principal']] = bcrypt.hashpw(
+                    users_dict[user].get('password').encode("utf-8"), bcrypt.gensalt()
+                ).decode()
+        return username_with_hashed_passwords

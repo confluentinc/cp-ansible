@@ -4,6 +4,34 @@
 ## - Added to corresponsing logical Connect clusters (cluster2 and ssl)
 ## - Added to the property file of control center
 ---
+- name: Verify - kafka_controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: controller.quorum.voters
+        expected_value: "{{ kafka_controller_quorum_voters }}"
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: process.roles
+        expected_value: controller
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: listeners
+        expected_value: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
+
 - name: Verify - kafka_connect1
   hosts: kafka-connect1
   gather_facts: false
@@ -71,6 +99,22 @@
         property: group.id
         expected_value: connect-ssl
 
+    - name: Get Connectors on connect cluster3
+      uri:
+        url: "https://kafka-connect3:8083/connectors"
+        status_code: 200
+        validate_certs: false
+        client_cert: /var/ssl/private/kafka_connect.crt
+        client_key: /var/ssl/private/kafka_connect.key
+      register: connectors
+
+    - name: Assert Connector Created
+      assert:
+        that:
+          - connectors.json[0] == "sample-connector-3"
+        fail_msg: "Connector not created"
+        quiet: true
+
 - name: Verify - kafka_connect4
   hosts: kafka-connect4
   gather_facts: false
@@ -91,10 +135,10 @@
         client_cert: /var/ssl/private/kafka_connect.crt
         client_key: /var/ssl/private/kafka_connect.key
       register: connectors
-    - name: Assert Connector should have not been Created
+    - name: Assert Connector Created
       assert:
         that:
-          - connectors.json|length == 0
+          - connectors.json[0] == "sample-connector-3"
         fail_msg: "Connector not created"
         quiet: true
 
@@ -140,6 +184,28 @@
 
 - name: Verify - control_center
   hosts: control_center
+  gather_facts: false
+  tasks:
+    - name: Check line connect cluster cluster2
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.connect.connect-cluster2.cluster
+        expected_value: http://kafka-connect2:8083,http://kafka-connect5:8083
+
+    - name: Check line connect cluster ssl
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.connect.connect-ssl.cluster
+        expected_value: https://kafka-connect3:8083,https://kafka-connect4:8083
+
+- name: Verify - control_center_next_gen
+  hosts: control_center_next_gen
   gather_facts: false
   tasks:
     - name: Check line connect cluster cluster2

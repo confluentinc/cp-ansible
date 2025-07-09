@@ -35,7 +35,7 @@ Each Confluent component has its own role, with the name `<component_name>`. Wit
 1. A name clearly defining what the task accomplishes, using capital letters
 2. Uses an idempotent ansible module whenever possible
 3. Make use of variables instead of hard coding paths
-4. For file creation use '640' permission, for directory creation use '750' permission. There are some exceptions, but be sure to secure files.
+4. For file creation use 0640 permission, for directory creation use 0750 permission. There are some exceptions, but be sure to secure files.
 5. Proper ownership set
 6. Trigger component restart handler when necessary
 
@@ -225,10 +225,24 @@ We are currently linting with:
 To test/check manually you can run:
 
 ```shell
-yamllimt .
+yamllint .
 ansible-lint *.yml
 ```
 
 ## Branching Model
 
 Our `-post` branches are released branches and not meant for Pull Requests, unless there is a major bug. For bugs and minor features make PRs into the `.x` branches. For example if `6.1.1-post` is the latest version, make a bug fix PR into `6.1.x`, and expect that change to be released with the `6.1.2-post` branch. For major features we ask those get added into the next major release. To follow the example, make PRs for major features into `6.2.x` and expect them to be released with `6.2.0-post`. The CP-Ansible maintainers will handle merging your changes up through the various branches.
+
+## Version bump
+
+We use bump2version tool to update the version strings in files based on the rules in config file.
+
+Run following command to bump up the `confluent_package_version`:
+```shell
+bump2version --config-file .bumpversion.cfg <patch|minor|major>
+```
+
+Run following command to bump up the cp-ansible version:
+```shell
+bump2version --config-file .bumpversion-ansible.cfg <patch|minor|major>
+```

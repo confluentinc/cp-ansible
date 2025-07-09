@@ -147,7 +147,7 @@
     kerberos_keytab_path: "{{ksql_kerberos_keytab_path}}"
     kerberos_keytab_destination_path: "{{ksql_keytab_path}}"
     kerberos_handler: "restart ksql"
-  when: (kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'GSSAPI') or (kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'GSSAPI' and ksql_log_streaming_enabled | bool)
+  when: "'GSSAPI' in (kafka_broker_listeners[ksql_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol) or ('GSSAPI' in (kafka_broker_listeners[ksql_processing_log_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol) and ksql_log_streaming_enabled | bool)"
 
 - name: Copy Custom KSQL Files
   include_role:
@@ -161,9 +161,67 @@
   tags:
     - configuration
 
-- name: Configure RBAC
+- name: Copy Custom Files From All Components List
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{all_components_copy_files}}"
+    user: "{{ksql_user}}"
+    group: "{{ksql_group}}"
+  when: all_components_copy_files | length > 0
+  tags:
+    - configuration
+
+- name: Extract Ksql Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{ksql_keystore_path}}"
+    keystore_storepass: "{{ksql_keystore_storepass}}"
+    pm_rules: "{{ksql_final_properties.get('ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC on KSQL for mTLS User
   include_tasks: rbac.yml
-  when: rbac_enabled|bool
+  vars:
+    ksqldb_user: "{{ ks_extracted_principal | urlencode }}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC for OAuth User
+  include_tasks: rbac.yml
+  vars:
+    ksqldb_user: "{{ksql_oauth_principal}}"
+  when: rbac_enabled|bool and oauth_enabled
+
+- name: Configure RBAC for LDAP User
+  include_tasks: rbac.yml
+  vars:
+    ksqldb_user: "{{ksql_ldap_user}}"
+  when:
+    - rbac_enabled|bool
+    - ((not oauth_enabled) or ( oauth_enabled and ldap_with_oauth_enabled ))
+
+- name: Import IDP certificate to Truststore for OAuth
+  include_role:
+    name: common
+    tasks_from: idp_certs.yml
+  vars:
+    idp_cert_path: "{{ oauth_idp_cert_path }}"
+    idp_cert_dest: /tmp/oauth_idp_cert.pem
+    alias: "oauth_cert"
+    truststore_storepass: "{{ksql_truststore_storepass}}"
+    truststore_path: "{{ksql_truststore_path}}"
+    create_bouncy_castle_keystore: false
+    restart_handler_name: "restart ksql"
+  when:
+    - oauth_enabled|bool or schema_registry_oauth_enabled|bool or kafka_rest_oauth_enabled|bool or kafka_connect_oauth_enabled|bool or kafka_connect_replicator_oauth_enabled|bool
+    - oauth_idp_cert_path != ""
 
 - name: Create Ksql Config directory
   file:
@@ -355,6 +413,7 @@
     mode: '750'
   tags:
     - systemd
+    - privileged
 
 - name: Write Service Overrides
   template:
@@ -367,6 +426,7 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - systemd
+    - privileged
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -412,7 +472,13 @@
       - control_center
       - control_center_parallel
       - control_center_serial
+      - control_center_next_gen
+      - control_center_next_gen_parallel
+      - control_center_next_gen_serial
       - schema_registry
+      - kafka_controller
+      - kafka_controller_parallel
+      - kafka_controller_serial
   set_fact:
     parent_ksql_cluster_group: "{{ (group_names | difference(keywords))[0] | default('ksql') }}"
     parent_ksql_cluster_id: "{{ ksql_final_properties['ksql.service.id'] }}"

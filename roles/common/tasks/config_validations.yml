@@ -1,7 +1,7 @@
 ---
 - name: Retrieve SSL public key hash from private key on Local Host
   shell:
-    cmd: openssl pkey -pubout | openssl md5
+    cmd: openssl pkey -pubout | openssl sha256
     stdin: "{{ lookup('file', ssl_key_filepath) }}"
   register: key_hash_local
   delegate_to: localhost
@@ -28,7 +28,7 @@
 
 - name: Retrieve SSL public key Hash from private key on Remote Host
   shell:
-    cmd: openssl pkey -pubout | openssl md5
+    cmd: openssl pkey -pubout | openssl sha256
     stdin: "{{ remote_key['results'][group_idx].content | b64decode }}"
   register: key_hash_remote
   changed_when: false
@@ -44,7 +44,7 @@
 
 - name: Retrieve SSL public key hash from X509 certificate on Local Host
   shell:
-    cmd: openssl x509 -noout -pubkey | openssl md5
+    cmd: openssl x509 -noout -pubkey | openssl sha256
     stdin: "{{ lookup('file', ssl_signed_cert_filepath) }}"
   register: cert_hash_local
   delegate_to: localhost
@@ -71,7 +71,7 @@
 
 - name: Retrieve SSL public key hash from X509 certificate on Remote Host
   shell:
-    cmd: openssl x509 -noout -pubkey | openssl md5
+    cmd: openssl x509 -noout -pubkey | openssl sha256
     stdin: "{{ remote_cert['results'][group_idx].content | b64decode }}"
   register: cert_hash_remote
   changed_when: false
@@ -103,7 +103,7 @@
   assert:
     that: key_hash['results'][group_idx].stdout == cert_hash['results'][group_idx].stdout and not key_hash['results'][group_idx].stderr|length > 0
     fail_msg: >-
-      "The MD5 value of the custom ssl key does not match the MD5 value of the custom certificate, indicating that the keys do no match
+      "The sha256 value of the custom ssl key does not match the sha256 value of the custom certificate, indicating that the keys do no match
       and are incompatible.  Please review your keys and certs and confirm they are from the same source."
   when:
     - ssl_custom_certs|bool
@@ -114,3 +114,223 @@
   loop: "{{group_names}}"
   loop_control:
     index_var: group_idx
+
+- name: Check the OS when using FIPS mode
+  fail:
+    msg: "FIPS mode is only supported on RedHat based OS"
+  when:
+    - fips_enabled | bool
+    - ansible_os_family != "RedHat"
+  tags: validate
+
+- name: Check if FIPS is enabled on Local Host
+  shell: sysctl crypto.fips_enabled
+  delegate_to: localhost
+  register: fips_output_localhost
+  when:
+    - fips_enabled | bool
+    - ansible_os_family == "RedHat"
+  tags: validate
+
+- assert:
+    that:
+      - fips_output_localhost.stdout == "crypto.fips_enabled = 1"
+    fail_msg: "FIPS is not enabled on your localhost, please enable fips on your Local Host."
+  delegate_to: localhost
+  when:
+    - fips_enabled | bool
+    - ansible_os_family == "RedHat"
+  tags: validate
+
+- name: Check if FIPS is enabled on Remote Host
+  shell: sysctl crypto.fips_enabled
+  register: fips_output_remotehost
+  when:
+    - fips_enabled | bool
+    - ansible_os_family == "RedHat"
+  tags: validate
+
+- assert:
+    that:
+      - fips_output_remotehost.stdout == "crypto.fips_enabled = 1"
+    fail_msg: "FIPS is not enabled on your remote host, please enable fips on your Remote Host."
+  when:
+    - fips_enabled | bool
+    - ansible_os_family == "RedHat"
+  tags: validate
+
+- assert:
+    that:
+      - auth_mode in ['ldap', 'ldap_with_oauth', 'oauth', 'mtls', 'none']
+    fail_msg: "auth_mode must be one of 'ldap', 'ldap_with_oauth', 'oauth', 'mtls', 'none'"
+  tags: validate
+
+- assert:
+    that:
+      - auth_mode in ['ldap', 'ldap_with_oauth', 'oauth', 'mtls']
+    fail_msg: "When RBAC is enabled, auth_mode must be one of 'ldap', 'ldap_with_oauth', 'oauth', 'mtls'"
+  when:
+    - rbac_enabled|bool
+  tags: validate
+
+- assert:
+    that:
+      - auth_mode in ['none', 'oauth']
+    fail_msg: "When RBAC is not enabled, auth_mode must be one of 'oauth', 'none'"
+  when:
+    - not rbac_enabled|bool
+  tags: validate
+
+- assert:
+    that:
+      - rbac_enabled|bool
+    fail_msg: "When auth mode is ldap or mtls, RBAC also must be enabled"
+  when:
+    - auth_mode == 'ldap' or auth_mode == 'ldap_with_oauth' or auth_mode == 'mtls'
+  tags: validate
+
+- assert:
+    that:
+      - rbac_enabled|bool
+    fail_msg: "When we have file based user store enabled we must have MDS and thus RBAC also must be enabled"
+  when:
+    - mds_file_based_user_store_enabled|bool
+  tags: validate
+
+- assert:
+    that:
+      - mds_file_based_user_store_src_path != ''
+      - mds_file_based_user_store_dest_path != ''
+    fail_msg: "When mds_file_based_user_store_enabled is true we must also define  mds_file_based_user_store_src_path and mds_file_based_user_store_dest_path"
+  when:
+    - mds_file_based_user_store_enabled|bool
+  tags: validate
+
+- assert:
+    that:
+      - mds_ssl_client_authentication != 'none'
+    fail_msg: "When auth mode is mtls, mds must have ssl client authentication is set to required or requested"
+  when:
+    - auth_mode == 'mtls'
+  tags: validate
+
+- assert:
+    that:
+      - mds_super_user_external_cert_path != ''
+      - mds_super_user_external_key_path != ''
+    fail_msg: "When Centralized MDS has mTLS enabled you must provide super user cert and key in mds_super_user_external_cert_path and mds_super_user_external_key_path"
+  when:
+    - mds_ssl_client_authentication != 'none'
+    - external_mds_enabled|bool
+  tags: validate
+
+- assert:
+    that:
+      - "{{item}} != 'none'"
+    fail_msg: "Please provide the value of {{ item }} in the inventory file."
+  loop:
+    - oauth_token_uri
+    - oauth_issuer_url
+    - oauth_jwks_uri
+  when: auth_mode == 'oauth' or auth_mode == 'ldap_with_oauth'
+  tags: validate
+
+- assert:
+    that:
+      - not fips_enabled|bool
+    fail_msg: "OAuth is not supported on FIPS enabled cluster yet. Please disable FIPS or OAuth to setup the cluster."
+  when: auth_mode == 'oauth' or auth_mode == 'ldap_with_oauth'
+  tags: validate
+
+- assert:
+    that:
+      - sasl_protocol | confluent.platform.split_to_list | length < 3
+    fail_msg: "CP-Ansible supports at most two values of sasl_protocol at the moment."
+  when: sasl_protocol is defined
+  tags: validate
+
+- assert:
+    that:
+      - (sasl_protocol | confluent.platform.split_to_list)[0] in ['plain', 'scram', 'scram256', 'kerberos', 'oauth', 'none']
+    fail_msg: "sasl_protocol supports ['plain', 'scram', 'scram256', 'kerberos', 'oauth', 'none'] when providing single value."
+  when: sasl_protocol is defined and sasl_protocol | confluent.platform.split_to_list | length == 1
+  tags: validate
+
+- assert:
+    that:
+      - item in ['plain', 'scram', 'scram256', 'kerberos']
+    fail_msg: "sasl_protocol can have support for two values from the list ['plain', 'scram', 'scram256', 'kerberos']"
+  loop: "{{ sasl_protocol | confluent.platform.split_to_list }}"
+  when: sasl_protocol is defined and sasl_protocol | confluent.platform.split_to_list | length == 2
+  tags: validate
+
+- assert:
+    that:
+      - kafka_controller_sasl_protocol | confluent.platform.split_to_list | length < 3
+    fail_msg: "CP-Ansible supports at most two values of kafka_controller_sasl_protocol at the moment."
+  when: kafka_controller_sasl_protocol is defined
+  tags: validate
+
+- assert:
+    that:
+      - item in ['plain', 'scram', 'scram256', 'kerberos']
+    fail_msg: "kafka_controller_sasl_protocol value in CP-Ansible can have support for two values from the list ['plain', 'scram', 'scram256', 'kerberos']"
+  loop: "{{ kafka_controller_sasl_protocol | confluent.platform.split_to_list }}"
+  when: kafka_controller_sasl_protocol is defined and kafka_controller_sasl_protocol | confluent.platform.split_to_list | length == 2
+  tags: validate
+
+- assert:
+    that:
+      - (hostvars[item]['kafka_controller_sasl_protocol'] | confluent.platform.split_to_list)[0] not in ['scram', 'scram256']
+    fail_msg: "kafka_controller_sasl_protocol in kafka controller {{hostvars[item]['kafka_controller_sasl_protocol']}} cannot have first value as scram or scram256 since inter-controller communication via SCRAM is not supported. Please use other protocols along with it."
+  loop: "{{ groups['kafka_controller'] }}"
+  when:
+    - ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) | bool
+    - hostvars[item]['kafka_controller_sasl_protocol'] is defined
+  tags: validate
+
+- assert:
+    that:
+      - hostvars[item]['kafka_controller_sasl_protocol'] is defined
+    fail_msg: "kafka_controller_sasl_protocol must be defined."
+  loop: "{{ groups['kafka_controller'] }}"
+  when:
+    - ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) | bool
+    - sasl_protocol is defined and (sasl_protocol | confluent.platform.split_to_list)[0] in ['scram', 'scram256']
+  tags: validate
+
+- name: Assert mTLS is enabled only if SSL is enabled for Prometheus
+  assert:
+    that:
+      - not control_center_next_gen_dependency_prometheus_mtls_enabled | bool or control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+    fail_msg: "control_center_next_gen_dependency_prometheus_mtls_enabled must only be true if control_center_next_gen_dependency_prometheus_ssl_enabled is also true."
+  tags: validate
+
+- name: Assert mTLS is enabled only if SSL is enabled for Alertmanager
+  assert:
+    that:
+      - not control_center_next_gen_dependency_alertmanager_mtls_enabled | bool or control_center_next_gen_dependency_alertmanager_ssl_enabled | bool
+    fail_msg: "control_center_next_gen_dependency_alertmanager_mtls_enabled must only be true if control_center_next_gen_dependency_alertmanager_ssl_enabled is also true."
+  tags: validate
+
+- name: Validate Alertmanager TLS/mTLS Configuration
+  assert:
+    that:
+      - not control_center_next_gen_dependency_alertmanager_mtls_enabled | bool or control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+      - not control_center_next_gen_dependency_alertmanager_ssl_enabled | bool or control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+    fail_msg: "Alertmanager mTLS and TLS must not be enabled when Prometheus TLS is disabled."
+  tags: validate
+
+- name: Validate Prometheus TLS/mTLS/Basic Auth Configuration
+  assert:
+    that:
+      - not (control_center_next_gen_dependency_prometheus_ssl_enabled | bool and control_center_next_gen_dependency_prometheus_mtls_enabled | bool and control_center_next_gen_dependency_prometheus_basic_auth_enabled | bool)
+    fail_msg: "Prometheus SSL, mTLS, and Basic Auth cannot all be enabled simultaneously."
+  tags: validate
+
+- name: Validate Alertmanager TLS/mTLS/Basic Auth Configuration
+  assert:
+    that:
+      - not (control_center_next_gen_dependency_alertmanager_ssl_enabled | bool and control_center_next_gen_dependency_alertmanager_mtls_enabled | bool and control_center_next_gen_dependency_alertmanager_basic_auth_enabled | bool)
+    fail_msg: "Alertmanager SSL, mTLS, and Basic Auth cannot all be enabled simultaneously."
+  tags: validate

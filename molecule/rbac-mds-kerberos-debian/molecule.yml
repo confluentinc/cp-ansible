@@ -1,21 +1,22 @@
 ---
-### Installs two Confluent Platform Clusters on Debian9.
+### Installs two Confluent Platform Clusters on Debian10.
 ### RBAC enabled.
 ### Remote MDS from Cluster2 to Cluster1 (MDS).
 ### Custom TLS certificates.
 ### Kafka Broker Customer Listener
 ### RBAC Additional System Admin.
+### SSO authentication using OIDC in Control center using Azure IdP
 
 driver:
   name: docker
 platforms:
-  # LDAP and Keberos on centos, rest on debian
+  # LDAP and kerberos on centos, rest on debian
   - name: mds-ldap1
     hostname: mds-ldap1.confluent
     groups:
       - ldap_server
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: centos:centos8
+    dockerfile: ../Dockerfile-centos8-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -26,8 +27,8 @@ platforms:
     hostname: mds-kerberos1.confluent
     groups:
       - kerberos_server
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: centos:centos8
+    dockerfile: ../Dockerfile-centos8-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -35,13 +36,14 @@ platforms:
     networks:
       - name: confluent
   # MDS Zookeeper and Kafka
-  - name: mds-zookeeper1
-    hostname: mds-zookeeper1.confluent
+  - name: mds-${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: mds-${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
       - mds
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -52,9 +54,10 @@ platforms:
     hostname: mds-kafka-broker1.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
       - mds
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -65,9 +68,10 @@ platforms:
     hostname: mds-kafka-broker2.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
       - mds
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -75,13 +79,14 @@ platforms:
     networks:
       - name: confluent
   # Cluster 2 goups, groupnames will be changed during converge phase
-  - name: zookeeper1
-    hostname: zookeeper1.confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper2
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}2
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}2_migration
       - cluster2
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -92,9 +97,10 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker2
+      - kafka_broker2_migration
       - cluster2
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -105,9 +111,10 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker2
+      - kafka_broker2_migration
       - cluster2
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -118,9 +125,10 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker2
+      - kafka_broker2_migration
       - cluster2
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -131,9 +139,10 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry2
+      - schema_registry2_migration
       - cluster2
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -144,9 +153,10 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest2
+      - kafka_rest2_migration
       - cluster2
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -157,9 +167,10 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect2
+      - kafka_connect2_migration
       - cluster2
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -170,9 +181,10 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql2
+      - ksql2_migration
       - cluster2
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -183,9 +195,10 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center2
+      - control_center2_migration
       - cluster2
-    image: geerlingguy/docker-debian9-ansible
-    dockerfile: ../Dockerfile-debian.j2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -194,20 +207,65 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
-
+  - name: control-center-next-gen
+    hostname: control-center-next-gen.confluent
+    groups:
+      - control_center_next_gen2
+      - control_center_next_gen2_migration
+      - cluster2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9022:9022"
+    networks:
+      - name: confluent
+  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: mds-controller1-mig
+    hostname: mds-controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+      - mds
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller2_migration
+      - cluster2
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
-    converge: ../multi_rbac_converge.yml
+    converge: ${MIGRATION_CONVERGE_RBAC:-../multi_rbac_converge.yml}
   inventory:
     group_vars:
       # Shared properties among mds cluster and cluster2 groups (as well as kerberos and ldap)
       all:
         scenario_name: rbac-mds-kerberos-debian
-
+        control_center_next_gen_port: 9022
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+        control_center_next_gen_dependency_alertmanager_basic_auth_enabled: true
         ssl_enabled: false
         sasl_protocol: kerberos
 
         rbac_enabled: true
+        sso_mode: oidc
 
         create_mds_certs: false
         token_services_public_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/public.pem"
@@ -220,6 +278,9 @@ provisioner:
 
         mds_super_user: mds
         mds_super_user_password: password
+
+        kafka_controller_ldap_user: kafka_controller
+        kafka_controller_ldap_password: password
 
         kafka_broker_ldap_user: kafka_broker
         kafka_broker_ldap_password: password
@@ -239,6 +300,9 @@ provisioner:
         control_center_ldap_user: control_center
         control_center_ldap_password: password
 
+        control_center_next_gen_ldap_user: control_center
+        control_center_next_gen_ldap_password: password
+
         rbac_component_additional_system_admins:
           - user1
 
@@ -252,8 +316,31 @@ provisioner:
         zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
         kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         kafka_broker_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
+        kafka_controller_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        kafka_controller_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_controller-{{inventory_hostname}}.keytab"
+
+        custom_java_path: /opt/jdk17 # Use custom Java 17
+
+        # setups /etc/hosts on ec2 to allow delegate_to: localhost to make requests to MDS url by making the url resolvable
+        docker_containers:
+          - mds-ldap1
+          - mds-kafka-broker1
+          - mds-kafka-broker2
+          - kafka-broker1
+          - kafka-broker2
 
       mds:
+
+        # necessary configs in MDS server for sso in C3
+        sso_groups_claim: groups
+        sso_sub_claim: sub
+        sso_issuer_url: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/v2.0
+        sso_jwks_uri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/discovery/v2.0/keys
+        sso_authorize_uri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/oauth2/v2.0/authorize
+        sso_token_uri: https://login.microsoftonline.com/0893715b-959b-4906-a185-2789e1ead045/oauth2/v2.0/token
+        sso_client_id: ${AZURE_CLIENT:-user}
+        sso_client_password: ${AZURE_PASSWORD:-pass}
+
         kafka_broker_custom_properties:
           ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
           ldap.com.sun.jndi.ldap.read.timeout: 3000
@@ -288,12 +375,20 @@ provisioner:
         kerberos_principals:
           - principal: "zookeeper/mds-zookeeper1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/zookeeper-mds-zookeeper1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/mds-controller1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-mds-controller1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/mds-controller1-mig.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-mds-controller1-mig.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-mds-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker2.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-mds-kafka-broker2.keytab"
           - principal: "zookeeper/zookeeper1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/controller1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/controller1-mig.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller1-mig.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker2.confluent@{{kerberos.realm | upper}}"
@@ -326,8 +421,12 @@ provisioner:
             password: "{{ksql_ldap_password}}"
             uid: 9996
             guid: 96
-          - username: "{{control_center_ldap_user}}"
-            password: "{{control_center_ldap_password}}"
+#          - username: "{{control_center_ldap_user}}"
+#            password: "{{control_center_ldap_password}}"
+#            uid: 9995
+#            guid: 95
+          - username: "{{control_center_next_gen_ldap_user}}"
+            password: "{{control_center_next_gen_ldap_password}}"
             uid: 9995
             guid: 95
           - username: "{{kafka_rest_ldap_user}}"
@@ -338,3 +437,7 @@ provisioner:
             password: "{{mds_super_user_password}}"
             uid: 9993
             guid: 93
+          - username: "{{kafka_controller_ldap_user}}"
+            password: "{{kafka_controller_ldap_password}}"
+            uid: 9992
+            guid: 92

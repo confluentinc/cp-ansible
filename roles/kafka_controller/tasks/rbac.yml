@@ -1,0 +1,154 @@
+---
+- name: Get Principals used on the Controller Listener
+  include_tasks: set_principal.yml
+  vars:
+    listener: "{{ kafka_controller_listeners['controller'] }}"
+    kc_keystore_path: "{{ hostvars[item]['kafka_controller_keystore_path'] | default(kafka_controller_keystore_path) }}"
+    kc_keystore_storepass: "{{ hostvars[item]['kafka_controller_keystore_storepass'] | default(kafka_controller_keystore_storepass) }}"
+  loop: "{{ groups['kafka_controller'] }}"
+  args:
+    apply:
+      delegate_to: "{{item}}"
+      delegate_facts: true
+  run_once: true
+
+- name: Fail if No Authentication is set
+  fail:
+    msg: "Please configure Authentication on the Kraft cluster."
+  loop: "{{ groups['kafka_controller'] }}"
+  when: hostvars[item]['kafka_controller_principal'] is undefined
+  run_once: true
+
+- name: Show principals
+  debug:
+    msg: "Principal for {{item}} is  {{ hostvars[item]['kafka_controller_principal'] }}"
+  loop: "{{ groups['kafka_controller'] }}"
+  run_once: true
+
+# Take super.users property, split into list, remove empty string from list
+- name: Initialize Super Users List
+  set_fact:
+    super_users: "{{ rbac_super_users + (kafka_controller_final_properties['super.users'] | default('')).split(';') | difference(['']) }}"
+
+- name: Append Super Users List with LDAP
+  set_fact:
+    super_users: "{{ super_users + [ 'User:' + lookup('vars', 'mds_super_user') ]}}"
+  when: "'ldap' in auth_mode"
+
+- name: Append Super Users List with OAuth
+  set_fact:
+    super_users: "{{ super_users + [ 'User:' + lookup('vars', 'oauth_superuser_principal') ]}}"
+  when: "'oauth' in auth_mode"
+
+- name: Extract principal from each controller's cert
+  include_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{ kafka_controller_keystore_path }}"
+    keystore_storepass: "{{ kafka_controller_keystore_storepass }}"
+    pm_rules: "{{ kafka_controller_final_properties.get('ssl.principal.mapping.rules', 'DEFAULT') }}"
+  args:
+    apply:
+      delegate_to: "{{item}}"
+      delegate_facts: true
+  loop: "{{ groups['kafka_controller'] }}"
+  run_once: true
+  when: mds_ssl_client_authentication != 'none'
+
+- name: Append cert principal to super users list
+  set_fact:
+    super_users: "{{ super_users + [ 'User:' + hostvars[item]['ks_extracted_principal'] ]}}"
+  loop: "{{ groups['kafka_controller'] }}"
+  when: mds_ssl_client_authentication != 'none'
+
+# Loop over each controllers principal and add to list
+- name: Add Each Controller's Principal to Super Users List
+  set_fact:
+    super_users: "{{ super_users + [ hostvars[item]['kafka_controller_principal'] ] }}"
+  loop: "{{ groups['kafka_controller'] }}"
+
+- name: Remove Duplicates and Convert to String
+  set_fact:
+    super_users: "{{ super_users | unique | join(';') }}"
+
+- name: Add Super Users list to Kafka Properties
+  set_fact:
+    kafka_controller_final_properties: "{{ kafka_controller_final_properties | combine(
+      {
+          'super.users': super_users
+      }
+    ) }}"
+
+#this is required when we have mTLS enabled
+- name: Add Controller's Principal to Broker's Super Users List
+  include_tasks: set_broker_principal.yml
+  vars:
+    broker_host: "{{ item }}"
+  loop: "{{ groups['kafka_broker'] }}"
+  args:
+    apply:
+      delegate_to: "{{item}}"
+  when: kraft_migration|bool and ssl_mutual_auth_enabled|bool
+  run_once: true
+
+- name: Create SSL Certificate Directory
+  file:
+    path: /var/ssl/private
+    state: directory
+    mode: '755'
+  tags:
+    - privileged
+    - filesystem
+
+- name: Check if MDS public pem file exists on Ansible Controller
+  stat:
+    path: "{{ token_services_public_pem_file }}"
+  register: broker_public_pem_file
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: "{{ ansible_become_localhost }}"
+
+- name: Debug
+  ansible.builtin.debug:
+    msg: WARNING - The file {{token_services_public_pem_file}} doesn't exist on the control node
+  when: not broker_public_pem_file.stat.exists|bool
+
+- name: Copy in public pem files
+  copy:
+    src: "{{token_services_public_pem_file}}"
+    dest: "{{rbac_enabled_public_pem_path}}"
+    mode: '640'
+    owner: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+  when:
+    - broker_public_pem_file.stat.exists|bool
+    - not ( ssl_provided_keystore_and_truststore_remote_src|bool )
+  diff: "{{ not mask_sensitive_diff|bool }}"
+
+- name: Check if MDS private pem file exists on Ansible Controller
+  stat:
+    path: "{{ token_services_private_pem_file }}"
+  register: broker_private_pem_file
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: "{{ ansible_become_localhost }}"
+
+- name: Debug
+  ansible.builtin.debug:
+    msg: WARNING - The file {{token_services_private_pem_file}} doesn't exist on the control node
+  when: not broker_private_pem_file.stat.exists|bool
+
+- name: Copy in private pem files
+  copy:
+    src: "{{token_services_private_pem_file}}"
+    dest: "{{rbac_enabled_private_pem_path}}"
+    mode: '640'
+    owner: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+  when:
+    - broker_private_pem_file.stat.exists|bool
+    - not ( ssl_provided_keystore_and_truststore_remote_src|bool )
+  diff: "{{ not mask_sensitive_diff|bool }}"

@@ -1,0 +1,89 @@
+---
+### Validates that the Console Consumer can consume data from cluster2, proving that data has been replicated from cluster1 (MDS).
+### Validates that Replicator is using OAuth and TLS to Produce to cluster2.
+### Validates that Replicator is using MTLS to Consume from Cluster1 (MDS).
+### Validates that client ID's are set correctly on Replicator.
+
+- name: Verify - kafka_controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: controller.quorum.voters
+        expected_value: "{{ kafka_controller_quorum_voters }}"
+
+- name: Kafka Connect Replicator Validate Consumption and Production between clusters
+  hosts: kafka-broker1
+  gather_facts: false
+  tasks:
+    - name: Pause for 20 seconds to allow replication to occur across clusters.
+      pause:
+        seconds: 20
+
+    - name: Consume Records from destination cluster
+      shell: |
+        kafka-console-consumer --topic test-replicator-source --bootstrap-server kafka-broker1:9091 \
+        --from-beginning --timeout-ms 10000 --consumer.config /etc/kafka/client.properties
+      run_once: true
+      register: consumer_output
+      failed_when:
+        - "'1\n2\n3\n4\n5\n6\n7\n8\n9\n10' not in consumer_output.stdout"
+
+- name: Verify - Kafka Connect Replicator Configuration
+  hosts: kafka-connect-replicator1
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-connect-replicator/kafka-connect-replicator.properties
+        property: sasl.mechanism
+        expected_value: OAUTHBEARER
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-connect-replicator/kafka-connect-replicator-consumer.properties
+        property: security.protocol
+        expected_value: SSL
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-connect-replicator/kafka-connect-replicator-consumer.properties
+        property: client.id
+        expected_value: consumer-test
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-connect-replicator/kafka-connect-replicator-producer.properties
+        property: sasl.mechanism
+        expected_value: OAUTHBEARER
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka-connect-replicator/kafka-connect-replicator-producer.properties
+        property: client.id
+        expected_value: producer-test
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_ownership.yml
+      vars:
+        file_name: kafka-connect-replicator.log
+        custom_path: /var/log/confluent/kafka-connect-replicator/
+        group: confluent
+        user: cp-kafka-connect-replicator

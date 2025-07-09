@@ -1,24 +1,71 @@
 ---
 - name: Install OpenSSL Rsync and Java
-  hosts: zookeeper[0]
+  hosts: kafka_broker[0]
   tasks:
     - name: Install OpenSSL Rsync and Java
       yum:
         name:
           - openssl
           - rsync
-          - java-11-openjdk
+          - java-17-openjdk
         state: present
-      when: ansible_os_family == "RedHat"
+      when: ansible_os_family == "RedHat" and ansible_distribution != "Amazon"
 
     - name: Install OpenSSL Rsync and Java
+      yum:
+        name:
+          - openssl
+          - rsync
+          - java-17-amazon-corretto
+        state: present
+      when: ansible_os_family == "RedHat" and ansible_distribution == "Amazon"
+
+    - name: Install OpenSSL Rsync
       apt:
         name:
           - openssl
           - rsync
-          - openjdk-11-jdk
         state: present
       when: ansible_os_family == "Debian"
+
+    - name: Install Java
+      apt:
+        name:
+          - openjdk-11-jdk
+        state: present
+      when: ansible_os_family == "Debian" and ansible_distribution_major_version != "12"
+
+    - name: Install Java
+      apt:
+        name:
+          - openjdk-17-jdk
+        state: present
+      when: ansible_os_family == "Debian" and ansible_distribution_major_version == "12"
+
+    - name: Get Java Path
+      shell: dirname $(dirname $(readlink -f $(which java)))
+      register: java_path
+      when:
+        - fips_enabled|default(false) | bool
+        - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+
+    - name: Disable JVM level FIPS
+      lineinfile:
+        path: "{{java_path.stdout}}/conf/security/java.security"
+        search_string: 'security.useSystemPropertiesFile=true'
+        line: security.useSystemPropertiesFile=false
+        owner: root
+        group: root
+        mode: '644'
+      when:
+        - fips_enabled|default(false) | bool
+        - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+
+    - name: Configure crypto policies
+      shell: update-crypto-policies --set FIPS
+      when:
+        - fips_enabled|default(false) | bool
+        - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
 
     - name: Create SSL Certificate Generation Directory
       file:
@@ -52,6 +99,20 @@
             path: /var/ssl/private/generation/certificate-hosts
           loop: "{{groups['zookeeper']}}"
           when: groups['zookeeper'] is defined
+
+        - name: Write Kraft Controller hostnames for cert creation
+          lineinfile:
+            line: "kafka_controller:{{item}}"
+            path: /var/ssl/private/generation/certificate-hosts
+          loop: "{{groups['kafka_controller']}}"
+          when: groups['kafka_controller'] is defined
+
+        - name: Write Kraft Controller hostnames for cert creation
+          lineinfile:
+            line: "kafka_controller_migration:{{item}}"
+            path: /var/ssl/private/generation/certificate-hosts
+          loop: "{{groups['kafka_controller_migration']}}"
+          when: groups['kafka_controller_migration'] is defined and groups['zookeeper'] is defined
 
         - name: Write kafka hostnames for cert creation
           lineinfile:
@@ -95,12 +156,33 @@
           loop: "{{groups['control_center']}}"
           when: groups['control_center'] is defined
 
+        - name: Write control_center_next_gen hostnames for cert creation
+          lineinfile:
+            line: "control_center_next_gen:{{item}}"
+            path: /var/ssl/private/generation/certificate-hosts
+          loop: "{{groups['control_center_next_gen']}}"
+          when: groups['control_center_next_gen'] is defined
+
         - name: Write ldap hostnames for cert creation
           lineinfile:
             line: "openldap:{{item}}"
             path: /var/ssl/private/generation/certificate-hosts
           loop: "{{groups['ldap_server']}}"
           when: groups['ldap_server'] is defined
+
+    - name: Install bind utils
+      yum:
+        name:
+          - bind-utils
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install bind utils
+      apt:
+        name:
+          - dnsutils
+        state: present
+      when: ansible_os_family == "Debian"
 
     - name: Run
       shell: |
@@ -121,12 +203,13 @@
 
 - name: Copy certs on remote src
   hosts: all
+  ignore_errors: true
   tasks:
     - name: Create the directory on Remote Hosts
       file:
         path: "{{ ssl_ca_cert_filepath | dirname }}"
         state: directory
-        mode: 0755
+        mode: '755'
       when: ssl_custom_certs_remote_src | default(false)
     - name: Copy CA Cert Filepath to remote Host
       copy:

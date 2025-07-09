@@ -25,16 +25,57 @@
   loop: "{{ groups['kafka_broker'] }}"
   run_once: true
 
-# Take super.users property, split into list, remove empty string from list, and add in mds_super_user
+# Take super.users property, split into list, remove empty string from list
 - name: Initialize Super Users List
   set_fact:
-    super_users: "{{ (kafka_broker_final_properties['super.users'] | default('')).split(';') | difference(['']) + [ 'User:' + lookup('vars', 'mds_super_user') ]}}"
+    super_users: "{{ rbac_super_users + (kafka_broker_final_properties['super.users'] | default('')).split(';') | difference(['']) }}"
+
+- name: Append Super Users List with LDAP
+  set_fact:
+    super_users: "{{ super_users + [ 'User:' + lookup('vars', 'mds_super_user') ]}}"
+  when: "'ldap' in auth_mode"
+
+- name: Append Super Users List with OAuth
+  set_fact:
+    super_users: "{{ super_users + [ 'User:' + lookup('vars', 'oauth_superuser_principal') ]}}"
+  when: "'oauth' in auth_mode"
+
+- name: Extract principal from each broker's cert
+  include_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{ kafka_broker_keystore_path }}"
+    keystore_storepass: "{{ kafka_broker_keystore_storepass }}"
+    pm_rules: "{{ kafka_broker_final_properties.get('ssl.principal.mapping.rules', 'DEFAULT') }}"
+  args:
+    apply:
+      delegate_to: "{{item}}"
+      delegate_facts: true
+  loop: "{{ groups['kafka_broker'] }}"
+  run_once: true
+  when: mds_ssl_client_authentication != 'none'
+
+- name: Append cert principal to super users list
+  set_fact:
+    super_users: "{{ super_users + [ 'User:' + hostvars[item]['ks_extracted_principal'] ]}}"
+  loop: "{{ groups['kafka_broker'] }}"
+  when: mds_ssl_client_authentication != 'none'
 
 # Loop over each brokers principal and add to list
 - name: Add Each Broker's Principal to Super Users List
   set_fact:
     super_users: "{{ super_users + [ hostvars[item]['kafka_broker_principal'] ] }}"
   loop: "{{ groups['kafka_broker'] }}"
+
+- name: Add Each Controller's Principal to Broker's Super Users List
+  set_fact:
+    super_users: "{{ super_users + [ hostvars[item]['kafka_controller_principal'] ] }}"
+  loop: "{{ groups['kafka_controller'] }}"
+  when:
+    - kraft_enabled|bool
+    - kafka_controller_ssl_mutual_auth_enabled|bool
+    - rbac_super_users | length == 0 # when this variable isnt defined then we need to bring in principals from other host
 
 - name: Remove Duplicates and Convert to String
   set_fact:
@@ -47,6 +88,37 @@
           'super.users': super_users
       }
     ) }}"
+
+# store the original Controller properties when Controller and Broker colocated
+- set_fact:
+    kafka_controller_initial_properties: "{{hostvars[inventory_hostname]['kafka_controller_final_properties']}}"
+  when:
+    - kraft_enabled|bool
+    - "inventory_hostname in groups.kafka_controller"
+    - rbac_super_users | length == 0
+
+#this is required when we have mTLS enabled
+- name: Add Broker's Principal to Controller's Super Users List
+  include_tasks: set_controller_principal.yml
+  vars:
+    controller_host: "{{ item }}"
+  loop: "{{ groups['kafka_controller'] }}"
+  args:
+    apply:
+      delegate_to: "{{item}}"
+  when:
+    - kraft_enabled|bool
+    - kafka_controller_ssl_mutual_auth_enabled|bool
+    - rbac_super_users | length == 0
+  run_once: true
+
+# reset the Controller's properties to the original properties when Controller and Broker colocated
+- set_fact:
+    kafka_controller_final_properties: "{{kafka_controller_initial_properties}}"
+  when:
+    - kraft_enabled|bool
+    - "inventory_hostname in groups.kafka_controller"
+    - rbac_super_users | length == 0
 
 - name: Create SSL Certificate Directory
   file:
@@ -108,3 +180,30 @@
     - broker_private_pem_file.stat.exists|bool
     - not ( ssl_provided_keystore_and_truststore_remote_src|bool )
   diff: "{{ not mask_sensitive_diff|bool }}"
+
+- name: Create MDS User Store File Directory
+  file:
+    path: "{{ mds_file_based_user_store_dest_path | dirname }}"
+    state: directory
+    owner: "{{ kafka_broker_user }}"
+    group: "{{ kafka_broker_group }}"
+    mode: '750'
+  when:
+    - mds_file_based_user_store_enabled|bool
+    - not external_mds_enabled|bool
+  tags:
+    - privileged
+    - filesystem
+    - file_user_store
+
+- name: Copy MDS User Store File to MDS
+  copy:
+    src: "{{ mds_file_based_user_store_src_path }}"
+    dest: "{{ mds_file_based_user_store_dest_path }}"
+    remote_src: "{{ mds_file_based_user_store_remote_src|bool }}"
+  when:
+    - mds_file_based_user_store_enabled|bool
+    - not external_mds_enabled|bool
+  tags:
+    - configuration
+    - file_user_store

@@ -17,6 +17,14 @@
     - validate
     - validate_ansi_version
 
+- name: Check the presence of Controller and Zookeeper
+  fail:
+    msg:  "Providing Zookeeper and Controller both are not supported at this time. Please remove one of these from your inventory"
+  when:
+    - ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) | bool
+    - ('zookeeper' in groups.keys() and groups['zookeeper'] | length > 0) | bool
+    - not kraft_migration | bool
+
 - name: Gather OS Facts
   setup:
     gather_subset:
@@ -92,7 +100,9 @@
     path: "{{ jolokia_jar_path | dirname }}"
     state: directory
     mode: '755'
-  when: jolokia_enabled|bool
+  when:
+    - lookup('vars', item + '_jolokia_enabled', default=jolokia_enabled)|bool
+  loop: "{{ group_names }}"
 
 - name: Copy Jolokia Jar
   copy:
@@ -100,8 +110,9 @@
     dest: "{{ jolokia_jar_path }}"
     mode: '755'
   when:
-    - jolokia_enabled|bool
+    - lookup('vars', item + '_jolokia_enabled', default=jolokia_enabled)|bool
     - not jolokia_url_remote|bool
+  loop: "{{ group_names }}"
 
 - name: Download Jolokia Jar
   get_url:
@@ -114,9 +125,10 @@
   retries: 5
   delay: 5
   when:
-    - jolokia_enabled|bool
+    - lookup('vars', item + '_jolokia_enabled', default=jolokia_enabled)|bool
     - jolokia_url_remote|bool
     - not ansible_check_mode # (Bug ansible/ansible#65687)
+  loop: "{{ group_names }}"
 
 - name: Create Prometheus install directory
   file:

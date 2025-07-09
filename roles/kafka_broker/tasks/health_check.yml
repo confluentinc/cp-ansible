@@ -17,7 +17,7 @@
 
 - name: Get Topics with UnderReplicatedPartitions with Secrets Protection enabled
   shell: |
-    {{ binary_base_path }}/bin/kafka-topics --bootstrap-server {{inventory_hostname}}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}} \
+    {{ binary_base_path }}/bin/kafka-topics --bootstrap-server {{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}} \
       --describe --under-replicated-partitions --command-config {{kafka_broker.client_config_file}}
   environment:
     CONFLUENT_SECURITY_MASTER_KEY: "{{ secrets_protection_masterkey }}"
@@ -34,25 +34,69 @@
     - kafka_broker_client_secrets_protection_enabled|bool
     - rbac_enabled|bool or confluent_cli_version is version('3.0.0', '>=')
 
+- set_fact:
+    mds_send_client_cert: "{{ mds_ssl_client_authentication in ['required', 'requested'] }}"
+    erp_send_client_cert: "{{ erp_ssl_client_authentication in ['required', 'requested'] }}"
+
+- name: Get Authorization Token for Super User
+  import_role:
+    name: common
+    tasks_from: get_authorization_token.yml
+  vars:
+    oauth: "{{ oauth_enabled }}"
+    oauth_user: "{{ oauth_superuser_client_id }}"
+    oauth_password: "{{ oauth_superuser_client_password }}"
+    ldap_user: "{{ mds_super_user }}"
+    ldap_password: "{{ mds_super_user_password }}"
+    mtls_client_cert: "{{ kafka_broker_cert_path }}"
+    mtls_client_key: "{{ kafka_broker_key_path }}"
+    cert_auth_only_enabled: "{{ kafka_broker_mds_cert_auth_only }}"
+  when: rbac_enabled or oauth_enabled
+
 - name: Wait for Metadata Service to start
   uri:
-    url: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname, True) }}:{{mds_port}}/security/1.0/authenticate"
+    url: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname, True) | confluent.platform.format_hostname }}:{{mds_port}}/security/1.0/authenticate"
     validate_certs: false
     return_content: true
     status_code: 200
-    url_username: "{{mds_health_check_user}}"
-    url_password: "{{mds_health_check_password}}"
-    force_basic_auth: true
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_broker_cert_path if mds_send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_broker_key_path if mds_send_client_cert|bool else omit }}"
   register: mds_result
   until: mds_result.status == 200
   retries: "{{ mds_retries }}"
   delay: 5
   ignore_errors: true
+  no_log: "{{mask_secrets|bool}}"
   when:
     - rbac_enabled|bool and not external_mds_enabled|bool
     # Skip if any previous check failed
     - not urp_topics.failed|default(False) and not urp_topics_secrets_protection.failed|default(False)
-    - not fips_enabled|bool
+
+- name: Wait for Embedded Rest Proxy to start
+  uri:
+    url: "{{kafka_broker_erp_clusters_url}}"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_broker_cert_path if erp_send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_broker_key_path if erp_send_client_cert|bool else omit }}"
+  register: erp_result
+  until: erp_result.status == 200
+  retries: "{{ mds_retries }}"
+  delay: 5
+  ignore_errors: true
+  no_log: "{{mask_secrets|bool}}"
+  when:
+    - kafka_broker_rest_proxy_enabled|bool
+    - rbac_enabled|bool or oauth_enabled
+    # Skip if any previous checks failed
+    - not urp_topics.failed|default(False) and not urp_topics_secrets_protection.failed|default(False) and not mds_result.failed|default(False)
 
 - name: Wait for Embedded Rest Proxy to start
   uri:
@@ -63,16 +107,16 @@
     url_username: "{{kafka_broker_rest_health_check_user}}"
     url_password: "{{kafka_broker_rest_health_check_password}}"
     force_basic_auth: true
-  register: erp_result
-  until: erp_result.status == 200
+  register: erp_result_basic
+  until: erp_result_basic.status == 200
   retries: "{{ mds_retries }}"
   delay: 5
   ignore_errors: true
   when:
     - kafka_broker_rest_proxy_enabled|bool
+    - not (rbac_enabled|bool or oauth_enabled|bool)
     # Skip if any previous checks failed
-    - not urp_topics.failed|default(False) and not urp_topics_secrets_protection.failed|default(False) and not mds_result.failed|default(False)
-    - not fips_enabled|bool
+    - not urp_topics.failed|default(False) and not urp_topics_secrets_protection.failed|default(False) and not mds_result.failed|default(False) and not erp_result.failed|default(False)
 
 - name: Fetch Log Files and Error out
   block:
@@ -90,4 +134,4 @@
       fail:
         msg: Health checks failed. Review exported files.
   # When only one health check runs, only one will have a 'failed' field. For skipped checks, defaulting 'failed' to False
-  when: urp_topics.failed|default(False) or urp_topics_secrets_protection.failed|default(False) or mds_result.failed|default(False) or erp_result.failed|default(False)
+  when: urp_topics.failed|default(False) or urp_topics_secrets_protection.failed|default(False) or mds_result.failed|default(False) or erp_result.failed|default(False) or erp_result_basic.failed|default(False)

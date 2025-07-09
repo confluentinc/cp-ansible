@@ -1,21 +1,42 @@
 ---
+- name: Decide Where to delegate task of getting superuser token
+  set_fact:
+    delegation_target: >-
+      {%- if mds_ssl_client_authentication == 'none' -%}
+        {{ inventory_hostname }}
+      {%- elif external_mds_enabled|bool -%}
+        localhost
+      {%- else -%}
+        {{ groups['kafka_broker'][0] }}
+      {%- endif -%}
+
 - name: Get Kafka Cluster Id
   import_role:
     name: common
     tasks_from: rbac_setup.yml
   vars:
     copy_certs: false
+    delegated_to_localhost: "{{ external_mds_enabled|bool }}"
+    erp_client_cert_path: "{{ schema_registry_cert_path }}"
+    erp_client_key_path: "{{ schema_registry_key_path }}"
+    cert_auth_only_enabled_for_rbac: "{{ schema_registry_mds_cert_auth_only|bool }}"
+  delegate_to: "{{ delegation_target }}"
+  # For single cluster delegating this task to broker as in case of cert based token retrival only broker can get a super user token using its certs
+  # For Centralized MDS other clusters can't delegate to MDS cluster as that cluster may not have permissions to ssh into MDS, thus delegate to localhost
+
+- set_fact:
+    send_client_cert: "{{ mds_ssl_client_authentication in ['required', 'requested'] }}"
 
 - name: Register Schema Registry Cluster
   uri:
     url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/registry/clusters"
     method: POST
     validate_certs: false
-    force_basic_auth: true
-    url_username: "{{mds_super_user}}"
-    url_password: "{{mds_super_user_password}}"
     headers:
       Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ schema_registry_cert_path if send_client_cert else omit }}"
+    client_key: "{{schema_registry_key_path if send_client_cert else omit}}"
     body_format: json
     body: >
       [
@@ -34,7 +55,8 @@
       ]
     status_code: 204
   run_once: true
+  no_log: "{{mask_secrets|bool}}"
   register: output
   until: output.status == 204
   retries: "{{ mds_retries }}"
-  delay: 5
+  delay: 10

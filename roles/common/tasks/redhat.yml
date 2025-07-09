@@ -1,4 +1,12 @@
 ---
+- name: Ensure Custom Repo file is not in repos when repository_configuration is Confluent
+  file:
+    state: absent
+    path: /etc/yum.repos.d/custom-confluent.repo
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+
 - name: Add Confluent Repo file
   template:
     src: confluent.repo.j2
@@ -11,6 +19,13 @@
   when:
     - repository_configuration == 'confluent'
     - installation_method == "package"
+
+- name: Ensure Confluent Repo file is not in repos when repository_configuration is Custom
+  file:
+    state: absent
+    path: /etc/yum.repos.d/confluent.repo
+  when:
+    - repository_configuration == 'custom'
 
 - name: Add Custom Repo file
   copy:
@@ -34,7 +49,10 @@
     confluent_repo_result.changed|default(False) or
     repository_configuration == 'custom'
 
-- name: Install Java
+- name: Custom Java Install
+  include_tasks: custom_java_install.yml
+
+- name: Install Java on Rhel
   yum:
     name: "{{redhat_java_package_name}}"
     state: present
@@ -42,7 +60,18 @@
   until: java_install_result is success  or ansible_check_mode
   retries: 10
   delay: 5
-  when: install_java|bool
+  when: install_java|bool and ansible_distribution != "Amazon"
+  tags: package
+
+- name: Install Java on Amazonlinux
+  yum:
+    name: "{{amazon_java_package_name}}"
+    state: present
+  register: java_install_result
+  until: java_install_result is success  or ansible_check_mode
+  retries: 10
+  delay: 5
+  when: install_java|bool and ansible_distribution == "Amazon"
   tags: package
 
 - name: Install OpenSSL and Unzip
@@ -52,21 +81,64 @@
       - unzip
   tags: package
 
+- name: Get Java Version
+  shell: java -version
+  register: version_output
+  check_mode: false
+  changed_when: false
+
+- name: Print Java Version
+  debug:
+    msg: "Current Java Version is: {{version_output.stderr_lines[0]}}"
+
 - name: Install pip
   yum:
     name:
       - python3-pip
     state: present
   become: true
+  tags:
+    - package
+    - pip-package
+
+- name: Install pip package setuptools using yum
+  yum:
+    name:
+      - python3-setuptools
+    state: present
+  become: true
   tags: package
+  when: ansible_distribution == "Amazon"
+
+- name: Install pip packages using yum
+  yum:
+    name:
+      - "python3-{{item}}"
+    state: present
+  become: true
+  loop: "{{pip_packages}}"
+  tags: package
+  when: ansible_distribution == "Amazon"
 
 - name: Upgrade pip
   ansible.builtin.pip:
     name: pip
     extra_args: --upgrade
-  tags: package
+  tags:
+    - package
+    - pip-package
+  when: ansible_distribution != "Amazon"
 
 - name: Install pip packages
   ansible.builtin.pip:
     name: "{{pip_packages}}"
-  tags: package
+  tags:
+    - package
+    - pip-package
+  when: ansible_distribution != "Amazon"
+
+- name: Enable FIPS on rhel 8+
+  include_tasks: fips-redhat.yml
+  when:
+    - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+    - fips_enabled|bool

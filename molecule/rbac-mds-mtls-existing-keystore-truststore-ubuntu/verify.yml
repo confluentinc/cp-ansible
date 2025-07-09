@@ -30,8 +30,20 @@
     - name: Assert full dname found in server.properties
       assert:
         that:
-          - "'User:CN=kafka_broker,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US' in super_users_grep.stdout"
-        fail_msg: "Super Users property: {{super_users_grep.stdout}} does not contain User:CN=kafka_broker,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US"
+          - "'User:CN=kafka_broker,OU=TEST TEAM,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US' in super_users_grep.stdout"
+        fail_msg: "Super Users property: {{super_users_grep.stdout}} does not contain User:CN=kafka_broker,OU=TEST TEAM,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US"
+
+- name: Verify - kafka_controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: listener.name.controller.ssl.keystore.location
+        expected_value: /var/ssl/private/controller.keystore.jks
 
 - name: Verify - schema_registry
   hosts: schema_registry
@@ -93,13 +105,25 @@
         property: confluent.controlcenter.streams.ssl.truststore.location
         expected_value: /var/ssl/private/control_center.truststore.jks
 
+- name: Verify - control_center next gen
+  hosts: control_center_next_gen
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/confluent-control-center/control-center-production.properties
+        property: confluent.controlcenter.streams.ssl.truststore.location
+        expected_value: /var/ssl/private/control_center_next_gen.truststore.jks
+
 - name: Verify - Client Packages
   hosts: kafka_broker
   gather_facts: false
   tasks:
     - import_role:
         name: common
-    - shell: grep -Fq "deb {{confluent_clients_repository_baseurl}}/clients/deb/ stretch main" /etc/apt/sources.list
+    - shell: grep -REq "deb {{confluent_clients_repository_baseurl}}/clients/deb/ .* main" /etc/apt/sources.list.d
       register: linecheck
       check_mode: false
       changed_when: false

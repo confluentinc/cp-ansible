@@ -1,0 +1,144 @@
+---
+##
+## The following is an example inventory file of the configuration required for setting up Confluent Platform with RBAC over mTLS.
+## Sets RBAC on a cluster which talks to already running Centralized MDS server
+## Principals extracted from certs are given role bindings.
+
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: ec2-user
+    ansible_become: true
+    ansible_ssh_private_key_file: /home/ec2-user/guest.pem
+    ansible_python_interpreter: /usr/bin/python3
+
+    ## TLS Configuration
+    ssl_enabled: true
+    # 3 ways to handle ssl
+    # Self Signed Certs (Default) Not recommended for production clusters
+    # Custom Certs
+    # Set ssl_custom_certs, ssl_ca_cert_filepath, ssl_signed_cert_filepath, ssl_key_filepath, ssl_key_password & ssl_custom_certs_remote_src(optional)
+    # Provided Keystore Truststore
+    # Set ssl_provided_keystore_and_truststore, ssl_keystore_and_truststore_custom_password, ssl_keystore_filepath, ssl_keystore_key_password, ssl_keystore_store_password, ssl_keystore_alias, ssl_truststore_filepath, ssl_truststore_password, ssl_truststore_ca_cert_alias and ssl_provided_keystore_and_truststore_remote_src (optional)
+
+    rbac_enabled: true
+    auth_mode: mtls # MDS server will use mTLS certs for authentication, no user store like ldap/oauth will be setup on server
+
+    # Centralized MDS server configuration
+    external_mds_enabled: true # This is for cluster to talk to remote MDS server
+    mds_broker_bootstrap_servers: mds-kafka-broker1:9093,mds-kafka-broker2:9093,mds-kafka-broker3:9093
+    mds_bootstrap_server_urls: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
+    mds_broker_listener: # details about the Kafka listener on MDS cluster to which we want to connect
+      ssl_enabled: true
+      ssl_mutual_auth_enabled: true
+      ssl_client_authentication: required
+      sasl_protocol: none
+
+    # This should be a superuser cert. In cases of LDAP/OAuth based setup we only needed user names or client id of super user inside this cluster to give role bindings to all components like SR/RP/Connect. Here we need a certificate whose principal is super user in MDS.
+    mds_super_user_external_cert_path: <cert path>
+    mds_super_user_external_key_path: <key path>
+
+    create_mds_certs: false
+    token_services_public_pem_file: /home/ec2-user/keys/public.pem
+    token_services_private_pem_file: /home/ec2-user/keys/tokenKeypair.pem
+
+    ssl_mutual_auth_enabled: true
+    ssl_client_authentication: required  # <required/requested/none>
+    # Sets mTLS on kafka broker listeners, CP components also take the default value from these variables
+
+    mds_ssl_client_authentication: required  # <required/requested/none>
+    # All CP clients use this variable to know if Centralized MDS has mTLS.
+    # Must be defined in all section as all components need to know its value for assigning role bindings
+    # Default value is none
+
+    # When set to required clients must send certs to server
+    # When set to requested sending certs is optional given there is another mechanism like ldap/oauth which is sending principal
+    # requested mode is used for upgrade scenarios where all clients might not be sending certs to server
+    # Once all clients start sending certs to server this requested should be changed to required
+
+    kafka_broke_custom_listeners:
+      external1:
+        name: external1
+        port: 9095
+        ssl_enabled: true
+        # if global mtls is enabled use both vars to turn off mtls
+        ssl_mutual_auth_enabled: false
+        ssl_client_authentication: none
+      external2:
+        name: external2
+        port: 9096
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: false
+        # if use only one var to turn off mtls, will not work mtls will still be enabled
+      external3:
+        name: external3
+        port: 9097
+        ssl_enabled: true
+        ssl_client_authentication: none
+        # if use only one var to turn off mtls, will not work mtls will still be enabled
+
+    principal_mapping_rules:
+      - "RULE:.*CN=([a-zA-Z0-9.-_]*).*$/$1/"
+      - "DEFAULT"
+
+    # List of super user principals who can get an impersonation token on behalf of other users. We should add broker, rest proxy, schema registry and connect principals here.
+    # The Principal which is used for CP component to talk to MDS. Here that is cert principal.
+    # Needed for principal propogation for Rest Proxy and Control Center to work.
+    # To extract dn from cert check use openssl x509 -noout -subject -nameopt RFC2253 -in <cert>
+    # using this the dn would be something like 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker'
+    # Then applying the principal mapping rules it would give the principal kafka_broker
+    impersonation_super_users:
+      - 'kafka_broker'
+      - 'kafka_rest'
+      - 'schema_registry'
+      - 'kafka_connect'
+
+    # Optional Config
+    # These users cant be impersonated by impersonation_super_users. Typically one might want to add super users here to stop any other user from impersonating it
+    impersonation_protected_users:
+      - 'super_user'
+
+    # SSO for C3
+    sso_mode: oidc
+    sso_groups_claim: groups
+    sso_sub_claim: sub
+    sso_groups_scope: groups # scope is optional, depending on the Idp
+    sso_issuer_url: <sso-idp-url>
+    sso_jwks_uri: <sso-idp-jkw-url>
+    sso_authorize_uri: <sso_jwks_uri>
+    sso_token_uri: <sso_token_uri>
+    sso_client_id: <sso_client_id>
+    sso_client_password: <sso_client_password>
+    sso_idp_cert_path: my-idp-cert.pem
+
+kafka_controller:
+  hosts:
+    ec2-34-219-110-48.us-west-2.compute.amazonaws.com:
+    ec2-18-237-72-224.us-west-2.compute.amazonaws.com:
+    ec2-35-161-39-212.us-west-2.compute.amazonaws.com:
+
+kafka_broker:
+  hosts:
+    ec2-34-211-33-32.us-west-2.compute.amazonaws.com:
+    ec2-35-89-77-112.us-west-2.compute.amazonaws.com:
+    ec2-35-163-80-4.us-west-2.compute.amazonaws.com:
+
+schema_registry:
+  hosts:
+    ec2-34-212-49-238.us-west-2.compute.amazonaws.com:
+
+kafka_connect:
+  hosts:
+    ec2-35-93-21-143.us-west-2.compute.amazonaws.com:
+
+kafka_rest:
+  hosts:
+    ec2-34-222-41-249.us-west-2.compute.amazonaws.com:
+
+control_center:
+  hosts:
+    ec2-35-87-151-33.us-west-2.compute.amazonaws.com:
+
+control_center_next_gen:
+  hosts:
+    ec2-35-85-219-170.us-west-2.compute.amazonaws.com:

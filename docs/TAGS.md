@@ -91,6 +91,12 @@ Description: To generate secrets protection masterkey if secrets protection enab
 
 ***
 
+### Tag - pip-package
+
+Decription: To install pip and pip packages. Skip this if already have installed pip packages.
+
+***
+
 ### Tag - package
 
 Description: This is applied to all package installation related tasks (common and CP packages). Skip this if you don't want to reinstall.
@@ -244,5 +250,17 @@ Description: Pre flight check. Check if /tmp directory exists or not.
 ### Tag - zookeeper
 
 Description: For all zookeeper tasks - installing, configuring. Runs the zookeeper role.
+
+***
+
+### Tag - migrate_to_dual_write
+
+Description: To pause Zookeeper to Kraft migration at Dual Write mode. Used to manually validate the metadata/ACLs before moving to Kraft mode.
+
+***
+
+### Tag - migrate_to_kraft
+
+Description: To migrate from Dual Write mode to Kraft mode. Used only when the cluster is currently in Dual Write mode.
 
 ***

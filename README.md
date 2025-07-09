@@ -12,6 +12,7 @@ Ansible provides a simple way to deploy, manage, and configure the Confluent Pla
 The services that can be installed from this repository are:
 
 * ZooKeeper
+* Kraft Controller (or Kafka Controller)
 * Kafka
 * Schema Registry
 * REST Proxy
@@ -57,6 +58,7 @@ If you would like to contribute to the CP-Ansible project, please refer to the [
 ## Support
 
 For any support request, please reach out to [Confluent Support Portal](https://support.confluent.io/).
+> **Disclaimer:** This collection contains a dependency on `community.crypto` that is currently not certified. If an issue is encountered that is determined to be caused by this unsupported module, the collection will not be supported under the Redhat support program. A certified and fully supported alternative will be introduced in a future release.
 
 ## Release Notes
 

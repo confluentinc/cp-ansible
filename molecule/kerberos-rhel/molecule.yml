@@ -1,6 +1,7 @@
 ---
-### Installation of Confluent Platform on CentOS7.
+### Installation of Confluent Platform on Oracle Linux 9.
 ### Kerberos enabled with custom client config path
+### Creates a Connector in Connect cluster
 
 driver:
   name: docker
@@ -9,20 +10,34 @@ platforms:
     hostname: kerberos1.confluent
     groups:
       - kerberos_server
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: centos:centos8
+    dockerfile: ../Dockerfile-centos8-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
     networks:
       - name: confluent
-  - name: zookeeper1
-    hostname: zookeeper1.confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}2
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -33,8 +48,9 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+      - kafka_broker_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -45,8 +61,9 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+      - kafka_broker_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -57,8 +74,9 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+      - kafka_broker_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -69,8 +87,8 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -81,8 +99,8 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -93,8 +111,8 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -105,8 +123,8 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -117,8 +135,8 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -127,15 +145,54 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
+  - name: control-center-next-gen
+    hostname: control-center-next-gen.confluent
+    groups:
+      - control_center_next_gen
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9022:9022"
+    networks:
+      - name: confluent
+    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller2-mig
+    hostname: controller2-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
-    prepare: ../kerberos.yml
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
+        control_center_next_gen_port: 9022
         scenario_name: kerberos-rhel
-
-        sasl_protocol: kerberos
+        sasl_protocol: kerberos,plain
 
         kerberos:
           realm: realm.example.com
@@ -144,9 +201,24 @@ provisioner:
 
         kerberos_client_config_file_dest: /krb/krb5.conf
 
+        # To run the FileStream connector, you must add the filestream-connectors path in the plugin.path
+        kafka_connect_custom_properties:
+          plugin.path: "/usr/share/filestream-connectors,/usr/share/java/connect_plugins"
+
+        kafka_connect_connectors:
+          - name: sample-connector-1
+            config:
+              connector.class: "FileStreamSinkConnector"
+              tasks.max: "1"
+              file: "/etc/kafka/connect-distributed.properties"
+              topics: "test_topic"
+
       zookeeper:
         zookeeper_kerberos_principal: "zk/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
+      kafka_controller:
+        kafka_controller_kerberos_principal: "kafka-a/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        kafka_controller_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_controller-{{inventory_hostname}}.keytab"
       kafka_broker:
         kafka_broker_kerberos_principal: "kafka-a/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         kafka_broker_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
@@ -165,6 +237,9 @@ provisioner:
       control_center:
         control_center_kerberos_principal: "control_center/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         control_center_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/control_center-{{inventory_hostname}}.keytab"
+      control_center_next_gen:
+        control_center_next_gen_kerberos_principal: "control_center_next_gen/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        control_center_next_gen_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/control_center_next_gen-{{inventory_hostname}}.keytab"
 
       kerberos_server:
         realm_name: "{{ kerberos.realm | upper }}"
@@ -173,8 +248,24 @@ provisioner:
 
         kerberos_principals:
           # Wish there was a better way to create this list, this will do for now
+          # zookeeper keytabs and principal is not  used in Kraft mode, it will be removed once we drop zookeeper support
           - principal: "zk/zookeeper1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
+
+          - principal: "zk/zookeeper2.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/zookeeper-zookeeper2.keytab"
+
+          - principal: "kafka-a/controller1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller1.keytab"
+
+          - principal: "kafka-a/controller1-mig.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller1-mig.keytab"
+
+          - principal: "kafka-a/controller2.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller2.keytab"
+
+          - principal: "kafka-a/controller2-mig.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller2-mig.keytab"
 
           - principal: "kafka-a/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
@@ -199,3 +290,6 @@ provisioner:
 
           - principal: "control_center/control-center1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/control_center-control-center1.keytab"
+
+          - principal: "control_center_next_gen/control-center-next-gen.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/control_center_next_gen-control-center-next-gen.keytab"

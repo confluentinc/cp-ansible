@@ -1,14 +1,79 @@
 ---
 - name: Register Kafka Connect Subgroups
   set_fact:
-    subgroups: "{{ ((subgroups | default([])) + hostvars[item].group_names) | difference('kafka_broker, ksql, kafka_connect, kafka_rest, kerberos, ksql, schema_registry, zookeeper, kafka_broker_parallel, ksql_parallel, kafka_connect_parallel, kafka_rest_parallel, kerberos_parallel, ksql_parallel, schema_registry_parallel, zookeeper_parallel') }}"
+    subgroups: "{{ ((subgroups | default([])) + hostvars[item].group_names) | difference('kafka_broker, ksql, kafka_connect, kafka_rest, kerberos, ksql, schema_registry, zookeeper, kafka_broker_parallel, ksql_parallel, kafka_connect_parallel, kafka_rest_parallel, kerberos_parallel, ksql_parallel, schema_registry_parallel, zookeeper_parallel, kafka_controller, kafka_controller_parallel') }}"
   with_items: "{{groups['kafka_connect']}}"
+
+- name: Extract Connect Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{kafka_connect_keystore_path}}"
+    keystore_storepass: "{{kafka_connect_keystore_storepass}}"
+    pm_rules: "{{kafka_connect_final_properties.get('auth.ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+    - not ansible_check_mode
+    - kafka_connect_connectors is defined
+
+- name: Add Role Bindings for Connect mTLS User
+  include_tasks: rbac_connectors.yml
+  vars:
+    connect_user: "{{ ks_extracted_principal | urlencode }}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+    - not ansible_check_mode
+    - kafka_connect_connectors is defined
+
+- name: Add Role Bindings for Connect OAuth
+  include_tasks: rbac_connectors.yml
+  vars:
+    connect_user: "{{kafka_connect_oauth_principal}}"
+  when:
+    - rbac_enabled|bool
+    - oauth_enabled|bool
+    - not ansible_check_mode
+    - kafka_connect_connectors is defined
+
+- name: Add Role Bindings for Connect Ldap
+  include_tasks: rbac_connectors.yml
+  vars:
+    connect_user: "{{kafka_connect_ldap_user}}"
+  when:
+    - rbac_enabled|bool
+    - "'ldap' in auth_mode"
+    - not ansible_check_mode
+    - kafka_connect_connectors is defined
+
+- set_fact:
+    certs_chain: "{{ssl_file_dir_final}}/{{ kafka_connect_service_name if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect' }}.chain"
+
+- name: Get Authorization Token for Connect User
+  import_role:
+    name: common
+    tasks_from: get_authorization_token.yml
+  vars:
+    oauth: "{{ kafka_connect_oauth_enabled }}"
+    oauth_user: "{{ kafka_connect_oauth_user }}"
+    oauth_password: "{{ kafka_connect_oauth_password }}"
+    ldap_user: "{{ kafka_connect_ldap_user }}"
+    ldap_password: "{{ kafka_connect_ldap_password }}"
+    mtls_client_cert: "{{ kafka_connect_cert_path }}"
+    mtls_client_key: "{{ kafka_connect_key_path }}"
+    cert_auth_only_enabled: "{{ kafka_connect_mds_cert_auth_only|bool }}"
+  when: rbac_enabled or kafka_connect_oauth_enabled
 
 - name: Register connector configs and remove deleted connectors for single cluster
   confluent.platform.kafka_connectors:
-    connect_url: "{{kafka_connect_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_connect_rest_port}}/connectors"
+    connect_url: "{{kafka_connect_http_protocol}}://{{ hostvars[inventory_hostname] | confluent.platform.resolve_and_format_hostname }}:{{kafka_connect_rest_port}}/connectors"
     active_connectors: "{{ kafka_connect_connectors }}"
     timeout: "{{ kafka_connect_deploy_connector_timeout }}"
+    token: "{% if rbac_enabled or kafka_connect_oauth_enabled %}{{ authorization_token }}{% else %}{{none}}{% endif %}"
+    client_cert: "{% if (ssl_provided_keystore_and_truststore and ssl_mutual_auth_enabled) %}{{kafka_connect_cert_path}}{% elif ssl_mutual_auth_enabled %}{{certs_chain}}{% else %}{{none}}{% endif %}"
+    client_key: "{% if ssl_mutual_auth_enabled %}{{kafka_connect_key_path}}{% else %}{{none}}{% endif %}"
   when:
     - kafka_connect_connectors is defined
     - subgroups|length == 0
@@ -16,9 +81,12 @@
 
 - name: Register connector configs and remove deleted connectors for Multiple Clusters
   confluent.platform.kafka_connectors:
-    connect_url: "http{% if hostvars[groups[item][0]].kafka_connect_ssl_enabled|default(kafka_connect_ssl_enabled) %}s{% endif %}://{{ hostvars[groups[item][0]]|confluent.platform.resolve_hostname }}:{{ hostvars[groups[item][0]].kafka_connect_rest_port|default(kafka_connect_rest_port) }}/connectors"
+    connect_url: "http{% if hostvars[groups[item][0]].kafka_connect_ssl_enabled|default(kafka_connect_ssl_enabled) %}s{% endif %}://{{ hostvars[groups[item][0]] | confluent.platform.resolve_and_format_hostname }}:{{ hostvars[groups[item][0]].kafka_connect_rest_port|default(kafka_connect_rest_port) }}/connectors"
     active_connectors: "{{ hostvars[groups[item][0]].kafka_connect_connectors }}"
     timeout: "{{ kafka_connect_deploy_connector_timeout }}"
+    token: "{% if rbac_enabled or kafka_connect_oauth_enabled %}{{ authorization_token }}{% else %}{{none}}{% endif %}"
+    client_cert: "{% if (ssl_provided_keystore_and_truststore and hostvars[groups[item][0]].kafka_connect_ssl_mutual_auth_enabled|default(kafka_connect_ssl_mutual_auth_enabled)) %}{{hostvars[groups[item][0]].kafka_connect_cert_path|default(kafka_connect_cert_path)}}{% elif hostvars[groups[item][0]].kafka_connect_ssl_mutual_auth_enabled|default(kafka_connect_ssl_mutual_auth_enabled) %}{{certs_chain}}{% else %}{{none}}{% endif %}"
+    client_key: "{% if hostvars[groups[item][0]].kafka_connect_ssl_mutual_auth_enabled|default(kafka_connect_ssl_mutual_auth_enabled) %}{{hostvars[groups[item][0]].kafka_connect_key_path|default(kafka_connect_key_path)}}{% else %}{{none}}{% endif %}"
   when: hostvars[groups[item][0]].kafka_connect_connectors is defined
   delegate_to: "{{ groups[item][0] }}"
   loop: "{{subgroups}}"
