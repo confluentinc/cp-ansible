@@ -116,7 +116,7 @@ def check_file_for_setfact_issues(file_path, changed_lines=None):
 
             # Check if this is a set_fact task
             if is_setfact_task(task):
-                task_name = task.get('name', f'Task {i+1}')
+                task_name = task.get('name', f'Task {i + 1}')
                 # Get line number from original content
                 line_number = get_task_line_number(content, task_name, i)
 

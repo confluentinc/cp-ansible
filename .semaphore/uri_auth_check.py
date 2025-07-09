@@ -53,7 +53,7 @@ def check_file_for_auth_issues(file_path):
             # Check if this is a URI task with authorization
             if is_uri_task_with_auth(task):
                 if not has_no_log_protection(task):
-                    task_name = task.get('name', f'Task {i+1}')
+                    task_name = task.get('name', f'Task {i + 1}')
                     # Get line number from original content
                     line_number = get_task_line_number(content, task_name, i)
 
