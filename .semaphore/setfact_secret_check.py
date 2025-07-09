@@ -196,18 +196,15 @@ def check_file_for_setfact_issues(file_path, changed_lines=None):
 
                 print(f"Debug: Found set_fact task '{task_name}' at line {line_number}")
 
-                # If we have changed lines info, only report if this task is in changed lines
-                is_in_changed_lines = changed_lines is None or len(changed_lines) == 0 or any(abs(line_number - changed_line) <= 5 for changed_line in changed_lines)
-                print(f"Debug: Task is in changed lines: {is_in_changed_lines}")
-
-                if is_in_changed_lines:
-                    issues.append({
-                        'file': file_path,
-                        'task': task_name,
-                        'line': line_number,
-                        'has_no_log': has_no_log_protection(task),
-                        'message': 'set_fact task found - please verify no sensitive data is exposed and consider adding no_log if needed'
-                    })
+                # For set_fact tasks, report ALL instances in changed files
+                # Don't filter by line numbers since we want to review all set_fact usage
+                issues.append({
+                    'file': file_path,
+                    'task': task_name,
+                    'line': line_number,
+                    'has_no_log': has_no_log_protection(task),
+                    'message': 'set_fact task found - please verify no sensitive data is exposed and consider adding no_log if needed'
+                })
 
     except Exception as e:
         print(f"Warning: Could not parse {file_path}: {e}")
