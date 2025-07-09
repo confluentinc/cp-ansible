@@ -7,7 +7,6 @@ import os
 import sys
 import glob
 import yaml
-import re
 
 
 def get_all_yaml_files(collection_root):

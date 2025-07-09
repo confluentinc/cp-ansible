@@ -5,7 +5,6 @@ Checks for set_fact tasks that might leak secrets in changed files.
 
 import os
 import sys
-import glob
 import yaml
 import re
 import subprocess
@@ -44,7 +43,7 @@ def get_changed_files_and_lines():
         # Get changed files
         result = subprocess.run(
             ['git', 'diff', '--name-only', f'origin/{base_branch}...{current_branch}'],
-            capture_output=True, text=True, cwd=os.getcwd()
+            capture_output=True, text=True, cwd=os.getcwd(), check=False
         )
 
         if result.returncode != 0:
@@ -60,7 +59,7 @@ def get_changed_files_and_lines():
                 # Get changed line numbers for this file
                 diff_result = subprocess.run(
                     ['git', 'diff', '-U0', f'origin/{base_branch}...{current_branch}', file_path],
-                    capture_output=True, text=True, cwd=os.getcwd()
+                    capture_output=True, text=True, cwd=os.getcwd(), check=False
                 )
 
                 if diff_result.returncode == 0:
