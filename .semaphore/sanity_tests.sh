@@ -153,7 +153,7 @@ def is_uri_task_with_auth(task):
 
     # Check for various authorization parameters
     auth_indicators = [
-        'url_username', 'url_password', 'force_basic_auth'
+        'Authorization'
     ]
 
     for param in auth_indicators:
