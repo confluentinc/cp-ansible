@@ -64,3 +64,15 @@ python -m galaxy_importer.main $ARTEFACT
 
 # Test2
 ansible-test sanity
+
+# Test3 - Custom URI Authorization Check
+echo "Running custom URI authorization sanity check..."
+python3 $PATH_TO_CPA/.semaphore/uri_auth_check.py
+
+echo "URI authorization sanity check completed."
+
+# Test4 - Custom set_fact Secret Leak Check
+echo "Running custom set_fact secret leak sanity check..."
+python3 $PATH_TO_CPA/.semaphore/setfact_secret_check.py
+
+echo "set_fact secret leak sanity check completed."
