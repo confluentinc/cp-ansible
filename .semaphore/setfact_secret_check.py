@@ -47,7 +47,7 @@ def get_changed_files_and_lines():
             ['git', 'rev-parse', '--is-shallow-repository'],
             capture_output=True, text=True, cwd=collection_root, check=False
         )
-        
+
         if shallow_check.returncode == 0 and shallow_check.stdout.strip() == 'true':
             print("Repository is shallow, attempting to unshallow...")
             subprocess.run(
@@ -60,7 +60,7 @@ def get_changed_files_and_lines():
             ['git', 'fetch', 'origin'],
             capture_output=True, text=True, cwd=collection_root, check=False
         )
-        
+
         if fetch_all_result.returncode == 0:
             print("Successfully fetched all branches")
 
