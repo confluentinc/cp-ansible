@@ -43,7 +43,7 @@ def get_changed_files_and_lines():
         # Get changed files
         result = subprocess.run(
             ['git', 'diff', '--name-only', f'origin/{base_branch}...{current_branch}'],
-            capture_output=True, text=True, cwd=os.getcwd(), check=False
+            capture_output=True, text=True, cwd=os.environ.get('PATH_TO_CPA', os.getcwd()), check=False
         )
 
         if result.returncode != 0:
