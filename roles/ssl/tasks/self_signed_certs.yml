@@ -41,54 +41,8 @@
       -extensions v3_req
   no_log: "{{mask_secrets|bool}}"
 
-- name: Create temp directory for individual certificates
-  tempfile:
-    state: directory
-    suffix: individual_certs
-  register: temp_dir
-
-- name: Split CA Cert Bundle into Individual Certificates
-  shell: |
-    awk 'BEGIN {n=0} /BEGIN CERTIFICATE/{n++} {print > "{{ temp_dir.path }}/ca." n ".pem"}' {{ ca_cert_path }}
-  changed_when: false
-
-- name: Split Signed Cert Bundle - Extract Last Certificate
-  shell: |
-    awk '
-      /BEGIN CERTIFICATE/,/END CERTIFICATE/ {
-        cert = cert $0 "\n"
-      }
-      /END CERTIFICATE/ {
-        last_cert = cert
-        cert = ""
-      }
-      END {
-        print last_cert
-      }' {{ cert_path }} > "{{ temp_dir.path }}/signed.last.pem"
-  changed_when: false
-
-- name: Verify and Build Certificate Chain
-  shell: |
-    for ca_file in {{ temp_dir.path }}/ca.*.pem; do
-      # Verify using the last certificate from the chain
-      if openssl verify -CAfile "$ca_file" "{{ temp_dir.path }}/signed.last.pem"; then
-        # If verification succeeds, create the chain using original cert/chain
-        cat {{ cert_path }} "$ca_file" > "{{ ssl_file_dir_final }}/{{ service_name }}.chain"
-        echo "Chain completed with: $ca_file"
-        exit 0
-      fi
-    done
-    echo "No valid CA found to complete the chain" >&2
-    exit 1
-  register: chain_result
-  failed_when: chain_result.rc != 0
-  changed_when: chain_result.rc == 0
-
-- name: Cleanup Temp Directory
-  file:
-    path: "{{ temp_dir.path }}"
-    state: absent
-  changed_when: false
+- name: Build Certificate Chain
+  include_tasks: build_certificate_chain.yml
 
 - name: Create Keystore and Truststore from Certs
   include_tasks: create_keystores_from_certs.yml
