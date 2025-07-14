@@ -56,7 +56,7 @@
 - name: Install the Kafka Controller Packages
   yum:
     name: "{{ kafka_controller_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
-    state: latest
+    state: present
   register: install_kafka_package_result
   until: install_kafka_package_result is success  or ansible_check_mode
   retries: 5
@@ -74,6 +74,7 @@
 - name: Install the Kafka Controller Packages
   apt:
     name: "{{ kafka_controller_packages | product([confluent_package_debian_suffix]) | map('join') | list }}"
+    state: present
   register: install_kafka_package_result
   until: install_kafka_package_result is success  or ansible_check_mode
   retries: 5
@@ -117,7 +118,7 @@
     src: "{{ ((binary_base_path, 'lib/systemd/system') | path_join if installation_method=='archive' else systemd_base_dir, kafka_broker.systemd_file|basename) | path_join }}"
     remote_src: true
     dest: "{{kafka_controller.systemd_file}}"
-    mode: '644'
+    mode: 0644
     force: true
   tags:
     - systemd
@@ -210,7 +211,7 @@
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
     state: directory
-    mode: '750'
+    mode: 0750
   tags:
     - privileged
     - filesystem
@@ -219,7 +220,7 @@
   file:
     path: "{{ kafka_controller.config_file | dirname }}"
     state: directory
-    mode: '750'
+    mode: 0750
     owner: "{{kafka_controller_user}}"
     group: "{{kafka_controller_group}}"
   tags:
@@ -312,7 +313,7 @@
   file:
     path: "{{ logredactor_rule_path | dirname }}"
     state: directory
-    mode: '755'
+    mode: 0755
   when: (kafka_controller_custom_log4j2|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
@@ -322,7 +323,7 @@
   copy:
     src: "{{ logredactor_rule_path_local }}"
     dest: "{{ logredactor_rule_path }}"
-    mode: '644'
+    mode: 0644
   when: (kafka_controller_custom_log4j2|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
@@ -340,6 +341,7 @@
     src: "{{ kafka_controller.log4j_file }}"
     dest: "{{ kafka_controller.log4j_file }}.bak"
     remote_src: true
+    mode: preserve
   when: log4j_file_stat.stat.exists
   tags:
     - log
@@ -468,6 +470,7 @@
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
+  changed_when: false
   notify: restart Kafka Controller
   when: certs_updated|bool
 
