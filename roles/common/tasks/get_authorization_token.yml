@@ -1,7 +1,7 @@
 ---
 # Step 0: Setup
 - name: Ensure temporary directory exists
-  file:
+  ansible.builtin.file:
     path: /tmp/oauth_temp
     state: directory
     mode: '0700'
@@ -40,7 +40,7 @@
 - name: Generate local JWT assertion
   block:
     - name: Get current timestamp (fresh)
-      shell: date +%s
+      command: date +%s
       register: current_time_result
       changed_when: false
 
@@ -135,11 +135,13 @@
 
     - name: Sign JWT with private key
       shell: |
+        set -o pipefail
         echo -n "{{ jwt_signing_input }}" | \
         openssl dgst -sha256 -sign "{{ oauth_client_assertion_private_key_file }}" \
         {% if oauth_client_assertion_private_key_passphrase | default('none') != 'none' %}-passin pass:"{{ oauth_client_assertion_private_key_passphrase }}"{% endif %} | \
         base64 | tr -d '\n' | tr '+/' '-_' | tr -d '='
       register: jwt_signature_result
+      changed_when: jwt_signature_result.rc == 0
       no_log: "{{ mask_secrets | bool }}"
 
     - name: Assemble final JWT
@@ -206,6 +208,7 @@
   retries: 10
   delay: 5
   until: auth_token_oauth.status == 200
+  changed_when: false
   no_log: "{{ mask_secrets | bool }}"
   when:
     - oauth | bool
@@ -230,6 +233,7 @@
   until: auth_token_oauth_basic.status == 200
   retries: 10
   delay: 5
+  changed_when: false
   no_log: "{{mask_secrets|bool}}"
   when:
     - oauth|bool
@@ -252,6 +256,7 @@
   until: auth_token_mds.status == 200
   retries: "{{ mds_retries }}"
   delay: 5
+  changed_when: false
   no_log: "{{mask_secrets|bool}}"
   when:
     - cluster_id_source | default('erp') == 'erp'
@@ -273,6 +278,7 @@
   until: auth_token_mds_mtls.status == 200
   retries: "{{ mds_retries }}"
   delay: 5
+  changed_when: false
   no_log: "{{mask_secrets|bool}}"
   when:
     - cluster_id_source | default('erp') == 'erp'
@@ -294,7 +300,7 @@
 
 # Step 8: Cleanup
 - name: Clean up temporary files
-  file:
+  ansible.builtin.file:
     path: /tmp/oauth_temp
     state: absent
   when: oauth | bool and oauth_client_assertion_enabled | default(false) | bool
