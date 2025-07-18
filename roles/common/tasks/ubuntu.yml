@@ -28,7 +28,7 @@
 - name: Download Confluent Common Repository Key
   ansible.builtin.get_url:
     url: "{{ confluent_common_repository_debian_key_url }}"
-    dest: /usr/share/keyrings/confluent-common-archive-keyring.gpg
+    dest: /tmp/confluent-common-archive-keyring.gpg.tmp
     mode: '0644'
   register: download_common_key_result
   until: download_common_key_result is success
@@ -38,15 +38,76 @@
     - repository_configuration == 'confluent'
     - installation_method == "package"
 
+- name: De-armor and Install Confluent Common Repository Key
+  ansible.builtin.command:
+    cmd: "gpg --dearmor -o /usr/share/keyrings/confluent-common-archive-keyring.gpg {{ download_common_key_result.dest }}"
+  args:
+    creates: /usr/share/keyrings/confluent-common-archive-keyring.gpg
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+    - download_common_key_result.changed or not (download_common_key_result is skipped)
+
 - name: Download Confluent Control Center Next Gen Repository Key
   ansible.builtin.get_url:
     url: "{{ confluent_control_center_next_gen_repository_debian_key_url }}"
-    dest: /usr/share/keyrings/confluent-cc-archive-keyring.gpg
+    dest: /tmp/confluent-cc-archive-keyring.gpg.tmp
     mode: '0644'
   register: download_cc_key_result
   until: download_cc_key_result is success
   retries: 5
   delay: 90
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+
+- name: De-armor and Install Confluent Control Center Next Gen Repository Key
+  ansible.builtin.command:
+    cmd: "gpg --dearmor -o /usr/share/keyrings/confluent-cc-archive-keyring.gpg {{ download_cc_key_result.dest }}"
+  args:
+    creates: /usr/share/keyrings/confluent-cc-archive-keyring.gpg
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+    - download_cc_key_result.changed or not (download_cc_key_result is skipped)
+
+- name: Clean up temporary key files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/confluent-common-archive-keyring.gpg.tmp
+    - /tmp/confluent-cc-archive-keyring.gpg.tmp
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+
+- name: Verify Confluent Common Repository Key
+  shell: gpg --show-keys /usr/share/keyrings/confluent-common-archive-keyring.gpg
+  register: common_key_verification
+  changed_when: false
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+
+- name: Display Confluent Common Repository Key Fingerprint
+  debug:
+    msg: "Confluent Common Repository Key: {{ common_key_verification.stdout_lines }}"
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+
+- name: Verify Confluent Control Center Next Gen Repository Key
+  shell: gpg --show-keys /usr/share/keyrings/confluent-cc-archive-keyring.gpg
+  register: cc_key_verification
+  changed_when: false
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+
+- name: Display Confluent Control Center Next Gen Repository Key Fingerprint
+  debug:
+    msg: "Confluent Control Center Next Gen Repository Key: {{ cc_key_verification.stdout_lines }}"
   when:
     - repository_configuration == 'confluent'
     - installation_method == "package"
