@@ -1,15 +1,17 @@
 ---
 - name: Check if Data Directories are Formatted
-  shell: "{{ binary_base_path }}/bin/kafka-storage info -c {{ kafka_controller.config_file }}"
+  command: "{{ binary_base_path }}/bin/kafka-storage info -c {{ kafka_controller.config_file }}"
   ignore_errors: true
   failed_when: false
+  changed_when: false
   register: formatted
 
 - name: Get ClusterId
-  shell: "{{ binary_base_path }}/bin/kafka-storage random-uuid"
+  command: "{{ binary_base_path }}/bin/kafka-storage random-uuid"
   environment:
     KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
   register: uuid_key
+  changed_when: false
   run_once: true
 
 - name: Format Data Directory and Add Scram Credentials
@@ -20,6 +22,7 @@
     {% if 'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms %}--add-scram 'SCRAM-SHA-256=[name={{ sasl_scram256_users_final.admin.principal }},password={{ sasl_scram256_users_final.admin.password }}]' {% endif %} \
     --ignore-formatted
   register: format_meta
+  changed_when: format_meta.rc == 0
   vars:
     clusterid: "{{ uuid_key.stdout }}"
   when: formatted.rc == 1
