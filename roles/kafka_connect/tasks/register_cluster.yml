@@ -14,7 +14,6 @@
   import_role:
     name: common
     tasks_from: rbac_setup.yml
-  when: rbac_enabled
   vars:
     copy_certs: false
     delegated_to_localhost: "{{ external_mds_enabled|bool }}"
@@ -25,17 +24,22 @@
   # For single cluster delegating this task to broker as in case of cert based token retrival only broker can get a super user token using its certs
   # For Centralized MDS other clusters can't delegate to MDS cluster as that cluster may not have permissions to ssh into MDS, thus delegate to localhost
 
-- name: Fetch Kafka Connect Cluster Groups
+- name: Lookup cluster hosts
+  vars:
+    - connect_cluster_workers: []
   set_fact:
-    active_kafka_connect_groups: "{{ (((active_kafka_connect_groups | default([])) + hostvars[item].group_names) | difference('kafka_connect'+'kafka_connect_parallel'+'kafka_connect_serial'+ 'kafka_broker'+ 'kafka_broker_parallel'+'kafka_broker_serial'+'ksql'+ 'ksql_parallel'+'ksql_serial'+'control_center_next_gen'+'control_center_next_gen_parallel'+'control_center_next_gen_serial'+'schema_registry'+'kafka_rest'+'kafka_rest_parallel'+'kafka_rest_serial'+'kafka_controller'+'kafka_controller_parallel'+'kafka_controller_serial')) | default(['kafka_connect'], true) }}"
-  with_items: "{{ ansible_play_hosts }}"
+    connect_cluster_workers: "{{ connect_cluster_workers + [ { 'host': hostvars[item]['ansible_host'], 'port': kafka_connect_rest_port } ] }}"
+  loop: "{{ groups['kafka_connect'] }}"
 
 - name: Register Kafka Connect Cluster
   vars:
-    cluster_host_delegates: "{{ active_kafka_connect_groups | map('extract', groups, 0)| list }}"
-    cluster_group: "{{ hostvars[item].parent_kafka_connect_cluster_group }}"
-    cluster_name: "{{ hostvars[item].kafka_connect_cluster_name }}"
-    cluster_id: "{{ hostvars[item].parent_kafka_connect_cluster_id }}"
+    cluster_register_request:
+      - clusterName: "{{ kafka_connect_cluster_name }}"
+        protocol: "{{ kafka_connect_http_protocol | upper }}"
+        scope:
+          kafka-cluster: "{{ kafka_cluster_id }}"
+          connect-cluster: "{{ kafka_connect_final_properties['group.id'] }}"
+        hosts: "{{ connect_cluster_workers }}"
   uri:
     url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/registry/clusters"
     method: POST
@@ -46,27 +50,9 @@
     client_cert: "{{ kafka_connect_cert_path if send_client_cert|bool else omit }}"
     client_key: "{{ kafka_connect_key_path if send_client_cert|bool else omit }}"
     body_format: json
-    body: >
-      [
-          {
-              "clusterName": "{{cluster_name}}",
-              "scope": {
-                  "clusters": {
-                      "kafka-cluster": "{{kafka_cluster_id}}",
-                      "connect-cluster": "{{cluster_id}}"
-                  }
-              },
-              "hosts": [ {% for inv_host in groups[cluster_group] %}{% if loop.index > 1%},{% endif %}{ "host": "{{hostvars[inv_host]|confluent.platform.resolve_hostname}}", "port": {% if hostvars[inv_host].kafka_connect_rest_port is defined %} {{hostvars[inv_host].kafka_connect_rest_port}} {% else %} {{kafka_connect_rest_port}} {% endif %} }{% endfor %} ],
-              "protocol": "{{kafka_connect_http_protocol | upper}}"
-          }
-      ]
+    body: "{{ cluster_register_request | to_json }}"
     status_code: 204
   register: output
   until: output.status == 204
   retries: "{{ mds_retries }}"
   delay: 10
-  when:
-    - hostvars[item].get("rbac_enabled", false)|bool
-    - hostvars[item].kafka_connect_cluster_name is defined
-    - hostvars[item].parent_kafka_connect_cluster_id is defined
-  with_items: "{{ cluster_host_delegates }}"
