@@ -18,51 +18,51 @@
   delay: 90
   tags: package
 
-- name: Download Confluent Common Repository Key
-  ansible.builtin.get_url:
-    url: "{{ confluent_common_repository_debian_key_url }}"
-    dest: /tmp/confluent-common-archive-keyring.gpg.tmp
-    mode: "0644"
-  register: download_common_key_result
-  until: download_common_key_result is success
+- name: Add Confluent Clients Repository using deb822_repository
+  ansible.builtin.deb822_repository:
+    name: confluent-clients
+    types:
+      - deb
+    uris:
+      - "{{ confluent_clients_repository_baseurl }}/clients/deb"
+    suites:
+      - "{{ confluent_common_repository_debian_release_version }}"
+    components:
+      - main
+    signed_by: "{{ confluent_clients_repository_debian_key_url }}"
+    state: present
+    update_cache: true
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+  register: add_clients_repo_result
+  until: add_clients_repo_result is success or ansible_check_mode
   retries: 5
   delay: 90
+  tags: package
+
+- name: Add Confluent Common Repository using deb822_repository
+  ansible.builtin.deb822_repository:
+    name: confluent-common
+    types:
+      - deb
+    uris:
+      - "{{ confluent_common_repository_baseurl }}/deb/{{ confluent_common_repository_debian_release_version }}"
+    suites:
+      - stable
+    components:
+      - main
+    signed_by: "{{ confluent_common_repository_debian_key_url }}"
+    state: present
+    update_cache: true
   when:
     - repository_configuration == 'confluent'
     - installation_method == "package"
-
-- name: De-armor and Install Confluent Common Repository Key
-  ansible.builtin.command:
-    cmd: "gpg --dearmor -o /usr/share/keyrings/confluent-common-archive-keyring.gpg {{ download_common_key_result.dest }}"
-  args:
-    creates: /usr/share/keyrings/confluent-common-archive-keyring.gpg
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-    - download_common_key_result.changed or not (download_common_key_result is skipped)
-
-- name: Download Confluent Control Center Next Gen Repository Key
-  ansible.builtin.get_url:
-    url: "{{ confluent_control_center_next_gen_repository_debian_key_url }}"
-    dest: /tmp/confluent-cc-archive-keyring.gpg.tmp
-    mode: "0644"
-  register: download_cc_key_result
-  until: download_cc_key_result is success
+  register: add_common_repo_result
+  until: add_common_repo_result is success or ansible_check_mode
   retries: 5
   delay: 90
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: De-armor and Install Confluent Control Center Next Gen Repository Key
-  ansible.builtin.command:
-    cmd: "gpg --dearmor -o /usr/share/keyrings/confluent-cc-archive-keyring.gpg {{ download_cc_key_result.dest }}"
-  args:
-    creates: /usr/share/keyrings/confluent-cc-archive-keyring.gpg
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-    - download_cc_key_result.changed or not (download_cc_key_result is skipped)
+  tags: package
 
 - name: Clean up temporary key files
   file:
@@ -75,145 +75,6 @@
   when:
     - repository_configuration == 'confluent'
     - installation_method == "package"
-
-- name: Verify Confluent Common Repository Key
-  shell: gpg --show-keys /usr/share/keyrings/confluent-common-archive-keyring.gpg
-  register: common_key_verification
-  changed_when: false
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Display Confluent Common Repository Key Fingerprint
-  debug:
-    msg: "Confluent Common Repository Key: {{ common_key_verification.stdout_lines }}"
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Verify Confluent Control Center Next Gen Repository Key
-  shell: gpg --show-keys /usr/share/keyrings/confluent-cc-archive-keyring.gpg
-  register: cc_key_verification
-  changed_when: false
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Display Confluent Control Center Next Gen Repository Key Fingerprint
-  debug:
-    msg: "Confluent Control Center Next Gen Repository Key: {{ cc_key_verification.stdout_lines }}"
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Ensure Custom Apt Repo does not Exists when repository_configuration is Confluent
-  file:
-    state: absent
-    path: /etc/apt/sources.list.d/custom_confluent.list
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-  notify:
-    - apt-get update
-
-- name: Add Confluent Repository
-  apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/confluent-common-archive-keyring.gpg] {{ confluent_common_repository_debian_baseurl }}/{{ confluent_repo_version }} stable main"
-    state: present
-    filename: confluent-common
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Add Confluent Control Center Next Gen Repository
-  apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/confluent-cc-archive-keyring.gpg] {{ confluent_control_center_next_gen_repository_debian_baseurl }} stable main"
-    state: present
-    filename: confluent-control-center-next-gen
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Download Confluent Clients Repository Key
-  ansible.builtin.get_url:
-    url: "{{ confluent_common_repository_debian_clients_key_url }}"
-    dest: /tmp/confluent-clients-archive-keyring.gpg.tmp
-    mode: "0644"
-  register: download_clients_key_result
-  until: download_clients_key_result is success
-  retries: 5
-  delay: 90
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: De-armor and Install Confluent Clients Repository Key
-  ansible.builtin.command:
-    cmd: "gpg --dearmor -o /usr/share/keyrings/confluent-clients-archive-keyring.gpg {{ download_clients_key_result.dest }}"
-  args:
-    creates: /usr/share/keyrings/confluent-clients-archive-keyring.gpg
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-    - download_clients_key_result.changed or not (download_clients_key_result is skipped)
-
-- name: Verify Confluent Clients Repository Key
-  shell: gpg --show-keys /usr/share/keyrings/confluent-clients-archive-keyring.gpg
-  register: clients_key_verification
-  changed_when: false
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Display Confluent Clients Repository Key Fingerprint
-  debug:
-    msg: "Confluent Clients Repository Key: {{ clients_key_verification.stdout_lines }}"
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Add Confluent Clients Apt Repo
-  apt_repository:
-    repo: "deb [signed-by=/usr/share/keyrings/confluent-clients-archive-keyring.gpg] {{ confluent_clients_repository_baseurl }}/clients/deb/ {{ confluent_common_repository_debian_release_version }} main"
-    state: present
-  register: apt_add_result
-  until: apt_add_result is success
-  retries: 10
-  delay: 5
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Ensure Confluent Apt Repo does not Exists when repository_configuration is Custom
-  apt_repository:
-    repo: "{{item}}"
-    state: absent
-  loop:
-    - "{{confluent_common_repository_debian_repository}}"
-    - "{{confluent_control_center_next_gen_repository_debian_repository}}"
-  when:
-    - repository_configuration == 'custom'
-
-- name: Ensure Confluent Clients Apt Repo does not Exists when repository_configuration is Custom
-  apt_repository:
-    repo: "{{confluent_common_repository_debian_clients_repository}}"
-    state: absent
-  when:
-    - repository_configuration == 'custom'
-
-- name: Add Custom Apt Repo
-  copy:
-    src: "{{custom_apt_repo_filepath}}"
-    dest: /etc/apt/sources.list.d/custom_confluent.list
-  register: apt_custom_add_result
-  until: apt_custom_add_result is success
-  retries: 5
-  delay: 90
-  when: repository_configuration == 'custom'
-  notify:
-    - apt-get update
-
-- meta: flush_handlers
 
 - name: Make Sure man pages Directory Exists
   file:
