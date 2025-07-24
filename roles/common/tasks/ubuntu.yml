@@ -18,102 +18,76 @@
   delay: 90
   tags: package
 
-- name: Add Confluent Apt Key
-  apt_key:
-    url: "{{item}}"
-    state: present
-  loop:
-    - "{{confluent_common_repository_debian_key_url}}"
-    - "{{confluent_control_center_next_gen_repository_debian_key_url}}"
-  register: apt_add_key_result
-  until: apt_add_key_result is success
+- name: Install python3-debian for deb822_repository module
+  apt:
+    name: python3-debian
+  register: install_python_debian_result
+  until: install_python_debian_result is success or ansible_check_mode
   retries: 5
   delay: 90
+  tags: package
+
+- name: Add Confluent Clients Repository using deb822_repository
+  ansible.builtin.deb822_repository:
+    name: confluent-clients
+    types:
+      - deb
+    uris:
+      - "{{ confluent_clients_repository_baseurl }}/clients/deb"
+    suites:
+      - "{{ 'stable' if confluent_common_repository_debian_release_version in ['noble'] else confluent_common_repository_debian_release_version }}"
+    components:
+      - main
+    signed_by: "{{ confluent_common_repository_debian_clients_key_url }}" # This should be a URL to the GPG key
+    state: present
   when:
     - repository_configuration == 'confluent'
     - installation_method == "package"
+  tags: package
 
-- name: Ensure Custom Apt Repo does not Exists when repository_configuration is Confluent
+- name: Add Confluent Common Repository using deb822_repository
+  ansible.builtin.deb822_repository:
+    name: confluent-common
+    types:
+      - deb
+    uris:
+      - "{{ confluent_common_repository_baseurl }}/deb/{{ confluent_repo_version }}"
+    suites:
+      - stable
+    components:
+      - main
+    signed_by: "{{ confluent_common_repository_debian_key_url }}" # This should be a URL to the GPG key
+    state: present
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+  tags: package
+
+- name: Update apt cache after repository configuration
+  apt:
+    update_cache: true
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+  tags: package
+
+- name: Clean up temporary key files
   file:
-    state: absent
-    path: /etc/apt/sources.list.d/custom_confluent.list
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-  notify:
-    - apt-get update
-
-- name: Add Confluent Apt Repo
-  apt_repository:
-    repo: "{{item}}"
-    state: present
-  loop:
-    - "{{confluent_common_repository_debian_repository}}"
-    - "{{confluent_control_center_next_gen_repository_debian_repository}}"
-  register: apt_add_result
-  until: apt_add_result is success
-  retries: 5
-  delay: 90
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Add Confluent Clients Apt Key
-  apt_key:
-    url: "{{confluent_common_repository_debian_clients_key_url}}"
-    state: present
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Add Confluent Clients Apt Repo
-  apt_repository:
-    repo: "{{confluent_common_repository_debian_clients_repository}}"
-    state: present
-  register: apt_add_result
-  until: apt_add_result is success
-  retries: 10
-  delay: 5
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Ensure Confluent Apt Repo does not Exists when repository_configuration is Custom
-  apt_repository:
-    repo: "{{item}}"
+    path: "{{ item }}"
     state: absent
   loop:
-    - "{{confluent_common_repository_debian_repository}}"
-    - "{{confluent_control_center_next_gen_repository_debian_repository}}"
+    - /tmp/confluent-common-archive-keyring.gpg.tmp
+    - /tmp/confluent-cc-archive-keyring.gpg.tmp
+    - /tmp/confluent-clients-archive-keyring.gpg.tmp
   when:
-    - repository_configuration == 'custom'
-
-- name: Ensure Confluent Clients Apt Repo does not Exists when repository_configuration is Custom
-  apt_repository:
-    repo: "{{confluent_common_repository_debian_clients_repository}}"
-    state: absent
-  when:
-    - repository_configuration == 'custom'
-
-- name: Add Custom Apt Repo
-  copy:
-    src: "{{custom_apt_repo_filepath}}"
-    dest: /etc/apt/sources.list.d/custom_confluent.list
-  register: apt_custom_add_result
-  until: apt_custom_add_result is success
-  retries: 5
-  delay: 90
-  when: repository_configuration == 'custom'
-  notify:
-    - apt-get update
-
-- meta: flush_handlers
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
 
 - name: Make Sure man pages Directory Exists
   file:
     path: /usr/share/man/man1
     state: directory
-    mode: '755'
+    mode: "755"
 
 - name: Custom Java Install
   include_tasks: custom_java_install.yml
