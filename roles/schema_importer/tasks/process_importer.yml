@@ -14,7 +14,7 @@
     api_config:
       schema.registry.url: "{{ base_config.remote_schema_registry_endpoint }}"
       basic.auth.credentials.source: "{{ 'USER_INFO' if base_config.remote_authentication_type == 'basic' else omit }}"
-      basic.auth.user.info: "{{ base_config.basic_username + ':' + base_config.basic_pwd if base_config.remote_authentication_type == 'basic' else omit }}"
+      basic.auth.user.info: "{{ base_config.basic_username + ':' + base_config.basic_password if base_config.remote_authentication_type == 'basic' else omit }}"
     schema_importer_final_config: "{{ api_config | combine(override_config) }}"
 
 - name: Check if Schema Importer exists
@@ -36,7 +36,7 @@
     body: "{{ importer_request_body }}"
     # 201: Successfully created new importer
     # 409: Importer already exists (conflict, but acceptable)
-    status_code: [201, 409]
+    status_code: [200]
     validate_certs: false
     user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
     password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
@@ -51,18 +51,62 @@
   register: importer_creation
   when: importer_check.status == 404
 
-- name: Update Schema Importer via API
+- name: Pause Schema Importer before update
   uri:
-    url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers/{{ schema_importer_config.name }}/config"
+    url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers/{{ schema_importer_config.name }}/pause"
     method: PUT
-    body_format: json
-    body: "{{ schema_importer_config.config }}"
+    status_code: [200, 202]
+    validate_certs: false
+    user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
+    password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+  register: importer_pause
+  when: importer_check.status == 200
+
+- name: Wait for Schema Importer to be paused
+  uri:
+    url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers/{{ schema_importer_config.name }}/status"
+    method: GET
     status_code: 200
     validate_certs: false
     user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
     password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+  register: pause_status
+  until: pause_status.json.state == 'PAUSED'
+  retries: 10
+  delay: 2
+  when: importer_check.status == 200
+
+- name: Update Schema Importer via API
+  uri:
+    url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers/{{ schema_importer_config.name }}"
+    method: PUT
+    body_format: json
+    body: "{{ importer_update_body }}"
+    status_code: 200
+    validate_certs: false
+    user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
+    password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+  vars:
+    # Include all updatable fields
+    base_update_body:
+      subjects: "{{ schema_importer_config.subjects }}"
+      config: "{{ schema_importer_config.config }}"
+    context_type_field: "{{ {'contextType': schema_importer_config.contextType} if schema_importer_config.contextType != 'AUTO' else {} }}"
+    context_field: "{{ {'context': schema_importer_config.context} if schema_importer_config.contextType not in ['NONE', 'AUTO'] else {} }}"
+    importer_update_body: "{{ base_update_body | combine(context_type_field) | combine(context_field) }}"
   register: importer_update
   when: importer_check.status == 200
+
+- name: Resume Schema Importer after update
+  uri:
+    url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers/{{ schema_importer_config.name }}/resume"
+    method: PUT
+    status_code: [200, 202]
+    validate_certs: false
+    user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
+    password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+  register: importer_resume
+  when: importer_check.status == 200 and importer_update is defined
 
 - name: Verify Schema Importer Status
   uri:
