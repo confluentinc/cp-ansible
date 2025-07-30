@@ -1,0 +1,166 @@
+---
+### Manual health check test for USM Agent using correct endpoint
+
+- name: Test USM Agent Health Endpoint
+  hosts: usm_agent
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Test healthz endpoint with curl
+      shell: |
+        curl -f -s -o /dev/null -w "%{http_code}" \
+        http://localhost:{{ usm_agent_admin_port | default(9901) }}/healthz
+      register: curl_health_check
+      retries: 15
+      delay: 10
+      until: curl_health_check.stdout == "200"
+
+    - name: Display health check result
+      debug:
+        msg: "Health check returned HTTP status: {{ curl_health_check.stdout }}"
+
+    - name: Verify USM Agent Configuration File Exists
+      stat:
+        path: "{{ usm_agent.config_file }}"
+      register: config_file_check
+
+    - name: Assert Configuration File Exists
+      assert:
+        that:
+          - config_file_check.stat.exists
+        fail_msg: "USM Agent configuration file does not exist"
+        success_msg: "USM Agent configuration file exists"
+
+    - name: Verify Basic Auth is Enabled in Properties
+      shell: "grep -q 'confluent.usm-agent.listener.dataplane.basic.auth.enabled=true' {{ usm_agent.config_file }}"
+      register: basic_auth_check
+
+    - name: Assert Basic Auth is Enabled
+      assert:
+        that:
+          - basic_auth_check.rc == 0
+        fail_msg: "Basic auth is not enabled in USM Agent properties"
+        success_msg: "Basic auth is enabled in USM Agent properties"
+
+    - name: Display CP Credential File Info
+      shell: "ls -la {{ usm_agent.cp_credential_file }}"
+      register: cp_cred_info
+
+    - name: Show CP credential file info
+      debug:
+        msg: "CP credential file: {{ cp_cred_info.stdout }}"
+
+    - name: Verify CP Credential File Contains Envoy Format
+      shell: "grep -q 'envoy.filters.http.basic_auth' {{ usm_agent.cp_credential_file }}"
+      register: envoy_format_check
+
+    - name: Verify CP Credential File Contains SHA1 Hashes
+      shell: "grep -q '{SHA}' {{ usm_agent.cp_credential_file }}"
+      register: sha1_format_check
+
+    - name: Assert Envoy Format is Correct
+      assert:
+        that:
+          - envoy_format_check.rc == 0
+          - sha1_format_check.rc == 0
+        fail_msg: "CP credential file does not contain correct Envoy basic auth format with SHA1 hashes"
+        success_msg: "CP credential file contains correct Envoy format with SHA1 hashes"
+
+    - name: Verify File Permissions are 640
+      stat:
+        path: "{{ usm_agent.cp_credential_file }}"
+      register: cp_cred_permissions
+
+    - name: Assert Correct File Permissions
+      assert:
+        that:
+          - cp_cred_permissions.stat.mode == '0640'
+        fail_msg: "CP credential file does not have correct permissions (should be 640)"
+        success_msg: "CP credential file has correct permissions (640)"
+
+    - name: Verify CA Certificates Package is Installed
+      package_facts:
+        manager: auto
+
+    - name: Assert CA Certificates Package is Present
+      assert:
+        that:
+          - "'ca-certificates' in ansible_facts.packages"
+        fail_msg: "ca-certificates package is not installed"
+        success_msg: "ca-certificates package is installed"
+
+    - name: Verify TLS Certificate Path is Configured
+      shell: "grep -q 'confluent.usm-agent.ccloud.ssl.trusted.ca.location' {{ usm_agent.config_file }}"
+      register: tls_cert_config_check
+
+    - name: Assert TLS Certificate Configuration is Present
+      assert:
+        that:
+          - tls_cert_config_check.rc == 0
+        fail_msg: "TLS certificate configuration not found in USM Agent properties"
+        success_msg: "TLS certificate configuration found in USM Agent properties"
+
+    - name: Verify Certificate File Exists
+      stat:
+        path: "{{ usm_agent_ccloud_ssl_trusted_ca_location }}"
+      register: cert_file_stat
+
+    - name: Assert Certificate File Exists
+      assert:
+        that:
+          - cert_file_stat.stat.exists
+        fail_msg: "TLS certificate file does not exist at {{ usm_agent_ccloud_ssl_trusted_ca_location }}"
+        success_msg: "TLS certificate file exists at {{ usm_agent_ccloud_ssl_trusted_ca_location }}"
+
+- name: Test USM Agent Client Configuration in CP Components
+  hosts: kafka_controller:kafka_broker:kafka_connect
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Get component name for logging
+      set_fact:
+        component_name: "{{ 'kafka-controller' if inventory_hostname in groups['kafka_controller'] else ('kafka-broker' if inventory_hostname in groups['kafka_broker'] else 'kafka-connect') }}"
+
+    - name: Get config file path based on component
+      set_fact:
+        component_config_file: >-
+          {%- if inventory_hostname in groups['kafka_controller'] -%}
+          {{ kafka_controller.config_file }}
+          {%- elif inventory_hostname in groups['kafka_broker'] -%}
+          {{ kafka_broker.config_file }}
+          {%- elif inventory_hostname in groups['kafka_connect'] -%}
+          {{ kafka_connect.config_file }}
+          {%- endif -%}
+
+    - name: Verify USM Agent Telemetry is Enabled
+      shell: "grep -q 'confluent.telemetry.enabled=true' {{ component_config_file }}"
+      register: telemetry_enabled_check
+
+    - name: Verify USM Agent Base URL is Set
+      shell: "grep -q 'confluent.telemetry.base.url={{ usm_agent_url }}' {{ component_config_file }}"
+      register: base_url_check
+
+    - name: Verify USM Agent Basic Auth Credentials
+      shell: "grep -q 'confluent.telemetry.api.key={{ usm_agent_user }}' {{ component_config_file }}"
+      register: api_key_check
+
+    - name: Assert USM Agent Client Configuration
+      assert:
+        that:
+          - telemetry_enabled_check.rc == 0
+          - base_url_check.rc == 0
+          - api_key_check.rc == 0
+        fail_msg: "USM Agent client configuration not found in {{ component_name }} config"
+        success_msg: "USM Agent client configuration verified for {{ component_name }}"
+
+    - name: Show component config snippet (for debugging)
+      shell: "grep -A5 -B5 'confluent.telemetry' {{ component_config_file }} || echo 'No telemetry config found'"
+      register: config_snippet
+
+    - name: Display config snippet
+      debug:
+        msg: "{{ component_name }} USM config: {{ config_snippet.stdout_lines }}"

@@ -1,0 +1,137 @@
+---
+### Test USM Agent Plain Deployment (No Authentication) with CP Components
+
+- name: Test USM Agent Plain Configuration (No Auth)
+  hosts: usm_agent
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Test healthz endpoint with curl
+      shell: |
+        curl -f -s -o /dev/null -w "%{http_code}" \
+        http://localhost:{{ usm_agent_admin_port | default(9901) }}/healthz
+      register: curl_health_check
+      retries: 15
+      delay: 10
+      until: curl_health_check.stdout == "200"
+
+    - name: Display health check result
+      debug:
+        msg: "Health check returned HTTP status: {{ curl_health_check.stdout }}"
+
+    - name: Verify USM Agent Configuration File Exists
+      stat:
+        path: "{{ usm_agent.config_file }}"
+      register: config_file_check
+
+    - name: Assert Configuration File Exists
+      assert:
+        that:
+          - config_file_check.stat.exists
+        fail_msg: "USM Agent configuration file does not exist"
+        success_msg: "USM Agent configuration file exists"
+
+    - name: Verify Basic Auth is Disabled in Properties
+      shell: "grep -q 'confluent.usm-agent.listener.dataplane.basic.auth.enabled=false' {{ usm_agent.config_file }}"
+      register: basic_auth_disabled_check
+
+    - name: Verify SSL is Disabled in Properties
+      shell: "grep -q 'confluent.usm-agent.listener.dataplane.ssl.enabled=false' {{ usm_agent.config_file }}"
+      register: ssl_disabled_check
+
+    - name: Assert No Authentication Configuration
+      assert:
+        that:
+          - basic_auth_disabled_check.rc == 0
+          - ssl_disabled_check.rc == 0
+        fail_msg: "USM Agent should have no authentication enabled"
+        success_msg: "USM Agent correctly has no authentication enabled"
+
+    - name: Verify Basic Auth Credential File Does NOT Exist (Plain mode)
+      stat:
+        path: "{{ usm_agent.cp_credential_file }}"
+      register: cp_cred_file_check
+
+    - name: Assert Basic Auth Credential File Does NOT Exist
+      assert:
+        that:
+          - not cp_cred_file_check.stat.exists
+        fail_msg: "USM Agent basic auth credential file should not exist in plain mode"
+        success_msg: "USM Agent basic auth credential file correctly does not exist in plain mode"
+
+    - name: Verify SSL Certificate Files Do NOT Exist (Plain mode)
+      stat:
+        path: "{{ item }}"
+      register: ssl_file_checks
+      loop:
+        - "{{ usm_agent_cert_path }}"
+        - "{{ usm_agent_key_path }}"
+        - "{{ usm_agent_ca_cert_path }}"
+      failed_when: false
+
+    - name: Assert SSL Certificate Files Do NOT Exist
+      assert:
+        that:
+          - not item.stat.exists
+        fail_msg: "SSL certificate file {{ item.item }} should not exist in plain mode"
+        success_msg: "SSL certificate file {{ item.item }} correctly does not exist in plain mode"
+      loop: "{{ ssl_file_checks.results }}"
+
+- name: Test USM Agent Client Configuration in CP Components (Plain HTTP, No Auth)
+  hosts: kafka_controller:kafka_broker:kafka_connect
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Get component name for logging
+      set_fact:
+        component_name: "{{ 'kafka-controller' if inventory_hostname in groups['kafka_controller'] else ('kafka-broker' if inventory_hostname in groups['kafka_broker'] else 'kafka-connect') }}"
+
+    - name: Get config file path based on component
+      set_fact:
+        component_config_file: >-
+          {%- if inventory_hostname in groups['kafka_controller'] -%}
+          {{ kafka_controller.config_file }}
+          {%- elif inventory_hostname in groups['kafka_broker'] -%}
+          {{ kafka_broker.config_file }}
+          {%- elif inventory_hostname in groups['kafka_connect'] -%}
+          {{ kafka_connect.config_file }}
+          {%- endif -%}
+
+    - name: Verify USM Agent Telemetry is Enabled
+      shell: "grep -q 'confluent.telemetry.enabled=true' {{ component_config_file }}"
+      register: telemetry_enabled_check
+
+    - name: Verify USM Agent Base URL is Set with HTTP (not HTTPS)
+      shell: "grep -q 'confluent.telemetry.base.url={{ usm_agent_url }}' {{ component_config_file }}"
+      register: base_url_check
+
+    - name: Verify USM Agent Dummy Credentials (No Auth mode)
+      shell: "grep -q 'confluent.telemetry.api.key=dummy' {{ component_config_file }}"
+      register: dummy_key_check
+
+    - name: Verify SSL Configuration is NOT Present
+      shell: "grep 'confluent.telemetry.exporter._confluent.https.ssl' {{ component_config_file }}"
+      register: ssl_config_check
+      failed_when: false
+
+    - name: Assert USM Agent Client Configuration (Plain HTTP, No Auth)
+      assert:
+        that:
+          - telemetry_enabled_check.rc == 0
+          - base_url_check.rc == 0
+          - dummy_key_check.rc == 0
+          - ssl_config_check.rc != 0  # Should NOT find SSL config
+        fail_msg: "USM Agent client configuration (Plain HTTP, No Auth) not correct in {{ component_name }} config"
+        success_msg: "USM Agent client configuration (Plain HTTP, No Auth) verified for {{ component_name }}"
+
+    - name: Show component config snippet (for debugging)
+      shell: "grep -A10 -B5 'confluent.telemetry' {{ component_config_file }} || echo 'No telemetry config found'"
+      register: config_snippet
+
+    - name: Display config snippet
+      debug:
+        msg: "{{ component_name }} USM config: {{ config_snippet.stdout_lines }}"

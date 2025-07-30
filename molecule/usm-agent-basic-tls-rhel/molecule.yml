@@ -1,0 +1,105 @@
+---
+dependency:
+  name: galaxy
+driver:
+  name: docker
+platforms:
+  - name: controller1
+    hostname: controller1.confluent
+    groups:
+      - kafka_controller
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: usm-agent1
+    hostname: usm-agent1.confluent
+    groups:
+      - usm_agent
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9901:9901"  # USM Agent admin port
+      - "9999:9999"  # USM Agent control plane port
+      - "10000:10000" # USM Agent data plane port
+    networks:
+      - name: confluent
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      callbacks_enabled: profile_tasks
+      stdout_callback: yaml
+      bin_ansible_callbacks: true
+  inventory:
+    group_vars:
+      all:
+        scenario_name: usm-agent-basic-tls-rhel
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: false
+        self_signed: true
+
+        # Test basic auth + TLS configuration (SSL enabled, no mutual auth)
+        usm_agent_basic_users:
+          admin:
+            principal: admin
+            password: admin-secret
+            roles: admin
+          cluster1:
+            principal: kafka-cluster1
+            password: cluster1-secret
+            roles: user
+          cluster2:
+            principal: kafka-cluster2
+            password: cluster2-secret
+            roles: user
+
+        # CCloud configuration (using staging values)
+        ccloud_credential:
+          username: "test-ccloud-key"
+          password: "test-ccloud-secret"
+        ccloud_endpoint: "https://psrc-stgc48jdn27.us-east-1.aws.stag.cpdev.cloud"
+        ccloud_environment_id: "env-stgc7mqgjw"
+
+        # USM Agent Client Configuration for CP components (Basic Auth + TLS)
+        usm_agent_url: "https://usm-agent1.confluent:10000"
+        usm_agent_client_auth_type: plain
+        usm_agent_client_ssl_enabled: true
+        usm_agent_client_ssl_mutual_auth_enabled: false
+        usm_agent_user: "kafka-cluster1"
+        usm_agent_password: "cluster1-secret"
+
+verifier:
+  name: ansible
