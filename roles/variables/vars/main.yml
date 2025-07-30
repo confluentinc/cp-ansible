@@ -1275,6 +1275,38 @@ schema_registry_properties:
     enabled: "{{schema_registry_telemetry_ansible_labels_enabled}}"
     properties:
       confluent.telemetry.labels.confluent.ansible.playbooks.version: "{{confluent_ansible_branch}}"
+  schema_exporter:
+    enabled: "{{ schema_exporters is defined and unified_stream_manager is defined and unified_stream_manager.remote_schema_registry_endpoint == 'none' and schema_importers is not defined }}"
+    properties:
+      resource.extension.class: io.confluent.schema.exporter.SchemaExporterResourceExtension
+  schema_importer:
+    enabled: "{{ schema_importers is defined and unified_stream_manager is defined and unified_stream_manager.remote_schema_registry_endpoint == 'none' and schema_exporters is not defined }}"
+    properties:
+      resource.extension.class: io.confluent.schema.importer.SchemaImporterResourceExtension,io.confluent.dekregistry.DekRegistryResourceExtension
+  schema_exporter_and_importer:
+    enabled: "{{ schema_importers is defined and schema_exporters is defined and unified_stream_manager is defined and unified_stream_manager.remote_schema_registry_endpoint == 'none' }}"
+    properties:
+      resource.extension.class: io.confluent.schema.importer.SchemaImporterResourceExtension,io.confluent.dekregistry.DekRegistryResourceExtension,io.confluent.schema.exporter.SchemaExporterResourceExtension
+  usm_sr:
+    enabled: "{{unified_stream_manager is defined and unified_stream_manager.remote_schema_registry_endpoint != 'none'}}" # enables the USM schema registry extension
+    properties:
+      resource.extension.class: io.confluent.schema.registry.usm.UsmSchemaRegistryExtension,io.confluent.schema.importer.SchemaImporterResourceExtension,io.confluent.schema.exporter.SchemaExporterResourceExtension,io.confluent.dekregistry.DekRegistryResourceExtension
+      usm.schema.registry.remote.endpoint: "{{ unified_stream_manager.remote_schema_registry_endpoint }}"
+      usm.schema.registry.remote.api.key: "{{ unified_stream_manager.basic_username }}"
+      usm.schema.registry.remote.api.secret: "{{ unified_stream_manager.basic_password }}"
+  usm_context_prefix:
+    enabled: "{{unified_stream_manager is defined and unified_stream_manager.remote_context is defined and unified_stream_manager.remote_context != ''}}"
+    properties:
+      usm.schema.registry.remote.context.prefix: "{{ unified_stream_manager.remote_context | default('') }}"
+  sr_encoder:
+    enabled: "{{ schema_exporters is defined or (unified_stream_manager is defined and unified_stream_manager.remote_schema_registry_endpoint == 'none') or schema_importers is defined }}"
+    properties:
+      password.encoder.secret: "{{ password_encoder_secret }}"
+  exporter_config:
+    enabled: "{{schema_exporters is defined or (unified_stream_manager is defined and unified_stream_manager.remote_schema_registry_endpoint != 'none')}}"
+    properties:
+      kafkastore.update.handlers: io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler
+
 
 schema_registry_combined_properties: "{{schema_registry_properties | confluent.platform.combine_properties}}"
 
