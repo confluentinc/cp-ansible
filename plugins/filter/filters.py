@@ -670,12 +670,13 @@ class FilterModule(object):
 
         return ','.join(enabled_extensions)
 
-    def schema_registry_extension_classes(self, rbac_enabled, schema_exporters_defined):
+    def schema_registry_extension_classes(self, rbac_enabled, schema_exporters_defined, schema_importers_defined):
         """
         Generates comma-separated list of Schema Registry resource extension classes based on enabled features.
         """
         extensions_dict = {
             'rbac': [rbac_enabled, 'io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension'],
-            'schema_exporter': [schema_exporters_defined, 'io.confluent.schema.exporter.SchemaExporterResourceExtension']
+            'schema_exporter': [schema_exporters_defined, 'io.confluent.schema.exporter.SchemaExporterResourceExtension'],
+            'schema_importer': [schema_importers_defined, 'io.confluent.schema.importer.SchemaImporterResourceExtension,io.confluent.dekregistry.DekRegistryResourceExtension'],
         }
         return self.combine_extension_classes(extensions_dict)
