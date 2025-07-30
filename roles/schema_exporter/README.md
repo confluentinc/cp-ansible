@@ -43,6 +43,8 @@ schema_exporter:
       remote_authentication_type: "basic"
       basic_username: "client-id"
       basic_password: "client-secret"
+
+password_encoder_secret: "secret"
 ```
 
 This example shows:
