@@ -1,0 +1,91 @@
+---
+dependency:
+  name: galaxy
+driver:
+  name: docker
+platforms:
+  - name: controller1
+    hostname: controller1.confluent
+    groups:
+      - kafka_controller
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: usm-agent1
+    hostname: usm-agent1.confluent
+    groups:
+      - usm_agent
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9901:9901"  # USM Agent admin port
+      - "9999:9999"  # USM Agent control plane port
+      - "10000:10000" # USM Agent data plane port
+    networks:
+      - name: confluent
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      callbacks_enabled: profile_tasks
+      stdout_callback: yaml
+      bin_ansible_callbacks: true
+  inventory:
+    group_vars:
+      all:
+        scenario_name: usm-agent-mtls-rhel
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
+        self_signed: true
+
+        # Test mTLS authentication (SSL + mutual auth enabled, no basic auth users)
+        # USM Agent will use mTLS for authentication (no basic auth users defined)
+
+        # CCloud configuration (using staging values)
+        ccloud_credential:
+          username: "test-ccloud-key"
+          password: "test-ccloud-secret"
+        ccloud_endpoint: "https://psrc-stgc48jdn27.us-east-1.aws.stag.cpdev.cloud"
+        ccloud_environment_id: "env-stgc7mqgjw"
+
+        # USM Agent Client Configuration for CP components (mTLS)
+        usm_agent_url: "https://usm-agent1.confluent:10000"
+        usm_agent_client_auth_type: mtls
+        usm_agent_client_ssl_enabled: true
+        usm_agent_client_ssl_mutual_auth_enabled: true
+
+verifier:
+  name: ansible
