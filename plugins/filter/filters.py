@@ -670,7 +670,6 @@ class FilterModule(object):
 
         return ','.join(enabled_extensions)
 
-
     def schema_registry_extension_classes(self, rbac_enabled, schema_exporters_defined):
         """
         Generates comma-separated list of Schema Registry resource extension classes based on enabled features.
