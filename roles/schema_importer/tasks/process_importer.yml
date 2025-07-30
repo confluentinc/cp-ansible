@@ -15,6 +15,7 @@
       schema.registry.url: "{{ base_config.remote_schema_registry_endpoint }}"
       basic.auth.credentials.source: "{{ 'USER_INFO' if base_config.remote_authentication_type == 'basic' else omit }}"
       basic.auth.user.info: "{{ base_config.basic_username + ':' + base_config.basic_password if base_config.remote_authentication_type == 'basic' else omit }}"
+      basic.auth.user.info: "{{ base_config.basic_username + ':' + base_config.basic_password if base_config.remote_authentication_type == 'basic' else omit }}"
     schema_importer_final_config: "{{ api_config | combine(override_config) }}"
 
 - name: Check if Schema Importer exists
@@ -28,7 +29,7 @@
   register: importer_check
   ignore_errors: true
 
-- name: Create Schema Importer via API
+- name: Create Schema Importer
   uri:
     url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers"
     method: POST
@@ -51,7 +52,7 @@
   register: importer_creation
   when: importer_check.status == 404
 
-- name: Pause Schema Importer before update
+- name: Pause Schema Importer
   uri:
     url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers/{{ schema_importer_config.name }}/pause"
     method: PUT
@@ -59,24 +60,13 @@
     validate_certs: false
     user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
     password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
-  register: importer_pause
-  when: importer_check.status == 200
-
-- name: Wait for Schema Importer to be paused
-  uri:
-    url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers/{{ schema_importer_config.name }}/status"
-    method: GET
-    status_code: 200
-    validate_certs: false
-    user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-    password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
-  register: pause_status
-  until: pause_status.json.state == 'PAUSED'
+  register: exporter_pause
+  until: exporter_pause.status in [200]
   retries: 10
   delay: 2
-  when: importer_check.status == 200
+  when: exporter_check.status == 200
 
-- name: Update Schema Importer via API
+- name: Update Schema Importer
   uri:
     url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers/{{ schema_importer_config.name }}"
     method: PUT
@@ -97,7 +87,7 @@
   register: importer_update
   when: importer_check.status == 200
 
-- name: Resume Schema Importer after update
+- name: Resume Schema Importer
   uri:
     url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers/{{ schema_importer_config.name }}/resume"
     method: PUT
@@ -120,21 +110,5 @@
 
 - name: Set Schema Importer State
   set_fact:
-    schema_importer_state: "{{ importer_status.json.state | default('Unknown') }}"
+    schema_importer_state: "{{ importer_status.json.state }}"
     schema_importer_configured: true
-
-- name: Log Schema Importer Creation Result
-  debug:
-    msg: |
-      Schema Importer '{{ schema_importer_config.name }}' configured successfully.
-      Status: {{ schema_importer_state }}
-      {% if schema_importer_state == 'PAUSED' and importer_status.json.trace is defined %}
-      Error: {{ importer_status.json.trace | regex_replace('\n', ' ') }}
-      {% endif %}
-      {% if importer_creation is defined and importer_creation.changed %}
-      Action: Created new importer
-      {% elif importer_update is defined and importer_update.changed %}
-      Action: Updated existing importer
-      {% else %}
-      Action: No changes needed
-      {% endif %}
