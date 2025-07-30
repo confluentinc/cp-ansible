@@ -38,6 +38,7 @@ class FilterModule(object):
             'resolve_and_format_hostnames': self.resolve_and_format_hostnames,
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
             'replace_client_assertion_file': self.replace_client_assertion_file,
+            'schema_registry_extension_classes': self.schema_registry_extension_classes,
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
@@ -626,3 +627,56 @@ class FilterModule(object):
                     users_dict[user].get('password').encode("utf-8"), bcrypt.gensalt()
                 ).decode()
         return username_with_hashed_passwords
+
+    def combine_extension_classes(self, extensions_config):
+        """
+        Combines extension classes from multiple enabled configurations into a comma-separated string.
+
+        Args:
+            extensions_config (dict): Dictionary where keys are feature names and values are tuples
+                                    of (enabled_condition, extension_class_name)
+
+        Returns:
+            str: Comma-separated list of extension classes for enabled features
+        """
+        if not isinstance(extensions_config, dict):
+            return ''
+
+        enabled_extensions = []
+
+        for config in extensions_config.values():
+            try:
+                # Handle both tuple (enabled, class_name) and dict formats
+                if isinstance(config, (list, tuple)) and len(config) >= 2:
+                    enabled = config[0]
+                    extension_class = config[1]
+                elif isinstance(config, dict) and 'enabled' in config and 'class' in config:
+                    enabled = config['enabled']
+                    extension_class = config['class']
+                else:
+                    continue
+
+                # Convert string boolean values to actual booleans
+                if isinstance(enabled, str):
+                    enabled = enabled.lower() in ('true', 'yes', '1', 'on')
+
+                # Add extension class if feature is enabled
+                if enabled and extension_class and extension_class.strip():
+                    enabled_extensions.append(extension_class.strip())
+
+            except (IndexError, KeyError, TypeError):
+                # Skip malformed entries
+                continue
+
+        return ','.join(enabled_extensions)
+
+    def schema_registry_extension_classes(self, rbac_enabled, schema_exporters_defined, schema_importers_defined):
+        """
+        Generates comma-separated list of Schema Registry resource extension classes based on enabled features.
+        """
+        extensions_dict = {
+            'rbac': [rbac_enabled, 'io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension'],
+            'schema_exporter': [schema_exporters_defined, 'io.confluent.schema.exporter.SchemaExporterResourceExtension'],
+            'schema_importer': [schema_importers_defined, 'io.confluent.schema.importer.SchemaImporterResourceExtension,io.confluent.dekregistry.DekRegistryResourceExtension'],
+        }
+        return self.combine_extension_classes(extensions_dict)
