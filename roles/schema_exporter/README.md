@@ -8,6 +8,51 @@ Schema exporters allow you to export schemas from one Schema Registry to another
 
 This role can be used to create and manage multiple schema exporters. Each exporter can be configured with different contexts, subjects, and authentication methods.
 
+## Sample Configuration
+
+Below is an example of how to configure a schema exporter in your inventory file:
+
+```yaml
+schema_exporter:
+  - name: "dev-to-staging-exporter"
+    context_type: "CUSTOM"
+    remote_context: "dev-context"
+    subjects: ["orders.*", "customers.*"]
+    subject_rename_format: "dc_${subject}"
+    kek_rename_format: "dc_${kek}"
+    config:
+      remote_schema_registry_endpoint: "http://dev-schema-registry:8081"
+      remote_authentication_type: "basic"
+      basic_username: "dev-user"
+      basic_password: "dev-password"
+
+  - name: "prod-backup-exporter"
+    context_type: "AUTO"
+    subjects: [*]  # Export all subjects
+    config:
+      remote_schema_registry_endpoint: "https://prod-schema-registry:8081"
+      remote_authentication_type: "basic"
+      basic_username: "prod-client-id"
+      basic_password: "prod-client-secret"
+
+  - name: "simple-exporter"
+    context_type: "NONE"
+    subjects: ["payment.*"]
+    config:
+      remote_schema_registry_endpoint: "http://remote-schema-registry:8081"
+      remote_authentication_type: "basic"
+      basic_username: "client-id"
+      basic_password: "client-secret"
+
+password_encoder_secret: "secret"
+```
+
+This example shows:
+- Different context types (CUSTOM, AUTO, NONE)
+- Subject filtering and renaming patterns
+- Basic authentication configuration
+- Custom configuration overrides
+
 ## Documentation
 
 You can find the documentation for running CP-Ansible at https://docs.confluent.io/current/installation/cp-ansible/index.html.
