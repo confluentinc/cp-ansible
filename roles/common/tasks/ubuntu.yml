@@ -89,17 +89,36 @@
     - installation_method == "package"
   tags: package
 
-- name: Clean up temporary key files
+- name: Ensure Confluent Apt Repo does not Exists when repository_configuration is Custom
   file:
-    path: "{{ item }}"
     state: absent
-  loop:
-    - /tmp/confluent-common-archive-keyring.gpg.tmp
-    - /tmp/confluent-cc-archive-keyring.gpg.tmp
-    - /tmp/confluent-clients-archive-keyring.gpg.tmp
+    path: /etc/apt/sources.list.d/custom_confluent.list
   when:
     - repository_configuration == 'confluent'
     - installation_method == "package"
+
+- name: Ensure Confluent deb822 repositories are not present when repository_configuration is custom
+  ansible.builtin.deb822_repository:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - confluent-clients
+    - confluent-common
+    - confluent-control-center-next-gen
+  when:
+    - repository_configuration == 'custom'
+
+- name: Add Custom Apt Repo
+  copy:
+    src: "{{custom_apt_repo_filepath}}"
+    dest: /etc/apt/sources.list.d/custom_confluent.list
+  register: apt_custom_add_result
+  until: apt_custom_add_result is success
+  retries: 5
+  delay: 90
+  when: repository_configuration == 'custom'
+  notify:
+    - apt-get update
 
 - name: Make Sure man pages Directory Exists
   file:
