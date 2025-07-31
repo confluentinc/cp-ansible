@@ -628,47 +628,44 @@ class FilterModule(object):
                 ).decode()
         return username_with_hashed_passwords
 
-    def combine_extension_classes(self, extensions_config):
+    def combine_enabled_values(self, config_dict):
         """
-        Combines extension classes from multiple enabled configurations into a comma-separated string.
+        Combines values from multiple enabled configurations into a comma-separated string.
 
         Args:
-            extensions_config (dict): Dictionary where keys are feature names and values are tuples
-                                    of (enabled_condition, extension_class_name)
+            config_dict (dict): Dictionary where keys are feature names and values are lists
+                               of [enabled_condition, value_to_include]
 
         Returns:
-            str: Comma-separated list of extension classes for enabled features
+            str: Comma-separated list of values for enabled features
         """
-        if not isinstance(extensions_config, dict):
+        if not isinstance(config_dict, dict):
             return ''
 
-        enabled_extensions = []
+        enabled_values = []
 
-        for config in extensions_config.values():
+        for config in config_dict.values():
             try:
-                # Handle both tuple (enabled, class_name) and dict formats
-                if isinstance(config, (list, tuple)) and len(config) >= 2:
-                    enabled = config[0]
-                    extension_class = config[1]
-                elif isinstance(config, dict) and 'enabled' in config and 'class' in config:
-                    enabled = config['enabled']
-                    extension_class = config['class']
-                else:
+                # Only accept list/tuple format - caller must provide proper format
+                if not isinstance(config, (list, tuple)) or len(config) < 2:
                     continue
+
+                enabled = config[0]
+                value = config[1]
 
                 # Convert string boolean values to actual booleans
                 if isinstance(enabled, str):
                     enabled = enabled.lower() in ('true', 'yes', '1', 'on')
 
-                # Add extension class if feature is enabled
-                if enabled and extension_class and extension_class.strip():
-                    enabled_extensions.append(extension_class.strip())
+                # Add value if feature is enabled
+                if enabled and value and value.strip():
+                    enabled_values.append(value.strip())
 
-            except (IndexError, KeyError, TypeError):
+            except (IndexError, TypeError):
                 # Skip malformed entries
                 continue
 
-        return ','.join(enabled_extensions)
+        return ','.join(enabled_values)
 
     def schema_registry_extension_classes(self, rbac_enabled, schema_exporters_defined, schema_importers_defined):
         """
@@ -680,4 +677,4 @@ class FilterModule(object):
             'schema_importer': [schema_importers_defined, 'io.confluent.schema.importer.SchemaImporterResourceExtension'],
             'schema_importer': [schema_importers_defined, 'io.confluent.dekregistry.DekRegistryResourceExtension'],
         }
-        return self.combine_extension_classes(extensions_dict)
+        return self.combine_enabled_values(extensions_dict)
