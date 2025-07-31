@@ -19,99 +19,84 @@
       basic.auth.user.info: "{{ base_config.basic_username + ':' + base_config.basic_password if base_config.remote_authentication_type == 'basic' else omit }}"
     schema_exporter_final_config: "{{ api_config | combine(override_config) }}"
 
+# Shared variables for common request body fields and URI auth
+- name: Set shared exporter variables
+  set_fact:
+    # Common URI authentication parameters
+    exporter_uri_auth:
+      validate_certs: false
+      user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
+      password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+    # Common request body fields
+    exporter_body_fields:
+      context_type_field: "{{ {'contextType': schema_exporter_config.context_type} if schema_exporter_config.context_type != 'AUTO' else {} }}"
+      context_field: "{{ {'context': schema_exporter_config.context} if schema_exporter_config.context_type not in ['NONE', 'AUTO'] else {} }}"
+      kek_rename_field: "{{ {'kekRenameFormat': schema_exporter_config.kek_rename_format} if schema_exporter_config.kek_rename_format | default('') != '' else {} }}"
+      subject_rename_field: "{{ {'subjectRenameFormat': schema_exporter_config.subject_rename_format} if schema_exporter_config.subject_rename_format | default('') != '' else {} }}"
+
 - name: Check if Schema Exporter exists
   uri:
     url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ schema_exporter_config.name }}"
     method: GET
     status_code: [200, 404]
-    validate_certs: false
-    user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-    password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+  args: "{{ exporter_uri_auth }}"
   register: exporter_check
   ignore_errors: true
 
-- name: Create Schema Exporter
-  uri:
-    url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters"
-    method: POST
-    body_format: json
-    body: "{{ exporter_request_body }}"
-    status_code: [200]
-    validate_certs: false
-    user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-    password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
-  vars:
-    base_request_body:
-      name: "{{ schema_exporter_config.name }}"
-      subjects: "{{ schema_exporter_config.subjects }}"
-      config: "{{ schema_exporter_config.config }}"
-    context_type_field: "{{ {'contextType': schema_exporter_config.context_type} if schema_exporter_config.context_type != 'AUTO' else {} }}"
-    context_field: "{{ {'context': schema_exporter_config.context} if schema_exporter_config.context_type not in ['NONE', 'AUTO'] else {} }}"
-    kek_rename_field: "{{ {'kekRenameFormat': schema_exporter_config.kek_rename_format} if schema_exporter_config.kek_rename_format | default('') != '' else {} }}"
-    subject_rename_field: "{{ {'subjectRenameFormat': schema_exporter_config.subject_rename_format} if schema_exporter_config.subject_rename_format | default('') != '' else {} }}"
-    exporter_request_body: "{{ base_request_body | combine(context_type_field) | combine(context_field) | combine(kek_rename_field) | combine(subject_rename_field) }}"
-  register: exporter_creation
-  when: exporter_check.status == 404
-
-- name: Pause Schema Exporter
+# Pause exporter before update (only needed for existing exporters)
+- name: Pause Schema Exporter before update
   uri:
     url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ schema_exporter_config.name }}/pause"
     method: PUT
     status_code: [200, 202]
-    validate_certs: false
-    user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-    password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+  args: "{{ exporter_uri_auth }}"
   register: exporter_pause
   until: exporter_pause.status in [200]
   retries: 10
   delay: 2
   when: exporter_check.status == 200
 
-- name: Update Schema Exporter
+# Create or Update Schema Exporter (POST for new, PUT for existing)
+- name: Create or Update Schema Exporter
   uri:
-    url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ schema_exporter_config.name }}"
-    method: PUT
+    url: "{{ exporter_url }}"
+    method: "{{ exporter_method }}"
     body_format: json
-    body: "{{ exporter_update_body }}"
+    body: "{{ exporter_request_body }}"
     status_code: 200
-    validate_certs: false
-    user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-    password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+  args: "{{ exporter_uri_auth }}"
   vars:
-    # Include all updatable fields
-    base_update_body:
+    # Dynamic method and URL based on whether exporter exists
+    exporter_method: "{{ 'POST' if exporter_check.status == 404 else 'PUT' }}"
+    exporter_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters{{ '' if exporter_check.status == 404 else '/' + schema_exporter_config.name }}"
+    # Dynamic request body (create includes name, update doesn't)
+    base_exporter_body: "{{ {'name': schema_exporter_config.name} if exporter_check.status == 404 else {} }}"
+    common_exporter_body:
       subjects: "{{ schema_exporter_config.subjects }}"
       config: "{{ schema_exporter_config.config }}"
-    context_type_field: "{{ {'contextType': schema_exporter_config.context_type} if schema_exporter_config.context_type != 'AUTO' else {} }}"
-    context_field: "{{ {'context': schema_exporter_config.context} if schema_exporter_config.context_type not in ['NONE', 'AUTO'] else {} }}"
-    kek_rename_field: "{{ {'kekRenameFormat': schema_exporter_config.kek_rename_format} if schema_exporter_config.kek_rename_format | default('') != '' else {} }}"
-    subject_rename_field: "{{ {'subjectRenameFormat': schema_exporter_config.subject_rename_format} if schema_exporter_config.subject_rename_format | default('') != '' else {} }}"
-    exporter_update_body: "{{ base_update_body | combine(context_type_field) | combine(context_field) | combine(kek_rename_field) | combine(subject_rename_field) }}"
-  register: exporter_update
-  when: exporter_check.status == 200
+    exporter_request_body: "{{ base_exporter_body | combine(common_exporter_body) | combine(exporter_body_fields.context_type_field) | combine(exporter_body_fields.context_field) | combine(exporter_body_fields.kek_rename_field) | combine(exporter_body_fields.subject_rename_field) }}"
+  register: exporter_operation
+  when: exporter_check.status in [200, 404]
 
-- name: Resume Schema Exporter
+# Resume exporter after update (only needed for existing exporters)
+- name: Resume Schema Exporter after update
   uri:
     url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ schema_exporter_config.name }}/resume"
     method: PUT
     status_code: [200, 202]
-    validate_certs: false
-    user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-    password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+  args: "{{ exporter_uri_auth }}"
   register: exporter_resume
-  when: exporter_check.status == 200 and exporter_update is defined
+  when: exporter_check.status == 200
 
 - name: Register Schema Exporter Status
   uri:
     url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ schema_exporter_config.name }}/status"
     method: GET
     status_code: 200
-    validate_certs: false
-    user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-    password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
-  register: exporter_status
+  args: "{{ exporter_uri_auth }}"
+  register: exporter_status_response
 
-- name: Set Schema Exporter State
+- name: Retrieve Schema Exporter State
   set_fact:
-    schema_exporter_state: "{{ exporter_status.json.state}}"
+    schema_exporter_state: "{{ exporter_status_response.json.state }}"
     schema_exporter_configured: true
