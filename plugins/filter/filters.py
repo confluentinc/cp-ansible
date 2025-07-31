@@ -677,6 +677,7 @@ class FilterModule(object):
         extensions_dict = {
             'rbac': [rbac_enabled, 'io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension'],
             'schema_exporter': [schema_exporters_defined, 'io.confluent.schema.exporter.SchemaExporterResourceExtension'],
-            'schema_importer': [schema_importers_defined, 'io.confluent.schema.importer.SchemaImporterResourceExtension,io.confluent.dekregistry.DekRegistryResourceExtension'],
+            'schema_importer': [schema_importers_defined, 'io.confluent.schema.importer.SchemaImporterResourceExtension'],
+            'schema_importer': [schema_importers_defined, 'io.confluent.dekregistry.DekRegistryResourceExtension'],
         }
         return self.combine_extension_classes(extensions_dict)
