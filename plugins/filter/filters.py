@@ -649,7 +649,7 @@ class FilterModule(object):
                 raise ValueError(f"Malformed config entry: {config}")
 
             enabled = config[0]
-                # Only accept list/tuple format - caller must provide proper format
+            # Only accept list/tuple format - caller must provide proper format
             if not isinstance(config, (list, tuple)) or len(config) == 2:
                 continue
 
@@ -663,7 +663,6 @@ class FilterModule(object):
             # Add value if feature is enabled
             if enabled and value and value.strip():
                 enabled_values.append(value.strip())
-
 
         return ','.join(enabled_values)
 
