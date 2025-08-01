@@ -29,6 +29,7 @@ kafka_connect_config_prefix_path: "{{ kafka_connect_config_prefix.strip('/') }}"
 ksql_config_prefix_path: "{{ ksql_config_prefix.strip('/') }}"
 control_center_next_gen_config_prefix_path: "{{ control_center_next_gen_config_prefix.strip('/') }}"
 kafka_connect_replicator_config_prefix_path: "{{ kafka_connect_replicator_config_prefix.strip('/') }}"
+usm_agent_config_prefix_path: "{{ usm_agent_config_prefix.strip('/') }}"
 
 # Jolokia vars
 kafka_broker_jolokia_java_arg_ssl_addon: ",keystore={{kafka_broker_keystore_path}},keystorePassword={{kafka_broker_keystore_storepass}},protocol=https"
@@ -407,7 +408,7 @@ kafka_controller_properties:
   metrics_reporter_for_control_center_next_gen:
     enabled: "{{ kafka_controller_metrics_reporter_for_control_center_next_gen_enabled|bool }}"
     properties:
-      metric.reporters: io.confluent.telemetry.reporter.TelemetryReporter,org.apache.kafka.common.metrics.JmxReporter
+      metric.reporters: io.confluent.telemetry.reporter.TelemetryReporter
       confluent.telemetry.exporter._c3.type: "http"
       confluent.telemetry.exporter._c3.enabled: "true"
       confluent.telemetry.exporter._c3.metrics.include: "io.confluent.kafka.server.request.(?!.*delta).*|io.confluent.kafka.server.server.broker.state|io.confluent.kafka.server.replica.manager.leader.count|io.confluent.kafka.server.request.queue.size|io.confluent.kafka.server.broker.topic.failed.produce.requests.rate.1.min|io.confluent.kafka.server.tier.archiver.total.lag|io.confluent.kafka.server.request.total.time.ms.p99|io.confluent.kafka.server.broker.topic.failed.fetch.requests.rate.1.min|io.confluent.kafka.server.broker.topic.total.fetch.requests.rate.1.min|io.confluent.kafka.server.partition.caught.up.replicas.count|io.confluent.kafka.server.partition.observer.replicas.count|io.confluent.kafka.server.tier.tasks.num.partitions.in.error|io.confluent.kafka.server.broker.topic.bytes.out.rate.1.min|io.confluent.kafka.server.request.total.time.ms.p95|io.confluent.kafka.server.controller.active.controller.count|io.confluent.kafka.server.session.expire.listener.zookeeper.disconnects.total|io.confluent.kafka.server.request.total.time.ms.p999|io.confluent.kafka.server.controller.active.broker.count|io.confluent.kafka.server.request.handler.pool.request.handler.avg.idle.percent.rate.1.min|io.confluent.kafka.server.session.expire.listener.zookeeper.disconnects.rate.1.min|io.confluent.kafka.server.controller.unclean.leader.elections.rate.1.min|io.confluent.kafka.server.replica.manager.partition.count|io.confluent.kafka.server.controller.unclean.leader.elections.total|io.confluent.kafka.server.partition.replicas.count|io.confluent.kafka.server.broker.topic.total.produce.requests.rate.1.min|io.confluent.kafka.server.controller.offline.partitions.count|io.confluent.kafka.server.socket.server.network.processor.avg.idle.percent|io.confluent.kafka.server.partition.under.replicated|io.confluent.kafka.server.log.log.start.offset|io.confluent.kafka.server.log.tier.size|io.confluent.kafka.server.log.size|io.confluent.kafka.server.tier.fetcher.bytes.fetched.total|io.confluent.kafka.server.request.total.time.ms.p50|io.confluent.kafka.server.tenant.consumer.lag.offsets|io.confluent.kafka.server.session.expire.listener.zookeeper.expires.rate.1.min|io.confluent.kafka.server.log.log.end.offset|io.confluent.kafka.server.broker.topic.bytes.in.rate.1.min|io.confluent.kafka.server.partition.under.min.isr|io.confluent.kafka.server.partition.in.sync.replicas.count|io.confluent.telemetry.http.exporter.batches.dropped|io.confluent.telemetry.http.exporter.items.total|io.confluent.telemetry.http.exporter.items.succeeded|io.confluent.telemetry.http.exporter.send.time.total.millis|io.confluent.kafka.server.controller.leader.election.rate.(?!.*delta).*|io.confluent.telemetry.http.exporter.batches.failed"
@@ -486,6 +487,55 @@ kafka_controller_properties:
                     false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
                     kerberos_kafka_controller_primary|default('kafka'), kafka_controller_keytab_path, kafka_controller_kerberos_principal|default('kafka'),
                     false, 'user', 'pass', mds_bootstrap_server_urls, oauth_enabled, kafka_controller_oauth_user, kafka_controller_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, true, kafka_controller_oauth_client_assertion_config | confluent.platform.replace_client_assertion_file(kafka_controller_third_party_oauth_client_assertion_config.audit_logs_destination_admin_client)) }}"
+  usm_agent_telemetry:
+    enabled: "{{ usm_agent_url != '' }}"
+    properties:
+      confluent.telemetry.enabled: true
+      confluent.telemetry.base.url: "{{ usm_agent_url }}"
+      confluent.catalog.collector.enable: true
+      confluent.catalog.collector.destination.topic: catalog-events
+      confluent.catalog.collector.full.configs.enable: true
+      confluent.catalog.collector.multitenant.topics.enable: false
+      confluent.telemetry.exporter.eventsexporter.enabled: true
+      confluent.telemetry.exporter.eventsexporter.type: http
+      confluent.telemetry.exporter.eventsexporter.events.enabled: true
+      confluent.telemetry.exporter.eventsexporter.metrics.enabled: false
+      confluent.telemetry.exporter.eventsexporter.events.client.base.url: "{{ usm_agent_url }}"
+      confluent.telemetry.exporter.eventsexporter.events.client.compression: none
+      confluent.telemetry.exporter.eventsexporter.events.filtering.routes.allowed: catalog-events
+      confluent.telemetry.exporter.eventsexporter.events.filtering.enabled: true
+  usm_agent_telemetry_auth_basic:
+    enabled: "{{ usm_agent_url != '' and usm_agent_authentication_type == 'basic' and usm_agent_user != '' }}"
+    properties:
+      confluent.telemetry.api.key: "{{ usm_agent_user }}"
+      confluent.telemetry.api.secret: "{{ usm_agent_password }}"
+      confluent.telemetry.exporter.eventsexporter.events.api.key: "{{ usm_agent_user }}"
+      confluent.telemetry.exporter.eventsexporter.events.api.secret: "{{ usm_agent_password }}"
+  usm_agent_telemetry_auth_dummy:
+    enabled: "{{ usm_agent_url != '' and usm_agent_authentication_type != 'basic' }}"
+    properties:
+      confluent.telemetry.api.key: dummy
+      confluent.telemetry.api.secret: dummy
+      confluent.telemetry.exporter.eventsexporter.events.api.key: dummy
+      confluent.telemetry.exporter.eventsexporter.events.api.secret: dummy
+  usm_agent_telemetry_ssl:
+    enabled: "{{ usm_agent_url != '' and usm_agent_ssl_enabled }}"
+    properties:
+      confluent.telemetry.exporter._confluent.https.ssl.protocol: TLSv1.2
+      confluent.telemetry.exporter._confluent.https.ssl.truststore.location: "{{ kafka_controller_truststore_path }}"
+      confluent.telemetry.exporter._confluent.https.ssl.truststore.password: "{{ kafka_controller_truststore_storepass }}"
+      confluent.telemetry.exporter.eventsexporter.events.https.ssl.protocol: TLSv1.2
+      confluent.telemetry.exporter.eventsexporter.events.https.ssl.truststore.location: "{{ kafka_controller_truststore_path }}"
+      confluent.telemetry.exporter.eventsexporter.events.https.ssl.truststore.password: "{{ kafka_controller_truststore_storepass }}"
+  usm_agent_telemetry_mtls:
+    enabled: "{{ usm_agent_url != '' and usm_agent_authentication_type == 'mtls' }}"
+    properties:
+      confluent.telemetry.exporter._confluent.https.ssl.keystore.location: "{{ kafka_controller_keystore_path }}"
+      confluent.telemetry.exporter._confluent.https.ssl.keystore.password: "{{ kafka_controller_keystore_storepass }}"
+      confluent.telemetry.exporter._confluent.https.ssl.key.password: "{{ kafka_controller_keystore_keypass }}"
+      confluent.telemetry.exporter.eventsexporter.events.https.ssl.keystore.location: "{{ kafka_controller_keystore_path }}"
+      confluent.telemetry.exporter.eventsexporter.events.https.ssl.keystore.password: "{{ kafka_controller_keystore_storepass }}"
+      confluent.telemetry.exporter.eventsexporter.events.https.ssl.key.password: "{{ kafka_controller_keystore_keypass }}"
 
 kafka_controller_combined_properties: "{{kafka_controller_properties | confluent.platform.combine_properties}}"
 
@@ -574,12 +624,7 @@ kafka_broker_properties:
       # broker.id logic depends on inventory hostname being in kafka_broker host list, defaulting to 0 if non kafka broker host
       broker.id: "{{ broker_id | default( groups.kafka_broker.index(inventory_hostname) + 1 ) if inventory_hostname in groups.kafka_broker else 0 }}"
   ssl:
-    enabled: "{{ kafka_controller_ssl_enabled|bool or
-    kafka_broker_listeners | confluent.platform.ssl_required(ssl_enabled) or
-    kafka_broker_rest_ssl_enabled|bool or
-    mds_broker_listener.ssl_enabled|bool or
-    mds_tls_enabled|bool or
-    ( kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_ssl_enabled ) }}"
+    enabled: "{{ kafka_controller_ssl_enabled|bool or kafka_broker_listeners | confluent.platform.ssl_required(ssl_enabled) or kafka_broker_rest_ssl_enabled|bool or mds_broker_listener.ssl_enabled|bool or mds_tls_enabled|bool or ( kafka_broker_schema_validation_enabled and 'schema_registry' in groups and schema_registry_ssl_enabled ) }}"
     properties:
       ssl.truststore.location: "{{kafka_broker_truststore_path}}"
       ssl.truststore.password: "{{kafka_broker_truststore_storepass}}"
@@ -991,7 +1036,7 @@ kafka_broker_properties:
   metrics_reporter_for_control_center_next_gen:
     enabled: "{{ kafka_broker_metrics_reporter_for_control_center_next_gen_enabled|bool }}"
     properties:
-      metric.reporters: io.confluent.telemetry.reporter.TelemetryReporter,org.apache.kafka.common.metrics.JmxReporter
+      metric.reporters: io.confluent.telemetry.reporter.TelemetryReporter
       confluent.telemetry.exporter._c3.type: "http"
       confluent.telemetry.exporter._c3.enabled: "true"
       confluent.telemetry.exporter._c3.metrics.include: "io.confluent.kafka.server.request.(?!.*delta).*|io.confluent.kafka.server.server.broker.state|io.confluent.kafka.server.replica.manager.leader.count|io.confluent.kafka.server.request.queue.size|io.confluent.kafka.server.broker.topic.failed.produce.requests.rate.1.min|io.confluent.kafka.server.tier.archiver.total.lag|io.confluent.kafka.server.request.total.time.ms.p99|io.confluent.kafka.server.broker.topic.failed.fetch.requests.rate.1.min|io.confluent.kafka.server.broker.topic.total.fetch.requests.rate.1.min|io.confluent.kafka.server.partition.caught.up.replicas.count|io.confluent.kafka.server.partition.observer.replicas.count|io.confluent.kafka.server.tier.tasks.num.partitions.in.error|io.confluent.kafka.server.broker.topic.bytes.out.rate.1.min|io.confluent.kafka.server.request.total.time.ms.p95|io.confluent.kafka.server.controller.active.controller.count|io.confluent.kafka.server.session.expire.listener.zookeeper.disconnects.total|io.confluent.kafka.server.request.total.time.ms.p999|io.confluent.kafka.server.controller.active.broker.count|io.confluent.kafka.server.request.handler.pool.request.handler.avg.idle.percent.rate.1.min|io.confluent.kafka.server.session.expire.listener.zookeeper.disconnects.rate.1.min|io.confluent.kafka.server.controller.unclean.leader.elections.rate.1.min|io.confluent.kafka.server.replica.manager.partition.count|io.confluent.kafka.server.controller.unclean.leader.elections.total|io.confluent.kafka.server.partition.replicas.count|io.confluent.kafka.server.broker.topic.total.produce.requests.rate.1.min|io.confluent.kafka.server.controller.offline.partitions.count|io.confluent.kafka.server.socket.server.network.processor.avg.idle.percent|io.confluent.kafka.server.partition.under.replicated|io.confluent.kafka.server.log.log.start.offset|io.confluent.kafka.server.log.tier.size|io.confluent.kafka.server.log.size|io.confluent.kafka.server.tier.fetcher.bytes.fetched.total|io.confluent.kafka.server.request.total.time.ms.p50|io.confluent.kafka.server.tenant.consumer.lag.offsets|io.confluent.kafka.server.session.expire.listener.zookeeper.expires.rate.1.min|io.confluent.kafka.server.log.log.end.offset|io.confluent.kafka.server.broker.topic.bytes.in.rate.1.min|io.confluent.kafka.server.partition.under.min.isr|io.confluent.kafka.server.partition.in.sync.replicas.count|io.confluent.telemetry.http.exporter.batches.dropped|io.confluent.telemetry.http.exporter.items.total|io.confluent.telemetry.http.exporter.items.succeeded|io.confluent.telemetry.http.exporter.send.time.total.millis|io.confluent.kafka.server.controller.leader.election.rate.(?!.*delta).*|io.confluent.telemetry.http.exporter.batches.failed"
@@ -1070,6 +1115,38 @@ kafka_broker_properties:
                     false, sasl_plain_users_final.admin.principal, sasl_plain_users_final.admin.password, sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password,
                     kerberos_kafka_broker_primary|default('kafka'), kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'),
                     false, 'user', 'pass', mds_bootstrap_server_urls, oauth_enabled, kafka_broker_oauth_user, kafka_broker_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false, kafka_broker_oauth_client_assertion_config | confluent.platform.replace_client_assertion_file(kafka_broker_third_party_oauth_client_assertion_config.audit_logs_destination_admin_client)) }}"
+  usm_agent_telemetry:
+    enabled: "{{ usm_agent_url != '' }}"
+    properties:
+      confluent.telemetry.enabled: true
+      confluent.telemetry.base.url: "{{ usm_agent_url }}"
+      confluent.client.topic.metrics.manager: org.apache.kafka.server.metrics.PlatformClientTopicMetricsManager
+      confluent.client.topic.max.metrics.count: 1000
+      confluent.client.topic.metrics.expiry.sec: 3600
+      confluent.consumer.lag.emitter.enabled: true
+      confluent.consumer.lag.emitter.interval.ms: 60000
+  usm_agent_telemetry_auth_basic:
+    enabled: "{{ usm_agent_url != '' and usm_agent_authentication_type == 'basic' and usm_agent_user != '' }}"
+    properties:
+      confluent.telemetry.api.key: "{{ usm_agent_user }}"
+      confluent.telemetry.api.secret: "{{ usm_agent_password }}"
+  usm_agent_telemetry_auth_dummy:
+    enabled: "{{ usm_agent_url != '' and usm_agent_authentication_type != 'basic' }}"
+    properties:
+      confluent.telemetry.api.key: dummy
+      confluent.telemetry.api.secret: dummy
+  usm_agent_telemetry_ssl:
+    enabled: "{{ usm_agent_url != '' and usm_agent_ssl_enabled }}"
+    properties:
+      confluent.telemetry.exporter._confluent.https.ssl.protocol: TLSv1.2
+      confluent.telemetry.exporter._confluent.https.ssl.truststore.location: "{{ kafka_broker_truststore_path }}"
+      confluent.telemetry.exporter._confluent.https.ssl.truststore.password: "{{ kafka_broker_truststore_storepass }}"
+  usm_agent_telemetry_mtls:
+    enabled: "{{ usm_agent_url != '' and usm_agent_authentication_type == 'mtls' }}"
+    properties:
+      confluent.telemetry.exporter._confluent.https.ssl.keystore.location: "{{ kafka_broker_keystore_path }}"
+      confluent.telemetry.exporter._confluent.https.ssl.keystore.password: "{{ kafka_broker_keystore_storepass }}"
+      confluent.telemetry.exporter._confluent.https.ssl.key.password: "{{ kafka_broker_keystore_keypass }}"
 kafka_broker_combined_properties: "{{kafka_broker_properties | confluent.platform.combine_properties}}"
 
 kafka_broker_final_properties: "{{ kafka_broker_combined_properties | combine(kafka_broker_custom_properties) }}"
@@ -1567,6 +1644,49 @@ kafka_connect_properties:
     enabled: "{{kafka_connect_telemetry_ansible_labels_enabled}}"
     properties:
       confluent.telemetry.labels.confluent.ansible.playbooks.version: "{{confluent_ansible_branch}}"
+  usm_agent_telemetry:
+    enabled: "{{ usm_agent_url != '' }}"
+    properties:
+      metric.reporters: io.confluent.telemetry.reporter.TelemetryReporter
+      confluent.telemetry.enabled: true
+      confluent.telemetry.base.url: "{{ usm_agent_url }}"
+      confluent.connectmetadata.events.client.base.url: "{{ usm_agent_url }}"
+      confluent.connectmetadata.events.enabled: true
+      confluent.connectmetadata.events.type: http
+      confluent.connectmetadata.events.snapshot.interval.seconds: 60
+      confluent.connectmetadata.events.mode: snapshot_and_incremental
+  usm_agent_telemetry_auth_basic:
+    enabled: "{{ usm_agent_url != '' and usm_agent_authentication_type == 'basic' and usm_agent_user != '' }}"
+    properties:
+      confluent.telemetry.api.key: "{{ usm_agent_user }}"
+      confluent.telemetry.api.secret: "{{ usm_agent_password }}"
+      confluent.connectmetadata.events.api.key: "{{ usm_agent_user }}"
+      confluent.connectmetadata.events.api.secret: "{{ usm_agent_password }}"
+  usm_agent_telemetry_auth_dummy:
+    enabled: "{{ usm_agent_url != '' and usm_agent_authentication_type != 'basic' }}"
+    properties:
+      confluent.telemetry.api.key: dummy
+      confluent.telemetry.api.secret: dummy
+      confluent.connectmetadata.events.api.key: dummy
+      confluent.connectmetadata.events.api.secret: dummy
+  usm_agent_telemetry_ssl:
+    enabled: "{{ usm_agent_url != '' and usm_agent_ssl_enabled }}"
+    properties:
+      confluent.telemetry.exporter._confluent.https.ssl.protocol: TLSv1.2
+      confluent.telemetry.exporter._confluent.https.ssl.truststore.location: "{{ kafka_connect_truststore_path }}"
+      confluent.telemetry.exporter._confluent.https.ssl.truststore.password: "{{ kafka_connect_truststore_storepass }}"
+      confluent.connectmetadata.events.ssl.protocol: TLSv1.2
+      confluent.connectmetadata.events.ssl.truststore.location: "{{ kafka_connect_truststore_path }}"
+      confluent.connectmetadata.events.ssl.truststore.password: "{{ kafka_connect_truststore_storepass }}"
+  usm_agent_telemetry_mtls:
+    enabled: "{{ usm_agent_url != '' and usm_agent_authentication_type == 'mtls' }}"
+    properties:
+      confluent.telemetry.exporter._confluent.https.ssl.keystore.location: "{{ kafka_connect_keystore_path }}"
+      confluent.telemetry.exporter._confluent.https.ssl.keystore.password: "{{ kafka_connect_keystore_storepass }}"
+      confluent.telemetry.exporter._confluent.https.ssl.key.password: "{{ kafka_connect_keystore_keypass }}"
+      confluent.connectmetadata.events.ssl.keystore.location: "{{ kafka_connect_keystore_path }}"
+      confluent.connectmetadata.events.ssl.keystore.password: "{{ kafka_connect_keystore_storepass }}"
+      confluent.connectmetadata.events.ssl.key.password: "{{ kafka_connect_keystore_keypass }}"
 
 kafka_connect_combined_properties: "{{kafka_connect_properties | confluent.platform.combine_properties}}"
 
@@ -2716,3 +2836,79 @@ kafka_connect_replicator_monitoring_interceptor_properties:
                 oauth_enabled, kafka_connect_replicator_monitoring_interceptor_oauth_user, kafka_connect_replicator_monitoring_interceptor_oauth_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, false, kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_config | confluent.platform.replace_client_assertion_file(kafka_connect_replicator_third_party_oauth_client_assertion_config.kafka)) }}"
 kafka_connect_replicator_monitoring_interceptor_combined_properties: "{{kafka_connect_replicator_monitoring_interceptor_properties | confluent.platform.combine_properties}}"
 kafka_connect_replicator_monitoring_interceptor_final_properties: "{{kafka_connect_replicator_monitoring_interceptor_combined_properties | combine(kafka_connect_replicator_monitoring_interceptor_custom_properties)}}"
+
+
+#### USM Agent Variables ####
+usm_agent_service_name: usm-agent
+usm_agent_default_user: cp-usm-agent
+usm_agent_default_group: confluent
+confluent_usm_agent_archive_version: "{{confluent_usm_agent_package_version}}"
+usm_agent_binary_base_path: "{{ ((config_base_path,('confluent-usm-agent-',confluent_usm_agent_archive_version) | join) | path_join) if installation_method == 'archive' else '/usr' }}"
+usm_agent_archive_file_source: "{{confluent_usm_agent_independent_repository_baseurl}}/archive/confluent-usm-agent-{{confluent_usm_agent_package_version}}.tar.gz"
+usm_agent_archive_file_remote: "{{ confluent_archive_file_remote | default(true) }}"
+
+usm_agent:
+  config_file: "{{ (config_base_path, usm_agent_config_prefix_path, 'usm-agent.properties') | path_join }}"
+  systemd_file: "{{ (systemd_base_dir, (usm_agent_service_name, '.service') | join) | path_join }}"
+  systemd_override: /etc/systemd/system/{{usm_agent_service_name}}.service.d/override.conf
+  ccloud_credential_file: "{{ (config_base_path, usm_agent_config_prefix_path, 'secrets', 'ccloud_credential.yaml') | path_join }}"
+  cp_credential_file: "{{ (config_base_path, usm_agent_config_prefix_path, 'secrets', 'cp_credential.yaml') | path_join }}"
+  log_dir: "/var/log/confluent/usm-agent"
+
+usm_agent_admin_port: 9901
+usm_agent_controlplane_port: 9999
+usm_agent_dataplane_port: 10000
+
+usm_agent_ccloud_environment_id: "{{ ccloud_environment_id }}"
+usm_agent_ccloud_host: "{{ ccloud_endpoint | urlsplit('hostname') }}"
+usm_agent_ccloud_port: "{{ ccloud_endpoint | urlsplit('port') | default(443) }}"
+usm_agent_ccloud_ssl_enabled: true
+
+usm_agent_ccloud_credential:
+  username: "{{ ccloud_credential.username }}"
+  password: "{{ ccloud_credential.password }}"
+
+usm_agent_cp_credential:
+  username: ""
+  password: ""
+
+usm_agent_secrets_dir: "{{ (config_base_path, usm_agent_config_prefix_path, 'secrets') | path_join }}"
+
+usm_agent_ccloud_basic_auth_encoded: "{{ (usm_agent_ccloud_credential.username + ':' + usm_agent_ccloud_credential.password) | b64encode }}"
+usm_agent_cp_basic_auth_encoded: "{{ (usm_agent_cp_credential.username + ':' + usm_agent_cp_credential.password) | b64encode }}"
+
+usm_agent_properties:
+  defaults:
+    enabled: true
+    properties:
+      confluent.usm-agent.listener.admin.port: "{{ usm_agent_admin_port }}"
+      confluent.usm-agent.listener.controlplane.port: "{{ usm_agent_controlplane_port }}"
+      confluent.usm-agent.listener.dataplane.port: "{{ usm_agent_dataplane_port }}"
+      confluent.usm-agent.listener.dataplane.basic.auth.enabled: "{{ (usm_agent_authentication_type == 'basic')|string|lower }}"
+      confluent.usm-agent.listener.dataplane.ssl.enabled: "{{ usm_agent_ssl_enabled|string|lower }}"
+      confluent.usm-agent.listener.dataplane.ssl.client.auth.enabled: "{{ usm_agent_ssl_mutual_auth_enabled|string|lower }}"
+      confluent.usm-agent.ccloud.environment-id: "{{ usm_agent_ccloud_environment_id }}"
+      confluent.usm-agent.ccloud.host: "{{ usm_agent_ccloud_host }}"
+      confluent.usm-agent.ccloud.port: "{{ usm_agent_ccloud_port }}"
+      confluent.usm-agent.ccloud.basic.auth.credential.location: "{{ usm_agent.ccloud_credential_file }}"
+      confluent.usm-agent.ccloud.ssl.enabled: "{{ usm_agent_ccloud_ssl_enabled|string|lower }}"
+      confluent.usm-agent.ccloud.ssl.trusted.ca.location: "{{ usm_agent_ccloud_ssl_trusted_ca_location }}"
+  basic:
+    enabled: "{{ usm_agent_authentication_type == 'basic' }}"
+    properties:
+      confluent.usm-agent.listener.dataplane.basic.auth.credential.location: "{{ usm_agent.cp_credential_file }}"
+  ssl:
+    enabled: "{{ usm_agent_ssl_enabled }}"
+    properties:
+      confluent.usm-agent.listener.dataplane.ssl.server.certificate.location: "{{ usm_agent_cert_path }}"
+      confluent.usm-agent.listener.dataplane.ssl.server.key.location: "{{ usm_agent_key_path }}"
+      confluent.usm-agent.listener.dataplane.ssl.server.key.password.location: "{{ usm_agent_keystore_keypass }}"
+  mtls:
+    enabled: "{{ usm_agent_ssl_mutual_auth_enabled }}"
+    properties:
+      confluent.usm-agent.listener.dataplane.ssl.client.auth.trusted.ca.location: "{{ usm_agent_ca_cert_path }}"
+
+
+usm_agent_combined_properties: "{{usm_agent_properties | confluent.platform.combine_properties}}"
+
+usm_agent_final_properties: "{{ usm_agent_combined_properties | combine(usm_agent_custom_properties) }}"
