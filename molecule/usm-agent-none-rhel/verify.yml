@@ -1,0 +1,50 @@
+---
+### Test USM Agent Plain Deployment (No Authentication) with CP Components
+
+- name: Test USM Agent Plain Configuration (No Auth)
+  hosts: usm_agent
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Test healthz endpoint with curl
+      shell: |
+        curl -f -s -o /dev/null -w "%{http_code}" \
+        http://localhost:{{ usm_agent_admin_port | default(9901) }}/healthz
+      register: curl_health_check
+      retries: 15
+      delay: 10
+      until: curl_health_check.stdout == "200"
+
+    - name: Display health check result
+      debug:
+        msg: "Health check returned HTTP status: {{ curl_health_check.stdout }}"
+
+    - name: Verify USM Agent Configuration File Exists
+      stat:
+        path: "{{ usm_agent.config_file }}"
+      register: config_file_check
+
+    - name: Assert Configuration File Exists
+      assert:
+        that:
+          - config_file_check.stat.exists
+        fail_msg: "USM Agent configuration file does not exist"
+        success_msg: "USM Agent configuration file exists"
+
+    - name: Verify Basic Auth is Disabled in Properties
+      shell: "grep -q 'confluent.usm-agent.listener.dataplane.basic.auth.enabled=false' {{ usm_agent.config_file }}"
+      register: basic_auth_disabled_check
+
+    - name: Verify SSL is Disabled in Properties
+      shell: "grep -q 'confluent.usm-agent.listener.dataplane.ssl.enabled=false' {{ usm_agent.config_file }}"
+      register: ssl_disabled_check
+
+    - name: Assert No Authentication Configuration
+      assert:
+        that:
+          - basic_auth_disabled_check.rc == 0
+          - ssl_disabled_check.rc == 0
+        fail_msg: "USM Agent should have no authentication enabled"
+        success_msg: "USM Agent correctly has no authentication enabled"
