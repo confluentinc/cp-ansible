@@ -38,6 +38,7 @@ class FilterModule(object):
             'resolve_and_format_hostnames': self.resolve_and_format_hostnames,
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
             'replace_client_assertion_file': self.replace_client_assertion_file,
+            'schema_registry_extension_classes': self.schema_registry_extension_classes,
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
@@ -626,3 +627,52 @@ class FilterModule(object):
                     users_dict[user].get('password').encode("utf-8"), bcrypt.gensalt()
                 ).decode()
         return username_with_hashed_passwords
+
+    def combine_enabled_values(self, config_dict):
+        """
+        Combines values from multiple enabled configurations into a comma-separated string.
+
+        Args:
+            config_dict (dict): Dictionary where keys are feature names and values are lists
+                               of [enabled_condition, value_to_include]
+
+        Returns:
+            str: Comma-separated list of values for enabled features
+        """
+        if not isinstance(config_dict, dict):
+            return ''
+
+        enabled_values = []
+
+        for config in config_dict.values():
+            try:
+                # Only accept list/tuple format - caller must provide proper format
+                if not isinstance(config, (list, tuple)) or len(config) < 2:
+                    continue
+
+                enabled = config[0]
+                value = config[1]
+
+                # Convert string boolean values to actual booleans
+                if isinstance(enabled, str):
+                    enabled = enabled.lower() in ('true', 'yes', '1', 'on')
+
+                # Add value if feature is enabled
+                if enabled and value and value.strip():
+                    enabled_values.append(value.strip())
+
+            except (IndexError, TypeError):
+                # Skip malformed entries
+                continue
+
+        return ','.join(enabled_values)
+
+    def schema_registry_extension_classes(self, rbac_enabled, schema_exporters_defined):
+        """
+        Generates comma-separated list of Schema Registry resource extension classes based on enabled features.
+        """
+        extensions_dict = {
+            'rbac': [rbac_enabled, 'io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension'],
+            'schema_exporter': [schema_exporters_defined, 'io.confluent.schema.exporter.SchemaExporterResourceExtension']
+        }
+        return self.combine_enabled_values(extensions_dict)
