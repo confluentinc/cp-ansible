@@ -1,0 +1,294 @@
+---
+- name: Schema Registry Automation Workflow
+  hosts: schema_registry
+  gather_facts: false
+  vars:
+    # Workflow control variables
+    workflow_part: "{{ workflow_part | default('all') }}"  # Options: part1, part2, part3, all
+    rollback_on_failure: "{{ rollback_on_failure | default(true) }}"
+
+    # Status tracking
+    workflow_status: "started"
+    current_step: ""
+    failed_step: ""
+
+  tasks:
+    - import_role:
+        name: variables
+
+    # - import_role:
+    #     name: common
+    #   tags: common
+
+    - name: Check if automation workflow should run
+      set_fact:
+        run_automation_workflow: "{{ sr_switch_over_exporter_name is defined and sr_switch_over_exporter_name != '' and sr_switch_over_exporter_name != 'none' }}"
+
+    - name: Skip automation workflow
+      debug:
+        msg: |
+          Skipping Schema Registry switchover automation workflow.
+          Reason: sr_switch_over_exporter_name is not defined or empty.
+          To enable automation, define sr_switch_over_exporter_name with a valid exporter name.
+      when: not (run_automation_workflow | bool)
+
+    - name: Validate automation workflow configuration
+      assert:
+        that:
+          - unified_stream_manager is defined
+          - schema_importers is defined
+        fail_msg: "Schema registry automation configuration is missing required fields"
+      when: run_automation_workflow | bool
+      tags: validate
+
+    # Check if exporter already exists and is running (pilot mode)
+    - name: "Check existing exporter status"
+      block:
+        - name: Check if specific exporter is already running
+          uri:
+            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}/status"
+            method: GET
+            status_code: 200
+            validate_certs: false
+            user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
+            password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+          register: existing_exporter_status
+          failed_when: false
+          when: sr_switch_over_exporter_name is defined
+
+        - name: Log existing exporter status
+          debug:
+            msg: "Exporter {{ sr_switch_over_exporter_name }} found with state: {{ existing_exporter_status.json.state | default('NOT_FOUND') }}"
+          when: 
+            - sr_switch_over_exporter_name is defined
+            - existing_exporter_status.status == 200
+
+        - name: Set skip_part1 flag if exporter is already running
+          set_fact:
+            skip_part1: true
+          when:
+            - sr_switch_over_exporter_name is defined
+            - existing_exporter_status.status == 200
+            - existing_exporter_status.json.state == 'RUNNING'
+
+        - name: Log skipping Part 1
+          debug:
+            msg: "Exporter {{ sr_switch_over_exporter_name }} is already running. Skipping Part 1 (Schema Export Setup)."
+          when: skip_part1 | default(false)
+
+      rescue:
+        - name: Handle exporter check failure
+          debug:
+            msg: "Could not check exporter status or exporter not found. Proceeding with Part 1."
+          
+        - name: Set skip_part1 to false on check failure
+          set_fact:
+            skip_part1: false
+      when: run_automation_workflow | bool
+
+    # PART 1: Export existing CP schemas to CC
+    - name: "PART 1: Setup Schema Exporter on CP SR"
+      block:
+        - name: Setup Schema Exporter
+          include_role:
+            name: schema_exporter
+
+        - name: Determine exporter name for status check
+          set_fact:
+            exporter_name: "{{ sr_switch_over_exporter_name | default(schema_exporters[0].name) }}"
+
+        - name: Wait for Schema Exporter to be in Running state
+          uri:
+            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ exporter_name }}/status"
+            method: GET
+            status_code: 200
+            validate_certs: false
+            user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
+            password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+          register: exporter_status_check
+          until: exporter_status_check.json.state == 'RUNNING'
+          retries: 30
+          delay: 10
+
+        - name: Verify exporter is running
+          assert:
+            that:
+              - exporter_status_check.json.state == 'RUNNING'
+            fail_msg: "Schema Exporter failed to reach RUNNING state. Current state: {{ exporter_status_check.json.state }}"
+
+      rescue:
+        - name: Handle Part 1 failure
+          set_fact:
+            failed_step: "part1_schema_export"
+            workflow_status: "failed"
+
+        - name: Fail workflow
+          fail:
+            msg: "Part 1 (Schema Export) failed. Cannot proceed with automation."
+      when: 
+        - run_automation_workflow | bool
+        - workflow_part in ['part1', 'all']
+        - not (skip_part1 | default(false))
+
+    # PART 2: Primary SR switchover from CP to CC
+    - name: "Primary SR switchover from CP to CC"
+      block:
+        - name: Set exporter name for operations
+          set_fact:
+            exporter_name: "{{ sr_switch_over_exporter_name | default(schema_exporters[0].name) }}"
+
+        - name: Pre-checks - Validate destination URLs match
+          assert:
+            that:
+              - schema_exporters[0].config.remote_schema_registry_endpoint == unified_stream_manager.remote_schema_registry_endpoint
+              - schema_importers[0].config.remote_schema_registry_endpoint == unified_stream_manager.remote_schema_registry_endpoint
+            fail_msg: "Pre-check failed: Exporter, Importer, and USM remote endpoints must match"
+
+        - name: "Switch CP SR to FORWARD mode (WRITE DOWNTIME STARTS)"
+          uri:
+            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.__GLOBAL:"
+            method: PUT
+            body_format: json
+            body:
+              mode: "FORWARD"
+            status_code: 200
+            validate_certs: false
+            user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
+            password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+          register: cp_sr_forward_mode
+
+        - name: Verify CP SR is in FORWARD mode
+          uri:
+            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.__GLOBAL:"
+            method: GET
+            status_code: 200
+            validate_certs: false
+            user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
+            password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+          register: cp_sr_mode_check
+          until: cp_sr_mode_check.json.mode == 'FORWARD'
+          retries: 5
+          delay: 2
+
+        - name: "Switch CC SR to READWRITE mode (WRITE DOWNTIME ENDS)"
+          uri:
+            url: "{{ unified_stream_manager.remote_schema_registry_endpoint }}/mode"
+            method: PUT
+            body_format: json
+            body:
+              mode: "READWRITE"
+            status_code: 200
+            validate_certs: false
+            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.remote_authentication_type == 'basic' else omit }}"
+            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.remote_authentication_type == 'basic' else omit }}"
+          register: cc_sr_readwrite_mode
+
+        - name: Verify CC SR is in READWRITE mode
+          uri:
+            url: "{{ unified_stream_manager.remote_schema_registry_endpoint }}/mode"
+            method: GET
+            status_code: 200
+            validate_certs: false
+            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.remote_authentication_type == 'basic' else omit }}"
+            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.remote_authentication_type == 'basic' else omit }}"
+          register: cc_sr_mode_check
+          until: cc_sr_mode_check.json.mode == 'READWRITE'
+          retries: 5
+          delay: 2
+
+      rescue:
+        - name: Handle Part 2 failure
+          set_fact:
+            failed_step: "part2_switchover"
+            workflow_status: "failed"
+
+        - name: "ROLLBACK: Restore CP SR to READWRITE mode"
+          uri:
+            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.__GLOBAL:"
+            method: PUT
+            body_format: json
+            body:
+              mode: "READWRITE"
+            status_code: 200
+            validate_certs: false
+            user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
+            password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+          ignore_errors: true
+
+        - name: Fail workflow with rollback info
+          fail:
+            msg: |
+              Part 2 (Switchover) failed.
+              Rollback attempted: CP SR restored to READWRITE mode.
+              Manual intervention may be required.
+      when: 
+        - run_automation_workflow | bool
+        - (workflow_part in ['part2', 'all'] or (skip_part1 | default(false)))
+
+    # PART 3: Setup Schema Importer for reverse sync
+    - name: "Setup Schema Importer"
+      block:
+        - name: Setup Schema Importer
+          include_role:
+            name: schema_importer
+
+        - name: Wait for Schema Importer to be in Running state
+          uri:
+            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers/{{ schema_importers[0].name }}/status"
+            method: GET
+            status_code: 200
+            validate_certs: false
+            user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
+            password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+          register: importer_status_check
+          until: importer_status_check.json.state == 'RUNNING'
+          retries: 30
+          delay: 10
+
+        - name: Verify importer is running
+          assert:
+            that:
+              - importer_status_check.json.state == 'RUNNING'
+            fail_msg: "Schema Importer failed to reach RUNNING state. Current state: {{ importer_status_check.json.state }}"
+
+        - name: Log automation completion
+          debug:
+            msg: |
+              SR AUTOMATION WORKFLOW COMPLETED SUCCESSFULLY!
+
+              Current State:
+              - Primary SR: CC SR ({{ unified_stream_manager.remote_schema_registry_endpoint }})
+              - CP SR: FORWARD mode → CC SR
+              - Export Sync: CP SR → CC SR ({{ schema_exporters[0].name }})
+              - Import Sync: CC SR → CP SR ({{ schema_importers[0].name }})
+
+              Next Steps:
+              - Monitor importer/exporter status regularly
+              - Update applications to use CC SR endpoint
+              - Verify schema compatibility and data flow
+
+      rescue:
+        - name: Handle Part 3 failure
+          set_fact:
+            failed_step: "part3_reverse_sync"
+            workflow_status: "failed"
+
+        - name: Fail workflow
+          fail:
+            msg: "Part 3 (Reverse Sync) failed. Manual intervention required for importer setup."
+      when: 
+        - run_automation_workflow | bool
+        - workflow_part in ['part3', 'all'] 
+
+    - name: Display workflow summary
+      debug:
+        msg: |
+          Schema Registry Automation Workflow Summary:
+          Start Time: {{ workflow_start_time }}
+          End Time: {{ workflow_end_time }}
+          Status: {{ workflow_status }}
+          Parts Executed: {{ workflow_part }}
+          {% if failed_step != '' %}
+          Failed Step: {{ failed_step }}
+          {% endif %}
+      when: run_automation_workflow | bool
