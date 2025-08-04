@@ -41,6 +41,77 @@
       when: run_automation_workflow | bool
       tags: validate
 
+    # Ensure schema registry is configured with required automation properties
+    - name: "Configure Schema Registry for Automation"
+      block:
+        - name: Configure schema registry with required automation properties
+          debug:
+            msg: |
+              Configuring Schema Registry with automation properties (will create or update existing configuration).
+              Required properties for exporter/importer functionality:
+              - kafkastore.update.handlers=io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler
+              - schema.registry.resource.extension.class=...SchemaExporterResourceExtension,SchemaImporterResourceExtension...
+              - password.encoder.secret={{ password_encoder_secret | default('***') }}
+              {% if unified_stream_manager is defined and unified_stream_manager.remote_schema_registry_endpoint != 'none' %}
+              USM Properties (for Confluent Cloud integration):
+              - usm.schema.registry.remote.endpoint={{ unified_stream_manager.remote_schema_registry_endpoint }}
+              - usm.schema.registry.remote.api.key={{ unified_stream_manager.basic_username }}
+              - usm.schema.registry.remote.api.secret=***
+              {% endif %}
+              {% if unified_stream_manager is defined and unified_stream_manager.remote_context is defined and unified_stream_manager.remote_context != '' %}
+              - usm.schema.registry.remote.context.prefix={{ unified_stream_manager.remote_context }}
+              {% endif %}
+
+        - name: Add/Update required automation properties to schema registry config
+          blockinfile:
+            path: "{{ schema_registry.config_file }}"
+            block: |
+              # Schema Registry Automation Properties
+              kafkastore.update.handlers=io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler
+              schema.registry.resource.extension.class={{ rbac_enabled | confluent.platform.schema_registry_extension_classes(schema_exporters is defined, schema_importers is defined, (unified_stream_manager is defined and unified_stream_manager.remote_schema_registry_endpoint != 'none')) }}
+              password.encoder.secret={{ password_encoder_secret }}
+              {% if unified_stream_manager is defined and unified_stream_manager.remote_schema_registry_endpoint != 'none' %}
+              # USM Schema Registry Properties
+              usm.schema.registry.remote.endpoint={{ unified_stream_manager.remote_schema_registry_endpoint }}
+              usm.schema.registry.remote.api.key={{ unified_stream_manager.basic_username }}
+              usm.schema.registry.remote.api.secret={{ unified_stream_manager.basic_password }}
+              {% endif %}
+              {% if unified_stream_manager is defined and unified_stream_manager.remote_context is defined and unified_stream_manager.remote_context != '' %}
+              # USM Context Prefix Properties
+              usm.schema.registry.remote.context.prefix={{ unified_stream_manager.remote_context }}
+              {% endif %}
+            marker: "# {mark} ANSIBLE MANAGED BLOCK - Schema Registry Automation"
+            backup: yes
+          register: automation_properties_added
+          when: 
+            - not (skip_part1 | default(false))
+
+        - name: Restart schema registry if properties were added
+          systemd:
+            name: "{{ schema_registry_service_name }}"
+            state: restarted
+          when: 
+            - not (skip_part1 | default(false))
+            - automation_properties_added is defined
+            - automation_properties_added.changed
+
+        - name: Wait for Schema Registry to be ready after reconfiguration
+          uri:
+            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+            method: GET
+            status_code: 200
+            validate_certs: false
+            user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
+            password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+          retries: 30
+          delay: 5
+          when: 
+            - not (skip_part1 | default(false))
+            - automation_properties_added is defined
+            - automation_properties_added.changed
+
+      when: run_automation_workflow | bool
+
     # Check if exporter already exists and is running (pilot mode)
     - name: "Check existing exporter status"
       block:
