@@ -1,24 +1,35 @@
 ---
+# Schema Registry Automation Workflow
+#
+# This playbook supports Ansible tags for selective execution:
+#   ansible-playbook playbook.yml --tags "schema_export"     # Run only schema export
+#   ansible-playbook playbook.yml --tags "switchover"       # Run only switchover
+#   ansible-playbook playbook.yml --tags "reverse_sync"     # Run only reverse sync
+#   ansible-playbook playbook.yml --tags "schema_export,switchover"  # Run multiple phases
+#   ansible-playbook playbook.yml --skip-tags "reverse_sync"        # Skip reverse sync
+#   ansible-playbook playbook.yml                           # Run all (default)
+#
+# Available tags:
+#   - validate: Pre-flight validation
+#   - check_status: Check existing exporter status
+#   - schema_export: Setup schema exporter
+#   - switchover: Perform SR switchover
+#   - reverse_sync: Setup schema importer
+
 - name: Schema Registry Automation Workflow
   hosts: schema_registry
   gather_facts: false
   vars:
     # Workflow control variables
-    workflow_part: "{{ workflow_part | default('all') }}"  # Options: part1, part2, part3, all
-    rollback_on_failure: "{{ rollback_on_failure | default(true) }}"
+    workflow_part: "{{ workflow_part | default('all') }}"  # Options: schema_export, switchover, reverse_sync, all
 
     # Status tracking
     workflow_status: "started"
-    current_step: ""
     failed_step: ""
 
   tasks:
     - import_role:
         name: variables
-
-    # - import_role:
-    #     name: common
-    #   tags: common
 
     - name: Check if automation workflow should run
       set_fact:
@@ -59,35 +70,35 @@
         - name: Log existing exporter status
           debug:
             msg: "Exporter {{ sr_switch_over_exporter_name }} found with state: {{ existing_exporter_status.json.state | default('NOT_FOUND') }}"
-          when: 
+          when:
             - sr_switch_over_exporter_name is defined
             - existing_exporter_status.status == 200
 
-        - name: Set skip_part1 flag if exporter is already running
+        - name: Set skip_schema_export flag if exporter is already running
           set_fact:
-            skip_part1: true
+            skip_schema_export: true
           when:
             - sr_switch_over_exporter_name is defined
             - existing_exporter_status.status == 200
             - existing_exporter_status.json.state == 'RUNNING'
 
-        - name: Log skipping Part 1
+        - name: Log skipping Schema Export
           debug:
-            msg: "Exporter {{ sr_switch_over_exporter_name }} is already running. Skipping Part 1 (Schema Export Setup)."
-          when: skip_part1 | default(false)
+            msg: "Exporter {{ sr_switch_over_exporter_name }} is already running. Skipping Schema Export Setup."
+          when: skip_schema_export | default(false)
 
       rescue:
         - name: Handle exporter check failure
           debug:
-            msg: "Could not check exporter status or exporter not found. Proceeding with Part 1."
-          
-        - name: Set skip_part1 to false on check failure
+            msg: "Could not check exporter status or exporter not found. Proceeding with Schema Export."
+
+        - name: Set skip_schema_export to false on check failure
           set_fact:
-            skip_part1: false
+            skip_schema_export: false
       when: run_automation_workflow | bool
 
-    # PART 1: Export existing CP schemas to CC
-    - name: "PART 1: Setup Schema Exporter on CP SR"
+    # SCHEMA EXPORT: Export existing CP schemas to CC
+    - name: "Schema Export: Setup Schema Exporter on CP SR"
       block:
         - name: Setup Schema Exporter
           include_role:
@@ -117,21 +128,23 @@
             fail_msg: "Schema Exporter failed to reach RUNNING state. Current state: {{ exporter_status_check.json.state }}"
 
       rescue:
-        - name: Handle Part 1 failure
+        - name: Handle Schema Export failure
           set_fact:
-            failed_step: "part1_schema_export"
+            failed_step: "schema_export_setup"
             workflow_status: "failed"
 
         - name: Fail workflow
           fail:
-            msg: "Part 1 (Schema Export) failed. Cannot proceed with automation."
-      when: 
+            msg: "Schema Export failed. Cannot proceed with automation."
+      when:
         - run_automation_workflow | bool
-        - workflow_part in ['part1', 'all']
-        - not (skip_part1 | default(false))
+        - workflow_part in ['schema_export', 'all']
+        - not (skip_schema_export | default(false))
+      tags:
+        - schema_export
 
-    # PART 2: Primary SR switchover from CP to CC
-    - name: "Primary SR switchover from CP to CC"
+    # SWITCHOVER: Primary SR switchover from CP to CC
+    - name: "Switchover: Primary SR switchover from CP to CC"
       block:
         - name: Set exporter name for operations
           set_fact:
@@ -197,9 +210,9 @@
           delay: 2
 
       rescue:
-        - name: Handle Part 2 failure
+        - name: Handle Switchover failure
           set_fact:
-            failed_step: "part2_switchover"
+            failed_step: "primary_switchover"
             workflow_status: "failed"
 
         - name: "ROLLBACK: Restore CP SR to READWRITE mode"
@@ -218,15 +231,17 @@
         - name: Fail workflow with rollback info
           fail:
             msg: |
-              Part 2 (Switchover) failed.
+              Primary Switchover failed.
               Rollback attempted: CP SR restored to READWRITE mode.
               Manual intervention may be required.
-      when: 
+      when:
         - run_automation_workflow | bool
-        - (workflow_part in ['part2', 'all'] or (skip_part1 | default(false)))
+        - (workflow_part in ['switchover', 'all'] or (skip_schema_export | default(false)))
+      tags:
+        - switchover
 
-    # PART 3: Setup Schema Importer for reverse sync
-    - name: "Setup Schema Importer"
+    # REVERSE SYNC: Setup Schema Importer for reverse sync
+    - name: "Reverse Sync: Setup Schema Importer"
       block:
         - name: Setup Schema Importer
           include_role:
@@ -268,24 +283,24 @@
               - Verify schema compatibility and data flow
 
       rescue:
-        - name: Handle Part 3 failure
+        - name: Handle Reverse Sync failure
           set_fact:
-            failed_step: "part3_reverse_sync"
+            failed_step: "reverse_sync_setup"
             workflow_status: "failed"
 
         - name: Fail workflow
           fail:
-            msg: "Part 3 (Reverse Sync) failed. Manual intervention required for importer setup."
-      when: 
+            msg: "Reverse Sync failed. Manual intervention required for importer setup."
+      when:
         - run_automation_workflow | bool
-        - workflow_part in ['part3', 'all'] 
+        - workflow_part in ['reverse_sync', 'all']
+      tags:
+        - reverse_sync
 
     - name: Display workflow summary
       debug:
         msg: |
           Schema Registry Automation Workflow Summary:
-          Start Time: {{ workflow_start_time }}
-          End Time: {{ workflow_end_time }}
           Status: {{ workflow_status }}
           Parts Executed: {{ workflow_part }}
           {% if failed_step != '' %}

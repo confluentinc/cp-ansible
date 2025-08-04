@@ -670,5 +670,6 @@ class FilterModule(object):
             'schema_exporter': [schema_exporters_defined, 'io.confluent.schema.exporter.SchemaExporterResourceExtension'],
             'schema_importer': [schema_importers_defined, 'io.confluent.schema.importer.SchemaImporterResourceExtension'],
             'dek_registry': [schema_importers_defined, 'io.confluent.dekregistry.DekRegistryResourceExtension'],
+            'usm_sr': [usm_enabled, 'io.confluent.schema.registry.usm.UsmSchemaRegistryExtension'],
         }
         return self.combine_enabled_values(extensions_dict)
