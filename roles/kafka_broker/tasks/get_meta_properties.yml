@@ -1,12 +1,21 @@
 ---
+- name: Check if predefined cluster ID is set
+  set_fact:
+    use_predefined_cluster_id: "{{ kafka_broker_cluster_id != '' }}"
+
 - name: Extract ClusterId from meta.properties on KRaft Controller
   slurp:
     src: "{{ kafka_controller_final_properties['log.dirs'] }}/meta.properties"
   delegate_to: "{{ groups.kafka_controller[0] }}"
   register: uuid_broker
+  when: not use_predefined_cluster_id
+
+- name: Set ClusterId Variable
+  set_fact:
+    broker_cluster_uuid: "{{ kafka_broker_cluster_id if use_predefined_cluster_id else (uuid_broker['content'] | b64decode).partition('cluster.id=')[2].partition('\n')[0] }}"
 
 - name: Format Storage Directory
   shell: "{{ binary_base_path }}/bin/kafka-storage  format -t={{ clusterid }} -c {{ kafka_broker.config_file }} --ignore-formatted"
   register: format_meta
   vars:
-    clusterid: "{{ (uuid_broker['content'] | b64decode).partition('cluster.id=')[2].partition('\n')[0] }}"
+    clusterid: "{{ broker_cluster_uuid }}"
