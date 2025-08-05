@@ -334,3 +334,80 @@
       - not (control_center_next_gen_dependency_alertmanager_ssl_enabled | bool and control_center_next_gen_dependency_alertmanager_mtls_enabled | bool and control_center_next_gen_dependency_alertmanager_basic_auth_enabled | bool)
     fail_msg: "Alertmanager SSL, mTLS, and Basic Auth cannot all be enabled simultaneously."
   tags: validate
+
+# Jolokia Access Control Validations
+- name: Validate Jolokia Access Control Configuration - Kafka Controller
+  fail:
+    msg: |
+      Security requirement: When Jolokia is enabled and access control is enabled,
+      you must set kafka_controller_jolokia_access_control_custom_file_enabled to either:
+      - true (provide your own secure XML file via kafka_controller_jolokia_access_control_file_src_path)
+      - false (use our secure default XML)
+
+      This prevents lateral movement attacks via exposed Jolokia endpoints.
+  when:
+    - "'kafka_controller' in group_names"
+    - kafka_controller_jolokia_enabled|bool
+    - kafka_controller_jolokia_access_control_enabled|bool
+    - kafka_controller_jolokia_access_control_custom_file_enabled is not defined or kafka_controller_jolokia_access_control_custom_file_enabled is none
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Validate Custom Jolokia Access Control File Path - Kafka Controller
+  fail:
+    msg: |
+      When kafka_controller_jolokia_access_control_custom_file_enabled is true,
+      you must provide kafka_controller_jolokia_access_control_file_src_path with a valid file path.
+  when:
+    - "'kafka_controller' in group_names"
+    - kafka_controller_jolokia_enabled|bool
+    - kafka_controller_jolokia_access_control_enabled|bool
+    - kafka_controller_jolokia_access_control_custom_file_enabled|bool
+    - kafka_controller_jolokia_access_control_file_src_path == ""
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Validate Custom Jolokia Access Control File Exists - Kafka Controller
+  stat:
+    path: "{{ kafka_controller_jolokia_access_control_file_src_path }}"
+  delegate_to: localhost
+  register: kafka_controller_custom_jolokia_file_check
+  when:
+    - "'kafka_controller' in group_names"
+    - kafka_controller_jolokia_enabled|bool
+    - kafka_controller_jolokia_access_control_enabled|bool
+    - kafka_controller_jolokia_access_control_custom_file_enabled|bool
+    - kafka_controller_jolokia_access_control_file_src_path != ""
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Fail if Custom Jolokia Access Control File Does Not Exist - Kafka Controller
+  fail:
+    msg: |
+      Custom Jolokia access control file not found at: {{ kafka_controller_jolokia_access_control_file_src_path }}
+      Please ensure the file exists on the Ansible controller.
+  when:
+    - "'kafka_controller' in group_names"
+    - kafka_controller_jolokia_enabled|bool
+    - kafka_controller_jolokia_access_control_enabled|bool
+    - kafka_controller_jolokia_access_control_custom_file_enabled|bool
+    - kafka_controller_jolokia_access_control_file_src_path != ""
+    - not kafka_controller_custom_jolokia_file_check.stat.exists
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Set Default Jolokia Access Control File Path - Kafka Controller
+  set_fact:
+    kafka_controller_jolokia_access_control_file_src_path: "jolokia_access_control_default.xml.j2"
+  when:
+    - "'kafka_controller' in group_names"
+    - kafka_controller_jolokia_enabled|bool
+    - kafka_controller_jolokia_access_control_enabled|bool
+    - not kafka_controller_jolokia_access_control_custom_file_enabled|bool
+  tags:
+    - validate
+    - validate_jolokia
