@@ -1,0 +1,138 @@
+---
+### Test USM Agent Authentication Scenarios
+### This molecule scenario demonstrates all 4 USM Agent authentication types:
+### 1. No authentication
+### 2. Basic authentication (HTTP)
+### 3. Basic authentication + TLS (HTTPS)
+### 4. mTLS (mutual TLS)
+###
+### Uncomment the desired scenario below to test it.
+
+driver:
+  name: docker
+platforms:
+  - name: controller1
+    hostname: controller1.confluent
+    groups:
+      - kafka_controller
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: usm-agent1
+    hostname: usm-agent1.confluent
+    groups:
+      - usm_agent
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+provisioner:
+  playbooks:
+    converge: ../collections_converge.yml
+    prepare: prepare.yml
+    verify: verify.yml
+  inventory:
+    group_vars:
+      usm_agent:
+        ## ═══════════════════════════════════════════════════════════════════════════════════════
+        ## USM AGENT CCLOUD CONFIGURATION
+        ## ═══════════════════════════════════════════════════════════════════════════════════════
+        ccloud_credential:
+          username: "<api-key>"
+          password: "<api-token>"
+        ccloud_endpoint: "https://api.us-west-2.aws.private.stag.cpdev.cloud:443"
+        ccloud_environment_id: "env-stgc36r58m"
+
+        ## ═══════════════════════════════════════════════════════════════════════════════════════
+        ## USM AGENT SERVER CONFIGURATION SCENARIOS
+        ## ═══════════════════════════════════════════════════════════════════════════════════════
+        ## SCENARIO 1: NO AUTHENTICATION
+        # sasl_protocol: none
+        # ssl_enabled: false
+        # ssl_mutual_auth_enabled: false
+
+        ## SCENARIO 2: BASIC AUTHENTICATION
+        # sasl_protocol: plain
+        # usm_agent_basic_users:
+        #   admin:
+        #     principal: admin
+        #     password: admin-secret
+        #   user1:
+        #     principal: user1
+        #     password: user1-secret
+        # ssl_enabled: false
+        # ssl_mutual_auth_enabled: false
+
+        ## SCENARIO 3: BASIC AUTHENTICATION + TLS
+        sasl_protocol: plain
+        usm_agent_basic_users:
+          admin:
+            principal: admin
+            password: admin-secret
+          user1:
+            principal: user1
+            password: user1-secret
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: false
+
+        ## SCENARIO 4: MUTUAL TLS (mTLS)
+        # sasl_protocol: none
+        # ssl_enabled: true
+        # ssl_mutual_auth_enabled: true
+
+        ## ═══════════════════════════════════════════════════════════════════════════════════════
+        ## OTHER SSL CONFIGURATIONS
+        ## ═══════════════════════════════════════════════════════════════════════════════════════
+        # ssl_custom_certs: true
+        # ssl_ca_cert_filepath: confluent-root-certificate.crt
+        # ssl_signed_cert_filepath: server.crt
+        # ssl_key_filepath: server-private-key.key
+        # ssl_key_password: password
+
+      all:
+        scenario_name: usm-agent-none-rhel
+
+        # Kafka Cluster Configuration (for testing purposes)
+        kafka_broker_cluster_name: "ansible-cluster-rohan"
+        kafka_broker_cluster_id: "ZmHIw3BUS2W8tuZ-9LIOyg"
+        kafka_cluster_id: "{{ kafka_broker_cluster_id }}"
+
+        ## ═══════════════════════════════════════════════════════════════════════════════════════
+        ## USM AGENT CLIENT CONFIGURATIONS
+        ## ═══════════════════════════════════════════════════════════════════════════════════════
+        usm_agent_user: "user1"
+        usm_agent_password: "user1-secret"
