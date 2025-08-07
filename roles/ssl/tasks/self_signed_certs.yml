@@ -17,6 +17,8 @@
   shell: |
     openssl genrsa -out {{key_path}} {{ssl_key_size}}
   diff: "{{ not mask_sensitive_diff|bool }}"
+  register: create_host_key_result
+  changed_when: create_host_key_result.rc == 0
 
 - name: Create Certificate Signing Request
   shell: |
@@ -24,11 +26,14 @@
       -out {{ ssl_file_dir_final }}/generation/client.csr \
       -subj '/CN={{service_name}}/OU=TEST/O=CONFLUENT/L=PaloAlto/ST=Ca/C=US'
   diff: "{{ not mask_sensitive_diff|bool }}"
+  register: create_csr_result
+  changed_when: create_csr_result.rc == 0
 
 - name: Create Openssl Config for SAN
   template:
     src: openssl-san.cnf.j2
     dest: "{{ ssl_file_dir_final }}/generation/openssl-san.cnf"
+    mode: '644'
   diff: "{{ not mask_sensitive_diff|bool }}"
 
 - name: Sign CSR with the Certificate Authority
@@ -41,6 +46,8 @@
       -passin pass:{{ssl_self_signed_ca_password}} \
       -extfile {{ ssl_file_dir_final }}/generation/openssl-san.cnf \
       -extensions v3_req
+  register: sign_csr_result
+  changed_when: sign_csr_result.rc == 0
   no_log: "{{mask_secrets|bool}}"
 
 - name: Slurp Signed Cert
@@ -59,6 +66,7 @@
   copy:
     content: "{{ ''.join(self_signed_cert_chain.complete_chain) }}"
     dest: "{{ ssl_file_dir_final }}/{{ service_name }}.chain"
+    mode: '644'
 
 - name: Create Keystore and Truststore from Certs
   include_tasks: create_keystores_from_certs.yml
