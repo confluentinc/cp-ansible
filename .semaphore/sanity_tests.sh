@@ -67,7 +67,12 @@ GALAXY_EXIT_CODE=$?
 echo "$GALAXY_OUTPUT"
 
 # Extract ansible-lint section from galaxy-importer output and check for warnings
-ANSIBLE_LINT_SECTION=$(echo "$GALAXY_OUTPUT" | sed -n '/Linting collection via ansible-lint\.\.\./,/\.\.\.ansible-lint run complete/p')
+ANSIBLE_LINT_SECTION=$(echo "$GALAXY_OUTPUT" | sed -n '/Linting collection via ansible-lint/,/\.\.\.ansible-lint run complete/p')
+
+# Debug: Show what was extracted
+echo "DEBUG: ANSIBLE_LINT_SECTION content:"
+echo "$ANSIBLE_LINT_SECTION"
+echo "DEBUG: End of ANSIBLE_LINT_SECTION"
 
 # Check if there are any warnings in the ansible-lint section
 if echo "$ANSIBLE_LINT_SECTION" | grep -q "WARNING:"; then
