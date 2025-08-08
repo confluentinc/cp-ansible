@@ -61,7 +61,7 @@ echo $PYTHON_INTERPRETER
 # Test1
 export GALAXY_IMPORTER_CONFIG="$PATH_TO_CPA/galaxy-importer/galaxy-importer.cfg"
 echo "Running galaxy-importer..."
-if (python -m galaxy_importer.main $ARTEFACT | sed -n '/Linting collection via ansible-lint/,/\.\.\.ansible-lint run complete/p' | grep -q "WARNING:"); then
+if (echo $(python -m galaxy_importer.main $ARTEFACT 2>&1) | sed -n '/Linting collection via ansible-lint/,/\.\.\.ansible-lint run complete/p' | grep -q "WARNING:"); then`
     echo "ERROR: ansible-lint warnings detected."
     exit 1
 fi
