@@ -64,10 +64,10 @@ echo "Running galaxy-importer..."
 GALAXY_OUTPUT=$(python -m galaxy_importer.main $ARTEFACT 2>&1)
 
 # Extract ansible-lint section from galaxy-importer output and check for warnings
-ANSIBLE_LINT_SECTION=$(echo "$GALAXY_OUTPUT" | sed -n '/Linting collection via ansible-lint/,/\.\.\.ansible-lint run complete/p')
+ANSIBLE_LINT_SECTION=$( "$GALAXY_OUTPUT" | sed -n '/Linting collection via ansible-lint/,/\.\.\.ansible-lint run complete/p')
 
 # Check if there are any warnings in the ansible-lint section
-if echo "$ANSIBLE_LINT_SECTION" | grep -q "WARNING:"; then
+if "$ANSIBLE_LINT_SECTION" | grep -q "WARNING:"; then
     echo "ERROR: ansible-lint warnings detected. Pipeline should fail on warnings."
     exit 1
 fi
