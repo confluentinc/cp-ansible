@@ -60,7 +60,26 @@ echo $PYTHON_INTERPRETER
 
 # Test1
 export GALAXY_IMPORTER_CONFIG="$PATH_TO_CPA/galaxy-importer/galaxy-importer.cfg"
-python -m galaxy_importer.main $ARTEFACT
+echo "Running galaxy-importer..."
+GALAXY_OUTPUT=$(python -m galaxy_importer.main $ARTEFACT 2>&1)
+
+# Extract ansible-lint section from galaxy-importer output and check for warnings
+ANSIBLE_LINT_SECTION=$(echo "$GALAXY_OUTPUT" | sed -n '/Linting collection via ansible-lint/,/\.\.\.ansible-lint run complete/p')
+
+# Check if there are any warnings in the ansible-lint section
+if echo "$ANSIBLE_LINT_SECTION" | grep -q "WARNING:"; then
+    echo "ERROR: ansible-lint warnings detected. Pipeline should fail on warnings."
+    exit 1
+fi
+
+# Check if the galaxy-importer itself failed
+if [ $GALAXY_EXIT_CODE -ne 0 ]; then
+    echo "ERROR: galaxy-importer failed with exit code $GALAXY_EXIT_CODE"
+    exit $GALAXY_EXIT_CODE
+fi
+
+echo "galaxy-importer completed successfully with no ansible-lint warnings."
 
 # Test2
+echo "Running ansible-test sanity..."
 ansible-test sanity
