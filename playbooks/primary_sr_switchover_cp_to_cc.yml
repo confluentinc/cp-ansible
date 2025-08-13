@@ -18,7 +18,7 @@
 
 - name: Schema Registry Automation Workflow
   hosts: schema_registry
-  gather_facts: false
+  gather_facts: true
   vars:
     # Workflow control variables
     workflow_part: "{{ workflow_part | default('all') }}"  # Options: schema_export, switchover, reverse_sync, all
@@ -34,6 +34,8 @@
     - name: Check if automation workflow should run
       set_fact:
         run_automation_workflow: "{{ sr_switch_over_exporter_name is defined and sr_switch_over_exporter_name != '' and sr_switch_over_exporter_name != 'none' }}"
+      tags:
+        - always
 
     - name: Skip automation workflow
       debug:
@@ -63,9 +65,9 @@
               - kafkastore.update.handlers=io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler
               - schema.registry.resource.extension.class=...SchemaExporterResourceExtension,SchemaImporterResourceExtension...
               - password.encoder.secret={{ password_encoder_secret | default('***') }}
-              {% if unified_stream_manager is defined and unified_stream_manager.remote_schema_registry_endpoint != 'none' %}
+              {% if unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none' %}
               USM Properties (for Confluent Cloud integration):
-              - usm.schema.registry.remote.endpoint={{ unified_stream_manager.remote_schema_registry_endpoint }}
+              - usm.schema.registry.remote.endpoint={{ unified_stream_manager.schema_registry_endpoint }}
               - usm.schema.registry.remote.api.key={{ unified_stream_manager.basic_username }}
               - usm.schema.registry.remote.api.secret=***
               {% endif %}
@@ -79,11 +81,11 @@
             block: |
               # Schema Registry Automation Properties
               kafkastore.update.handlers=io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler
-              schema.registry.resource.extension.class={{ rbac_enabled | confluent.platform.schema_registry_extension_classes(schema_exporters is defined, schema_importers is defined, (unified_stream_manager is defined and unified_stream_manager.remote_schema_registry_endpoint != 'none')) }}
+              schema.registry.resource.extension.class={{ rbac_enabled | confluent.platform.schema_registry_extension_classes(schema_exporters is defined, schema_importers is defined, (unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none')) }}
               password.encoder.secret={{ password_encoder_secret }}
-              {% if unified_stream_manager is defined and unified_stream_manager.remote_schema_registry_endpoint != 'none' %}
+              {% if unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none' %}
               # USM Schema Registry Properties
-              usm.schema.registry.remote.endpoint={{ unified_stream_manager.remote_schema_registry_endpoint }}
+              usm.schema.registry.remote.endpoint={{ unified_stream_manager.schema_registry_endpoint }}
               usm.schema.registry.remote.api.key={{ unified_stream_manager.basic_username }}
               usm.schema.registry.remote.api.secret={{ unified_stream_manager.basic_password }}
               {% endif %}
@@ -209,10 +211,9 @@
             msg: "Schema Export failed. Cannot proceed with automation."
       when:
         - run_automation_workflow | bool
-        - workflow_part in ['schema_export', 'all']
         - not (skip_schema_export | default(false))
       tags:
-        - schema_export
+        - schema_exporter
 
     # SWITCHOVER: Primary SR switchover from CP to CC
     - name: "Switchover: Primary SR switchover from CP to CC"
@@ -224,8 +225,8 @@
         - name: Pre-checks - Validate destination URLs match
           assert:
             that:
-              - schema_exporters[0].config.remote_schema_registry_endpoint == unified_stream_manager.remote_schema_registry_endpoint
-              - schema_importers[0].config.remote_schema_registry_endpoint == unified_stream_manager.remote_schema_registry_endpoint
+              - schema_exporters[0].config.schema_registry_endpoint == unified_stream_manager.schema_registry_endpoint
+              - schema_importers[0].config.schema_registry_endpoint == unified_stream_manager.schema_registry_endpoint
             fail_msg: "Pre-check failed: Exporter, Importer, and USM remote endpoints must match"
 
         - name: "Switch CP SR to FORWARD mode (WRITE DOWNTIME STARTS)"
@@ -256,7 +257,7 @@
 
         - name: "Switch CC SR to READWRITE mode (WRITE DOWNTIME ENDS)"
           uri:
-            url: "{{ unified_stream_manager.remote_schema_registry_endpoint }}/mode"
+            url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode"
             method: PUT
             body_format: json
             body:
@@ -269,7 +270,7 @@
 
         - name: Verify CC SR is in READWRITE mode
           uri:
-            url: "{{ unified_stream_manager.remote_schema_registry_endpoint }}/mode"
+            url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode"
             method: GET
             status_code: 200
             validate_certs: false
@@ -307,7 +308,7 @@
               Manual intervention may be required.
       when:
         - run_automation_workflow | bool
-        - (workflow_part in ['switchover', 'all'] or (skip_schema_export | default(false)))
+        - not (skip_schema_export | default(false))
       tags:
         - switchover
 
@@ -343,7 +344,7 @@
               SR AUTOMATION WORKFLOW COMPLETED SUCCESSFULLY!
 
               Current State:
-              - Primary SR: CC SR ({{ unified_stream_manager.remote_schema_registry_endpoint }})
+              - Primary SR: CC SR ({{ unified_stream_manager.schema_registry_endpoint }})
               - CP SR: FORWARD mode → CC SR
               - Export Sync: CP SR → CC SR ({{ schema_exporters[0].name }})
               - Import Sync: CC SR → CP SR ({{ schema_importers[0].name }})
@@ -364,15 +365,13 @@
             msg: "Reverse Sync failed. Manual intervention required for importer setup."
       when:
         - run_automation_workflow | bool
-        - workflow_part in ['reverse_sync', 'all']
       tags:
-        - reverse_sync
+        - schema_importer
 
     - name: Display workflow summary
       debug:
         msg: |
           Schema Registry Automation Workflow Summary:
-          Status: {{ workflow_status }}
           Parts Executed: {{ workflow_part }}
           {% if failed_step != '' %}
           Failed Step: {{ failed_step }}
