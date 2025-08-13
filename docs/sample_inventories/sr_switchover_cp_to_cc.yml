@@ -1,0 +1,103 @@
+---
+### Schema Registry Switchover from Confluent Platform to Confluent Cloud
+##
+## This inventory enables automated switchover of primary Schema Registry from CP to CC
+## with reverse sync setup for seamless migration.
+##
+## SUPPORTED SCENARIOS:
+##
+## SCENARIO 1: Existing CP deployment with schemas
+## - Configure: unified_stream_manager + schema_exporters + schema_importers + sr_switch_over_exporter_name
+## - Run: ansible-playbook ... --tags switchover_to_cc
+## - Result: Exports schemas → Switches to CC → Enables reverse sync
+##
+## SCENARIO 2: New/blank CP deployment (no schemas to export)
+## - Configure: unified_stream_manager + schema_importers (omit schema_exporters)
+## - Run: ansible-playbook ... --tags switchover_to_cc
+## - Result: Switches to CC → Enables reverse sync (no export needed)
+##
+## WORKFLOW OVERVIEW:
+## 1. Schema Export: Export existing schemas from CP SR to CC SR (if schemas exist)
+## 2. Switchover: CP SR switches to FORWARD mode, CC SR becomes primary (READWRITE)
+## 3. Reverse Sync: Setup importer for CC SR → CP SR sync
+##
+## USAGE:
+## - Default run: ansible-playbook playbooks/primary_sr_switchover_cp_to_cc.yml
+##   → Runs schema exporter setup only
+## - Full switchover: ansible-playbook ... --tags switchover_to_cc
+##   → Runs exporter + switchover + reverse sync
+## - Individual phases: --tags schema_exporter|forward_to_cc|schema_importer
+
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: ubuntu
+    ansible_become: true
+    ansible_ssh_private_key_file: ~/cp-ansible.pem
+    confluent_common_repository_baseurl: "https://dev-confluent-packages-654654529379-us-west-2.s3.us-west-2.amazonaws.com/8.1.x/6081"
+    confluent_package_version: "8.1.0-0"
+    confluent_full_package_version: "8.1.0-0.1.0"
+    confluent_package_redhat_suffix: "-8.1.0-0.1.0"
+    confluent_package_debian_suffix: "=8.1.0~0-1"
+
+    ## REQUIRED: Secret for enabling schema exporter and importer
+    password_encoder_secret: "mysecret"
+    
+    ## OPTIONAL: Disable remote endpoint validation if needed
+    schema_registry_custom_properties:
+      usm.schema.registry.remote.endpoint.validation.enabled: false
+
+schema_registry:
+  hosts:
+    your-schema-registry-host.example.com
+  vars:
+    ## REQUIRED: Confluent Cloud Schema Registry connection details
+    ## This is required to enable forward sync from CP to CC
+    unified_stream_manager:
+      schema_registry_endpoint: https://psrc-xxxxx.us-east-1.aws.confluent.cloud
+      authentication_type: basic  # Currently only 'basic' auth supported
+      basic_username: YOUR_CC_SR_API_KEY  # CC SR API Key
+      basic_password: YOUR_CC_SR_API_SECRET  # CC SR API Secret
+
+    schema_exporters:
+      - name: schema-exporter  # Must match sr_switch_over_exporter_name
+        subjects: ["*"]  # Export all subjects, or specify patterns: [":.context:*", "subject-prefix-*"]
+        context_type: "AUTO"  # AUTO|CUSTOM|NONE|DEFAULT - how to handle contexts
+        # context: "custom-context"  # Required if context_type is CUSTOM
+        config:
+          schema_registry_endpoint: https://psrc-xxxxx.us-east-1.aws.confluent.cloud
+          authentication_type: basic
+          basic_username: YOUR_CC_SR_API_KEY
+          basic_password: YOUR_CC_SR_API_SECRET
+
+    ## REQUIRED: Specify which exporter to use for switchover workflow
+    ## - Must match one of schema_exporters[].name if exporters are defined
+    ## - Can be undefined/empty for blank CP deployments (import-only workflow)
+    sr_switch_over_exporter_name: "schema-exporter"
+
+    ## REQUIRED: Define importers for reverse sync (CC SR → CP SR)
+    ## This enables bidirectional sync after switchover
+    schema_importers:
+      - name: "schema-importer"
+        subjects: ["*"]  # Import all subjects from CC, or specify patterns
+        config:
+          schema_registry_endpoint: https://psrc-xxxxx.us-east-1.aws.confluent.cloud
+          authentication_type: basic
+          basic_username: YOUR_CC_SR_API_KEY
+          basic_password: YOUR_CC_SR_API_SECRET
+
+    ## MULTI-NODE SETUP NOTES:
+    ## - Schema Registry automation properties are applied to ALL nodes
+    ## - Switchover workflow runs on FIRST node only (SR nodes are clustered)
+    ## - All nodes will be configured to forward to CC after switchover
+
+    ## REQUIRED: Secret for schema encryption (can be different from global)
+    password_encoder_secret: "secret"
+
+kafka_broker:
+  hosts:
+    your-kafka-broker.example.com:
+
+kafka_controller:
+  hosts:
+    your-kafka-controller.example.com:
