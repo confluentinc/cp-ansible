@@ -14,18 +14,18 @@
     - import_role:
         name: variables
 
-    - name: Test Jolokia Endpoint Access (No Auth)
+    - name: Test Jolokia Migration Endpoint Access (No Auth)
       uri:
-        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/list"
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
         validate_certs: false
         return_content: true
         status_code: 200
       register: jolokia_no_auth_result
       failed_when: false
 
-    - name: Test Jolokia Endpoint Access (Basic Auth)
+    - name: Test Jolokia Migration Endpoint Access (Basic Auth)
       uri:
-        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/list"
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
         validate_certs: false
         return_content: true
         force_basic_auth: true
@@ -46,28 +46,32 @@
     - name: Fail if Both Auth Methods Failed
       fail:
         msg: |
-          ERROR: Unable to access Jolokia endpoint with either authentication method!
+          ERROR: Unable to access Jolokia ZkMigrationState endpoint with either authentication method!
 
-          Endpoint: {{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/list
+          Endpoint: {{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState
 
           No Auth Result: {{ jolokia_no_auth_result.status | default('Connection Failed') }}
           Basic Auth Result: {{ jolokia_basic_auth_result.status | default('Connection Failed') }}
 
           Possible causes:
-          1. Jolokia access control XML file is blocking access
+          1. Jolokia access control XML file is blocking access to the ZkMigrationState MBean
           2. Jolokia service is not running properly
-          3. Both authentication methods are misconfigured
+          3. Authentication methods are misconfigured (check jolokia_user/jolokia_password)
           4. SSL/TLS configuration issues
+          5. Kafka Controller is not running or ZkMigrationState MBean is not available
 
           Please check your jolokia_access_control_custom_file_enabled and
           jolokia_access_control_file_src_path configuration.
+
+          Note: This validation tests the actual endpoint required for migration monitoring,
+          not the general /jolokia/list endpoint which may be blocked for security reasons.
       when: not jolokia_accessible|bool
 
     - name: Success - Jolokia Endpoint is Accessible
       debug:
         msg: |
-          SUCCESS: Jolokia endpoint is accessible and ready for ZK to KRaft migration
-          Endpoint: {{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/list
+          SUCCESS: Jolokia ZkMigrationState endpoint is accessible and ready for ZK to KRaft migration
+          Endpoint: {{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState
           No Auth: {{ jolokia_no_auth_result.status | default('Failed') }}
           Basic Auth: {{ jolokia_basic_auth_result.status | default('Failed') }}
           At least one method succeeded!
