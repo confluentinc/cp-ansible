@@ -53,18 +53,10 @@
           No Auth Result: {{ jolokia_no_auth_result.status | default('Connection Failed') }}
           Basic Auth Result: {{ jolokia_basic_auth_result.status | default('Connection Failed') }}
 
-          Possible causes:
-          1. Jolokia access control XML file is blocking access to the ZkMigrationState MBean
-          2. Jolokia service is not running properly
-          3. Authentication methods are misconfigured (check jolokia_user/jolokia_password)
-          4. SSL/TLS configuration issues
-          5. Kafka Controller is not running or ZkMigrationState MBean is not available
-
           Please check your jolokia_access_control_custom_file_enabled and
           jolokia_access_control_file_src_path configuration.
 
           Note: This validation tests the actual endpoint required for migration monitoring,
-          not the general /jolokia/list endpoint which may be blocked for security reasons.
       when: not jolokia_accessible|bool
 
     - name: Success - Jolokia Endpoint is Accessible
@@ -234,42 +226,6 @@
       until: ( jolokia_output.content | from_json ).value.Value == 3
       register: jolokia_output
       when: jolokia_auth_mode == "basic"
-
-- name: Restore Original Jolokia Policy
-  hosts: kafka_controller
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: variables
-
-    - name: Restore Original Jolokia Access Control XML
-      copy:
-        src: "{{ kafka_controller_jolokia_access_control_dest_path }}.backup"
-        dest: "{{ kafka_controller_jolokia_access_control_dest_path }}"
-        remote_src: true
-        mode: '640'
-        owner: "{{ kafka_controller_user }}"
-        group: "{{ kafka_controller_group }}"
-      when:
-        - kafka_controller_jolokia_access_control_enabled|bool
-      failed_when: false
-      notify: restart Kafka Controller
-
-    - name: Remove Backup File
-      file:
-        path: "{{ kafka_controller_jolokia_access_control_dest_path }}.backup"
-        state: absent
-      when: kafka_controller_jolokia_access_control_enabled|bool
-
-    - meta: flush_handlers
-
-    - name: Wait for Kafka Controller to restart with restored policy
-      wait_for:
-        port: "{{ kafka_controller_jolokia_port }}"
-        host: "{{ inventory_hostname }}"
-        delay: 10
-        timeout: 300
-      when: kafka_controller_jolokia_access_control_enabled|bool
 
 - name: Finish Migration
   hosts: kafka_controller
