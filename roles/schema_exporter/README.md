@@ -16,13 +16,13 @@ Below is an example of how to configure a schema exporter in your inventory file
 schema_exporter:
   - name: "dev-to-staging-exporter"
     context_type: "CUSTOM"
-    remote_context: "dev-context"
+    context: "dev-context"
     subjects: ["orders.*", "customers.*"]
     subject_rename_format: "dc_${subject}"
     kek_rename_format: "dc_${kek}"
     config:
-      remote_schema_registry_endpoint: "http://dev-schema-registry:8081"
-      remote_authentication_type: "basic"
+      schema_registry_endpoint: "http://dev-schema-registry:8081"
+      authentication_type: "basic"
       basic_username: "dev-user"
       basic_password: "dev-password"
 
@@ -30,8 +30,8 @@ schema_exporter:
     context_type: "AUTO"
     subjects: [*]  # Export all subjects
     config:
-      remote_schema_registry_endpoint: "https://prod-schema-registry:8081"
-      remote_authentication_type: "basic"
+      schema_registry_endpoint: "https://prod-schema-registry:8081"
+      authentication_type: "basic"
       basic_username: "prod-client-id"
       basic_password: "prod-client-secret"
 
@@ -39,8 +39,8 @@ schema_exporter:
     context_type: "NONE"
     subjects: ["payment.*"]
     config:
-      remote_schema_registry_endpoint: "http://remote-schema-registry:8081"
-      remote_authentication_type: "basic"
+      schema_registry_endpoint: "http://remote-schema-registry:8081"
+      authentication_type: "basic"
       basic_username: "client-id"
       basic_password: "client-secret"
 
