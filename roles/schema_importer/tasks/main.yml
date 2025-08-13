@@ -1,0 +1,28 @@
+---
+- name: Import variables
+  import_role:
+    name: variables
+
+- name: Validate input configuration
+  include_tasks: validate_input.yml
+  tags:
+    - validate
+    - validate_schema_importer
+
+- name: Wait for Schema Registry to be Ready
+  uri:
+    url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+    method: GET
+    status_code: 200
+    validate_certs: false
+    user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
+    password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
+  retries: "{{ schema_registry_retries }}"
+  delay: 2
+
+- name: Process each Schema Importer
+  include_tasks: process_importer.yml
+  loop: "{{ schema_importers }}"
+  loop_control:
+    loop_var: importer
+    index_var: importer_index
