@@ -18,16 +18,16 @@ schema_importers:
     context: "staging-context"
     subjects: ["orders.*", "customers.*"]
     config:
-      remote_schema_registry_endpoint: "http://staging-schema-registry:8081"
-      remote_authentication_type: "basic"
+      schema_registry_endpoint: "http://staging-schema-registry:8081"
+      authentication_type: "basic"
       basic_username: "staging-user"
       basic_password: "staging-password"
 
   - name: "dev-sync-importer"
     subjects: ["*"]  # Import all subjects
     config:
-      remote_schema_registry_endpoint: "https://dev-schema-registry:8081"
-      remote_authentication_type: "basic"
+      schema_registry_endpoint: "https://dev-schema-registry:8081"
+      authentication_type: "basic"
       basic_username: "dev-client-id"
       basic_password: "dev-client-secret"
 
@@ -35,8 +35,8 @@ schema_importers:
     context: "backup-context"
     subjects: ["payment.*", "user.*"]
     config:
-      remote_schema_registry_endpoint: "http://backup-schema-registry:8081"
-      remote_authentication_type: "basic"
+      schema_registry_endpoint: "http://backup-schema-registry:8081"
+      authentication_type: "basic"
       basic_username: "backup-user"
       basic_password: "backup-password"
 
