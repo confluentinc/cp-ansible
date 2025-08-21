@@ -1,0 +1,159 @@
+---
+### SR Automation Workflow Testing - Plaintext/No Auth
+### Tests SR automation features with no security/authentication
+### Simplest baseline scenario for automation workflow testing
+
+name: sr_automation_plaintext
+platforms:
+  - name: controller1
+    hostname: controller1.confluent
+    groups:
+      - kafka_controller
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Primary Schema Registry (simulates CP SR)
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Mock Confluent Cloud Schema Registry (simulates CC SR target)
+  - name: mock-cc-schema-registry
+    hostname: mock-cc-schema-registry.confluent
+    groups:
+      - mock_cc_schema_registry
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+provisioner:
+  playbooks:
+    prepare: prepare.yml
+    converge: converge.yml
+    verify: verify.yml
+  inventory:
+    group_vars:
+      all:
+        scenario_name: sr_automation_plaintext
+        # SR Automation specific variables (applies to both CP and mock CC)
+        password_encoder_secret: "plaintext-test-secret"
+        
+        # SR Automation components (global - applies to all hosts for workflow)
+        unified_stream_manager:
+          schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
+          authentication_type: basic
+          basic_username: "cc-api-key"
+          basic_password: "cc-api-secret"
+        
+        # Schema Exporters for testing - Basic auth to mock CC SR (even in plaintext scenario)
+        schema_exporters:
+          - name: "plaintext-schema-exporter"
+            subjects: ["test.*", "automation.*"]
+            context_type: "AUTO"
+            config:
+              schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
+              authentication_type: basic
+              basic_username: "exporter-api-key"
+              basic_password: "client-secret"
+        
+        # Schema Importers for reverse sync testing - Basic auth from mock CC SR
+        schema_importers:
+          - name: "plaintext-schema-importer"
+            subjects: ["*"]
+            config:
+              schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
+              authentication_type: basic
+              basic_username: "importer-api-key"
+              basic_password: "client-secret"
+        
+        # Specify exporter for switchover testing
+        sr_switch_over_exporter_name: "plaintext-schema-exporter"
+        
+      # CP Schema Registry configuration (only applies to CP components)
+      schema_registry:
+        # No SSL/TLS - Plaintext configuration
+        ssl_enabled: false
+        ssl_mutual_auth_enabled: false
+        schema_registry_authentication_type: none
+        schema_registry_ssl_enabled: false
+
+      # Kafka plaintext configuration
+      kafka_broker:
+        ssl_enabled: false
+        sasl_protocol: none
+
+      kafka_controller:
+        ssl_enabled: false
+        sasl_protocol: none
+
+      # Schema Registry plaintext configuration
+      schema_registry:
+        schema_registry_custom_properties:
+          # Disable security validations for plaintext testing
+          usm.schema.registry.remote.endpoint.validation.enabled: false
+
+    host_vars:
+      # Mock CC Schema Registry configuration - Basic Auth over HTTP (simulates CC)
+      mock-cc-schema-registry:
+        schema_registry_listener_port: 8081
+        schema_registry_http_protocol: http
+        schema_registry_authentication_type: basic
+        # CC uses basic auth, no mutual TLS (using HTTP for plaintext testing)
+        ssl_enabled: true
+        schema_registry_authentication_type: basic
+        schema_registry_basic_users:
+          client:
+            principal: client
+            password: client-secret
+            roles: client,developer,admin
+        schema_registry_custom_properties:
+          usm.schema.registry.remote.endpoint.validation.enabled: false
+
+verifier:
+  name: ansible

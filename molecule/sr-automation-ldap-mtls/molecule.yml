@@ -1,0 +1,198 @@
+---
+### SR Automation Workflow Testing - LDAP/RBAC + mTLS
+### Tests SR automation features with LDAP authentication, RBAC authorization, and mTLS
+### Enterprise directory + certificate authentication scenario
+
+name: sr_automation_ldap_mtls
+platforms:
+  - name: controller1
+    hostname: controller1.confluent
+    groups:
+      - kafka_controller
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Primary Schema Registry (simulates CP SR with LDAP/RBAC + mTLS)
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Mock Confluent Cloud Schema Registry (simulates CC SR target with basic auth)
+  - name: mock-cc-schema-registry
+    hostname: mock-cc-schema-registry.confluent
+    groups:
+      - mock_cc_schema_registry
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # LDAP server for testing
+  - name: ldap-server1
+    hostname: ldap-server1.confluent
+    groups:
+      - ldap_server
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+provisioner:
+  playbooks:
+    prepare: prepare.yml
+    converge: converge.yml
+    verify: verify.yml
+  inventory:
+    group_vars:
+      all:
+        scenario_name: sr_automation_ldap_mtls
+        # SR Automation specific variables (applies to both CP and mock CC)
+        password_encoder_secret: "ldap-mtls-test-secret"
+        
+        # LDAP configuration (global for components that need it)
+        ldap_enabled: true
+        ldap_url: "ldaps://ldap-server1:636"
+        ldap_bind_dn: "cn=ldapadmin,dc=confluent,dc=example,dc=com"
+        ldap_bind_password: "ldapadmin"
+        ldap_search_base: "dc=confluent,dc=example,dc=com"
+        
+        # RBAC configuration (global)
+        rbac_enabled: true
+        mds_bootstrap_server_urls: "{{ groups['kafka_broker'] | confluent.platform.get_hostnames(hostvars, 'kafka_broker') | confluent.platform.get_port(hostvars, 'kafka_broker_listeners', 'internal') }}"
+        
+        # SR Automation components (global - applies to all hosts for workflow)
+        unified_stream_manager:
+          schema_registry_endpoint: "https://mock-cc-schema-registry:8081"
+          authentication_type: basic
+          basic_username: "client"
+          basic_password: "cc-api-secret"
+        
+        # Schema Exporters for testing - Basic auth to mock CC SR
+        schema_exporters:
+          - name: "ldap-mtls-schema-exporter"
+            subjects: ["test.*", "automation.*"]
+            context_type: "AUTO"
+            config:
+              schema_registry_endpoint: "https://mock-cc-schema-registry:8081"
+              authentication_type: basic
+              basic_username: "client"
+              basic_password: "client-secret"
+        
+        # Schema Importers for reverse sync testing - Basic auth from mock CC SR
+        schema_importers:
+          - name: "ldap-mtls-schema-importer"
+            subjects: ["*"]
+            config:
+              schema_registry_endpoint: "https://mock-cc-schema-registry:8081"
+              authentication_type: basic
+              basic_username: "client"
+              basic_password: "client-secret"
+        
+        # Specify exporter for switchover testing
+        sr_switch_over_exporter_name: "ldap-mtls-schema-exporter"
+
+      # LDAP server group configuration
+      ldap_server:
+        ldaps_enabled: true
+        ldaps_custom_certs: true
+        ssl_custom_certs: true
+
+      # Schema Registry LDAP + RBAC + mTLS configuration
+      schema_registry:
+        # SSL/TLS with mutual authentication (CP only)
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
+        schema_registry_authentication_type: ldap
+        schema_registry_ssl_mutual_auth_enabled: true
+        
+        schema_registry_custom_properties:
+          # LDAP authentication - using standard pattern
+          authentication.method: LDAP
+          ldap.java.naming.factory.initial: "com.sun.jndi.ldap.LdapCtxFactory"
+          ldap.com.sun.jndi.ldap.read.timeout: "3000"
+          ldap.java.naming.provider.url: "{{ ldap_url }}"
+          ldap.java.naming.security.protocol: "SSL"
+          ldap.ssl.truststore.location: "/var/ssl/private/schema_registry.truststore.jks"
+          ldap.ssl.truststore.password: "confluenttruststorepass"
+          ldap.java.naming.security.principal: "{{ ldap_bind_dn }}"
+          ldap.java.naming.security.credentials: "{{ ldap_bind_password }}"
+          ldap.java.naming.security.authentication: "simple"
+          ldap.user.search.base: "{{ ldap_search_base }}"
+          ldap.group.search.base: "{{ ldap_search_base }}"
+          ldap.user.name.attribute: "uid"
+          ldap.user.memberof.attribute.pattern: "CN=(.*),{{ ldap_search_base }}"
+          ldap.group.name.attribute: "cn"
+          ldap.group.member.attribute.pattern: "CN=(.*),{{ ldap_search_base }}"
+          ldap.user.object.class: "account"
+          # RBAC authorization
+          confluent.schema.registry.authorizer.class: "io.confluent.kafka.schemaregistry.security.authorizer.rbac.RbacAuthorizer"
+          # mTLS settings
+          inter.instance.protocol: "https"
+          usm.schema.registry.remote.endpoint.validation.enabled: false
+
+    host_vars:
+      # Mock CC Schema Registry configuration - Basic Auth (simulates CC)
+      mock-cc-schema-registry:
+        schema_registry_listener_port: 8081
+        schema_registry_authentication_type: basic
+        # CC uses regular TLS, not mutual TLS
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: false
+        schema_registry_ssl_mutual_auth_enabled: false
+        schema_registry_basic_users:
+          client:
+            principal: client
+            password: client-secret
+            roles: client,developer,admin
+
+verifier:
+  name: ansible

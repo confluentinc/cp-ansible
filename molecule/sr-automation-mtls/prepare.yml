@@ -1,0 +1,46 @@
+---
+### SR Automation Workflow Test Environment Preparation - mTLS
+### Imports base preparation and adds mTLS specific setup
+
+- import_playbook: ../base_templates/sr_automation_prepare_base.yml
+
+- name: mTLS Specific Preparation
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Verify certificate generation for mTLS
+      stat:
+        path: "{{ ssl_file_dir_final }}/schema_registry.crt"
+      register: cert_check
+      when: ssl_mutual_auth_enabled | default(false)
+
+    - name: Display mTLS certificate status
+      debug:
+        msg: |
+          mTLS Certificate Configuration:
+          - SSL enabled: {{ ssl_enabled | default(false) }}
+          - Mutual auth enabled: {{ ssl_mutual_auth_enabled | default(false) }}
+          - Certificates directory: {{ ssl_file_dir_final | default('not-configured') }}
+          - Schema Registry cert: {{ 'EXISTS' if cert_check.stat.exists | default(false) else 'PENDING' }}
+
+- name: mTLS Configuration Verification
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+    - name: Verify mTLS environment variables
+      assert:
+        that:
+          - ssl_enabled | default(false) == true
+          - ssl_mutual_auth_enabled | default(false) == true
+          - schema_registry_ssl_mutual_auth_enabled | default(false) == true
+          - schema_registry_authentication_type == 'mtls'
+        fail_msg: "mTLS scenario configuration validation failed"
+
+    - name: Display mTLS scenario readiness
+      debug:
+        msg: |
+          ✓ mTLS SR Automation Test Environment Ready
+          - SSL/TLS with mutual authentication enabled
+          - Client certificates configured
+          - Certificate-based authentication
+          - Ready for secure automation workflow testing
