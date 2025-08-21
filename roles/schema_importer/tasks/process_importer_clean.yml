@@ -10,10 +10,44 @@
     base_config: "{{ importer.config | default({}) }}"
     override_config: "{{ importer.config_overrides | default({}) }}"
     # Transform inventory config to API format
-    api_config:
+    # Base configuration
+    base_api_config:
       schema.registry.url: "{{ base_config.schema_registry_endpoint }}"
-      basic.auth.credentials.source: "{{ 'USER_INFO' if base_config.authentication_type == 'basic' else omit }}"
-      basic.auth.user.info: "{{ base_config.basic_username + ':' + base_config.basic_password if base_config.authentication_type == 'basic' else omit }}"
+    
+    # Basic Authentication
+    basic_auth_config: "{{ {
+      'basic.auth.credentials.source': 'USER_INFO',
+      'basic.auth.user.info': base_config.basic_username + ':' + base_config.basic_password
+    } if base_config.authentication_type == 'basic' else {} }}"
+    
+    # SASL Authentication
+    sasl_auth_config: "{{ {
+      'sasl.mechanism': base_config.sasl_mechanism | default('PLAIN'),
+      'security.protocol': base_config.security_protocol | default('SASL_SSL'),
+      'sasl.jaas.config': base_config.sasl_jaas_config if base_config.sasl_jaas_config is defined 
+                         else (base_config.sasl_mechanism | default('PLAIN') + ' required username=\"' + base_config.sasl_username + '\" password=\"' + base_config.sasl_password + '\";')
+    } if base_config.authentication_type == 'sasl' else {} }}"
+    
+    # OAuth Authentication  
+    oauth_auth_config: "{{ {
+      'security.protocol': base_config.security_protocol | default('SASL_SSL'),
+      'sasl.mechanism': 'OAUTHBEARER',
+      'sasl.jaas.config': 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"' + base_config.oauth_client_id + '\" clientSecret=\"' + base_config.oauth_client_secret + '\" scope=\"' + (base_config.oauth_scope | default('')) + '\" extension_logicalCluster=\"' + (base_config.oauth_logical_cluster | default('')) + '\" extension_identityPoolId=\"' + (base_config.oauth_identity_pool_id | default('')) + '\";',
+      'sasl.login.callback.handler.class': 'io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler'
+    } if base_config.authentication_type == 'oauth' else {} }}"
+    
+    # mTLS Authentication
+    mtls_auth_config: "{{ {
+      'security.protocol': base_config.security_protocol | default('SSL'),
+      'ssl.keystore.location': base_config.ssl_keystore_location,
+      'ssl.keystore.password': base_config.ssl_keystore_password,
+      'ssl.key.password': base_config.ssl_key_password | default(base_config.ssl_keystore_password),
+      'ssl.truststore.location': base_config.ssl_truststore_location,
+      'ssl.truststore.password': base_config.ssl_truststore_password
+    } if base_config.authentication_type == 'mtls' else {} }}"
+    
+    # Combined API configuration
+    api_config: "{{ base_api_config | combine(basic_auth_config) | combine(sasl_auth_config) | combine(oauth_auth_config) | combine(mtls_auth_config) }}"
     schema_importer_final_config: "{{ api_config | combine(override_config) }}"
 
 # Shared variables for common request body fields and URI auth
