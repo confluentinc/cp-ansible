@@ -14,33 +14,26 @@
     - import_role:
         name: variables
 
-    - name: Test Jolokia Migration Endpoint Access (No Auth)
+    - name: Test Jolokia Migration Endpoint Access
       uri:
         url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
         validate_certs: false
         return_content: true
         status_code: 200
-      register: jolokia_no_auth_result
+        force_basic_auth: "{{ item.auth }}"
+        url_username: "{{ item.username | default(omit) }}"
+        url_password: "{{ item.password | default(omit) }}"
+      register: jolokia_auth_results
       failed_when: false
-
-    - name: Test Jolokia Migration Endpoint Access (Basic Auth)
-      uri:
-        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
-        validate_certs: false
-        return_content: true
-        force_basic_auth: true
-        url_username: "{{ jolokia_user }}"
-        url_password: "{{ jolokia_password }}"
-        status_code: 200
-      register: jolokia_basic_auth_result
-      failed_when: false
+      loop:
+        - { name: "no_auth", auth: false }
+        - { name: "basic_auth", auth: true, username: "{{ jolokia_user }}", password: "{{ jolokia_password }}" }
 
     - name: Check if Either Auth Method Succeeded
       set_fact:
         jolokia_accessible: >-
           {{
-            (jolokia_no_auth_result.status is defined and jolokia_no_auth_result.status == 200) or
-            (jolokia_basic_auth_result.status is defined and jolokia_basic_auth_result.status == 200)
+            jolokia_auth_results.results | selectattr('status', 'defined') | selectattr('status', 'equalto', 200) | list | length > 0
           }}
 
     - name: Fail if Both Auth Methods Failed
