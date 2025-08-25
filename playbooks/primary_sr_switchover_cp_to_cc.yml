@@ -218,6 +218,20 @@
       set_fact:
         exporter_name: "{{ sr_switch_over_exporter_name }}"
 
+    - name: Pre-checks - Validate USM remote endpoint is configured
+      assert:
+        that:
+          - unified_stream_manager is defined
+          - unified_stream_manager.schema_registry_endpoint is defined
+          - unified_stream_manager.schema_registry_endpoint != 'none'
+          - unified_stream_manager.schema_registry_endpoint != ''
+          - unified_stream_manager.schema_registry_endpoint != none
+        fail_msg: "USM remote endpoint must be configured. Current value: '{{ unified_stream_manager.schema_registry_endpoint | default('undefined') }}'. Please set unified_stream_manager.schema_registry_endpoint to a valid Confluent Cloud Schema Registry URL."
+      tags:
+        - never
+        - forward_to_cc
+        - switchover_to_cc
+
     - name: Pre-checks - Validate exporter and USM destination URLs match
       assert:
         that:
@@ -225,12 +239,20 @@
         fail_msg: "Pre-check failed: Exporter and USM remote endpoints must match"
       when:
         - (schema_exporters is defined and (schema_exporters | length) > 0) or (sr_switch_over_exporter_name is defined)
+      tags:
+        - never
+        - forward_to_cc
+        - switchover_to_cc
 
     - name: Pre-checks - Validate importer and USM destination URLs match
       assert:
         that:
           - schema_importers[0].config.schema_registry_endpoint == unified_stream_manager.schema_registry_endpoint
         fail_msg: "Pre-check failed: Importer and USM remote endpoints must match"
+      tags:
+        - never
+        - forward_to_cc
+        - switchover_to_cc
 
     # Context validation for schema importers - handles both scenarios:
     # 1. When USM remote_context is defined: qualified subjects must match the context
