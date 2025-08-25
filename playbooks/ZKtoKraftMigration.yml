@@ -31,28 +31,26 @@
       set_fact:
         jolokia_accessible: >-
           {{
-            jolokia_auth_results.results | selectattr('status', 'defined') | selectattr('status', 'equalto', 200) | list | length > 0
+            jolokia_auth_results.results | map(attribute='status') | select('defined') | select('equalto', 200) | list | length > 0
           }}
     - name: Fail if Both Auth Methods Failed
       fail:
-        msg: |
-          ERROR: Unable to access Jolokia ZkMigrationState endpoint with either authentication method!
-          Endpoint: {{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState
-          No Auth Result: {{ jolokia_no_auth_result.status | default('Connection Failed') }}
-          Basic Auth Result: {{ jolokia_basic_auth_result.status | default('Connection Failed') }}
-          Please check your jolokia_access_control_custom_file_enabled and
-          jolokia_access_control_file_src_path configuration.
-          Note: This validation tests the actual endpoint required for migration monitoring,
+        msg: "ERROR: Unable to access Jolokia ZkMigrationState endpoint with either authentication method! Please check your jolokia_access_control_custom_file_enabled and jolokia_access_control_file_src_path configuration."
+      when: not jolokia_accessible|bool
+
+    - name: Show Failed Auth Results
+      debug:
+        var: jolokia_auth_results.results
       when: not jolokia_accessible|bool
 
     - name: Success - Jolokia Endpoint is Accessible
       debug:
-        msg: |
-          SUCCESS: Jolokia ZkMigrationState endpoint is accessible and ready for ZK to KRaft migration
-          Endpoint: {{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState
-          No Auth: {{ jolokia_no_auth_result.status | default('Failed') }}
-          Basic Auth: {{ jolokia_basic_auth_result.status | default('Failed') }}
-          At least one method succeeded!
+        msg: "SUCCESS: Jolokia ZkMigrationState endpoint is accessible and ready for ZK to KRaft migration!"
+      when: jolokia_accessible|bool
+
+    - name: Show Jolokia Test Results
+      debug:
+        var: jolokia_auth_results.results
       when: jolokia_accessible|bool
 
 - import_playbook: kafka_broker.yml
