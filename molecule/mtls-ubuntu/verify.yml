@@ -105,3 +105,47 @@
         file_path: /etc/confluent-control-center/control-center-production.properties
         property: confluent.controlcenter.streams.security.protocol
         expected_value: SSL
+
+- name: Test Jolokia Migration Endpoint Access
+  uri:
+    url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|default(false)|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port|default(8778)}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    force_basic_auth: "{{ item.auth }}"
+    url_username: "{{ item.username | default(omit) }}"
+    url_password: "{{ item.password | default(omit) }}"
+  register: jolokia_auth_results
+  failed_when: false
+  loop:
+    - { name: "no_auth", auth: false }
+    - { name: "basic_auth", auth: true, username: "{{ jolokia_user|default('') }}", password: "{{ jolokia_password|default('') }}" }
+
+- name: Check if Either Auth Method Succeeded
+  set_fact:
+    jolokia_accessible: >-
+      {{
+        jolokia_auth_results.results | selectattr('status', 'defined') | selectattr('status', 'equalto', 200) | list | length > 0
+      }}
+
+- name: Fail if Both Auth Methods Failed
+  fail:
+    msg: |
+      ERROR: Unable to access Jolokia ZkMigrationState endpoint with either authentication method!
+      Endpoint: {{ 'https' if kafka_controller_jolokia_ssl_enabled|default(false)|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port|default(8778)}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState
+      No Auth Result: {{ (jolokia_auth_results.results | selectattr('item.name', 'equalto', 'no_auth') | first).status | default('Connection Failed') }}
+      Basic Auth Result: {{ (jolokia_auth_results.results | selectattr('item.name', 'equalto', 'basic_auth') | first).status | default('Connection Failed') }}
+      Please check your jolokia_access_control_custom_file_enabled and
+      jolokia_access_control_file_src_path configuration.
+      Note: This validation tests the actual endpoint required for migration monitoring.
+  when: not jolokia_accessible|bool
+
+- name: Success - Jolokia Endpoint is Accessible
+  debug:
+    msg: |
+      SUCCESS: Jolokia ZkMigrationState endpoint is accessible and ready for ZK to KRaft migration!
+      Endpoint: {{ 'https' if kafka_controller_jolokia_ssl_enabled|default(false)|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port|default(8778)}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState
+      No Auth: {{ (jolokia_auth_results.results | selectattr('item.name', 'equalto', 'no_auth') | first).status | default('Failed') }}
+      Basic Auth: {{ (jolokia_auth_results.results | selectattr('item.name', 'equalto', 'basic_auth') | first).status | default('Failed') }}
+      At least one method succeeded!
+  when: jolokia_accessible|bool
