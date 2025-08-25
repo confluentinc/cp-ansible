@@ -1,0 +1,42 @@
+---
+- name: Primary SR Switchover Validations
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+
+    - name: Validate Unified Stream Manager (USM) config
+      assert:
+        that:
+          - unified_stream_manager.schema_registry_endpoint != 'none'
+          - unified_stream_manager.authentication_type in ['basic']
+          - unified_stream_manager.basic_username != 'none'
+          - unified_stream_manager.basic_password != 'none'
+        fail_msg: "USM (Confluent Cloud SR) configuration is incomplete or invalid."
+
+    - name: Validate switchover exporter name
+      assert:
+        that:
+           - sr_switch_over_exporter_name != ''
+           - sr_switch_over_exporter_name != 'none'
+      when:
+        - sr_switch_over_exporter_name is defined
+
+
+    - name: Validate importer configuration
+      assert:
+        that:
+          - schema_importers is defined and (schema_importers | length) > 0
+        fail_msg: "Importer configuration is required for switchover or reverse sync phases"
+      tags:
+        - never
+        - switchover_to_cc
+        - forward_to_cc
+        - schema_importer
+
+    - name: Validate exporter configuration
+      assert:
+        that:
+           - sr_switch_over_exporter_name is defined
+        fail_msg: "sr_switch_over_exporter_name is required for switchover if schema_exporters is defined"
+      when:
+        - schema_exporters is defined and (schema_exporters | length) > 0
