@@ -76,7 +76,7 @@
 
     - name: Test Jolokia Migration Endpoint Access
       uri:
-        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|default(false)|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port|default(8778)}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|default(false)|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port|default(7770)}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
         validate_certs: false
         return_content: true
         status_code: 200
@@ -93,34 +93,32 @@
       set_fact:
         jolokia_accessible: >-
           {{
-            jolokia_auth_results.results | selectattr('status', 'defined') | selectattr('status', 'equalto', 200) | list | length > 0
+            jolokia_auth_results.results | map(attribute='status') | select('defined') | select('equalto', 200) | list | length > 0
           }}
 
     - name: Fail if Both Auth Methods Failed
       fail:
-        msg: |
-          ERROR: Unable to access Jolokia ZkMigrationState endpoint with either authentication method!
-          Endpoint: {{ 'https' if kafka_controller_jolokia_ssl_enabled|default(false)|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port|default(8778)}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState
-          No Auth Result: {{ (jolokia_auth_results.results | selectattr('item.name', 'equalto', 'no_auth') | first).status | default('Connection Failed') }}
-          Basic Auth Result: {{ (jolokia_auth_results.results | selectattr('item.name', 'equalto', 'basic_auth') | first).status | default('Connection Failed') }}
-          Please check your jolokia_access_control_custom_file_enabled and
-          jolokia_access_control_file_src_path configuration.
-          Note: This validation tests the actual endpoint required for migration monitoring.
+        msg: "ERROR: Unable to access Jolokia ZkMigrationState endpoint with either authentication method! Please check your jolokia_access_control_custom_file_enabled and jolokia_access_control_file_src_path configuration."
+      when: not jolokia_accessible|bool
+
+    - name: Show Failed Auth Results
+      debug:
+        var: jolokia_auth_results.results
       when: not jolokia_accessible|bool
 
     - name: Success - Jolokia Endpoint is Accessible
       debug:
-        msg: |
-          SUCCESS: Jolokia ZkMigrationState endpoint is accessible and ready for ZK to KRaft migration!
-          Endpoint: {{ 'https' if kafka_controller_jolokia_ssl_enabled|default(false)|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port|default(8778)}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState
-          No Auth: {{ (jolokia_auth_results.results | selectattr('item.name', 'equalto', 'no_auth') | first).status | default('Failed') }}
-          Basic Auth: {{ (jolokia_auth_results.results | selectattr('item.name', 'equalto', 'basic_auth') | first).status | default('Failed') }}
-          At least one method succeeded!
+        msg: "SUCCESS: Jolokia ZkMigrationState endpoint is accessible and ready for ZK to KRaft migration!"
+      when: jolokia_accessible|bool
+
+    - name: Show Jolokia Test Results
+      debug:
+        var: jolokia_auth_results.results
       when: jolokia_accessible|bool
 
     - name: Test Jolokia Restricted Endpoint Access (Should be Blocked)
       uri:
-        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|default(false)|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port|default(8778)}}/jolokia/{{ item.endpoint }}"
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|default(false)|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port|default(7770)}}/jolokia/{{ item.endpoint }}"
         validate_certs: false
         return_content: true
         force_basic_auth: "{{ item.auth }}"
@@ -138,31 +136,27 @@
       set_fact:
         jolokia_access_control_working: >-
           {{
-            jolokia_restricted_results.results | selectattr('status', 'defined') | selectattr('status', 'equalto', 403) | list | length > 0
+            jolokia_restricted_results.results | map(attribute='status') | select('defined') | select('equalto', 403) | list | length > 0
           }}
 
     - name: Verify Access Control is Working - Some Endpoints Blocked
       debug:
-        msg: |
-          SUCCESS: Jolokia access control is working! Some restricted endpoints are properly blocked.
-          Test Results:
-          {% for result in jolokia_restricted_results.results %}
-          - {{ result.item.name }}: HTTP {{ result.status | default('Connection Failed') }}
-          {% endfor %}
-          Expected: At least one endpoint should return HTTP 403 (Forbidden)
+        msg: "SUCCESS: Jolokia access control is working! Some restricted endpoints are properly blocked."
+      when: jolokia_access_control_working|bool
+
+    - name: Show Restricted Endpoint Results
+      debug:
+        var: jolokia_restricted_results.results
       when: jolokia_access_control_working|bool
 
     - name: Warning - Access Control May Not Be Working
       debug:
-        msg: |
-          WARNING: Jolokia access control may not be working as expected!
-          None of the restricted endpoints returned HTTP 403 (Forbidden).
-          Test Results:
-          {% for result in jolokia_restricted_results.results %}
-          - {{ result.item.name }}: HTTP {{ result.status | default('Connection Failed') }}
-          {% endfor %}
-          Please check your jolokia_access_control_custom_file_enabled and jolokia_access_control_file_src_path configuration.
-          Note: If all endpoints return HTTP 200, access control might be disabled or misconfigured.
+        msg: "WARNING: Jolokia access control may not be working as expected! None of the restricted endpoints returned HTTP 403 (Forbidden)."
+      when: not jolokia_access_control_working|bool
+
+    - name: Show Failed Restricted Endpoint Results
+      debug:
+        var: jolokia_restricted_results.results
       when: not jolokia_access_control_working|bool
 
 - name: Verify - kafka_broker
