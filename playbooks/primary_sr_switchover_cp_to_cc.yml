@@ -261,27 +261,87 @@
       tags:
         - schema_exporter
         - switchover_to_cc
-    # SWITCHOVER: Primary SR switchover from CP to CC
+    # PRE-CHECKS: Validate configuration before making any changes
+    - name: Set exporter name for operations
+      set_fact:
+        exporter_name: "{{ sr_switch_over_exporter_name }}"
+
+    - name: Pre-checks - Validate USM remote endpoint is configured
+      assert:
+        that:
+          - unified_stream_manager is defined
+          - unified_stream_manager.schema_registry_endpoint is defined
+          - unified_stream_manager.schema_registry_endpoint != 'none'
+          - unified_stream_manager.schema_registry_endpoint != ''
+          - unified_stream_manager.schema_registry_endpoint != none
+        fail_msg: "USM remote endpoint must be configured. Current value: '{{ unified_stream_manager.schema_registry_endpoint | default('undefined') }}'. Please set unified_stream_manager.schema_registry_endpoint to a valid Confluent Cloud Schema Registry URL."
+      tags:
+        - never
+        - forward_to_cc
+        - switchover_to_cc
+
+    - name: Pre-checks - Validate exporter and USM destination URLs match
+      assert:
+        that:
+          - (existing_exporter_remote_endpoint is defined and existing_exporter_remote_endpoint == unified_stream_manager.schema_registry_endpoint) or ((schema_exporters | selectattr('name', 'equalto', sr_switch_over_exporter_name) | list | first).config.schema_registry_endpoint == unified_stream_manager.schema_registry_endpoint)
+        fail_msg: "Pre-check failed: Exporter and USM remote endpoints must match"
+      when:
+        - (schema_exporters is defined and (schema_exporters | length) > 0) or (sr_switch_over_exporter_name is defined)
+      tags:
+        - never
+        - forward_to_cc
+        - switchover_to_cc
+
+    - name: Pre-checks - Validate importer and USM destination URLs match
+      assert:
+        that:
+          - schema_importers[0].config.schema_registry_endpoint == unified_stream_manager.schema_registry_endpoint
+        fail_msg: "Pre-check failed: Importer and USM remote endpoints must match"
+      tags:
+        - never
+        - forward_to_cc
+        - switchover_to_cc
+
+    # Context validation for schema importers - handles both scenarios:
+    # 1. When USM remote_context is defined: qualified subjects must match the context
+    # 2. When USM remote_context is NOT defined: only unqualified subjects allowed
+    - name: "Pre-checks: Validate configuration for switchover"
+      block:
+        - name: Extract contexts from schema importer qualified subjects
+          set_fact:
+            importer_qualified_contexts: "{{ schema_importers[0].subjects | select('match', '^:\\.([^:]+):.*$') | map('regex_replace', '^:\\.([^:]+):.*$', '\\1') | list | unique }}"
+          when:
+            - schema_importers is defined
+            - schema_importers | length > 0
+
+        - name: Validate no qualified subjects when USM context not configured
+          assert:
+            that:
+              - importer_qualified_contexts | length == 0
+            fail_msg: "Schema importer cannot use qualified subjects when USM remote_context is not configured. Remove context prefixes: {{ schema_importers[0].subjects | select('match', '^:\\.([^:]+):.*$') | list | join(', ') }}"
+          when:
+            - unified_stream_manager is defined
+            - unified_stream_manager.remote_context is not defined or unified_stream_manager.remote_context == ''
+            - importer_qualified_contexts is defined
+
+        - name: Validate qualified subjects match USM remote context
+          assert:
+            that:
+              - importer_qualified_contexts | length == 0 and not (unified_stream_manager.remote_context is defined and unified_stream_manager.remote_context != '') or (importer_qualified_contexts | length == 1 and importer_qualified_contexts[0] == unified_stream_manager.remote_context)
+            fail_msg: "Schema importer qualified subjects must match USM remote_context '{{ unified_stream_manager.remote_context }}'. Found contexts: {{ importer_qualified_contexts | join(', ') }}"
+          when:
+            - unified_stream_manager is defined
+            - unified_stream_manager.remote_context is defined
+            - unified_stream_manager.remote_context != ''
+            - importer_qualified_contexts is defined
+      tags:
+        - never
+        - forward_to_cc
+        - switchover_to_cc
+
+    # SWITCHOVER: Primary SR switchover from CP to CC (with rollback on failure)
     - name: "Switchover: Primary SR switchover from CP to CC"
       block:
-        - name: Set exporter name for operations
-          set_fact:
-            exporter_name: "{{ sr_switch_over_exporter_name }}"
-
-        - name: Pre-checks - Validate exporter and USM destination URLs match
-          assert:
-            that:
-              - (existing_exporter_remote_endpoint is defined and existing_exporter_remote_endpoint == unified_stream_manager.schema_registry_endpoint) or ((schema_exporters | selectattr('name', 'equalto', sr_switch_over_exporter_name) | list | first).config.schema_registry_endpoint == unified_stream_manager.schema_registry_endpoint)
-            fail_msg: "Pre-check failed: Exporter and USM remote endpoints must match"
-          when:
-            - (schema_exporters is defined and (schema_exporters | length) > 0) or (sr_switch_over_exporter_name is defined)
-
-        - name: Pre-checks - Validate importer and USM destination URLs match
-          assert:
-            that:
-              - schema_importers[0].config.schema_registry_endpoint == unified_stream_manager.schema_registry_endpoint
-            fail_msg: "Pre-check failed: Importer and USM remote endpoints must match"
-
         - name: "Switch CP SR to FORWARD mode (WRITE DOWNTIME STARTS)"
           include_tasks: ../roles/common/tasks/sr_api_call.yml
           vars:
