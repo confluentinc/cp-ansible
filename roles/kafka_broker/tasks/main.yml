@@ -361,6 +361,103 @@
   tags:
     - log
 
+- name: Validate Jolokia Access Control Configuration - Kafka Broker
+  fail:
+    msg: |
+      Security requirement: When Jolokia is enabled and access control is enabled,
+      you must set jolokia_access_control_custom_file_enabled to either:
+      - true (provide your own secure XML file via jolokia_access_control_file_src_path)
+      - false (use our secure default XML)
+      This prevents lateral movement attacks via exposed Jolokia endpoints.
+  when:
+    - "'kafka_broker' in group_names"
+    - kafka_broker_jolokia_enabled|bool
+    - jolokia_access_control_enabled|bool
+    - jolokia_access_control_custom_file_enabled is none
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Validate Custom Jolokia Access Control File Path - Kafka Broker
+  fail:
+    msg: |
+      When jolokia_access_control_custom_file_enabled is true,
+      you must provide jolokia_access_control_file_src_path with a valid file path.
+  when:
+    - "'kafka_broker' in group_names"
+    - kafka_broker_jolokia_enabled|bool
+    - jolokia_access_control_enabled|bool
+    - jolokia_access_control_custom_file_enabled|bool
+    - jolokia_access_control_file_src_path == ""
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Validate Custom Jolokia Access Control File Exists - Kafka Broker
+  stat:
+    path: "{{ jolokia_access_control_file_src_path }}"
+  delegate_to: localhost
+  register: kafka_broker_custom_jolokia_file_check
+  when:
+    - "'kafka_broker' in group_names"
+    - kafka_broker_jolokia_enabled|bool
+    - jolokia_access_control_enabled|bool
+    - jolokia_access_control_custom_file_enabled|bool
+    - jolokia_access_control_file_src_path != ""
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Fail if Custom Jolokia Access Control File Does Not Exist - Kafka Broker
+  fail:
+    msg: |
+      Custom Jolokia access control file not found at: {{ jolokia_access_control_file_src_path }}
+  when:
+    - "'kafka_broker' in group_names"
+    - kafka_broker_jolokia_enabled|bool
+    - jolokia_access_control_enabled|bool
+    - jolokia_access_control_custom_file_enabled|bool
+    - jolokia_access_control_file_src_path != ""
+    - not kafka_broker_custom_jolokia_file_check.stat.exists
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Set Default Jolokia Access Control File Path - Kafka Broker
+  set_fact:
+    jolokia_access_control_file_src_path: "roles/kafka_broker/templates/jolokia_access_control_default.xml"
+  when:
+    - "'kafka_broker' in group_names"
+    - kafka_broker_jolokia_enabled|bool
+    - jolokia_access_control_enabled|bool
+    - not jolokia_access_control_custom_file_enabled|bool
+  tags:
+    - variables
+
+- name: Create Kafka Broker Jolokia Directory
+  file:
+    path: "{{ jolokia_access_control_file_dest_path | dirname }}"
+    state: directory
+    mode: '755'
+    owner: "{{ kafka_broker_user }}"
+    group: "{{ kafka_broker_group }}"
+  when: kafka_broker_jolokia_enabled|bool and jolokia_access_control_enabled|bool
+  tags:
+    - filesystem
+    - privileged
+
+- name: Copy Kafka Broker Jolokia Access Control File
+  copy:
+    src: "{{ jolokia_access_control_file_src_path }}"
+    dest: "{{ jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_broker_user }}"
+    group: "{{ kafka_broker_group }}"
+  when: kafka_broker_jolokia_enabled|bool and jolokia_access_control_enabled|bool
+  tags:
+    - configuration
+    - privileged
+
 - name: Create Kafka Broker Jolokia Config
   template:
     src: kafka_jolokia.properties.j2
