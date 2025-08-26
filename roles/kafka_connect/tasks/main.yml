@@ -284,6 +284,43 @@
   tags:
     - log
 
+
+- name: Set Default Jolokia Access Control File Path - Kafka Connect
+  set_fact:
+    jolokia_access_control_file_src_path: "roles/kafka_connect/templates/jolokia_access_control_default.xml"
+  when:
+    - "'kafka_connect' in group_names"
+    - kafka_connect_jolokia_enabled|bool
+    - jolokia_access_control_enabled|bool
+    - not jolokia_access_control_custom_file_enabled|bool
+  tags:
+    - variables
+
+- name: Create Kafka Connect Jolokia Directory
+  file:
+    path: "{{ jolokia_access_control_file_dest_path | dirname }}"
+    state: directory
+    mode: '755'
+    owner: "{{ kafka_connect_user }}"
+    group: "{{ kafka_connect_group }}"
+  when: kafka_connect_jolokia_enabled|bool and jolokia_access_control_enabled|bool
+  tags:
+    - filesystem
+    - privileged
+
+- name: Copy Kafka Connect Jolokia Access Control File
+  copy:
+    src: "{{ jolokia_access_control_file_src_path }}"
+    dest: "{{ jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_connect_user }}"
+    group: "{{ kafka_connect_group }}"
+  when: kafka_connect_jolokia_enabled|bool and jolokia_access_control_enabled|bool
+  tags:
+    - configuration
+    - privileged
+
+
 - name: Create Kafka Connect Jolokia Config
   template:
     src: kafka_connect_jolokia.properties.j2
@@ -421,3 +458,5 @@
     - "{{kafka_connect_cert_path}}"
     - "{{kafka_connect_key_path}}"
   when: (ssl_provided_keystore_and_truststore | bool)
+
+
