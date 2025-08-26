@@ -5,6 +5,50 @@
 - import_playbook: kafka_controller.yml
   tags: migrate_to_dual_write
 
+- name: Validate Jolokia Endpoint Access
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Test Jolokia Migration Endpoint Access
+      uri:
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+        validate_certs: false
+        return_content: true
+        status_code: 200
+        force_basic_auth: "{{ item.auth }}"
+        url_username: "{{ item.username | default(omit) }}"
+        url_password: "{{ item.password | default(omit) }}"
+      register: jolokia_auth_results
+      failed_when: false
+      loop:
+        - { name: "no_auth", auth: false }
+        - { name: "basic_auth", auth: true, username: "{{ jolokia_user }}", password: "{{ jolokia_password }}" }
+
+    - name: Check if Either Auth Method Succeeded
+      set_fact:
+        jolokia_accessible: >-
+          {{
+            jolokia_auth_results.results | map(attribute='status') | select('defined') | select('equalto', 200) | list | length > 0
+          }}
+    - name: Fail if Both Auth Methods Failed
+      fail:
+        msg: "ERROR: Unable to access Jolokia ZkMigrationState endpoint with either authentication method! Please check your jolokia_access_control_custom_file_enabled and jolokia_access_control_file_src_path configuration."
+      when: not jolokia_accessible|bool
+
+    - name: Show Failed Auth Results
+      debug:
+        var: jolokia_auth_results.results
+      when: not jolokia_accessible|bool
+
+    - name: Success - Jolokia Endpoint is Accessible
+      debug:
+        msg: "SUCCESS: Jolokia ZkMigrationState endpoint is accessible and ready for ZK to KRaft migration!"
+      when: jolokia_accessible|bool
+
+
 - import_playbook: kafka_broker.yml
   vars:
     deployment_strategy: 'serial'
