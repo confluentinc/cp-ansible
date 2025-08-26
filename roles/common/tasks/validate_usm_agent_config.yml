@@ -1,0 +1,154 @@
+---
+# USM Agent Configuration Validation
+# Centralized validation for both server-side and client-side USM Agent authentication configuration
+
+- name: Validate USM Agent configuration
+  block:
+    # Server-side validations (only run on USM agent hosts)
+    - name: Check for Basic Auth without users
+      fail:
+        msg: "USM Agent basic authentication is enabled (sasl_protocol: plain) but no users are defined. Please define usm_agent_basic_users in the usm_agent group variables."
+      when:
+        - sasl_protocol == 'plain'
+        - usm_agent_basic_users is not defined or usm_agent_basic_users | length == 0
+
+    - name: Check for Basic Auth without client credentials
+      fail:
+        msg: "USM Agent basic authentication is enabled but client credentials are missing. Please define usm_agent_client_username and usm_agent_client_password for clients."
+      when:
+        - sasl_protocol == 'plain'
+        - usm_agent_client_username is not defined or usm_agent_client_username == ''
+        - usm_agent_client_password is not defined or usm_agent_client_password == ''
+
+    - name: Check for mTLS with Basic Auth (dual authentication)
+      fail:
+        msg: "USM Agent cannot have both basic authentication and mTLS enabled. Current configuration: sasl_protocol={{ sasl_protocol }}, ssl_mutual_auth_enabled={{ ssl_mutual_auth_enabled }}. Please choose either basic authentication OR mTLS, not both."
+      when:
+        - sasl_protocol == 'plain'
+        - ssl_mutual_auth_enabled | bool
+
+    - name: Check for empty basic users definition
+      fail:
+        msg: "USM Agent basic authentication is enabled but usm_agent_basic_users is empty or invalid. Please define valid users in usm_agent_basic_users with principal and password."
+      when:
+        - sasl_protocol == 'plain'
+        - usm_agent_basic_users is defined
+        - usm_agent_basic_users | length > 0
+        - usm_agent_basic_users is mapping
+        - usm_agent_basic_users.values() | selectattr('principal', 'defined') | list | length == 0
+
+    - name: Check for invalid SASL protocol
+      fail:
+        msg: "Invalid SASL protocol '{{ sasl_protocol }}' for USM Agent. Supported values are 'none' and 'plain'. Please use 'none' for no authentication or mTLS, 'plain' for basic authentication."
+      when:
+        - sasl_protocol is defined
+        - sasl_protocol not in ['none', 'plain']
+
+    - name: Check for missing client credentials in Basic Auth + TLS
+      fail:
+        msg: "USM Agent has Basic Auth + TLS enabled but client credentials are missing. Please define usm_agent_client_username and usm_agent_client_password for clients."
+      when:
+        - sasl_protocol == 'plain'
+        - ssl_enabled | bool
+        - usm_agent_client_username is not defined or usm_agent_client_username == ''
+        - usm_agent_client_password is not defined or usm_agent_client_password == ''
+
+    - name: Check for conflicting explicit variable definitions
+      fail:
+        msg: "Conflicting variable definitions detected. sasl_protocol={{ sasl_protocol }} but usm_agent_basic_auth_enabled={{ usm_agent_basic_auth_enabled }}. When sasl_protocol is 'none', usm_agent_basic_auth_enabled should be false or undefined."
+      when:
+        - sasl_protocol == 'none'
+        - usm_agent_basic_auth_enabled is defined
+        - usm_agent_basic_auth_enabled | bool
+
+    # Client-side validations (only run on client hosts)
+    - name: Check for client-side Basic Auth disabled when USM has Basic Auth
+      fail:
+        msg: "USM Agent has basic authentication enabled but this client has usm_agent_basic_auth_enabled=false. Client must enable basic authentication when USM Agent uses basic auth. Please set usm_agent_basic_auth_enabled: true for this client."
+      when:
+        - groups is defined
+        - groups['usm_agent'] is defined
+        - groups['usm_agent'] | length > 0
+        - hostvars[groups['usm_agent'][0]]['sasl_protocol'] == 'plain'
+        - usm_agent_basic_auth_enabled is defined
+        - not usm_agent_basic_auth_enabled | bool
+
+    - name: Check for client-side SSL disabled when USM has SSL
+      fail:
+        msg: "USM Agent has SSL enabled but this client has usm_agent_ssl_enabled=false. Client must enable SSL when USM Agent uses SSL. Please set usm_agent_ssl_enabled: true for this client."
+      when:
+        - groups is defined
+        - groups['usm_agent'] is defined
+        - groups['usm_agent'] | length > 0
+        - (hostvars[groups['usm_agent'][0]]['ssl_enabled'] | default(false) | bool) or (hostvars[groups['usm_agent'][0]]['usm_agent_ssl_enabled'] | default(false) | bool)
+        - usm_agent_ssl_enabled is defined
+        - not usm_agent_ssl_enabled | bool
+
+    - name: Check for client-side mTLS disabled when USM has mTLS
+      fail:
+        msg: "USM Agent has mTLS enabled but this client has usm_agent_ssl_mutual_auth_enabled=false. Client must enable mTLS when USM Agent uses mTLS. Please set usm_agent_ssl_mutual_auth_enabled: true for this client."
+      when:
+        - groups is defined
+        - groups['usm_agent'] is defined
+        - groups['usm_agent'] | length > 0
+        - (hostvars[groups['usm_agent'][0]]['ssl_mutual_auth_enabled'] | default(false) | bool) or (hostvars[groups['usm_agent'][0]]['usm_agent_ssl_mutual_auth_enabled'] | default(false) | bool)
+        - usm_agent_ssl_mutual_auth_enabled is defined
+        - not usm_agent_ssl_mutual_auth_enabled | bool
+
+    - name: Check for client-side Basic Auth enabled when USM has mTLS
+      fail:
+        msg: "USM Agent has mTLS enabled but this client has usm_agent_basic_auth_enabled=true. Client cannot use basic authentication when USM Agent uses mTLS. Please set usm_agent_basic_auth_enabled: false for this client."
+      when:
+        - groups is defined
+        - groups['usm_agent'] is defined
+        - groups['usm_agent'] | length > 0
+        - (hostvars[groups['usm_agent'][0]]['ssl_mutual_auth_enabled'] | default(false) | bool) or (hostvars[groups['usm_agent'][0]]['usm_agent_ssl_mutual_auth_enabled'] | default(false) | bool)
+        - usm_agent_basic_auth_enabled is defined
+        - usm_agent_basic_auth_enabled | bool
+
+    - name: Check for missing client credentials when USM has Basic Auth
+      fail:
+        msg: "USM Agent has basic authentication enabled but client credentials are missing. Please define usm_agent_client_username and usm_agent_client_password for this client."
+      when:
+        - groups is defined
+        - groups['usm_agent'] is defined
+        - groups['usm_agent'] | length > 0
+        - hostvars[groups['usm_agent'][0]]['sasl_protocol'] == 'plain'
+        - usm_agent_client_username is not defined or usm_agent_client_username == ''
+        - usm_agent_client_password is not defined or usm_agent_client_password == ''
+
+    # Reverse scenarios - Client enabled but USM Agent disabled
+    - name: Check for client-side Basic Auth enabled when USM has no Basic Auth
+      fail:
+        msg: "Client has usm_agent_basic_auth_enabled=true but USM Agent does not have basic authentication enabled. Please set usm_agent_basic_auth_enabled: false for this client or enable basic authentication on USM Agent."
+      when:
+        - groups is defined
+        - groups['usm_agent'] is defined
+        - groups['usm_agent'] | length > 0
+        - hostvars[groups['usm_agent'][0]]['sasl_protocol'] != 'plain'
+        - usm_agent_basic_auth_enabled is defined
+        - usm_agent_basic_auth_enabled | bool
+
+    - name: Check for client-side SSL enabled when USM has no SSL
+      fail:
+        msg: "Client has usm_agent_ssl_enabled=true but USM Agent does not have SSL enabled. Please set usm_agent_ssl_enabled: false for this client or enable SSL on USM Agent."
+      when:
+        - groups is defined
+        - groups['usm_agent'] is defined
+        - groups['usm_agent'] | length > 0
+        - not ((hostvars[groups['usm_agent'][0]]['ssl_enabled'] | default(false) | bool) or (hostvars[groups['usm_agent'][0]]['usm_agent_ssl_enabled'] | default(false) | bool))
+        - usm_agent_ssl_enabled is defined
+        - usm_agent_ssl_enabled | bool
+
+    - name: Check for client-side mTLS enabled when USM has no mTLS
+      fail:
+        msg: "Client has usm_agent_ssl_mutual_auth_enabled=true but USM Agent does not have mTLS enabled. Please set usm_agent_ssl_mutual_auth_enabled: false for this client or enable mTLS on USM Agent."
+      when:
+        - groups is defined
+        - groups['usm_agent'] is defined
+        - groups['usm_agent'] | length > 0
+        - not ((hostvars[groups['usm_agent'][0]]['ssl_mutual_auth_enabled'] | default(false) | bool) or (hostvars[groups['usm_agent'][0]]['usm_agent_ssl_mutual_auth_enabled'] | default(false) | bool))
+        - usm_agent_ssl_mutual_auth_enabled is defined
+        - usm_agent_ssl_mutual_auth_enabled | bool
+
+  when: "groups is defined and groups['usm_agent'] is defined"
