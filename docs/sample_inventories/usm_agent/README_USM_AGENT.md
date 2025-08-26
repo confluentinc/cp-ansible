@@ -125,15 +125,14 @@ ansible-playbook -i docs/sample_inventories/usm_agent/usm_agent_mtls.yml playboo
 1. **No Auth → Basic Auth**
    - Add `usm_agent_basic_users` configuration
    - Add client credentials
-   - Update `sasl_protocol` to `plain`
+   - Update `usm_agent_basic_auth_enabled` to `true`
 
 2. **Basic Auth → Basic Auth + TLS**
-   - Change `usm_agent_http_protocol` to `https`
    - Add SSL certificate configuration
    - Set `usm_agent_ssl_enabled: true`
 
 3. **Basic Auth + TLS → mTLS**
    - Remove basic auth configuration
-   - Set `sasl_protocol: none`
+   - Set `usm_agent_basic_auth_enabled: false`
    - Set `usm_agent_ssl_mutual_auth_enabled: true`
    - Remove client credentials
