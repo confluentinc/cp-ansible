@@ -39,9 +39,6 @@ class FilterModule(object):
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
             'replace_client_assertion_file': self.replace_client_assertion_file,
             'schema_registry_extension_classes': self.schema_registry_extension_classes,
-            'get_usm_agent_basic_auth_enabled': self.get_usm_agent_basic_auth_enabled,
-            'get_usm_agent_ssl_enabled': self.get_usm_agent_ssl_enabled,
-            'get_usm_agent_ssl_mutual_auth_enabled': self.get_usm_agent_ssl_mutual_auth_enabled,
             'get_usm_agent_url': self.get_usm_agent_url,
         }
 
