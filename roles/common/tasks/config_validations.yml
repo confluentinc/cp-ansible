@@ -158,3 +158,94 @@
     - fips_enabled | bool
     - ansible_os_family == "RedHat"
   tags: validate
+
+- name: Set Jolokia Component Detection Facts
+  set_fact:
+    jolokia_component_enabled: >-
+      {{
+        ('kafka_controller' in group_names and kafka_controller_jolokia_enabled|bool) or
+        ('kafka_broker' in group_names and kafka_broker_jolokia_enabled|bool) or
+        ('kafka_connect' in group_names and kafka_connect_jolokia_enabled|bool) or
+        ('kafka_connect_replicator' in group_names and kafka_connect_replicator_jolokia_enabled|bool) or
+        ('ksql' in group_names and ksql_jolokia_enabled|bool) or
+        ('zookeeper' in group_names and zookeeper_jolokia_enabled|bool) or
+        ('kafka_rest' in group_names and kafka_rest_jolokia_enabled|bool) or
+        ('schema_registry' in group_names and schema_registry_jolokia_enabled|bool)
+      }}
+    jolokia_component_name: >-
+      {{
+        'kafka_controller' if 'kafka_controller' in group_names else
+        'kafka_broker' if 'kafka_broker' in group_names else
+        'kafka_connect' if 'kafka_connect' in group_names else
+        'kafka_connect_replicator' if 'kafka_connect_replicator' in group_names else
+        'ksql' if 'ksql' in group_names else
+        'zookeeper' if 'zookeeper' in group_names else
+        'kafka_rest' if 'kafka_rest' in group_names else
+        'schema_registry' if 'schema_registry' in group_names else
+        'unknown'
+      }}
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Validate Jolokia Access Control Configuration
+  fail:
+    msg: |
+      Security requirement: When Jolokia is enabled and access control is enabled,
+      you must set jolokia_access_control_custom_file_enabled to either:
+      - true (provide your own secure XML file via jolokia_access_control_file_src_path)
+      - false (use our secure default XML)
+      This prevents lateral movement attacks via exposed Jolokia endpoints.
+      Component: {{ jolokia_component_name }}
+  when:
+    - jolokia_component_enabled|bool
+    - jolokia_access_control_enabled|bool
+    - jolokia_access_control_custom_file_enabled is none
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Validate Custom Jolokia Access Control File Path
+  fail:
+    msg: |
+      When jolokia_access_control_custom_file_enabled is true,
+      you must provide jolokia_access_control_file_src_path with a valid file path.
+      Component: {{ jolokia_component_name }}
+  when:
+    - jolokia_component_enabled|bool
+    - jolokia_access_control_enabled|bool
+    - jolokia_access_control_custom_file_enabled|bool
+    - jolokia_access_control_file_src_path == ""
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Validate Custom Jolokia Access Control File Exists
+  stat:
+    path: "{{ jolokia_access_control_file_src_path }}"
+  delegate_to: localhost
+  register: jolokia_custom_file_check
+  when:
+    - jolokia_component_enabled|bool
+    - jolokia_access_control_enabled|bool
+    - jolokia_access_control_custom_file_enabled|bool
+    - jolokia_access_control_file_src_path != ""
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Fail if Custom Jolokia Access Control File Does Not Exist
+  fail:
+    msg: |
+      Custom Jolokia access control file not found at: {{ jolokia_access_control_file_src_path }}
+      Please ensure the file exists on the Ansible controller.
+      Component: {{ jolokia_component_name }}
+  when:
+    - jolokia_component_enabled|bool
+    - jolokia_access_control_enabled|bool
+    - jolokia_access_control_custom_file_enabled|bool
+    - jolokia_access_control_file_src_path != ""
+    - not jolokia_custom_file_check.stat.exists
+  tags:
+    - validate
+    - validate_jolokia
