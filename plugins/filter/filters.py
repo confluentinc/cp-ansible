@@ -39,6 +39,10 @@ class FilterModule(object):
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
             'replace_client_assertion_file': self.replace_client_assertion_file,
             'schema_registry_extension_classes': self.schema_registry_extension_classes,
+            'get_usm_agent_basic_auth_enabled': self.get_usm_agent_basic_auth_enabled,
+            'get_usm_agent_ssl_enabled': self.get_usm_agent_ssl_enabled,
+            'get_usm_agent_ssl_mutual_auth_enabled': self.get_usm_agent_ssl_mutual_auth_enabled,
+            'get_usm_agent_url': self.get_usm_agent_url,
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
@@ -672,3 +676,95 @@ class FilterModule(object):
             'dek_registry': [schema_importers_defined, 'io.confluent.dekregistry.DekRegistryResourceExtension'],
         }
         return self.combine_enabled_values(extensions_dict)
+
+    def get_usm_agent_basic_auth_enabled(self, groups, hostvars, current_host, sasl_protocol):
+        """
+        Determines usm_agent_basic_auth_enabled value:
+        1. If usm_agent_basic_auth_enabled is explicitly defined, use that value
+        2. If usm_agent group exists and has sasl_protocol == 'plain' or usm_agent_basic_auth_enabled defined, return that value
+        3. Otherwise return sasl_protocol == 'plain' for current host or False
+        """
+        # Check if usm_agent_basic_auth_enabled is explicitly defined for current host
+        if current_host in hostvars and 'usm_agent_basic_auth_enabled' in hostvars[current_host]:
+            return hostvars[current_host]['usm_agent_basic_auth_enabled']
+
+        # Check if usm_agent group exists and has sasl_protocol == 'plain' or usm_agent_basic_auth_enabled defined
+        if groups is not None and 'usm_agent' in groups and len(groups['usm_agent']) > 0:
+            usm_agent_host = groups['usm_agent'][0]
+            if usm_agent_host in hostvars and 'sasl_protocol' in hostvars[usm_agent_host]:
+                return hostvars[usm_agent_host]['sasl_protocol'] == 'plain'
+            if usm_agent_host in hostvars and 'usm_agent_basic_auth_enabled' in hostvars[usm_agent_host]:
+                return hostvars[usm_agent_host]['usm_agent_basic_auth_enabled']
+        # Default: check if current host's sasl_protocol == 'plain'
+        if current_host in hostvars and 'sasl_protocol' in hostvars[current_host]:
+            return hostvars[current_host]['sasl_protocol'] == 'plain'
+        return False
+
+    def get_usm_agent_ssl_enabled(self, groups, hostvars, current_host, ssl_enabled):
+        """
+        Determines usm_agent_ssl_enabled value:
+        1. If usm_agent_ssl_enabled is explicitly defined, use that value
+        2. If usm_agent group exists and has ssl_enabled or usm_agent_ssl_enabled defined, return that value
+        3. Otherwise return ssl_enabled for current host or False
+        """
+        # Check if usm_agent_ssl_enabled is explicitly defined for current host
+        if current_host in hostvars and 'usm_agent_ssl_enabled' in hostvars[current_host]:
+            return hostvars[current_host]['usm_agent_ssl_enabled']
+
+        # Check if usm_agent group exists and has ssl_enabled or usm_agent_ssl_enabled defined
+        if groups is not None and 'usm_agent' in groups and len(groups['usm_agent']) > 0:
+            usm_agent_host = groups['usm_agent'][0]
+            if usm_agent_host in hostvars and 'ssl_enabled' in hostvars[usm_agent_host]:
+                return hostvars[usm_agent_host]['ssl_enabled']
+            if usm_agent_host in hostvars and 'usm_agent_ssl_enabled' in hostvars[usm_agent_host]:
+                return hostvars[usm_agent_host]['usm_agent_ssl_enabled']
+        # Default: return current host's ssl_enabled
+        if current_host in hostvars and 'ssl_enabled' in hostvars[current_host]:
+            return hostvars[current_host]['ssl_enabled']
+        return False
+
+    def get_usm_agent_ssl_mutual_auth_enabled(self, groups, hostvars, current_host, ssl_mutual_auth_enabled):
+        """
+        Determines usm_agent_ssl_mutual_auth_enabled value:
+        1. If usm_agent_ssl_mutual_auth_enabled is explicitly defined, use that value
+        2. If usm_agent group exists and has ssl_mutual_auth_enabled or usm_agent_ssl_mutual_auth_enabled defined, return that value
+        3. Otherwise return ssl_mutual_auth_enabled for current host or False
+        """
+        # Check if usm_agent_ssl_mutual_auth_enabled is explicitly defined for current host
+        if current_host in hostvars and 'usm_agent_ssl_mutual_auth_enabled' in hostvars[current_host]:
+            return hostvars[current_host]['usm_agent_ssl_mutual_auth_enabled']
+
+        # Check if usm_agent group exists and has ssl_mutual_auth_enabled or usm_agent_ssl_mutual_auth_enabled defined
+        if groups is not None and 'usm_agent' in groups and len(groups['usm_agent']) > 0:
+            usm_agent_host = groups['usm_agent'][0]
+            if usm_agent_host in hostvars and 'ssl_mutual_auth_enabled' in hostvars[usm_agent_host]:
+                return hostvars[usm_agent_host]['ssl_mutual_auth_enabled']
+            if usm_agent_host in hostvars and 'usm_agent_ssl_mutual_auth_enabled' in hostvars[usm_agent_host]:
+                return hostvars[usm_agent_host]['usm_agent_ssl_mutual_auth_enabled']
+        # Default: return current host's ssl_mutual_auth_enabled
+        if current_host in hostvars and 'ssl_mutual_auth_enabled' in hostvars[current_host]:
+            return hostvars[current_host]['ssl_mutual_auth_enabled']
+        return False
+
+    def get_usm_agent_url(self, groups, hostvars, http_protocol, dataplane_port):
+        """
+        Determines the USM agent URL by always using the USM agent host's hostname,
+        regardless of which component is being deployed.
+
+        Args:
+            groups: Ansible groups dictionary
+            hostvars: Ansible hostvars dictionary
+            http_protocol: HTTP protocol (http or https)
+            dataplane_port: USM agent dataplane port
+
+        Returns:
+            str: USM agent URL or empty string if no USM agent group exists
+        """
+        # Check if usm_agent group exists and has hosts
+        if groups is not None and 'usm_agent' in groups and len(groups['usm_agent']) > 0:
+            usm_agent_host = groups['usm_agent'][0]
+            if usm_agent_host in hostvars:
+                # Use the USM agent host's hostname, not the current host's
+                usm_agent_hostname = self.resolve_and_format_hostname(hostvars[usm_agent_host])
+                return f"{http_protocol}://{usm_agent_hostname}:{dataplane_port}"
+        return ""

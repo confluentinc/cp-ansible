@@ -2261,6 +2261,15 @@ control_center_next_gen_secrets_protection_encrypt_passwords: "{{secrets_protect
 ### List of Control Center properties to encrypt. Can be used in addition to control_center_next_gen_secrets_protection_encrypt_passwords.
 control_center_next_gen_secrets_protection_encrypt_properties: []
 
+### Boolean to enable secrets protection in USM Agent.
+usm_agent_secrets_protection_enabled: "{{secrets_protection_enabled}}"
+
+### Boolean to encrypt sensitive properties, such as those containing 'password' for USM Agent.
+usm_agent_secrets_protection_encrypt_passwords: "{{secrets_protection_encrypt_passwords}}"
+
+### List of USM Agent properties to encrypt. Can be used in addition to usm_agent_secrets_protection_encrypt_passwords.
+usm_agent_secrets_protection_encrypt_properties: []
+
 # Telemetry Variables
 
 ### Boolean to configure Telemetry. Must also set telemetry_api_key and telemetry_api_secret
@@ -3228,3 +3237,59 @@ schema_registry_retries: 30
 
 ### Property required for password encoding in Schema Exporter and Importer.
 password_encoder_secret: ""
+
+### USM Agent Variables
+# Version of Confluent USM Agent to install
+confluent_usm_agent_package_version: 1.0.0
+confluent_usm_agent_full_package_version: "{{ confluent_usm_agent_package_version + '-1' }}"
+confluent_usm_agent_package_redhat_suffix: "{{ '-' + confluent_usm_agent_full_package_version if confluent_usm_agent_full_package_version != '' else ''}}"
+confluent_usm_agent_package_debian_suffix: "{{ '=' + confluent_usm_agent_full_package_version if confluent_usm_agent_full_package_version != '' else ''}}"
+
+usm_agent_packages:
+  - confluent-usm-agent
+
+usm_agent_copy_files: []
+
+usm_agent_health_checks_enabled: "{{ health_checks_enabled }}"
+
+# USM Agent server side configurations
+usm_agent_basic_auth_enabled: "{{ groups | confluent.platform.get_usm_agent_basic_auth_enabled(hostvars, inventory_hostname, sasl_protocol) }}"
+usm_agent_ssl_enabled: "{{ groups | confluent.platform.get_usm_agent_ssl_enabled(hostvars, inventory_hostname, ssl_enabled) }}"
+usm_agent_ssl_mutual_auth_enabled: "{{ groups | confluent.platform.get_usm_agent_ssl_mutual_auth_enabled(hostvars, inventory_hostname, ssl_mutual_auth_enabled) }}"
+usm_agent_basic_users:
+  admin:
+    principal: admin
+    password: admin-secret
+
+usm_agent_http_protocol: "{{ 'https' if usm_agent_ssl_enabled|bool else 'http' }}"
+
+# USM Agent client side configurations
+usm_agent_url: "{{ groups | confluent.platform.get_usm_agent_url(hostvars, usm_agent_http_protocol, usm_agent_dataplane_port) }}"
+usm_agent_client_username: "user1"
+usm_agent_client_password: "user1-secret"
+kafka_broker_usm_agent_username: "{{ usm_agent_client_username }}"
+kafka_broker_usm_agent_password: "{{ usm_agent_client_password }}"
+kafka_controller_usm_agent_username: "{{ usm_agent_client_username }}"
+kafka_controller_usm_agent_password: "{{ usm_agent_client_password }}"
+kafka_connect_usm_agent_username: "{{ usm_agent_client_username }}"
+kafka_connect_usm_agent_password: "{{ usm_agent_client_password }}"
+
+usm_agent_config_prefix: "{{ config_prefix }}/confluent/usm-agent"
+
+usm_agent_skip_restarts: "{{ skip_restarts }}"
+
+usm_agent_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/usm_agent.truststore.jks{% endif %}"
+usm_agent_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/usm_agent.keystore.jks{% endif %}"
+usm_agent_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+usm_agent_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+usm_agent_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else usm_agent_keystore_storepass }}"
+usm_agent_key_password_file: "{{ ssl_file_dir_final }}/usm_agent_key_password.txt"
+usm_agent_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+usm_agent_cert_path: "{{ ssl_file_dir_final }}/usm_agent.crt"
+usm_agent_key_path: "{{ ssl_file_dir_final }}/usm_agent.key"
+usm_agent_export_certs: "true"
+usm_agent_keytab_path: /etc/security/keytabs/usm_agent.keytab
+
+usm_agent_ccloud_ssl_trusted_ca_location: "{{ '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem' if ansible_os_family == 'RedHat' else '/etc/ssl/certs/ca-certificates.crt' }}"
+
+usm_agent_custom_properties: {}
