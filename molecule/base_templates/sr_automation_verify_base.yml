@@ -3,17 +3,19 @@
 ### This template can be imported by scenario-specific verify playbooks
 ### Validates SR automation workflow functionality across different security configurations
 
+- name: Load Variables for SR Automation Verification
+  hosts: all
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.platform.variables
+
 - name: Verify Schema Registry Automation Configuration
   hosts: schema_registry
   gather_facts: false
   vars:
-    # Dynamic auth headers based on scenario
-    sr_auth_headers: "{{ 
-      {'Authorization': 'Bearer ' + oauth_token} if schema_registry_oauth_enabled | default(false)
-      else {} 
-    }}"
-    sr_client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt if ssl_mutual_auth_enabled | default(false) else omit }}"
-    sr_client_key: "{{ ssl_file_dir_final }}/schema_registry.key if ssl_mutual_auth_enabled | default(false) else omit }}"
+    # Using sr_Api_Call for all SR authentication scenarios
+    # No need for manual auth headers - sr_Api_Call handles all scenarios automatically
     
   tasks:
     - name: Check core automation properties are configured
@@ -60,28 +62,29 @@
   gather_facts: false
   tasks:
     - name: Wait for Schema Registry to be ready
-      uri:
-        url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
-        method: GET
-        validate_certs: false
-        client_cert: "{{ sr_client_cert }}"
-        client_key: "{{ sr_client_key }}"
-        headers: "{{ sr_auth_headers }}"
-        status_code: 200
-      retries: 10
-      delay: 5
+      import_role:
+        name: confluent.platform.common
+        tasks_from: sr_api_call.yml
+      vars:
+        sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        sr_api_method: GET
+        sr_api_expected_status: 200
+        sr_api_result_var: sr_ready_check
+        sr_api_operation_name: "Schema Registry API Readiness Check"
+        sr_api_retries: 10
+        sr_api_delay: 5
       tags: api
 
     - name: Get subjects list for validation
-      uri:
-        url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
-        method: GET
-        validate_certs: false
-        client_cert: "{{ sr_client_cert }}"
-        client_key: "{{ sr_client_key }}"
-        headers: "{{ sr_auth_headers }}"
-        status_code: 200
-      register: subjects_list
+      import_role:
+        name: confluent.platform.common
+        tasks_from: sr_api_call.yml
+      vars:
+        sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        sr_api_method: GET
+        sr_api_expected_status: 200
+        sr_api_result_var: subjects_list
+        sr_api_operation_name: "Get Subjects List"
       tags: api
 
     - name: Verify test schemas exist
@@ -92,60 +95,76 @@
         fail_msg: "Test schemas were not created successfully"
       tags: api
 
-- name: Verify Schema Automation Features
-  hosts: schema_registry
+- name: Verify Schema Automation Extensions Loaded (Cluster-wide)
+  hosts: schema_registry  # Verify automation extensions on all SR instances
+  gather_facts: false
+  tasks:
+    - name: Verify automation extensions are loaded
+      import_role:
+        name: confluent.platform.common
+        tasks_from: sr_api_call.yml
+      vars:
+        sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters"
+        sr_api_method: GET
+        sr_api_expected_status: 200
+        sr_api_result_var: automation_extensions_check
+        sr_api_operation_name: "Verify Automation Extensions on {{ inventory_hostname }}"
+      tags: automation
+
+- name: Verify Schema Automation Features (Primary Only)
+  hosts: schema_registry:!mock-cc-schema-registry  # Only verify active management on primary SR
   gather_facts: false
   tasks:
     - name: Check exporters endpoint accessibility
-      uri:
-        url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters"
-        method: GET
-        validate_certs: false
-        client_cert: "{{ sr_client_cert }}"
-        client_key: "{{ sr_client_key }}"
-        headers: "{{ sr_auth_headers }}"
-        status_code: 200
-      register: exporters_list
+      import_role:
+        name: confluent.platform.common
+        tasks_from: sr_api_call.yml
+      vars:
+        sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters"
+        sr_api_method: GET
+        sr_api_expected_status: 200
+        sr_api_result_var: exporters_list
+        sr_api_operation_name: "Get Exporters List"
       tags: automation
 
     - name: Check importers endpoint accessibility
-      uri:
-        url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers"
-        method: GET
-        validate_certs: false
-        client_cert: "{{ sr_client_cert }}"
-        client_key: "{{ sr_client_key }}"
-        headers: "{{ sr_auth_headers }}"
-        status_code: 200
-      register: importers_list
+      import_role:
+        name: confluent.platform.common
+        tasks_from: sr_api_call.yml
+      vars:
+        sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers"
+        sr_api_method: GET
+        sr_api_expected_status: 200
+        sr_api_result_var: importers_list
+        sr_api_operation_name: "Get Importers List"
       tags: automation
 
     - name: Check if test exporter was created
-      uri:
-        url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}"
-        method: GET
-        validate_certs: false
-        client_cert: "{{ sr_client_cert }}"
-        client_key: "{{ sr_client_key }}"
-        headers: "{{ sr_auth_headers }}"
-        status_code: [200, 404]
-      register: exporter_check
-      ignore_errors: true
+      import_role:
+        name: confluent.platform.common
+        tasks_from: sr_api_call.yml
+      vars:
+        sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}"
+        sr_api_method: GET
+        sr_api_expected_status: [200, 404]
+        sr_api_result_var: exporter_check
+        sr_api_operation_name: "Check Test Exporter"
+        sr_api_ignore_errors: true
       when: sr_switch_over_exporter_name is defined
       tags: automation
 
     - name: Verify exporter configuration if it exists
       block:
         - name: Check exporter status
-          uri:
-            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}/status"
-            method: GET
-            validate_certs: false
-            client_cert: "{{ sr_client_cert }}"
-            client_key: "{{ sr_client_key }}"
-            headers: "{{ sr_auth_headers }}"
-            status_code: 200
-          register: exporter_status
+          import_role:
+            name: confluent.platform.common
+            tasks_from: sr_api_call.yml
+          vars:
+            sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}/status"
+            sr_api_method: GET
+            sr_api_expected_status: 200
+            sr_api_result_var: exporter_status
+            sr_api_operation_name: "Check Exporter Status"
           
         - name: Verify exporter is in expected state
           assert:
@@ -154,15 +173,15 @@
             fail_msg: "Exporter is not in expected state: {{ exporter_status.json.state }}"
 
         - name: Check exporter configuration
-          uri:
-            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}/config"
-            method: GET
-            validate_certs: false
-            client_cert: "{{ sr_client_cert }}"
-            client_key: "{{ sr_client_key }}"
-            headers: "{{ sr_auth_headers }}"
-            status_code: 200
-          register: exporter_config
+          import_role:
+            name: confluent.platform.common
+            tasks_from: sr_api_call.yml
+          vars:
+            sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}/config"
+            sr_api_method: GET
+            sr_api_expected_status: 200
+            sr_api_result_var: exporter_config
+            sr_api_operation_name: "Check Exporter Configuration"
           
         - name: Verify exporter target endpoint
           assert:
@@ -179,15 +198,15 @@
   gather_facts: false
   tasks:
     - name: Check Schema Registry mode
-      uri:
-        url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode"
-        method: GET
-        validate_certs: false
-        client_cert: "{{ sr_client_cert }}"
-        client_key: "{{ sr_client_key }}"
-        headers: "{{ sr_auth_headers }}"
-        status_code: 200
-      register: sr_mode_check
+      import_role:
+        name: confluent.platform.common
+        tasks_from: sr_api_call.yml
+      vars:
+        sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode"
+        sr_api_method: GET
+        sr_api_expected_status: 200
+        sr_api_result_var: sr_mode_check
+        sr_api_operation_name: "Check Schema Registry Mode"
       tags: security
 
     - name: Verify Schema Registry is in correct mode

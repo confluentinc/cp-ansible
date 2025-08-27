@@ -2,46 +2,51 @@
 ### SR Automation Workflow Testing Converge Playbook - Base Template
 ### This template can be imported by scenario-specific converge playbooks
 ### Tests the complete schema registry automation workflow
+### Note: Assumes CC and CP clusters are already deployed by multi_sr_automation_converge.yml
 
-- import_playbook: confluent.platform.all
+- name: Load Variables for SR Automation
+  hosts: all
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.platform.variables
 
 - name: Setup Schema Registry Automation Workflow Test
-  hosts: schema_registry
+  hosts: schema_registry:!cc_cluster  # CP Schema Registry only (exclude CC SR)
   gather_facts: true
   vars:
     # Common test configuration
     test_scenario: "{{ scenario_name | default('sr_automation') }}"
-    
+
   tasks:
     - name: Wait for Schema Registry to be ready
-      uri:
-        url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
-        method: GET
-        validate_certs: false
-        client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt if ssl_mutual_auth_enabled | default(false) else omit }}"
-        client_key: "{{ ssl_file_dir_final }}/schema_registry.key if ssl_mutual_auth_enabled | default(false) else omit }}"
-        headers:
-          Authorization: "{{ 'Bearer ' + oauth_token if schema_registry_oauth_enabled | default(false) else omit }}"
-        status_code: 200
-      retries: 10
-      delay: 5
-      register: sr_ready_check
+      import_role:
+        name: confluent.platform.common
+        tasks_from: sr_api_call.yml
+      vars:
+        sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        sr_api_method: GET
+        sr_api_expected_status: 200
+        sr_api_result_var: sr_ready_check
+        sr_api_operation_name: "Schema Registry Readiness Check"
+        sr_api_retries: 10
+        sr_api_delay: 5
       run_once: true
 
     - name: Create test schemas for automation workflow
-      uri:
-        url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects/{{ item.subject }}/versions"
-        method: POST
-        validate_certs: false
-        client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt if ssl_mutual_auth_enabled | default(false) else omit }}"
-        client_key: "{{ ssl_file_dir_final }}/schema_registry.key if ssl_mutual_auth_enabled | default(false) else omit }}"
-        headers:
-          Content-Type: application/vnd.schemaregistry.v1+json
-          Authorization: "{{ 'Bearer ' + oauth_token if schema_registry_oauth_enabled | default(false) else omit }}"
-        body_format: json
-        body:
+      include_role:
+        name: confluent.platform.common
+        tasks_from: sr_api_call.yml
+      vars:
+        sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects/{{ item.subject }}/versions"
+        sr_api_method: POST
+        sr_api_expected_status: 200
+        sr_api_result_var: "test_schema_creation_{{ item.subject | replace('.', '_') | replace('-', '_') }}"
+        sr_api_operation_name: "Create Schema {{ item.subject }}"
+        sr_api_body_format: json
+        sr_api_body:
           schema: "{{ item.schema | to_json }}"
-        status_code: 200
+        sr_api_ignore_errors: true
       loop:
         - subject: "test.user-value"
           schema:
@@ -73,21 +78,15 @@
                   name: "Status"
                   symbols: ["STARTED", "RUNNING", "COMPLETED", "FAILED"]
       run_once: true
-      ignore_errors: true
       register: test_schema_creation
 
     - name: Log test schema creation results
       debug:
         msg: |
           Test schema creation results:
-          {% for result in test_schema_creation.results %}
-          - {{ result.item.subject }}: {{ 'SUCCESS' if result.status == 200 else 'FAILED (' + result.status|string + ')' }}
-          {% endfor %}
+          - test.user-value: {{ 'SUCCESS' if test_schema_creation_test_user_value.status == 200 else 'FAILED (' + test_schema_creation_test_user_value.status|string + ')' if test_schema_creation_test_user_value is defined else 'SKIPPED' }}
+          - automation.workflow-value: {{ 'SUCCESS' if test_schema_creation_automation_workflow_value.status == 200 else 'FAILED (' + test_schema_creation_automation_workflow_value.status|string + ')' if test_schema_creation_automation_workflow_value is defined else 'SKIPPED' }}
       run_once: true
 
 - name: Test Schema Registry Automation Workflow
   import_playbook: confluent.platform.primary_sr_switchover_cp_to_cc
-  vars:
-    # Default to schema_exporter tag only for testing (not full switchover)
-    # Override with --tags switchover_to_cc for full workflow testing
-    ansible_run_tags: ["{{ test_automation_tags | default('schema_exporter') }}"]

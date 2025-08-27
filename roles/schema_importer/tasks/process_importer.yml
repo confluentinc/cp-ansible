@@ -1,4 +1,7 @@
 ---
+# Enhanced Schema Importer with Comprehensive Override Support
+# This allows overriding ANY part of the API request body
+
 - name: Set importer configuration
   set_fact:
     schema_importer_config:
@@ -8,22 +11,32 @@
       config: "{{ schema_importer_final_config }}"
   vars:
     base_config: "{{ importer.config | default({}) }}"
-    override_config: "{{ importer.config_overrides | default({}) }}"
+    config_overrides: "{{ importer.config_overrides | default({}) }}"
+    
     # Transform inventory config to API format
     api_config:
       schema.registry.url: "{{ base_config.schema_registry_endpoint }}"
       basic.auth.credentials.source: "{{ 'USER_INFO' if base_config.authentication_type == 'basic' else omit }}"
       basic.auth.user.info: "{{ base_config.basic_username + ':' + base_config.basic_password if base_config.authentication_type == 'basic' else omit }}"
-    schema_importer_final_config: "{{ api_config | combine(override_config) }}"
+      
+    # Enhanced: Apply config overrides to config section
+    schema_importer_final_config: "{{ api_config | combine(config_overrides) }}"
 
 # Shared variables for common request body fields and URI auth
 - name: Set importer variables
   set_fact:
     # Certificate chain for mTLS authentication
     certs_chain: "{{ssl_file_dir_final}}/schema_registry.chain"
-    # Common request body fields
-    importer_body_fields:
-      context_field: "{{ {'context': schema_importer_config.context} if schema_importer_config.context | default('') != '' else {} }}"
+    
+    # Build base request body from configuration
+    base_request_body:
+      name: "{{ schema_importer_config.name }}"
+      subjects: "{{ schema_importer_config.subjects }}"
+      config: "{{ schema_importer_config.config }}"
+      
+    # Add optional fields if they exist
+    optional_fields:
+      context: "{{ schema_importer_config.context if schema_importer_config.context != '' else omit }}"
 
 - name: Check if Schema Importer exists
   include_tasks: ../common/tasks/sr_api_call.yml
@@ -34,6 +47,8 @@
     sr_api_expected_status: [200, 404]
     sr_api_result_var: importer_check
     sr_api_ignore_errors: true
+    sr_api_username: "{{ schema_registry_basic_users_final.admin.principal | default(omit) }}"
+    sr_api_password: "{{ schema_registry_basic_users_final.admin.password | default(omit) }}"
 
 # Pause importer before update (only needed for existing importers)
 - name: Pause Schema Importer before update
@@ -48,23 +63,29 @@
     sr_api_until_condition: "{{ RESULT_VAR.status in [200] }}"
     sr_api_retries: "{{ schema_registry_retries }}"
     sr_api_delay: 2
+    sr_api_username: "{{ schema_registry_basic_users_final.admin.principal | default(omit) }}"
+    sr_api_password: "{{ schema_registry_basic_users_final.admin.password | default(omit) }}"
 
-# Prepare variables for Create or Update Schema Importer
+# Enhanced: Build comprehensive request body with full override support
 - name: Set importer operation variables
   set_fact:
     # Dynamic method and URL based on whether importer exists
     importer_method: "{{ 'POST' if importer_check.status == 404 else 'PUT' }}"
     importer_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers{{ '' if importer_check.status == 404 else '/' + schema_importer_config.name }}"
-    # Dynamic request body (create includes name, update doesn't)
-    base_importer_body: "{{ {'name': schema_importer_config.name} if importer_check.status == 404 else {} }}"
-    common_importer_body:
-      subjects: "{{ schema_importer_config.subjects }}"
-      config: "{{ schema_importer_config.config }}"
+    # Dynamic base body (create includes name, update doesn't)
+    initial_request_body: "{{ {'name': schema_importer_config.name} if importer_check.status == 404 else {} }}"
   when: importer_check.status in [200, 404]
 
-- name: Create importer request body
+- name: Build standard importer request body
   set_fact:
-    importer_request_body: "{{ base_importer_body | combine(common_importer_body) | combine(importer_body_fields.context_field) }}"
+    # Build standard request body from base components
+    standard_request_body: "{{ initial_request_body | combine(base_request_body) | combine(optional_fields) }}"
+  when: importer_check.status in [200, 404]
+
+- name: Apply comprehensive overrides to importer request body
+  set_fact:
+    # Apply comprehensive overrides (can override ANY field)
+    importer_request_body: "{{ standard_request_body | combine(importer.body_overrides | default({}), recursive=True) }}"
   when: importer_check.status in [200, 404]
 
 # Create or Update Schema Importer (POST for new, PUT for existing)
@@ -79,6 +100,8 @@
     sr_api_body: "{{ importer_request_body }}"
     sr_api_result_var: importer_operation
     sr_api_when_condition: "{{ importer_check.status in [200, 404] }}"
+    sr_api_username: "{{ schema_registry_basic_users_final.admin.principal | default(omit) }}"
+    sr_api_password: "{{ schema_registry_basic_users_final.admin.password | default(omit) }}"
 
 # Resume importer after update (only needed for existing importers)
 - name: Resume Schema Importer after update
@@ -90,6 +113,8 @@
     sr_api_expected_status: [200, 202]
     sr_api_result_var: importer_resume
     sr_api_when_condition: "{{ importer_check.status == 200 }}"
+    sr_api_username: "{{ schema_registry_basic_users_final.admin.principal | default(omit) }}"
+    sr_api_password: "{{ schema_registry_basic_users_final.admin.password | default(omit) }}"
 
 - name: Register Schema Importer Status
   include_tasks: ../common/tasks/sr_api_call.yml
@@ -99,6 +124,8 @@
     sr_api_method: GET
     sr_api_expected_status: 200
     sr_api_result_var: importer_status_response
+    sr_api_username: "{{ schema_registry_basic_users_final.admin.principal | default(omit) }}"
+    sr_api_password: "{{ schema_registry_basic_users_final.admin.password | default(omit) }}"
 
 - name: Retrieve Schema Importer State
   set_fact:

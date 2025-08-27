@@ -1,0 +1,93 @@
+---
+### Multi-Cluster SR Automation Converge Playbook
+### CC first with standard groups, then rename CP groups and deploy CP, then automation
+
+- name: Setup Mock CC Cluster First (Standard Groups)
+  import_playbook: confluent.platform.all
+
+- name: Add Automation Properties to Mock CC Schema Registry
+  hosts: schema_registry:&cc_cluster
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+    - name: Add automation properties to mock CC Schema Registry
+  # Required for bulk API functionality (importers need SchemaCacheManagerResourceExtension)
+      lineinfile:
+        path: "{{ schema_registry.config_file }}"
+        regexp: "^{{ item.property | regex_escape }}="
+        line: "{{ item.property }}={{ item.value }}"
+        backup: yes
+      loop:
+        - property: "kafkastore.update.handlers"
+          value: "io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler,io.confluent.schema.manager.SchemaCacheManagerUpdateHandler"
+        - property: "password.encoder.secret"
+          value: "{{ password_encoder_secret }}"
+        - property: "schema.registry.resource.extension.class"
+          value: "io.confluent.schema.exporter.SchemaExporterResourceExtension,io.confluent.schema.importer.SchemaImporterResourceExtension,io.confluent.dekregistry.DekRegistryResourceExtension,io.confluent.schema.manager.SchemaCacheManagerResourceExtension"
+        - property: "dek.registry.update.handlers"
+          value: "io.confluent.schema.manager.SchemaCacheManagerDekUpdateHandler"
+      register: mock_cc_automation_config
+
+    - name: Restart Mock CC Schema Registry to load automation extensions
+      systemd:
+        name: confluent-schema-registry
+        state: restarted
+      when: mock_cc_automation_config.changed
+
+    - name: Wait for Mock CC Schema Registry to be ready after restart
+      include_tasks: ../roles/common/tasks/sr_api_call.yml
+      vars:
+        sr_api_operation_name: "Wait for Mock CC Schema Registry to be ready after restart"
+        sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        sr_api_method: GET
+        sr_api_expected_status: 200
+        sr_api_result_var: mock_cc_sr_ready_check
+        sr_api_username: "{{ schema_registry_basic_users_final.admin.principal | default(omit) }}"
+        sr_api_password: "{{ schema_registry_basic_users_final.admin.password | default(omit) }}"
+        sr_api_retries: 15
+        sr_api_delay: 3
+        sr_api_ignore_errors: true
+      when: mock_cc_automation_config.changed
+
+- name: Rename Groups After CC Deployment
+  hosts: cc_cluster
+  gather_facts: false
+  tasks:
+    - name: "Rename CC Groups to Avoid Conflicts with CP Deployment"
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: "{{item}}:"
+        line: "{{item}}_cc:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - kafka_controller
+        - kafka_broker
+        - schema_registry
+
+- name: Rename Groups After CC Deployment
+  hosts: all:!cc_cluster
+  gather_facts: false
+  tasks:
+    - name: "Rename CP Groups to Standard Names for Deployment"
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: "{{item}}_cp:"
+        line: "{{item}}:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - kafka_controller
+        - kafka_broker
+        - schema_registry
+
+    - name: Refresh Inventory
+      meta: refresh_inventory
+
+
+- name: Setup CP Cluster Second (Automation Platform)
+  import_playbook: confluent.platform.all
+
+- name: Setup SR Automation Workflow (CP to CC)
+  import_playbook: base_templates/sr_automation_converge_base.yml

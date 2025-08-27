@@ -9,7 +9,7 @@ platforms:
   - name: controller1
     hostname: controller1.confluent
     groups:
-      - kafka_controller
+      - kafka_controller_cp
     image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java21.j2
     command: ""
@@ -22,20 +22,7 @@ platforms:
   - name: kafka-broker1
     hostname: kafka-broker1.confluent
     groups:
-      - kafka_broker
-    image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu-java21.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
-
-  - name: kafka-broker2
-    hostname: kafka-broker2.confluent
-    groups:
-      - kafka_broker
+      - kafka_broker_cp
     image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java21.j2
     command: ""
@@ -49,7 +36,37 @@ platforms:
   - name: schema-registry1
     hostname: schema-registry1.confluent
     groups:
-      - schema_registry
+      - schema_registry_cp
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Mock Confluent Cloud Kafka Controller (CC cluster infrastructure)
+  - name: cc-controller1
+    hostname: cc-controller1.confluent
+    groups:
+      - kafka_controller
+      - cc_cluster
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Mock Confluent Cloud Kafka Broker (CC cluster infrastructure)
+  - name: cc-kafka-broker1
+    hostname: cc-kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - cc_cluster
     image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java21.j2
     command: ""
@@ -63,7 +80,8 @@ platforms:
   - name: mock-cc-schema-registry
     hostname: mock-cc-schema-registry.confluent
     groups:
-      - mock_cc_schema_registry
+      - schema_registry
+      - cc_cluster
     image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java21.j2
     command: ""
@@ -74,35 +92,77 @@ platforms:
       - name: confluent
 
 provisioner:
+  config_options:
+    tags:
+      run: all,switchover_to_cc
+
   playbooks:
     prepare: prepare.yml
-    converge: converge.yml
+    converge: ../multi_sr_automation_converge.yml
     verify: verify.yml
   inventory:
     group_vars:
       all:
+        installation_method: archive
+        confluent_common_repository_baseurl: "https://dev-confluent-packages-654654529379-us-west-2.s3.us-west-2.amazonaws.com/8.1.x/6081"
+        confluent_package_version: "8.1.0-0"
+        confluent_full_package_version: "8.1.0-0.1.0"
+        confluent_package_redhat_suffix: "-8.1.0-0.1.0"
+        confluent_package_debian_suffix: "=8.1.0~0-1"
         scenario_name: sr_automation_plaintext
         # SR Automation specific variables (applies to both CP and mock CC)
         password_encoder_secret: "plaintext-test-secret"
-        
-        # SR Automation components (global - applies to all hosts for workflow)
+        # Common SR property for plaintext testing (applies to all SR instances)
+        schema_registry_custom_properties:
+          usm.schema.registry.remote.endpoint.validation.enabled: false
+
+      # schema_registry group (initially CC, then renamed for CP after CC deployment)
+      schema_registry:
+        # CC Schema Registry connects to CC Kafka cluster (stays as basic SR)
+        kafkastore_bootstrap_servers: "cc-kafka-broker1:9092"
+        schema_registry_custom_properties:
+          # CC-specific configuration (inherits validation property from all group)
+          kafkastore.topic: _schemas_cc  # Use separate schemas topic for CC cluster
+
+    host_vars:
+      # CP Controller host configuration
+      kafka-controller1:
+        kafka_controller_custom_properties:
+          # CP cluster configuration
+          group.id: cp-controller-group
+
+      # CP Broker host configuration
+      kafka-broker1:
+        kafka_broker_custom_properties:
+          # CP cluster configuration
+          group.initial.rebalance.delay.ms: 0
+      # CP Schema Registry configuration - SR Automation properties (CP only)
+      schema-registry1:
+        # CP Schema Registry Kafka connection
+        kafkastore_bootstrap_servers: "kafka-broker1:9092"
+        schema_registry_custom_properties:
+          # CP-specific configuration (inherits validation property from all group)
+          kafkastore.topic: _schemas  # Use standard schemas topic for CP cluster
+          schema.registry.group.id: schema-registry-cp
+
+        # SR Automation components (CP only - applied via host_vars, CC SR has no automation)
         unified_stream_manager:
           schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
           authentication_type: basic
-          basic_username: "cc-api-key"
-          basic_password: "cc-api-secret"
-        
+          basic_username: "admin"
+          basic_password: "admin-secret"
+
         # Schema Exporters for testing - Basic auth to mock CC SR (even in plaintext scenario)
         schema_exporters:
           - name: "plaintext-schema-exporter"
-            subjects: ["test.*", "automation.*"]
+            subjects: ["test.*"]
             context_type: "AUTO"
             config:
               schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
               authentication_type: basic
-              basic_username: "exporter-api-key"
-              basic_password: "client-secret"
-        
+              basic_username: "admin"
+              basic_password: "admin-secret"
+
         # Schema Importers for reverse sync testing - Basic auth from mock CC SR
         schema_importers:
           - name: "plaintext-schema-importer"
@@ -110,51 +170,12 @@ provisioner:
             config:
               schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
               authentication_type: basic
-              basic_username: "importer-api-key"
-              basic_password: "client-secret"
-        
+              basic_username: "admin"
+              basic_password: "admin-secret"
+
         # Specify exporter for switchover testing
         sr_switch_over_exporter_name: "plaintext-schema-exporter"
-        
-      # CP Schema Registry configuration (only applies to CP components)
-      schema_registry:
-        # No SSL/TLS - Plaintext configuration
-        ssl_enabled: false
-        ssl_mutual_auth_enabled: false
-        schema_registry_authentication_type: none
-        schema_registry_ssl_enabled: false
 
-      # Kafka plaintext configuration
-      kafka_broker:
-        ssl_enabled: false
-        sasl_protocol: none
-
-      kafka_controller:
-        ssl_enabled: false
-        sasl_protocol: none
-
-      # Schema Registry plaintext configuration
-      schema_registry:
-        schema_registry_custom_properties:
-          # Disable security validations for plaintext testing
-          usm.schema.registry.remote.endpoint.validation.enabled: false
-
-    host_vars:
-      # Mock CC Schema Registry configuration - Basic Auth over HTTP (simulates CC)
-      mock-cc-schema-registry:
-        schema_registry_listener_port: 8081
-        schema_registry_http_protocol: http
-        schema_registry_authentication_type: basic
-        # CC uses basic auth, no mutual TLS (using HTTP for plaintext testing)
-        ssl_enabled: true
-        schema_registry_authentication_type: basic
-        schema_registry_basic_users:
-          client:
-            principal: client
-            password: client-secret
-            roles: client,developer,admin
-        schema_registry_custom_properties:
-          usm.schema.registry.remote.endpoint.validation.enabled: false
 
 verifier:
   name: ansible

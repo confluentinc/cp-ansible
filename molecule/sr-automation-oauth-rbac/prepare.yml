@@ -1,56 +1,7 @@
 ---
-### SR Automation Workflow Test Environment Preparation - OAuth + RBAC
-### Imports base preparation and adds OAuth + RBAC specific setup
+- import_playbook: ../oauth.yml
 
-- import_playbook: ../base_templates/sr_automation_prepare_base.yml
-
-- name: OAuth + RBAC Specific Preparation
-  hosts: oauth
-  gather_facts: false
+- name: Download OAuth IDP cert
+  hosts: localhost
   tasks:
-    - name: Display OAuth + RBAC scenario information
-      debug:
-        msg: |
-          OAuth + RBAC SR Automation Testing Setup:
-          - OAuth server: {{ oauth_token_uri | default('https://oauth-server1:8090/oauth2/token') }}
-          - JWKS endpoint: {{ oauth_jwks_uri | default('https://oauth-server1:8090/.well-known/jwks.json') }}
-          - RBAC authorization: Enabled with MDS integration
-          - Test OAuth clients: sr-automation-client, exporter-client, importer-client
-      run_once: true
-
-- name: RBAC Setup Preparation
-  hosts: kafka_broker
-  gather_facts: false
-  tasks:
-    - name: Setup MDS configuration for RBAC
-      debug:
-        msg: |
-          Configuring MDS for RBAC testing:
-          - MDS bootstrap servers: {{ mds_bootstrap_server_urls }}
-          - Super users will be configured for automation testing
-          - Role bindings will be set up for schema registry operations
-
-- name: OAuth + RBAC Configuration Verification
-  hosts: schema_registry
-  gather_facts: false
-  tasks:
-    - name: Verify OAuth + RBAC environment variables
-      assert:
-        that:
-          - ssl_enabled | default(false) == true
-          - oauth_enabled | default(false) == true
-          - rbac_enabled | default(false) == true
-          - schema_registry_oauth_enabled | default(false) == true
-          - oauth_token_uri is defined
-          - oauth_jwks_uri is defined
-        fail_msg: "OAuth + RBAC scenario configuration validation failed"
-
-    - name: Display OAuth + RBAC scenario readiness
-      debug:
-        msg: |
-          ✓ OAuth + RBAC SR Automation Test Environment Ready
-          - OAuth server configured
-          - RBAC authorization enabled
-          - SSL/TLS enabled (required for OAuth)
-          - Test clients configured for automation components
-          - Ready for secure automation workflow testing
+    - shell: openssl s_client -showcerts -connect localhost:8443 </dev/null 2>/dev/null|openssl x509 -outform PEM > oauthcertfile.pem
