@@ -1,7 +1,4 @@
 ---
-# Enhanced Schema Exporter with Comprehensive Override Support
-# This allows overriding ANY part of the API request body
-
 - name: Set exporter configuration
   set_fact:
     schema_exporter_config:
@@ -14,35 +11,59 @@
       config: "{{ schema_exporter_final_config }}"
   vars:
     base_config: "{{ exporter.config | default({}) }}"
-    config_overrides: "{{ exporter.config_overrides | default({}) }}"
-    
+    override_config: "{{ exporter.config_overrides | default({}) }}"
     # Transform inventory config to API format
-    api_config:
+    # Base configuration
+    base_api_config:
       schema.registry.url: "{{ base_config.schema_registry_endpoint }}"
-      basic.auth.credentials.source: "{{ 'USER_INFO' if base_config.authentication_type == 'basic' else omit }}"
-      basic.auth.user.info: "{{ base_config.basic_username + ':' + base_config.basic_password if base_config.authentication_type == 'basic' else omit }}"
-      
-    # Enhanced: Apply config overrides to config section
-    schema_exporter_final_config: "{{ api_config | combine(config_overrides) }}"
+    
+    # Basic Authentication
+    basic_auth_config: "{{ {
+      'basic.auth.credentials.source': 'USER_INFO',
+      'basic.auth.user.info': base_config.basic_username + ':' + base_config.basic_password
+    } if base_config.authentication_type == 'basic' else {} }}"
+    
+    # SASL Authentication
+    sasl_auth_config: "{{ {
+      'sasl.mechanism': base_config.sasl_mechanism | default('PLAIN'),
+      'security.protocol': base_config.security_protocol | default('SASL_SSL'),
+      'sasl.jaas.config': base_config.sasl_jaas_config if base_config.sasl_jaas_config is defined 
+                         else (base_config.sasl_mechanism | default('PLAIN') + ' required username=\"' + base_config.sasl_username + '\" password=\"' + base_config.sasl_password + '\";')
+    } if base_config.authentication_type == 'sasl' else {} }}"
+    
+    # OAuth Authentication  
+    oauth_auth_config: "{{ {
+      'security.protocol': base_config.security_protocol | default('SASL_SSL'),
+      'sasl.mechanism': 'OAUTHBEARER',
+      'sasl.jaas.config': 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"' + base_config.oauth_client_id + '\" clientSecret=\"' + base_config.oauth_client_secret + '\" scope=\"' + (base_config.oauth_scope | default('')) + '\" extension_logicalCluster=\"' + (base_config.oauth_logical_cluster | default('')) + '\" extension_identityPoolId=\"' + (base_config.oauth_identity_pool_id | default('')) + '\";',
+      'sasl.login.callback.handler.class': 'io.confluent.kafka.clients.plugins.auth.token.TokenUserLoginCallbackHandler'
+    } if base_config.authentication_type == 'oauth' else {} }}"
+    
+    # mTLS Authentication
+    mtls_auth_config: "{{ {
+      'security.protocol': base_config.security_protocol | default('SSL'),
+      'ssl.keystore.location': base_config.ssl_keystore_location,
+      'ssl.keystore.password': base_config.ssl_keystore_password,
+      'ssl.key.password': base_config.ssl_key_password | default(base_config.ssl_keystore_password),
+      'ssl.truststore.location': base_config.ssl_truststore_location,
+      'ssl.truststore.password': base_config.ssl_truststore_password
+    } if base_config.authentication_type == 'mtls' else {} }}"
+    
+    # Combined API configuration
+    api_config: "{{ base_api_config | combine(basic_auth_config) | combine(sasl_auth_config) | combine(oauth_auth_config) | combine(mtls_auth_config) }}"
+    schema_exporter_final_config: "{{ api_config | combine(override_config) }}"
 
 # Shared variables for common request body fields and URI auth
 - name: Set exporter variables
   set_fact:
     # Certificate chain for mTLS authentication
     certs_chain: "{{ssl_file_dir_final}}/schema_registry.chain"
-    
-    # Build base request body from configuration
-    base_request_body:
-      name: "{{ schema_exporter_config.name }}"
-      subjects: "{{ schema_exporter_config.subjects }}"
-      config: "{{ schema_exporter_config.config }}"
-      
-    # Add optional fields if they exist
-    optional_fields:
-      contextType: "{{ schema_exporter_config.context_type if schema_exporter_config.context_type != 'AUTO' else omit }}"
-      context: "{{ schema_exporter_config.context if schema_exporter_config.context_type not in ['NONE', 'AUTO'] and schema_exporter_config.context != '' else omit }}"
-      kekRenameFormat: "{{ schema_exporter_config.kek_rename_format if schema_exporter_config.kek_rename_format != '' else omit }}"
-      subjectRenameFormat: "{{ schema_exporter_config.subject_rename_format if schema_exporter_config.subject_rename_format != '' else omit }}"
+    # Common request body fields
+    exporter_body_fields:
+      context_type_field: "{{ {'contextType': schema_exporter_config.context_type} if schema_exporter_config.context_type != 'AUTO' else {} }}"
+      context_field: "{{ {'context': schema_exporter_config.context} if schema_exporter_config.context_type not in ['NONE', 'AUTO'] else {} }}"
+      kek_rename_field: "{{ {'kekRenameFormat': schema_exporter_config.kek_rename_format} if schema_exporter_config.kek_rename_format | default('') != '' else {} }}"
+      subject_rename_field: "{{ {'subjectRenameFormat': schema_exporter_config.subject_rename_format} if schema_exporter_config.subject_rename_format | default('') != '' else {} }}"
 
 - name: Check if Schema Exporter exists
   include_tasks: ../common/tasks/sr_api_call.yml
@@ -53,8 +74,6 @@
     sr_api_expected_status: [200, 404]
     sr_api_result_var: exporter_check
     sr_api_ignore_errors: true
-    sr_api_username: "{{ schema_registry_basic_users_final.admin.principal | default(omit) }}"
-    sr_api_password: "{{ schema_registry_basic_users_final.admin.password | default(omit) }}"
 
 # Pause exporter before update (only needed for existing exporters)
 - name: Pause Schema Exporter
@@ -69,29 +88,23 @@
     sr_api_until_condition: "{{ RESULT_VAR.status in [200] }}"
     sr_api_retries: "{{ schema_registry_retries }}"
     sr_api_delay: 2
-    sr_api_username: "{{ schema_registry_basic_users_final.admin.principal | default(omit) }}"
-    sr_api_password: "{{ schema_registry_basic_users_final.admin.password | default(omit) }}"
 
-# Enhanced: Build comprehensive request body with full override support
+# Prepare variables for Create or Update Schema Exporter
 - name: Set exporter operation variables
   set_fact:
     # Dynamic method and URL based on whether exporter exists
     exporter_method: "{{ 'POST' if exporter_check.status == 404 else 'PUT' }}"
     exporter_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters{{ '' if exporter_check.status == 404 else '/' + schema_exporter_config.name }}"
-    # Dynamic base body (create includes name, update doesn't)
-    initial_request_body: "{{ {'name': schema_exporter_config.name} if exporter_check.status == 404 else {} }}"
+    # Dynamic request body (create includes name, update doesn't)
+    base_exporter_body: "{{ {'name': schema_exporter_config.name} if exporter_check.status == 404 else {} }}"
+    common_exporter_body:
+      subjects: "{{ schema_exporter_config.subjects }}"
+      config: "{{ schema_exporter_config.config }}"
   when: exporter_check.status in [200, 404]
 
-- name: Build standard exporter request body
+- name: Create exporter request body
   set_fact:
-    # Build standard request body from base components
-    standard_request_body: "{{ initial_request_body | combine(base_request_body) | combine(optional_fields) }}"
-  when: exporter_check.status in [200, 404]
-
-- name: Apply comprehensive overrides to exporter request body
-  set_fact:
-    # Apply comprehensive overrides (can override ANY field)
-    exporter_request_body: "{{ standard_request_body | combine(exporter.body_overrides | default({}), recursive=True) }}"
+    exporter_request_body: "{{ base_exporter_body | combine(common_exporter_body) | combine(exporter_body_fields.context_type_field) | combine(exporter_body_fields.context_field) | combine(exporter_body_fields.kek_rename_field) | combine(exporter_body_fields.subject_rename_field) }}"
   when: exporter_check.status in [200, 404]
 
 # Create or Update Schema Exporter (POST for new, PUT for existing)
@@ -106,8 +119,6 @@
     sr_api_body: "{{ exporter_request_body }}"
     sr_api_result_var: exporter_operation
     sr_api_when_condition: "{{ exporter_check.status in [200, 404] }}"
-    sr_api_username: "{{ schema_registry_basic_users_final.admin.principal | default(omit) }}"
-    sr_api_password: "{{ schema_registry_basic_users_final.admin.password | default(omit) }}"
 
 # Resume exporter after update (only needed for existing exporters)
 - name: Resume Schema Exporter
@@ -119,8 +130,6 @@
     sr_api_expected_status: [200, 202]
     sr_api_result_var: exporter_resume
     sr_api_when_condition: "{{ exporter_check.status == 200 }}"
-    sr_api_username: "{{ schema_registry_basic_users_final.admin.principal | default(omit) }}"
-    sr_api_password: "{{ schema_registry_basic_users_final.admin.password | default(omit) }}"
 
 - name: Register Schema Exporter Status
   include_tasks: ../common/tasks/sr_api_call.yml
@@ -130,8 +139,6 @@
     sr_api_method: GET
     sr_api_expected_status: 200
     sr_api_result_var: exporter_status_response
-    sr_api_username: "{{ schema_registry_basic_users_final.admin.principal | default(omit) }}"
-    sr_api_password: "{{ schema_registry_basic_users_final.admin.password | default(omit) }}"
 
 - name: Retrieve Schema Exporter State
   set_fact:
