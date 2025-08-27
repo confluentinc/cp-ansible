@@ -31,6 +31,8 @@
     owner: root
     group: root
   notify: restart usm agent
+  tags:
+    - systemd
 
 - name: Configure USM Agent Logrotate
   template:
@@ -52,7 +54,7 @@
 
 - name: Install Cron Package for USM Agent Log Rotation
   package:
-    name: cronie
+    name: "{{ 'cronie' if ansible_os_family == 'RedHat' else 'cron' }}"
     state: present
   register: install_cron_result
   until: install_cron_result is success or ansible_check_mode
@@ -63,10 +65,12 @@
 
 - name: Enable and Start Cron Service
   systemd:
-    name: crond
+    name: "{{ 'crond' if ansible_os_family == 'RedHat' else 'cron' }}"
     enabled: true
     state: started
   when: usm_agent_logrotate_enabled|bool
+  tags:
+    - systemd
 
 - name: Add USM Agent Logrotate Cron Job
   cron:
@@ -77,20 +81,21 @@
   when: usm_agent_logrotate_enabled|bool
 
 # Remove logrotate configuration if disabled
-- name: Remove USM Agent Logrotate Configuration
+- name: Remove USM Agent Logrotate Configuration and Scripts
   file:
-    path: /etc/logrotate.d/usm-agent
+    path: "{{ item }}"
     state: absent
+  loop:
+    - /etc/logrotate.d/usm-agent
+    - /usr/local/bin/logrotate-usm-agent.sh
   when: not usm_agent_logrotate_enabled|bool
-
-- name: Remove USM Agent Logrotate Wrapper Script
-  file:
-    path: /usr/local/bin/logrotate-usm-agent.sh
-    state: absent
-  when: not usm_agent_logrotate_enabled|bool
+  tags:
+    - disable_logrotate
 
 - name: Remove USM Agent Logrotate Cron Job
   cron:
     name: "USM Agent Log Rotation"
     state: absent
   when: not usm_agent_logrotate_enabled|bool
+  tags:
+    - disable_logrotate
