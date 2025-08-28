@@ -42,6 +42,58 @@
       tags:
         - always
 
+    # Apply USM config fallback for exporters and importers to reduce configuration repetition
+    - name: "Apply USM Config Fallback for Exporters and Importers"
+      block:
+        - name: Set default USM config for fallback
+          set_fact:
+            usm_fallback_config:
+              schema_registry_endpoint: "{{ unified_stream_manager.schema_registry_endpoint }}"
+              authentication_type: "{{ unified_stream_manager.authentication_type }}"
+              basic_username: "{{ unified_stream_manager.basic_username }}"
+              basic_password: "{{ unified_stream_manager.basic_password }}"
+
+        - name: Apply USM config fallback to exporters without config
+          set_fact:
+            schema_exporters: >-
+              [{% for exporter in schema_exporters | default([]) %}
+                {% if 'config' not in exporter %}
+                  {{ exporter | combine({'config': usm_fallback_config}) }}
+                {% else %}
+                  {{ exporter }}
+                {% endif %}
+                {% if not loop.last %},{% endif %}
+              {% endfor %}]
+          when:
+            - (schema_exporters | selectattr('config', 'undefined') | list | length) > 0
+
+        - name: Apply USM config fallback to importers without config
+          set_fact:
+            schema_importers: >-
+              [{% for importer in schema_importers | default([]) %}
+                {% if 'config' not in importer %}
+                  {{ importer | combine({'config': usm_fallback_config}) }}
+                {% else %}
+                  {{ importer }}
+                {% endif %}
+                {% if not loop.last %},{% endif %}
+              {% endfor %}]
+          when:
+            - (schema_importers | selectattr('config', 'undefined') | list | length) > 0
+
+      when:
+        # Only run this entire block if USM is configured AND there are exporters/importers without config
+        - unified_stream_manager is defined
+        - unified_stream_manager.schema_registry_endpoint is defined
+        - unified_stream_manager.authentication_type is defined
+        - >
+          (
+            (schema_exporters is defined and schema_exporters | length > 0 and (schema_exporters | selectattr('config', 'undefined') | list | length) > 0) or
+            (schema_importers is defined and schema_importers | length > 0 and (schema_importers | selectattr('config', 'undefined') | list | length) > 0)
+          )
+      tags:
+        - always
+
     # Ensure schema registry is configured with required automation properties
     - name: "Configure Schema Registry Properties for Automation"
       block:
