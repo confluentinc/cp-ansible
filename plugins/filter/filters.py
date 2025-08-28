@@ -1,5 +1,7 @@
 import re
 import ipaddress
+import hashlib
+import base64
 
 DOCUMENTATION = '''
 ---
@@ -39,6 +41,7 @@ class FilterModule(object):
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
             'prometheus_client_properties': self.prometheus_client_properties,
             'alertmanager_client_properties': self.alertmanager_client_properties,
+            'usm_sha1_password_hash': self.usm_sha1_password_hash
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
@@ -644,3 +647,26 @@ class FilterModule(object):
             final_dict[config_prefix + 'basic.auth.user.info'] = basic_auth_user_info
 
         return final_dict
+
+    def usm_sha1_password_hash(self, password):
+        """
+        Generates a SHA1 hash of the provided password in the format required for USM agent basic auth.
+        Returns the hash in base64 format with {SHA} prefix.
+
+        Args:
+            password (str): The plain text password to hash
+
+        Returns:
+            str: The SHA1 hash in format {SHA}base64_hash
+        """
+        if not password:
+            return ''
+
+        # Generate SHA1 hash
+        sha1_hash = hashlib.sha1(password.encode('utf-8')).digest()
+
+        # Encode to base64
+        base64_hash = base64.b64encode(sha1_hash).decode('utf-8')
+
+        # Return in format required for basic auth: {SHA}base64_hash
+        return f"{{SHA}}{base64_hash}"
