@@ -30,14 +30,7 @@ schema_importers:
       authentication_type: "basic"
       basic_username: "dev-client-id"
       basic_password: "dev-client-secret"
-        # Override to use mTLS instead of basic auth
-    config_overrides:
-      security.protocol: "SSL"
-      ssl.keystore.location: "/var/ssl/private/client.keystore.jks"
-      ssl.keystore.password: "keystorepass"
-      ssl.key.password: "keypass"
-      ssl.truststore.location: "/var/ssl/private/client.truststore.jks"
-      ssl.truststore.password: "truststorepass"
+        # Use standard config section for authentication
 
   - name: "backup-restore-importer"
     context: "backup-context"
@@ -47,11 +40,8 @@ schema_importers:
       authentication_type: "basic"
       basic_username: "backup-user"
       basic_password: "backup-password"
-    # Method 1: Override config section only
-    config_overrides:
-      basic.auth.credentials.source: "USER_INFO"
-    # Method 2: Override entire request body (if needed)
-    body_overrides:
+    # Overrides
+    overrides:
       contextType: "CUSTOM"
       context: "prod-context"
       config:

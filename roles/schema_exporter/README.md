@@ -25,14 +25,7 @@ schema_exporter:
       authentication_type: "basic"
       basic_username: "dev-user"
       basic_password: "dev-password"
-        # Override to use mTLS instead of basic auth
-    config_overrides:
-      security.protocol: "SSL"
-      ssl.keystore.location: "/var/ssl/private/client.keystore.jks"
-      ssl.keystore.password: "keystorepass"
-      ssl.key.password: "keypass"
-      ssl.truststore.location: "/var/ssl/private/client.truststore.jks"
-      ssl.truststore.password: "truststorepass"
+        # Use standard config section for authentication
 
   - name: "prod-backup-exporter"
     context_type: "AUTO"
@@ -42,13 +35,8 @@ schema_exporter:
       authentication_type: "basic"
       basic_username: "prod-client-id"
       basic_password: "prod-client-secret"
-     # Method 1: Override config section only
-    config_overrides:
-      basic_username: "dev-user"
-      basic_password: "dev-password"
-
-    # Method 2: Override entire request body (if needed)
-    body_overrides:
+    # Overrides
+    overrides:
       contextType: "CUSTOM"
       context: "prod-context"
       config:
@@ -79,7 +67,7 @@ schema_exporters:
       basic_password: "pass"
 
     # Override entire request body structure
-    body_overrides:
+    overrides:
       name: "production-exporter"  # Override name
       contextType: "CUSTOM"
       context: "prod-dc1"
