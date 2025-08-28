@@ -1,5 +1,7 @@
 import re
 import ipaddress
+import hashlib
+import base64
 
 DOCUMENTATION = '''
 ---
@@ -37,9 +39,9 @@ class FilterModule(object):
             'resolve_and_format_hostname': self.resolve_and_format_hostname,
             'resolve_and_format_hostnames': self.resolve_and_format_hostnames,
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
+            'usm_sha1_password_hash': self.usm_sha1_password_hash,
             'replace_client_assertion_file': self.replace_client_assertion_file,
             'schema_registry_extension_classes': self.schema_registry_extension_classes,
-            'get_usm_agent_url': self.get_usm_agent_url,
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
@@ -674,25 +676,25 @@ class FilterModule(object):
         }
         return self.combine_enabled_values(extensions_dict)
 
-    def get_usm_agent_url(self, groups, hostvars, http_protocol, dataplane_port):
+    def usm_sha1_password_hash(self, password):
         """
-        Determines the USM agent URL by always using the USM agent host's hostname,
-        regardless of which component is being deployed.
+        Generates a SHA1 hash of the provided password in the format required for USM agent basic auth.
+        Returns the hash in base64 format with {SHA} prefix.
 
         Args:
-            groups: Ansible groups dictionary
-            hostvars: Ansible hostvars dictionary
-            http_protocol: HTTP protocol (http or https)
-            dataplane_port: USM agent dataplane port
+            password (str): The plain text password to hash
 
         Returns:
-            str: USM agent URL or empty string if no USM agent group exists
+            str: The SHA1 hash in format {SHA}base64_hash
         """
-        # Check if usm_agent group exists and has hosts
-        if groups is not None and 'usm_agent' in groups and len(groups['usm_agent']) > 0:
-            usm_agent_host = groups['usm_agent'][0]
-            if usm_agent_host in hostvars:
-                # Use the USM agent host's hostname, not the current host's
-                usm_agent_hostname = self.resolve_and_format_hostname(hostvars[usm_agent_host])
-                return f"{http_protocol}://{usm_agent_hostname}:{dataplane_port}"
-        return ""
+        if not password:
+            return ''
+
+        # Generate SHA1 hash
+        sha1_hash = hashlib.sha1(password.encode('utf-8')).digest()
+
+        # Encode to base64
+        base64_hash = base64.b64encode(sha1_hash).decode('utf-8')
+
+        # Return in format required for basic auth: {SHA}base64_hash
+        return f"{{SHA}}{base64_hash}"
