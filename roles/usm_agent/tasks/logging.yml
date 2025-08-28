@@ -1,0 +1,101 @@
+---
+- name: Create USM Agent Logs Directory
+  file:
+    path: "{{usm_agent.log_dir}}"
+    state: directory
+    group: "{{usm_agent_default_group}}"
+    owner: "{{usm_agent_default_user}}"
+    mode: '770'
+
+- name: Create USM Agent Log File
+  file:
+    path: "{{usm_agent.log_dir}}/usm-agent_access.log"
+    state: touch
+    group: "{{usm_agent_default_group}}"
+    owner: "{{usm_agent_default_user}}"
+    mode: '640'
+
+- name: Create USM Agent Log File
+  file:
+    path: "{{usm_agent.log_dir}}/usm-agent_application.log"
+    state: touch
+    group: "{{usm_agent_default_group}}"
+    owner: "{{usm_agent_default_user}}"
+    mode: '640'
+
+- name: Configure USM Agent Systemd Logging
+  template:
+    src: usm-agent-logging.conf.j2
+    dest: /etc/systemd/system/{{usm_agent_service_name}}.service.d/logging.conf
+    mode: '644'
+    owner: root
+    group: root
+  notify: restart usm agent
+  tags:
+    - systemd
+
+- name: Configure USM Agent Logrotate
+  template:
+    src: usm-agent.logrotate.j2
+    dest: /etc/logrotate.d/usm-agent
+    mode: '644'
+    owner: root
+    group: root
+  when: usm_agent_logrotate_enabled|bool
+
+- name: Create USM Agent Logrotate Wrapper Script
+  template:
+    src: logrotate-usm-agent.sh.j2
+    dest: /usr/local/bin/logrotate-usm-agent.sh
+    mode: '755'
+    owner: root
+    group: root
+  when: usm_agent_logrotate_enabled|bool
+
+- name: Install Cron Package for USM Agent Log Rotation
+  package:
+    name: "{{ 'cronie' if ansible_os_family == 'RedHat' else 'cron' }}"
+    state: present
+  register: install_cron_result
+  until: install_cron_result is success or ansible_check_mode
+  retries: 3
+  delay: 30
+  ignore_errors: "{{ ansible_check_mode }}"
+  when: usm_agent_logrotate_enabled|bool
+
+- name: Enable and Start Cron Service
+  systemd:
+    name: "{{ 'crond' if ansible_os_family == 'RedHat' else 'cron' }}"
+    enabled: true
+    state: started
+  when: usm_agent_logrotate_enabled|bool
+  tags:
+    - systemd
+
+- name: Add USM Agent Logrotate Cron Job
+  cron:
+    name: "USM Agent Log Rotation"
+    minute: "*/10"
+    job: "/usr/local/bin/logrotate-usm-agent.sh >> /tmp/usm-agent-rotate.log 2>&1"
+    user: root
+  when: usm_agent_logrotate_enabled|bool
+
+# Remove logrotate configuration if disabled
+- name: Remove USM Agent Logrotate Configuration and Scripts
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/logrotate.d/usm-agent
+    - /usr/local/bin/logrotate-usm-agent.sh
+  when: not usm_agent_logrotate_enabled|bool
+  tags:
+    - disable_logrotate
+
+- name: Remove USM Agent Logrotate Cron Job
+  cron:
+    name: "USM Agent Log Rotation"
+    state: absent
+  when: not usm_agent_logrotate_enabled|bool
+  tags:
+    - disable_logrotate
