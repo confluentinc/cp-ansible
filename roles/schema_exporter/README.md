@@ -25,6 +25,7 @@ schema_exporter:
       authentication_type: "basic"
       basic_username: "dev-user"
       basic_password: "dev-password"
+        # Use standard config section for authentication
 
   - name: "prod-backup-exporter"
     context_type: "AUTO"
@@ -34,6 +35,13 @@ schema_exporter:
       authentication_type: "basic"
       basic_username: "prod-client-id"
       basic_password: "prod-client-secret"
+    # Overrides
+    overrides:
+      contextType: "CUSTOM"
+      context: "prod-context"
+      config:
+        basic.auth.credentials.source: "USER_INFO"
+
 
   - name: "simple-exporter"
     context_type: "NONE"
@@ -45,6 +53,34 @@ schema_exporter:
       basic_password: "client-secret"
 
 password_encoder_secret: "secret"
+
+Complete Request Body Override**
+
+```yaml
+schema_exporters:
+  - name: "custom-exporter"
+    subjects: ["default.*"]  # This will be overridden
+    config:
+      schema_registry_endpoint: "http://localhost:8081"
+      authentication_type: "basic"
+      basic_username: "user"
+      basic_password: "pass"
+
+    # Override entire request body structure
+    overrides:
+      name: "production-exporter"  # Override name
+      contextType: "CUSTOM"
+      context: "prod-dc1"
+      subjects: ["orders.*", "payments.*", "users.*"]  # Override subjects
+      subjectRenameFormat: "prod_${subject}"
+      kekRenameFormat: "prod_${kek}"
+      config:
+        schema.registry.url: "https://prod-sr.company.com:8081"
+        basic.auth.credentials.source: "USER_INFO"
+        basic.auth.user.info: "{{ prod_sr_user }}:{{ prod_sr_password }}"
+        schema.registry.ssl.truststore.location: "/etc/ssl/certs/java/cacerts"
+        schema.registry.ssl.truststore.password: "changeit"
+        schema.registry.ssl.endpoint.identification.algorithm: "https"
 ```
 
 This example shows:

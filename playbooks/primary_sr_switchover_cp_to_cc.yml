@@ -36,6 +36,12 @@
     - import_role:
         name: variables
 
+    - name: Set certificate chain for mTLS authentication
+      set_fact:
+        certs_chain: "{{ssl_file_dir_final}}/schema_registry.chain"
+      tags:
+        - always
+
     # Ensure schema registry is configured with required automation properties
     - name: "Configure Schema Registry Properties for Automation"
       block:
@@ -57,27 +63,64 @@
               - usm.schema.registry.remote.context.prefix={{ unified_stream_manager.remote_context }}
               {% endif %}
 
-        - name: Add/Update required automation properties to schema registry config
-          blockinfile:
+        - name: Add/Update required automation properties to schema registry config makes more sense.
+          set_fact:
+            sr_core_properties:
+              - property: "kafkastore.update.handlers"
+                value: "io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler"
+              - property: "password.encoder.secret"
+                value: "{{ password_encoder_secret }}"
+
+        - name: Add/Update schema registry extension classes
+          set_fact:
+            sr_extension_classes: "{{ rbac_enabled | confluent.platform.schema_registry_extension_classes(schema_exporters is defined, schema_importers is defined, (unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none')) }}"
+
+        - name: Append extension class property
+          set_fact:
+            sr_core_properties: "{{ sr_core_properties + [{'property': 'schema.registry.resource.extension.class', 'value': sr_extension_classes}] }}"
+
+        - name: Prepare USM properties for configuration
+          set_fact:
+            sr_usm_properties:
+              - property: "usm.schema.registry.remote.endpoint"
+                value: "{{ unified_stream_manager.schema_registry_endpoint }}"
+              - property: "usm.schema.registry.remote.api.key"
+                value: "{{ unified_stream_manager.basic_username }}"
+              - property: "usm.schema.registry.remote.api.secret"
+                value: "{{ unified_stream_manager.basic_password }}"
+          when: unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none'
+
+        - name: Prepare USM context prefix property
+          set_fact:
+            sr_context_properties:
+              - property: "usm.schema.registry.remote.context.prefix"
+                value: "{{ unified_stream_manager.remote_context }}"
+          when:
+            - unified_stream_manager is defined
+            - unified_stream_manager.remote_context is defined
+            - unified_stream_manager.remote_context != ''
+
+        - name: Combine all properties for configuration
+          set_fact:
+            sr_all_properties: "{{ sr_core_properties + (sr_usm_properties | default([])) + (sr_context_properties | default([])) }}"
+
+        - name: Configure Schema Registry automation properties
+          lineinfile:
             path: "{{ schema_registry.config_file }}"
-            block: |
-              # Schema Registry Automation Properties
-              kafkastore.update.handlers=io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler
-              schema.registry.resource.extension.class={{ rbac_enabled | confluent.platform.schema_registry_extension_classes(schema_exporters is defined, schema_importers is defined, (unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none')) }}
-              password.encoder.secret={{ password_encoder_secret }}
-              {% if unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none' %}
-              # USM Schema Registry Properties
-              usm.schema.registry.remote.endpoint={{ unified_stream_manager.schema_registry_endpoint }}
-              usm.schema.registry.remote.api.key={{ unified_stream_manager.basic_username }}
-              usm.schema.registry.remote.api.secret={{ unified_stream_manager.basic_password }}
-              {% endif %}
-              {% if unified_stream_manager is defined and unified_stream_manager.remote_context is defined and unified_stream_manager.remote_context != '' %}
-              # USM Context Prefix Properties
-              usm.schema.registry.remote.context.prefix={{ unified_stream_manager.remote_context }}
-              {% endif %}
-            marker: "# {mark} ANSIBLE MANAGED BLOCK - Schema Registry Automation"
-            backup: yes
-          register: automation_properties_added
+            regexp: "^{{ item.property | regex_escape }}="
+            line: "{{ item.property }}={{ item.value }}"
+            backup: yes  # Create backup of the file
+          loop: "{{ sr_all_properties }}"
+          loop_control:
+            label: "{{ item.property }}"
+          register: sr_properties_results
+          retries: 3
+          delay: 5
+
+        - name: Check if any automation properties were changed
+          set_fact:
+            automation_properties_added:
+              changed: "{{ sr_properties_results.results | selectattr('changed', 'defined') | selectattr('changed') | list | length > 0 }}"
 
         - name: Restart schema registry if properties were added
           systemd:
@@ -88,18 +131,18 @@
             - automation_properties_added.changed
 
         - name: Wait for Schema Registry to be ready after reconfiguration
-          uri:
-            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
-            method: GET
-            status_code: 200
-            validate_certs: false
-            user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-            password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
-          retries: 30
-          delay: 5
-          when:
-            - automation_properties_added is defined
-            - automation_properties_added.changed
+          include_tasks: ../roles/common/tasks/sr_api_call.yml
+          vars:
+            sr_api_operation_name: "Wait for Schema Registry to be ready after reconfiguration"
+            sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+            sr_api_method: GET
+            sr_api_expected_status: 200
+            sr_api_result_var: sr_ready_check
+            sr_api_when_condition: "{{ automation_properties_added is defined }}"
+            sr_api_retries: 30
+            sr_api_delay: 5
+      tags:
+        - always  # This configuration is required for all automation features
 
     # SCHEMA EXPORT: Export existing CP schemas to CC
     - name: "Schema Export: Setup Schema Exporter on CP SR"
@@ -108,15 +151,14 @@
         - name: Skip Schema Exporter Configuration
           block:
             - name: Check if specific exporter is already running
-              uri:
-                url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}/status"
-                method: GET
-                status_code: 200
-                validate_certs: false
-                user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-                password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
-              register: existing_exporter_status
-              failed_when: false
+              include_tasks: ../roles/common/tasks/sr_api_call.yml
+              vars:
+                sr_api_operation_name: "Check if specific exporter is already running"
+                sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}/status"
+                sr_api_method: GET
+                sr_api_expected_status: 200
+                sr_api_result_var: existing_exporter_status
+                sr_api_ignore_errors: true
 
             - name: Log existing exporter status
               debug:
@@ -140,15 +182,14 @@
 
             # Prepare exporter endpoint for switchover prechecks
             - name: Fetch existing exporter config for prechecks
-              uri:
-                url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}/config"
-                method: GET
-                status_code: 200
-                validate_certs: false
-                user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-                password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
-              register: existing_exporter_config_details
-              failed_when: false
+              include_tasks: ../roles/common/tasks/sr_api_call.yml
+              vars:
+                sr_api_operation_name: "Fetch existing exporter config for prechecks"
+                sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}/config"
+                sr_api_method: GET
+                sr_api_expected_status: 200
+                sr_api_result_var: existing_exporter_config_details
+                sr_api_ignore_errors: true
 
             - name: Set exporter remote endpoint from existing exporter config
               set_fact:
@@ -165,8 +206,8 @@
               debug:
                 msg: "Proceeding with exporter setup by default (status check failed)."
           when:
-          - sr_switch_over_exporter_name is defined
-          - not ((schema_exporters is defined and (schema_exporters | length) > 0) and sr_switch_over_exporter_name in (schema_exporters | map(attribute='name') | list))
+            - sr_switch_over_exporter_name is defined
+            - not ((schema_exporters is defined and (schema_exporters | length) > 0) and sr_switch_over_exporter_name in (schema_exporters | map(attribute='name') | list))
 
         - name: Configure Schema Exporter
           block:
@@ -179,17 +220,18 @@
                 exporter_name: "{{ sr_switch_over_exporter_name }}"
 
             - name: Wait for Schema Exporter to be in Running state
-              uri:
-                url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ exporter_name }}/status"
-                method: GET
-                status_code: 200
-                validate_certs: false
-                user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-                password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
-              register: exporter_status_check
-              until: exporter_status_check.json.state == 'RUNNING'
-              retries: "{{ schema_registry_retries }}"
-              delay: 10
+              include_tasks: ../roles/common/tasks/sr_api_call.yml
+              vars:
+                sr_api_operation_name: "Wait for Schema Exporter to be in Running state"
+                sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ exporter_name }}/status"
+                sr_api_method: GET
+                sr_api_expected_status: 200
+                sr_api_result_var: exporter_status_check
+                sr_api_until_condition: "RESULT_VAR.json.state == 'RUNNING'"
+                sr_api_username: "{{ schema_registry_basic_users_final.admin.principal | default(omit) }}"
+                sr_api_password: "{{ schema_registry_basic_users_final.admin.password | default(omit) }}"
+                sr_api_retries: "{{ schema_registry_retries }}"
+                sr_api_delay: 10
 
             - name: Verify exporter is running
               assert:
@@ -213,52 +255,33 @@
       tags:
         - schema_exporter
         - switchover_to_cc
+      run_once: true
+
     # PRE-CHECKS: Validate configuration before making any changes
     - name: Set exporter name for operations
       set_fact:
         exporter_name: "{{ sr_switch_over_exporter_name }}"
 
-    - name: Pre-checks - Validate USM remote endpoint is configured
-      assert:
-        that:
-          - unified_stream_manager is defined
-          - unified_stream_manager.schema_registry_endpoint is defined
-          - unified_stream_manager.schema_registry_endpoint != 'none'
-          - unified_stream_manager.schema_registry_endpoint != ''
-          - unified_stream_manager.schema_registry_endpoint != none
-        fail_msg: "USM remote endpoint must be configured. Current value: '{{ unified_stream_manager.schema_registry_endpoint | default('undefined') }}'. Please set unified_stream_manager.schema_registry_endpoint to a valid Confluent Cloud Schema Registry URL."
-      tags:
-        - never
-        - forward_to_cc
-        - switchover_to_cc
-
-    - name: Pre-checks - Validate exporter and USM destination URLs match
-      assert:
-        that:
-          - (existing_exporter_remote_endpoint is defined and existing_exporter_remote_endpoint == unified_stream_manager.schema_registry_endpoint) or ((schema_exporters | selectattr('name', 'equalto', sr_switch_over_exporter_name) | list | first).config.schema_registry_endpoint == unified_stream_manager.schema_registry_endpoint)
-        fail_msg: "Pre-check failed: Exporter and USM remote endpoints must match"
-      when:
-        - (schema_exporters is defined and (schema_exporters | length) > 0) or (sr_switch_over_exporter_name is defined)
-      tags:
-        - never
-        - forward_to_cc
-        - switchover_to_cc
-
-    - name: Pre-checks - Validate importer and USM destination URLs match
-      assert:
-        that:
-          - schema_importers[0].config.schema_registry_endpoint == unified_stream_manager.schema_registry_endpoint
-        fail_msg: "Pre-check failed: Importer and USM remote endpoints must match"
-      tags:
-        - never
-        - forward_to_cc
-        - switchover_to_cc
 
     # Context validation for schema importers - handles both scenarios:
     # 1. When USM remote_context is defined: qualified subjects must match the context
     # 2. When USM remote_context is NOT defined: only unqualified subjects allowed
     - name: "Pre-checks: Validate configuration for switchover"
       block:
+        - name: Pre-checks - Validate exporter and USM destination URLs match
+          assert:
+            that:
+              - (existing_exporter_remote_endpoint is defined and existing_exporter_remote_endpoint == unified_stream_manager.schema_registry_endpoint) or ((schema_exporters | selectattr('name', 'equalto', sr_switch_over_exporter_name) | list | first).config.schema_registry_endpoint == unified_stream_manager.schema_registry_endpoint)
+            fail_msg: "Pre-check failed: Exporter and USM remote endpoints must match"
+          when:
+            - (schema_exporters is defined and (schema_exporters | length) > 0) or (sr_switch_over_exporter_name is defined)
+
+        - name: Pre-checks - Validate importer and USM destination URLs match
+          assert:
+            that:
+              - schema_importers[0].config.schema_registry_endpoint == unified_stream_manager.schema_registry_endpoint
+            fail_msg: "Pre-check failed: Importer and USM remote endpoints must match"
+
         - name: Extract contexts from schema importer qualified subjects
           set_fact:
             importer_qualified_contexts: "{{ schema_importers[0].subjects | select('match', '^:\\.([^:]+):.*$') | map('regex_replace', '^:\\.([^:]+):.*$', '\\1') | list | unique }}"
@@ -290,35 +313,34 @@
         - never
         - forward_to_cc
         - switchover_to_cc
+      run_once: true
 
     # SWITCHOVER: Primary SR switchover from CP to CC (with rollback on failure)
     - name: "Switchover: Primary SR switchover from CP to CC"
       block:
         - name: "Switch CP SR to FORWARD mode (WRITE DOWNTIME STARTS)"
-          uri:
-            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.__GLOBAL:"
-            method: PUT
-            body_format: json
-            body:
+          include_tasks: ../roles/common/tasks/sr_api_call.yml
+          vars:
+            sr_api_operation_name: "Switch CP SR to FORWARD mode"
+            sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.__GLOBAL:"
+            sr_api_method: PUT
+            sr_api_expected_status: 200
+            sr_api_body_format: json
+            sr_api_body:
               mode: "FORWARD"
-            status_code: 200
-            validate_certs: false
-            user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-            password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
-          register: cp_sr_forward_mode
+            sr_api_result_var: cp_sr_forward_mode
 
         - name: Verify CP SR is in FORWARD mode
-          uri:
-            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.__GLOBAL:"
-            method: GET
-            status_code: 200
-            validate_certs: false
-            user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-            password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
-          register: cp_sr_mode_check
-          until: cp_sr_mode_check.json.mode == 'FORWARD'
-          retries: 5
-          delay: 2
+          include_tasks: ../roles/common/tasks/sr_api_call.yml
+          vars:
+            sr_api_operation_name: "Verify CP SR is in FORWARD mode"
+            sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.__GLOBAL:"
+            sr_api_method: GET
+            sr_api_expected_status: 200
+            sr_api_result_var: cp_sr_mode_check
+            sr_api_until_condition: "RESULT_VAR.json.mode == 'FORWARD'"
+            sr_api_retries: 5
+            sr_api_delay: 2
 
         - name: "Switch CC SR to READWRITE mode (WRITE DOWNTIME ENDS)"
           uri:
@@ -329,8 +351,8 @@
               mode: "READWRITE"
             status_code: 200
             validate_certs: false
-            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.remote_authentication_type == 'basic' else omit }}"
-            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.remote_authentication_type == 'basic' else omit }}"
+            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
+            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
           register: cc_sr_readwrite_mode
 
         - name: Verify CC SR is in READWRITE mode
@@ -339,8 +361,8 @@
             method: GET
             status_code: 200
             validate_certs: false
-            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.remote_authentication_type == 'basic' else omit }}"
-            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.remote_authentication_type == 'basic' else omit }}"
+            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
+            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
           register: cc_sr_mode_check
           until: cc_sr_mode_check.json.mode == 'READWRITE'
           retries: 5
@@ -353,17 +375,17 @@
             workflow_status: "failed"
 
         - name: "ROLLBACK: Restore CP SR to READWRITE mode"
-          uri:
-            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.__GLOBAL:"
-            method: PUT
-            body_format: json
-            body:
+          include_tasks: ../roles/common/tasks/sr_api_call.yml
+          vars:
+            sr_api_operation_name: "ROLLBACK: Restore CP SR to READWRITE mode"
+            sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.__GLOBAL:"
+            sr_api_method: PUT
+            sr_api_expected_status: 200
+            sr_api_body_format: json
+            sr_api_body:
               mode: "READWRITE"
-            status_code: 200
-            validate_certs: false
-            user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-            password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
-          ignore_errors: true
+            sr_api_result_var: cp_sr_rollback_result
+            sr_api_ignore_errors: true
 
         - name: Fail workflow with rollback info
           fail:
@@ -375,6 +397,7 @@
         - never
         - forward_to_cc
         - switchover_to_cc
+      run_once: true
 
     # REVERSE SYNC: Setup Schema Importer for reverse sync
     - name: "Reverse Sync: Setup Schema Importer"
@@ -384,17 +407,16 @@
             name: schema_importer
 
         - name: Wait for Schema Importer to be in Running state
-          uri:
-            url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers/{{ schema_importers[0].name }}/status"
-            method: GET
-            status_code: 200
-            validate_certs: false
-            user: "{{ schema_registry_health_check_user if schema_registry_authentication_type == 'basic' else omit }}"
-            password: "{{ schema_registry_health_check_password if schema_registry_authentication_type == 'basic' else omit }}"
-          register: importer_status_check
-          until: importer_status_check.json.state == 'RUNNING'
-          retries: 30
-          delay: 10
+          include_tasks: ../roles/common/tasks/sr_api_call.yml
+          vars:
+            sr_api_operation_name: "Wait for Schema Importer to be in Running state"
+            sr_api_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers/{{ schema_importers[0].name }}/status"
+            sr_api_method: GET
+            sr_api_expected_status: 200
+            sr_api_result_var: importer_status_check
+            sr_api_until_condition: "RESULT_VAR.json.state == 'RUNNING'"
+            sr_api_retries: 30
+            sr_api_delay: 10
 
         - name: Verify importer is running
           assert:
@@ -420,6 +442,7 @@
         - never
         - schema_importer
         - switchover_to_cc
+      run_once: true
 
     - name: Display workflow summary
       debug:
