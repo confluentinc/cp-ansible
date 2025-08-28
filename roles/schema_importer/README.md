@@ -16,7 +16,7 @@ Below is an example of how to configure schema importers in your inventory file:
 schema_importers:
   - name: "staging-to-prod-importer"
     context: "staging-context"
-    subjects: ["orders.*", "customers.*"]
+    subjects: ["orders", "customers.*"]
     config:
       schema_registry_endpoint: "http://staging-schema-registry:8081"
       authentication_type: "basic"
@@ -30,15 +30,24 @@ schema_importers:
       authentication_type: "basic"
       basic_username: "dev-client-id"
       basic_password: "dev-client-secret"
+        # Use standard config section for authentication
 
   - name: "backup-restore-importer"
     context: "backup-context"
-    subjects: ["payment.*", "user.*"]
+    subjects: ["payment", "user.*"]
     config:
       schema_registry_endpoint: "http://backup-schema-registry:8081"
       authentication_type: "basic"
       basic_username: "backup-user"
       basic_password: "backup-password"
+    # Overrides
+    overrides:
+      contextType: "CUSTOM"
+      context: "prod-context"
+      config:
+        schema.registry.url: "https://psrc-xxxxx.us-central1.gcp.confluent.cloud"
+        basic.auth.credentials.source: "USER_INFO"
+        basic.auth.user.info: "{{ confluent_cloud_api_key }}:{{ confluent_cloud_api_secret }}"
 
 password_encoder_secret: "mysecret"
 ```

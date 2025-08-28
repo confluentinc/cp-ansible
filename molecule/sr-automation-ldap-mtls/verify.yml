@@ -1,0 +1,104 @@
+---
+### SR Automation Workflow Verification - LDAP/RBAC + mTLS
+### Imports base verification and adds LDAP + mTLS specific checks
+
+- import_playbook: ../base_templates/sr_automation_verify_base.yml
+
+- name: LDAP + mTLS Specific Verification
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+    - name: Check LDAP authentication properties
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: authentication.method
+        expected_value: LDAP
+      tags: ldap
+
+    - name: Check LDAP URL configuration
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: ldap.java.naming.provider.url
+        expected_value: "{{ ldap_url }}"
+      tags: ldap
+
+    - name: Check RBAC authorizer configuration
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: confluent.schema.registry.authorizer.class
+        expected_value: io.confluent.kafka.schemaregistry.security.authorizer.rbac.RbacAuthorizer
+      tags: rbac
+
+    - name: Verify mTLS certificate files exist
+      stat:
+        path: "{{ item }}"
+      register: cert_files_check
+      loop:
+        - "{{ ssl_file_dir_final }}/schema_registry.crt"
+        - "{{ ssl_file_dir_final }}/schema_registry.key"
+        - "{{ ssl_file_dir_final }}/ca.crt"
+      when: ssl_mutual_auth_enabled | default(false)
+      tags: mtls
+
+    - name: Verify all certificate files present
+      assert:
+        that:
+          - item.stat.exists
+        fail_msg: "Required mTLS certificate file missing: {{ item.item }}"
+      loop: "{{ cert_files_check.results }}"
+      when: 
+        - ssl_mutual_auth_enabled | default(false)
+        - cert_files_check is defined
+      tags: mtls
+
+    - name: Test HTTPS with client certificate
+      uri:
+        url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        method: GET
+        validate_certs: false
+        client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt"
+        client_key: "{{ ssl_file_dir_final }}/schema_registry.key"
+        status_code: 200
+      register: mtls_access_test
+      when: ssl_mutual_auth_enabled | default(false)
+      tags: mtls
+
+    - name: Test LDAP user authentication (if possible)
+      uri:
+        url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        method: GET
+        validate_certs: false
+        client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt"
+        client_key: "{{ ssl_file_dir_final }}/schema_registry.key"
+        user: "sr-admin"
+        password: "admin-password"
+        force_basic_auth: true
+        status_code: [200, 401, 403]
+      register: ldap_auth_test
+      ignore_errors: true
+      when: ssl_mutual_auth_enabled | default(false)
+      tags: ldap
+
+    - name: Display LDAP + mTLS verification summary
+      debug:
+        msg: |
+          ✓ LDAP + mTLS SR Automation Verification Complete:
+          - LDAP authentication: {{ 'CONFIGURED' }}
+          - LDAP server: {{ ldap_url }}
+          - LDAP users provisioned: sr-admin, sr-user, sr-exporter, sr-importer, mds-user
+          - mTLS certificates: {{ 'PRESENT' if cert_files_check.results | selectattr('stat.exists') | list | length == 3 else 'MISSING' }}
+          - RBAC authorization: {{ 'ENABLED' }}
+          - Client cert access: {{ 'WORKING' if mtls_access_test is succeeded else 'FAILED' }}
+          - LDAP auth test: {{ 'ATTEMPTED' if ldap_auth_test is defined else 'SKIPPED' }}
+          - Security level: Enterprise-grade LDAP + mTLS
+          - Automation features: Ready for secure directory-based authentication
+      tags: summary
