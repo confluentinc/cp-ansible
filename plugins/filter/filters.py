@@ -664,7 +664,7 @@ class FilterModule(object):
 
         return ','.join(enabled_values)
 
-    def schema_registry_extension_classes(self, rbac_enabled, schema_exporters_defined, schema_importers_defined):
+    def schema_registry_extension_classes(self, rbac_enabled, schema_exporters_defined, schema_importers_defined, usm_enabled):
         """
         Generates comma-separated list of Schema Registry resource extension classes based on enabled features.
         """
@@ -673,6 +673,7 @@ class FilterModule(object):
             'schema_exporter': [schema_exporters_defined, 'io.confluent.schema.exporter.SchemaExporterResourceExtension'],
             'schema_importer': [schema_importers_defined, 'io.confluent.schema.importer.SchemaImporterResourceExtension'],
             'dek_registry': [schema_importers_defined, 'io.confluent.dekregistry.DekRegistryResourceExtension'],
+            'usm_sr': [usm_enabled, 'io.confluent.schema.registry.usm.UsmSchemaRegistryExtension'],
         }
         return self.combine_enabled_values(extensions_dict)
 
