@@ -17,7 +17,7 @@ schema_exporter:
   - name: "dev-to-staging-exporter"
     context_type: "CUSTOM"
     context: "dev-context"
-    subjects: ["orders.*", "customers.*"]
+    subjects: ["orders.*"]
     subject_rename_format: "dc_${subject}"
     kek_rename_format: "dc_${kek}"
     config:
@@ -53,41 +53,6 @@ schema_exporter:
       basic_password: "client-secret"
 
 password_encoder_secret: "secret"
-
-Complete Request Body Override**
-
-```yaml
-schema_exporters:
-  - name: "custom-exporter"
-    subjects: ["default.*"]  # This will be overridden
-    config:
-      schema_registry_endpoint: "http://localhost:8081"
-      authentication_type: "basic"
-      basic_username: "user"
-      basic_password: "pass"
-
-    # Override entire request body structure
-    overrides:
-      name: "production-exporter"  # Override name
-      contextType: "CUSTOM"
-      context: "prod-dc1"
-      subjects: ["orders.*", "payments.*", "users.*"]  # Override subjects
-      subjectRenameFormat: "prod_${subject}"
-      kekRenameFormat: "prod_${kek}"
-      config:
-        schema.registry.url: "https://prod-sr.company.com:8081"
-        basic.auth.credentials.source: "USER_INFO"
-        basic.auth.user.info: "{{ prod_sr_user }}:{{ prod_sr_password }}"
-        schema.registry.ssl.truststore.location: "/etc/ssl/certs/java/cacerts"
-        schema.registry.ssl.truststore.password: "changeit"
-        schema.registry.ssl.endpoint.identification.algorithm: "https"
-```
-
-This example shows:
-- Different context types (CUSTOM, AUTO, NONE)
-- Subject filtering and renaming patterns
-- Basic authentication configuration
-- Custom configuration overrides
 
 ## Documentation
 
