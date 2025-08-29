@@ -1,45 +1,24 @@
 ---
-# Reusable Schema Registry API call with authentication support
-# This task file handles all CP Schema Registry authentication scenarios
-# following the same pattern as health_check.yml
-#
-# Required variables:
-#   - sr_api_url: Full URL for the API call
-#   - sr_api_method: HTTP method (GET, POST, PUT, DELETE)
-#   - sr_api_expected_status: Expected status code(s) [200] or [200, 404]
-#   - sr_api_result_var: Variable name to store the result
-#
-# Optional variables:
-#   - sr_api_body: Request body (for POST/PUT)
-#   - sr_api_body_format: Request body format (json, form)
-#   - sr_api_username: Username for basic auth (omitted if not provided)
-#   - sr_api_password: Password for basic auth (omitted if not provided)
-#   - sr_api_when_condition: Additional when condition (default: true)
-#   - sr_api_retries: Number of retries (default: 1)
-#   - sr_api_delay: Delay between retries (default: 1)
-#   - sr_api_until_condition: Until condition for retries
-#   - sr_api_ignore_errors: Whether to ignore errors (default: false)
-
-- name: "{{ sr_api_operation_name | default('Schema Registry API Call') }} - Basic/No Auth"
+- name: "{{ operation_name | default('Schema Registry API Call') }} - Basic/No Auth"
   uri:
-    url: "{{ sr_api_url }}"
-    method: "{{ sr_api_method }}"
-    status_code: "{{ sr_api_expected_status }}"
+    url: "{{ request_url }}"
+    method: "{{ method }}"
+    status_code: "{{ expected_status }}"
     validate_certs: false
-    url_username: "{{ sr_api_username if schema_registry_authentication_type == 'basic' else omit }}"
-    url_password: "{{ sr_api_password if schema_registry_authentication_type == 'basic' else omit }}"
+    url_username: "{{ username if schema_registry_authentication_type == 'basic' else omit }}"
+    url_password: "{{ password if schema_registry_authentication_type == 'basic' else omit }}"
     force_basic_auth: "{{ true if schema_registry_authentication_type == 'basic' else false }}"
-    body_format: "{{ sr_api_body_format | default(omit) }}"
-    body: "{{ sr_api_body | default(omit) }}"
-  register: sr_api_call_result
-  until: (sr_api_until_condition | default('true')) | replace('RESULT_VAR', 'sr_api_call_result')
-  retries: "{{ sr_api_retries | default(1) }}"
-  delay: "{{ sr_api_delay | default(1) }}"
+    body_format: "{{ request_body_format | default(omit) }}"
+    body: "{{ request_body | default(omit) }}"
+  register: request_call_result
+  until: (until_condition | default('true')) | replace('RESULT_VAR', 'request_call_result')
+  retries: "{{ request_retries | default(1) }}"
+  delay: "{{ request_delay | default(1) }}"
   when:
-    - sr_api_when_condition | default(true)
+    - when_condition | default(true)
     - schema_registry_authentication_type != 'mtls'
     - not (rbac_enabled or schema_registry_oauth_enabled)
-  ignore_errors: "{{ sr_api_ignore_errors | default(false) }}"
+  ignore_errors: "{{ ignore_errors | default(false) }}"
 
 - name: Get Authorization Token for Schema Registry User
   import_role:
@@ -64,76 +43,76 @@
     oauth_client_assertion_template_file: "{{ schema_registry_oauth_client_assertion_template_file_dest_path }}"
   when: rbac_enabled or schema_registry_oauth_enabled
 
-- name: "{{ sr_api_operation_name | default('Schema Registry API Call') }} - OAuth"
+- name: "{{ operation_name | default('Schema Registry API Call') }} - OAuth"
   uri:
-    url: "{{ sr_api_url }}"
-    method: "{{ sr_api_method }}"
-    status_code: "{{ sr_api_expected_status }}"
+    url: "{{ request_url }}"
+    method: "{{ method }}"
+    status_code: "{{ expected_status }}"
     validate_certs: false
     headers:
       Authorization: "Bearer {{ authorization_token }}"
-    body_format: "{{ sr_api_body_format | default(omit) }}"
-    body: "{{ sr_api_body | default(omit) }}"
-  register: sr_api_call_result_oauth
-  until: sr_api_until_condition | default(true) | replace('RESULT_VAR', 'sr_api_call_result_oauth')
-  retries: "{{ sr_api_retries | default(1) }}"
-  delay: "{{ sr_api_delay | default(1) }}"
+    body_format: "{{ request_body_format | default(omit) }}"
+    body: "{{ request_body | default(omit) }}"
+  register: result_oauth
+  until: until_condition | default(true) | replace('RESULT_VAR', 'result_oauth')
+  retries: "{{ request_retries | default(1) }}"
+  delay: "{{ request_delay | default(1) }}"
   when:
-    - sr_api_when_condition | default(true)
+    - when_condition | default(true)
     - schema_registry_authentication_type != 'mtls'
     - rbac_enabled or schema_registry_oauth_enabled
   no_log: "{{ mask_secrets|bool }}"
-  ignore_errors: "{{ sr_api_ignore_errors | default(false) }}"
+  ignore_errors: "{{ ignore_errors | default(false) }}"
 
-- name: "{{ sr_api_operation_name | default('Schema Registry API Call') }} - mTLS"
+- name: "{{ operation_name | default('Schema Registry API Call') }} - mTLS"
   uri:
-    url: "{{ sr_api_url }}"
-    method: "{{ sr_api_method }}"
-    status_code: "{{ sr_api_expected_status }}"
+    url: "{{ request_url }}"
+    method: "{{ method }}"
+    status_code: "{{ expected_status }}"
     validate_certs: false
     client_cert: "{{ schema_registry_cert_path if ssl_provided_keystore_and_truststore else certs_chain }}"
     client_key: "{{ schema_registry_key_path }}"
     force_basic_auth: true
-    body_format: "{{ sr_api_body_format | default(omit) }}"
-    body: "{{ sr_api_body | default(omit) }}"
-  register: sr_api_call_result_mtls
-  until: sr_api_until_condition | default(true) | replace('RESULT_VAR', 'sr_api_call_result_mtls')
-  retries: "{{ sr_api_retries | default(1) }}"
-  delay: "{{ sr_api_delay | default(1) }}"
+    body_format: "{{ request_body_format | default(omit) }}"
+    body: "{{ request_body | default(omit) }}"
+  register: request_call_result_mtls
+  until: until_condition | default(true) | replace('RESULT_VAR', 'request_call_result_mtls')
+  retries: "{{ request_retries | default(1) }}"
+  delay: "{{ request_delay | default(1) }}"
   when:
-    - sr_api_when_condition | default(true)
+    - when_condition | default(true)
     - schema_registry_authentication_type == 'mtls'
     - not (rbac_enabled or schema_registry_oauth_enabled)
-  ignore_errors: "{{ sr_api_ignore_errors | default(false) }}"
+  ignore_errors: "{{ ignore_errors | default(false) }}"
 
-- name: "{{ sr_api_operation_name | default('Schema Registry API Call') }} - mTLS + OAuth/Rbac"
+- name: "{{ operation_name | default('Schema Registry API Call') }} - mTLS + OAuth/Rbac"
   uri:
-    url: "{{ sr_api_url }}"
-    method: "{{ sr_api_method }}"
-    status_code: "{{ sr_api_expected_status }}"
+    url: "{{ request_url }}"
+    method: "{{ method }}"
+    status_code: "{{ expected_status }}"
     validate_certs: false
     client_cert: "{{ schema_registry_cert_path if ssl_provided_keystore_and_truststore else certs_chain }}"
     client_key: "{{ schema_registry_key_path }}"
     headers:
       Authorization: "Bearer {{ authorization_token }}"
-    body_format: "{{ sr_api_body_format | default(omit) }}"
-    body: "{{ sr_api_body | default(omit) }}"
-  register: sr_api_call_result_mtls_oauth
-  until: sr_api_until_condition | default(true) | replace('RESULT_VAR', 'sr_api_call_result_mtls_oauth')
-  retries: "{{ sr_api_retries | default(1) }}"
-  delay: "{{ sr_api_delay | default(1) }}"
+    body_format: "{{ request_body_format | default(omit) }}"
+    body: "{{ request_body | default(omit) }}"
+  register: request_call_result_mtls_oauth
+  until: until_condition | default(true) | replace('RESULT_VAR', 'request_call_result_mtls_oauth')
+  retries: "{{ request_retries | default(1) }}"
+  delay: "{{ request_delay | default(1) }}"
   when:
-    - sr_api_when_condition | default(true)
+    - when_condition | default(true)
     - schema_registry_authentication_type == 'mtls'
     - rbac_enabled or schema_registry_oauth_enabled
   no_log: "{{ mask_secrets|bool }}"
-  ignore_errors: "{{ sr_api_ignore_errors | default(false) }}"
+  ignore_errors: "{{ ignore_errors | default(false) }}"
 
-- name: "Set unified {{ sr_api_result_var }} result"
+- name: "Set unified {{ result_var }} result"
   set_fact:
-    "{{ sr_api_result_var }}": "{{
-      sr_api_call_result if (sr_api_call_result is defined and not sr_api_call_result.skipped | default(false)) else
-      sr_api_call_result_oauth if (sr_api_call_result_oauth is defined and not sr_api_call_result_oauth.skipped | default(false)) else
-      sr_api_call_result_mtls if (sr_api_call_result_mtls is defined and not sr_api_call_result_mtls.skipped | default(false)) else
-      sr_api_call_result_mtls_oauth
+    "{{ result_var }}": "{{
+      request_call_result if (request_call_result is defined and not request_call_result.skipped | default(false)) else
+      result_oauth if (result_oauth is defined and not result_oauth.skipped | default(false)) else
+      request_call_result_mtls if (request_call_result_mtls is defined and not request_call_result_mtls.skipped | default(false)) else
+      request_call_result_mtls_oauth
     }}"

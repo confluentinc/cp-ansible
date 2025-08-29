@@ -14,14 +14,6 @@ Below is an example of how to configure schema importers in your inventory file:
 
 ```yaml
 schema_importers:
-  - name: "staging-to-prod-importer"
-    context: "staging-context"
-    subjects: ["orders", "customers.*"]
-    config:
-      schema_registry_endpoint: "http://staging-schema-registry:8081"
-      authentication_type: "basic"
-      basic_username: "staging-user"
-      basic_password: "staging-password"
 
   - name: "dev-sync-importer"
     subjects: ["*"]  # Import all subjects
