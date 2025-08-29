@@ -1,0 +1,110 @@
+---
+### SR Automation Workflow Test Environment Preparation - Base Template
+### This template can be imported by scenario-specific prepare playbooks
+### Sets up common test environment requirements
+
+- name: Configure IPv6 Preference
+  import_playbook: ../configure_ipv6.yml
+
+- name: Setup VM DNS
+  import_playbook: ../dns.yml
+
+- import_playbook: ../certificates.yml
+  when: ssl_enabled | default(false)
+
+- name: Prepare Common SR Automation Test Environment
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Install test utilities
+      package:
+        name:
+          - curl
+          - jq
+          - openssl
+        state: present
+      become: true
+
+    - name: Create test data directory
+      file:
+        path: /tmp/sr-automation-test-data
+        state: directory
+        mode: '0755'
+
+    - name: Create sample test schemas directory
+      file:
+        path: /tmp/sr-automation-test-data/schemas
+        state: directory
+        mode: '0755'
+
+    - name: Create sample Avro schema for testing
+      copy:
+        content: |
+          {
+            "type": "record",
+            "name": "User",
+            "namespace": "com.confluent.test",
+            "fields": [
+              {"name": "id", "type": "long"},
+              {"name": "username", "type": "string"},
+              {"name": "email", "type": ["null", "string"], "default": null},
+              {"name": "created_at", "type": "long"}
+            ]
+          }
+        dest: /tmp/sr-automation-test-data/schemas/user-schema.json
+        mode: '0644'
+
+    - name: Create automation test schema
+      copy:
+        content: |
+          {
+            "type": "record",
+            "name": "AutomationWorkflow",
+            "namespace": "com.confluent.automation",
+            "fields": [
+              {"name": "workflow_id", "type": "string"},
+              {"name": "step", "type": "string"},
+              {"name": "timestamp", "type": "long"},
+              {"name": "status", "type": {"type": "enum", "name": "Status", "symbols": ["STARTED", "RUNNING", "COMPLETED", "FAILED"]}},
+              {"name": "metadata", "type": ["null", {"type": "map", "values": "string"}], "default": null}
+            ]
+          }
+        dest: /tmp/sr-automation-test-data/schemas/automation-workflow-schema.json
+        mode: '0644'
+
+- name: Prepare Schema Registry Automation Configuration
+  hosts: schema_registry:!cc_cluster
+  gather_facts: false
+  tasks:
+    - name: Display test scenario configuration
+      debug:
+        msg: |
+          SR Automation Test Configuration ({{ scenario_name | default('unknown') }}):
+          - Authentication Type: {{ schema_registry_authentication_type | default('basic') }}
+          - SSL Enabled: {{ ssl_enabled | default(false) }}
+          - mTLS Enabled: {{ ssl_mutual_auth_enabled | default(false) }}
+          - OAuth Enabled: {{ oauth_enabled | default(false) }}
+          - LDAP Enabled: {{ ldap_enabled | default(false) }}
+          - RBAC Enabled: {{ rbac_enabled | default(false) }}
+          - request Call Auth Handler: ENABLED (auto-detects auth method)
+          - Password Encoder Secret: {{ password_encoder_secret | default('not-set') }}
+          - USM Endpoint: {{ unified_stream_manager.schema_registry_endpoint | default('not-configured') }}
+          - Exporter Name: {{ sr_switch_over_exporter_name | default('not-configured') }}
+
+    - name: Verify Schema Registry prerequisites
+      assert:
+        that:
+          - password_encoder_secret is defined
+          - password_encoder_secret != ''
+          - unified_stream_manager is defined
+          - unified_stream_manager.schema_registry_endpoint is defined
+        fail_msg: "Required SR automation variables not properly configured"
+
+    - name: Log scenario-specific setup completion
+      debug:
+        msg: |
+          Scenario {{ scenario_name | default('unknown') }} preparation completed successfully.
+          Ready for SR automation workflow testing with the following components:
+          - Schema Exporters: {{ (schema_exporters | default([])) | length }}
+          - Schema Importers: {{ (schema_importers | default([])) | length }}
+          - Test schemas prepared: 2 (User, AutomationWorkflow)
