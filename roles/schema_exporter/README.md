@@ -17,7 +17,7 @@ schema_exporter:
   - name: "dev-to-staging-exporter"
     context_type: "CUSTOM"
     context: "dev-context"
-    subjects: ["orders.*", "customers.*"]
+    subjects: ["orders.*"]
     subject_rename_format: "dc_${subject}"
     kek_rename_format: "dc_${kek}"
     config:
@@ -25,6 +25,7 @@ schema_exporter:
       authentication_type: "basic"
       basic_username: "dev-user"
       basic_password: "dev-password"
+        # Use standard config section for authentication
 
   - name: "prod-backup-exporter"
     context_type: "AUTO"
@@ -34,6 +35,13 @@ schema_exporter:
       authentication_type: "basic"
       basic_username: "prod-client-id"
       basic_password: "prod-client-secret"
+    # Overrides
+    overrides:
+      contextType: "CUSTOM"
+      context: "prod-context"
+      config:
+        basic.auth.credentials.source: "USER_INFO"
+
 
   - name: "simple-exporter"
     context_type: "NONE"
@@ -45,13 +53,6 @@ schema_exporter:
       basic_password: "client-secret"
 
 password_encoder_secret: "secret"
-```
-
-This example shows:
-- Different context types (CUSTOM, AUTO, NONE)
-- Subject filtering and renaming patterns
-- Basic authentication configuration
-- Custom configuration overrides
 
 ## Documentation
 
