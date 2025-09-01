@@ -1,0 +1,93 @@
+---
+- name: Validate USM Agent CCloud Credentials are provided
+  assert:
+    that:
+      - usm_agent_ccloud_credential.username is defined
+      - usm_agent_ccloud_credential.username != ""
+      - usm_agent_ccloud_credential.password is defined
+      - usm_agent_ccloud_credential.password != ""
+    fail_msg: "CCloud credentials (username and password) are required for USM Agent to function. Please provide ccloud_credential.username and ccloud_credential.password in your inventory."
+    success_msg: "CCloud credentials validation passed"
+  when:
+    - "'usm_agent' in group_names"
+  tags:
+    - validate_usm_agent_configs
+
+- name: Validate USM Agent CCloud Configuration is provided
+  assert:
+    that:
+      - usm_agent_ccloud_host is defined
+      - usm_agent_ccloud_host != ""
+      - usm_agent_ccloud_environment_id is defined
+      - usm_agent_ccloud_environment_id != ""
+    fail_msg: "CCloud configuration (host and environment_id) are required for USM Agent to function. Please provide ccloud_host and ccloud_environment_id in your inventory."
+    success_msg: "CCloud configuration validation passed"
+  when:
+    - "'usm_agent' in group_names"
+  tags:
+    - validate_usm_agent_configs
+
+- name: Set USM Agent Server Effective Authentication Values
+  set_fact:
+    usm_agent_server_basic_auth_effective: "{{ hostvars[groups['usm_agent'][0]]['usm_agent_basic_auth_enabled'] | default(usm_agent_basic_auth_enabled) | bool }}"
+    usm_agent_server_ssl_effective: "{{ hostvars[groups['usm_agent'][0]]['usm_agent_ssl_enabled'] | default(usm_agent_ssl_enabled) | bool }}"
+    usm_agent_server_mtls_effective: "{{ hostvars[groups['usm_agent'][0]]['usm_agent_ssl_mutual_auth_enabled'] | default(usm_agent_ssl_mutual_auth_enabled) | bool }}"
+  when:
+    - "'usm_agent' in groups"
+    - "groups['usm_agent'] | length > 0"
+  tags:
+    - validate_usm_agent_configs
+
+- name: Validate USM Agent Basic Auth Configuration Consistency Between Server and Clients
+  assert:
+    that:
+      - (hostvars[item]['usm_agent_basic_auth_enabled'] | default(usm_agent_basic_auth_enabled) | bool) == (usm_agent_server_basic_auth_effective | bool)
+    fail_msg: |
+      USM Agent basic auth configuration mismatch:
+      - USM Agent server ({{ groups['usm_agent'][0] }}) effective value: {{ usm_agent_server_basic_auth_effective }}
+      - Client ({{ item }}) effective value: {{ hostvars[item]['usm_agent_basic_auth_enabled'] | default(usm_agent_basic_auth_enabled) }}
+
+      Server and all clients must have consistent usm_agent_basic_auth_enabled values.
+  loop: "{{ (groups.get('kafka_controller', []) + groups.get('kafka_broker', []) + groups.get('kafka_connect', [])) | unique }}"
+  when:
+    - "'usm_agent' in groups"
+    - "groups['usm_agent'] | length > 0"
+    - usm_agent_server_basic_auth_effective is defined
+  tags:
+    - validate_usm_agent_configs
+
+- name: Validate USM Agent SSL Configuration Consistency Between Server and Clients
+  assert:
+    that:
+      - (hostvars[item]['usm_agent_ssl_enabled'] | default(usm_agent_ssl_enabled) | bool) == (usm_agent_server_ssl_effective | bool)
+    fail_msg: |
+      USM Agent SSL configuration mismatch:
+      - USM Agent server ({{ groups['usm_agent'][0] }}) effective value: {{ usm_agent_server_ssl_effective }}
+      - Client ({{ item }}) effective value: {{ hostvars[item]['usm_agent_ssl_enabled'] | default(usm_agent_ssl_enabled) }}
+
+      Server and all clients must have consistent usm_agent_ssl_enabled values.
+  loop: "{{ (groups.get('kafka_controller', []) + groups.get('kafka_broker', []) + groups.get('kafka_connect', [])) | unique }}"
+  when:
+    - "'usm_agent' in groups"
+    - "groups['usm_agent'] | length > 0"
+    - usm_agent_server_ssl_effective is defined
+  tags:
+    - validate_usm_agent_configs
+
+- name: Validate USM Agent mTLS Configuration Consistency Between Server and Clients
+  assert:
+    that:
+      - (hostvars[item]['usm_agent_ssl_mutual_auth_enabled'] | default(usm_agent_ssl_mutual_auth_enabled) | bool) == (usm_agent_server_mtls_effective | bool)
+    fail_msg: |
+      USM Agent mTLS configuration mismatch:
+      - USM Agent server ({{ groups['usm_agent'][0] }}) effective value: {{ usm_agent_server_mtls_effective }}
+      - Client ({{ item }}) effective value: {{ hostvars[item]['usm_agent_ssl_mutual_auth_enabled'] | default(usm_agent_ssl_mutual_auth_enabled) }}
+
+      Server and all clients must have consistent usm_agent_ssl_mutual_auth_enabled values.
+  loop: "{{ (groups.get('kafka_controller', []) + groups.get('kafka_broker', []) + groups.get('kafka_connect', [])) | unique }}"
+  when:
+    - "'usm_agent' in groups"
+    - "groups['usm_agent'] | length > 0"
+    - usm_agent_server_mtls_effective is defined
+  tags:
+    - validate_usm_agent_configs
