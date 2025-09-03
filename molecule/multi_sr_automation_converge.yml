@@ -90,4 +90,81 @@
   import_playbook: confluent.platform.all
 
 - name: Setup SR Automation Workflow (CP to CC)
-  import_playbook: base_templates/sr_automation_converge_base.yml
+  hosts: schema_registry:!cc_cluster  # CP Schema Registry only (exclude CC SR)
+  gather_facts: true
+  vars:
+    # Common test configuration
+    test_scenario: "{{ scenario_name | default('sr_automation') }}"
+
+  tasks:
+    - name: Wait for Schema Registry to be ready
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        method: GET
+        expected_status: 200
+        result_var: sr_ready_check
+        operation_name: "Schema Registry Readiness Check"
+        request_retries: 10
+        request_delay: 5
+      run_once: true
+
+    - name: Create test schemas for automation workflow
+      include_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects/{{ item.subject }}/versions"
+        method: POST
+        expected_status: 200
+        result_var: "test_schema_creation_{{ item.subject | replace('.', '_') | replace('-', '_') }}"
+        operation_name: "Create Schema {{ item.subject }}"
+        request_body_format: json
+        request_body:
+          schema: "{{ item.schema | to_json }}"
+        ignore_errors: true
+      loop:
+        - subject: "test.user-value"
+          schema:
+            type: "record"
+            name: "User"
+            namespace: "test"
+            fields:
+              - name: "id"
+                type: "long"
+              - name: "username"
+                type: "string"
+              - name: "email"
+                type: "string"
+        - subject: "automation.workflow-value"
+          schema:
+            type: "record"
+            name: "AutomationWorkflow"
+            namespace: "automation"
+            fields:
+              - name: "workflow_id"
+                type: "string"
+              - name: "step"
+                type: "string"
+              - name: "timestamp"
+                type: "long"
+              - name: "status"
+                type:
+                  type: "enum"
+                  name: "Status"
+                  symbols: ["STARTED", "RUNNING", "COMPLETED", "FAILED"]
+      run_once: true
+      register: test_schema_creation
+
+    - name: Log test schema creation results
+      debug:
+        msg: |
+          Test schema creation results:
+          - test.user-value: {{ 'SUCCESS' if test_schema_creation_test_user_value.status == 200 else 'FAILED (' + test_schema_creation_test_user_value.status|string + ')' if test_schema_creation_test_user_value is defined else 'SKIPPED' }}
+          - automation.workflow-value: {{ 'SUCCESS' if test_schema_creation_automation_workflow_value.status == 200 else 'FAILED (' + test_schema_creation_automation_workflow_value.status|string + ')' if test_schema_creation_automation_workflow_value is defined else 'SKIPPED' }}
+      run_once: true
+
+- name: Test Schema Registry Automation Workflow
+  import_playbook: confluent.platform.primary_sr_switchover_cp_to_cc
