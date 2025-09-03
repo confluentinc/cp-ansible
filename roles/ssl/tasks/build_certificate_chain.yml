@@ -1,0 +1,96 @@
+---
+# Certificate Chain Building Tasks
+# ------------------------------
+# These tasks build a proper certificate chain by:
+# 1. Creating a temporary directory for processing
+# 2. Splitting a CA bundle into individual certificates
+# 3. Extracting certificates from the signed cert
+# 4. Building a validated certificate chain by finding which CA signed the cert
+# 5. Cleaning up temporary files
+
+# Creates a temporary directory that will be automatically deleted when the playbook ends
+# Example: Creates a directory like /tmp/ansible.individual_certs.XXXXXXXX/
+- name: Create temp directory for individual certificates
+  tempfile:
+    state: directory
+    suffix: individual_certs
+  register: temp_dir
+
+# Splits a CA certificate bundle into individual certificate files
+# This is necessary because a CA bundle can contain multiple certificates
+#
+# Sample certificate bundle format:
+# -----BEGIN CERTIFICATE-----
+# MIIDSjCCAjKgAwIBAgIQRK+wgNajJ7qJMDmGLvhAazANBgkqhkiG9w0BAQUFADA/
+# MSQwIgYDVQQKExtEaWdpdGFsIFNpZ25hdHVyZSBUcnVzdCBDby4xFzAVBgNVBAMT
+# (more base64 encoded certificate data)
+# -----END CERTIFICATE-----
+# -----BEGIN CERTIFICATE-----
+# MIIE0zCCA7ugAwIBAgIQGNrRniZ96LtKIVjNzGs7SjANBgkqhkiG9w0BAQUFADCB
+# yjELMAkGA1UEBhMCVVMxFzAVBgNVBAoTDlZlcmlTaWduLCBJbmMuMR8wHQYDVQQL
+# (more base64 encoded certificate data)
+# -----END CERTIFICATE-----
+#
+# Example: If ca_cert_path contains 3 certificates like above, this creates:
+#   /tmp/ansible.individual_certs.XXXXXXXX/ca.1.pem
+#   /tmp/ansible.individual_certs.XXXXXXXX/ca.2.pem
+#   /tmp/ansible.individual_certs.XXXXXXXX/ca.3.pem
+- name: Split CA Cert Bundle into Individual Certificates
+  shell: |
+    awk 'BEGIN {n=0} /BEGIN CERTIFICATE/{n++} {print > "{{ temp_dir.path }}/ca." n ".pem"}' {{ ca_cert_path }}
+  changed_when: false
+
+# Extracts the last (end-entity) certificate from the signed certificate bundle
+# For multi-cert bundles, we need the last certificate to verify against the CA
+# Example: If cert_path contains a chain with 2 certificates, this creates:
+#   /tmp/ansible.individual_certs.XXXXXXXX/signed.last.pem
+# containing only the last certificate in the chain
+- name: Split Signed Cert Bundle - Extract Last Certificate
+  shell: |
+    awk '
+      # Store each certificate (including newlines) in a variable
+      /BEGIN CERTIFICATE/,/END CERTIFICATE/ {
+        cert = cert $0 "\n"
+      }
+      # When we reach the end of a certificate, store it as the last one and reset
+      /END CERTIFICATE/ {
+        last_cert = cert
+        cert = ""
+      }
+      # At the end, print only the last certificate we found
+      END {
+        print last_cert
+      }' {{ cert_path }} > "{{ temp_dir.path }}/signed.last.pem"
+  changed_when: false
+
+# Verifies which CA certificate can validate the end-entity certificate
+# and builds a complete certificate chain by concatenating them
+# Example: If ca.2.pem successfully validates signed.last.pem, this creates:
+#   /path/to/ssl_dir/servicename.chain
+# containing the full certificate + CA certificate chain
+- name: Verify and Build Certificate Chain
+  shell: |
+    # Try each CA certificate to find one that can verify our certificate
+    for ca_file in {{ temp_dir.path }}/ca.*.pem; do
+      # Attempt to verify the certificate using this CA
+      if openssl verify -CAfile "$ca_file" "{{ temp_dir.path }}/signed.last.pem"; then
+        # When we find a match, create the chain by concatenating the cert and CA
+        cat {{ cert_path }} "$ca_file" > "{{ ssl_file_dir_final }}/{{ service_name }}.chain"
+        echo "Chain completed with: $ca_file"
+        exit 0  # Success, no need to check other CAs
+      fi
+    done
+    # If we get here, no CA could verify the certificate
+    echo "No valid CA found to complete the chain" >&2
+    exit 1  # Failure
+  register: chain_result
+  failed_when: chain_result.rc != 0
+  changed_when: chain_result.rc == 0
+
+# Removes the temporary directory and all its contents
+# Example: Deletes /tmp/ansible.individual_certs.XXXXXXXX/ and all files inside
+- name: Cleanup Temp Directory
+  file:
+    path: "{{ temp_dir.path }}"
+    state: absent
+  changed_when: false
