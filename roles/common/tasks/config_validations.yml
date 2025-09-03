@@ -140,9 +140,10 @@
   tags: validate
 
 - name: Check if FIPS is enabled on Local Host
-  shell: sysctl crypto.fips_enabled
+  command: sysctl crypto.fips_enabled
   delegate_to: localhost
   register: fips_output_localhost
+  changed_when: false
   when:
     - fips_enabled | bool
     - ansible_os_family == "RedHat"
@@ -159,8 +160,9 @@
   tags: validate
 
 - name: Check if FIPS is enabled on Remote Host
-  shell: sysctl crypto.fips_enabled
+  command: sysctl crypto.fips_enabled
   register: fips_output_remotehost
+  changed_when: false
   when:
     - fips_enabled | bool
     - ansible_os_family == "RedHat"
@@ -405,4 +407,44 @@
       kafka_connect_replicator_consumer: "{{ kafka_connect_replicator_consumer_oauth_client_assertion_config }}"
       kafka_connect_replicator_monitoring_interceptor: "{{ kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_config }}"
       control_center_next_gen: "{{ control_center_next_gen_oauth_client_assertion_config }}"
+  tags: validate
+
+- name: Validate Unified Stream Manager Configuration
+  assert:
+    that:
+      - unified_stream_manager.basic_username != 'none'
+      - unified_stream_manager.basic_password != 'none'
+    fail_msg: "When unified_stream_manager is defined, you must provide remote schema registry endpoint, username, and password"
+  when:
+    - unified_stream_manager.schema_registry_endpoint is defined and unified_stream_manager.schema_registry_endpoint != 'none'
+  tags: validate
+
+- name: Validate Schema Exporter Configuration
+  assert:
+    that:
+      - item.name is defined and item.name != ''
+      - item.config is defined
+      - item.config.schema_registry_endpoint is defined and item.config.schema_registry_endpoint != 'none'
+      - item.config.basic_username is defined and item.config.basic_username != 'none'
+      - item.config.basic_password is defined and item.config.basic_password != 'none'
+    fail_msg: "Schema exporter '{{ item.name | default('unnamed') }}' requires name, config with remote endpoint, username, and password"
+  loop: "{{ schema_exporters | default([]) }}"
+  when:
+    - schema_exporters is defined
+    - schema_exporters | length > 0
+  tags: validate
+
+- name: Validate Schema Importer Configuration
+  assert:
+    that:
+      - item.name is defined and item.name != ''
+      - item.config is defined
+      - item.config.schema_registry_endpoint is defined and item.config.schema_registry_endpoint != 'none'
+      - item.config.basic_username is defined and item.config.basic_username != 'none'
+      - item.config.basic_password is defined and item.config.basic_password != 'none'
+    fail_msg: "Schema importer '{{ item.name | default('unnamed') }}' requires name, config with remote endpoint, username, and password"
+  loop: "{{ schema_importers | default([]) }}"
+  when:
+    - schema_importers is defined
+    - schema_importers | length > 0
   tags: validate
