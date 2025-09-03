@@ -553,7 +553,7 @@
           delay: 2
           when: importer_qualified_contexts is not defined or importer_qualified_contexts | length == 0
 
-        - name: Switch CC SR contexts to each context to READWRITE mode
+        - name: Switch CC SR contexts for each context to READWRITE mode
           uri:
             url: "{{ unified_stream_manager.schema_registry_endpoint }}/contexts/{{ item }}/mode"
             method: PUT
@@ -588,32 +588,6 @@
               mode: "READWRITE"
             result_var: cp_sr_rollback_result
             ignore_errors: true
-
-        # Rollback context modes if switchover failed
-        - name: "ROLLBACK: Restore CC SR contexts to previous mode"
-          block:
-            - name: Extract contexts that were changed
-              set_fact:
-                rollback_contexts: "{{ importer_qualified_contexts | default([]) }}"
-              when: importer_qualified_contexts is defined
-
-            - name: Restore each context to previous mode (default to IMPORT)
-              uri:
-                url: "{{ unified_stream_manager.schema_registry_endpoint }}/contexts/{{ item }}/mode"
-                method: PUT
-                body_format: json
-                body:
-                  mode: "IMPORT"
-                status_code: 200
-                validate_certs: false
-                user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
-                password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
-              register: context_rollback_results
-              loop: "{{ rollback_contexts | default([]) }}"
-              loop_control:
-                label: "Rollback context {{ item }}"
-              ignore_errors: true
-              when: rollback_contexts | length > 0
 
         - name: Fail workflow with rollback info
           fail:
