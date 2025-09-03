@@ -193,6 +193,136 @@
             when_condition: "{{ automation_properties_added is defined }}"
             request_retries: 30
             request_delay: 5
+
+        # RBAC Role Bindings for Schema Registry Automation (when RBAC is enabled)
+        - name: "Setup RBAC Role Bindings for Schema Registry Automation"
+          block:
+            - name: Grant Schema Registry user ClusterAdmin role for exporter endpoint access
+              uri:
+                url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_basic_users_final.admin.principal}}/roles/ClusterAdmin"
+                method: POST
+                validate_certs: false
+                headers:
+                  Content-Type: application/json
+                  Authorization: "Bearer {{ authorization_token }}"
+                client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt if ssl_mutual_auth_enabled | default(false) else omit }}"
+                client_key: "{{ ssl_file_dir_final }}/schema_registry.key if ssl_mutual_auth_enabled | default(false) else omit }}"
+                body_format: json
+                body: >
+                  {
+                    "clusters": {
+                      "kafka-cluster": "{{kafka_cluster_id}}",
+                      "schema-registry-cluster": "{{schema_registry_final_properties['schema.registry.group.id']}}"
+                    }
+                  }
+                status_code: 204
+              register: sr_cluster_admin_result
+              until: sr_cluster_admin_result.status == 204
+              retries: "{{ mds_retries | default(3) }}"
+              delay: 5
+              when: 
+                - rbac_enabled | default(false)
+                - mds_bootstrap_server_urls is defined
+                - authorization_token is defined
+                - kafka_cluster_id is defined
+                - schema_registry_final_properties is defined
+                - schema_registry_basic_users_final.admin.principal is defined
+
+            - name: Grant Schema Registry user ResourceOwner role for automation topics
+              uri:
+                url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_basic_users_final.admin.principal}}/roles/ResourceOwner/bindings"
+                method: POST
+                validate_certs: false
+                headers:
+                  Content-Type: application/json
+                  Authorization: "Bearer {{ authorization_token }}"
+                client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt if ssl_mutual_auth_enabled | default(false) else omit }}"
+                client_key: "{{ ssl_file_dir_final }}/schema_registry.key if ssl_mutual_auth_enabled | default(false) else omit }}"
+                body_format: json
+                body: >
+                  {
+                    "scope": {
+                      "clusters": {
+                        "kafka-cluster": "{{kafka_cluster_id}}"
+                      }
+                    },
+                    "resourcePatterns": [
+                      {
+                        "resourceType":"Group",
+                        "name": "{{schema_registry_final_properties['schema.registry.group.id']}}",
+                        "patternType":"LITERAL"
+                      },
+                      {
+                        "resourceType":"Topic",
+                        "name": "{{schema_registry_final_properties['kafkastore.topic']}}",
+                        "patternType":"LITERAL"
+                      },
+                      {
+                        "resourceType":"Topic",
+                        "name": "{{schema_registry_final_properties['confluent.license.topic']}}",
+                        "patternType":"LITERAL"
+                      },
+                      {
+                        "resourceType":"Topic",
+                        "name": "_exporter_configs",
+                        "patternType":"LITERAL"
+                      },
+                      {
+                        "resourceType":"Topic",
+                        "name": "_exporter_states",
+                        "patternType":"LITERAL"
+                      },
+                      {
+                        "resourceType":"Topic",
+                        "name": "_importer_configs",
+                        "patternType":"LITERAL"
+                      },
+                      {
+                        "resourceType":"Topic",
+                        "name": "_importer_states",
+                        "patternType":"LITERAL"
+                      },
+                      {
+                        "resourceType":"Topic",
+                        "name": "_dek_registry_keys",
+                        "patternType":"LITERAL"
+                      },
+                      {
+                        "resourceType":"Topic",
+                        "name": "_dek_registry_keks",
+                        "patternType":"LITERAL"
+                      }
+                    ]
+                  }
+                status_code: 204
+              register: sr_mds_result
+              until: sr_mds_result.status == 204
+              retries: "{{ mds_retries | default(3) }}"
+              delay: 5
+              when: 
+                - rbac_enabled | default(false)
+                - mds_bootstrap_server_urls is defined
+                - authorization_token is defined
+                - kafka_cluster_id is defined
+                - schema_registry_final_properties is defined
+                - schema_registry_basic_users_final.admin.principal is defined
+
+            - name: Log RBAC role binding completion
+              debug:
+                msg: |
+                  RBAC Role Bindings for Schema Registry Automation completed:
+                  - ClusterAdmin role granted for exporter endpoint access
+                  - ResourceOwner role granted for automation topics
+                  - Automation topics: _exporter_configs, _exporter_states, _importer_configs, _importer_states, _dek_registry_keys, _dek_registry_keks
+              when: 
+                - rbac_enabled | default(false)
+                - sr_cluster_admin_result is defined
+                - sr_mds_result is defined
+
+          when: rbac_enabled | default(false)
+          tags:
+            - always
+            - rbac
       tags:
         - always  # This configuration is required for all automation features
 
@@ -336,10 +466,11 @@
 
         - name: Extract contexts from schema importer qualified subjects
           set_fact:
-            importer_qualified_contexts: "{{ schema_importers[0].subjects | select('match', '^:\\.([^:]+):.*$') | map('regex_replace', '^:\\.([^:]+):.*$', '\\1') | list | unique }}"
+            importer_qualified_contexts: "{{ (schema_importers[0].subjects | default([])) | select('match', '^:\\.([^:]+):.*$') | map('regex_replace', '^:\\.([^:]+):.*$', '\\1') | list | unique }}"
           when:
             - schema_importers is defined
             - schema_importers | length > 0
+            - schema_importers[0].subjects is defined
 
         - name: Validate no qualified subjects when USM context not configured
           assert:
@@ -406,6 +537,7 @@
             user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
             password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
           register: cc_sr_readwrite_mode
+          when: importer_qualified_contexts is not defined or importer_qualified_contexts | length == 0
 
         - name: Verify CC SR is in READWRITE mode
           uri:
@@ -419,6 +551,41 @@
           until: cc_sr_mode_check.json.mode == 'READWRITE'
           retries: 5
           delay: 2
+          when: importer_qualified_contexts is not defined or importer_qualified_contexts | length == 0
+
+        - name: Switch CC SR contexts to each context to READWRITE mode
+          uri:
+            url: "{{ unified_stream_manager.schema_registry_endpoint }}/contexts/{{ item }}/mode"
+            method: PUT
+            body_format: json
+            body:
+              mode: "READWRITE"
+            status_code: 200
+            validate_certs: false
+            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
+            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
+          register: context_mode_results
+          loop: "{{ importer_qualified_contexts | default([]) }}"
+          loop_control:
+            label: "Context {{ item }}"
+          when: importer_qualified_contexts | length > 0
+
+        - name: Verify all contexts are in READWRITE mode
+          uri:
+            url: "{{ unified_stream_manager.schema_registry_endpoint }}/contexts/{{ item }}/mode"
+            method: GET
+            status_code: 200
+            validate_certs: false
+            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
+            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
+          register: context_mode_verification
+          loop: "{{ importer_qualified_contexts | default([]) }}"
+          loop_control:
+            label: "Verify context {{ item }}"
+          until: context_mode_verification.json.mode == 'READWRITE'
+          retries: 5
+          delay: 2
+          when: importer_qualified_contexts | length > 0
 
       rescue:
         - name: Handle Switchover failure
@@ -438,6 +605,32 @@
               mode: "READWRITE"
             result_var: cp_sr_rollback_result
             ignore_errors: true
+
+        # Rollback context modes if switchover failed
+        - name: "ROLLBACK: Restore CC SR contexts to previous mode"
+          block:
+            - name: Extract contexts that were changed
+              set_fact:
+                rollback_contexts: "{{ importer_qualified_contexts | default([]) }}"
+              when: importer_qualified_contexts is defined
+
+            - name: Restore each context to previous mode (default to IMPORT)
+              uri:
+                url: "{{ unified_stream_manager.schema_registry_endpoint }}/contexts/{{ item }}/mode"
+                method: PUT
+                body_format: json
+                body:
+                  mode: "IMPORT"
+                status_code: 200
+                validate_certs: false
+                user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
+                password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
+              register: context_rollback_results
+              loop: "{{ rollback_contexts | default([]) }}"
+              loop_control:
+                label: "Rollback context {{ item }}"
+              ignore_errors: true
+              when: rollback_contexts | length > 0
 
         - name: Fail workflow with rollback info
           fail:
