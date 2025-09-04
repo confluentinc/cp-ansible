@@ -22,6 +22,24 @@
         property: listener.security.protocol.map
         expected_value: CONTROLLER:SSL,BROKER:SSL
 
+    # Verify Jolokia Access Control is working for Controller
+    - name: Test Jolokia Access Control - Attempt to access restricted mbean (should fail)
+      uri:
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_controller_jolokia_port }}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+        method: GET
+        status_code: 403
+      register: jolokia_restricted_access
+      when: kafka_controller_jolokia_access_control_enabled|bool
+      ignore_errors: true
+
+    - name: Verify Jolokia Access Control is blocking unauthorized access
+      assert:
+        that:
+          - jolokia_restricted_access.status == 403
+        fail_msg: "Jolokia access control should block unauthorized mbean access with 403 status"
+        success_msg: "Jolokia access control is properly blocking unauthorized access"
+      when: kafka_controller_jolokia_access_control_enabled|bool
+
 - name: Verify - kafka_broker
   hosts: kafka_broker
   gather_facts: false
@@ -45,6 +63,24 @@
         property: listener.security.protocol.map
         expected_value: CONTROLLER:SSL,INTERNAL:SSL,BROKER:SSL
       when: kraft_mode|bool
+
+    # Verify Jolokia Access Control is working for Broker
+    - name: Test Jolokia Access Control - Attempt to access restricted mbean (should fail)
+      uri:
+        url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_broker_jolokia_port }}/jolokia/read/kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec"
+        method: GET
+        status_code: 403
+      register: jolokia_broker_restricted_access
+      when: kafka_broker_jolokia_access_control_enabled|bool
+      ignore_errors: true
+
+    - name: Verify Jolokia Access Control is blocking unauthorized access for Broker
+      assert:
+        that:
+          - jolokia_broker_restricted_access.status == 403
+        fail_msg: "Jolokia access control should block unauthorized mbean access with 403 status"
+        success_msg: "Jolokia access control is properly blocking unauthorized access for Broker"
+      when: kafka_broker_jolokia_access_control_enabled|bool
 
 - name: Verify - schema_registry
   hosts: schema_registry
