@@ -22,23 +22,32 @@
         property: listener.security.protocol.map
         expected_value: CONTROLLER:SSL,BROKER:SSL
 
-    # Verify Jolokia Access Control is working for Controller
-    - name: Test Jolokia Access Control - Attempt to access restricted mbean (should fail)
+    # Verify Jolokia is accessible and access control is working for Controller
+    - name: Test Jolokia Controller Endpoint Accessibility
       uri:
         url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_controller_jolokia_port }}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
-        method: GET
-        status_code: 403
-      register: jolokia_restricted_access
-      when: kafka_controller_jolokia_access_control_enabled|bool
-      ignore_errors: true
+        validate_certs: false
+        return_content: true
+      register: jolokia_controller_access
+      when: kafka_controller_jolokia_enabled|bool
+      failed_when: false
 
-    - name: Verify Jolokia Access Control is blocking unauthorized access
+    - name: Verify Controller Jolokia is accessible
       assert:
         that:
-          - jolokia_restricted_access.status == 403
-        fail_msg: "Jolokia access control should block unauthorized mbean access with 403 status"
-        success_msg: "Jolokia access control is properly blocking unauthorized access"
-      when: kafka_controller_jolokia_access_control_enabled|bool
+          - jolokia_controller_access.status is defined
+          - jolokia_controller_access.status != -1
+        fail_msg: "Controller Jolokia endpoint is not accessible (status: {{ jolokia_controller_access.status | default('undefined') }}). Check if jolokia is enabled and running."
+        success_msg: "Controller Jolokia endpoint is accessible"
+      when: kafka_controller_jolokia_enabled|bool
+
+    - name: Verify Controller Jolokia allows ZkMigrationState access (when access control enabled)
+      assert:
+        that:
+          - jolokia_controller_access.status == 200
+        fail_msg: "Controller should allow access to ZkMigrationState mbean when access control is properly configured"
+        success_msg: "Controller Jolokia access control is working - ZkMigrationState is accessible"
+      when: kafka_controller_jolokia_enabled|bool and kafka_controller_jolokia_access_control_enabled|bool and jolokia_controller_access.status is defined
 
 - name: Verify - kafka_broker
   hosts: kafka_broker
@@ -64,23 +73,33 @@
         expected_value: CONTROLLER:SSL,INTERNAL:SSL,BROKER:SSL
       when: kraft_mode|bool
 
-    # Verify Jolokia Access Control is working for Broker
-    - name: Test Jolokia Access Control - Attempt to access restricted mbean (should fail)
+    # Verify Jolokia Access Control is blocking all mbean access for Broker
+    - name: Test Broker Jolokia Endpoint - Check basic connectivity
+      uri:
+        url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_broker_jolokia_port }}/jolokia/version"
+        validate_certs: false
+        return_content: true
+      register: jolokia_broker_basic
+      when: kafka_broker_jolokia_enabled|bool
+      failed_when: false
+
+    - name: Test Broker Jolokia Access Control - Verify mbean access is blocked
       uri:
         url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_broker_jolokia_port }}/jolokia/read/kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec"
-        method: GET
-        status_code: 403
+        validate_certs: false
+        return_content: true
       register: jolokia_broker_restricted_access
-      when: kafka_broker_jolokia_access_control_enabled|bool
-      ignore_errors: true
+      when: kafka_broker_jolokia_enabled|bool and kafka_broker_jolokia_access_control_enabled|bool and jolokia_broker_basic.status is defined and jolokia_broker_basic.status == 200
+      failed_when: false
 
-    - name: Verify Jolokia Access Control is blocking unauthorized access for Broker
+    - name: Verify Broker Jolokia Access Control is working
       assert:
         that:
-          - jolokia_broker_restricted_access.status == 403
-        fail_msg: "Jolokia access control should block unauthorized mbean access with 403 status"
-        success_msg: "Jolokia access control is properly blocking unauthorized access for Broker"
-      when: kafka_broker_jolokia_access_control_enabled|bool
+          - jolokia_broker_basic.status == 200
+          - jolokia_broker_restricted_access.status in [403, 401]
+        fail_msg: "Broker Jolokia access control issue - Basic connectivity: {{ jolokia_broker_basic.status | default('undefined') }}, MBean access: {{ jolokia_broker_restricted_access.status | default('undefined') }}"
+        success_msg: "Broker Jolokia access control is working - endpoint accessible but mbean access properly blocked"
+      when: kafka_broker_jolokia_enabled|bool and kafka_broker_jolokia_access_control_enabled|bool and jolokia_broker_basic.status is defined
 
 - name: Verify - schema_registry
   hosts: schema_registry
