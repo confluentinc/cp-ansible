@@ -1,0 +1,72 @@
+---
+### SR Automation Workflow Test Environment Preparation - Plaintext/No Auth
+### Includes base preparation and adds plaintext-specific setup
+
+- name: Configure IPv6 Preference
+  import_playbook: ../configure_ipv6.yml
+
+- name: Setup VM DNS
+  import_playbook: ../dns.yml
+
+- name: Prepare Common SR Automation Test Environment
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Install test utilities
+      package:
+        name:
+          - curl
+          - jq
+          - openssl
+        state: present
+      become: true
+
+    - name: Create test data directory
+      file:
+        path: /tmp/sr-automation-test-data
+        state: directory
+        mode: '0755'
+
+    - name: Create sample test schemas directory
+      file:
+        path: /tmp/sr-automation-test-data/schemas
+        state: directory
+        mode: '0755'
+
+    - name: Create sample Avro schema for testing
+      copy:
+        content: |
+          {
+            "type": "record",
+            "name": "User",
+            "namespace": "com.confluent.test",
+            "fields": [
+              {"name": "id", "type": "long"},
+              {"name": "username", "type": "string"},
+              {"name": "email", "type": ["null", "string"], "default": null},
+              {"name": "created_at", "type": "long"}
+            ]
+          }
+        dest: /tmp/sr-automation-test-data/schemas/user-schema.json
+        mode: '0644'
+
+    - name: Create automation test schema
+      copy:
+        content: |
+          {
+            "type": "record",
+            "name": "AutomationWorkflow",
+            "namespace": "com.confluent.automation",
+            "fields": [
+              {"name": "workflow_id", "type": "string"},
+              {"name": "step", "type": "string"},
+              {"name": "timestamp", "type": "long"},
+              {"name": "status", "type": {"type": "enum", "name": "Status", "symbols": ["STARTED", "RUNNING", "COMPLETED", "FAILED"]}},
+              {"name": "metadata", "type": ["null", {"type": "map", "values": "string"}], "default": null}
+            ]
+          }
+        dest: /tmp/sr-automation-test-data/schemas/automation-workflow-schema.json
+        mode: '0644'
+
+- name: Setup Mock CC Cluster First (Standard Groups)
+  import_playbook: confluent.platform.all
