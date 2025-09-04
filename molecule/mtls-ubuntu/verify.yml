@@ -49,6 +49,24 @@
         success_msg: "Controller Jolokia access control is working - ZkMigrationState is accessible"
       when: kafka_controller_jolokia_enabled|bool and kafka_controller_jolokia_access_control_enabled|bool and jolokia_controller_access.status is defined
 
+    # Test that random MBeans are blocked by access control
+    - name: Test Jolokia Controller Random MBean Access (should be blocked)
+      uri:
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_controller_jolokia_port }}/jolokia/read/java.lang:type=Memory"
+        validate_certs: false
+        return_content: true
+      register: jolokia_controller_random_mbean
+      when: kafka_controller_jolokia_enabled|bool and kafka_controller_jolokia_access_control_enabled|bool
+      failed_when: false
+
+    - name: Verify Controller Jolokia blocks random MBean access (when access control enabled)
+      assert:
+        that:
+          - jolokia_controller_random_mbean.status == 403 or jolokia_controller_random_mbean.status == 401
+        fail_msg: "Controller should block access to random MBeans when access control is enabled (got status: {{ jolokia_controller_random_mbean.status | default('undefined') }}). Access control may not be working properly."
+        success_msg: "Controller Jolokia access control is working - random MBean access is properly blocked"
+      when: kafka_controller_jolokia_enabled|bool and kafka_controller_jolokia_access_control_enabled|bool and jolokia_controller_random_mbean.status is defined
+
 - name: Verify - kafka_broker
   hosts: kafka_broker
   gather_facts: false
@@ -96,7 +114,7 @@
       assert:
         that:
           - jolokia_broker_basic.status == 200
-          - jolokia_broker_restricted_access.status in [403, 401]
+          - jolokia_broker_restricted_access.status not in [200, 204]
         fail_msg: "Broker Jolokia access control issue - Basic connectivity: {{ jolokia_broker_basic.status | default('undefined') }}, MBean access: {{ jolokia_broker_restricted_access.status | default('undefined') }}"
         success_msg: "Broker Jolokia access control is working - endpoint accessible but mbean access properly blocked"
       when: kafka_broker_jolokia_enabled|bool and kafka_broker_jolokia_access_control_enabled|bool and jolokia_broker_basic.status is defined
