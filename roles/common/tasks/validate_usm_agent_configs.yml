@@ -27,121 +27,64 @@
   tags:
     - validate_usm_agent_configs
 
-- name: Create facts.d directory on USM Agent host
-  file:
-    path: /etc/ansible/facts.d
-    state: directory
-    mode: '755'
-  when:
-    - "'usm_agent' in group_names"
-  tags:
-    - validate_usm_agent_configs
-
-- name: Store USM Agent Configuration as Persistent Facts (USM Agent deployment)
-  copy:
-    content: |
-      {
-        "usm_agent_basic_auth_enabled_server_config": {{ usm_agent_basic_auth_enabled | bool | to_json }},
-        "usm_agent_ssl_enabled_server_config": {{ usm_agent_ssl_enabled | bool | to_json }},
-        "usm_agent_ssl_mutual_auth_enabled_server_config": {{ usm_agent_ssl_mutual_auth_enabled | bool | to_json }}
-      }
-    dest: /etc/ansible/facts.d/usm_agent_config.fact
-    mode: '644'
-  when:
-    - "'usm_agent' in group_names"
-  tags:
-    - validate_usm_agent_configs
-
-- name: Reload facts to include USM Agent configuration (USM Agent deployment)
-  setup:
-
-  when:
-    - "'usm_agent' in group_names"
-  tags:
-    - validate_usm_agent_configs
-
-- name: Gather facts from USM Agent host to load persistent configuration (Other components)
-  setup:
-  delegate_to: "{{ groups['usm_agent'][0] }}"
-  when:
-    - "'usm_agent' in groups"
-    - "groups['usm_agent'] | length > 0"
-    - "'usm_agent' not in group_names"
-    - "('kafka_controller' in group_names) or ('kafka_broker' in group_names) or ('kafka_connect' in group_names)"
-  tags:
-    - validate_usm_agent_configs
-
-- name: Load USM Agent Configuration from Facts
+- name: Set USM Agent Server Effective Authentication Values
   set_fact:
-    usm_agent_baseline: "{{ hostvars[groups['usm_agent'][0]]['ansible_local']['usm_agent_config'] }}"
+    usm_agent_server_basic_auth_effective: "{{ hostvars[groups['usm_agent'][0]]['usm_agent_basic_auth_enabled'] | default(usm_agent_basic_auth_enabled) | bool }}"
+    usm_agent_server_ssl_effective: "{{ hostvars[groups['usm_agent'][0]]['usm_agent_ssl_enabled'] | default(usm_agent_ssl_enabled) | bool }}"
+    usm_agent_server_mtls_effective: "{{ hostvars[groups['usm_agent'][0]]['usm_agent_ssl_mutual_auth_enabled'] | default(usm_agent_ssl_mutual_auth_enabled) | bool }}"
   when:
     - "'usm_agent' in groups"
     - "groups['usm_agent'] | length > 0"
-    - "('kafka_controller' in group_names) or ('kafka_broker' in group_names) or ('kafka_connect' in group_names)"
-    - hostvars[groups['usm_agent'][0]]['ansible_local'] is defined
-    - hostvars[groups['usm_agent'][0]]['ansible_local']['usm_agent_config'] is defined
   tags:
     - validate_usm_agent_configs
 
-- name: Validate USM Agent Basic Auth Configuration Consistency
+- name: Validate USM Agent Basic Auth Configuration Consistency Between Server and Clients
   assert:
     that:
-      - (usm_agent_basic_auth_enabled | bool) == (usm_agent_baseline.usm_agent_basic_auth_enabled_server_config | bool)
+      - (hostvars[item]['usm_agent_basic_auth_enabled'] | default(usm_agent_basic_auth_enabled) | bool) == (usm_agent_server_basic_auth_effective | bool)
     fail_msg: |
-      USM Agent basic auth configuration inconsistency detected:
-      - USM Agent value: {{ usm_agent_baseline.usm_agent_basic_auth_enabled_server_config }}
-      - Current component ({{ inventory_hostname }}) value: {{ usm_agent_basic_auth_enabled | bool }}
-
-      All components must have consistent usm_agent_basic_auth_enabled values.
-      Either update {{ inventory_hostname }} to match the USM Agent configuration, or redeploy USM Agent with consistent configuration.
-    success_msg: "USM Agent basic auth configuration consistency validation passed"
+      USM Agent basic auth configuration mismatch:
+      - USM Agent server ({{ groups['usm_agent'][0] }}) effective value: {{ usm_agent_server_basic_auth_effective }}
+      - Client ({{ item }}) effective value: {{ hostvars[item]['usm_agent_basic_auth_enabled'] | default(usm_agent_basic_auth_enabled) }}
+      Server and all clients must have consistent usm_agent_basic_auth_enabled values.
+  loop: "{{ (groups.get('kafka_controller', []) + groups.get('kafka_broker', []) + groups.get('kafka_connect', [])) | unique }}"
   when:
     - "'usm_agent' in groups"
     - "groups['usm_agent'] | length > 0"
-    - "'usm_agent' not in group_names"
-    - "('kafka_controller' in group_names) or ('kafka_broker' in group_names) or ('kafka_connect' in group_names)"
-    - usm_agent_baseline is defined
+    - usm_agent_server_basic_auth_effective is defined
   tags:
     - validate_usm_agent_configs
 
-- name: Validate USM Agent SSL Configuration Consistency
+- name: Validate USM Agent SSL Configuration Consistency Between Server and Clients
   assert:
     that:
-      - (usm_agent_ssl_enabled | bool) == (usm_agent_baseline.usm_agent_ssl_enabled_server_config | bool)
+      - (hostvars[item]['usm_agent_ssl_enabled'] | default(usm_agent_ssl_enabled) | bool) == (usm_agent_server_ssl_effective | bool)
     fail_msg: |
-      USM Agent SSL configuration inconsistency detected:
-      - USM Agent value: {{ usm_agent_baseline.usm_agent_ssl_enabled_server_config }}
-      - Current component ({{ inventory_hostname }}) value: {{ usm_agent_ssl_enabled | bool }}
-
-      All components must have consistent usm_agent_ssl_enabled values.
-      Either update {{ inventory_hostname }} to match the USM Agent configuration, or redeploy USM Agent with consistent configuration.
-    success_msg: "USM Agent SSL configuration consistency validation passed"
+      USM Agent SSL configuration mismatch:
+      - USM Agent server ({{ groups['usm_agent'][0] }}) effective value: {{ usm_agent_server_ssl_effective }}
+      - Client ({{ item }}) effective value: {{ hostvars[item]['usm_agent_ssl_enabled'] | default(usm_agent_ssl_enabled) }}
+      Server and all clients must have consistent usm_agent_ssl_enabled values.
+  loop: "{{ (groups.get('kafka_controller', []) + groups.get('kafka_broker', []) + groups.get('kafka_connect', [])) | unique }}"
   when:
     - "'usm_agent' in groups"
     - "groups['usm_agent'] | length > 0"
-    - "'usm_agent' not in group_names"
-    - "('kafka_controller' in group_names) or ('kafka_broker' in group_names) or ('kafka_connect' in group_names)"
-    - usm_agent_baseline is defined
+    - usm_agent_server_ssl_effective is defined
   tags:
     - validate_usm_agent_configs
 
-- name: Validate USM Agent mTLS Configuration Consistency
+- name: Validate USM Agent mTLS Configuration Consistency Between Server and Clients
   assert:
     that:
-      - (usm_agent_ssl_mutual_auth_enabled | bool) == (usm_agent_baseline.usm_agent_ssl_mutual_auth_enabled_server_config | bool)
+      - (hostvars[item]['usm_agent_ssl_mutual_auth_enabled'] | default(usm_agent_ssl_mutual_auth_enabled) | bool) == (usm_agent_server_mtls_effective | bool)
     fail_msg: |
-      USM Agent mTLS configuration inconsistency detected:
-      - USM Agent value: {{ usm_agent_baseline.usm_agent_ssl_mutual_auth_enabled_server_config }}
-      - Current component ({{ inventory_hostname }}) value: {{ usm_agent_ssl_mutual_auth_enabled | bool }}
-
-      All components must have consistent usm_agent_ssl_mutual_auth_enabled values.
-      Either update {{ inventory_hostname }} to match the USM Agent configuration, or redeploy USM Agent with consistent configuration.
-    success_msg: "USM Agent mTLS configuration consistency validation passed"
+      USM Agent mTLS configuration mismatch:
+      - USM Agent server ({{ groups['usm_agent'][0] }}) effective value: {{ usm_agent_server_mtls_effective }}
+      - Client ({{ item }}) effective value: {{ hostvars[item]['usm_agent_ssl_mutual_auth_enabled'] | default(usm_agent_ssl_mutual_auth_enabled) }}
+      Server and all clients must have consistent usm_agent_ssl_mutual_auth_enabled values.
+  loop: "{{ (groups.get('kafka_controller', []) + groups.get('kafka_broker', []) + groups.get('kafka_connect', [])) | unique }}"
   when:
     - "'usm_agent' in groups"
     - "groups['usm_agent'] | length > 0"
-    - "'usm_agent' not in group_names"
-    - "('kafka_controller' in group_names) or ('kafka_broker' in group_names) or ('kafka_connect' in group_names)"
-    - usm_agent_baseline is defined
+    - usm_agent_server_mtls_effective is defined
   tags:
     - validate_usm_agent_configs
