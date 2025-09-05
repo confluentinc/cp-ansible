@@ -115,6 +115,26 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+  - name: usm-agent1
+    hostname: usm-agent1.confluent
+    groups:
+      - usm_agent
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ccloud-mock-service
+    hostname: ccloud-mock-service.confluent
+    groups:
+      - ccloud_mock
+    image: 519856050701.dkr.ecr.us-west-2.amazonaws.com/docker/dev/confluentinc/usmagent-mock-ccloud:latest
+    command: ""
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
     converge: ../collections_converge.yml
@@ -205,6 +225,22 @@ provisioner:
         sso_client_id: ${OKTA_CLIENT:-user}
         sso_client_password: ${OKTA_PASSWORD:-pass}
         sso_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/ssocertfile.pem"
+
+        # USM Agent Configuration - mTLS
+        usm_agent_basic_auth_enabled: false
+        usm_agent_ssl_enabled: true
+        usm_agent_ssl_mutual_auth_enabled: true
+
+        # USM Agent Configuration - CCloud Mock Server
+        ccloud_endpoint: http://ccloud-mock-service:8081
+        ccloud_environment_id: env-mock-123
+        ccloud_credential:
+          username: ccloud-user
+          password: ccloud-secret
+
+      usm_agent:
+        ssl_keystore_filepath: "/var/ssl/private/usm_agent.keystore.jks"
+        ssl_truststore_filepath: "/var/ssl/private/usm_agent.truststore.jks"
 
       kafka_controller:
         ssl_keystore_filepath: "/var/ssl/private/controller.keystore.jks"

@@ -3,6 +3,7 @@
 ### SASL SCRAM protocol.
 ### TLS Enabled.
 ### Custom Archive owner.
+### USM Agent Authentication Configuration - BASIC + TLS AUTHENTICATION with self signed certs.
 
 driver:
   name: docker
@@ -93,6 +94,26 @@ platforms:
       - "9022:9022"
     networks:
       - name: confluent
+  - name: usm-agent1
+    hostname: usm-agent1.confluent
+    groups:
+      - usm_agent
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ccloud-mock-service
+    hostname: ccloud-mock-service.confluent
+    groups:
+      - ccloud_mock
+    image: 519856050701.dkr.ecr.us-west-2.amazonaws.com/docker/dev/confluentinc/usmagent-mock-ccloud:latest
+    command: ""
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
     converge: ../collections_converge.yml
@@ -117,6 +138,31 @@ provisioner:
         mask_secrets: false
         kafka_broker_custom_properties:
           log.dirs: /tmp/logs1,/tmp/logs2
+
+        usm_agent_basic_auth_enabled: true
+        usm_agent_ssl_enabled: true
+        usm_agent_ssl_mutual_auth_enabled: false
+
+        usm_agent_basic_users:
+          admin:
+            principal: admin
+            password: admin-secret
+          user1:
+            principal: user1
+            password: user1-secret
+          user2:
+            principal: user2
+            password: user2-secret
+
+        usm_agent_client_username: "user1"
+        usm_agent_client_password: "user1-secret"
+
+        # USM Agent Configuration - CCloud Mock Server
+        ccloud_endpoint: http://ccloud-mock-service:8081
+        ccloud_environment_id: env-mock-123
+        ccloud_credential:
+          username: ccloud-user
+          password: ccloud-secret
 
       kafka_controller:
         kafka_controller_sasl_protocol: plain,scram256

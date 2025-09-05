@@ -196,6 +196,26 @@ platforms:
       - "9022:9022"
     networks:
       - name: confluent
+  - name: usm-agent
+    hostname: usm-agent1.confluent
+    groups:
+      - usm_agent2
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ccloud-mock-service
+    hostname: ccloud-mock-service.confluent
+    groups:
+      - ccloud_mock
+    image: 519856050701.dkr.ecr.us-west-2.amazonaws.com/docker/dev/confluentinc/usmagent-mock-ccloud:latest
+    command: ""
+    networks:
       - name: confluent
 provisioner:
   playbooks:
@@ -257,6 +277,18 @@ provisioner:
         kafka_broker_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
         kafka_controller_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{ansible_host}}.confluent@{{kerberos.realm | upper}}"
         kafka_controller_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_controller-{{ansible_host}}.keytab"
+
+        # USM Agent Configuration - mTLS
+        usm_agent_basic_auth_enabled: false
+        usm_agent_ssl_enabled: true
+        usm_agent_ssl_mutual_auth_enabled: true
+
+        # USM Agent Configuration - CCloud Mock Server
+        ccloud_endpoint: http://ccloud-mock-service:8081
+        ccloud_environment_id: env-mock-123
+        ccloud_credential:
+          username: ccloud-user
+          password: ccloud-secret
 
         # setups /etc/hosts on ec2 to allow delegate_to: localhost to make requests to MDS url by making the url resolvable
         docker_containers:
