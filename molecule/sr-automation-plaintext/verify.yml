@@ -16,6 +16,50 @@
         property: kafkastore.update.handlers
         expected_value: io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler,io.confluent.schema.manager.SchemaCacheManagerUpdateHandler
 
+    - name: Check if test schemas were exported to CC SR
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        method: GET
+        expected_status: 200
+        result_var: cc_subjects_list
+        operation_name: "Get CC Schema Registry Subjects"
+        url_username: "{{ unified_stream_manager.basic_username }}"
+        url_password: "{{ unified_stream_manager.basic_password }}"
+
+    - name: Verify test schemas exist in CC SR
+      assert:
+        that:
+          - "'test.user-value' in cc_subjects_list.json"
+        fail_msg: "Test schemas were not successfully exported to CC Schema Registry"
+
+    - name: Create new test schema in CC SR for import testing
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects/test.test-value2/versions"
+        method: POST
+        expected_status: 200
+        result_var: cc_new_schema_creation
+        operation_name: "Create New Schema in CC SR for Import Test"
+        request_body_format: json
+        request_body:
+          schema: |
+            {
+              "type": "record",
+              "name": "ImportTest",
+              "namespace": "import.test",
+              "fields": [
+                {"name": "test_id", "type": "string"},
+                {"name": "test_data", "type": "string"},
+                {"name": "created_at", "type": "long"},
+                {"name": "import_flag", "type": "boolean", "default": true}
+              ]
+            }
+
 - name: Rename Groups After CC Deployment
   hosts: cc_cluster
   gather_facts: false
@@ -49,7 +93,7 @@
         - schema_registry
 
     - name: Refresh Inventory
-      meta: refresh_inventoryy
+      meta: refresh_inventory
 
 - name: Load Variables for SR Automation Verification
   hosts: all
@@ -148,7 +192,7 @@
       tags: automation
 
 - name: Verify Schema Automation Features (Primary Only)
-  hosts: schema_registry:!mock-cc-schema-registry  # Only verify active management on primary SR
+  hosts: schema-registry1  # Only verify active management on CP SR
   gather_facts: false
   tasks:
     - name: Check exporters endpoint accessibility
@@ -263,3 +307,57 @@
           ✓ Test Schemas Created: {{ subjects_list.json | select('match', '(test|automation)\..*') | list | length }}
           ✓ Automation Features: {{ 'ENABLED' if (exporters_list.json | length > 0 or importers_list.json | length > 0) else 'DISABLED' }}
       tags: summary
+
+- name: Test Schema Import Functionality
+  hosts: schema-registry1  # Only test import on CP SR
+  gather_facts: false
+  tasks:
+
+    - name: Check if imported schema exists in CP SR
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        method: GET
+        expected_status: 200
+        result_var: cp_subjects_after_import
+        operation_name: "Get CP Subjects After Import"
+      tags: import_test
+
+    - name: Verify imported schema exists in CP SR
+      assert:
+        that:
+          - "'test.test-value2' in cp_subjects_after_import.json"
+        fail_msg: "Schema 'test.test-value2' was not successfully imported from CC SR"
+
+    - name: Verify imported schema content matches
+      block:
+        - name: Get imported schema from CP SR
+          import_role:
+            name: confluent.platform.common
+            tasks_from: schema_registry_operations.yml
+          vars:
+            request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects/test.test-value2/versions/latest"
+            method: GET
+            expected_status: 200
+            result_var: cp_imported_schema
+            operation_name: "Get Imported Schema from CP SR"
+
+        - name: Get original schema from CC SR
+          import_role:
+            name: confluent.platform.common
+            tasks_from: schema_registry_operations.yml
+          vars:
+            request_url: "{{ unified_stream_manager.schema_registry_endpoint }}/subjects/test.test-value2/versions/latest"
+            method: GET
+            expected_status: 200
+            result_var: cc_original_schema
+            operation_name: "Get Original Schema from CC SR"
+
+        - name: Verify schema content matches
+          assert:
+            that:
+              - cp_imported_schema.json.schema == cc_original_schema.json.schema
+            fail_msg: "Imported schema content does not match original schema"
+      tags: import_test
