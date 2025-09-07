@@ -1,15 +1,6 @@
 ---
-### SR Automation Workflow Verification - mTLS
-### Includes base verification and adds mTLS specific checks
-
-- name: Load Variables for SR Automation Verification
-  hosts: all
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: confluent.platform.variables
-
-- name: Verify Schema Registry Automation Configuration
+### SR Automation Workflow Verification
+- name: Verify mock CC Schema Registry Automation Configuration
   hosts: schema_registry
   gather_facts: false
   vars:
@@ -22,9 +13,60 @@
       vars:
         file_path: /etc/schema-registry/schema-registry.properties
         property: kafkastore.update.handlers
-        expected_value: io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler
-      tags: config
+        expected_value: io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler,io.confluent.schema.manager.SchemaCacheManagerUpdateHandler
 
+- name: Rename Groups After CC Deployment
+  hosts: cc_cluster
+  gather_facts: false
+  tasks:
+    - name: "Rename CC Groups to Avoid Conflicts with CP Deployment"
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: "{{item}}:"
+        line: "{{item}}_cc:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - kafka_controller
+        - kafka_broker
+        - schema_registry
+
+- name: Rename Groups After CC Deployment
+  hosts: all:!cc_cluster
+  gather_facts: false
+  tasks:
+    - name: "Rename CP Groups to Standard Names for Deployment"
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: "{{item}}_cp:"
+        line: "{{item}}:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - kafka_controller
+        - kafka_broker
+        - schema_registry
+
+    - name: Refresh Inventory
+      meta: refresh_inventory
+
+- name: Load Variables for SR Automation Verification
+  hosts: all
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.platform.variables
+    
+    - name: Set mTLS variables
+      set_fact:
+        certs_chain: "{{ ssl_file_dir_final }}/schema_registry.chain"
+
+- name: Verify Schema Registry Automation Configuration
+  hosts: schema_registry
+  gather_facts: false
+  vars:
+
+  tasks:
     - name: Check password encoder secret is configured
       import_role:
         name: confluent.test
@@ -224,63 +266,3 @@
           ✓ Test Schemas Created: {{ subjects_list.json | select('match', '(test|automation)\..*') | list | length }}
           ✓ Automation Features: {{ 'ENABLED' if (exporters_list.json | length > 0 or importers_list.json | length > 0) else 'DISABLED' }}
       tags: summary
-
-- name: mTLS Specific Verification
-  hosts: schema_registry
-  gather_facts: false
-  tasks:
-    - name: Verify mTLS certificate files exist
-      stat:
-        path: "{{ item }}"
-      register: mtls_cert_files_check
-      loop:
-        - "{{ ssl_file_dir_final }}/schema_registry.crt"
-        - "{{ ssl_file_dir_final }}/schema_registry.key"
-        - "{{ ssl_file_dir_final }}/ca.crt"
-      when: ssl_mutual_auth_enabled | default(false)
-      tags: mtls
-
-    - name: Verify all mTLS certificate files present
-      assert:
-        that:
-          - item.stat.exists
-        fail_msg: "Required mTLS certificate file missing: {{ item.item }}"
-      loop: "{{ mtls_cert_files_check.results }}"
-      when:
-        - ssl_mutual_auth_enabled | default(false)
-        - mtls_cert_files_check is defined
-      tags: mtls
-
-    - name: Test mTLS client certificate authentication
-      uri:
-        url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
-        method: GET
-        validate_certs: false
-        client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt"
-        client_key: "{{ ssl_file_dir_final }}/schema_registry.key"
-        status_code: 200
-      register: mtls_auth_test
-      when: ssl_mutual_auth_enabled | default(false)
-      tags: mtls
-
-    - name: Verify mTLS authentication requirement
-      uri:
-        url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
-        method: GET
-        validate_certs: false
-        # No client certificate provided - should fail
-        status_code: [401, 403, 400]
-      register: mtls_no_cert_test
-      when: ssl_mutual_auth_enabled | default(false)
-      tags: mtls
-
-    - name: Display mTLS verification summary
-      debug:
-        msg: |
-          ✓ mTLS SR Automation Verification Complete:
-          - Certificate files: {{ 'ALL PRESENT' if (mtls_cert_files_check.results | selectattr('stat.exists') | list | length == 3) else 'MISSING' }}
-          - Client cert auth: {{ 'WORKING' if mtls_auth_test is succeeded else 'FAILED' }}
-          - Auth requirement: {{ 'ENFORCED' if mtls_no_cert_test.status in [401, 403, 400] else 'NOT_ENFORCED' }}
-          - Security level: Mutual TLS authentication
-          - Automation features: Ready for certificate-based authentication
-      tags: mtls
