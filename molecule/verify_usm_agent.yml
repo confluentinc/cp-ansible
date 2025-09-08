@@ -1,0 +1,155 @@
+---
+- name: Verify USM Agent Functionality
+  hosts: usm_agent
+  gather_facts: true
+  vars:
+    # USM Agent configuration
+    usm_agent_port: 9999
+    usm_agent_host: "{{ inventory_hostname }}"
+    usm_agent_log_file: "/var/log/confluent/usm-agent/usm-agent_access.log"
+
+    # CCloud Mock Service configuration
+    ccloud_mock_host: "ccloud-mock-service"
+    ccloud_mock_port: 8081
+    ccloud_mock_user: "ccloud-user"
+    ccloud_mock_password: "ccloud-secret"
+
+    # Test configuration
+    test_topic_name: "usm-test-topic-{{ ansible_date_time.epoch }}"
+    test_connector_name: "usm-test-connector-{{ ansible_date_time.epoch }}"
+
+  tasks:
+    # USM Agent Health Check
+    - name: Check USM Agent health
+      uri:
+        url: "http://{{ usm_agent_host }}:{{ usm_agent_port }}/healthz"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: usm_healthz_check
+      retries: 5
+      delay: 10
+      until: usm_healthz_check.status == 200
+
+    # Get baseline events count
+    - name: Get baseline events count
+      uri:
+        url: "http://{{ ccloud_mock_host }}:{{ ccloud_mock_port }}/events_count"
+        method: GET
+        user: "{{ ccloud_mock_user }}"
+        password: "{{ ccloud_mock_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: baseline_events_count
+      delegate_to: localhost
+
+    # Check USM Agent logs
+    - name: Check USM Agent access logs
+      stat:
+        path: "{{ usm_agent_log_file }}"
+      register: log_file_stat
+
+    - name: Read recent USM Agent logs
+      shell: "tail -n 100 {{ usm_agent_log_file }}"
+      register: usm_agent_logs
+      when: log_file_stat.stat.exists
+
+    - name: Verify v1/events endpoint in logs (204)
+      set_fact:
+        events_endpoint_found: "{{ usm_agent_logs.stdout | regex_search('POST.*v1/events.*204') is not none }}"
+      when: log_file_stat.stat.exists
+
+    - name: Verify v1/metrics endpoint in logs (200)
+      set_fact:
+        metrics_endpoint_found: "{{ usm_agent_logs.stdout | regex_search('POST.*v1/metrics.*200') is not none }}"
+      when: log_file_stat.stat.exists
+
+    # Kafka Topic Test
+    - name: Create test topic using Confluent CLI
+      shell: |
+        confluent kafka topic create {{ test_topic_name }} \
+          --partitions 3 \
+          --replication-factor 1
+      delegate_to: localhost
+      register: topic_creation
+      failed_when: topic_creation.rc != 0 and 'already exists' not in topic_creation.stderr
+
+    - name: Wait for USM Agent to process topic event
+      pause:
+        seconds: 15
+
+    - name: Get events count after topic creation
+      uri:
+        url: "http://{{ ccloud_mock_host }}:{{ ccloud_mock_port }}/events_count"
+        method: GET
+        user: "{{ ccloud_mock_user }}"
+        password: "{{ ccloud_mock_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: post_topic_events_count
+      delegate_to: localhost
+
+    # Kafka Connector Test
+    - name: Download datagen connector
+      shell: |
+        docker exec kafka-connect1 confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:latest
+      delegate_to: localhost
+      register: datagen_install
+      ignore_errors: true
+
+    - name: Restart Kafka Connect to load datagen connector
+      uri:
+        url: "http://kafka-connect1:8083/connectors"
+        method: GET
+        status_code: 200
+      register: connect_check
+      delegate_to: localhost
+      retries: 3
+      delay: 10
+
+    - name: Create datagen connector
+      uri:
+        url: "http://kafka-connect1:8083/connectors"
+        method: POST
+        body_format: json
+        body:
+          name: "{{ test_connector_name }}"
+          config:
+            connector.class: "io.confluent.kafka.connect.datagen.DatagenConnector"
+            tasks.max: "1"
+            kafka.topic: "{{ test_topic_name }}"
+            quickstart: "users"
+            max.interval: "1000"
+            iterations: "10"
+        status_code: [201, 409]
+      register: connector_creation
+      delegate_to: localhost
+
+    - name: Wait for USM Agent to process connector event
+      pause:
+        seconds: 15
+
+    - name: Get events count after connector creation
+      uri:
+        url: "http://{{ ccloud_mock_host }}:{{ ccloud_mock_port }}/events_count"
+        method: GET
+        user: "{{ ccloud_mock_user }}"
+        password: "{{ ccloud_mock_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: post_connector_events_count
+      delegate_to: localhost
+
+    # Cleanup
+    - name: Delete test connector
+      uri:
+        url: "http://kafka-connect1:8083/connectors/{{ test_connector_name }}"
+        method: DELETE
+        status_code: [204, 404]
+      delegate_to: localhost
+      ignore_errors: true
+
+    - name: Delete test topic
+      shell: "confluent kafka topic delete {{ test_topic_name }}"
+      delegate_to: localhost
+      ignore_errors: true
