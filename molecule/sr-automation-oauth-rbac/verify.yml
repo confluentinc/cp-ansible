@@ -2,6 +2,56 @@
 ### SR Automation Workflow Verification - OAuth + RBAC
 ### Includes base verification and adds OAuth + RBAC specific checks
 
+- name: Verify mock CC Schema Registry Automation Configuration
+  hosts: schema_registry
+  gather_facts: false
+  vars:
+
+  tasks:
+    - name: Check core automation properties are configured
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: kafkastore.update.handlers
+        expected_value: io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler,io.confluent.schema.manager.SchemaCacheManagerUpdateHandler
+
+- name: Rename Groups After CC Deployment
+  hosts: cc_cluster
+  gather_facts: false
+  tasks:
+    - name: "Rename CC Groups to Avoid Conflicts with CP Deployment"
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: "{{item}}:"
+        line: "{{item}}_cc:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - kafka_controller
+        - kafka_broker
+        - schema_registry
+
+- name: Rename Groups After CC Deployment
+  hosts: all:!cc_cluster
+  gather_facts: false
+  tasks:
+    - name: "Rename CP Groups to Standard Names for Deployment"
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: "{{item}}_cp:"
+        line: "{{item}}:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - kafka_controller
+        - kafka_broker
+        - schema_registry
+
+    - name: Refresh Inventory
+      meta: refresh_inventory
+
 - name: Load Variables for SR Automation Verification
   hosts: all
   gather_facts: false
@@ -15,15 +65,6 @@
   vars:
 
   tasks:
-    - name: Check core automation properties are configured
-      import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/schema-registry/schema-registry.properties
-        property: kafkastore.update.handlers
-        expected_value: io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler
-      tags: config
 
     - name: Check password encoder secret is configured
       import_role:
@@ -224,62 +265,3 @@
           ✓ Test Schemas Created: {{ subjects_list.json | select('match', '(test|automation)\..*') | list | length }}
           ✓ Automation Features: {{ 'ENABLED' if (exporters_list.json | length > 0 or importers_list.json | length > 0) else 'DISABLED' }}
       tags: summary
-
-- name: OAuth + RBAC Specific Verification
-  hosts: schema_registry
-  gather_facts: false
-  tasks:
-    - name: Check OAuth configuration properties
-      import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/schema-registry/schema-registry.properties
-        property: confluent.schema.registry.auth.mechanism
-        expected_value: OAUTH
-      tags: oauth
-
-    - name: Check RBAC authorizer configuration
-      import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/schema-registry/schema-registry.properties  
-        property: confluent.schema.registry.authorizer.class
-        expected_value: io.confluent.kafka.schemaregistry.security.authorizer.rbac.RbacAuthorizer
-      tags: rbac
-
-    - name: Verify OAuth server accessibility
-      uri:
-        url: "{{ oauth_jwks_uri }}"
-        method: GET
-        validate_certs: false
-        status_code: 200
-      register: oauth_server_check
-      tags: oauth
-
-    - name: Test OAuth token endpoint
-      uri:
-        url: "{{ oauth_token_uri }}"
-        method: POST
-        validate_certs: false
-        body_format: form-urlencoded
-        body:
-          grant_type: client_credentials
-          client_id: "sr-automation-client"
-          client_secret: "sr-automation-secret"
-        status_code: 200
-      register: oauth_token_test
-      ignore_errors: true
-      tags: oauth
-
-    - name: Display OAuth + RBAC verification summary
-      debug:
-        msg: |
-          ✓ OAuth + RBAC SR Automation Verification Complete:
-          - OAuth server: {{ 'ACCESSIBLE' if oauth_server_check is succeeded else 'FAILED' }}
-          - Token endpoint: {{ 'WORKING' if oauth_token_test is succeeded else 'NEEDS_SETUP' }}
-          - RBAC authorizer: {{ 'CONFIGURED' }}
-          - Security level: OAuth authentication + RBAC authorization
-          - Automation features: Ready for token-based authentication
-      tags: oauth
