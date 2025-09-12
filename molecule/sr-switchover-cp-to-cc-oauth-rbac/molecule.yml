@@ -33,6 +33,7 @@ platforms:
   - name: controller1
     hostname: controller1.confluent
     groups:
+      - cp_cluster
       - kafka_controller_cp
     image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java21.j2
@@ -46,6 +47,7 @@ platforms:
   - name: kafka-broker1
     hostname: kafka-broker1.confluent
     groups:
+      - cp_cluster
       - kafka_broker_cp
     image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java21.j2
@@ -60,6 +62,7 @@ platforms:
   - name: schema-registry1
     hostname: schema-registry1.confluent
     groups:
+      - cp_cluster
       - schema_registry_cp
     image: geerlingguy/docker-ubuntu2404-ansible
     dockerfile: ../Dockerfile-ubuntu-java21.j2
@@ -131,12 +134,30 @@ provisioner:
         scenario_name: sr-switchover-cp-to-cc-oauth-rbac
         # SR Automation specific variables (applies to both CP and mock CC)
         password_encoder_secret: "oauth-rbac-test-secret"
+
+      cc_cluster:
+        ssl_enabled: false
+        auth_mode: none
+        oauth_enabled: false
+        rbac_enabled: false
+
+        kafka_broker_custom_listeners: {}
+
+        # CC Schema Registry connects to CC Kafka cluster (stays as basic SR)
+        kafkastore_bootstrap_servers: "cc-kafka-broker1:9092"
+        schema_registry_custom_properties:
+          usm.schema.registry.remote.endpoint.validation.enabled: false
+          kafkastore.topic: _schemas_cc  # Use separate schemas topic for CC cluster
+
+      cp_cluster:
+        # Override group inheritance - ensure CP Controller gets full OAuth/RBAC config
+        auth_mode: oauth
         ssl_enabled: true
+        oauth_enabled: true
+        rbac_enabled: true
             # sasl protocol for inter-broker communication
         sasl_protocol: plain
         # OAuth configuration (global for components that need it)
-        oauth_enabled: true
-        auth_mode: oauth
         oauth_superuser_client_id: superuser
         oauth_superuser_client_password: my-secret
 
@@ -154,41 +175,6 @@ provisioner:
         schema_registry_oauth_user: schema_registry
         schema_registry_oauth_password: my-secret
 
-        # RBAC configuration (global)
-        rbac_enabled: true
-
-        # Common SR property for OAuth RBAC testing (applies to all SR instances)
-        schema_registry_custom_properties:
-          usm.schema.registry.remote.endpoint.validation.enabled: false
-
-
-
-      # CC cluster override - disable OAuth/RBAC for CC hosts
-      cc_cluster:
-        ssl_enabled: false
-        # Override global OAuth/RBAC settings for CC cluster
-        auth_mode: none
-        oauth_enabled: false
-        rbac_enabled: false
-
-        kafka_broker_custom_listeners: {}
-
-      # schema_registry group (initially CC, then renamed for CP after CC deployment)
-      schema_registry:
-        # CC Schema Registry connects to CC Kafka cluster (stays as basic SR)
-        kafkastore_bootstrap_servers: "cc-kafka-broker1:9092"
-        schema_registry_custom_properties:
-          # CC-specific configuration (inherits validation property from all group)
-          kafkastore.topic: _schemas_cc  # Use separate schemas topic for CC cluster
-
-    host_vars:
-      # CP Controller host configuration
-      controller1:
-        # Override group inheritance - ensure CP Controller gets full OAuth/RBAC config
-        auth_mode: oauth
-        ssl_enabled: true
-        oauth_enabled: true
-        rbac_enabled: true
         # RBAC role bindings for Kafka cluster permissions
         kafka_broker_additional_system_admins:
           - "{{ schema_registry_oauth_user | default('schema-registry') }}"
@@ -198,36 +184,8 @@ provisioner:
           auto.create.topics.enable: true
           default.replication.factor: 1
 
-      # CP Broker host configurations
-      kafka-broker1:
-        # Override group inheritance - ensure CP Broker gets full OAuth/RBAC config
-        auth_mode: oauth
-        ssl_enabled: true
-        oauth_enabled: true
-        rbac_enabled: true
-        # RBAC role bindings for Kafka cluster permissions
-        kafka_broker_additional_system_admins:
-          - "{{ schema_registry_oauth_user | default('schema-registry') }}"
-
-        kafka_broker_custom_properties:
-          # Allow auto creation of system topics for Schema Registry
-          auto.create.topics.enable: true
-          default.replication.factor: 1
-
-      # CP Schema Registry host configuration - OAuth + RBAC
-      schema-registry1:
-        # Override group inheritance - ensure CP Schema Registry gets full OAuth/RBAC config
-        auth_mode: oauth
-        # rbac_enabled: true
-        oauth_enabled: true
-        # CP Schema Registry Kafka connection using OAuth listener
-        kafkastore_bootstrap_servers: "kafka-broker1:9093"
-        # SSL/TLS configuration (required for OAuth)
-        ssl_enabled: true
-        # Schema Registry OAuth + RBAC configuration
         schema_registry_oauth_enabled: true
         schema_registry_authentication_type: oauth
-
 
         # RBAC role bindings for Schema Registry exporters
         schema_registry_additional_system_admins:
@@ -243,6 +201,8 @@ provisioner:
           exporter.topic.replication.factor: 1
           exporter.topic.partitions: 1
           exporter.topic.auto.create: true
+          usm.schema.registry.remote.endpoint.validation.enabled: false
+
 
         # SR Automation components (CP only - applied via host_vars, CC SR has no automation)
         unified_stream_manager:
