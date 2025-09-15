@@ -285,6 +285,90 @@
   tags:
     - log
 
+- name: Validate Jolokia Access Control Configuration - Zookeeper
+  fail:
+    msg: |
+      Security requirement: When Jolokia is enabled and access control is enabled,
+      you must set zookeeper_jolokia_access_control_custom_file_enabled to either:
+      - true (provide your own secure XML file via zookeeper_jolokia_access_control_file_src_path)
+      - false (use our secure default XML)
+      This prevents lateral movement attacks via exposed Jolokia endpoints.
+  when:
+    - zookeeper_jolokia_enabled|bool
+    - zookeeper_jolokia_access_control_enabled|bool
+    - zookeeper_jolokia_access_control_custom_file_enabled is none
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Validate Custom Jolokia Access Control File Path - Zookeeper
+  fail:
+    msg: |
+      When zookeeper_jolokia_access_control_custom_file_enabled is true,
+      you must provide zookeeper_jolokia_access_control_file_src_path with a valid file path.
+  when:
+    - zookeeper_jolokia_enabled|bool
+    - zookeeper_jolokia_access_control_enabled|bool
+    - zookeeper_jolokia_access_control_custom_file_enabled|bool
+    - zookeeper_jolokia_access_control_file_src_path == ""
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Validate Custom Jolokia Access Control File Exists - Zookeeper
+  stat:
+    path: "{{ zookeeper_jolokia_access_control_file_src_path }}"
+  delegate_to: localhost
+  register: zookeeper_custom_jolokia_file_check
+  when:
+    - zookeeper_jolokia_enabled|bool
+    - zookeeper_jolokia_access_control_enabled|bool
+    - zookeeper_jolokia_access_control_custom_file_enabled|bool
+    - zookeeper_jolokia_access_control_file_src_path != ""
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Fail if Custom Jolokia Access Control File Does Not Exist - Zookeeper
+  fail:
+    msg: |
+      Custom Jolokia access control file not found at: {{ zookeeper_jolokia_access_control_file_src_path }}
+      Please ensure the file exists on the Ansible controller.
+  when:
+    - zookeeper_jolokia_enabled|bool
+    - zookeeper_jolokia_access_control_enabled|bool
+    - zookeeper_jolokia_access_control_custom_file_enabled|bool
+    - zookeeper_jolokia_access_control_file_src_path != ""
+    - not zookeeper_custom_jolokia_file_check.stat.exists
+  tags:
+    - validate
+    - validate_jolokia
+
+
+- name: Create Zookeeper Jolokia Directory
+  file:
+    path: "{{ zookeeper_jolokia_access_control_file_dest_path | dirname }}"
+    state: directory
+    mode: '755'
+    owner: "{{ zookeeper_user }}"
+    group: "{{ zookeeper_group }}"
+  when: zookeeper_jolokia_enabled|bool and zookeeper_jolokia_access_control_enabled|bool
+  tags:
+    - filesystem
+    - privileged
+
+- name: Copy Zookeeper Jolokia Access Control File
+  copy:
+    src: "{{ zookeeper_jolokia_access_control_file_src_path }}"
+    dest: "{{ zookeeper_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ zookeeper_user }}"
+    group: "{{ zookeeper_group }}"
+  when: zookeeper_jolokia_enabled|bool and zookeeper_jolokia_access_control_enabled|bool
+  tags:
+    - configuration
+    - privileged
+
 - name: Create Zookeeper Jolokia Config
   template:
     src: zookeeper_jolokia.properties.j2
