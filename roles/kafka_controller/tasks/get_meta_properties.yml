@@ -1,15 +1,17 @@
 ---
 - name: Check if Data Directories are Formatted
-  shell: "{{ binary_base_path }}/bin/kafka-storage info -c {{ kafka_controller.config_file }}"
+  command: "{{ binary_base_path }}/bin/kafka-storage info -c {{ kafka_controller.config_file }}"
   ignore_errors: true
   failed_when: false
+  changed_when: false
   register: formatted
 
 - name: Get ClusterId
-  shell: "{{ binary_base_path }}/bin/kafka-storage random-uuid"
+  command: "{{ binary_base_path }}/bin/kafka-storage random-uuid"
   environment:
     KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
   register: uuid_key
+  changed_when: false
   run_once: true
   when: not kraft_migration|bool
 
@@ -23,6 +25,7 @@
 - name: Format Data Directory
   shell: "{{ binary_base_path }}/bin/kafka-storage  format -t={{ clusterid }} -c {{ kafka_controller.config_file }}  --ignore-formatted"
   register: format_meta
+  changed_when: format_meta.rc == 0
   vars:
     clusterid: "{{ (zoo_cluster['content'] | b64decode).partition('cluster.id=')[2].partition('\n')[0] if kraft_migration|bool else uuid_key.stdout }}"
   when: formatted.rc == 1 # To trigger the command only when the directories are not formatted
