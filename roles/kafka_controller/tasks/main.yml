@@ -44,49 +44,6 @@
     fail_msg: "If you have log.dirs in kafka_controller_custom_properties, make sure you only provide one directory."
 
 
-- name: Validate Jolokia Access Control Configuration
-  fail:
-    msg: |
-      Security requirement: When Jolokia is enabled and access control is enabled,
-      you must set kafka_controller_jolokia_access_control_custom_file_enabled to either:
-      - true (provide your own secure XML file via kafka_controller_jolokia_access_control_file_src_path)
-      - false (use our secure default XML)
-      This prevents lateral movement attacks via exposed Jolokia endpoints.
-  when:
-    - kafka_controller_jolokia_enabled|bool
-    - kafka_controller_jolokia_access_control_enabled|bool
-    - kafka_controller_jolokia_access_control_custom_file_enabled is none
-  tags:
-    - validate
-    - validate_jolokia
-
-- name: Validate Custom Jolokia Access Control File Path - Kafka Controller
-  fail:
-    msg: |
-      When kafka_controller_jolokia_access_control_custom_file_enabled is true,
-      you must provide kafka_controller_jolokia_access_control_file_src_path with a valid file path.
-  when:
-    - kafka_controller_jolokia_enabled|bool
-    - kafka_controller_jolokia_access_control_enabled|bool
-    - kafka_controller_jolokia_access_control_custom_file_enabled|bool
-    - kafka_controller_jolokia_access_control_file_src_path == ""
-  tags:
-    - validate
-    - validate_jolokia
-
-- name: Validate Custom Jolokia Access Control File Exists - Kafka Controller
-  stat:
-    path: "{{ kafka_controller_jolokia_access_control_file_src_path }}"
-  delegate_to: localhost
-  register: kafka_controller_custom_jolokia_file_check
-  when:
-    - kafka_controller_jolokia_enabled|bool
-    - kafka_controller_jolokia_access_control_enabled|bool
-    - kafka_controller_jolokia_access_control_custom_file_enabled|bool
-    - kafka_controller_jolokia_access_control_file_src_path != ""
-  tags:
-    - validate
-    - validate_jolokia
 
 - name: Fail if Custom Jolokia Access Control File Does Not Exist - Kafka Controller
   fail:
@@ -97,8 +54,7 @@
     - kafka_controller_jolokia_enabled|bool
     - kafka_controller_jolokia_access_control_enabled|bool
     - kafka_controller_jolokia_access_control_custom_file_enabled|bool
-    - kafka_controller_jolokia_access_control_file_src_path != ""
-    - not kafka_controller_custom_jolokia_file_check.stat.exists
+    - kafka_controller_jolokia_access_control_file_src_path == "" or not kafka_controller_custom_jolokia_file_check.stat.exists
   tags:
     - validate
     - validate_jolokia
@@ -434,6 +390,16 @@
   tags:
     - configuration
     - privileged
+
+- name: Validate Kafka Controller Jolokia Access Control Policy File Exists
+  stat:
+    path: "{{ kafka_controller_jolokia_access_control_file_dest_path }}"
+  register: jolokia_policy_file_check
+  failed_when: not jolokia_policy_file_check.stat.exists
+  when: kafka_controller_jolokia_enabled|bool and kafka_controller_jolokia_access_control_enabled|bool
+  tags:
+    - validation
+    - configuration
 
 - name: Create Kafka Controller Jaas Config
   template:
