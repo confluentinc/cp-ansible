@@ -1,0 +1,262 @@
+---
+### SR Automation Workflow Testing - LDAP/RBAC + mTLS
+### Tests SR automation features with LDAP authentication, RBAC authorization, and mTLS
+### Enterprise directory + certificate authentication scenario
+
+driver:
+  name: docker
+platforms:
+  # LDAP server for testing
+  - name: ldap1
+    hostname: ldap1.confluent
+    groups:
+      - ldap_server
+    image: centos:centos8
+    dockerfile: ../Dockerfile-centos8-base.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  - name: controller1
+    hostname: controller1.confluent
+    groups:
+      - cp_cluster
+      - kafka_controller_cp
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - cp_cluster
+      - kafka_broker_cp
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Primary Schema Registry (simulates CP SR)
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - cp_cluster
+      - schema_registry_cp
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Mock Confluent Cloud Kafka Controller (CC cluster infrastructure)
+  - name: cc-controller1
+    hostname: cc-controller1.confluent
+    groups:
+      - kafka_controller
+      - cc_cluster
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Mock Confluent Cloud Kafka Broker (CC cluster infrastructure)
+  - name: cc-kafka-broker1
+    hostname: cc-kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - cc_cluster
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Mock Confluent Cloud Schema Registry (simulates CC SR target)
+  - name: mock-cc-schema-registry
+    hostname: mock-cc-schema-registry.confluent
+    groups:
+      - schema_registry
+      - cc_cluster
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  config_options:
+    tags:
+      run: all,switchover_to_cc
+  playbooks:
+    prepare: prepare.yml
+    converge: ../multi_sr_automation_converge.yml
+    verify: verify.yml
+  inventory:
+    group_vars:
+      all:
+        mask_secrets: false
+        # installation_method: archive
+        scenario_name: sr-switchover-cp-to-cc-ldap-mtls
+
+        # Common SR property for LDAP mTLS testing (applies to all SR instances)
+        schema_registry_custom_properties:
+          usm.schema.registry.remote.endpoint.validation.enabled: false
+        # SR Automation specific variables (applies to both CP and mock CC)
+        password_encoder_secret: "ldap-mtls-test-secret"
+        schema_registry_ldap_user: schema-registry1
+        schema_registry_ldap_password: password
+
+      # LDAP server configuration
+      ldap_server:
+        ldaps_enabled: false
+        ldaps_custom_certs: false
+
+        ldap_admin_password: ldppassword
+
+        ldap_rbac_group: rbac
+        ldap_dc: example
+        ldap_dc_extension: com
+        ldap_users:
+          - username: "{{schema_registry_ldap_user}}"
+            password: "{{schema_registry_ldap_password}}"
+            uid: 9998
+            guid: 98
+          - username: "{{mds_super_user}}"
+            password: "{{mds_super_user_password}}"
+            uid: 9993
+            guid: 93
+
+      cp_cluster:
+        schema_registry_ldap_user: schema-registry1
+        schema_registry_ldap_password: password
+
+        mds_super_user: mds
+        mds_super_user_password: password
+
+        rbac_enabled: true
+        auth_mode: ldap
+        ssl_enabled: true
+        ssl_client_authentication: required
+        mds_ssl_client_authentication: required
+        schema_registry_mds_cert_auth_only: true
+
+        # Define the mTLS listener that Schema Registry needs to know about
+        kafka_broker_custom_listeners:
+          puremtls:
+            name: CERTONLY
+            port: 9094
+            ssl_client_authentication: required
+            ssl_enabled: true
+            sasl_protocol: none
+
+        # Force Schema Registry to use mTLS listener
+        schema_registry_kafka_listener_name: puremtls
+
+        # CP-specific Schema Registry properties
+        schema_registry_custom_properties:
+          # CP-specific configuration (inherits validation property from all group)
+          kafkastore.topic: _schemas  # Use standard schemas topic for CP cluster
+          schema.registry.group.id: schema-registry-cp
+          # Enable RBAC for Schema Linking exporters (required for _exporter_configs topic access)
+          schema.linking.rbac.enable: true
+          # System topics configuration for exporters
+          exporter.topic.replication.factor: 1
+          exporter.topic.partitions: 1
+          # Allow Schema Registry to create system topics (may be needed in strict RBAC)
+          exporter.topic.auto.create: true
+
+        # SR Automation components (CP only - applied via host_vars, CC SR has no automation)
+        unified_stream_manager:
+          schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
+          authentication_type: basic
+          basic_username: "admin"
+          basic_password: "admin-secret"
+
+        # Schema Exporters for testing - Basic auth to mock CC SR
+        schema_exporters:
+          - name: "ldap-mtls-schema-exporter"
+            subjects: ["automation.*"]
+            context_type: "AUTO"
+            config:
+              schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
+              authentication_type: basic
+              basic_username: "admin"
+              basic_password: "admin-secret"
+
+        # Schema Importers for reverse sync testing - Basic auth from mock CC SR
+        schema_importers:
+          - name: "ldap-mtls-schema-importer"
+            subjects: ["*"]
+            config:
+              schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
+              authentication_type: basic
+              basic_username: "admin"
+              basic_password: "admin-secret"
+
+        # Specify exporter for switchover testing
+        sr_switch_over_exporter_name: "ldap-mtls-schema-exporter"
+
+        kafka_broker_rest_proxy_mds_cert_auth_only: true
+        schema_registry_mds_cert_auth_only: true
+        kafka_connect_mds_cert_auth_only: true
+        kafka_rest_mds_cert_auth_only: true
+        ksql_mds_cert_auth_only: true
+        control_center_next_gen_mds_cert_auth_only: true
+
+        # RBAC role bindings for Schema Registry exporters
+        kafka_broker_additional_system_admins:
+          - "{{ schema_registry_ldap_user }}"
+
+
+        # Kafka broker properties for LDAP and system topics
+        kafka_broker_custom_properties:
+          # LDAP configuration for Kafka brokers
+          ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+          ldap.com.sun.jndi.ldap.read.timeout: 3000
+          ldap.java.naming.provider.url: ldap://ldap1:389
+          ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
+          ldap.java.naming.security.credentials: password
+          ldap.java.naming.security.authentication: simple
+          ldap.user.search.base: OU=rbac,DC=example,DC=com
+          ldap.group.search.base: OU=rbac,DC=example,DC=com
+          ldap.user.name.attribute: uid
+          ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.group.name.attribute: cn
+          ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.user.object.class: account
+          # Allow auto-creation of system topics (needed for Schema Registry exporters)
+          auto.create.topics.enable: true
+          # Default replication factor for auto-created topics
+          default.replication.factor: 1
+
+        # Impersonation configuration
+        impersonation_super_users:
+          - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker'
+          - 'C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=schema_registry'
+
+verifier:
+  name: ansible
