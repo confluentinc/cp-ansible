@@ -1,5 +1,5 @@
 ---
-### Installation of Confluent Platform on centos8.
+### Installation of Confluent Platform on RHEL8.
 ### MTLS enabled with custom certificates.
 
 driver:
@@ -9,7 +9,9 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
-    image: geerlingguy/docker-centos8-ansible
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -20,7 +22,9 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
+      - kafka_broker_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -31,7 +35,9 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
+      - kafka_broker_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -42,7 +48,9 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
+      - kafka_broker_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -53,7 +61,9 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-    image: geerlingguy/docker-centos8-ansible
+      - schema_registry_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -64,7 +74,9 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
-    image: geerlingguy/docker-centos8-ansible
+      - kafka_rest_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -75,7 +87,9 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
-    image: geerlingguy/docker-centos8-ansible
+      - kafka_connect_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -86,7 +100,9 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-    image: geerlingguy/docker-centos8-ansible
+      - ksql_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -97,7 +113,9 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
-    image: geerlingguy/docker-centos8-ansible
+      - control_center_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -106,9 +124,22 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
+    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
-    prepare: ../certificates.yml
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
@@ -122,6 +153,9 @@ provisioner:
         ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
         ssl_key_password: keypass
 
-      ${CONTROLLER_HOSTGROUP:-zookeeper}:
+      zookeeper:
         # Test that both with/without trailing slash works
+        ssl_file_dir: /opt/test-ssl/
+
+      kafka_controller:
         ssl_file_dir: /opt/test-ssl/

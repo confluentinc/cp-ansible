@@ -156,6 +156,25 @@
 - include_tasks: rbac.yml
   when: rbac_enabled|bool
 
+- name: Import IDP certificate to MDS Truststore for C3 SSO
+  include_role:
+    name: common
+    tasks_from: idp_certs.yml
+  vars:
+    idp_cert_path: "{{ sso_idp_cert_path }}"
+    idp_cert_dest: /tmp/sso_idp_cert.pem
+    alias: "sso_cert"
+    truststore_storepass: "{{kafka_broker_truststore_storepass}}"
+    truststore_path: "{{kafka_broker_pkcs12_truststore_path}}"
+    bcfks_truststore_path: "{{kafka_broker_bcfks_truststore_path}}"
+    create_bouncy_castle_keystore: "{{fips_enabled}}"
+    restart_handler_name: "restart kafka" # adding cert to Truststore requires a restart of the service to get loaded
+    # cant directly call notify handler from include_role task.
+  when:
+    - sso_mode != 'none'
+    - sso_idp_cert_path != ""
+    - not external_mds_enabled|bool
+
 - name: Configure Kerberos
   include_role:
     name: kerberos
@@ -225,7 +244,7 @@
 
 - name: Include Kraft Cluster Data
   include_tasks: get_meta_properties.yml
-  when: kraft_enabled|bool
+  when: kraft_enabled|bool and not kraft_migration|bool
 
 # Zookeeper shell cannot read server.properties if secrets protection is enabled. Keeping a separate file.
 - name: Create Zookeeper TLS Client Config

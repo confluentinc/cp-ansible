@@ -1,0 +1,42 @@
+---
+- name: Initialize Controller principals list in Broker
+  set_fact:
+    controller_principals: []
+
+- name: Add Each Controller's Principal to the List
+  set_fact:
+    controller_principals: "{{ controller_principals + [ hostvars[controller_item]['kafka_controller_principal'] ] }}"
+  loop: "{{ groups['kafka_controller'] }}"
+  loop_control:
+    loop_var: controller_item
+
+- name: Load server.properties of Kafka Broker
+  delegate_to: "{{ broker_host }}"
+  slurp:
+    src: "{{ kafka_broker.config_file }}"
+  register: slurped_properties
+
+- name: Extract Kafka Broker's Super Users
+  set_fact:
+    broker_users: "{{((slurped_properties.content|b64decode).split('\n') | select('match', '^super.users*') | list \
+      | first | regex_replace('^[-a-zA-Z0-9.]*[ ]?=[ ]?(.*)$', '\\1')) | split(';') }}"
+
+- name: Add Each Controller's Principal to Broker's Super Users List
+  set_fact:
+    broker_users: "{{ broker_users + controller_principals }}"
+
+- name: Remove Duplicates and Convert to String
+  set_fact:
+    broker_users: "{{ broker_users | unique | join(';') }}"
+
+- name: Update Super Users of Broker
+  lineinfile:
+    path: "{{ kafka_broker.config_file }}"
+    regexp: 'super.users=(.*)$'
+    line: super.users={{ broker_users }}
+  delegate_to: "{{ broker_host }}"
+
+- name: Restart Broker
+  include_role:
+    name: kafka_broker
+    tasks_from: restart_and_wait.yml

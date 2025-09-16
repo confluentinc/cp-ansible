@@ -1,6 +1,7 @@
 ---
 ### Validates that Kerberos is enabled across all components.
 ### Validates that SASL SSL Plaintext is enabled across all components.
+### Validates that Connector is running
 
 - name: Verify - kafka_controller
   hosts: kafka_controller
@@ -89,6 +90,126 @@
         file_path: /etc/kafka/connect-distributed.properties
         property: sasl.kerberos.service.name
         expected_value: kafka-a
+
+    - name: Get Connectors on connect cluster1
+      uri:
+        url: "http://kafka-connect1:8083/connectors"
+        status_code: 200
+        validate_certs: false
+      register: connectors
+
+    - name: Assert Connector Created
+      assert:
+        that:
+          - connectors.json[0] == "sample-connector-1"
+        fail_msg: "Connector not created"
+        quiet: true
+
+    - import_role:
+        name: variables
+
+    - name: Test data
+      set_fact:
+        kafka_connect_url: "{{kafka_connect_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_connect_rest_port}}/connectors"
+        reset_all_connectors: []
+
+        add_new_connector:
+          - name: test-connector-1
+            config:
+              connector.class: "FileStreamSourceConnector"
+              tasks.max: "1"
+              file: "/etc/kafka/connect-distributed.properties"
+              topic: "test_topic"
+
+        update_existing_connector:
+          - name: test-connector-1
+            config:
+              connector.class: "FileStreamSourceConnector"
+              tasks.max: "5"
+              file: "/etc/kafka/connect-distributed.properties"
+              topic: "test_topic"
+
+        add_bad_request_connector:
+          - name: test-connector-1
+            config:
+              connector.class: "FileStreamSourceConnector"
+              tasks.max: "5"
+              file: "/etc/kafka/connect-distributed.properties"
+              topic: "test_topic"
+          - name: test-connector-2
+            config:
+              connector.class: "org.apache.kafka.connect.mirror.MirrorHeartbeatConnector"
+              tasks.max: "1"
+              file: "/etc/kafka/connect-distributed.properties"
+              topics: "foo"
+
+        add_non_existent_connector:
+          - name: test-connector-1
+            config:
+              connector.class: "FileStreamSourceConnector"
+              tasks.max: "5"
+              file: "/etc/kafka/connect-distributed.properties"
+              topic: "test_topic"
+          - name: test-connector-2
+            config:
+              connector.class: "io.confluent.connect.jdbc.JdbcSinkConnector"
+              tasks.max: "1"
+              topics: "foo"
+
+        delete_connector:
+          - name: test-connector-2
+            config:
+              connector.class: "FileStreamSourceConnector"
+              tasks.max: "1"
+              topic: "bar"
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_connector.yml
+      vars:
+        connect_url_input: "{{ kafka_connect_url }}"
+        active_connectors_input: "{{ reset_all_connectors }}"
+        expected_message: ""
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_connector.yml
+      vars:
+        connect_url_input: "{{ kafka_connect_url }}"
+        active_connectors_input: "{{ add_new_connector }}"
+        expected_message: "Connectors added or updated: test-connector-1: new connector added."
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_connector.yml
+      vars:
+        connect_url_input: "{{ kafka_connect_url }}"
+        active_connectors_input: "{{ update_existing_connector }}"
+        expected_message: "Connectors added or updated: test-connector-1: connector configuration updated."
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_connector.yml
+      vars:
+        connect_url_input: "{{ kafka_connect_url }}"
+        active_connectors_input: "{{ add_bad_request_connector }}"
+        expected_message: "Connectors added or updated: test-connector-1: no configuration change, test-connector-2: ERROR error while adding new connector configuration (HTTP Error 400: Bad Request)."
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_connector.yml
+      vars:
+        connect_url_input: "{{ kafka_connect_url }}"
+        active_connectors_input: "{{ add_non_existent_connector }}"
+        expected_message: "Connectors added or updated: test-connector-1: no configuration change, test-connector-2: ERROR error while adding new connector configuration (HTTP Error 500: Internal Server Error)."
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_connector.yml
+      vars:
+        connect_url_input: "{{ kafka_connect_url }}"
+        active_connectors_input: "{{ delete_connector }}"
+        expected_message: "Connectors removed: test-connector-1. Connectors added or updated: test-connector-2: new connector added."
 
 - name: Verify - kafka_rest
   hosts: kafka_rest

@@ -1,5 +1,5 @@
 ---
-### Installation of Confluent Platform on centos8.
+### Installation of Confluent Platform on RHEL8.
 ### SASL Plain enabled.
 ### TLS enabled on ERP only.
 
@@ -10,7 +10,8 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
-    image: geerlingguy/docker-centos8-ansible
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: redhat/ubi8-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -22,7 +23,8 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
+      - kafka_broker_migration
+    image: redhat/ubi8-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -34,7 +36,8 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
-    image: geerlingguy/docker-centos8-ansible
+      - control_center_migration
+    image: redhat/ubi8-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -44,7 +47,22 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
+      # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:

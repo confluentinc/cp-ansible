@@ -88,6 +88,30 @@ Simply run:
 molecule destroy -s <scenario name>
 ```
 
+### Running in kraft mode
+
+Simply run:
+
+```
+molecule --env-file molecule/kraft.yml converge -s <scenario name>
+```
+
+### Running on ARM64 architecture machine
+
+Simply run:
+
+```
+molecule --env-file molecule/arm.yml converge -s <scenario name>
+```
+
+### Running in kraft mode on ARM64 architecture machine
+
+Simply run:
+
+```
+molecule --env-file molecule/arm_kraft.yml converge -s <scenario name>
+```
+
 ## Creating and Modifying Scenarios
 
 When developing new features you can create a new scenario simply by duplicating the default one and customizing. Edit the verify.yml to have test assertions for your scenario.

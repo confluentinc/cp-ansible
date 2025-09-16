@@ -2,6 +2,7 @@
 ### Validates that protocol is set to sasl plain.
 ### Validates that protocol is set to SASL SSL.
 ### Validates log4j config.
+### Validates that Connector is Running.
 
 - name: Verify - kafka_controller
   hosts: kafka_controller
@@ -72,6 +73,31 @@
         property: security.protocol
         expected_value: SASL_SSL
 
+    - name: Get Connectors on connect cluster1
+      uri:
+        url: "https://kafka-connect1:8083/connectors"
+        status_code: 200
+        validate_certs: false
+
+      register: connectors
+
+    - name: Assert Connector Created
+      assert:
+        that:
+          - connectors.json[0] == "sample-connector-1"
+        fail_msg: "Connector not created"
+        quiet: true
+
+    - name: Wait for Connector tasks to return Running
+      uri:
+        url: https://kafka-connect1:8083/connectors/sample-connector-1/status
+        status_code: 200
+        validate_certs: false
+      register: connector_status_response
+      until: connector_status_response.json.tasks[0].state == 'RUNNING'
+      retries: 10
+      delay: 5
+
 - name: Verify - ksql
   hosts: ksql
   gather_facts: false
@@ -97,7 +123,7 @@
         expected_value: SASL_SSL
 
 - name: Verify log4j Configuration
-  hosts: all
+  hosts: all,!kafka_controller_migration  #Workaround to skip the task in migration test, need to remove in CP 8.0
   gather_facts: false
   tasks:
     - import_role:

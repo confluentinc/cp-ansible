@@ -4,7 +4,7 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-v7.4.10
+v7.6.6
 ======
 
 Notable enhancements
@@ -17,7 +17,7 @@ Notable fixes
 
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.4.9
+v7.6.5
 ======
 
 Notable enhancements
@@ -35,7 +35,7 @@ Notable fixes
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
 
-v7.4.8
+v7.6.4
 ======
 
 Notable enhancements
@@ -44,7 +44,7 @@ Notable enhancements
 - Improved error handling in connectors.
 - Fixed the ownership of data directory files in kraft controllers and brokers.
 
-v7.4.7
+v7.6.3
 ======
 
 Notable enhancements
@@ -57,21 +57,21 @@ Notable fixes
 
 - Critical security and vulnerability issues were fixed
 
-v7.4.6
+v7.6.2
 ======
 
 Notable fixes
 -------------
 
-- Ansible playbooks use archive debian10 repo since debian 10 reached EOL.
+- Ansible playbooks use archive debian10 repo since debian 10 reached EOL
+- IDP certificate for SSO in Control Center can be added to MDS truststore
 
-v7.4.5
+v7.6.1
 ======
 
 Notable enhancements
 -------------
 
-- Added support for configuring a custom port for the kraft controllers.
 - Updated default confluent cli version to 3.55.0
 
 Notable fixes
@@ -80,7 +80,26 @@ Notable fixes
 - Connect and Ksqldb clusters are correctly registered even for co-located components
 - Critical security and vulnerability issues were fixed
 
-v7.4.4
+
+
+v7.6.0
+======
+
+New features
+-------------
+
+- In place upgrade from Zookeeper to Kraft is now supported
+- ARM64 architecture is now supported in production
+- Deploying connectors now supported on clusters with RBAC & mTLS
+
+Notable enhancements
+-------------
+
+- Rocky Linux 8 and Rocky Linux 9 Operating Systems are now supported
+- Discovery has been de-coupled from cp-ansible and is now a present in separate repo named cp-discovery
+- Custom port can now be used in Kraft Controller listener
+
+v7.5.2
 ======
 
 Notable fixes
@@ -89,16 +108,7 @@ Notable fixes
 - Critical security and vulnerability issues were fixed.
 
 
-v7.4.3
-======
-
-Notable fixes
--------------
-
-- Critical security and vulnerability issues were fixed.
-
-
-v7.4.2
+v7.5.1
 ======
 
 Notable enhancements
@@ -108,6 +118,20 @@ Notable enhancements
 - Fixed bugs in discovery to generate inventory file with appropriate security protocols
 - Ansible builtin File mode is now string instead of octal
 
+v7.5.0
+======
+
+New features
+-------------
+
+- Configure single sign-on (SSO) authentication for Control Center using OpenID Connect (OIDC)
+- Enable FIPS on Confluent Platform(CP) for RHEL8 & RHEL9 using cp-ansible.
+
+Notable enhancements
+-------------
+
+- Added capability to discover multiple workers in the connect cluster in discovery
+- Added support to specify ansible_password in discovery
 
 v7.4.1
 ======

@@ -6,6 +6,7 @@
 ### Kafka Broker Customer Listener.
 ### RBAC Additional System Admin.
 ### Use Java 11 package
+### Creates a Connector in connect cluster
 
 driver:
   name: docker
@@ -14,8 +15,8 @@ platforms:
     hostname: ldap1.confluent
     groups:
       - ldap_server
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: centos:centos8
+    dockerfile: ../Dockerfile-centos8-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -26,6 +27,7 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
@@ -38,6 +40,7 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
@@ -50,6 +53,7 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
@@ -62,6 +66,7 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
@@ -74,6 +79,7 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
+      - schema_registry_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
@@ -86,6 +92,7 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
+      - kafka_rest_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
@@ -98,6 +105,7 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
+      - kafka_connect_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
@@ -110,6 +118,7 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
+      - ksql_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
@@ -122,6 +131,7 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
+      - control_center_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu-java11.j2
     command: ""
@@ -132,7 +142,23 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
+  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: mds-controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+      - cluster2
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu-java11.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
@@ -143,6 +169,7 @@ provisioner:
           - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker
           - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_controller
           - User:CN=kafka_controller,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
+          - User:CN=kafka_controller_migration,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
           - User:CN=kafka_broker,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
 
         ssl_enabled: true
@@ -174,6 +201,10 @@ provisioner:
 
         rbac_component_additional_system_admins:
           - User:user1
+
+        # To run the FileStream connector, you must add the filestream-connectors path in the plugin.path
+        kafka_connect_custom_properties:
+          plugin.path: "/usr/share/filestream-connectors,/usr/share/java/connect_plugins"
 
       kafka_broker:
         ldap_config: |
@@ -287,6 +318,17 @@ provisioner:
         token_services_public_pem_file: "/var/ssl/private/public.pem"
         token_services_private_pem_file: "/var/ssl/private/tokenKeypair.pem"
 
+        kafka_connect_connector_white_list: "test_topic"
+        kafka_connect_connectors:
+          - name: sample-connector-1
+            config:
+              connector.class: "FileStreamSinkConnector"
+              tasks.max: "5"
+              file: "/etc/kafka/connect-distributed.properties"
+              topics: "test_topic"
+              key.converter: "org.apache.kafka.connect.json.JsonConverter"
+              value.converter: "org.apache.kafka.connect.json.JsonConverter"
+
       ksql:
         ssl_keystore_filepath: "/var/ssl/private/ksql.keystore.jks"
         ssl_keystore_key_password: keystorepass
@@ -302,6 +344,17 @@ provisioner:
         ssl_keystore_key_password: keystorepass
         ssl_keystore_store_password: keystorepass
         ssl_truststore_filepath: "/var/ssl/private/control_center.truststore.jks"
+        ssl_truststore_password: truststorepass
+        ssl_truststore_ca_cert_alias: CARoot
+        token_services_public_pem_file: "/var/ssl/private/public.pem"
+        token_services_private_pem_file: "/var/ssl/private/tokenKeypair.pem"
+
+      cluster2:
+        # keystore and truststore should be present on the Kraft controller node for migration
+        ssl_keystore_filepath: "/var/ssl/private/controller1_mi.keystore.jks"
+        ssl_keystore_key_password: keystorepass
+        ssl_keystore_store_password: keystorepass
+        ssl_truststore_filepath: "/var/ssl/private/controller1_mi.truststore.jks"
         ssl_truststore_password: truststorepass
         ssl_truststore_ca_cert_alias: CARoot
         token_services_public_pem_file: "/var/ssl/private/public.pem"

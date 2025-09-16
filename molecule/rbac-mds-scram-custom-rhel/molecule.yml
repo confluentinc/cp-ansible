@@ -1,5 +1,5 @@
 ---
-### Installs two Confluent Platform Clusters on centos8.
+### Installs two Confluent Platform Clusters on Rocky Linux 9.
 ### RBAC enabled.
 ### Remote MDS from Cluster2 to Cluster1 (MDS).
 ### Custom TLS certificates.
@@ -14,9 +14,32 @@ platforms:
     hostname: mds-ldap1.confluent
     groups:
       - ldap_server
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: centos:centos8
+    dockerfile: ../Dockerfile-centos8-base.j2
     command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: oauth1
+    hostname: oauth1.confluent
+    groups:
+      - oauth_server
+    image: quay.io/keycloak/keycloak:latest
+    env:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: oauth1
+      KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
+      KEYCLOAK_HTTP_PORT: "8080"
+      KEYCLOAK_HTTPS_PORT: "8443"
+    dockerfile: ../Dockerfile-oauth.j2
+    published_ports:
+      - "8080:8080"
+      - "8443:8443"
+    command: start-dev
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
@@ -28,7 +51,7 @@ platforms:
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
       - mds
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -41,7 +64,7 @@ platforms:
     groups:
       - kafka_broker
       - mds
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -54,7 +77,7 @@ platforms:
     groups:
       - kafka_broker
       - mds
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -68,7 +91,7 @@ platforms:
     groups:
       - zookeeper2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -81,7 +104,7 @@ platforms:
     groups:
       - kafka_broker2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -94,7 +117,7 @@ platforms:
     groups:
       - kafka_broker2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -107,7 +130,7 @@ platforms:
     groups:
       - kafka_broker2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -120,7 +143,7 @@ platforms:
     groups:
       - schema_registry2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -133,7 +156,7 @@ platforms:
     groups:
       - kafka_rest2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -146,7 +169,7 @@ platforms:
     groups:
       - kafka_connect2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -159,7 +182,7 @@ platforms:
     groups:
       - ksql2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -172,7 +195,7 @@ platforms:
     groups:
       - control_center2
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -201,6 +224,10 @@ provisioner:
         ssl_key_password: keypass
 
         rbac_enabled: true
+        sso_mode: oidc
+
+        keycloak_oauth_server_port: 8443
+        keycloak_http_protocol: https
 
         create_mds_certs: false
         token_services_public_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/public.pem"
@@ -239,6 +266,16 @@ provisioner:
           - User:user1
 
       mds:
+        # necessary configs in MDS server for sso in C3
+        sso_groups_claim: groups
+        sso_sub_claim: sub
+        sso_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
+        sso_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
+        sso_authorize_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/auth
+        sso_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
+        sso_client_id: control_center
+        sso_client_password: my-secret
+        sso_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/ssocertfile.pem"
         kafka_broker_custom_properties:
           ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
           ldap.com.sun.jndi.ldap.read.timeout: 3000

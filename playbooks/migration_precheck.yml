@@ -1,0 +1,199 @@
+---
+- name: Check Inventory file
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Check the presence of Controller in the inventory file
+      fail:
+        msg:  "Please add Kraft Controller hosts in the inventory file for migration."
+      when:
+        - not (('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) | bool)
+
+    - name: Check the presence of Zookeeper in the inventory file
+      fail:
+        msg:  "Please add Zookeeper hosts in the inventory file for migration."
+      when:
+        - not (('zookeeper' in groups.keys() and groups['zookeeper'] | length > 0) | bool)
+
+    - name: Check the migration flag in the inventory file
+      fail:
+        msg:  "Please enable Kraft Migration flag in the inventory file for migration."
+      when:
+        - not (kraft_migration | default(false) | bool)
+
+    - name: Get List of Kafka Broker listeners' ports
+      set_fact:
+        kafka_broker_ports: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['port'] }}{% endfor %}"
+
+    - name: Check Kraft port in colocated Migration
+      fail:
+        msg: "Port {{kafka_controller_port}} is already occupied for {{item}}, Please use a different port for Kraft Controller."
+      when:
+        - item in groups.kafka_broker
+        - kafka_controller_port|string in kafka_broker_ports.split(',')
+      loop: "{{ groups.kafka_controller }}"
+
+- name: Check Current Confluent Version
+  hosts: zookeeper,kafka_broker
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Gather OS Facts
+      setup:
+        # Only gathers items in list, filters out the rest
+        filter: ansible_os_family
+        gather_subset:
+          - '!all'
+
+    - import_role:
+        name: variables
+
+    - name: Load override.conf
+      slurp:
+        src: "{{ zookeeper.systemd_override }}"
+      register: slurped_override
+      when: installation_method == "archive" and "zookeeper" in group_names
+
+    - name: Set current_confluent_version variable Zookeeper - Archive Installer
+      set_fact:
+        current_confluent_version: "{{ (slurped_override.content|b64decode) .split('\n') |
+              select('match', '^ExecStart=' + config_base_path + '/confluent-(.*)/bin/zookeeper-server-start ' + zookeeper.config_file) |
+              list | first | regex_search('[0-9]+(.[0-9]+)+') }}"
+      when: installation_method == "archive" and "zookeeper" in group_names
+
+    - name: Load override.conf
+      slurp:
+        src: "{{ kafka_broker.systemd_override }}"
+      register: slurped_override
+      when: installation_method == "archive" and "kafka_broker" in group_names
+
+    - name: Set current_confluent_version variable Kafka Broker - Archive Installer
+      set_fact:
+        current_confluent_version: "{{ (slurped_override.content|b64decode) .split('\n') |
+          select('match', '^ExecStart=' + config_base_path + '/confluent-(.*)/bin/kafka-server-start ' + kafka_broker.config_file) |
+          list | first | regex_search('[0-9]+(.[0-9]+)+') }}"
+      when: installation_method == "archive" and "kafka_broker" in group_names
+
+    - name: Get Package Facts
+      package_facts:
+        manager: auto
+      when: installation_method == "package"
+
+    - set_fact:
+        confluent_server_enabled: "{{ True if ansible_facts.packages['confluent-server'] is defined else False }}"
+      when: installation_method == "package"
+
+    - name: Set Current Package Version of confluent-server
+      set_fact:
+        current_confluent_version: "{{ ansible_facts.packages['confluent-server'][0]['version'] }}"
+      when:
+        - confluent_server_enabled|bool
+        - installation_method == "package"
+
+    - name: Set Current Package Version of confluent-kafka
+      set_fact:
+        current_confluent_version: "{{ ansible_facts.packages['confluent-kafka'][0]['version'] }}"
+      when:
+        - not confluent_server_enabled|bool
+        - installation_method == "package"
+
+    - name: Check if Current Version is equal to Confluent Package Version
+      fail:
+        msg: "Please Upgrade {{inventory_hostname}} to {{confluent_package_version}} before starting Migration."
+      when: current_confluent_version not in [confluent_package_version, confluent_full_package_version]
+      tags: check_confluent_package_version
+
+- name: Check Kraft Controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - name: Gather OS Facts
+      setup:
+        # Only gathers items in list, filters out the rest
+        filter: ansible_os_family
+        gather_subset:
+          - '!all'
+
+    - import_role:
+        name: variables
+
+    - name: Register Keystore path
+      stat:
+        path: "{{kafka_controller_keystore_path}}"
+      register: keystore
+      when: ssl_provided_keystore_and_truststore|bool and ssl_provided_keystore_and_truststore_remote_src|bool
+
+    - name: Validate if Keystore Exists
+      assert:
+        that: keystore.stat.exists|bool
+        fail_msg: "Keystore is not present on Kraft Controller. Please check the keystore path."
+      when: ssl_provided_keystore_and_truststore|bool and ssl_provided_keystore_and_truststore_remote_src|bool
+
+    - name: Register Truststore path
+      stat:
+        path: "{{kafka_controller_truststore_path}}"
+      register: truststore
+      when: ssl_provided_keystore_and_truststore|bool and ssl_provided_keystore_and_truststore_remote_src|bool
+
+    - name: Validate if Truststore Exists
+      assert:
+        that: truststore.stat.exists|bool
+        fail_msg: "Truststore is not present on Kraft Controller. Please check the truststore path."
+      when: ssl_provided_keystore_and_truststore|bool and ssl_provided_keystore_and_truststore_remote_src|bool
+
+    - name: Register CA Cert path
+      stat:
+        path: "{{ssl_ca_cert_filepath}}"
+      register: ca_crt
+      when: ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+
+    - name: Validate if CA Cert Exists
+      assert:
+        that: ca_crt.stat.exists|bool
+        fail_msg: "CA Certificate is not present on Kraft Controller. Please check the CA Cert path."
+      when: ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+
+    - name: Register Signed Cert path
+      stat:
+        path: "{{ssl_signed_cert_filepath}}"
+      register: signed_crt
+      when: ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+
+    - name: Validate if Signed Cert Exists
+      assert:
+        that: signed_crt.stat.exists|bool
+        fail_msg: "Signed Certificate is not present on Kraft Controller. Please check the Signed Cert path."
+      when: ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+
+    - name: Register Key path
+      stat:
+        path: "{{ssl_key_filepath}}"
+      register: custom_key
+      when: ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+
+    - name: Validate if Key Exists
+      assert:
+        that: custom_key.stat.exists|bool
+        fail_msg: "Key is not present on Kraft Controller. Please check SSL Key path."
+      when: ssl_custom_certs|bool and ssl_custom_certs_remote_src|bool
+
+    - name: Check if Jolokia is enabled
+      assert:
+        that: kafka_controller_jolokia_enabled|bool
+        fail_msg: "Please enable Jolokia on Kraft Controller for Migration"
+
+    - name: Check Jolokia jar path
+      delegate_to: localhost
+      stat:
+        path: "{{jolokia_jar_url}}"
+      register: jolokia_path
+      when: not jolokia_url_remote|bool
+
+    - name: Validate if Jolokia jar exists on Control node
+      assert:
+        that: jolokia_path.stat.exists|bool
+        fail_msg: "Jolokia jar is not present on Ansible Control node. Please check jolokia path."
+      when: not jolokia_url_remote|bool

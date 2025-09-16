@@ -35,7 +35,7 @@ Each Confluent component has its own role, with the name `<component_name>`. Wit
 1. A name clearly defining what the task accomplishes, using capital letters
 2. Uses an idempotent ansible module whenever possible
 3. Make use of variables instead of hard coding paths
-4. For file creation use '640' permission, for directory creation use '750' permission. There are some exceptions, but be sure to secure files.
+4. For file creation use 0640 permission, for directory creation use 0750 permission. There are some exceptions, but be sure to secure files.
 5. Proper ownership set
 6. Trigger component restart handler when necessary
 

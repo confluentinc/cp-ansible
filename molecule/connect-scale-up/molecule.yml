@@ -8,7 +8,7 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -20,7 +20,7 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -32,7 +32,7 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -44,7 +44,7 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -57,7 +57,7 @@ platforms:
     groups:
       - kafka_connect
       - cluster1
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -70,7 +70,7 @@ platforms:
     groups:
       - kafka_connect
       - cluster2
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -83,7 +83,7 @@ platforms:
     groups:
       - kafka_connect
       - ssl
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -93,7 +93,7 @@ platforms:
       - name: confluent
   - name: kafka-connect4
     hostname: kafka-connect4.confluent
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -103,7 +103,7 @@ platforms:
       - name: confluent
   - name: kafka-connect5
     hostname: kafka-connect5.confluent
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -115,7 +115,7 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -127,7 +127,7 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -139,7 +139,7 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
-    image: geerlingguy/docker-centos8-ansible
+    image: rockylinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -159,19 +159,34 @@ provisioner:
       all:
         ssl_enabled: true
         ssl_mutual_auth_enabled: true
-
+        redhat_java_package_name: java-11-openjdk
+        # To run the FileStream connector, you must add the filestream-connectors path in the plugin.path
+        kafka_connect_custom_properties:
+          plugin.path: "/usr/share/filestream-connectors,/usr/share/java/connect_plugins"
       # connect clusters
       ssl:
         kafka_connect_group_id: connect-ssl
+        # Create Connectors with ssl
+        kafka_connect_ssl_enabled: true
+        kafka_connect_ssl_mutual_auth_enabled: true
+        kafka_connect_connectors:
+          - name: sample-connector-3
+            config:
+              connector.class: "FileStreamSinkConnector"
+              tasks.max: "5"
+              file: "/etc/kafka/connect-distributed.properties"
+              topics: "test_topic"
+              key.converter: "org.apache.kafka.connect.json.JsonConverter"
+              value.converter: "org.apache.kafka.connect.json.JsonConverter"
       cluster1:
         kafka_connect_group_id: connect-cluster1
-        # Create Connectors not working w ssl on molecule
+        # Create Connectors without ssl
         kafka_connect_ssl_enabled: false
         kafka_connect_ssl_mutual_auth_enabled: false
         kafka_connect_connectors:
           - name: sample-connector-1
             config:
-              connector.class: "org.apache.kafka.connect.tools.VerifiableSinkConnector"
+              connector.class: "FileStreamSinkConnector"
               tasks.max: "5"
               file: "/etc/kafka/connect-distributed.properties"
               topics: "test_topic"
@@ -179,13 +194,13 @@ provisioner:
               value.converter: "org.apache.kafka.connect.json.JsonConverter"
       cluster2:
         kafka_connect_group_id: connect-cluster2
-        # Create Connectors not working w ssl
+        # Create Connectors without ssl
         kafka_connect_ssl_enabled: false
         kafka_connect_ssl_mutual_auth_enabled: false
         kafka_connect_connectors:
           - name: sample-connector-2
             config:
-              connector.class: "org.apache.kafka.connect.tools.VerifiableSinkConnector"
+              connector.class: "FileStreamSinkConnector"
               tasks.max: "5"
               file: "/etc/kafka/connect-distributed.properties"
               topics: "test_topic"
