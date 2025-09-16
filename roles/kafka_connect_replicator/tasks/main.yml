@@ -292,6 +292,49 @@
   tags:
     - configuration
 
+
+- name: Validate Custom Jolokia Access Control File Exists - Kafka Connect Replicator
+  stat:
+    path: "{{ kafka_connect_replicator_jolokia_access_control_file_src_path }}"
+  delegate_to: localhost
+  register: kafka_connect_replicator_custom_jolokia_file_check
+  when:
+    - kafka_connect_replicator_jolokia_enabled|bool
+    - kafka_connect_replicator_jolokia_access_control_enabled|bool
+    - kafka_connect_replicator_jolokia_access_control_custom_file_enabled|bool
+    - kafka_connect_replicator_jolokia_access_control_file_src_path == "" or not kafka_connect_replicator_custom_jolokia_file_check.stat.exists
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Fail if Custom Jolokia Access Control File Does Not Exist - Kafka Connect Replicator
+  fail:
+    msg: |
+      Custom Jolokia access control file not found at: {{ kafka_connect_replicator_jolokia_access_control_file_src_path }}
+      Please ensure the file exists on the Ansible controller.
+  when:
+    - kafka_connect_replicator_jolokia_enabled|bool
+    - kafka_connect_replicator_jolokia_access_control_enabled|bool
+    - kafka_connect_replicator_jolokia_access_control_custom_file_enabled|bool
+    - kafka_connect_replicator_jolokia_access_control_file_src_path != ""
+    - not kafka_connect_replicator_custom_jolokia_file_check.stat.exists
+  tags:
+    - validate
+    - validate_jolokia
+
+
+
+- name: Copy Kafka Connect Replicator Jolokia Access Control File
+  copy:
+    src: "{{ kafka_connect_replicator_jolokia_access_control_file_src_path }}"
+    dest: "{{ kafka_connect_replicator_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_connect_replicator_user }}"
+    group: "{{ kafka_connect_replicator_group }}"
+  when: kafka_connect_replicator_jolokia_enabled|bool and kafka_connect_replicator_jolokia_access_control_enabled|bool
+  tags:
+    - configuration
+
 - name: Create Kafka Connect Replicator Jolokia Config
   template:
     src: kafka-connect-replicator-jolokia.properties.j2
