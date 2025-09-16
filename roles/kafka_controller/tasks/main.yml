@@ -43,6 +43,23 @@
       - kafka_controller_final_properties['log.dirs'] != "/" and not ',' in kafka_controller_final_properties['log.dirs']
     fail_msg: "If you have log.dirs in kafka_controller_custom_properties, make sure you only provide one directory."
 
+
+
+- name: Fail if Custom Jolokia Access Control File Does Not Exist - Kafka Controller
+  fail:
+    msg: |
+      Custom Jolokia access control file not found at: {{ kafka_controller_jolokia_access_control_file_src_path }}
+      Please ensure the file exists on the Ansible controller.
+  when:
+    - kafka_controller_jolokia_enabled|bool
+    - kafka_controller_jolokia_access_control_enabled|bool
+    - kafka_controller_jolokia_access_control_custom_file_enabled|bool
+    - kafka_controller_jolokia_access_control_file_src_path == "" or not kafka_controller_custom_jolokia_file_check.stat.exists
+  tags:
+    - validate
+    - validate_jolokia
+
+
 - name: Stop Service and Remove Packages on Version Change
   include_role:
     name: common
@@ -333,6 +350,33 @@
   tags:
     - log
 
+
+
+
+- name: Create Kafka Controller Jolokia Directory
+  file:
+    path: "{{ kafka_controller_jolokia_access_control_file_dest_path | dirname }}"
+    state: directory
+    mode: '755'
+    owner: "{{ kafka_controller_user }}"
+    group: "{{ kafka_controller_group }}"
+  when: kafka_controller_jolokia_enabled|bool and kafka_controller_jolokia_access_control_enabled|bool
+  tags:
+    - filesystem
+    - privileged
+
+- name: Copy Kafka Controller Jolokia Access Control File
+  copy:
+    src: "{{ kafka_controller_jolokia_access_control_file_src_path }}"
+    dest: "{{ kafka_controller_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_controller_user }}"
+    group: "{{ kafka_controller_group }}"
+  when: kafka_controller_jolokia_enabled|bool and kafka_controller_jolokia_access_control_enabled|bool
+  tags:
+    - configuration
+    - privileged
+
 - name: Create Kafka Controller Jolokia Config
   template:
     src: kafka_jolokia.properties.j2
@@ -346,6 +390,16 @@
   tags:
     - configuration
     - privileged
+
+- name: Validate Kafka Controller Jolokia Access Control Policy File Exists
+  stat:
+    path: "{{ kafka_controller_jolokia_access_control_file_dest_path }}"
+  register: jolokia_policy_file_check
+  failed_when: not jolokia_policy_file_check.stat.exists
+  when: kafka_controller_jolokia_enabled|bool and kafka_controller_jolokia_access_control_enabled|bool
+  tags:
+    - validation
+    - configuration
 
 - name: Create Kafka Controller Jaas Config
   template:
