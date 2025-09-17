@@ -284,6 +284,49 @@
   tags:
     - log
 
+
+
+- name: Validate Custom Jolokia Access Control File Exists - Kafka Connect
+  stat:
+    path: "{{ kafka_connect_jolokia_access_control_file_src_path }}"
+  delegate_to: localhost
+  register: kafka_connect_custom_jolokia_file_check
+  when:
+    - kafka_connect_jolokia_enabled|bool
+    - kafka_connect_jolokia_access_control_enabled|bool
+    - kafka_connect_jolokia_access_control_custom_file_enabled|bool
+    - kafka_connect_jolokia_access_control_file_src_path == "" or not kafka_connect_custom_jolokia_file_check.stat.exists
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Fail if Custom Jolokia Access Control File Does Not Exist - Kafka Connect
+  fail:
+    msg: |
+      Custom Jolokia access control file not found at: {{ kafka_connect_jolokia_access_control_file_src_path }}
+      Please ensure the file exists on the Ansible controller.
+  when:
+    - kafka_connect_jolokia_enabled|bool
+    - kafka_connect_jolokia_access_control_enabled|bool
+    - kafka_connect_jolokia_access_control_custom_file_enabled|bool
+    - kafka_connect_jolokia_access_control_file_src_path != ""
+    - not kafka_connect_custom_jolokia_file_check.stat.exists
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Copy Kafka Connect Jolokia Access Control File
+  copy:
+    src: "{{ kafka_connect_jolokia_access_control_file_src_path }}"
+    dest: "{{ kafka_connect_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_connect_user }}"
+    group: "{{ kafka_connect_group }}"
+  when: kafka_connect_jolokia_enabled|bool and kafka_connect_jolokia_access_control_enabled|bool
+  tags:
+    - configuration
+
+
 - name: Create Kafka Connect Jolokia Config
   template:
     src: kafka_connect_jolokia.properties.j2
@@ -422,3 +465,5 @@
     - "{{kafka_connect_cert_path}}"
     - "{{kafka_connect_key_path}}"
   when: (ssl_provided_keystore_and_truststore | bool)
+
+
