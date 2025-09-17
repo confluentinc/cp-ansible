@@ -1,0 +1,64 @@
+---
+- name: Verify USM Agent Functionality
+  hosts: usm_agent
+  gather_facts: true
+  vars:
+    # USM Agent configuration
+    usm_agent_port: 9999
+    usm_agent_host: "{{ inventory_hostname }}"
+    usm_agent_log_file: "/var/log/confluent/usm-agent/usm-agent_access.log"
+
+    # CCloud Mock Service configuration
+    ccloud_mock_host: "ccloud-mock-service"
+    ccloud_mock_port: 8081
+    ccloud_mock_user: "ccloud-user"
+    ccloud_mock_password: "ccloud-secret"
+
+    # Test configuration
+    test_topic_name: "usm-test-topic-{{ ansible_date_time.epoch }}"
+    test_connector_name: "usm-test-connector-{{ ansible_date_time.epoch }}"
+
+  tasks:
+    # USM Agent Health Check
+    - name: Check USM Agent health
+      uri:
+        url: "http://{{ usm_agent_host }}:{{ usm_agent_port }}/healthz"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: usm_healthz_check
+      retries: 5
+      delay: 10
+      until: usm_healthz_check.status == 200
+
+    # Get baseline events count
+    - name: Get baseline events count
+      uri:
+        url: "http://{{ ccloud_mock_host }}:{{ ccloud_mock_port }}/events_count"
+        method: GET
+        user: "{{ ccloud_mock_user }}"
+        password: "{{ ccloud_mock_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: baseline_events_count
+
+    # Check USM Agent logs
+    - name: Check USM Agent access logs
+      stat:
+        path: "{{ usm_agent_log_file }}"
+      register: log_file_stat
+
+    - name: Read recent USM Agent logs
+      shell: "tail -n 100 {{ usm_agent_log_file }}"
+      register: usm_agent_logs
+      when: log_file_stat.stat.exists
+
+    - name: Verify v1/events endpoint in logs (204)
+      set_fact:
+        events_endpoint_found: "{{ usm_agent_logs.stdout | regex_search('POST.*v1/events.*204') is not none }}"
+      when: log_file_stat.stat.exists
+
+    - name: Verify v1/metrics endpoint in logs (200)
+      set_fact:
+        metrics_endpoint_found: "{{ usm_agent_logs.stdout | regex_search('POST.*v1/metrics.*200') is not none }}"
+      when: log_file_stat.stat.exists
