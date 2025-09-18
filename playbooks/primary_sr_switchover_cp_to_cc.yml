@@ -24,7 +24,7 @@
 #   - schema_importer: Setup schema importer (reverse sync)
 #   - switchover_to_cc: Run switchover and reverse sync in addition to exporter
 
-- name: Schema Registry Automation Workflow
+- name: Schema Registry Automation Workflow Prerequisites
   hosts: schema_registry
   gather_facts: true
   vars:
@@ -173,15 +173,36 @@
           set_fact:
             automation_properties_added:
               changed: "{{ sr_properties_results.results | selectattr('changed', 'defined') | selectattr('changed') | list | length > 0 }}"
+  tags:
+    - always
+# Restart Schema Registry serially to apply configuration changes
+- name: Restart Schema Registry Serially
+  hosts: schema_registry
+  serial: 1
+  gather_facts: false
+  vars:
+  tasks:
+    - import_role:
+        name: variables
+    - name: Include Schema Registry restart tasks
+      include_tasks: ../roles/schema_registry/tasks/restart_and_wait.yml
+      when: automation_properties_added.changed | default(false)
+    - name: Health check
+      include_tasks: ../roles/schema_registry/tasks/health_check.yml
+  tags:
+    - always
 
-        - name: Restart schema registry if properties were added
-          systemd:
-            name: "{{ schema_registry_service_name }}"
-            state: restarted
-          when:
-            - automation_properties_added is defined
-            - automation_properties_added.changed
+- name: Schema Registry Automation Workflow
+  hosts: schema_registry
+  gather_facts: true
+  vars:
+    # Status tracking
+    workflow_status: "started"
+    failed_step: ""
 
+  tasks:
+    - name: Schema Registry Automation Workflow Prerequisites
+      block:
         - name: Wait for Schema Registry to be ready after reconfiguration
           include_tasks: ../roles/common/tasks/schema_registry_operations.yml
           vars:
@@ -195,134 +216,9 @@
             request_delay: 5
 
         # RBAC Role Bindings for Schema Registry Automation (when RBAC is enabled)
-        - name: "Setup RBAC Role Bindings for Schema Registry Automation"
-          block:
-            - name: Grant Schema Registry user ClusterAdmin role for exporter endpoint access
-              uri:
-                url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_basic_users_final.admin.principal}}/roles/ClusterAdmin"
-                method: POST
-                validate_certs: false
-                headers:
-                  Content-Type: application/json
-                  Authorization: "Bearer {{ authorization_token }}"
-                client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt if ssl_mutual_auth_enabled | default(false) else omit }}"
-                client_key: "{{ ssl_file_dir_final }}/schema_registry.key if ssl_mutual_auth_enabled | default(false) else omit }}"
-                body_format: json
-                body: >
-                  {
-                    "clusters": {
-                      "kafka-cluster": "{{kafka_cluster_id}}",
-                      "schema-registry-cluster": "{{schema_registry_final_properties['schema.registry.group.id']}}"
-                    }
-                  }
-                status_code: 204
-              register: sr_cluster_admin_result
-              until: sr_cluster_admin_result.status == 204
-              retries: "{{ mds_retries | default(3) }}"
-              delay: 5
-              when: 
-                - rbac_enabled | default(false)
-                - mds_bootstrap_server_urls is defined
-                - authorization_token is defined
-                - kafka_cluster_id is defined
-                - schema_registry_final_properties is defined
-                - schema_registry_basic_users_final.admin.principal is defined
-
-            - name: Grant Schema Registry user ResourceOwner role for automation topics
-              uri:
-                url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_basic_users_final.admin.principal}}/roles/ResourceOwner/bindings"
-                method: POST
-                validate_certs: false
-                headers:
-                  Content-Type: application/json
-                  Authorization: "Bearer {{ authorization_token }}"
-                client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt if ssl_mutual_auth_enabled | default(false) else omit }}"
-                client_key: "{{ ssl_file_dir_final }}/schema_registry.key if ssl_mutual_auth_enabled | default(false) else omit }}"
-                body_format: json
-                body: >
-                  {
-                    "scope": {
-                      "clusters": {
-                        "kafka-cluster": "{{kafka_cluster_id}}"
-                      }
-                    },
-                    "resourcePatterns": [
-                      {
-                        "resourceType":"Group",
-                        "name": "{{schema_registry_final_properties['schema.registry.group.id']}}",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "{{schema_registry_final_properties['kafkastore.topic']}}",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "{{schema_registry_final_properties['confluent.license.topic']}}",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_exporter_configs",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_exporter_states",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_importer_configs",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_importer_states",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_dek_registry_keys",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_dek_registry_keks",
-                        "patternType":"LITERAL"
-                      }
-                    ]
-                  }
-                status_code: 204
-              register: sr_mds_result
-              until: sr_mds_result.status == 204
-              retries: "{{ mds_retries | default(3) }}"
-              delay: 5
-              when: 
-                - rbac_enabled | default(false)
-                - mds_bootstrap_server_urls is defined
-                - authorization_token is defined
-                - kafka_cluster_id is defined
-                - schema_registry_final_properties is defined
-                - schema_registry_basic_users_final.admin.principal is defined
-
-            - name: Log RBAC role binding completion
-              debug:
-                msg: |
-                  RBAC Role Bindings for Schema Registry Automation completed:
-                  - ClusterAdmin role granted for exporter endpoint access
-                  - ResourceOwner role granted for automation topics
-                  - Automation topics: _exporter_configs, _exporter_states, _importer_configs, _importer_states, _dek_registry_keys, _dek_registry_keks
-              when: 
-                - rbac_enabled | default(false)
-                - sr_cluster_admin_result is defined
-                - sr_mds_result is defined
-
-          when: rbac_enabled | default(false)
-          tags:
-            - always
-            - rbac
+        - name: Configure RBAC for Schema Registry
+          include_tasks: ../roles/schema_registry/tasks/configure_rbac.yml
+          when: rbac_enabled|bool
       tags:
         - always  # This configuration is required for all automation features
 
