@@ -152,15 +152,20 @@
             - unified_stream_manager.remote_context is defined
             - unified_stream_manager.remote_context != ''
 
+        - name: Prepare custom properties for configuration
+          set_fact:
+            sr_custom_properties: "{{ schema_registry_custom_properties | default({}) | dict2items | map('dict', {'property': 'key', 'value': 'value'}) | list }}"
+          when: schema_registry_custom_properties is defined
+
         - name: Combine all properties for configuration
           set_fact:
-            sr_all_properties: "{{ sr_core_properties + (sr_usm_properties | default([])) + (sr_context_properties | default([])) }}"
+            sr_all_properties: "{{ sr_core_properties + (sr_usm_properties | default([])) + (sr_context_properties | default([])) + (sr_custom_properties | default([])) }}"
 
         - name: Configure Schema Registry automation properties
           lineinfile:
             path: "{{ schema_registry.config_file }}"
-            regexp: "^{{ item.property | regex_escape }}="
-            line: "{{ item.property }}={{ item.value }}"
+            regexp: "^{{ item.property | regex_escape }}\\s*="
+            line: "{{ item.property }} = {{ item.value }}"
             backup: yes  # Create backup of the file
           loop: "{{ sr_all_properties }}"
           loop_control:
@@ -168,6 +173,17 @@
           register: sr_properties_results
           retries: 3
           delay: 5
+
+        - name: Remove USM context prefix property when not configured
+          lineinfile:
+            path: "{{ schema_registry.config_file }}"
+            regexp: "^usm\\.schema\\.registry\\.remote\\.context\\.prefix\\s*="
+            state: absent
+            backup: yes  # Create backup of the file
+          when:
+            - unified_stream_manager is not defined or
+              unified_stream_manager.remote_context is not defined or
+              unified_stream_manager.remote_context == ''
 
         - name: Check if any automation properties were changed
           set_fact:
