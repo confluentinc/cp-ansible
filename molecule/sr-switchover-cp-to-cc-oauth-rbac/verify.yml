@@ -17,6 +17,31 @@
         property: kafkastore.update.handlers
         expected_value: io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler,io.confluent.schema.manager.SchemaCacheManagerUpdateHandler
 
+    - name: Create new test schema in CC SR for import testing
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects/test.test-value2/versions"
+        method: POST
+        expected_status: 200
+        result_var: cc_new_schema_creation
+        operation_name: "Create New Schema in CC SR for Import Test"
+        request_body_format: json
+        request_body:
+          schema: |
+            {
+              "type": "record",
+              "name": "ImportTest",
+              "namespace": "import.test",
+              "fields": [
+                {"name": "test_id", "type": "string"},
+                {"name": "test_data", "type": "string"},
+                {"name": "created_at", "type": "long"},
+                {"name": "import_flag", "type": "boolean", "default": true}
+              ]
+            }
+
 - name: Rename Groups After CC Deployment
   hosts: cc_cluster
   gather_facts: false
@@ -130,6 +155,7 @@
         that:
           - "'test.user-value' in subjects_list.json"
           - "'automation.workflow-value' in subjects_list.json"
+          - "'test.test-value2' in subjects_list.json"
         fail_msg: "Test schemas were not created successfully"
       tags: api
 
@@ -250,18 +276,6 @@
     - name: Verify Schema Registry is in correct mode
       assert:
         that:
-          - sr_mode_check.json.mode in ['READWRITE', 'READONLY', 'IMPORT', 'FORWARD']
+          - sr_mode_check.json.mode in ['IMPORT']
         fail_msg: "Schema Registry is in unexpected mode: {{ sr_mode_check.json.mode }}"
       tags: security
-
-    - name: Display automation workflow test summary
-      debug:
-        msg: |
-          SR Automation Workflow Test Results ({{ scenario_name | default('unknown') }}):
-          ✓ Schema Registry Mode: {{ sr_mode_check.json.mode }}
-          ✓ Security Configuration: {{ 'mTLS' if ssl_mutual_auth_enabled | default(false) else ('OAuth' if oauth_enabled | default(false) else ('LDAP' if ldap_enabled | default(false) else 'Plaintext')) }}
-          ✓ Available Exporters: {{ exporters_list.json | length }}
-          ✓ Available Importers: {{ importers_list.json | length }}
-          ✓ Test Schemas Created: {{ subjects_list.json | select('match', '(test|automation)\..*') | list | length }}
-          ✓ Automation Features: {{ 'ENABLED' if (exporters_list.json | length > 0 or importers_list.json | length > 0) else 'DISABLED' }}
-      tags: summary
