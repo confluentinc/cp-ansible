@@ -281,6 +281,49 @@
   tags:
     - log
 
+
+
+
+- name: Check if Custom Jolokia Access Control File Exists - KSQL
+  stat:
+    path: "{{ ksql_jolokia_access_control_file_src_path }}"
+  register: ksql_custom_jolokia_file_check
+  delegate_to: localhost
+  when:
+    - ksql_jolokia_enabled|bool
+    - ksql_jolokia_access_control_enabled|bool
+    - ksql_jolokia_access_control_custom_file_enabled|bool
+    - ksql_jolokia_access_control_file_src_path != ""
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Fail if Custom Jolokia Access Control File Does Not Exist - KSQL
+  fail:
+    msg: |
+      Custom Jolokia access control file not found at: {{ ksql_jolokia_access_control_file_src_path }}
+      Please ensure the file exists on the Ansible controller.
+  when:
+    - ksql_jolokia_enabled|bool
+    - ksql_jolokia_access_control_enabled|bool
+    - ksql_jolokia_access_control_custom_file_enabled|bool
+    - ksql_jolokia_access_control_file_src_path != ""
+    - not ksql_custom_jolokia_file_check.stat.exists
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Copy KSQL Jolokia Access Control File
+  copy:
+    src: "{{ ksql_jolokia_access_control_file_src_path }}"
+    dest: "{{ ksql_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ ksql_user }}"
+    group: "{{ ksql_group }}"
+  when: ksql_jolokia_enabled|bool and ksql_jolokia_access_control_enabled|bool
+  tags:
+    - configuration
+
 - name: Create Ksql Jolokia Config
   template:
     src: ksql_jolokia.properties.j2

@@ -263,6 +263,52 @@
   tags:
     - log
 
+
+
+
+
+- name: Check if Custom Jolokia Access Control File Exists - Schema Registry
+  stat:
+    path: "{{ schema_registry_jolokia_access_control_file_src_path }}"
+  register: schema_registry_custom_jolokia_file_check
+  delegate_to: localhost
+  when:
+    - schema_registry_jolokia_enabled|bool
+    - schema_registry_jolokia_access_control_enabled|bool
+    - schema_registry_jolokia_access_control_custom_file_enabled|bool
+    - schema_registry_jolokia_access_control_file_src_path != ""
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: Fail if Custom Jolokia Access Control File Does Not Exist - Schema Registry
+  fail:
+    msg: |
+      Custom Jolokia access control file not found at: {{ schema_registry_jolokia_access_control_file_src_path }}
+      Please ensure the file exists on the Ansible controller.
+  when:
+    - schema_registry_jolokia_enabled|bool
+    - schema_registry_jolokia_access_control_enabled|bool
+    - schema_registry_jolokia_access_control_custom_file_enabled|bool
+    - schema_registry_jolokia_access_control_file_src_path != ""
+    - not schema_registry_custom_jolokia_file_check.stat.exists
+  tags:
+    - validate
+    - validate_jolokia
+
+
+
+- name: Copy Schema Registry Jolokia Access Control File
+  copy:
+    src: "{{ schema_registry_jolokia_access_control_file_src_path }}"
+    dest: "{{ schema_registry_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ schema_registry_user }}"
+    group: "{{ schema_registry_group }}"
+  when: schema_registry_jolokia_enabled|bool and schema_registry_jolokia_access_control_enabled|bool
+  tags:
+    - configuration
+
 - name: Create Schema Registry Jolokia Config
   template:
     src: schema_registry_jolokia.properties.j2
