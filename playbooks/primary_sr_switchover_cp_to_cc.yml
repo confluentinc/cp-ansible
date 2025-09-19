@@ -24,7 +24,7 @@
 #   - schema_importer: Setup schema importer (reverse sync)
 #   - switchover_to_cc: Run switchover and reverse sync in addition to exporter
 
-- name: Schema Registry Automation Workflow
+- name: Schema Registry Automation Workflow Prerequisites
   hosts: schema_registry
   gather_facts: true
   vars:
@@ -95,93 +95,88 @@
         - always
 
     # Ensure schema registry is configured with required automation properties
-    - name: "Configure Schema Registry Properties for Automation"
+    - name: Configure Schema Registry Properties for Automation
       block:
-        - name: Configure schema registry with required automation properties
-          debug:
-            msg: |
-              Configuring Schema Registry with automation properties (will create or update existing configuration).
-              Required properties for exporter/importer functionality:
-              - kafkastore.update.handlers=io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler
-              - schema.registry.resource.extension.class=...SchemaExporterResourceExtension,SchemaImporterResourceExtension...
-              - password.encoder.secret={{ password_encoder_secret | default('***') }}
-              {% if unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none' %}
-              USM Properties (for Confluent Cloud integration):
-              - usm.schema.registry.remote.endpoint={{ unified_stream_manager.schema_registry_endpoint }}
-              - usm.schema.registry.remote.api.key={{ unified_stream_manager.basic_username }}
-              - usm.schema.registry.remote.api.secret=***
-              {% endif %}
-              {% if unified_stream_manager is defined and unified_stream_manager.remote_context is defined and unified_stream_manager.remote_context != '' %}
-              - usm.schema.registry.remote.context.prefix={{ unified_stream_manager.remote_context }}
-              {% endif %}
+        - name: Load schema registry role defaults
+          include_vars: "../roles/schema_registry/defaults/main.yml"
 
-        - name: Add/Update required automation properties to schema registry config makes more sense.
-          set_fact:
-            sr_core_properties:
-              - property: "kafkastore.update.handlers"
-                value: "io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler"
-              - property: "password.encoder.secret"
-                value: "{{ password_encoder_secret }}"
+        - name: Read current config file content
+          slurp:
+            src: "{{ schema_registry.config_file }}"
+          register: current_config_content
 
-        - name: Add/Update schema registry extension classes
-          set_fact:
-            sr_extension_classes: "{{ rbac_enabled | confluent.platform.schema_registry_extension_classes(schema_exporters is defined, schema_importers is defined, (unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none')) }}"
+        - name: Create Schema Registry config with automation properties
+          template:
+            src: ../roles/schema_registry/templates/schema-registry.properties.j2
+            dest: "{{ schema_registry.config_file }}"
+            mode: '640'
+            owner: "{{ schema_registry_user }}"
+            group: "{{ schema_registry_group }}"
+          register: sr_config_result
+          tags:
+            - configuration
 
-        - name: Append extension class property
-          set_fact:
-            sr_core_properties: "{{ sr_core_properties + [{'property': 'schema.registry.resource.extension.class', 'value': sr_extension_classes}] }}"
-
-        - name: Prepare USM properties for configuration
-          set_fact:
-            sr_usm_properties:
-              - property: "usm.schema.registry.remote.endpoint"
-                value: "{{ unified_stream_manager.schema_registry_endpoint }}"
-              - property: "usm.schema.registry.remote.api.key"
-                value: "{{ unified_stream_manager.basic_username }}"
-              - property: "usm.schema.registry.remote.api.secret"
-                value: "{{ unified_stream_manager.basic_password }}"
-          when: unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none'
-
-        - name: Prepare USM context prefix property
-          set_fact:
-            sr_context_properties:
-              - property: "usm.schema.registry.remote.context.prefix"
-                value: "{{ unified_stream_manager.remote_context }}"
+        - name: Create Schema Registry Config with Secrets Protection
+          include_role:
+            name: common
+            tasks_from: secrets_protection.yml
+          vars:
+            final_properties: "{{ schema_registry_final_properties }}"
+            encrypt_passwords: "{{ schema_registry_secrets_protection_encrypt_passwords }}"
+            encrypt_properties: "{{ schema_registry_secrets_protection_encrypt_properties }}"
+            config_path: "{{ schema_registry.config_file }}"
+            secrets_file: "{{ schema_registry_secrets_protection_file }}"
+            secrets_file_owner: "{{schema_registry_user}}"
+            secrets_file_group: "{{schema_registry_group}}"
+            ca_cert_path: "{{ schema_registry_ca_cert_path if schema_registry_ssl_enabled|bool else '' }}"
+            handler: "no-op"
+          tags:
+            - configuration
           when:
-            - unified_stream_manager is defined
-            - unified_stream_manager.remote_context is defined
-            - unified_stream_manager.remote_context != ''
+            - schema_registry_secrets_protection_enabled|bool
+            - rbac_enabled|bool or confluent_cli_version is version('3.0.0', '>=')
 
-        - name: Combine all properties for configuration
-          set_fact:
-            sr_all_properties: "{{ sr_core_properties + (sr_usm_properties | default([])) + (sr_context_properties | default([])) }}"
+        - name: Read new config file content after template
+          slurp:
+            src: "{{ schema_registry.config_file }}"
+          register: new_config_content
 
-        - name: Configure Schema Registry automation properties
-          lineinfile:
-            path: "{{ schema_registry.config_file }}"
-            regexp: "^{{ item.property | regex_escape }}="
-            line: "{{ item.property }}={{ item.value }}"
-            backup: yes  # Create backup of the file
-          loop: "{{ sr_all_properties }}"
-          loop_control:
-            label: "{{ item.property }}"
-          register: sr_properties_results
-          retries: 3
-          delay: 5
-
-        - name: Check if any automation properties were changed
+        - name: Check if automation properties were actually added/changed
           set_fact:
             automation_properties_added:
-              changed: "{{ sr_properties_results.results | selectattr('changed', 'defined') | selectattr('changed') | list | length > 0 }}"
+              changed: "{{ (current_config_content.content) != (new_config_content.content) }}"
+  tags:
+    - always
+# Restart Schema Registry serially to apply configuration changes
+- name: Restart Schema Registry Serially
+  hosts: schema_registry
+  serial: 1
+  gather_facts: false
+  vars:
+  tasks:
+    - import_role:
+        name: variables
+    - name: Include Schema Registry restart tasks
+      include_tasks: ../roles/schema_registry/tasks/restart_and_wait.yml
+      when:
+        - automation_properties_added.changed | default(false)
+        - not schema_registry_skip_restarts | default(false) | bool
+    - name: Health check
+      include_tasks: ../roles/schema_registry/tasks/health_check.yml
+  tags:
+    - always
 
-        - name: Restart schema registry if properties were added
-          systemd:
-            name: "{{ schema_registry_service_name }}"
-            state: restarted
-          when:
-            - automation_properties_added is defined
-            - automation_properties_added.changed
+- name: Schema Registry Automation Workflow
+  hosts: schema_registry
+  gather_facts: true
+  vars:
+    # Status tracking
+    workflow_status: "started"
+    failed_step: ""
 
+  tasks:
+    - name: Schema Registry Automation Workflow Prerequisites
+      block:
         - name: Wait for Schema Registry to be ready after reconfiguration
           include_tasks: ../roles/common/tasks/schema_registry_operations.yml
           vars:
@@ -195,134 +190,9 @@
             request_delay: 5
 
         # RBAC Role Bindings for Schema Registry Automation (when RBAC is enabled)
-        - name: "Setup RBAC Role Bindings for Schema Registry Automation"
-          block:
-            - name: Grant Schema Registry user ClusterAdmin role for exporter endpoint access
-              uri:
-                url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_basic_users_final.admin.principal}}/roles/ClusterAdmin"
-                method: POST
-                validate_certs: false
-                headers:
-                  Content-Type: application/json
-                  Authorization: "Bearer {{ authorization_token }}"
-                client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt if ssl_mutual_auth_enabled | default(false) else omit }}"
-                client_key: "{{ ssl_file_dir_final }}/schema_registry.key if ssl_mutual_auth_enabled | default(false) else omit }}"
-                body_format: json
-                body: >
-                  {
-                    "clusters": {
-                      "kafka-cluster": "{{kafka_cluster_id}}",
-                      "schema-registry-cluster": "{{schema_registry_final_properties['schema.registry.group.id']}}"
-                    }
-                  }
-                status_code: 204
-              register: sr_cluster_admin_result
-              until: sr_cluster_admin_result.status == 204
-              retries: "{{ mds_retries | default(3) }}"
-              delay: 5
-              when: 
-                - rbac_enabled | default(false)
-                - mds_bootstrap_server_urls is defined
-                - authorization_token is defined
-                - kafka_cluster_id is defined
-                - schema_registry_final_properties is defined
-                - schema_registry_basic_users_final.admin.principal is defined
-
-            - name: Grant Schema Registry user ResourceOwner role for automation topics
-              uri:
-                url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_basic_users_final.admin.principal}}/roles/ResourceOwner/bindings"
-                method: POST
-                validate_certs: false
-                headers:
-                  Content-Type: application/json
-                  Authorization: "Bearer {{ authorization_token }}"
-                client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt if ssl_mutual_auth_enabled | default(false) else omit }}"
-                client_key: "{{ ssl_file_dir_final }}/schema_registry.key if ssl_mutual_auth_enabled | default(false) else omit }}"
-                body_format: json
-                body: >
-                  {
-                    "scope": {
-                      "clusters": {
-                        "kafka-cluster": "{{kafka_cluster_id}}"
-                      }
-                    },
-                    "resourcePatterns": [
-                      {
-                        "resourceType":"Group",
-                        "name": "{{schema_registry_final_properties['schema.registry.group.id']}}",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "{{schema_registry_final_properties['kafkastore.topic']}}",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "{{schema_registry_final_properties['confluent.license.topic']}}",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_exporter_configs",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_exporter_states",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_importer_configs",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_importer_states",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_dek_registry_keys",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_dek_registry_keks",
-                        "patternType":"LITERAL"
-                      }
-                    ]
-                  }
-                status_code: 204
-              register: sr_mds_result
-              until: sr_mds_result.status == 204
-              retries: "{{ mds_retries | default(3) }}"
-              delay: 5
-              when: 
-                - rbac_enabled | default(false)
-                - mds_bootstrap_server_urls is defined
-                - authorization_token is defined
-                - kafka_cluster_id is defined
-                - schema_registry_final_properties is defined
-                - schema_registry_basic_users_final.admin.principal is defined
-
-            - name: Log RBAC role binding completion
-              debug:
-                msg: |
-                  RBAC Role Bindings for Schema Registry Automation completed:
-                  - ClusterAdmin role granted for exporter endpoint access
-                  - ResourceOwner role granted for automation topics
-                  - Automation topics: _exporter_configs, _exporter_states, _importer_configs, _importer_states, _dek_registry_keys, _dek_registry_keks
-              when: 
-                - rbac_enabled | default(false)
-                - sr_cluster_admin_result is defined
-                - sr_mds_result is defined
-
-          when: rbac_enabled | default(false)
-          tags:
-            - always
-            - rbac
+        - name: Configure RBAC for Schema Registry
+          include_tasks: ../roles/schema_registry/tasks/configure_rbac.yml
+          when: rbac_enabled|bool
       tags:
         - always  # This configuration is required for all automation features
 
@@ -438,12 +308,6 @@
         - schema_exporter
         - switchover_to_cc
       run_once: true
-
-    # PRE-CHECKS: Validate configuration before making any changes
-    - name: Set exporter name for operations
-      set_fact:
-        exporter_name: "{{ sr_switch_over_exporter_name }}"
-
 
     # Context validation for schema importers - handles both scenarios:
     # 1. When USM remote_context is defined: qualified subjects must match the context
