@@ -95,101 +95,33 @@
         - always
 
     # Ensure schema registry is configured with required automation properties
-    - name: "Configure Schema Registry Properties for Automation"
+    - name: Configure Schema Registry Properties for Automation
       block:
-        - name: Configure schema registry with required automation properties
-          debug:
-            msg: |
-              Configuring Schema Registry with automation properties (will create or update existing configuration).
-              Required properties for exporter/importer functionality:
-              - kafkastore.update.handlers=io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler
-              - schema.registry.resource.extension.class=...SchemaExporterResourceExtension,SchemaImporterResourceExtension...
-              - password.encoder.secret={{ password_encoder_secret | default('***') }}
-              {% if unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none' %}
-              USM Properties (for Confluent Cloud integration):
-              - usm.schema.registry.remote.endpoint={{ unified_stream_manager.schema_registry_endpoint }}
-              - usm.schema.registry.remote.api.key={{ unified_stream_manager.basic_username }}
-              - usm.schema.registry.remote.api.secret=***
-              {% endif %}
-              {% if unified_stream_manager is defined and unified_stream_manager.remote_context is defined and unified_stream_manager.remote_context != '' %}
-              - usm.schema.registry.remote.context.prefix={{ unified_stream_manager.remote_context }}
-              {% endif %}
+        - name: Read current config file content
+          slurp:
+            src: "{{ schema_registry.config_file }}"
+          register: current_config_content
+          ignore_errors: true
 
-        - name: Add/Update required automation properties to schema registry config makes more sense.
-          set_fact:
-            sr_core_properties:
-              - property: "kafkastore.update.handlers"
-                value: "io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler"
-              - property: "password.encoder.secret"
-                value: "{{ password_encoder_secret }}"
+        - name: Create Schema Registry config with automation properties
+          template:
+            src: ../roles/schema_registry/templates/schema-registry.properties.j2
+            dest: "{{ schema_registry.config_file }}"
+            mode: '640'
+            owner: "{{ schema_registry_user }}"
+            group: "{{ schema_registry_group }}"
+            backup: yes
+          register: sr_config_result
 
-        - name: Add/Update schema registry extension classes
-          set_fact:
-            sr_extension_classes: "{{ rbac_enabled | confluent.platform.schema_registry_extension_classes(schema_exporters is defined or sr_switch_over_exporter_name is defined, schema_importers is defined, (unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none')) }}"
+        - name: Read new config file content after template
+          slurp:
+            src: "{{ schema_registry.config_file }}"
+          register: new_config_content
 
-        - name: Append extension class property
-          set_fact:
-            sr_core_properties: "{{ sr_core_properties + [{'property': 'schema.registry.resource.extension.class', 'value': sr_extension_classes}] }}"
-
-        - name: Prepare USM properties for configuration
-          set_fact:
-            sr_usm_properties:
-              - property: "usm.schema.registry.remote.endpoint"
-                value: "{{ unified_stream_manager.schema_registry_endpoint }}"
-              - property: "usm.schema.registry.remote.api.key"
-                value: "{{ unified_stream_manager.basic_username }}"
-              - property: "usm.schema.registry.remote.api.secret"
-                value: "{{ unified_stream_manager.basic_password }}"
-          when: unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none'
-
-        - name: Prepare USM context prefix property
-          set_fact:
-            sr_context_properties:
-              - property: "usm.schema.registry.remote.context.prefix"
-                value: "{{ unified_stream_manager.remote_context }}"
-          when:
-            - unified_stream_manager is defined
-            - unified_stream_manager.remote_context is defined
-            - unified_stream_manager.remote_context != ''
-
-        - name: Prepare custom properties for configuration
-          set_fact:
-            sr_custom_properties: "{{ sr_custom_properties | default([]) + [{'property': item.key, 'value': item.value}] }}"
-          loop: "{{ schema_registry_custom_properties | default({}) | dict2items }}"
-          when: schema_registry_custom_properties is defined
-
-        - name: Combine all properties for configuration
-          set_fact:
-            sr_all_properties: "{{ sr_core_properties + (sr_usm_properties | default([])) + (sr_context_properties | default([])) + (sr_custom_properties | default([])) }}"
-
-        - name: Configure Schema Registry automation properties
-          lineinfile:
-            path: "{{ schema_registry.config_file }}"
-            regexp: "^{{ item.property | regex_escape }}\\s*="
-            line: "{{ item.property }} = {{ item.value }}"
-            backup: yes  # Create backup of the file
-          loop: "{{ sr_all_properties }}"
-          loop_control:
-            label: "{{ item.property }}"
-          register: sr_properties_results
-          retries: 3
-          delay: 5
-
-        - name: Remove USM context prefix property when not configured
-          lineinfile:
-            path: "{{ schema_registry.config_file }}"
-            regexp: "^usm\\.schema\\.registry\\.remote\\.context\\.prefix\\s*="
-            state: absent
-            backup: yes  # Create backup of the file
-          when:
-            - unified_stream_manager is not defined or
-              unified_stream_manager.remote_context is not defined or
-              unified_stream_manager.remote_context == ''
-
-        - name: Check if any automation properties were changed
+        - name: Check if automation properties were actually added/changed
           set_fact:
             automation_properties_added:
-              changed: "{{ sr_properties_results.results | selectattr('changed', 'defined') | selectattr('changed') | list | length > 0 }}"
+              changed: "{{ (current_config_content.content | b64decode if current_config_content is defined else '') != (new_config_content.content | b64decode) }}"
   tags:
     - always
 # Restart Schema Registry serially to apply configuration changes
@@ -203,7 +135,9 @@
         name: variables
     - name: Include Schema Registry restart tasks
       include_tasks: ../roles/schema_registry/tasks/restart_and_wait.yml
-      when: automation_properties_added.changed | default(false)
+      when:
+        - automation_properties_added.changed | default(false)
+        - not schema_registry_skip_restarts | default(false) | bool
     - name: Health check
       include_tasks: ../roles/schema_registry/tasks/health_check.yml
   tags:
