@@ -1,0 +1,44 @@
+---
+# Common validation tasks for all Confluent Platform components
+
+- name: "Check if Custom Jolokia Access Control File Exists - {{ component_name }}"
+  stat:
+    path: "{{ component_jolokia_access_control_file_src_path }}"
+  register: common_jolokia_file_check
+  delegate_to: localhost
+  when:
+    - component_jolokia_enabled|bool
+    - component_jolokia_access_control_enabled|bool
+    - component_jolokia_access_control_custom_file_enabled|bool
+    - component_jolokia_access_control_file_src_path != ""
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: "Validate Custom Jolokia Access Control File Path - {{ component_name }}"
+  fail:
+    msg: |
+      When {{ component_name }} jolokia_access_control_custom_file_enabled is true,
+      you must provide a valid jolokia_access_control_file_src_path.
+
+      Current configuration for {{ component_name }}:
+      - jolokia_enabled: {{ component_jolokia_enabled }}
+      - jolokia_access_control_enabled: {{ component_jolokia_access_control_enabled }}
+      - jolokia_access_control_custom_file_enabled: {{ component_jolokia_access_control_custom_file_enabled }}
+      - jolokia_access_control_file_src_path: "{{ component_jolokia_access_control_file_src_path }}"
+
+      {% if component_jolokia_access_control_file_src_path != "" %}
+      File status: {% if common_jolokia_file_check is defined and common_jolokia_file_check.stat is defined %}{{ 'EXISTS' if common_jolokia_file_check.stat.exists else 'NOT FOUND' }}{% else %}NOT CHECKED{% endif %}
+      {% endif %}
+
+      Please ensure:
+      1. The file path is not empty
+      2. The file exists on the Ansible controller
+  when:
+    - component_jolokia_enabled|bool
+    - component_jolokia_access_control_enabled|bool
+    - component_jolokia_access_control_custom_file_enabled|bool
+    - component_jolokia_access_control_file_src_path == "" or (common_jolokia_file_check is defined and common_jolokia_file_check.stat is defined and not common_jolokia_file_check.stat.exists)
+  tags:
+    - validate
+    - validate_jolokia
