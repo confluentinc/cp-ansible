@@ -1,0 +1,299 @@
+---
+### SR Automation Workflow Testing - OAuth + RBAC
+### Tests SR automation features with OAuth authentication and RBAC authorization
+### Modern enterprise authentication scenario
+
+driver:
+  name: docker
+platforms:
+  - name: oauth1
+    hostname: oauth1.confluent
+    groups:
+      - oauth_server
+    image: quay.io/keycloak/keycloak:latest
+    env:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: oauth1
+      KC_HTTPS_CERTIFICATE_FILE: /idp-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /idp-key.pem
+      KEYCLOAK_HTTP_PORT: "8080"
+      KEYCLOAK_HTTPS_PORT: "8443"
+    dockerfile: ../Dockerfile-oauth.j2
+    published_ports:
+      - "8080:8080"
+      - "8443:8443"
+    command: start-dev
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  - name: controller1
+    hostname: controller1.confluent
+    groups:
+      - cp_cluster
+      - kafka_controller_cp
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - cp_cluster
+      - kafka_broker_cp
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Primary Schema Registry (simulates CP SR)
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - cp_cluster
+      - schema_registry_cp
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest_cp
+      - cp_cluster
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect_cp
+      - cp_cluster
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql_cp
+      - cp_cluster
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center-next-gen
+    hostname: control-center-next-gen.confluent
+    groups:
+      - control_center_next_gen_cp
+      - cp_cluster
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9022:9022"
+    networks:
+      - name: confluent
+
+  # Mock Confluent Cloud Kafka Controller (CC cluster infrastructure)
+  - name: cc-controller1
+    hostname: cc-controller1.confluent
+    groups:
+      - kafka_controller
+      - cc_cluster
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Mock Confluent Cloud Kafka Broker (CC cluster infrastructure)
+  - name: cc-kafka-broker1
+    hostname: cc-kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - cc_cluster
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Mock Confluent Cloud Schema Registry (simulates CC SR target)
+  - name: mock-cc-schema-registry
+    hostname: mock-cc-schema-registry.confluent
+    groups:
+      - schema_registry
+      - cc_cluster
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+provisioner:
+  config_options:
+    tags:
+      run: all,switchover_to_cc
+  playbooks:
+    prepare: prepare.yml
+    converge: ../multi_sr_automation_converge.yml
+    verify: verify.yml
+  inventory:
+    group_vars:
+      all:
+        mask_secrets: false
+        # installation_method: archive
+        scenario_name: sr-switchover-cp-to-cc-oauth-rbac
+        # SR Automation specific variables (applies to both CP and mock CC)
+        password_encoder_secret: "oauth-rbac-test-secret"
+
+      cc_cluster:
+        ssl_enabled: false
+        auth_mode: none
+        oauth_enabled: false
+        rbac_enabled: false
+
+        kafka_broker_custom_listeners: {}
+
+        # CC Schema Registry connects to CC Kafka cluster (stays as basic SR)
+        kafkastore_bootstrap_servers: "cc-kafka-broker1:9092"
+        schema_registry_custom_properties:
+          usm.schema.registry.remote.endpoint.validation.enabled: false
+          kafkastore.topic: _schemas_cc  # Use separate schemas topic for CC cluster
+
+      cp_cluster:
+        # Override group inheritance - ensure CP Controller gets full OAuth/RBAC config
+        auth_mode: oauth
+        ssl_enabled: true
+        oauth_enabled: true
+        rbac_enabled: true
+            # sasl protocol for inter-broker communication
+        sasl_protocol: plain
+        # OAuth configuration (global for components that need it)
+        oauth_superuser_client_id: superuser
+        oauth_superuser_client_password: my-secret
+
+        keycloak_oauth_server_port: 8443
+        keycloak_http_protocol: https
+        oauth_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/oauthcertfile.pem"
+
+        oauth_sub_claim: client_id
+        oauth_groups_claim: groups
+        oauth_token_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/token
+        oauth_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
+        oauth_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
+        oauth_expected_audience: Confluent,account,api://default
+
+        schema_registry_oauth_user: schema_registry
+        schema_registry_oauth_password: my-secret
+
+        kafka_rest_oauth_user: kafka_rest
+        kafka_rest_oauth_password: my-secret
+
+        kafka_connect_oauth_user: kafka_connect
+        kafka_connect_oauth_password: my-secret
+
+        control_center_next_gen_oauth_user: control_center_next_gen
+        control_center_next_gen_oauth_password: my-secret
+
+        ksql_oauth_user: ksql
+        ksql_oauth_password: my-secret
+
+        # RBAC role bindings for Kafka cluster permissions
+        kafka_broker_additional_system_admins:
+          - "{{ schema_registry_oauth_user | default('schema-registry') }}"
+
+        kafka_broker_custom_properties:
+          # Allow auto creation of system topics for Schema Registry
+          auto.create.topics.enable: true
+          default.replication.factor: 1
+
+        schema_registry_oauth_enabled: true
+        schema_registry_authentication_type: oauth
+
+        # RBAC role bindings for Schema Registry exporters
+        schema_registry_additional_system_admins:
+          - "{{ schema_registry_oauth_user | default('schema-registry') }}"
+
+        schema_registry_custom_properties:
+          # CP-specific configuration (inherits validation property from all group)
+          kafkastore.topic: _schemas  # Use standard schemas topic for CP cluster
+          schema.registry.group.id: schema-registry-cp
+          usm.schema.registry.remote.endpoint.validation.enabled: false
+
+        # SR Automation components (CP only - applied via host_vars, CC SR has no automation)
+        unified_stream_manager:
+          schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
+          authentication_type: basic
+          basic_username: "admin"
+          basic_password: "admin-secret"
+
+        # Schema Exporters for testing - Basic auth to mock CC SR
+        schema_exporters:
+          - name: "oauth-schema-exporter"
+            subjects: ["*"]
+            context_type: "NONE"
+            config:
+              schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
+              authentication_type: basic
+              basic_username: "admin"
+              basic_password: "admin-secret"
+
+        # Schema Importers for reverse sync testing - Basic auth from mock CC SR
+        schema_importers:
+          - name: "oauth-schema-importer"
+            subjects: ["*"]
+            config:
+              schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
+              authentication_type: basic
+              basic_username: "admin"
+              basic_password: "admin-secret"
+
+        # Specify exporter for switchover testing
+        sr_switch_over_exporter_name: "oauth-schema-exporter"
+
+verifier:
+  name: ansible
