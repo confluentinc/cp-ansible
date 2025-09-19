@@ -152,10 +152,50 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+  - name: usm-agent
+    hostname: usm-agent1.confluent
+    groups:
+      - usm_agent
+      - cluster2
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ccloud-mock-service
+    hostname: ccloud-mock-service.confluent
+    groups:
+      - ccloud_mock
+    image: usmagent-mock-ccloud:latest
+    pre_build_image: true
+    command: ""
+    published_ports:
+      - "8081:8081"
+    networks:
+      - name: confluent
+    env:
+      MOCK_SERVER_HOST: "0.0.0.0"
+      MOCK_SERVER_PORT: "8081"
+      MOCK_SERVER_USE_TLS: "false"
+      MOCK_SERVER_REQUIRE_BASIC_AUTH: "true"
+      MOCK_SERVER_USERNAME: "ccloud-user"
+      MOCK_SERVER_PASSWORD: "ccloud-secret"
+      MOCK_SERVER_REQUIRE_MTLS: "false"
 provisioner:
   playbooks:
     converge: converge.yml
   inventory:
+    host_vars:
+      ccloud-mock-service:
+        ansible_connection: local
+        gather_facts: false
+      usm-agent1:
+        usm_agent_custom_properties:
+          confluent.usm-agent.ccloud.ssl.enabled: "false"
+        usm_agent_health_check_enabled: false
     group_vars:
       # Shared properties among mds cluster and cluster2 groups (as well as kerberos and ldap)
       all:
@@ -215,6 +255,18 @@ provisioner:
           - kafka-broker1
           - kafka-broker2
           - kafka-broker3
+
+        # USM Agent Configuration - mTLS
+        usm_agent_basic_auth_enabled: false
+        usm_agent_ssl_enabled: true
+        usm_agent_ssl_mutual_auth_enabled: true
+
+        # USM Agent Configuration - CCloud Mock Server
+        ccloud_endpoint: http://ccloud-mock-service:8081
+        ccloud_environment_id: env-mock-123
+        ccloud_credential:
+          username: ccloud-user
+          password: ccloud-secret
 
       mds:
         ssl_enabled: false
