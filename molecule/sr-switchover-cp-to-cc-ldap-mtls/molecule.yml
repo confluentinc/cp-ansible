@@ -1,0 +1,320 @@
+---
+### SR Automation Workflow Testing - LDAP/RBAC + mTLS
+### Tests SR automation features with LDAP authentication, RBAC authorization, and mTLS
+### Enterprise directory + certificate authentication scenario
+
+driver:
+  name: docker
+platforms:
+  # LDAP server for testing
+  - name: ldap1
+    hostname: ldap1.confluent
+    groups:
+      - ldap_server
+    image: centos:centos8
+    dockerfile: ../Dockerfile-centos8-base.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  - name: controller1
+    hostname: controller1.confluent
+    groups:
+      - cp_cluster
+      - kafka_controller_cp
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - cp_cluster
+      - kafka_broker_cp
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Primary Schema Registry (simulates CP SR)
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - cp_cluster
+      - schema_registry_cp
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest_cp
+      - cp_cluster
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect_cp
+      - cp_cluster
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql_cp
+      - cp_cluster
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center-next-gen
+    hostname: control-center-next-gen.confluent
+    groups:
+      - control_center_next_gen_cp
+      - cp_cluster
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    published_ports:
+      - "9022:9022"
+    networks:
+      - name: confluent
+
+  # Mock Confluent Cloud Kafka Controller (CC cluster infrastructure)
+  - name: cc-controller1
+    hostname: cc-controller1.confluent
+    groups:
+      - kafka_controller
+      - cc_cluster
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Mock Confluent Cloud Kafka Broker (CC cluster infrastructure)
+  - name: cc-kafka-broker1
+    hostname: cc-kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - cc_cluster
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Mock Confluent Cloud Schema Registry (simulates CC SR target)
+  - name: mock-cc-schema-registry
+    hostname: mock-cc-schema-registry.confluent
+    groups:
+      - schema_registry
+      - cc_cluster
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java21.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  config_options:
+    tags:
+      run: all,switchover_to_cc
+  playbooks:
+    prepare: prepare.yml
+    converge: ../multi_sr_automation_converge.yml
+    verify: verify.yml
+  inventory:
+    group_vars:
+      all:
+        mask_secrets: false
+        # installation_method: archive
+        scenario_name: sr-switchover-cp-to-cc-ldap-mtls
+
+        # Common SR property for LDAP mTLS testing (applies to all SR instances)
+        schema_registry_custom_properties:
+          usm.schema.registry.remote.endpoint.validation.enabled: false
+        # SR Automation specific variables (applies to both CP and mock CC)
+        password_encoder_secret: "ldap-mtls-test-secret"
+        
+        mds_super_user: mds
+        mds_super_user_password: password
+
+        schema_registry_ldap_user: schema-registry1
+        schema_registry_ldap_password: password
+
+        kafka_connect_ldap_user: kafka-connect1
+        kafka_connect_ldap_password: password
+
+        ksql_ldap_user: ksql1
+        ksql_ldap_password: password
+
+        kafka_rest_ldap_user: kafka-rest1
+        kafka_rest_ldap_password: password
+
+        control_center_next_gen_ldap_user: control-center1
+        control_center_next_gen_ldap_password: password
+      # LDAP server configuration
+      ldap_server:
+        ldaps_enabled: true
+        ldaps_custom_certs: true
+        ssl_custom_certs: true
+        ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+
+        ldap_admin_password: ldppassword
+
+        ldap_rbac_group: rbac
+        ldap_dc: example
+        ldap_dc_extension: com
+
+        ldap_users:
+          - username: "{{schema_registry_ldap_user}}"
+            password: "{{schema_registry_ldap_password}}"
+            uid: 9998
+            guid: 98
+          - username: "{{kafka_connect_ldap_user}}"
+            password: "{{kafka_connect_ldap_password}}"
+            uid: 9997
+            guid: 97
+          - username: "{{ksql_ldap_user}}"
+            password: "{{ksql_ldap_password}}"
+            uid: 9996
+            guid: 96
+          - username: "{{control_center_next_gen_ldap_user}}"
+            password: "{{control_center_next_gen_ldap_password}}"
+            uid: 9995
+            guid: 95
+          - username: "{{kafka_rest_ldap_user}}"
+            password: "{{kafka_rest_ldap_password}}"
+            uid: 9994
+            guid: 94
+          - username: "{{mds_super_user}}"
+            password: "{{mds_super_user_password}}"
+            uid: 9993
+            guid: 93
+
+      cp_cluster:
+        rbac_super_users:
+          - User:CONFLUENT
+
+        ssl_enabled: true
+
+        # ssl_mutual_auth_enabled: true
+        kafka_controller_ssl_mutual_auth_enabled: true
+        schema_registry_ssl_mutual_auth_enabled: true
+        kafka_rest_ssl_mutual_auth_enabled: true
+        kafka_connect_ssl_mutual_auth_enabled: true
+        ksql_ssl_mutual_auth_enabled: true
+        kafka_connect_replicator_ssl_mutual_auth_enabled: true
+
+        kafka_controller_port: 9095
+        secrets_protection_enabled: true
+        rbac_enabled: true
+
+        kafka_broker_custom_listeners:
+          broker: # trying out mtls in interbk without global config
+            name: BROKER
+            port: 9091
+            ssl_enabled: true
+            ssl_mutual_auth_enabled: true # testing if old config works
+            ssl_client_authentication: none
+            sasl_protocol: none
+          client_listener:
+            name: CLIENT
+            port: 9093
+
+        principal_mapping_rules:
+          - "RULE:.*O=(.*?),OU=TEST.*$$/$$1/"
+          - "DEFAULT"
+
+        kafka_broker_custom_properties:
+          super.users: User:dom;User:jeff
+
+        # To run the FileStream connector, you must add the filestream-connectors path in the plugin.path
+        kafka_connect_custom_properties:
+          plugin.path: "/usr/share/filestream-connectors,/usr/share/java/connect_plugins"
+
+        unified_stream_manager:
+          schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
+          authentication_type: basic
+          basic_username: "admin"
+          basic_password: "admin-secret"
+
+        # Schema Importers for reverse sync testing - Basic auth from mock CC SR
+        schema_importers:
+          - name: "ldap-mtls-schema-importer"
+            subjects: ["*"]
+            context: "custom-context"
+            config:
+              schema_registry_endpoint: "http://mock-cc-schema-registry:8081"
+              authentication_type: basic
+              basic_username: "admin"
+              basic_password: "admin-secret"
+
+      kafka_broker:
+        kafka_broker_cluster_name: Test-Broker
+        # Testing old way of passing ldap configs
+        ldap_config: |
+          ldap.java.naming.factory.initial=com.sun.jndi.ldap.LdapCtxFactory
+          ldap.com.sun.jndi.ldap.read.timeout=3000
+          ldap.java.naming.provider.url=ldap://{{ groups['ldap_server'][0] }}:389
+          ldap.java.naming.security.principal=uid=mds,OU=rbac,DC=example,DC=com
+          ldap.java.naming.security.credentials=password
+          ldap.java.naming.security.authentication=simple
+          ldap.user.search.base=OU=rbac,DC=example,DC=com
+          ldap.group.search.base=OU=rbac,DC=example,DC=com
+          ldap.user.name.attribute=uid
+          ldap.user.memberof.attribute.pattern=CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.group.name.attribute=cn
+          ldap.group.member.attribute.pattern=CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.user.object.class=account
+
+verifier:
+  name: ansible

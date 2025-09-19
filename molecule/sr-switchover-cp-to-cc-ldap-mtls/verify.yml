@@ -1,0 +1,166 @@
+---
+### SR Automation Workflow Verification - LDAP/RBAC + mTLS
+### Includes base verification and adds LDAP + mTLS specific checks
+- name: Verify mock CC Schema Registry Automation Configuration
+  hosts: schema_registry
+  gather_facts: false
+  vars:
+
+  tasks:
+    - name: Check core automation properties are configured
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: kafkastore.update.handlers
+        expected_value: io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler,io.confluent.schema.manager.SchemaCacheManagerUpdateHandler
+
+    - name: Create new test schema in CC SR for import testing
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects/test.test-value2/versions"
+        method: POST
+        expected_status: 200
+        result_var: cc_new_schema_creation
+        operation_name: "Create New Schema in CC SR for Import Test"
+        request_body_format: json
+        request_body:
+          schema: |
+            {
+              "type": "record",
+              "name": "ImportTest",
+              "namespace": "import.test",
+              "fields": [
+                {"name": "test_id", "type": "string"},
+                {"name": "test_data", "type": "string"},
+                {"name": "created_at", "type": "long"},
+                {"name": "import_flag", "type": "boolean", "default": true}
+              ]
+            }
+
+- name: Rename Groups After CC Deployment
+  hosts: cc_cluster
+  gather_facts: false
+  tasks:
+    - name: "Rename CC Groups to Avoid Conflicts with CP Deployment"
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: "{{item}}:"
+        line: "{{item}}_cc:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - kafka_controller
+        - kafka_broker
+        - schema_registry
+
+- name: Rename Groups After CC Deployment
+  hosts: all:!cc_cluster
+  gather_facts: false
+  tasks:
+    - name: "Rename CP Groups to Standard Names for Deployment"
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: "{{item}}_cp:"
+        line: "{{item}}:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - kafka_controller
+        - kafka_broker
+        - schema_registry
+
+    - name: Refresh Inventory
+      meta: refresh_inventory
+
+- name: Load Variables for SR Automation Verification
+  hosts: all
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.platform.variables
+
+    - name: Set mTLS variables
+      set_fact:
+        certs_chain: "{{ ssl_file_dir_final }}/schema_registry.chain"
+
+- name: Verify Schema Registry Automation Configuration
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+
+    - name: Check USM remote endpoint configuration
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: usm.schema.registry.remote.endpoint
+        expected_value: "{{ unified_stream_manager.schema_registry_endpoint }}"
+      when: unified_stream_manager.schema_registry_endpoint != 'none'
+      tags: config
+
+    - name: Check resource extension classes for automation
+      shell: |
+        grep "schema.registry.resource.extension.class.*SchemaImporterResourceExtension" /etc/schema-registry/schema-registry.properties
+      register: extension_check
+      changed_when: false
+      failed_when: extension_check.rc != 0
+      tags: config
+
+- name: Verify Schema Registry API Functionality
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+    - name: Wait for Schema Registry to be ready
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        method: GET
+        expected_status: 200
+        result_var: sr_ready_check
+        operation_name: "Schema Registry API Readiness Check"
+        request_retries: 10
+        request_delay: 5
+      tags: api
+
+    - name: Get subjects list for validation
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        method: GET
+        expected_status: 200
+        result_var: subjects_list
+        operation_name: "Get Subjects List"
+      tags: api
+
+    - name: Verify test schemas exist
+      assert:
+        that:
+          - "':.custom-context:test.test-value2' in subjects_list.json"
+        fail_msg: "Test schemas were not created successfully"
+      tags: api
+
+
+- name: Verify Schema Automation Features (Primary Only)
+  hosts: schema_registry:!mock-cc-schema-registry  # Only verify active management on primary SR
+  gather_facts: false
+  tasks:
+    - name: Check importers endpoint accessibility
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers"
+        method: GET
+        expected_status: 200
+        result_var: importers_list
+        operation_name: "Get Importers List"
+      tags: automation
