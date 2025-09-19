@@ -4,7 +4,6 @@
   gather_facts: true
   vars:
     # USM Agent configuration
-    usm_agent_port: 9999
     usm_agent_host: "{{ inventory_hostname }}"
     usm_agent_log_file: "/var/log/confluent/usm-agent/usm-agent_access.log"
 
@@ -14,15 +13,11 @@
     ccloud_mock_user: "ccloud-user"
     ccloud_mock_password: "ccloud-secret"
 
-    # Test configuration
-    test_topic_name: "usm-test-topic-{{ ansible_date_time.epoch }}"
-    test_connector_name: "usm-test-connector-{{ ansible_date_time.epoch }}"
-
   tasks:
     # USM Agent Health Check
     - name: Check USM Agent health
       uri:
-        url: "http://{{ usm_agent_host }}:{{ usm_agent_port }}/healthz"
+        url: "http://{{ usm_agent_host }}:{{ usm_agent_controlplane_port }}/healthz"
         method: GET
         status_code: 200
         timeout: 10
@@ -40,6 +35,7 @@
         password: "{{ ccloud_mock_password }}"
         force_basic_auth: true
         status_code: 200
+        timeout: 10
       register: baseline_events_count
 
     # Check USM Agent logs
@@ -48,17 +44,43 @@
         path: "{{ usm_agent_log_file }}"
       register: log_file_stat
 
-    - name: Read recent USM Agent logs
-      shell: "tail -n 100 {{ usm_agent_log_file }}"
-      register: usm_agent_logs
+    - name: Search for v1/events endpoint in logs (204)
+      shell: "grep -c 'POST.*v1/events.*204' {{ usm_agent_log_file }} || true"
+      register: events_grep_result
       when: log_file_stat.stat.exists
 
-    - name: Verify v1/events endpoint in logs (204)
-      set_fact:
-        events_endpoint_found: "{{ usm_agent_logs.stdout | regex_search('POST.*v1/events.*204') is not none }}"
+    - name: Search for v1/metrics endpoint in logs (200)
+      shell: "grep -c 'POST.*v1/metrics.*200' {{ usm_agent_log_file }} || true"
+      register: metrics_grep_result
       when: log_file_stat.stat.exists
 
-    - name: Verify v1/metrics endpoint in logs (200)
+    - name: Set events endpoint found fact
       set_fact:
-        metrics_endpoint_found: "{{ usm_agent_logs.stdout | regex_search('POST.*v1/metrics.*200') is not none }}"
+        events_endpoint_found: "{{ (events_grep_result.stdout | int) > 0 }}"
+      when: log_file_stat.stat.exists
+
+    - name: Set metrics endpoint found fact
+      set_fact:
+        metrics_endpoint_found: "{{ (metrics_grep_result.stdout | int) > 0 }}"
+      when: log_file_stat.stat.exists
+
+    # Verification assertions
+    - name: Assert USM Agent log file exists
+      assert:
+        that:
+          - log_file_stat.stat.exists
+        fail_msg: "USM Agent access log file does not exist at {{ usm_agent_log_file }}"
+
+    - name: Assert v1/events endpoint is working
+      assert:
+        that:
+          - events_endpoint_found | default(false)
+        fail_msg: "USM Agent v1/events endpoint not found in logs or not returning 204 status"
+      when: log_file_stat.stat.exists
+
+    - name: Assert v1/metrics endpoint is working
+      assert:
+        that:
+          - metrics_endpoint_found | default(false)
+        fail_msg: "USM Agent v1/metrics endpoint not found in logs or not returning 200 status"
       when: log_file_stat.stat.exists
