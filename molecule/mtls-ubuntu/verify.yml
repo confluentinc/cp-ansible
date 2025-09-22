@@ -101,7 +101,7 @@
         expected_value: CONTROLLER:SSL,INTERNAL:SSL,BROKER:SSL
       when: kraft_mode|bool
 
-    # Verify Jolokia Access Control is blocking all mbean access for Broker
+    # Comprehensive Broker Jolokia Access Control Testing
     - name: Test Broker Jolokia Endpoint - Check basic connectivity
       uri:
         url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_broker_jolokia_port }}/jolokia/version"
@@ -114,7 +114,8 @@
       when: kafka_broker_jolokia_enabled|bool
       failed_when: false
 
-    - name: Test Broker Jolokia Access Control - Verify mbean access is blocked
+    # Test allowed MBean access - should work
+    - name: Test Broker Jolokia - Verify allowed MBean access (MessagesInPerSec)
       uri:
         url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_broker_jolokia_port }}/jolokia/read/kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec"
         validate_certs: false
@@ -122,19 +123,35 @@
         user: "{{ kafka_broker_jolokia_user if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
         password: "{{ kafka_broker_jolokia_password if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
         force_basic_auth: "{{ true if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
-      register: jolokia_broker_restricted_access
+      register: jolokia_broker_allowed_access
       when: kafka_broker_jolokia_enabled|bool and kafka_broker_jolokia_access_control_enabled|bool and jolokia_broker_basic.status is defined and jolokia_broker_basic.status == 200
       failed_when: false
 
-    - name: Verify Broker Jolokia Access Control is working
+    # Test allowed JVM Memory access - should work
+    - name: Test Broker Jolokia - Verify allowed JVM Memory access
+      uri:
+        url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_broker_jolokia_port }}/jolokia/read/java.lang:type=Memory"
+        validate_certs: false
+        return_content: true
+        user: "{{ kafka_broker_jolokia_user if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
+        password: "{{ kafka_broker_jolokia_password if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
+        force_basic_auth: "{{ true if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
+      register: jolokia_broker_memory_access
+      when: kafka_broker_jolokia_enabled|bool and kafka_broker_jolokia_access_control_enabled|bool and jolokia_broker_basic.status is defined and jolokia_broker_basic.status == 200
+      failed_when: false
+
+
+    # Verify allowed access is working
+    - name: Verify Broker Jolokia - Allowed MBean access is working
       assert:
         that:
           - jolokia_broker_basic.status == 200
-          - jolokia_broker_restricted_access.status == 200
-          - jolokia_broker_restricted_access.content is defined
-          - "'forbidden' in jolokia_broker_restricted_access.content or 'status\":403' in jolokia_broker_restricted_access.content or 'status\":404' in jolokia_broker_restricted_access.content"
-        fail_msg: "Broker Jolokia access control issue - Basic connectivity: {{ jolokia_broker_basic.status | default('undefined') }}, MBean access: {{ jolokia_broker_restricted_access.status | default('undefined') }}, Content: {{ jolokia_broker_restricted_access.content | default('undefined') | truncate(100) }}"
-        success_msg: "Broker Jolokia access control is working - endpoint accessible but mbean access properly blocked"
+          - jolokia_broker_allowed_access.status == 200
+          - jolokia_broker_memory_access.status == 200
+          - "'value' in jolokia_broker_allowed_access.content or 'status\":200' in jolokia_broker_allowed_access.content"
+          - "'value' in jolokia_broker_memory_access.content or 'status\":200' in jolokia_broker_memory_access.content"
+        fail_msg: "Broker Jolokia allowed access failed - MessagesInPerSec: {{ jolokia_broker_allowed_access.status | default('undefined') }}, Memory: {{ jolokia_broker_memory_access.status | default('undefined') }}"
+        success_msg: "Broker Jolokia allowed access is working correctly - MessagesInPerSec and Memory MBeans accessible"
       when: kafka_broker_jolokia_enabled|bool and kafka_broker_jolokia_access_control_enabled|bool and jolokia_broker_basic.status is defined
 
 - name: Verify - schema_registry
