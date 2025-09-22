@@ -22,10 +22,65 @@
         property: listener.security.protocol.map
         expected_value: CONTROLLER:SSL,BROKER:SSL
 
+    # Verify Jolokia is accessible and access control is working for Controller
+    - name: Test Jolokia Controller Endpoint Accessibility
+      uri:
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_controller_jolokia_port }}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+        validate_certs: false
+        return_content: true
+        user: "{{ kafka_controller_jolokia_user if kafka_controller_jolokia_auth_mode == 'basic' else omit }}"
+        password: "{{ kafka_controller_jolokia_password if kafka_controller_jolokia_auth_mode == 'basic' else omit }}"
+        force_basic_auth: "{{ true if kafka_controller_jolokia_auth_mode == 'basic' else omit }}"
+      register: jolokia_controller_access
+      when: kafka_controller_jolokia_enabled|bool
+      failed_when: false
+
+    - name: Verify Controller Jolokia is accessible
+      assert:
+        that:
+          - jolokia_controller_access.status is defined
+          - jolokia_controller_access.status != -1
+        fail_msg: "Controller Jolokia endpoint is not accessible (status: {{ jolokia_controller_access.status | default('undefined') }}). Check if jolokia is enabled and running."
+        success_msg: "Controller Jolokia endpoint is accessible"
+      when: kafka_controller_jolokia_enabled|bool
+
+    - name: Verify Controller Jolokia allows ZkMigrationState access (when access control enabled)
+      assert:
+        that:
+          - jolokia_controller_access.status == 200
+        fail_msg: "Controller should allow access to ZkMigrationState mbean when access control is properly configured"
+        success_msg: "Controller Jolokia access control is working - ZkMigrationState is accessible"
+      when: kafka_controller_jolokia_enabled|bool and kafka_controller_jolokia_access_control_enabled|bool and jolokia_controller_access.status is defined
+
+    # Test that random MBeans are blocked by access control
+    - name: Test Jolokia Controller Random MBean Access (should be blocked)
+      uri:
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_controller_jolokia_port }}/jolokia/read/java.lang:type=Memory"
+        validate_certs: false
+        return_content: true
+        user: "{{ kafka_controller_jolokia_user if kafka_controller_jolokia_auth_mode == 'basic' else omit }}"
+        password: "{{ kafka_controller_jolokia_password if kafka_controller_jolokia_auth_mode == 'basic' else omit }}"
+        force_basic_auth: "{{ true if kafka_controller_jolokia_auth_mode == 'basic' else omit }}"
+      register: jolokia_controller_random_mbean
+      when: kafka_controller_jolokia_enabled|bool and kafka_controller_jolokia_access_control_enabled|bool
+      failed_when: false
+
+    - name: Verify Controller Jolokia blocks random MBean access (when access control enabled)
+      assert:
+        that:
+          - jolokia_controller_random_mbean.status == 200
+          - jolokia_controller_random_mbean.content is defined
+          - "'forbidden' in jolokia_controller_random_mbean.content or 'status\":403' in jolokia_controller_random_mbean.content"
+        fail_msg: "Controller should block access to random MBeans when access control is enabled (got status: {{ jolokia_controller_random_mbean.status | default('undefined') }}, content: {{ jolokia_controller_random_mbean.content | default('undefined') | truncate(100) }}). Access control may not be working properly."
+        success_msg: "Controller Jolokia access control is working - random MBean access is properly blocked"
+      when: kafka_controller_jolokia_enabled|bool and kafka_controller_jolokia_access_control_enabled|bool and jolokia_controller_random_mbean.status is defined
+
 - name: Verify - kafka_broker
   hosts: kafka_broker
   gather_facts: false
   tasks:
+    - import_role:
+        name: variables
     - set_fact:
         kraft_mode: "{{ ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) }}"
 
@@ -46,10 +101,91 @@
         expected_value: CONTROLLER:SSL,INTERNAL:SSL,BROKER:SSL
       when: kraft_mode|bool
 
+    # Comprehensive Broker Jolokia Access Control Testing
+    - name: Check if Jolokia is enabled for broker
+      debug:
+        msg: "Jolokia enabled: {{ kafka_broker_jolokia_enabled | default('false') }}, Port: {{ kafka_broker_jolokia_port | default('undefined') }}, SSL: {{ kafka_broker_jolokia_ssl_enabled | default('false') }}"
+
+    - name: Test Broker Jolokia Endpoint - Check basic connectivity
+      uri:
+        url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_broker_jolokia_port }}/jolokia/version"
+        validate_certs: false
+        return_content: true
+        user: "{{ kafka_broker_jolokia_user if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
+        password: "{{ kafka_broker_jolokia_password if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
+        force_basic_auth: "{{ true if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
+        timeout: 10
+      register: jolokia_broker_basic
+      when: kafka_broker_jolokia_enabled|bool
+      failed_when: false
+
+    # Test allowed MBean access - should work
+    - name: Test Broker Jolokia - Verify allowed MBean access (MessagesInPerSec)
+      uri:
+        url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_broker_jolokia_port }}/jolokia/read/kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec"
+        validate_certs: false
+        return_content: true
+        user: "{{ kafka_broker_jolokia_user if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
+        password: "{{ kafka_broker_jolokia_password if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
+        force_basic_auth: "{{ true if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
+      register: jolokia_broker_allowed_access
+      when: kafka_broker_jolokia_enabled|bool and kafka_broker_jolokia_access_control_enabled|bool and jolokia_broker_basic.status is defined and jolokia_broker_basic.status == 200
+      failed_when: false
+
+    # Test allowed JVM Memory access - should work
+    - name: Test Broker Jolokia - Verify allowed JVM Memory access
+      uri:
+        url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_broker_jolokia_port }}/jolokia/read/java.lang:type=Memory"
+        validate_certs: false
+        return_content: true
+        user: "{{ kafka_broker_jolokia_user if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
+        password: "{{ kafka_broker_jolokia_password if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
+        force_basic_auth: "{{ true if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
+      register: jolokia_broker_memory_access
+      when: kafka_broker_jolokia_enabled|bool and kafka_broker_jolokia_access_control_enabled|bool and jolokia_broker_basic.status is defined and jolokia_broker_basic.status == 200
+      failed_when: false
+
+
+    # Debug Jolokia connectivity first
+    - name: Debug Broker Jolokia connectivity status
+      debug:
+        msg:
+          - "Jolokia enabled: {{ kafka_broker_jolokia_enabled | default('undefined') }}"
+          - "Access control enabled: {{ kafka_broker_jolokia_access_control_enabled | default('undefined') }}"
+          - "Basic connectivity status: {{ jolokia_broker_basic.status | default('undefined') }}"
+          - "Basic connectivity content: {{ jolokia_broker_basic.content | default('undefined') | truncate(200) }}"
+          - "Allowed access status: {{ jolokia_broker_allowed_access.status | default('undefined') }}"
+          - "Memory access status: {{ jolokia_broker_memory_access.status | default('undefined') }}"
+      when: kafka_broker_jolokia_enabled|bool
+
+    # Verify basic Jolokia connectivity first
+    - name: Verify Broker Jolokia - Basic connectivity is working
+      assert:
+        that:
+          - jolokia_broker_basic.status is defined
+          - jolokia_broker_basic.status == 200
+        fail_msg: "Broker Jolokia basic connectivity failed - Status: {{ jolokia_broker_basic.status | default('undefined') }}, Content: {{ jolokia_broker_basic.content | default('undefined') | truncate(100) }}"
+        success_msg: "Broker Jolokia basic connectivity is working"
+      when: kafka_broker_jolokia_enabled|bool and jolokia_broker_basic.status is defined
+
+    # Verify allowed access is working (only when access control is enabled)
+    - name: Verify Broker Jolokia - Allowed MBean access is working
+      assert:
+        that:
+          - jolokia_broker_allowed_access.status == 200
+          - jolokia_broker_memory_access.status == 200
+          - "'value' in jolokia_broker_allowed_access.content or 'status\":200' in jolokia_broker_allowed_access.content"
+          - "'value' in jolokia_broker_memory_access.content or 'status\":200' in jolokia_broker_memory_access.content"
+        fail_msg: "Broker Jolokia allowed access failed - MessagesInPerSec: {{ jolokia_broker_allowed_access.status | default('undefined') }}, Memory: {{ jolokia_broker_memory_access.status | default('undefined') }}"
+        success_msg: "Broker Jolokia allowed access is working correctly - MessagesInPerSec and Memory MBeans accessible"
+      when: kafka_broker_jolokia_enabled|bool and kafka_broker_jolokia_access_control_enabled|bool and jolokia_broker_basic.status is defined and jolokia_broker_basic.status == 200
+
 - name: Verify - schema_registry
   hosts: schema_registry
   gather_facts: false
   tasks:
+    - import_role:
+        name: variables
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
@@ -58,10 +194,53 @@
         property: kafkastore.security.protocol
         expected_value: SSL
 
+    # Verify Schema Registry Jolokia Access Control with Basic Auth
+    - name: Test Schema Registry Jolokia Endpoint - Check basic connectivity
+      uri:
+        url: "{{ 'https' if schema_registry_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ schema_registry_jolokia_port }}/jolokia/version"
+        validate_certs: false
+        return_content: true
+        user: "{{ schema_registry_jolokia_user if schema_registry_jolokia_auth_mode == 'basic' else omit }}"
+        password: "{{ schema_registry_jolokia_password if schema_registry_jolokia_auth_mode == 'basic' else omit }}"
+        force_basic_auth: "{{ true if schema_registry_jolokia_auth_mode == 'basic' else omit }}"
+      register: jolokia_schema_registry_basic
+      when: schema_registry_jolokia_enabled|bool
+      failed_when: false
+
+    - name: Debug - Show actual schema registry basic connectivity result
+      debug:
+        var: jolokia_schema_registry_basic
+      when: schema_registry_jolokia_enabled|bool
+
+    - name: Test Schema Registry Jolokia Access Control - Verify mbean access is blocked
+      uri:
+        url: "{{ 'https' if schema_registry_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ schema_registry_jolokia_port }}/jolokia/read/java.lang:type=Memory"
+        validate_certs: false
+        return_content: true
+        user: "{{ schema_registry_jolokia_user if schema_registry_jolokia_auth_mode == 'basic' else omit }}"
+        password: "{{ schema_registry_jolokia_password if schema_registry_jolokia_auth_mode == 'basic' else omit }}"
+        force_basic_auth: "{{ true if schema_registry_jolokia_auth_mode == 'basic' else omit }}"
+      register: jolokia_schema_registry_restricted_access
+      when: schema_registry_jolokia_enabled|bool and schema_registry_jolokia_access_control_enabled|bool and jolokia_schema_registry_basic.status is defined and jolokia_schema_registry_basic.status == 200
+      failed_when: false
+
+    - name: Verify Schema Registry Jolokia Access Control is working
+      assert:
+        that:
+          - jolokia_schema_registry_basic.status == 200
+          - jolokia_schema_registry_restricted_access.status == 200
+          - jolokia_schema_registry_restricted_access.content is defined
+          - "'forbidden' in jolokia_schema_registry_restricted_access.content or 'status\":403' in jolokia_schema_registry_restricted_access.content or 'status\":404' in jolokia_schema_registry_restricted_access.content"
+        fail_msg: "Schema Registry Jolokia access control issue - Basic connectivity: {{ jolokia_schema_registry_basic.status | default('undefined') }}, MBean access: {{ jolokia_schema_registry_restricted_access.status | default('undefined') }}, Content: {{ jolokia_schema_registry_restricted_access.content | default('undefined') | truncate(100) }}"
+        success_msg: "Schema Registry Jolokia access control is working - endpoint accessible but mbean access properly blocked"
+      when: schema_registry_jolokia_enabled|bool and schema_registry_jolokia_access_control_enabled|bool and jolokia_schema_registry_basic.status is defined
+
 - name: Verify - kafka_connect
   hosts: kafka_connect
   gather_facts: false
   tasks:
+    - import_role:
+        name: variables
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
@@ -69,6 +248,27 @@
         file_path: /etc/kafka/connect-distributed.properties
         property: security.protocol
         expected_value: SSL
+
+    # Verify Kafka Connect Jolokia Endpoint
+    - name: Test Kafka Connect Jolokia Endpoint - Check basic connectivity
+      uri:
+        url: "{{ 'https' if kafka_connect_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_connect_jolokia_port }}/jolokia/version"
+        validate_certs: false
+        return_content: true
+        user: "{{ kafka_connect_jolokia_user if kafka_connect_jolokia_auth_mode == 'basic' else omit }}"
+        password: "{{ kafka_connect_jolokia_password if kafka_connect_jolokia_auth_mode == 'basic' else omit }}"
+        force_basic_auth: "{{ true if kafka_connect_jolokia_auth_mode == 'basic' else omit }}"
+      register: jolokia_kafka_connect_basic
+      when: kafka_connect_jolokia_enabled|bool
+      failed_when: false
+
+    - name: Verify Kafka Connect Jolokia is accessible
+      assert:
+        that:
+          - jolokia_kafka_connect_basic.status == 200
+        fail_msg: "Kafka Connect Jolokia endpoint is not accessible (status: {{ jolokia_kafka_connect_basic.status | default('undefined') }}). Check if jolokia is enabled and running."
+        success_msg: "Kafka Connect Jolokia endpoint is accessible"
+      when: kafka_connect_jolokia_enabled|bool and jolokia_kafka_connect_basic.status is defined
 
 - name: Verify - kafka_rest
   hosts: kafka_rest
