@@ -102,6 +102,10 @@
       when: kraft_mode|bool
 
     # Comprehensive Broker Jolokia Access Control Testing
+    - name: Check if Jolokia is enabled for broker
+      debug:
+        msg: "Jolokia enabled: {{ kafka_broker_jolokia_enabled | default('false') }}, Port: {{ kafka_broker_jolokia_port | default('undefined') }}, SSL: {{ kafka_broker_jolokia_ssl_enabled | default('false') }}"
+
     - name: Test Broker Jolokia Endpoint - Check basic connectivity
       uri:
         url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_broker_jolokia_port }}/jolokia/version"
@@ -110,6 +114,7 @@
         user: "{{ kafka_broker_jolokia_user if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
         password: "{{ kafka_broker_jolokia_password if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
         force_basic_auth: "{{ true if kafka_broker_jolokia_auth_mode == 'basic' else omit }}"
+        timeout: 10
       register: jolokia_broker_basic
       when: kafka_broker_jolokia_enabled|bool
       failed_when: false
@@ -141,18 +146,39 @@
       failed_when: false
 
 
-    # Verify allowed access is working
+    # Debug Jolokia connectivity first
+    - name: Debug Broker Jolokia connectivity status
+      debug:
+        msg:
+          - "Jolokia enabled: {{ kafka_broker_jolokia_enabled | default('undefined') }}"
+          - "Access control enabled: {{ kafka_broker_jolokia_access_control_enabled | default('undefined') }}"
+          - "Basic connectivity status: {{ jolokia_broker_basic.status | default('undefined') }}"
+          - "Basic connectivity content: {{ jolokia_broker_basic.content | default('undefined') | truncate(200) }}"
+          - "Allowed access status: {{ jolokia_broker_allowed_access.status | default('undefined') }}"
+          - "Memory access status: {{ jolokia_broker_memory_access.status | default('undefined') }}"
+      when: kafka_broker_jolokia_enabled|bool
+
+    # Verify basic Jolokia connectivity first
+    - name: Verify Broker Jolokia - Basic connectivity is working
+      assert:
+        that:
+          - jolokia_broker_basic.status is defined
+          - jolokia_broker_basic.status == 200
+        fail_msg: "Broker Jolokia basic connectivity failed - Status: {{ jolokia_broker_basic.status | default('undefined') }}, Content: {{ jolokia_broker_basic.content | default('undefined') | truncate(100) }}"
+        success_msg: "Broker Jolokia basic connectivity is working"
+      when: kafka_broker_jolokia_enabled|bool and jolokia_broker_basic.status is defined
+
+    # Verify allowed access is working (only when access control is enabled)
     - name: Verify Broker Jolokia - Allowed MBean access is working
       assert:
         that:
-          - jolokia_broker_basic.status == 200
           - jolokia_broker_allowed_access.status == 200
           - jolokia_broker_memory_access.status == 200
           - "'value' in jolokia_broker_allowed_access.content or 'status\":200' in jolokia_broker_allowed_access.content"
           - "'value' in jolokia_broker_memory_access.content or 'status\":200' in jolokia_broker_memory_access.content"
         fail_msg: "Broker Jolokia allowed access failed - MessagesInPerSec: {{ jolokia_broker_allowed_access.status | default('undefined') }}, Memory: {{ jolokia_broker_memory_access.status | default('undefined') }}"
         success_msg: "Broker Jolokia allowed access is working correctly - MessagesInPerSec and Memory MBeans accessible"
-      when: kafka_broker_jolokia_enabled|bool and kafka_broker_jolokia_access_control_enabled|bool and jolokia_broker_basic.status is defined
+      when: kafka_broker_jolokia_enabled|bool and kafka_broker_jolokia_access_control_enabled|bool and jolokia_broker_basic.status is defined and jolokia_broker_basic.status == 200
 
 - name: Verify - schema_registry
   hosts: schema_registry

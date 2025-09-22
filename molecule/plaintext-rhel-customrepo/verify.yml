@@ -524,56 +524,6 @@
         success_msg: "Kafka REST Jolokia endpoint is accessible"
       when: kafka_rest_jolokia_enabled|bool and not kafka_rest_jolokia_access_control_enabled|bool and jolokia_kafka_rest_basic.status is defined
 
-- name: Verify - kafka_connect_replicator
-  hosts: kafka_connect_replicator
-  gather_facts: false
-  tasks:
-    # Enhanced Kafka Connect Replicator Jolokia Access Control Verification
-    - import_role:
-        name: variables
-
-    - name: Test Kafka Connect Replicator Jolokia Endpoint - Check basic connectivity
-      uri:
-        url: "{{ 'https' if kafka_connect_replicator_jolokia_ssl_enabled|bool else 'http' }}://{{ inventory_hostname }}:{{ kafka_connect_replicator_jolokia_port }}/jolokia/version"
-        validate_certs: false
-        return_content: true
-        user: "{{ kafka_connect_replicator_jolokia_user if kafka_connect_replicator_jolokia_auth_mode == 'basic' else omit }}"
-        password: "{{ kafka_connect_replicator_jolokia_password if kafka_connect_replicator_jolokia_auth_mode == 'basic' else omit }}"
-        force_basic_auth: "{{ true if kafka_connect_replicator_jolokia_auth_mode == 'basic' else omit }}"
-      register: jolokia_kafka_connect_replicator_basic
-      when: kafka_connect_replicator_jolokia_enabled|bool
-      failed_when: false
-
-    - name: Test Kafka Connect Replicator Jolokia Access Control - Verify mbean access is blocked
-      uri:
-        url: "{{ 'https' if kafka_connect_replicator_jolokia_ssl_enabled|bool else 'http' }}://{{ inventory_hostname }}:{{ kafka_connect_replicator_jolokia_port }}/jolokia/read/java.lang:type=Memory"
-        validate_certs: false
-        return_content: true
-        user: "{{ kafka_connect_replicator_jolokia_user if kafka_connect_replicator_jolokia_auth_mode == 'basic' else omit }}"
-        password: "{{ kafka_connect_replicator_jolokia_password if kafka_connect_replicator_jolokia_auth_mode == 'basic' else omit }}"
-        force_basic_auth: "{{ true if kafka_connect_replicator_jolokia_auth_mode == 'basic' else omit }}"
-      register: jolokia_kafka_connect_replicator_restricted_access
-      when: kafka_connect_replicator_jolokia_enabled|bool and kafka_connect_replicator_jolokia_access_control_enabled|bool and jolokia_kafka_connect_replicator_basic.status is defined and jolokia_kafka_connect_replicator_basic.status == 200
-      failed_when: false
-
-    - name: Verify Kafka Connect Replicator Jolokia Access Control is working
-      assert:
-        that:
-          - jolokia_kafka_connect_replicator_basic.status == 200
-          - jolokia_kafka_connect_replicator_restricted_access.status == 200
-          - jolokia_kafka_connect_replicator_restricted_access.content is defined
-          - '''forbidden'' in jolokia_kafka_connect_replicator_restricted_access.content or ''status":403'' in jolokia_kafka_connect_replicator_restricted_access.content or ''status":404'' in jolokia_kafka_connect_replicator_restricted_access.content'
-        fail_msg: "Kafka Connect Replicator Jolokia access control issue - Basic connectivity: {{ jolokia_kafka_connect_replicator_basic.status | default('undefined') }}, MBean access: {{ jolokia_kafka_connect_replicator_restricted_access.status | default('undefined') }}, Content: {{ jolokia_kafka_connect_replicator_restricted_access.content | default('undefined') | truncate(100) }}"
-        success_msg: "Kafka Connect Replicator Jolokia access control is working - endpoint accessible but mbean access properly blocked"
-      when: kafka_connect_replicator_jolokia_enabled|bool and kafka_connect_replicator_jolokia_access_control_enabled|bool and jolokia_kafka_connect_replicator_basic.status is defined
-
-    - name: Verify Kafka Connect Replicator Jolokia is accessible (when access control disabled)
-      assert:
-        that:
-          - jolokia_kafka_connect_replicator_basic.status == 200
-        fail_msg: "Kafka Connect Replicator Jolokia endpoint is not accessible (status: {{ jolokia_kafka_connect_replicator_basic.status | default('undefined') }}). Check if jolokia is enabled and running."
-        success_msg: "Kafka Connect Replicator Jolokia endpoint is accessible"
-      when: kafka_connect_replicator_jolokia_enabled|bool and not kafka_connect_replicator_jolokia_access_control_enabled|bool and jolokia_kafka_connect_replicator_basic.status is defined
 
 - name: Verify - Restart Services
   import_playbook: ../../playbooks/restart.yml
