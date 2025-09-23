@@ -30,7 +30,7 @@ Prerequisites for installing CP can be found at [General Requirements](https://d
 
 You can install this collection from Ansible Automation Hub and Ansible Galaxy by following [Download Ansible Playbooks for Confluent Platform](https://docs.confluent.io/ansible/current/ansible-download.html).
 
-As an alternative to the recommended methods above, you can install the package directly from the source repository.
+As an alternative to the recommended methods above, non-RedHat customers can install the package directly from the source repository.
 
 * Create a directory with the following structure:<br>
 ```mkdir -p <path_to_cp-ansible>/ansible_collections/confluent/```
