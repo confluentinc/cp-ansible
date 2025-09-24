@@ -241,6 +241,12 @@ Description: Pre flight check. Check if /tmp directory exists or not.
 
 ***
 
+### Tag - validate_jolokia
+
+Description: Pre flight check. Validate Jolokia access control configuration including custom file paths and settings.
+
+***
+
 ### Tag - zookeeper
 
 Description: For all zookeeper tasks - installing, configuring. Runs the zookeeper role.
