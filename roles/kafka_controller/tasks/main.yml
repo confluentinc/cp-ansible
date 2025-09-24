@@ -24,6 +24,18 @@
     - ssl_mutual_auth_enabled|bool
     - rbac_super_users | length == 0
 
+- name: Validate Kafka Controller Jolokia Access Control Configuration
+  include_tasks: ../common/tasks/component_validations.yml
+  vars:
+    component_name: "Kafka Controller"
+    component_jolokia_enabled: "{{ kafka_controller_jolokia_enabled }}"
+    component_jolokia_access_control_enabled: "{{ kafka_controller_jolokia_access_control_enabled }}"
+    component_jolokia_access_control_custom_file_enabled: "{{ kafka_controller_jolokia_access_control_custom_file_enabled }}"
+    component_jolokia_access_control_file_src_path: "{{ kafka_controller_jolokia_access_control_file_src_path }}"
+  tags:
+    - validate
+    - validate_jolokia
+
 # datadir is not supported way to provide data directories for kafka controllers
 - name: Assert that datadir is not present in the inventory
   assert:
@@ -42,6 +54,7 @@
     that:
       - kafka_controller_final_properties['log.dirs'] != "/" and not ',' in kafka_controller_final_properties['log.dirs']
     fail_msg: "If you have log.dirs in kafka_controller_custom_properties, make sure you only provide one directory."
+
 
 - name: Stop Service and Remove Packages on Version Change
   include_role:
@@ -333,6 +346,19 @@
   tags:
     - log
 
+
+
+- name: Copy Kafka Controller Jolokia Access Control File
+  copy:
+    src: "{{ kafka_controller_jolokia_access_control_file_src_path }}"
+    dest: "{{ kafka_controller_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_controller_user }}"
+    group: "{{ kafka_controller_group }}"
+  when: kafka_controller_jolokia_enabled|bool and kafka_controller_jolokia_access_control_enabled|bool
+  tags:
+    - configuration
+
 - name: Create Kafka Controller Jolokia Config
   template:
     src: kafka_jolokia.properties.j2
@@ -346,6 +372,16 @@
   tags:
     - configuration
     - privileged
+
+- name: Validate Kafka Controller Jolokia Access Control Policy File Exists
+  stat:
+    path: "{{ kafka_controller_jolokia_access_control_file_dest_path }}"
+  register: jolokia_policy_file_check
+  failed_when: not jolokia_policy_file_check.stat.exists
+  when: kafka_controller_jolokia_enabled|bool and kafka_controller_jolokia_access_control_enabled|bool
+  tags:
+    - validation
+    - configuration
 
 - name: Create Kafka Controller Jaas Config
   template:
