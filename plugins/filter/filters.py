@@ -37,6 +37,8 @@ class FilterModule(object):
             'resolve_and_format_hostname': self.resolve_and_format_hostname,
             'resolve_and_format_hostnames': self.resolve_and_format_hostnames,
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
+            'prometheus_client_properties': self.prometheus_client_properties,
+            'alertmanager_client_properties': self.alertmanager_client_properties,
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
@@ -584,3 +586,61 @@ class FilterModule(object):
                     users_dict[user].get('password').encode("utf-8"), bcrypt.gensalt()
                 ).decode()
         return username_with_hashed_passwords
+
+    def prometheus_client_properties(self, ssl_enabled, truststore_path, truststore_storepass,
+                                   keystore_path, keystore_storepass, keystore_keypass,
+                                   basic_auth_enabled, basic_auth_user_info, mtls_enabled,
+                                   service_name):
+        """
+        Generate Prometheus client properties for Control Center Next Gen.
+        Uses the same logic as client_properties filter but with Prometheus-specific prefixes.
+        """
+        final_dict = {}
+        config_prefix = 'confluent.controlcenter.prometheus.'
+
+        # SSL/TLS properties
+        if ssl_enabled:
+            final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
+            final_dict[config_prefix + 'ssl.truststore.password'] = str(truststore_storepass)
+            final_dict[config_prefix + 'alias.name'] = service_name
+
+            # mTLS properties
+            if mtls_enabled:
+                final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
+                final_dict[config_prefix + 'ssl.keystore.password'] = str(keystore_storepass)
+                final_dict[config_prefix + 'ssl.key.password'] = str(keystore_keypass)
+
+        # Basic authentication
+        if basic_auth_enabled and basic_auth_user_info:
+            final_dict[config_prefix + 'basic.auth.user.info'] = basic_auth_user_info
+
+        return final_dict
+
+    def alertmanager_client_properties(self, ssl_enabled, truststore_path, truststore_storepass,
+                                      keystore_path, keystore_storepass, keystore_keypass,
+                                      basic_auth_enabled, basic_auth_user_info, mtls_enabled,
+                                      service_name):
+        """
+        Generate Alertmanager client properties for Control Center Next Gen.
+        Uses the same logic as client_properties filter but with Alertmanager-specific prefixes.
+        """
+        final_dict = {}
+        config_prefix = 'confluent.controlcenter.alertmanager.'
+
+        # SSL/TLS properties
+        if ssl_enabled:
+            final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
+            final_dict[config_prefix + 'ssl.truststore.password'] = str(truststore_storepass)
+            final_dict[config_prefix + 'alias.name'] = service_name
+
+            # mTLS properties
+            if mtls_enabled:
+                final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
+                final_dict[config_prefix + 'ssl.keystore.password'] = str(keystore_storepass)
+                final_dict[config_prefix + 'ssl.key.password'] = str(keystore_keypass)
+
+        # Basic authentication
+        if basic_auth_enabled and basic_auth_user_info:
+            final_dict[config_prefix + 'basic.auth.user.info'] = basic_auth_user_info
+
+        return final_dict
