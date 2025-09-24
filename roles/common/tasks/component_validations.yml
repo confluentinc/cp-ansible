@@ -1,0 +1,67 @@
+---
+# Common validation tasks for all Confluent Platform components
+
+- name: "Check if Custom Jolokia Access Control File Exists - {{ component_name }}"
+  stat:
+    path: "{{ component_jolokia_access_control_file_src_path }}"
+  register: common_jolokia_file_check
+  delegate_to: localhost
+  when:
+    - component_jolokia_enabled|bool
+    - component_jolokia_access_control_enabled|bool
+    - component_jolokia_access_control_custom_file_enabled|bool
+    - component_jolokia_access_control_file_src_path != ""
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: "Validate Custom Jolokia Access Control File Path is Not Default Template - {{ component_name }}"
+  fail:
+    msg: |
+      When {{ component_name }} jolokia_access_control_custom_file_enabled is true,
+      you must provide your own custom jolokia_access_control_file_src_path, not the default template path.
+
+      Current configuration for {{ component_name }}:
+      - jolokia_enabled: {{ component_jolokia_enabled }}
+      - jolokia_access_control_enabled: {{ component_jolokia_access_control_enabled }}
+      - jolokia_access_control_custom_file_enabled: {{ component_jolokia_access_control_custom_file_enabled }}
+      - jolokia_access_control_file_src_path: "{{ component_jolokia_access_control_file_src_path }}"
+
+      The current path appears to be the default template path. When using custom_file_enabled=true,
+      you must provide a path to your own custom XML file, for example:
+      - "/path/to/your/custom-jolokia-access.xml"
+      - "/etc/ansible/files/jolokia-access.xml"
+
+      Please set a custom file path that points to your own Jolokia access control XML file.
+  when:
+    - component_jolokia_enabled|bool
+    - component_jolokia_access_control_enabled|bool
+    - component_jolokia_access_control_custom_file_enabled|bool
+    - component_jolokia_access_control_file_src_path is search("role_path.*templates.*jolokia_access_control_default.xml")
+  tags:
+    - validate
+    - validate_jolokia
+
+- name: "Validate Custom Jolokia Access Control File Path - {{ component_name }}"
+  fail:
+    msg: |
+      When {{ component_name }} jolokia_access_control_custom_file_enabled is true,
+      you must provide a valid jolokia_access_control_file_src_path.
+
+      Current configuration for {{ component_name }}:
+      - jolokia_enabled: {{ component_jolokia_enabled }}
+      - jolokia_access_control_enabled: {{ component_jolokia_access_control_enabled }}
+      - jolokia_access_control_custom_file_enabled: {{ component_jolokia_access_control_custom_file_enabled }}
+      - jolokia_access_control_file_src_path: "{{ component_jolokia_access_control_file_src_path }}"
+      Please ensure:
+      1. The file path is not empty
+      2. The file path is not the default template path
+      3. The file exists on the Ansible controller
+  when:
+    - component_jolokia_enabled|bool
+    - component_jolokia_access_control_enabled|bool
+    - component_jolokia_access_control_custom_file_enabled|bool
+    - component_jolokia_access_control_file_src_path == "" or (common_jolokia_file_check is defined and common_jolokia_file_check.stat is defined and not common_jolokia_file_check.stat.exists)
+  tags:
+    - validate
+    - validate_jolokia
