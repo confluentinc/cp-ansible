@@ -36,6 +36,18 @@
       "Please use 'log.dirs' under kafka_broker_custom_properties with comma separated directories."
   loop: "{{ groups['kafka_broker'] }}"
 
+- name: Validate Kafka Broker Jolokia Access Control Configuration
+  include_tasks: ../common/tasks/component_validations.yml
+  vars:
+    component_name: "Kafka Broker"
+    component_jolokia_enabled: "{{ kafka_broker_jolokia_enabled }}"
+    component_jolokia_access_control_enabled: "{{ kafka_broker_jolokia_access_control_enabled }}"
+    component_jolokia_access_control_custom_file_enabled: "{{ kafka_broker_jolokia_access_control_custom_file_enabled }}"
+    component_jolokia_access_control_file_src_path: "{{ kafka_broker_jolokia_access_control_file_src_path }}"
+  tags:
+    - validate
+    - validate_jolokia
+
 # To avoid a catastrophic user error where root directory permissions get recursively changed
 - name: Assert log.dirs Property not Misconfigured
   assert:
@@ -378,6 +390,18 @@
   when: (kafka_broker_custom_log4j|bool) and (logredactor_enabled|bool) and (not kafka_broker_skip_restarts|bool)
   tags:
     - log
+
+
+- name: Copy Jolokia Access Control File
+  copy:
+    src: "{{ kafka_broker_jolokia_access_control_file_src_path }}"
+    dest: "{{ kafka_broker_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_broker_user }}"
+    group: "{{ kafka_broker_group }}"
+  when: kafka_broker_jolokia_enabled|bool and kafka_broker_jolokia_access_control_enabled|bool
+  tags:
+    - configuration
 
 - name: Create Kafka Broker Jolokia Config
   template:
