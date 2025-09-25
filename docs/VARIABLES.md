@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.3.13
+Default:  7.4.10
 
 ***
 
@@ -220,6 +220,14 @@ Default:  2000
 
 ***
 
+### required_total_memory_mb_kafka_controller
+
+Variable to define the minimum amount of memory in MB required to run kafka controller. Calculated as default heap size plus 1GB for OS.
+
+Default:  7000
+
+***
+
 ### required_total_memory_mb_kafka_broker
 
 Variable to define the minimum amount of memory in MB required to run kafka Broker. Calculated as default heap size plus 1GB for OS.
@@ -295,6 +303,14 @@ Default:  true
 ### zookeeper_health_checks_enabled
 
 Boolean to enable health checks on Zookeeper
+
+Default:  "{{health_checks_enabled}}"
+
+***
+
+### kafka_controller_health_checks_enabled
+
+Boolean to enable health checks on Kafka
 
 Default:  "{{health_checks_enabled}}"
 
@@ -440,7 +456,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  2.38.1
+Default:  3.65.0
 
 ***
 
@@ -908,6 +924,230 @@ Default:  "{{ skip_restarts }}"
 
 ***
 
+### kafka_controller_quorum_voters
+
+Default controller quorum voters
+
+Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{controller_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+
+***
+
+### kafka_controller_config_prefix
+
+Default Kafka config prefix. Only valid to customize when installation_method: archive
+
+Default:  "{{ config_prefix }}/controller"
+
+***
+
+### kafka_controller_port
+
+Port to expose Kraft Controller
+
+Default:  9093
+
+***
+
+### kafka_controller_ssl_enabled
+
+Boolean to configure controller with TLS Encryption. Also manages Java Keystore creation
+
+Default:  "{{ssl_enabled}}"
+
+***
+
+### kafka_controller_ssl_mutual_auth_enabled
+
+Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+
+Default:  "{{ssl_mutual_auth_enabled}}"
+
+***
+
+### kafka_controller_sasl_protocol
+
+SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none
+
+Default:  "{{sasl_protocol}}"
+
+***
+
+### kafka_controller_user
+
+Set this variable to customize the Linux User that the Kafka controller Service runs with. Default user is cp-kafka.
+
+Default:  "{{kafka_controller_default_user}}"
+
+***
+
+### kafka_controller_group
+
+Set this variable to customize the Linux Group that the Kafka controller Service user belongs to. Default group is confluent.
+
+Default:  "{{kafka_controller_default_group}}"
+
+***
+
+### kafka_controller_log_dir
+
+Set this variable to customize the directory that the Kafka controller writes log files to. Default location is /var/log/controller.
+
+Default:  "{{kafka_controller_default_log_dir}}"
+
+***
+
+### kafka_controller_jolokia_enabled
+
+Boolean to enable Jolokia Agent installation and configuration on kafka
+
+Default:  "{{jolokia_enabled}}"
+
+***
+
+### kafka_controller_jolokia_port
+
+Port to expose kafka jolokia metrics. Beware of port collisions if colocating components on same host
+
+Default:  7770
+
+***
+
+### kafka_controller_jolokia_ssl_enabled
+
+Boolean to enable TLS encryption on Kafka jolokia metrics
+
+Default:  "{{ ssl_enabled }}"
+
+***
+
+### kafka_controller_jolokia_config
+
+Path on Kafka host for Jolokia Configuration file
+
+Default:  "{{ (config_base_path, kafka_controller_config_prefix_path, 'kafka_jolokia.properties') | path_join }}"
+
+***
+
+### kafka_controller_jolokia_auth_mode
+
+Authentication Mode for Kafka's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set kafka_controller_jolokia_user and kafka_controller_jolokia_password
+
+Default:  "{{jolokia_auth_mode}}"
+
+***
+
+### kafka_controller_jolokia_user
+
+Username for Kafka's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_user}}"
+
+***
+
+### kafka_controller_jolokia_password
+
+Password for Kafka's Jolokia Agent when using Basic Auth
+
+Default:  "{{jolokia_password}}"
+
+***
+
+### kafka_controller_jmxexporter_enabled
+
+Boolean to enable Prometheus Exporter Agent installation and configuration on kafka
+
+Default:  "{{jmxexporter_enabled}}"
+
+***
+
+### kafka_controller_jmxexporter_port
+
+Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
+
+Default:  8079
+
+***
+
+### kafka_controller_jmxexporter_config_source_path
+
+Path on Ansible Controller for Kafka Broker jmx config file. Only necessary to set for custom config.
+
+Default:  kafka.yml.j2
+
+***
+
+### kafka_controller_jmxexporter_config_path
+
+Destination path for Kafka controller jmx config file
+
+Default:  /opt/prometheus/kafka.yml
+
+***
+
+### kafka_controller_copy_files
+
+Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
+
+Default:  []
+
+***
+
+### kafka_controller_default_internal_replication_factor
+
+Replication Factor for internal topics. Defaults to the minimum of the number of controllers and can be overridden via default replication factor (see default_internal_replication_factor).
+
+Default:  "{{ [ groups['kafka_controller'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
+
+***
+
+### kafka_controller_metrics_reporter_enabled
+
+Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
+
+Default:  "{{ confluent_server_enabled and 'control_center' in groups }}"
+
+***
+
+### kafka_controller_custom_properties
+
+Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_controller_custom_client_properties
+
+Use to add custom properties to variable kafka_controller_client_properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+
+Default:  {}
+
+***
+
+### kafka_controller_rest_proxy_enabled
+
+Boolean to enable the embedded rest proxy within Kraft Controller. Not yet supported.
+
+Default:  false
+
+***
+
+### kafka_controller_cluster_name
+
+Use to register and identify your Kafka cluster in the MDS.
+
+Default:  ""
+
+***
+
+### kafka_controller_skip_restarts
+
+Boolean used for disabling of systemd service restarts when rootless install is executed
+
+Default:  "{{ skip_restarts }}"
+
+***
+
 ### kafka_broker_config_prefix
 
 Default Kafka config prefix. Only valid to customize when installation_method: archive
@@ -1112,7 +1352,7 @@ Default:  {}
 
 Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
 
-Default:  "{{confluent_server_enabled and not ccloud_kafka_enabled}}"
+Default:  "{{confluent_server_enabled and not ccloud_kafka_enabled }}"
 
 ***
 
@@ -2148,6 +2388,14 @@ Default:  "{{mds_ssl_enabled}}"
 
 ***
 
+### rbac_super_users
+
+Additional list of super user principals for RBAC clusters. In case when mTLS is enabled on brokers or controllers their certificate principals should be passed in this list.
+
+Default:  []
+
+***
+
 ### mds_super_user
 
 LDAP User which will be granted super user permissions to create role bindings in the MDS
@@ -2183,6 +2431,22 @@ Default:  "{{mds_super_user}}"
 ### kafka_broker_ldap_password
 
 Password to kafka_broker_ldap_user LDAP User
+
+Default:  "{{mds_super_user_password}}"
+
+***
+
+### kafka_controller_ldap_user
+
+LDAP User for Kafkas Embedded Rest Service to authenticate as
+
+Default:  "{{mds_super_user}}"
+
+***
+
+### kafka_controller_ldap_password
+
+Password to kafka_controller_ldap_user LDAP User
 
 Default:  "{{mds_super_user_password}}"
 
@@ -2388,6 +2652,14 @@ Default:  []
 
 ***
 
+### kafka_controller_additional_system_admins
+
+List of principals to be granted system admin Role Bindings on the Kafka controller Cluster
+
+Default:  "{{rbac_component_additional_system_admins}}"
+
+***
+
 ### kafka_broker_additional_system_admins
 
 List of principals to be granted system admin Role Bindings on the Kafka Cluster
@@ -2465,6 +2737,54 @@ Default:  generated_ssl_files/security.properties
 Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config'.
 
 Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### kafka_controller_secrets_protection_enabled
+
+Boolean to enable secrets protection in Kafka controller
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### kafka_controller_client_secrets_protection_enabled
+
+Boolean to enable secrets protection on kafka controller client configuration.
+
+Default:  "{{secrets_protection_enabled}}"
+
+***
+
+### kafka_controller_client_secrets_protection_encrypt_passwords
+
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Kafka.
+
+Default:  "{{secrets_protection_encrypt_passwords}}"
+
+***
+
+### kafka_controller_client_secrets_protection_encrypt_properties
+
+List of Kafka client properties to encrypt. Can be used in addition to kafka_controller_client_secrets_protection_encrypt_passwords.
+
+Default:  []
+
+***
+
+### kafka_controller_secrets_protection_encrypt_passwords
+
+Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Kafka.
+
+Default:  "{{secrets_protection_encrypt_passwords}}"
+
+***
+
+### kafka_controller_secrets_protection_encrypt_properties
+
+List of Kafka properties to encrypt. Can be used in addition to kafka_controller_secrets_protection_encrypt_passwords.
+
+Default:  []
 
 ***
 
@@ -2681,6 +3001,22 @@ Default:  ""
 Password for Proxy Server used by Telemetry. Only set if Proxy Server requires authentication
 
 Default:  ""
+
+***
+
+### kafka_controller_telemetry_enabled
+
+Boolean to configure Telemetry on Kafka. Must also set telemetry_api_key and telemetry_api_secret
+
+Default:  "{{telemetry_enabled}}"
+
+***
+
+### kafka_controller_telemetry_ansible_labels_enabled
+
+Boolean to send cp-ansible Telemetry Metrics from Kafka. Currently only sends cp-ansible version data
+
+Default:  "{{kafka_controller_telemetry_enabled}}"
 
 ***
 
@@ -4084,6 +4420,14 @@ Default:  "{{deployment_strategy}}"
 
 ***
 
+### kafka_controller_deployment_strategy
+
+Deployment strategy for Kafka controller. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
 ### kafka_broker_deployment_strategy
 
 Deployment strategy for Kafka. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
@@ -4143,6 +4487,14 @@ Default:  false
 ### zookeeper_pause_rolling_deployment
 
 Boolean to Pause Rolling Deployment after each Zookeeper Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
+### kafka_controller_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each Kafka controller Node starts up.
 
 Default:  "{{pause_rolling_deployment}}"
 
@@ -4631,6 +4983,108 @@ Default:  60
 ***
 
 ### kafka_broker_jmxexporter_bean_name_expressions_cache
+
+Whether to cache bean name expressions to rule computation (match and mismatch). Not recommended for rules matching on bean value, as only the value from the first scrape will be cached and re-used. This can increase performance when collecting a lot of mbeans.
+
+Default:  false
+
+***
+
+# kafka_controller
+
+Below are the supported variables for the role kafka_controller
+
+***
+
+### kafka_controller_custom_log4j
+
+Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
+
+Default:  "{{ custom_log4j }}"
+
+***
+
+### kafka_controller_log4j_root_logger
+
+Root logger within Kafka's log4j config. Only honored if kafka_controller_custom_log4j: true
+
+Default:  "INFO, stdout, kafkaAppender"
+
+***
+
+### kafka_controller_max_log_files
+
+Max number of log files generated by Kafka Controller. Only honored if kafka_controller_custom_log4j: true
+
+Default:  10
+
+***
+
+### kafka_controller_log_file_size
+
+Max size of a log file generated by Kafka Controller. Only honored if kafka_controller_custom_log4j: true
+
+Default:  100MB
+
+***
+
+### kafka_controller_logredactor_logger_specs_list
+
+List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+
+Default: 
+
+***
+
+### kafka_controller_custom_java_args
+
+Custom Java Args to add to the Kafka Process
+
+Default:  ""
+
+***
+
+### kafka_controller_service_overrides
+
+Overrides to the Service Section of Kafka Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_controller_service_environment_overrides
+
+Environment Variables to be added to the Kafka Service. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_controller_service_unit_overrides
+
+Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
+
+Default: 
+
+***
+
+### kafka_controller_health_check_delay
+
+Time in seconds to wait before starting Kafka Health Checks.
+
+Default:  20
+
+***
+
+### kafka_controller_jmxexporter_startup_delay
+
+Time in seconds to wait before JMX exporter starts serving metrics. Any requests within the delay period will result in an empty metrics set.
+
+Default:  60
+
+***
+
+### kafka_controller_jmxexporter_bean_name_expressions_cache
 
 Whether to cache bean name expressions to rule computation (match and mismatch). Not recommended for rules matching on bean value, as only the value from the first scrape will be cached and re-used. This can increase performance when collecting a lot of mbeans.
 

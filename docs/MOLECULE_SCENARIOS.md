@@ -72,7 +72,7 @@ Validates that Java 17 is in Use
 
 #### Scenario archive-plain-rhel test's the following:
 
-Archive Installation of Confluent Platform on centos8.
+Archive Installation of Confluent Platform on RHEL9.
 
 SASL Plain protocol.
 
@@ -157,8 +157,6 @@ Archive Installation of Confluent Platform on centos8.
 SASL SCRAM protocol.
 
 TLS Enabled.
-
-Secrets Protection.
 
 Custom Archive owner.
 
@@ -251,6 +249,12 @@ connect-scale-up verify
 Installation of Confluent Community Edition on centos8.
 
 SASL Plain Auth.
+
+Kafka Controller and broker are colocated
+
+Kafka broker has custom listener at port 9093
+
+Kraft Controller is running at port 9094
 
 #### Scenario cp-kafka-plain-rhel verify test's the following:
 
@@ -494,7 +498,7 @@ Validates that Java 11 is in use.
 
 #### Scenario mtls-java11-rhel test's the following:
 
-Installation of Confluent Platform on CentOS7.
+Installation of Confluent Platform on RHEL9.
 
 MTLS enabled.
 
@@ -634,7 +638,7 @@ Validates that Control Center has truststore in place.
 
 #### Scenario plain-rhel test's the following:
 
-Installation of Confluent Platform on centos8.
+Installation of Confluent Platform on RHEL9.
 
 SASL Plain enabled.
 
@@ -1104,9 +1108,9 @@ RBAC enabled.
 
 MTLS enabled.
 
-FIPS enabled.
+Secrets protection enabled
 
-Secrets protection disabled
+FIPS enabled.
 
 Kafka Broker Customer Listener.
 
@@ -1331,8 +1335,6 @@ Enables SASL SCRAM Auth on Zookeeper.
 TLS enabled.
 
 Customer zookeeper root.
-
-Secrets Protection enabled.
 
 Jolokia has TLS disabled.
 

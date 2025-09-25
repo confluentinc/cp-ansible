@@ -1,0 +1,42 @@
+---
+- name: Kafka Controller Status Finding
+  hosts: kafka_controller
+  gather_facts: false
+  tags: kafka_controller
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Populate service facts
+      service_facts:
+
+    - name: Determine Installation Pattern - Parallel or Serial
+      set_fact:
+        install_pattern: "{{ 'parallel' if service_state != 'running' or kafka_controller_deployment_strategy == 'parallel' else 'serial' }}"
+      vars:
+        service_state: "{{ ansible_facts.services[kafka_controller_service_name + '.service'].state | default('unknown') }}"
+
+    - name: Group Hosts by Installation Pattern
+      group_by:
+        key: kafka_controller_{{install_pattern}}
+      changed_when: false
+
+- name: Kafka Controller Parallel Provisioning
+  hosts: kafka_controller_parallel
+  gather_facts: false
+  tags: kafka_controller
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: kafka_controller
+
+- name: Kafka Controller Serial Provisioning
+  hosts: kafka_controller_serial
+  gather_facts: false
+  serial: 1
+  tags: kafka_controller
+  environment: "{{ proxy_env }}"
+  tasks:
+    - import_role:
+        name: kafka_controller

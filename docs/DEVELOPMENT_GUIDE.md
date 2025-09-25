@@ -225,7 +225,7 @@ We are currently linting with:
 To test/check manually you can run:
 
 ```shell
-yamllimt .
+yamllint .
 ansible-lint *.yml
 ```
 

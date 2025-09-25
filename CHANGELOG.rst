@@ -4,15 +4,28 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-v7.3.14
+v7.4.10
 ======
+
+Notable enhancements
+-------------
+
+- Ansible 9.x is now supported.
 
 Notable fixes
 -------------
+
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.3.13
+v7.4.9
 ======
+
+Notable enhancements
+-------------
+
+- Introduced a new variable `rbac_super_users` to specify additional super users for the cluster
+- Removed Kraft controller and broker dependency on each other for fetching cert principals in RBAC enabled clusters with mTLS
+
 
 Notable fixes
 -------------
@@ -21,23 +34,30 @@ Notable fixes
 - Changed systemd service override directory permissions from 640 to 750
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.3.12
+
+v7.4.8
 ======
 
-Notable fixes
+Notable enhancements
 -------------
 
 - Improved error handling in connectors.
+- Fixed the ownership of data directory files in kraft controllers and brokers.
 
-v7.3.11
+v7.4.7
 ======
+
+Notable enhancements
+-------------
+
+- Updated default confluent cli version to 3.65.0
 
 Notable fixes
 -------------
 
 - Critical security and vulnerability issues were fixed
 
-v7.3.10
+v7.4.6
 ======
 
 Notable fixes
@@ -45,8 +65,14 @@ Notable fixes
 
 - Ansible playbooks use archive debian10 repo since debian 10 reached EOL.
 
-v7.3.9
+v7.4.5
 ======
+
+Notable enhancements
+-------------
+
+- Added support for configuring a custom port for the kraft controllers.
+- Updated default confluent cli version to 3.55.0
 
 Notable fixes
 -------------
@@ -54,8 +80,7 @@ Notable fixes
 - Connect and Ksqldb clusters are correctly registered even for co-located components
 - Critical security and vulnerability issues were fixed
 
-
-v7.3.8
+v7.4.4
 ======
 
 Notable fixes
@@ -64,7 +89,7 @@ Notable fixes
 - Critical security and vulnerability issues were fixed.
 
 
-v7.3.7
+v7.4.3
 ======
 
 Notable fixes
@@ -73,26 +98,52 @@ Notable fixes
 - Critical security and vulnerability issues were fixed.
 
 
-v7.3.6
+v7.4.2
 ======
 
 Notable enhancements
 -------------
 
-- Updated default confluent cli version to 2.38.1
+- Updated default confluent cli version to 3.30.1
+- Fixed bugs in discovery to generate inventory file with appropriate security protocols
 - Ansible builtin File mode is now string instead of octal
 
 
-v7.3.5
+v7.4.1
 ======
 
 Notable enhancements
 -------------
 
 - Parametrize the number of retries for MDS API requests
+- Add Broker's principals to Controller's super user list on a Kraft cluster with RBAC
 - Removed timeout configs from client properties of Kafka Broker, allowing customers to use custom timeout values
 - Archived installation of Confluent Platform on Debian 9 since the OS version reached end-of-life
 
+
+v7.4.0
+======
+
+New features
+-------------
+
+- CP-ansible supports KRaft-based fresh Confluent Platform deployments
+- CP-ansible includes the Confluent Ansible Discovery tool for migrating stand-alone Confluent Platform deployments to Ansible-managed Confluent Platform environments
+
+Notable enhancements
+-------------
+
+- Default confluent cli version has been updated to 3.2.1, which removes the dependency of secrets protection on rbac
+- Added variable to customize the number of days from Certificate Authority creation to expiration
+- Dedicated playbook to validate hosts
+- Added support for custom Kerberos client configuration file and custom path
+- Switched to archive repo for debian9 since it reached end-of-life
+- Added support for RHEL9 OS on CP
+
+Upgrade considerations
+-------------
+
+- Upgrades to CP 7.4 can be taken up with CP-Ansible using Ansible versions 4 - 7 (ansible-core versions 2.11 - 2.14)
 
 v7.3.4
 ======

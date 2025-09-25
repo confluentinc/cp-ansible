@@ -3,6 +3,28 @@
 ### Validates that LDAPS is working.
 ### Validates that TLS CN is being registered as super user.
 
+- name: Verify - kafka_controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: listener.name.controller.ssl.keystore.location
+        expected_value: /var/ssl/private/kafka_controller.keystore.jks
+
+    - name: Get super.users
+      shell: grep "super.users" /etc/controller/server.properties
+      register: super_users_grep
+
+    - name: Assert full dname found in server.properties
+      assert:
+        that:
+          - "'User:CN=kafka_controller,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US' in super_users_grep.stdout"
+        fail_msg: "Super Users property: {{super_users_grep.stdout}} does not contain User:CN=kafka_controller,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US"
+
 - name: Verify - kafka_broker
   hosts: kafka_broker
   gather_facts: false
