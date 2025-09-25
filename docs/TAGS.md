@@ -264,3 +264,9 @@ Description: To pause Zookeeper to Kraft migration at Dual Write mode. Used to m
 Description: To migrate from Dual Write mode to Kraft mode. Used only when the cluster is currently in Dual Write mode.
 
 ***
+
+###Tag - validate_jolokia
+
+Description: To validate Jolokia access control configurations.
+
+****
