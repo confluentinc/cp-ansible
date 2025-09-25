@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.9.2
+Default:  8.0.0
 
 ***
 
@@ -16,7 +16,7 @@ Default:  7.9.2
 
 Version of Confluent Control Center Next Gen to install
 
-Default:  2.0.0
+Default:  2.2.0
 
 ***
 
@@ -148,9 +148,9 @@ Default:  false
 
 ***
 
-### custom_log4j
+### custom_log4j2
 
-Boolean to configure ZK, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
+Boolean to configure Kraft, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
 
 Default:  true
 
@@ -158,7 +158,7 @@ Default:  true
 
 ### logredactor_enabled
 
-Boolean to enable logredactor for all components. Works only when enabled along with custom_log4j. If enabled, ensure correct value of logredactor_rule_path/url
+Boolean to enable logredactor for all components. Works only when enabled along with custom_log4j2. If enabled, ensure correct value of logredactor_rule_path/url
 
 Default:  false
 
@@ -174,7 +174,7 @@ Default:  ""
 
 ### logredactor_rule_path
 
-Full path and name of the rules file on all components. This is the location which will be referenced in the log4j property file on the redactor appender. Not required if logredactor_rule_url is specified.
+Full path and name of the rules file on all components. This is the location which will be referenced in the log4j2 property file on the redactor appender. Not required if logredactor_rule_url is specified.
 
 Default:  "{{ archive_config_base_path if installation_method == 'archive' else '' }}/{{ config_prefix }}/rules.json"
 
@@ -228,14 +228,6 @@ Default:  1000
 
 ***
 
-### required_total_memory_mb_zookeeper
-
-Variable to define the minimum amount of memory in MB required to run zookeeper.  Calculated as default heap size plus 1GB for OS.
-
-Default:  2000
-
-***
-
 ### required_total_memory_mb_kafka_controller
 
 Variable to define the minimum amount of memory in MB required to run kafka controller. Calculated as default heap size plus 1GB for OS.
@@ -284,14 +276,6 @@ Default:  3000
 
 ***
 
-### required_total_memory_mb_control_center
-
-Variable to define the minimum amount of memory in MB required to run Control Center. Calculated as default heap size plus 1GB for OS.
-
-Default:  7000
-
-***
-
 ### required_total_memory_mb_kafka_connect_replicator
 
 Variable to define the minimum amount of memory in MB required to run Kafka Connect Replicator. Calculated as default heap size plus 1GB for OS.
@@ -313,14 +297,6 @@ Default:  true
 Boolean to enable health checks on all components
 
 Default:  true
-
-***
-
-### zookeeper_health_checks_enabled
-
-Boolean to enable health checks on Zookeeper
-
-Default:  "{{health_checks_enabled}}"
 
 ***
 
@@ -372,14 +348,6 @@ Default:  "{{health_checks_enabled}}"
 
 ***
 
-### control_center_health_checks_enabled
-
-Boolean to enable health checks on Control Center
-
-Default:  "{{health_checks_enabled}}"
-
-***
-
 ### control_center_next_gen_health_checks_enabled
 
 Boolean to enable health checks on Control Center
@@ -392,7 +360,7 @@ Default:  "{{health_checks_enabled}}"
 
 Boolean to configure Monitoring Interceptors on ksqlDB, Rest Proxy, and Connect. Defaults to true if Control Center in inventory. Enable if you wish to have monitoring interceptors to report to a centralized monitoring cluster.
 
-Default:  "{{ 'control_center' in groups or 'control_center_next_gen' in groups }}"
+Default:  "{{ 'control_center_next_gen' in groups }}"
 
 ***
 
@@ -480,7 +448,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  4.7.0
+Default:  4.27.0
 
 ***
 
@@ -780,230 +748,6 @@ Default:  /sbin/nologin
 
 ***
 
-### zookeeper_config_prefix
-
-Default Zookeeper config prefix. Note - Only valid to customize when installation_method: archive
-
-Default:  "{{ config_prefix }}/kafka"
-
-***
-
-### zookeeper_user
-
-Set this variable to customize the Linux User that the Zookeeper Service runs with. Default user is cp-kafka.
-
-Default:  "{{zookeeper_default_user}}"
-
-***
-
-### zookeeper_group
-
-Set this variable to customize the Linux Group that the Zookeeper Service user belongs to. Default group is confluent.
-
-Default:  "{{zookeeper_default_group}}"
-
-***
-
-### zookeeper_ssl_enabled
-
-Boolean to configure zookeeper with TLS Encryption. Also manages Java Keystore creation
-
-Default:  "{{ssl_enabled}}"
-
-***
-
-### zookeeper_ssl_mutual_auth_enabled
-
-Deprecated- Boolean to enable mTLS Authentication on Zookeeper (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
-
-Default:  "{{ssl_mutual_auth_enabled}}"
-
-***
-
-### zookeeper_sasl_protocol
-
-Deprecated- SASL Mechanism for Zookeeper Server to Server and Server to Client Authentication. Options are none, kerberos, digest. Server to server auth only working for digest-md5
-
-Default:  "{{ 'kerberos' if 'kerberos' in (sasl_protocol | confluent.platform.split_to_list) else 'none' }}"
-
-***
-
-### zookeeper_quorum_authentication_type
-
-Authentication to put on ZK Server to Server connections. Available options: [mtls, digest, digest_over_tls].
-
-Default:  "{% if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled %}mtls{% elif zookeeper_sasl_protocol == 'digest' %}digest{% else %}none{% endif %}"
-
-***
-
-### zookeeper_client_authentication_type
-
-Authentication to put on ZK Client to Server connections. This is Kafka's connection to ZK. Available options: [mtls, digest, kerberos].
-
-Default:  "{{ 'mtls' if zookeeper_ssl_enabled and zookeeper_ssl_mutual_auth_enabled else zookeeper_sasl_protocol }}"
-
-***
-
-### zookeeper_client_port
-
-Port for Kafka to Zookeeper connections
-
-Default:  "{{'2182' if zookeeper_ssl_enabled|bool else '2181'}}"
-
-***
-
-### zookeeper_log_dir
-
-Set this variable to customize the directory that Zookeeper writes log files to. Default location is /var/log/kafka. NOTE- zookeeper.log_path is deprecated.
-
-Default:  "{{zookeeper_default_log_dir}}"
-
-***
-
-### zookeeper_chroot
-
-Chroot path in Zookeeper used by Kafka. Defaults to no chroot. Must begin with a /
-
-Default:  ""
-
-***
-
-### zookeeper_jolokia_enabled
-
-Boolean to enable Jolokia Agent installation and configuration on zookeeper
-
-Default:  "{{jolokia_enabled}}"
-
-***
-
-### zookeeper_jolokia_port
-
-Port to expose jolokia metrics. Beware of port collisions if colocating components on same host
-
-Default:  7770
-
-***
-
-### zookeeper_jolokia_ssl_enabled
-
-Boolean to enable TLS encryption on Zookeeper jolokia metrics
-
-Default:  "{{ zookeeper_ssl_enabled }}"
-
-***
-
-### zookeeper_jolokia_config
-
-Path on Zookeeper host for Jolokia Configuration file
-
-Default:  "{{ (config_base_path, zookeeper_config_prefix_path, 'zookeeper_jolokia.properties') | path_join }}"
-
-***
-
-### zookeeper_jolokia_auth_mode
-
-Authentication Mode for Zookeeper's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set zookeeper_jolokia_user and zookeeper_jolokia_password
-
-Default:  "{{jolokia_auth_mode}}"
-
-***
-
-### zookeeper_jolokia_user
-
-Username for Zookeeper's Jolokia Agent when using Basic Auth
-
-Default:  "{{jolokia_user}}"
-
-***
-
-### zookeeper_jolokia_password
-
-Password for Zookeeper's Jolokia Agent when using Basic Auth
-
-Default:  "{{jolokia_password}}"
-
-***
-
-### zookeeper_jmxexporter_enabled
-
-Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
-
-Default:  "{{jmxexporter_enabled}}"
-
-***
-
-### zookeeper_jmxexporter_port
-
-Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
-
-Default:  8079
-
-***
-
-### zookeeper_jmxexporter_config_source_path
-
-Path on Ansible Controller for Zookeeper jmx config file. Only necessary to set for custom config.
-
-Default:  zookeeper.yml
-
-***
-
-### zookeeper_jmxexporter_config_path
-
-Destination path for Zookeeper jmx config file
-
-Default:  /opt/prometheus/zookeeper.yml
-
-***
-
-### zookeeper_peer_port
-
-Zookeeper peer port
-
-Default:  2888
-
-***
-
-### zookeeper_leader_port
-
-Zookeeper leader port
-
-Default:  3888
-
-***
-
-### zookeeper_copy_files
-
-Use to copy files from control node to zookeeper hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
-
-Default:  []
-
-***
-
-### zookeeper_custom_properties
-
-Use to set custom zookeeper properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- zookeeper.properties is deprecated.
-
-Default:  {}
-
-***
-
-### zookeeper_skip_restarts
-
-Boolean used for disabling of systemd service restarts when rootless install is executed
-
-Default:  "{{ skip_restarts }}"
-
-***
-
-### kraft_migration
-
-Boolean to enable zookeeper to kraft migration
-
-Default:  false
-
-***
-
 ### metadata_migration_retries
 
 Parameter to increase the number of retries for Metadata Migration API request
@@ -1096,7 +840,7 @@ Default:  "{{kafka_controller_default_log_dir}}"
 
 Boolean to enable Jolokia Agent installation and configuration on kafka. Jolokia is required in Kraft Controller during ZK to Kraft migration
 
-Default:  "{{jolokia_enabled or kraft_migration}}"
+Default:  "{{jolokia_enabled}}"
 
 ***
 
@@ -1200,7 +944,7 @@ Default:  "{{ [ groups['kafka_controller'] | default(['localhost']) | length, de
 
 Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
-Default:  "{{ confluent_server_enabled and ('control_center' in groups or 'control_center_next_gen' in groups) }}"
+Default:  "{{ confluent_server_enabled and 'control_center_next_gen' in groups }}"
 
 ***
 
@@ -1432,7 +1176,7 @@ Default:  "{{ [ groups['kafka_broker'] | default(['localhost']) | length, defaul
 
 Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
 
-Default:  "{{ confluent_server_enabled and ('control_center' in groups or 'control_center_next_gen' in groups) }}"
+Default:  "{{ confluent_server_enabled and 'control_center_next_gen' in groups }}"
 
 ***
 
@@ -2492,118 +2236,6 @@ Default:  "{{ auth_mode }}"
 
 ***
 
-### control_center_config_prefix
-
-Default Control Center config prefix. Only valid to customize when installation_method: archive
-
-Default:  "{{ config_prefix }}/confluent-control-center"
-
-***
-
-### control_center_user
-
-Set this variable to customize the Linux User that the Control Center Service runs with. Default user is cp-control-center.
-
-Default:  "{{control_center_default_user}}"
-
-***
-
-### control_center_group
-
-Set this variable to customize the Linux Group that the Control Center Service user belongs to. Default group is confluent.
-
-Default:  "{{control_center_default_group}}"
-
-***
-
-### control_center_port
-
-Port Control Center exposed over
-
-Default:  9021
-
-***
-
-### control_center_listener_hostname
-
-Interface on host for Control Center to listen on
-
-Default:  "0.0.0.0"
-
-***
-
-### control_center_ssl_enabled
-
-Boolean to configure Control Center with TLS Encryption. Also manages Java Keystore creation
-
-Default:  "{{ssl_enabled}}"
-
-***
-
-### control_center_mds_cert_auth_only
-
-Property of Control Center as MDS client. Can be set to true when ssl_client_authentication is not none. When set to true will not send oauth token or ldap creds to MDS even when MDS server has support for accepting them. Keeping false means if MDS has oauth and mtls support client will send both oauth token and cert
-
-Default:  false
-
-***
-
-### control_center_authentication_type
-
-Control Center Authentication. Available options: [basic, none].
-
-Default:  none
-
-***
-
-### control_center_log_dir
-
-Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
-
-Default:  "{{control_center_default_log_dir}}"
-
-***
-
-### control_center_kafka_listener_name
-
-Name of listener used by C3 to talk to Kafka
-
-Default:  internal
-
-***
-
-### control_center_copy_files
-
-Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
-
-Default:  []
-
-***
-
-### control_center_default_internal_replication_factor
-
-Replication Factor for Control Center internal topics. Defaults to the minimum of the number of brokers and can be overridden via default replication factor (see default_internal_replication_factor).
-
-Default:  "{{ 3 if ccloud_kafka_enabled|bool else
-
-***
-
-### control_center_custom_properties
-
-Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
-
-Default:  {}
-
-***
-
-### control_center_skip_restarts
-
-Boolean used for disabling of systemd service restarts when rootless install is executed
-
-Default:  "{{ skip_restarts }}"
-
-***
-
 ### control_center_next_gen_config_prefix
 
 Default Control Center config prefix. Only valid to customize when installation_method: archive
@@ -2624,7 +2256,7 @@ Default:  "/opt/confluent-control-center/dependencies"
 
 Set this variable to customize the Linux User that the Control Center Service runs with. Default user is cp-control-center.
 
-Default:  "{{control_center_default_user}}"
+Default:  "{{control_center_next_gen_default_user}}"
 
 ***
 
@@ -2632,7 +2264,7 @@ Default:  "{{control_center_default_user}}"
 
 Set this variable to customize the Linux Group that the Control Center Service user belongs to. Default group is confluent.
 
-Default:  "{{control_center_default_group}}"
+Default:  "{{control_center_next_gen_default_group}}"
 
 ***
 
@@ -2678,7 +2310,7 @@ Default:  none
 
 ### control_center_next_gen_log_dir
 
-Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center.appender_log_path is deprecated.
+Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center_next_gen.appender_log_path is deprecated.
 
 Default:  "{{control_center_next_gen_default_log_dir}}"
 
@@ -2718,7 +2350,7 @@ Default:  "{{ 3 if ccloud_kafka_enabled|bool else
 
 ### control_center_next_gen_custom_properties
 
-Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center.properties is deprecated.
+Use to set custom Control Center properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- control_center_next_gen.properties is deprecated.
 
 Default:  {}
 
@@ -2964,6 +2596,94 @@ Default:  none
 
 ***
 
+### oauth_superuser_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  false
+
+***
+
+### oauth_superuser_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  none
+
+***
+
+### oauth_superuser_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  none
+
+***
+
+### oauth_superuser_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  none
+
+***
+
+### oauth_superuser_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  none
+
+***
+
+### oauth_superuser_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  none
+
+***
+
+### oauth_superuser_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  none
+
+***
+
+### oauth_superuser_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  none
+
+***
+
+### oauth_superuser_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  none
+
+***
+
+### oauth_superuser_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  none
+
+***
+
+### oauth_superuser_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  none
+
+***
+
 ### oauth_superuser_principal
 
 Service principal for OAuth client in IdPserver. Defaults to client id. Needs to be modified based on OAuth JWT token's field pointed by oauth_sub_claim
@@ -3116,6 +2836,94 @@ Default:  "{{oauth_superuser_client_password}}"
 
 ***
 
+### kafka_broker_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  "{{oauth_superuser_client_assertion_enabled}}"
+
+***
+
+### kafka_broker_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  "{{ oauth_superuser_client_assertion_file_base_path }}"
+
+***
+
+### kafka_broker_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_nbf_include}}"
+
+***
+
+### kafka_broker_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_audience}}"
+
+***
+
+### kafka_broker_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_issuer}}"
+
+***
+
+### kafka_broker_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_sub}}"
+
+***
+
+### kafka_broker_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_scope}}"
+
+***
+
+### kafka_broker_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_private_key_file}}"
+
+***
+
+### kafka_broker_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_private_key_passphrase}}"
+
+***
+
+### kafka_broker_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_jti_include}}"
+
+***
+
+### kafka_broker_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_template_file}}"
+
+***
+
 ### kafka_controller_ldap_user
 
 LDAP User for Kafkas Embedded Rest Service to authenticate as
@@ -3145,6 +2953,94 @@ Default:  "{{oauth_superuser_client_id}}"
 Client Secret to kafka_controller_oauth_user
 
 Default:  "{{oauth_superuser_client_password}}"
+
+***
+
+### kafka_controller_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  "{{oauth_superuser_client_assertion_enabled}}"
+
+***
+
+### kafka_controller_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_file_base_path}}"
+
+***
+
+### kafka_controller_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_nbf_include}}"
+
+***
+
+### kafka_controller_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_audience}}"
+
+***
+
+### kafka_controller_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_issuer}}"
+
+***
+
+### kafka_controller_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_sub}}"
+
+***
+
+### kafka_controller_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_scope}}"
+
+***
+
+### kafka_controller_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_private_key_file}}"
+
+***
+
+### kafka_controller_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_private_key_passphrase}}"
+
+***
+
+### kafka_controller_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_jti_include}}"
+
+***
+
+### kafka_controller_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  "{{oauth_superuser_client_assertion_template_file}}"
 
 ***
 
@@ -3188,6 +3084,94 @@ Default:  password
 
 ***
 
+### schema_registry_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  false
+
+***
+
+### schema_registry_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  none
+
+***
+
+### schema_registry_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  none
+
+***
+
+### schema_registry_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  none
+
+***
+
+### schema_registry_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  none
+
+***
+
+### schema_registry_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  none
+
+***
+
+### schema_registry_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  none
+
+***
+
+### schema_registry_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  none
+
+***
+
+### schema_registry_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  none
+
+***
+
+### schema_registry_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  none
+
+***
+
+### schema_registry_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  none
+
+***
+
 ### schema_registry_oauth_principal
 
 Service principal for SR client in IdPserver. Defaults to SR Client Id
@@ -3225,6 +3209,94 @@ Default:  connect
 Client Secret for kafka_connect_oauth_user
 
 Default:  password
+
+***
+
+### kafka_connect_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  false
+
+***
+
+### kafka_connect_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  none
 
 ***
 
@@ -3268,6 +3340,94 @@ Default:  password
 
 ***
 
+### ksql_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  false
+
+***
+
+### ksql_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  none
+
+***
+
+### ksql_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  none
+
+***
+
+### ksql_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  none
+
+***
+
+### ksql_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  none
+
+***
+
+### ksql_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  none
+
+***
+
+### ksql_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  none
+
+***
+
+### ksql_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  none
+
+***
+
+### ksql_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  none
+
+***
+
+### ksql_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  none
+
+***
+
+### ksql_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  none
+
+***
+
 ### ksql_oauth_principal
 
 Service principal for Ksql client in IdPserver. Defaults to Ksql Client Id
@@ -3308,51 +3468,99 @@ Default:  password
 
 ***
 
+### kafka_rest_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  false
+
+***
+
+### kafka_rest_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  none
+
+***
+
+### kafka_rest_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  none
+
+***
+
+### kafka_rest_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  none
+
+***
+
+### kafka_rest_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  none
+
+***
+
+### kafka_rest_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  none
+
+***
+
+### kafka_rest_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  none
+
+***
+
+### kafka_rest_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  none
+
+***
+
+### kafka_rest_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  none
+
+***
+
+### kafka_rest_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  none
+
+***
+
+### kafka_rest_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  none
+
+***
+
 ### kafka_rest_oauth_principal
 
 Service principal for Rest Proxy client in IdPserver. Defaults to Rest proxy Client Id
 
 Default:  "{{ kafka_rest_oauth_user }}"
-
-***
-
-### control_center_ldap_user
-
-LDAP User for Control Center to authenticate as
-
-Default:  control-center
-
-***
-
-### control_center_ldap_password
-
-Password to control_center_ldap_user LDAP User
-
-Default:  password
-
-***
-
-### control_center_oauth_user
-
-OAuth Client Id for Control Center to authenticate as
-
-Default:  control-center
-
-***
-
-### control_center_oauth_password
-
-Client Secret for control_center_oauth_user
-
-Default:  password
-
-***
-
-### control_center_oauth_principal
-
-Service principal for Control Center client in IdPserver. Defaults to Control Center Client Id
-
-Default:  "{{ control_center_oauth_user }}"
 
 ***
 
@@ -3388,9 +3596,97 @@ Default:  password
 
 ***
 
+### control_center_next_gen_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  false
+
+***
+
+### control_center_next_gen_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  none
+
+***
+
+### control_center_next_gen_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  none
+
+***
+
+### control_center_next_gen_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  none
+
+***
+
+### control_center_next_gen_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  none
+
+***
+
+### control_center_next_gen_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  none
+
+***
+
+### control_center_next_gen_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  none
+
+***
+
+### control_center_next_gen_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  none
+
+***
+
+### control_center_next_gen_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  none
+
+***
+
+### control_center_next_gen_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  none
+
+***
+
+### control_center_next_gen_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  none
+
+***
+
 ### control_center_next_gen_oauth_principal
 
-Service principal for Control Center (Next Gen) client in IdPserver. Defaults to Control Center Client Id
+Service principal for Control Center (Next Gen) client in IdPserver. Defaults to Control Center (Next Gen) Client Id
 
 Default:  "{{ control_center_next_gen_oauth_user }}"
 
@@ -3425,6 +3721,94 @@ Default:  replicator
 Client Secret for kafka_connect_replicator_oauth_user OAuth User
 
 Default:  password
+
+***
+
+### kafka_connect_replicator_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_replicator_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_replicator_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_replicator_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_replicator_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_replicator_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_replicator_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_replicator_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_replicator_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  none
+
+***
+
+### kafka_connect_replicator_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  none
 
 ***
 
@@ -3468,6 +3852,94 @@ Default:  "{{ kafka_connect_replicator_oauth_password }}"
 
 ***
 
+### kafka_connect_replicator_consumer_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_enabled }}"
+
+***
+
+### kafka_connect_replicator_consumer_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_file_base_path }}"
+
+***
+
+### kafka_connect_replicator_consumer_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_nbf_include }}"
+
+***
+
+### kafka_connect_replicator_consumer_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_audience }}"
+
+***
+
+### kafka_connect_replicator_consumer_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_issuer }}"
+
+***
+
+### kafka_connect_replicator_consumer_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_sub }}"
+
+***
+
+### kafka_connect_replicator_consumer_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_scope }}"
+
+***
+
+### kafka_connect_replicator_consumer_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_private_key_file }}"
+
+***
+
+### kafka_connect_replicator_consumer_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_private_key_passphrase }}"
+
+***
+
+### kafka_connect_replicator_consumer_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_jti_include }}"
+
+***
+
+### kafka_connect_replicator_consumer_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_template_file }}"
+
+***
+
 ### kafka_connect_replicator_consumer_oauth_principal
 
 Service principal for kafka_connect_consumer_replicator client in IdPserver. Defaults to Connect Replicator Consumer Client Id
@@ -3508,6 +3980,94 @@ Default:  "{{ kafka_connect_replicator_oauth_password }}"
 
 ***
 
+### kafka_connect_replicator_producer_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_enabled }}"
+
+***
+
+### kafka_connect_replicator_producer_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_file_base_path }}"
+
+***
+
+### kafka_connect_replicator_producer_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_nbf_include }}"
+
+***
+
+### kafka_connect_replicator_producer_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_audience }}"
+
+***
+
+### kafka_connect_replicator_producer_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_issuer }}"
+
+***
+
+### kafka_connect_replicator_producer_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_sub }}"
+
+***
+
+### kafka_connect_replicator_producer_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_scope }}"
+
+***
+
+### kafka_connect_replicator_producer_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_private_key_file }}"
+
+***
+
+### kafka_connect_replicator_producer_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_private_key_passphrase }}"
+
+***
+
+### kafka_connect_replicator_producer_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_jti_include }}"
+
+***
+
+### kafka_connect_replicator_producer_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_template_file }}"
+
+***
+
 ### kafka_connect_replicator_producer_oauth_principal
 
 Service principal for kafka_connect_producer_replicator client in IdPserver. Defaults to Connect Replicator Producer Client Id
@@ -3545,6 +4105,94 @@ Default:  "{{ kafka_connect_replicator_oauth_user }}"
 Client Secret for kafka_connect_replicator_monitoring_interceptor_oauth_user OAuth User
 
 Default:  "{{ kafka_connect_replicator_oauth_password }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_enabled }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_file_base_path }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_nbf_include }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_audience }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_issuer }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_sub }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_scope }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_private_key_file }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_private_key_passphrase }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_jti_include }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  "{{ kafka_connect_replicator_oauth_client_assertion_template_file }}"
 
 ***
 
@@ -3644,7 +4292,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ***
 
-### control_center_additional_system_admins
+### control_center_next_gen_additional_system_admins
 
 List of principals to be granted system admin Role Bindings on the Control Center Cluster
 
@@ -3654,7 +4302,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### secrets_protection_enabled
 
-Boolean to enable secrets protection on all components except Zookeeper.
+Boolean to enable secrets protection on all components.
 
 Default:  false
 
@@ -3884,7 +4532,7 @@ Default:  []
 
 ***
 
-### control_center_secrets_protection_enabled
+### control_center_next_gen_secrets_protection_enabled
 
 Boolean to enable secrets protection in Control Center.
 
@@ -3892,7 +4540,7 @@ Default:  "{{secrets_protection_enabled}}"
 
 ***
 
-### control_center_secrets_protection_encrypt_passwords
+### control_center_next_gen_secrets_protection_encrypt_passwords
 
 Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Control Center.
 
@@ -3900,9 +4548,9 @@ Default:  "{{secrets_protection_encrypt_passwords}}"
 
 ***
 
-### control_center_secrets_protection_encrypt_properties
+### control_center_next_gen_secrets_protection_encrypt_properties
 
-List of Control Center properties to encrypt. Can be used in addition to control_center_secrets_protection_encrypt_passwords.
+List of Control Center properties to encrypt. Can be used in addition to control_center_next_gen_secrets_protection_encrypt_passwords.
 
 Default:  []
 
@@ -4084,22 +4732,6 @@ Default:  "{{ksql_telemetry_enabled}}"
 
 ***
 
-### control_center_telemetry_enabled
-
-Boolean to configure Telemetry on Control Center. Must also set telemetry_api_key and telemetry_api_secret
-
-Default:  "{{telemetry_enabled}}"
-
-***
-
-### control_center_telemetry_ansible_labels_enabled
-
-Boolean to send cp-ansible Telemetry Metrics from Control Center. Currently only sends cp-ansible version data
-
-Default:  "{{control_center_telemetry_enabled}}"
-
-***
-
 ### control_center_next_gen_telemetry_enabled
 
 Boolean to configure Telemetry on Control Center. Must also set telemetry_api_key and telemetry_api_secret
@@ -4273,22 +4905,6 @@ Default:  "{{ kafka_rest_basic_users.admin.principal }}"
 Password for authenticated Rest Proxy Health Check. Set if using customized security like Basic Auth.
 
 Default:  "{{ kafka_rest_basic_users.admin.password }}"
-
-***
-
-### control_center_health_check_user
-
-User for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
-
-Default:  "{{ control_center_basic_users.admin.principal }}"
-
-***
-
-### control_center_health_check_password
-
-Password for authenticated Control Center Health Check. Set if using customized security like Basic Auth.
-
-Default:  "{{ control_center_basic_users.admin.password }}"
 
 ***
 
@@ -4812,6 +5428,94 @@ Default:  ""
 
 ***
 
+### kafka_connect_replicator_erp_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  false
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  None
+
+***
+
+### kafka_connect_replicator_erp_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  None
+
+***
+
 ### kafka_connect_replicator_kafka_cluster_id
 
 Set this variable to the Cluster ID for the kafka cluster which you are interacting with.
@@ -5028,6 +5732,94 @@ Default:  "{{ kafka_connect_replicator_erp_oauth_password }}"
 
 ***
 
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_enabled }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_file_base_path }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_nbf_include }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_audience }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_issuer }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_sub }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_scope }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_file }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_passphrase }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_jti_include }}"
+
+***
+
+### kafka_connect_replicator_consumer_erp_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_template_file }}"
+
+***
+
 ### kafka_connect_replicator_consumer_kafka_cluster_id
 
 Set this variable to the Cluster ID for the kafka cluster which you are interacting with.
@@ -5241,6 +6033,78 @@ Default:  "{{ kafka_connect_replicator_erp_oauth_user }}"
 Set this variable to the Client Secret of the OAuth Client for the Embedded Rest Proxy, to configure RBAC.  Defaults to match kafka_connect_replicator_erp_admin_password.
 
 Default:  "{{ kafka_connect_replicator_erp_oauth_password }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_enabled }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_file_base_path }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_nbf_include }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_audience }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_issuer }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_sub }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_scope }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_file }}"
+
+***
+
+### kafka_connect_replicator_producer_erp_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_template_file }}"
 
 ***
 
@@ -5484,6 +6348,94 @@ Default:  "{{ kafka_connect_replicator_erp_oauth_password }}"
 
 ***
 
+### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_enabled
+
+Boolean to enable OAuth client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_enabled }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_file_base_path
+
+Path to the Directory containing the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_file_base_path }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_nbf_include
+
+Not before time for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_nbf_include }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_audience
+
+Audience for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_audience }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_issuer
+
+Issuer for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_issuer }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_sub
+
+Subject for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_sub }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_scope
+
+Scope for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_scope }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_private_key_file
+
+Path to the file containing the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_file }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_private_key_passphrase
+
+Passphrase for the private key for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_private_key_passphrase }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_jti_include
+
+JTI for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_jti_include }}"
+
+***
+
+### kafka_connect_replicator_monitoring_interceptor_erp_oauth_client_assertion_template_file
+
+Path to the file containing the template for the client assertion
+
+Default:  "{{ kafka_connect_replicator_erp_oauth_client_assertion_template_file }}"
+
+***
+
 ### kafka_connect_replicator_monitoring_interceptor_kafka_cluster_id
 
 Set this variable to the Cluster ID for the kafka cluster which you are interacting with. Defaults to match kafka_connect_replicator_kafka_cluster_id.
@@ -5513,14 +6465,6 @@ Default:  "{{ kafka_connect_replicator_erp_pem_file }}"
 Set this variable to override the default location of the public pem file for connecting to the ERP when RBAC is enabled.
 
 Default:  "{{ kafka_connect_replicator_rbac_enabled_public_pem_path }}"
-
-***
-
-### zookeeper_deployment_strategy
-
-Deployment strategy for Zookeeper. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
-
-Default:  "{{deployment_strategy}}"
 
 ***
 
@@ -5564,14 +6508,6 @@ Default:  "{{deployment_strategy}}"
 
 ***
 
-### control_center_deployment_strategy
-
-Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
-
-Default:  "{{deployment_strategy}}"
-
-***
-
 ### control_center_next_gen_deployment_strategy
 
 Deployment strategy for Control Center. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
@@ -5593,14 +6529,6 @@ Default:  "{{deployment_strategy}}"
 Boolean to Pause Rolling Deployment after each Node starts up for all Components.
 
 Default:  false
-
-***
-
-### zookeeper_pause_rolling_deployment
-
-Boolean to Pause Rolling Deployment after each Zookeeper Node starts up.
-
-Default:  "{{pause_rolling_deployment}}"
 
 ***
 
@@ -5647,14 +6575,6 @@ Default:  "{{pause_rolling_deployment}}"
 ### ksql_pause_rolling_deployment
 
 Boolean to Pause Rolling Deployment after each ksqlDB Node starts up.
-
-Default:  "{{pause_rolling_deployment}}"
-
-***
-
-### control_center_pause_rolling_deployment
-
-Boolean to Pause Rolling Deployment after each Control Center Node starts up.
 
 Default:  "{{pause_rolling_deployment}}"
 
@@ -5726,7 +6646,7 @@ Default:  "{{control_center_next_gen_dependency_alertmanager_basic_users.admin.p
 
 ### ccloud_kafka_enabled
 
-Boolean to configure component to Confluent Cloud Kafka. Must also set ccloud_kafka_bootstrap_servers, ccloud_kafka_key, and ccloud_kafka_secret. zookeeper and kafka_broker groups should not be in inventory.
+Boolean to configure component to Confluent Cloud Kafka. Must also set ccloud_kafka_bootstrap_servers, ccloud_kafka_key, and ccloud_kafka_secret. kafka_controller and kafka_broker groups should not be in inventory.
 
 Default:  false
 
@@ -5860,15 +6780,15 @@ Default:  "{{ false if custom_java_path | length > 0 else true }}"
 
 ### redhat_java_package_name
 
-Java Package to install on RHEL/Centos hosts. Possible values java-8-openjdk, java-11-openjdk or java-17-openjdk
+Java Package to install on RHEL/Centos hosts. Possible values java-17-openjdk or java-21-openjdk
 
-Default:  java-17-openjdk
+Default:  java-21-openjdk
 
 ***
 
 ### debian_java_package_name
 
-Java Package to install on Debian hosts. Possible values openjdk-11-jdk, openjdk-8-jdk or openjdk-17-jdk
+Java Package to install on Debian hosts. Possible values openjdk-17-jdk
 
 Default:  openjdk-17-jdk
 
@@ -5876,17 +6796,17 @@ Default:  openjdk-17-jdk
 
 ### amazon_java_package_name
 
-Java Package to install on Amazon hosts. Possible values java-11-amazon-corretto or java-17-amazon-corretto
+Java Package to install on Amazon hosts. Possible values java-17-amazon-corretto or java-21-amazon-corretto
 
-Default:  java-17-amazon-corretto
+Default:  java-21-amazon-corretto
 
 ***
 
 ### ubuntu_java_package_name
 
-Java Package to install on Ubuntu hosts. Possible values openjdk-8-jdk, openjdk-11-jdk or openjdk-17-jdk
+Java Package to install on Ubuntu hosts. Possible values openjdk-17-jdk, openjdk-21-jdk
 
-Default:  openjdk-17-jdk
+Default:  openjdk-21-jdk
 
 ***
 
@@ -5994,125 +6914,39 @@ Default:  true
 
 ***
 
-# control_center
-
-Below are the supported variables for the role control_center
-
-***
-
-### control_center_custom_log4j
-
-Boolean to reconfigure Control Center's logging with RollingFileAppender and log cleanup
-
-Default:  "{{ custom_log4j }}"
-
-***
-
-### control_center_log4j_root_logger
-
-Root logger within Control Center's log4j config. Only honored if control_center_custom_log4j: true
-
-Default:  "INFO, main"
-
-***
-
-### control_center_max_log_files
-
-Max number of log files generated by Control Center. Only honored if control_center_custom_log4j: true
-
-Default:  10
-
-***
-
-### control_center_log_file_size
-
-Max size of a log file generated by Control Center. Only honored if control_center_custom_log4j: true
-
-Default:  100MB
-
-***
-
-### control_center_logredactor_logger_specs_list
-
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
-
-Default: 
-
-***
-
-### control_center_custom_java_args
-
-Custom Java Args to add to the Control Center Process
-
-Default:  ""
-
-***
-
-### control_center_rocksdb_path
-
-Full Path to the RocksDB Data Directory. If left as empty string, cp-ansible will not configure RocksDB
-
-Default:  ""
-
-***
-
-### control_center_service_overrides
-
-Overrides to the Service Section of Control Center Systemd File. This variable is a dictionary.
-
-Default: 
-
-***
-
-### control_center_service_environment_overrides
-
-Environment Variables to be added to the Control Center Service. This variable is a dictionary.
-
-Default: 
-
-***
-
-### control_center_service_unit_overrides
-
-Overrides to the Unit Section of Control Center Systemd File. This variable is a dictionary.
-
-Default: 
-
-***
-
-### control_center_health_check_delay
-
-Time in seconds to wait before starting Control Center Health Checks.
-
-Default:  30
-
-***
-
 # control_center_next_gen
 
 Below are the supported variables for the role control_center_next_gen
 
 ***
 
-### control_center_next_gen_custom_log4j
+### control_center_next_gen_custom_log4j2
 
 Boolean to reconfigure Control Center Next Gen's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ custom_log4j }}"
+Default:  "{{ custom_log4j2 }}"
 
 ***
 
-### control_center_next_gen_log4j_root_logger
+### control_center_next_gen_log4j2_root_logger_level
 
-Root logger within Control Center Next Gen's log4j config. Only honored if control_center_next_gen_custom_log4j: true
+Root logger level within Control Center Next Gen's log4j2 config. Only honored if control_center_next_gen_custom_log4j2: true
 
-Default:  "INFO, main"
+Default:  "INFO"
+
+***
+
+### control_center_next_gen_log4j2_root_appenders
+
+Root logger appender within Control Center Next Gen's log4j2 config. Only honored if control_center_next_gen_custom_log4j2: true
+
+Default: 
 
 ***
 
 ### control_center_next_gen_max_log_files
 
-Max number of log files generated by Control Center Next Gen. Only honored if control_center_next_gen_custom_log4j: true
+Max number of log files generated by Control Center Next Gen. Only honored if control_center_next_gen_custom_log4j2: true
 
 Default:  10
 
@@ -6120,7 +6954,7 @@ Default:  10
 
 ### control_center_next_gen_log_file_size
 
-Max size of a log file generated by Control Center Next Gen. Only honored if control_center_next_gen_custom_log4j: true
+Max size of a log file generated by Control Center Next Gen. Only honored if control_center_next_gen_custom_log4j2: true
 
 Default:  100MB
 
@@ -6252,25 +7086,25 @@ Below are the supported variables for the role kafka_broker
 
 ***
 
-### kafka_broker_custom_log4j
+### kafka_broker_custom_log4j2
 
 Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ custom_log4j }}"
+Default:  "{{ custom_log4j2 }}"
 
 ***
 
-### kafka_broker_log4j_root_logger
+### kafka_broker_log4j2_root_logger_level
 
-Root logger within Kafka's log4j config. Only honored if kafka_broker_custom_log4j: true
+Root logger level within Kafka's log4j2 config. Only honored if kafka_broker_custom_log4j2: true
 
-Default:  "INFO, stdout, kafkaAppender"
+Default:  "INFO"
 
 ***
 
 ### kafka_broker_max_log_files
 
-Max number of log files generated by Kafka Broker. Only honored if kafka_broker_custom_log4j: true
+Max number of log files generated by Kafka Broker. Only honored if kafka_broker_custom_log4j2: true
 
 Default:  10
 
@@ -6278,7 +7112,7 @@ Default:  10
 
 ### kafka_broker_log_file_size
 
-Max size of a log file generated by Kafka Broker. Only honored if kafka_broker_custom_log4j: true
+Max size of a log file generated by Kafka Broker. Only honored if kafka_broker_custom_log4j2: true
 
 Default:  100MB
 
@@ -6286,7 +7120,7 @@ Default:  100MB
 
 ### kafka_broker_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
 Default: 
 
@@ -6354,25 +7188,33 @@ Below are the supported variables for the role kafka_controller
 
 ***
 
-### kafka_controller_custom_log4j
+### kafka_controller_custom_log4j2
 
 Boolean to reconfigure Kafka's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ custom_log4j }}"
+Default:  "{{ custom_log4j2 }}"
 
 ***
 
-### kafka_controller_log4j_root_logger
+### kafka_controller_log4j2_root_logger_level
 
-Root logger within Kafka's log4j config. Only honored if kafka_controller_custom_log4j: true
+Root logger within Kafka's log4j config. Only honored if kafka_controller_custom_log4j2: true
 
-Default:  "INFO, stdout, kafkaAppender"
+Default:  "INFO"
+
+***
+
+### kafka_controller_log4j2_root_appenders
+
+Root logger appender within Kafka's log4j2 config. Only honored if kafka_controller_custom_log4j2: true
+
+Default: 
 
 ***
 
 ### kafka_controller_max_log_files
 
-Max number of log files generated by Kafka Controller. Only honored if kafka_controller_custom_log4j: true
+Max number of log files generated by Kafka Controller. Only honored if kafka_controller_custom_log4j2: true
 
 Default:  10
 
@@ -6380,7 +7222,7 @@ Default:  10
 
 ### kafka_controller_log_file_size
 
-Max size of a log file generated by Kafka Controller. Only honored if kafka_controller_custom_log4j: true
+Max size of a log file generated by Kafka Controller. Only honored if kafka_controller_custom_log4j2: true
 
 Default:  100MB
 
@@ -6388,7 +7230,7 @@ Default:  100MB
 
 ### kafka_controller_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
 Default: 
 
@@ -6456,25 +7298,33 @@ Below are the supported variables for the role kafka_connect
 
 ***
 
-### kafka_connect_custom_log4j
+### kafka_connect_custom_log4j2
 
 Boolean to reconfigure Kafka Connect's logging with the RollingFileAppender and log cleanup functionality.
 
-Default:  "{{ custom_log4j }}"
+Default:  "{{ custom_log4j2 }}"
 
 ***
 
-### kafka_connect_log4j_root_logger
+### kafka_connect_log4j2_root_logger_level
 
-Root logger within Kafka Connect's log4j config. Only honored if kafka_connect_custom_log4j: true
+Root logger level within Kafka Connect's log4j2 config. Only honored if kafka_connect_custom_log4j2: true
 
-Default:  "INFO, stdout, connectAppender, redactor"
+Default:  "INFO"
+
+***
+
+### kafka_connect_log4j2_root_appenders
+
+Root logger appender within Kafka Connect's log4j2 config. Only honored if kafka_connect_custom_log4j2: true
+
+Default: 
 
 ***
 
 ### kafka_connect_max_log_files
 
-Max number of log files generated by Kafka Connect. Only honored if kafka_connect_custom_log4j: true
+Max number of log files generated by Kafka Connect. Only honored if kafka_connect_custom_log4j2: true
 
 Default:  10
 
@@ -6482,7 +7332,7 @@ Default:  10
 
 ### kafka_connect_log_file_size
 
-Max size of a log file generated by Kafka Connect. Only honored if kafka_connect_custom_log4j: true
+Max size of a log file generated by Kafka Connect. Only honored if kafka_connect_custom_log4j2: true
 
 Default:  100MB
 
@@ -6490,7 +7340,7 @@ Default:  100MB
 
 ### kafka_connect_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
 Default: 
 
@@ -6550,25 +7400,33 @@ Below are the supported variables for the role kafka_rest
 
 ***
 
-### kafka_rest_custom_log4j
+### kafka_rest_custom_log4j2
 
 Boolean to reconfigure Rest Proxy's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ custom_log4j }}"
+Default:  "{{ custom_log4j2 }}"
 
 ***
 
-### kafka_rest_log4j_root_logger
+### kafka_rest_log4j2_root_logger_level
 
-Root logger within Rest Proxy's log4j config. Only honored if kafka_rest_custom_log4j: true
+Root logger level within Rest Proxy's log4j2 config. Only honored if kafka_rest_custom_log4j2: true
 
-Default:  "INFO, stdout, file"
+Default:  "INFO"
+
+***
+
+### kafka_rest_log4j2_root_appenders
+
+Root logger appender within Rest Proxy's log4j2 config. Only honored if kafka_rest_custom_log4j2: true
+
+Default: 
 
 ***
 
 ### kafka_rest_max_log_files
 
-Max number of log files generated by Rest Proxy. Only honored if kafka_rest_custom_log4j: true
+Max number of log files generated by Rest Proxy. Only honored if kafka_rest_custom_log4j2: true
 
 Default:  10
 
@@ -6576,7 +7434,7 @@ Default:  10
 
 ### kafka_rest_log_file_size
 
-Max size of a log file generated by Rest Proxy. Only honored if kafka_rest_custom_log4j: true
+Max size of a log file generated by Rest Proxy. Only honored if kafka_rest_custom_log4j2: true
 
 Default:  100MB
 
@@ -6584,7 +7442,7 @@ Default:  100MB
 
 ### kafka_rest_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
 Default: 
 
@@ -6636,25 +7494,33 @@ Below are the supported variables for the role ksql
 
 ***
 
-### ksql_custom_log4j
+### ksql_custom_log4j2
 
 Boolean to reconfigure ksqlDB's logging with the RollingFileAppender and log cleanup functionality.
 
-Default:  "{{ custom_log4j }}"
+Default:  "{{ custom_log4j2 }}"
 
 ***
 
-### ksql_log4j_root_logger
+### ksql_log4j2_root_logger_level
 
-Root logger within ksqlDB's log4j config. Only honored if ksql_custom_log4j: true
+Root logger level within ksqlDB's log4j2 config. Only honored if ksql_custom_log4j2: true
 
-Default:  "INFO, stdout, main"
+Default:  "INFO"
+
+***
+
+### ksql_log4j2_root_appenders
+
+Root logger appender within ksqlDB's log4j2 config. Only honored if ksql_custom_log4j2: true
+
+Default: 
 
 ***
 
 ### ksql_max_log_files
 
-Max number of log files generated by ksqlDB. Only honored if ksql_custom_log4j: true
+Max number of log files generated by ksqlDB. Only honored if ksql_custom_log4j2: true
 
 Default:  5
 
@@ -6662,7 +7528,7 @@ Default:  5
 
 ### ksql_log_file_size
 
-Max size of a log file generated by ksqlDB. Only honored if ksql_custom_log4j: true
+Max size of a log file generated by ksqlDB. Only honored if ksql_custom_log4j2: true
 
 Default:  10MB
 
@@ -6670,7 +7536,7 @@ Default:  10MB
 
 ### ksql_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
 Default: 
 
@@ -6730,25 +7596,33 @@ Below are the supported variables for the role schema_registry
 
 ***
 
-### schema_registry_custom_log4j
+### schema_registry_custom_log4j2
 
 Boolean to reconfigure Schema Registry's logging with RollingFileAppender and log cleanup
 
-Default:  "{{ custom_log4j }}"
+Default:  "{{ custom_log4j2 }}"
 
 ***
 
-### schema_registry_log4j_root_logger
+### schema_registry_log4j2_root_logger_level
 
-Root logger within Schema Registry's log4j config. Only honored if schema_registry_custom_log4j: true
+Root logger level within Schema Registry's log4j2 config. Only honored if schema_registry_custom_log4j2: true
 
-Default:  "INFO, stdout, file"
+Default:  "INFO"
+
+***
+
+### schema_registry_log4j2_root_appenders
+
+Root logger appender within Schema Registry's log4j2 config. Only honored if schema_registry_custom_log4j2: true
+
+Default: 
 
 ***
 
 ### schema_registry_max_log_files
 
-Max number of log files generated by Schema Registry. Only honored if schema_registry_custom_log4j: true
+Max number of log files generated by Schema Registry. Only honored if schema_registry_custom_log4j2: true
 
 Default:  10
 
@@ -6756,7 +7630,7 @@ Default:  10
 
 ### schema_registry_log_file_size
 
-Max size of a log file generated by Schema Registry. Only honored if schema_registry_custom_log4j: true
+Max size of a log file generated by Schema Registry. Only honored if schema_registry_custom_log4j2: true
 
 Default:  100MB
 
@@ -6764,7 +7638,7 @@ Default:  100MB
 
 ### schema_registry_logredactor_logger_specs_list
 
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
+List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
 Default: 
 
@@ -6810,111 +7684,33 @@ Default:  15
 
 ***
 
-# zookeeper
-
-Below are the supported variables for the role zookeeper
-
-***
-
-### zookeeper_custom_log4j
-
-Boolean to reconfigure Zookeeper's logging with RollingFileAppender and log cleanup
-
-Default:  "{{ custom_log4j }}"
-
-***
-
-### zookeeper_log4j_root_logger
-
-Root logger within Zookeeper's log4j config. Only honored if zookeeper_custom_log4j: true
-
-Default:  INFO, stdout, zkAppender
-
-***
-
-### zookeeper_max_log_files
-
-Max number of log files generated by Zookeeper. Only honored if zookeeper_custom_log4j: true
-
-Default:  10
-
-***
-
-### zookeeper_log_file_size
-
-Max size of a log file generated by Zookeeper. Only honored if zookeeper_custom_log4j: true
-
-Default:  100MB
-
-***
-
-### zookeeper_logredactor_logger_specs_list
-
-List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
-
-Default: 
-
-***
-
-### zookeeper_custom_java_args
-
-Custom Java Args to add to the Zookeeper Process
-
-Default:  ""
-
-***
-
-### zookeeper_service_overrides
-
-Overrides to the Service Section of Zookeeper Systemd File. This variable is a dictionary.
-
-Default: 
-
-***
-
-### zookeeper_service_environment_overrides
-
-Environment Variables to be added to the Zookeeper Service. This variable is a dictionary.
-
-Default: 
-
-***
-
-### zookeeper_service_unit_overrides
-
-Overrides to the Unit Section of Zookeeper Systemd File. This variable is a dictionary.
-
-Default: 
-
-***
-
-### zookeeper_health_check_delay
-
-Time in seconds to wait before starting Zookeeper Health Checks.
-
-Default:  5
-
-***
-
 # kafka_connect_replicator
 
 Below are the supported variables for the role kafka_connect_replicator
 
 ***
 
-### kafka_connect_replicator_custom_log4j
+### kafka_connect_replicator_custom_log4j2
 
 Boolean to reconfigure Kafka Connect Replicator's logging with the RollingFileAppender and log cleanup functionality.
 
-Default:  "{{ custom_log4j }}"
+Default:  "{{ custom_log4j2 }}"
 
 ***
 
-### kafka_connect_replicator_log4j_root_logger
+### kafka_connect_replicator_log4j2_root_logger_level
 
-Root logger within Kafka Connect Replicator's log4j config. Only honored if kafka_connect_replicator_custom_log4j: true
+Root logger level within Kafka Connect Replicator's log4j2 config. Only honored if kafka_connect_replicator_custom_log4j2: true
 
-Default:  "INFO, replicatorAppender, stdout"
+Default:  "INFO"
+
+***
+
+### kafka_connect_replicator_log4j2_root_appenders
+
+Root logger appender within Kafka Connect Replicator's log4j config. Only honored if kafka_connect_replicator_custom_log4j2: true
+
+Default: 
 
 ***
 
@@ -6987,4 +7783,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-

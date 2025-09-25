@@ -76,5 +76,4 @@ Common issues and solutions:
 ## Additional Resources
 
 - [mTLS Configuration Guide in CP-Ansible](https://docs.confluent.io/ansible/current/ansible-authorize.html#role-based-access-control-using-mtls)
-- [mTLS Guide in CP](https://docs.confluent.io/platform/7.9/security/authorization/rbac/mtls-rbac.html)
-- [SSO Integration Guide](https://docs.confluent.io/platform/7.9/security/authentication/sso-for-c3/overview.html)
+- [mTLS Guide in CP](https://docs.confluent.io/platform/8.0/security/authorization/rbac/mtls-rbac.html)

@@ -223,12 +223,6 @@ Description: Pre flight check. As name suggests.
 
 ***
 
-### Tag - validate_memory_usage_zookeeper
-
-Description: Pre flight check. As name suggests.
-
-***
-
 ### Tag - validate_os_version
 
 Description: Pre flight check. To confirm supported versions of rhel, ubuntu or debian.
