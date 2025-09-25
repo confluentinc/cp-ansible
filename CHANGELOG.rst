@@ -4,40 +4,44 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-v7.8.3
+v7.9.2
 ======
 
 Notable enhancements
 -------------
 
 - Enabled support for brownfield migrations to RBAC over mTLs
-- JMX Exporter is upgraded to 0.20.0
 
 Notable fixes
 -------------
 
 - Resolved issue where component restart was not triggered after adding IDP certificates to the truststore.
-- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 - Fixed assignment of role binding to certificate principals which contain spaces in their names
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.8.2
+v7.9.1
 ======
+
+New features
+-------------
+- Confluent Control Center Next Gen Support (Only on IPv4 based deployments)
+- IPv6 support for all CP components except Control Center Next Gen
+
+Notable Fixes
+-------------
+- KSQL will now prefer OAuth over LDAP for MDS communication when both are configured on MDS server.
+
+v7.9.0
+======
+
+New features
+-------------
+- OAuth & OIDC capabilities have been added for Ksqldb as a server and C3 as its client.
 
 Notable enhancements
 -------------
-
-- Introduced a new variable `rbac_super_users` to specify additional super users for the cluster
-- Removed Kraft controller and broker dependency on each other for fetching cert principals in RBAC enabled clusters with mTLS
-
-
-Notable fixes
--------------
-
-- Bug fix in secrets protection for SCRAM in kraft clusters
-- Bug fix in Set Permissions on Data Dir files task to avoid race condition
-- Changed systemd service override directory permissions from 640 to 750
-- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
-
+- Ubuntu 24.04 Operating system is now supported.
+- The JMX exporter version has been upgraded to the latest, 1.0.1, and the deprecated configurations have been removed.
 
 v7.8.0
 ======
