@@ -1,5 +1,5 @@
 ---
-### Installs two Confluent Platform Clusters on RHEL8.
+### Installs two Confluent Platform Clusters on Alma Linux 9.
 ### RBAC enabled.
 ### Remote MDS from Cluster2 to Cluster1 (MDS).
 ### Custom TLS certificates.
@@ -42,7 +42,7 @@ platforms:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
       - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
       - mds
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -56,7 +56,7 @@ platforms:
       - kafka_broker
       - kafka_broker_migration
       - mds
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -70,7 +70,7 @@ platforms:
       - kafka_broker
       - kafka_broker_migration
       - mds
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -85,7 +85,7 @@ platforms:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}2
       - ${CONTROLLER_HOSTGROUP:-zookeeper}2_migration
       - cluster2
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -99,7 +99,7 @@ platforms:
       - kafka_broker2
       - kafka_broker2_migration
       - cluster2
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -113,7 +113,7 @@ platforms:
       - kafka_broker2
       - kafka_broker2_migration
       - cluster2
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -127,7 +127,7 @@ platforms:
       - kafka_broker2
       - kafka_broker2_migration
       - cluster2
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -141,7 +141,7 @@ platforms:
       - schema_registry2
       - schema_registry2_migration
       - cluster2
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -155,7 +155,7 @@ platforms:
       - kafka_rest2
       - kafka_rest2_migration
       - cluster2
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -169,7 +169,7 @@ platforms:
       - kafka_connect2
       - kafka_connect2_migration
       - cluster2
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -183,7 +183,7 @@ platforms:
       - ksql2
       - ksql2_migration
       - cluster2
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -197,7 +197,7 @@ platforms:
       - control_center2
       - control_center2_migration
       - cluster2
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -213,7 +213,7 @@ platforms:
     groups:
       - kafka_controller_migration
       - mds
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -226,7 +226,7 @@ platforms:
     groups:
       - kafka_controller2_migration
       - cluster2
-    image: redhat/ubi8-minimal
+    image: almalinux:9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -247,8 +247,8 @@ provisioner:
         rbac_super_users:
           - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker
           - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_controller
-          - User:CN=kafka_controller,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
-          - User:CN=kafka_broker,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
+          - User:CN=kafka_controller,OU=TEST TEAM,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
+          - User:CN=kafka_broker,OU=TEST TEAM,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
 
         create_mds_certs: false
         token_services_public_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/public.pem"
@@ -259,6 +259,8 @@ provisioner:
         ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
         ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
         ssl_key_password: keypass
+        mds_super_user_external_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/mds-kafka-broker1-ca1-signed.crt"
+        mds_super_user_external_key_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/mds-kafka-broker1-key.pem"
 
         kafka_broker_custom_listeners:
           client_listener:
@@ -297,6 +299,14 @@ provisioner:
           realm: realm.example.com
           kdc_hostname: mds-kerberos1
           admin_hostname: mds-kerberos1
+
+        # setups /etc/hosts on ec2 to allow delegate_to: localhost to make requests to MDS url by making the url resolvable
+        docker_containers:
+          - mds-ldap1
+          - mds-kafka-broker1
+          - mds-kafka-broker2
+          - kafka-broker1
+          - kafka-broker2
 
       mds:
         ssl_enabled: true

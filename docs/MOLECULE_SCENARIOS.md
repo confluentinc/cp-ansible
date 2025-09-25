@@ -18,33 +18,9 @@ Validates that Confluent CLI is installed.
 
 ***
 
-### molecule/archive-plain-debian10
+### molecule/archive-plain-debian
 
-#### Scenario archive-plain-debian10 test's the following:
-
-Archive installation of Confluent Platform on Debian 10.
-
-SASL Protocol Plain.
-
-SSL Enabled.
-
-Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
-
-Custom log dirs for all components.
-
-#### Scenario archive-plain-debian10 verify test's the following:
-
-Validates that SASL SSL protocol is set across all components.
-
-Validates that custom log4j configuration is in place.
-
-Validates that Java 17 is in Use
-
-***
-
-### molecule/archive-plain-debian12
-
-#### Scenario archive-plain-debian12 test's the following:
+#### Scenario archive-plain-debian test's the following:
 
 Archive installation of Confluent Platform on Debian 12.
 
@@ -56,7 +32,7 @@ Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-
 
 Custom log dirs for all components.
 
-#### Scenario archive-plain-debian12 verify test's the following:
+#### Scenario archive-plain-debian verify test's the following:
 
 Validates that SASL SSL protocol is set across all components
 
@@ -106,7 +82,7 @@ Validates that FIPS is in use in OpenSSL.
 
 #### Scenario archive-plain-ubuntu test's the following:
 
-Archive Installation of Confluent Platform on Ubuntu1804.
+Archive Installation of Confluent Platform on Ubuntu2204.
 
 SASL Plain protocol.
 
@@ -368,7 +344,7 @@ Validates that Connector is running
 
 #### Scenario ksql-scale-up test's the following:
 
-Installation of Confluent Platform on RHEL9.
+Installation of Confluent Platform on Alma Linux 9.
 
 MTLS enabled.
 
@@ -389,6 +365,172 @@ Validates that ksql3 is added to KSQL cluster
 Validates that ksql4 is added to KSQL cluster
 
 Validates that Control Center Can connect to each KSQL cluster
+
+***
+
+### molecule/mini-setup-ext-mds-mtls
+
+#### Scenario mini-setup-ext-mds-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS enabled.
+
+Centralized MDS.
+
+File based login to C3 using overrides.
+
+#### Scenario mini-setup-ext-mds-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-ldap-mtls-fips
+
+#### Scenario mini-setup-ldap-mtls-fips test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS+LDAP enabled.
+
+MDS accepts LDAP credentials and mTLS certs.
+
+LDAP based login to C3.
+
+#### Scenario mini-setup-ldap-mtls-fips verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-mtls
+
+#### Scenario mini-setup-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS enabled.
+
+File based login to C3 using overrides.
+
+#### Scenario mini-setup-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-mtls-fips
+
+#### Scenario mini-setup-mtls-fips test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS enabled.
+
+File based login to C3 using overrides.
+
+#### Scenario mini-setup-mtls-fips verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-oauth-mtls
+
+#### Scenario mini-setup-oauth-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS+OAuth enabled.
+
+SSO authentication using OIDC in Control center using Okta IdP.
+
+#### Scenario mini-setup-oauth-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-out-ldap-in-mtls
+
+#### Scenario mini-setup-out-ldap-in-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS+LDAP enabled.
+
+Outside CP to CP communication over LDAP.
+
+Internal CP communication over mTLS.
+
+LDAP based login to C3.
+
+#### Scenario mini-setup-out-ldap-in-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-out-oauth-in-mtls
+
+#### Scenario mini-setup-out-oauth-in-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS+OAuth enabled.
+
+Outside CP to CP communication over OAuth.
+
+Internal CP communication over mTLS.
+
+SSO authentication using OIDC in Control center using Okta IdP.
+
+#### Scenario mini-setup-out-oauth-in-mtls verify test's the following:
+
+Validates that SSL Protocol is set.
+
+Validates ssl.client.authentication is set to REQUIRED.
+
+***
+
+### molecule/mini-setup-partial-mtls
+
+#### Scenario mini-setup-partial-mtls test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS enabled.
+
+File based login to C3 using overrides.
+
+#### Scenario mini-setup-partial-mtls verify test's the following:
+
+***
+
+### molecule/mini-setup-partial-mtls2
+
+#### Scenario mini-setup-partial-mtls2 test's the following:
+
+Installs Confluent Platform Cluster on ubi9.
+
+RBAC over mTLS enabled.
+
+File based login to C3 using overrides.
+
+#### Scenario mini-setup-partial-mtls2 verify test's the following:
 
 ***
 
@@ -468,7 +610,7 @@ Validates that Java 17 is in Use
 
 #### Scenario mtls-java11-rhel-fips test's the following:
 
-Installation of Confluent Platform on RHEL9.
+Installation of Confluent Platform on Alma Linux 9.
 
 MTLS enabled.
 
@@ -506,7 +648,7 @@ Validates that Java 11 is in use.
 
 #### Scenario mtls-ubuntu test's the following:
 
-Installation of Confluent Platform on Ubuntu1804.
+Installation of Confluent Platform on Ubuntu2204.
 
 MTLS enabled.
 
@@ -602,9 +744,9 @@ Validates that client ID's are set correctly on Replicator.
 
 ***
 
-### molecule/oauth-mtls-java11-debian
+### molecule/oauth-mtls-debian
 
-#### Scenario oauth-mtls-java11-debian test's the following:
+#### Scenario oauth-mtls-debian test's the following:
 
 Installation of Confluent Platform on Debian10.
 
@@ -612,7 +754,7 @@ MTLS enabled.
 
 Java 11.
 
-#### Scenario oauth-mtls-java11-debian verify test's the following:
+#### Scenario oauth-mtls-debian verify test's the following:
 
 Validates that Java 11 is in use.
 
@@ -622,7 +764,7 @@ Validates that Java 11 is in use.
 
 #### Scenario oauth-mtls-ubuntu-acl test's the following:
 
-Installation of Confluent Platform on Ubuntu1804.
+Installation of Confluent Platform on Ubuntu2204.
 
 MTLS enabled.
 
@@ -776,7 +918,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 #### Scenario oauth-rbac-mtls-provided-ubuntu test's the following:
 
-Installs Confluent Platform Cluster on Ubuntu1804.
+Installs Confluent Platform Cluster on Ubuntu2204.
 
 RBAC enabled.
 
@@ -962,9 +1104,9 @@ Validates that keystores are in place across all components.
 
 ***
 
-### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10
+### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-debian
 
-#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10 test's the following:
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian test's the following:
 
 Installation of Confluent Platform on Debian10.
 
@@ -978,7 +1120,7 @@ MTLS Customer certs enabled on cluster2.
 
 Replicator Configured with Kerberos and MTLS.
 
-#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian10 verify test's the following:
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-debian verify test's the following:
 
 Validates that the Console Consumer can consume data from cluster2, proving that data has been replicated from cluster1 (MDS).
 
@@ -994,11 +1136,11 @@ Validates client packages.
 
 ***
 
-### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004
+### molecule/rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu
 
-#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004 test's the following:
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu test's the following:
 
-Installation of Confluent Platform on Ubuntu2004.
+Installation of Confluent Platform on Ubuntu2204.
 
 RBAC Enabled.
 
@@ -1010,7 +1152,7 @@ MTLS Customer certs enabled on cluster2.
 
 Replicator Configured with Kerberos and MTLS.
 
-#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004 verify test's the following:
+#### Scenario rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu verify test's the following:
 
 Validates that the Console Consumer can consume data from cluster2, proving that data has been replicated from cluster1 (MDS).
 
@@ -1128,7 +1270,7 @@ Validates that all components on Cluster2 are pointing to the MDS on Cluster1.
 
 #### Scenario rbac-mds-mtls-custom-kerberos-rhel test's the following:
 
-Installs two Confluent Platform Clusters on RHEL8.
+Installs two Confluent Platform Clusters on Alma Linux 9.
 
 RBAC enabled.
 
@@ -1194,7 +1336,7 @@ Validates that FIPS is in use on both clusters.
 
 #### Scenario rbac-mds-mtls-existing-keystore-truststore-ubuntu test's the following:
 
-Installs Confluent Platform Cluster on Ubuntu1804.
+Installs Confluent Platform Cluster on Ubuntu2204.
 
 RBAC enabled.
 
@@ -1324,6 +1466,38 @@ Validates OIDC authenticate api for SSO in Control Center
 
 ***
 
+### molecule/rbac-replicator-mtls-custom-ubuntu
+
+#### Scenario rbac-replicator-mtls-custom-ubuntu test's the following:
+
+Installation of Confluent Platform on Ubuntu2204.
+
+RBAC Enabled.
+
+Customer RBAC system admins.
+
+Kerberos enabled on Cluster1(mds).
+
+MTLS Customer certs enabled on cluster2.
+
+Replicator Configured with Kerberos and MTLS.
+
+#### Scenario rbac-replicator-mtls-custom-ubuntu verify test's the following:
+
+Validates that the Console Consumer can consume data from cluster2, proving that data has been replicated from cluster1 (MDS).
+
+Validates that Replicator is using MTLS with RBAC to Produce data to Cluster2.
+
+Validates that Replicator is using Kerberos with RBAC to Consume from Cluster1 (MDS).
+
+Validates that client ID's are set correctly on Replicator.
+
+Validates that Replicator logging path is valid.
+
+Validates client packages.
+
+***
+
 ### molecule/rbac-scram-custom-rhel-fips
 
 #### Scenario rbac-scram-custom-rhel-fips test's the following:
@@ -1378,7 +1552,7 @@ SCRAM enabled.
 
 #### Scenario scram-rhel verify test's the following:
 
-Validates that SCRAM is enabled on all components.
+Validates that SCRAM is enabled on all components except kafka controller.
 
 ***
 
@@ -1454,7 +1628,7 @@ Validates Kafka Broker and Schema Registry is set to SCRAM.
 
 #### Scenario zookeeper-mtls-rhel test's the following:
 
-Installs Confluent Platform on RHEL8
+Installs Confluent Platform on Alma Linux 8.
 
 Enables MTLS Auth on Zookeeper.
 

@@ -4,12 +4,13 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-v7.7.4
+v7.8.3
 ======
 
 Notable enhancements
 -------------
 
+- Enabled support for brownfield migrations to RBAC over mTLs
 - JMX Exporter is upgraded to 0.20.0
 
 Notable fixes
@@ -17,8 +18,9 @@ Notable fixes
 
 - Resolved issue where component restart was not triggered after adding IDP certificates to the truststore.
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+- Fixed assignment of role binding to certificate principals which contain spaces in their names
 
-v7.7.3
+v7.8.2
 ======
 
 Notable enhancements
@@ -31,31 +33,23 @@ Notable enhancements
 Notable fixes
 -------------
 
+- Bug fix in secrets protection for SCRAM in kraft clusters
 - Bug fix in Set Permissions on Data Dir files task to avoid race condition
 - Changed systemd service override directory permissions from 640 to 750
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.7.2
+
+v7.8.0
 ======
+
+New features
+-------------
+- Role-based access control (RBAC) with principal from mTLS certs is now supported
+- SASL/SCRAM authentication support for kraft controllers and broker communication
 
 Notable enhancements
 -------------
-
-- Improved error handling in connectors.
-- Fixed the ownership of data directory files in kraft controllers and brokers.
-
-v7.7.1
-======
-
-Notable enhancements
--------------
-
-- Updated default confluent cli version to 3.65.0
-
-Notable fixes
--------------
-
-- Critical security and vulnerability issues were fixed
+- Ubuntu 22, Alma Linux 8, and Alma Linux 9 Operating systems are now supported
 
 v7.7.0
 ======

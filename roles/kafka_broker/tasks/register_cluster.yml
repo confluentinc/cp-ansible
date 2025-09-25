@@ -1,10 +1,32 @@
 ---
+- name: Decide Where to delegate task of getting superuser token
+  set_fact:
+    delegation_target: >-
+      {%- if mds_ssl_client_authentication == 'none' -%}
+        {{ inventory_hostname }}
+      {%- elif external_mds_enabled|bool -%}
+        localhost
+      {%- else -%}
+        {{ groups['kafka_broker'][0] }}
+      {%- endif -%}
+
 - name: Get Kafka Cluster Id
   import_role:
     name: common
     tasks_from: rbac_setup.yml
   vars:
     copy_certs: false
+    delegated_to_localhost: "{{ external_mds_enabled|bool }}"
+    erp_client_cert_path: "{{ kafka_broker_cert_path }}"
+    erp_client_key_path: "{{ kafka_broker_key_path }}"
+    cert_auth_only_enabled_for_rbac: "{{ kafka_broker_mds_cert_auth_only|bool }}"
+  delegate_to: "{{ delegation_target }}"
+  # For single cluster delegating this task to broker as in case of cert based token retrival only broker can get a super user token using its certs
+  # For Centralized MDS other clusters can't delegate to MDS cluster as that cluster may not have permissions to ssh into MDS, thus delegate to localhost
+
+
+- set_fact:
+    send_client_cert: "{{ mds_ssl_client_authentication in ['required', 'requested'] }}"
 
 - name: Register Kafka Cluster
   uri:
@@ -14,6 +36,8 @@
     headers:
       Content-Type: application/json
       Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ kafka_broker_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_broker_key_path if send_client_cert|bool else omit }}"
     body_format: json
     # For audit logs, must register the oauth listener which will be the "internal" listener
     body: >
@@ -32,6 +56,42 @@
       ]
     status_code: 204
   run_once: true
+  when: auth_mode != 'mtls'
+  no_log: "{{mask_secrets|bool}}"
+  register: output
+  until: output.status == 204
+  retries: "{{ mds_retries }}"
+  delay: 10
+
+- name: Register Kafka Cluster mTLS
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/registry/clusters"
+    method: POST
+    validate_certs: false
+    headers:
+      Content-Type: application/json
+    client_cert: "{{ kafka_broker_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ kafka_broker_key_path if send_client_cert|bool else omit }}"
+    body_format: json
+    # Cant use internal listener as register cluster doesnt support SSL protocol
+    # Thus using internal_token listener which works over SASL_SSL
+    body: >
+      [
+          {
+              "clusterName": "{{kafka_broker_cluster_name}}",
+              "scope": {
+                  "clusters": {
+                      "kafka-cluster": "{{kafka_cluster_id}}"
+                  }
+              },
+              "hosts": [ {% for host in groups['kafka_broker'] %}{% if loop.index > 1%},{% endif %}{ "host": "{{host}}", "port": {{kafka_broker_listeners.internal_token.port}} }{% endfor %}
+              ],
+              "protocol": "{{kafka_broker_listeners.internal_token.sasl_protocol|default(sasl_protocol) | confluent.platform.kafka_protocol(kafka_broker_listeners.internal_token.ssl_enabled|default(ssl_enabled)) }}"
+          }
+      ]
+    status_code: 204
+  run_once: true
+  when: auth_mode == 'mtls'
   no_log: "{{mask_secrets|bool}}"
   register: output
   until: output.status == 204

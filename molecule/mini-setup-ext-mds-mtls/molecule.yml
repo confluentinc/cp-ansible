@@ -1,0 +1,247 @@
+---
+### Installs Confluent Platform Cluster on ubi9.
+### RBAC over mTLS enabled.
+### Centralized MDS.
+### File based login to C3 using overrides.
+
+driver:
+  name: docker
+platforms:
+  - name: mds-${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: mds-${KRAFT_CONTROLLER:-zookeeper}1.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - mds
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: mds-kafka-broker1
+    hostname: mds-kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - kafka_broker_migration
+      - mds
+    image: redhat/ubi9-minimal
+    published_ports:
+      - "8090:8090"
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}2
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}2_migration
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker2
+      - kafka_broker2_migration
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry2
+      - schema_registry2_migration
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest2
+      - kafka_rest2_migration
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect2
+      - kafka_connect2_migration
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql2
+      - ksql2_migration
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center2
+      - control_center2_migration
+      - cluster2
+    image: redhat/ubi9-minimal
+    published_ports:
+      - "9021:9021"
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: mds-controller1-mig
+    hostname: mds-controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+      - mds
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller2_migration
+      - cluster2
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE_RBAC:-../multi_rbac_converge.yml}
+  inventory:
+    group_vars:
+      all:
+        mask_secrets: false
+
+        rbac_enabled: true
+        auth_mode: mtls
+
+        kafka_broker_custom_listeners:
+          external_listener:
+            name: EXTERNAL
+            port: 9093
+            ssl_enabled: true
+            ssl_client_authentication: required
+
+        ssl_enabled: true
+        ssl_client_authentication: required
+        mds_ssl_client_authentication: required
+
+        mds_file_based_user_store_enabled: true
+        mds_file_based_user_store_src_path: /tmp/credentials
+        mds_file_based_user_store_dest_path: /etc/kafka/credentials
+        mds_file_based_user_store_remote_src: true # credentials file already on target node
+
+        create_mds_certs: false
+        token_services_public_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/public.pem"
+        token_services_private_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/tokenKeypair.pem"
+
+        ssl_custom_certs: true
+        ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        ssl_key_password: keypass
+
+        impersonation_super_users:
+          - 'CN=kafka-broker1.confluent,OU=QEIT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US'
+          - 'CN=schema-registry1.confluent,OU=QEIT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US'
+          - 'CN=kafka-connect1.confluent,OU=QEIT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US'
+          - 'CN=kafka-rest1.confluent,OU=QEIT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US'
+
+        rbac_component_additional_system_admins:
+          - user1
+          - Group:group1
+
+        # setups /etc/hosts on ec2 to allow delegate_to: localhost to make requests to MDS url by making the url resolvable
+        docker_containers:
+          - mds-${KRAFT_CONTROLLER:-zookeeper}1
+          - mds-kafka-broker1
+          - ${KRAFT_CONTROLLER:-zookeeper}1
+          - kafka-broker1
+          - schema-registry1
+
+      mds:
+        kafka_broker_cluster_name: 'mds'
+
+      cluster2:
+        kafka_broker_cluster_name: 'second-cluster'
+        external_mds_enabled: true
+        mds_broker_bootstrap_servers: mds-kafka-broker1:9093
+        mds_bootstrap_server_urls: https://mds-kafka-broker1:8090
+
+        mds_broker_listener:
+          ssl_enabled: true
+          ssl_mutual_auth_enabled: true
+          sasl_protocol: none
+
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
+        ssl_client_authentication: required
+
+        ssl_custom_certs: true
+        ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+        ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
+        ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        ssl_key_password: keypass
+
+        mds_super_user_external_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/mds-kafka-broker1-ca1-signed.crt"
+        mds_super_user_external_key_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/mds-kafka-broker1-key.pem"

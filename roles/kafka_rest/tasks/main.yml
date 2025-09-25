@@ -128,6 +128,7 @@
   when: >
     kafka_rest_ssl_enabled|bool or
     ( kafka_broker_listeners[kafka_rest_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool and not public_certificates_enabled|bool ) or
+    ( kafka_broker_listeners[kafka_rest_client_kafka_listener_name]['ssl_enabled'] | default(ssl_enabled) | bool and not public_certificates_enabled|bool ) or
     ( mds_tls_enabled|bool and not public_certificates_enabled|bool ) or
     ( 'schema_registry' in groups and schema_registry_ssl_enabled|bool )
   tags: ssl
@@ -141,7 +142,9 @@
     kerberos_keytab_path: "{{kafka_rest_kerberos_keytab_path}}"
     kerberos_keytab_destination_path: "{{kafka_rest_keytab_path}}"
     kerberos_handler: "restart kafka-rest"
-  when: kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol == 'GSSAPI'
+  # not adding kafka_rest_client_kafka_listener_name in this when condn as either it is same as kafka_rest_kafka_listener_name or
+  # if different then it is internal_token where sasl protocol is oauth and not kerberos
+  when: "'GSSAPI' in (kafka_broker_listeners[kafka_rest_kafka_listener_name]['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol)"
 
 - name: Copy Custom Kafka Rest Files
   include_role:
@@ -152,6 +155,18 @@
     user: "{{kafka_rest_user}}"
     group: "{{kafka_rest_group}}"
   when: kafka_rest_copy_files | length > 0
+  tags:
+    - configuration
+
+- name: Copy Custom Files From All Components List
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{all_components_copy_files}}"
+    user: "{{kafka_rest_user}}"
+    group: "{{kafka_rest_group}}"
+  when: all_components_copy_files | length > 0
   tags:
     - configuration
 
@@ -184,6 +199,26 @@
   when:
     - oauth_enabled|bool or schema_registry_oauth_enabled|bool or kafka_rest_oauth_enabled|bool or kafka_connect_oauth_enabled|bool or kafka_connect_replicator_oauth_enabled|bool
     - oauth_idp_cert_path != ""
+
+- name: Extract RP Principal from cert
+  import_role:
+    name: common
+    tasks_from: cert_principal_extract.yml
+  vars:
+    keystore_path: "{{kafka_rest_keystore_path}}"
+    keystore_storepass: "{{kafka_rest_keystore_storepass}}"
+    pm_rules: "{{kafka_rest_final_properties.get('auth.ssl.principal.mapping.rules','DEFAULT')}}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
+
+- name: Configure RBAC for mTLS User
+  include_tasks: rbac.yml
+  vars:
+    rest_user: "{{ ks_extracted_principal | urlencode }}"
+  when:
+    - rbac_enabled|bool
+    - mds_ssl_client_authentication != 'none'
 
 - name: Create SSL Certificate Directory
   file:
