@@ -240,3 +240,27 @@ Description: Pre flight check. Validate keys and certs if custom_certs provided.
 Description: Pre flight check. Check if /tmp directory exists or not.
 
 ***
+
+### Tag - zookeeper
+
+Description: For all zookeeper tasks - installing, configuring. Runs the zookeeper role.
+
+***
+
+### Tag - migrate_to_dual_write
+
+Description: To pause Zookeeper to Kraft migration at Dual Write mode. Used to manually validate the metadata/ACLs before moving to Kraft mode.
+
+***
+
+### Tag - migrate_to_kraft
+
+Description: To migrate from Dual Write mode to Kraft mode. Used only when the cluster is currently in Dual Write mode.
+
+***
+
+###Tag - validate_jolokia
+
+Description: To validate Jolokia access control configurations.
+
+****
