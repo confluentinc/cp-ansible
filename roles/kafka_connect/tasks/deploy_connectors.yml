@@ -1,9 +1,4 @@
 ---
-- name: Register Kafka Connect Subgroups
-  set_fact:
-    subgroups: "{{ ((subgroups | default([])) + hostvars[item].group_names) | difference('kafka_broker, ksql, kafka_connect, kafka_rest, kerberos, ksql, schema_registry, kafka_broker_parallel, ksql_parallel, kafka_connect_parallel, kafka_rest_parallel, kerberos_parallel, ksql_parallel, schema_registry_parallel, kafka_controller, kafka_controller_parallel') }}"
-  with_items: "{{groups['kafka_connect']}}"
-
 - name: Extract Connect Principal from cert
   import_role:
     name: common
@@ -16,7 +11,6 @@
     - rbac_enabled|bool
     - mds_ssl_client_authentication != 'none'
     - not ansible_check_mode
-    - kafka_connect_connectors is defined
 
 - name: Add Role Bindings for Connect mTLS User
   include_tasks: rbac_connectors.yml
@@ -26,7 +20,6 @@
     - rbac_enabled|bool
     - mds_ssl_client_authentication != 'none'
     - not ansible_check_mode
-    - kafka_connect_connectors is defined
 
 - name: Add Role Bindings for Connect OAuth
   include_tasks: rbac_connectors.yml
@@ -36,7 +29,6 @@
     - rbac_enabled|bool
     - oauth_enabled|bool
     - not ansible_check_mode
-    - kafka_connect_connectors is defined
 
 - name: Add Role Bindings for Connect Ldap
   include_tasks: rbac_connectors.yml
@@ -46,7 +38,6 @@
     - rbac_enabled|bool
     - "'ldap' in auth_mode"
     - not ansible_check_mode
-    - kafka_connect_connectors is defined
 
 - set_fact:
     certs_chain: "{{ssl_file_dir_final}}/{{ kafka_connect_service_name if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect' }}.chain"
@@ -74,7 +65,7 @@
     oauth_client_assertion_template_file: "{{ kafka_connect_oauth_client_assertion_template_file_dest_path }}"
   when: rbac_enabled or kafka_connect_oauth_enabled
 
-- name: Register connector configs and remove deleted connectors for single cluster
+- name: Register connector configs and remove deleted connectors for a connect cluster
   confluent.platform.kafka_connectors:
     connect_url: "{{kafka_connect_http_protocol}}://{{ hostvars[inventory_hostname] | confluent.platform.resolve_and_format_hostname }}:{{kafka_connect_rest_port}}/connectors"
     active_connectors: "{{ kafka_connect_connectors }}"
@@ -83,19 +74,4 @@
     client_cert: "{% if (ssl_provided_keystore_and_truststore and ssl_mutual_auth_enabled) %}{{kafka_connect_cert_path}}{% elif ssl_mutual_auth_enabled %}{{certs_chain}}{% else %}{{none}}{% endif %}"
     client_key: "{% if ssl_mutual_auth_enabled %}{{kafka_connect_key_path}}{% else %}{{none}}{% endif %}"
   when:
-    - kafka_connect_connectors is defined
-    - subgroups|length == 0
-  run_once: true
-
-- name: Register connector configs and remove deleted connectors for Multiple Clusters
-  confluent.platform.kafka_connectors:
-    connect_url: "http{% if hostvars[groups[item][0]].kafka_connect_ssl_enabled|default(kafka_connect_ssl_enabled) %}s{% endif %}://{{ hostvars[groups[item][0]] | confluent.platform.resolve_and_format_hostname }}:{{ hostvars[groups[item][0]].kafka_connect_rest_port|default(kafka_connect_rest_port) }}/connectors"
-    active_connectors: "{{ hostvars[groups[item][0]].kafka_connect_connectors }}"
-    timeout: "{{ kafka_connect_deploy_connector_timeout }}"
-    token: "{% if rbac_enabled or kafka_connect_oauth_enabled %}{{ authorization_token }}{% else %}{{none}}{% endif %}"
-    client_cert: "{% if (ssl_provided_keystore_and_truststore and hostvars[groups[item][0]].kafka_connect_ssl_mutual_auth_enabled|default(kafka_connect_ssl_mutual_auth_enabled)) %}{{hostvars[groups[item][0]].kafka_connect_cert_path|default(kafka_connect_cert_path)}}{% elif hostvars[groups[item][0]].kafka_connect_ssl_mutual_auth_enabled|default(kafka_connect_ssl_mutual_auth_enabled) %}{{certs_chain}}{% else %}{{none}}{% endif %}"
-    client_key: "{% if hostvars[groups[item][0]].kafka_connect_ssl_mutual_auth_enabled|default(kafka_connect_ssl_mutual_auth_enabled) %}{{hostvars[groups[item][0]].kafka_connect_key_path|default(kafka_connect_key_path)}}{% else %}{{none}}{% endif %}"
-  when: hostvars[groups[item][0]].kafka_connect_connectors is defined
-  delegate_to: "{{ groups[item][0] }}"
-  loop: "{{subgroups}}"
-  run_once: true
+    - inventory_hostname == ansible_play_hosts_all[0] # solves serial mode issue
