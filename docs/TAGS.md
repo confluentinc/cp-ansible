@@ -240,3 +240,11 @@ Description: Pre flight check. Validate keys and certs if custom_certs provided.
 Description: Pre flight check. Check if /tmp directory exists or not.
 
 ***
+
+
+### Tag - validate_jolokia
+
+Description: Pre flight check. Validate Jolokia access control configuration including custom file paths and settings.
+
+***
+
