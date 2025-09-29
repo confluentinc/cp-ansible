@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  8.0.0
+Default:  8.0.1
 
 ***
 
@@ -6708,6 +6708,198 @@ Default:  yyyyyy
 
 ***
 
+### jolokia_access_control_custom_file_enabled
+
+Boolean to use custom Jolokia access control file. Must be set to true or false when Jolokia access control is enabled.
+
+Default:  false
+
+***
+
+### jolokia_access_control_file_src_path
+
+Full path on Ansible Controller to custom Jolokia access control XML file. Required when jolokia_access_control_custom_file_enabled is true
+
+Default:  ""
+
+***
+
+### kafka_controller_jolokia_access_control_custom_file_enabled
+
+Component-specific custom file enabled flags (must be defined before src_path variables)
+
+Default:  "{{jolokia_access_control_custom_file_enabled}}"
+
+***
+
+### kafka_controller_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Zookeeper (on control node)
+
+Default:  "{{ '' if kafka_controller_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_broker_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka Broker (on control node)
+
+Default:  "{{ '' if kafka_broker_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### schema_registry_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Schema Registry (on control node)
+
+Default:  "{{ '' if schema_registry_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_rest_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka REST (on control node)
+
+Default:  "{{ '' if kafka_rest_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_connect_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka Connect (on control node)
+
+Default:  "{{ '' if kafka_connect_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### ksql_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for ksqlDB (on control node)
+
+Default:  "{{ '' if ksql_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_connect_replicator_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka Connect Replicator (on control node)
+
+Default:  "{{ '' if kafka_connect_replicator_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_broker_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Kafka Broker
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_broker_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Broker Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_broker.config_file | dirname }}/jolokia-access.xml"
+
+***
+
+### schema_registry_jolokia_access_control_enabled
+
+Boolean to use custom Jolokia access control file for Schema Registry
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### schema_registry_jolokia_access_control_file_dest_path
+
+Path on target nodes where Schema Registry Jolokia access control XML file will be placed
+
+Default:  "{{ schema_registry.config_file | dirname }}/jolokia-access.xml"
+
+***
+
+### kafka_rest_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Rest Proxy
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_rest_jolokia_access_control_file_dest_path
+
+Path on target nodes where Rest Proxy Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_rest.config_file | dirname }}/jolokia-access.xml"
+
+***
+
+### kafka_connect_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Kafka Connect
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_connect_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Connect Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_connect.config_file | dirname }}/jolokia-access.xml"
+
+***
+
+### ksql_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on ksqlDB
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### ksql_jolokia_access_control_file_dest_path
+
+Path on target nodes where ksqlDB Jolokia access control XML file will be placed
+
+Default:  "{{ ksql.config_file | dirname }}/jolokia-access.xml"
+
+***
+
+### kafka_connect_replicator_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Kafka Connect Replicator
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_connect_replicator_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Connect Replicator Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_connect_replicator.config_file | dirname }}/jolokia-access.xml"
+
+***
+
+### kafka_controller_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on kafka controller
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_controller_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Controller Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_controller.config_file | dirname }}/jolokia-access.xml"
+
+***
+
 # common
 
 Below are the supported variables for the role common
@@ -7783,3 +7975,4 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
+
