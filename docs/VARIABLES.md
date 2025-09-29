@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.3.13
+Default:  7.3.14
 
 ***
 
@@ -97,6 +97,94 @@ Default:  admin
 Password for Jolokia Agent when using Basic Auth
 
 Default:  password
+
+***
+
+### jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control across all components
+
+Default:  false
+
+***
+
+### jolokia_access_control_custom_file_enabled
+
+Boolean to use custom Jolokia access control file. Must be set to true or false when Jolokia access control is enabled.
+
+Default:  false
+
+***
+
+### jolokia_access_control_file_src_path
+
+Full path on Ansible Controller to custom Jolokia access control XML file. Required when jolokia_access_control_custom_file_enabled is true
+
+Default:  ""
+
+***
+
+### zookeeper_jolokia_access_control_custom_file_enabled
+
+Component-specific custom file enabled flags (must be defined before src_path variables)
+
+Default:  "{{jolokia_access_control_custom_file_enabled}}"
+
+***
+
+### zookeeper_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Zookeeper (on control node)
+
+Default:  "{{ '' if zookeeper_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_broker_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka Broker (on control node)
+
+Default:  "{{ '' if kafka_broker_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### schema_registry_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Schema Registry (on control node)
+
+Default:  "{{ '' if schema_registry_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_rest_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka REST (on control node)
+
+Default:  "{{ '' if kafka_rest_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_connect_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka Connect (on control node)
+
+Default:  "{{ '' if kafka_connect_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### ksql_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for ksqlDB (on control node)
+
+Default:  "{{ '' if ksql_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_connect_replicator_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka Connect Replicator (on control node)
+
+Default:  "{{ '' if kafka_connect_replicator_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
 
 ***
 
@@ -836,6 +924,22 @@ Default:  "{{jolokia_password}}"
 
 ***
 
+### zookeeper_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Zookeeper
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### zookeeper_jolokia_access_control_file_dest_path
+
+Path on target nodes where Zookeeper Jolokia access control XML file will be placed
+
+Default:  "{{ zookeeper.config_file | dirname }}/jolokia-access.xml"
+
+***
+
 ### zookeeper_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
@@ -1033,6 +1137,22 @@ Default:  "{{jolokia_user}}"
 Password for Kafka's Jolokia Agent when using Basic Auth
 
 Default:  "{{jolokia_password}}"
+
+***
+
+### kafka_broker_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Kafka Broker
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_broker_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Broker Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_broker.config_file | dirname }}/jolokia-access.xml"
 
 ***
 
@@ -1268,6 +1388,22 @@ Default:  "{{jolokia_password}}"
 
 ***
 
+### schema_registry_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Schema Registry
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### schema_registry_jolokia_access_control_file_dest_path
+
+Path on target nodes where Schema Registry Jolokia access control XML file will be placed
+
+Default:  "{{ schema_registry.config_file | dirname }}/jolokia-access.xml"
+
+***
+
 ### schema_registry_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on schema registry
@@ -1449,6 +1585,22 @@ Default:  "{{jolokia_user}}"
 Password for Rest Proxy's Jolokia Agent when using Basic Auth
 
 Default:  "{{jolokia_password}}"
+
+***
+
+### kafka_rest_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Rest Proxy
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_rest_jolokia_access_control_file_dest_path
+
+Path on target nodes where Rest Proxy Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_rest.config_file | dirname }}/jolokia-access.xml"
 
 ***
 
@@ -1676,6 +1828,22 @@ Default:  "{{jolokia_password}}"
 
 ***
 
+### kafka_connect_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Kafka Connect
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_connect_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Connect Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_connect.config_file | dirname }}/jolokia-access.xml"
+
+***
+
 ### kafka_connect_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on Connect
@@ -1897,6 +2065,22 @@ Default:  "{{jolokia_user}}"
 Password for ksqlDB's Jolokia Agent when using Basic Auth
 
 Default:  "{{jolokia_password}}"
+
+***
+
+### ksql_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on ksqlDB
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### ksql_jolokia_access_control_file_dest_path
+
+Path on target nodes where ksqlDB Jolokia access control XML file will be placed
+
+Default:  "{{ ksql.config_file | dirname }}/jolokia-access.xml"
 
 ***
 
@@ -3257,6 +3441,22 @@ Default:  "{{jolokia_user}}"
 Password for Jolokia Agent when using Basic Auth.
 
 Default:  "{{jolokia_password}}"
+
+***
+
+### kafka_connect_replicator_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Kafka Connect Replicator
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_connect_replicator_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Connect Replicator Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_connect_replicator.config_file | dirname }}/jolokia-access.xml"
 
 ***
 
