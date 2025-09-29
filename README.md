@@ -34,7 +34,7 @@ Non Red Hat customers can install this collection from Ansible Galaxy.
 
 For detailed instructions, follow [Download Ansible Playbooks for Confluent Platform](https://docs.confluent.io/ansible/current/ansible-download.html).
 
-As an alternative to the recommended methods above, non-RedHat customers can install also the package directly from the source repository.
+As an alternative to the recommended methods above, non-RedHat customers can also install the package directly from the source repository.
 
 * Create a directory with the following structure:<br>
 ```mkdir -p <path_to_cp-ansible>/ansible_collections/confluent/```
