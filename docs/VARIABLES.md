@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  8.0.0
+Default:  8.0.1
 
 ***
 
