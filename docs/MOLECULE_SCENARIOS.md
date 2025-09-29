@@ -546,7 +546,7 @@ Validates that Java 11 is in use.
 
 Installation of Confluent Platform on Ubuntu1804.
 
-MTLS enabled.
+MTLS enabled
 
 #### Scenario mtls-ubuntu verify test's the following:
 
