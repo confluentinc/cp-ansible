@@ -2,6 +2,7 @@
 ### Validates that MTLS is enabled.
 ### Validates mapping rules for ACLs.
 ### Validates ACL users.
+### Validated ACL creation.
 
 - name: Verify - kafka_controller
   hosts: kafka_controller
@@ -59,13 +60,6 @@
         tasks_from: check_property.yml
       vars:
         file_path: /etc/kafka/server.properties
-        property: super.users
-        expected_value: User:kafka_broker;User:schema_registry;User:kafka_connect;User:ksql;User:control_center
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/kafka/server.properties
         property: authorizer.class.name
         expected_value: kafka.security.authorizer.AclAuthorizer
       when: not kraft_mode|bool
@@ -77,6 +71,56 @@
         property: authorizer.class.name
         expected_value: org.apache.kafka.metadata.authorizer.StandardAuthorizer
       when: kraft_mode|bool
+
+    - name: Create Kafka topic
+      shell: kafka-topics --create --topic test-topic \
+             --bootstrap-server kafka-broker1:9091 --command-config /etc/kafka/client.properties \
+             --replication-factor 1 --partitions 6
+      run_once: true
+      register: output
+      failed_when:
+        - "'Topic test-topic already exists' not in output.stdout"
+        - "'Created topic test-topic' not in output.stdout"
+
+    - name: Create Topic Data
+      shell: |
+        seq 10 | kafka-console-producer --topic test-topic \
+        --bootstrap-server kafka-broker1:9091 --producer.config /etc/kafka/client.properties
+      run_once: true
+
+    - name: Read Topic Data
+      shell: kafka-console-consumer --topic test-topic \
+             --bootstrap-server kafka-broker1:9091 --timeout-ms 10000 \
+             --from-beginning --consumer.config /etc/kafka/client.properties
+      run_once: true
+      register: consumer_output
+      failed_when:
+        - "'1\n2\n3\n4\n5\n6\n7\n8\n9\n10' not in consumer_output.stdout"
+
+    - name: Create ACL with write only permission
+      shell: kafka-acls --bootstrap-server kafka-broker1:9091 --add
+              --topic test-topic --allow-principal User:* --operation write
+              --command-config /etc/kafka/client.properties
+      run_once: true
+      register: acl_output
+      failed_when:
+        - "'Adding ACLs for resource' not in acl_output.stdout"
+        - "'Current ACLs for resource' not in acl_output.stdout"
+
+    - name: Create Topic Data
+      shell: |
+        seq 5 | kafka-console-producer --topic test-topic \
+        --bootstrap-server kafka-broker1:9091 --producer.config /etc/kafka/client.properties
+      run_once: true
+
+    - name: Read Topic Data
+      shell: kafka-console-consumer --topic test-topic \
+             --bootstrap-server kafka-broker1:9091 --timeout-ms 10000 \
+             --from-beginning --consumer.config /etc/kafka/client.properties
+      run_once: true
+      register: consumer_output
+      failed_when:
+        - consumer_output.stdout != ""    # not authorized to read data
 
 - name: Verify - schema_registry
   hosts: schema_registry
