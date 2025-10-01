@@ -152,7 +152,6 @@
   hosts: schema_registry
   serial: 1
   gather_facts: false
-  vars:
   tasks:
     - import_role:
         name: variables
@@ -401,7 +400,7 @@
             user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
             password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
           register: cc_sr_readwrite_mode
-          when: importer_qualified_contexts is not defined or importer_qualified_contexts | length == 0
+          when: schema_importers[0].subjects is not defined or schema_importers[0].subjects | length == 0 or "*" in schema_importers[0].subjects
 
         - name: Verify CC SR is in READWRITE mode
           uri:
@@ -415,11 +414,11 @@
           until: cc_sr_mode_check.json.mode == 'READWRITE'
           retries: 5
           delay: 2
-          when: importer_qualified_contexts is not defined or importer_qualified_contexts | length == 0
+          when: schema_importers[0].subjects is not defined or schema_importers[0].subjects | length == 0 or "*" in schema_importers[0].subjects
 
         - name: Switch CC SR contexts for each context to READWRITE mode
           uri:
-            url: "{{ unified_stream_manager.schema_registry_endpoint }}/contexts/{{ item }}/mode"
+            url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode/{{ item }}"
             method: PUT
             body_format: json
             body:
@@ -429,10 +428,10 @@
             user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
             password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
           register: context_mode_results
-          loop: "{{ importer_qualified_contexts | default([]) }}"
+          loop: "{{ schema_importers[0].subjects | default([]) }}"
           loop_control:
             label: "Context {{ item }}"
-          when: importer_qualified_contexts | length > 0
+          when: schema_importers[0].subjects | length > 0
 
       rescue:
         - name: Handle Switchover failure
