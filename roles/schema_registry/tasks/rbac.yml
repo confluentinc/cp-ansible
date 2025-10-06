@@ -81,6 +81,32 @@
   no_log: "{{mask_secrets|bool}}"
   when: not ansible_check_mode
 
+- name: Grant Schema Registry user ClusterAdmin role for exporter endpoint access
+  uri:
+    url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{sr_user}}/roles/ClusterAdmin"
+    method: POST
+    validate_certs: false
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer {{ authorization_token }}"
+    client_cert: "{{ schema_registry_cert_path if send_client_cert|bool else omit }}"
+    client_key: "{{ schema_registry_key_path if send_client_cert|bool else omit }}"
+    body_format: json
+    body: >
+      {
+        "clusters": {
+          "kafka-cluster": "{{kafka_cluster_id}}",
+          "schema-registry-cluster": "{{schema_registry_final_properties['schema.registry.group.id']}}"
+        }
+      }
+    status_code: 204
+  register: sr_cluster_admin_result
+  until: sr_cluster_admin_result.status == 204
+  retries: "{{ mds_retries }}"
+  delay: 5
+  no_log: "{{mask_secrets|bool}}"
+  when: not ansible_check_mode
+
 - name: Grant Schema Registry user ResourceOwner Schema Registry Group and Topic
   uri:
     url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{sr_user}}/roles/ResourceOwner/bindings"
@@ -113,6 +139,36 @@
           {
             "resourceType":"Topic",
             "name": "{{schema_registry_final_properties['confluent.license.topic']}}",
+            "patternType":"LITERAL"
+          },
+          {
+            "resourceType":"Topic",
+            "name": "_exporter_configs",
+            "patternType":"LITERAL"
+          },
+          {
+            "resourceType":"Topic",
+            "name": "_exporter_states",
+            "patternType":"LITERAL"
+          },
+          {
+            "resourceType":"Topic",
+            "name": "_importer_configs",
+            "patternType":"LITERAL"
+          },
+          {
+            "resourceType":"Topic",
+            "name": "_importer_states",
+            "patternType":"LITERAL"
+          },
+          {
+            "resourceType":"Topic",
+            "name": "_dek_registry_keys",
+            "patternType":"LITERAL"
+          },
+          {
+            "resourceType":"Topic",
+            "name": "_dek_registry_keks",
             "patternType":"LITERAL"
           }
         ]

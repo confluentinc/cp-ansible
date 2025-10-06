@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  8.0.0
+Default:  8.1.0
 
 ***
 
@@ -448,7 +448,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  4.27.0
+Default:  4.38.0
 
 ***
 
@@ -6596,6 +6596,22 @@ Default:  "{{pause_rolling_deployment}}"
 
 ***
 
+### usm_agent_deployment_strategy
+
+Deployment strategy for USM Agent. Set to parallel to run all provisioning tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### usm_agent_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each USM Agent Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
 ### control_center_next_gen_dependency_prometheus_health_check_user
 
 user for the user used to do healthcheck on Control Center Next Gen (prometheus)
@@ -6708,6 +6724,54 @@ Default:  yyyyyy
 
 ***
 
+### schema_registry_retries
+
+Number of retry attempts for Schema Registry API calls.
+
+Default:  30
+
+***
+
+### password_encoder_secret
+
+Property required for password encoding in Schema Exporter and Importer.
+
+Default:  ""
+
+***
+
+### confluent_usm_agent_package_version
+
+Version of Confluent USM Agent to install
+
+Default:  1.0.0
+
+***
+
+### usm_agent_basic_auth_enabled
+
+USM Agent server side configurations
+
+Default:  "false"
+
+***
+
+### usm_agent_url
+
+USM Agent client side configurations
+
+Default:  "{{ (groups.get('usm_agent') if groups.get('usm_agent') else ['localhost']) | confluent.platform.resolve_and_format_hostnames(hostvars) | map('regex_replace', '^', usm_agent_http_protocol + '://') | map('regex_replace', '$', ':' + usm_agent_dataplane_port|string) | join(',') }}"
+
+***
+
+### unified_stream_manager
+
+Unified Stream Manager configuration for remote Schema Registry connection
+
+Default: 
+
+***
+
 # common
 
 Below are the supported variables for the role common
@@ -6759,6 +6823,14 @@ Default:  "https://packages.confluent.io"
 Confluent independent release packages RPM and Debian Package Repositories
 
 Default:  "https://packages.confluent.io"
+
+***
+
+### confluent_usm_agent_independent_repository_baseurl
+
+Confluent USM Agent RPM and Debian Package Repositories
+
+Default:  "{{confluent_independent_repository_baseurl}}/confluent-usm-agent"
 
 ***
 
@@ -7783,3 +7855,4 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
+
