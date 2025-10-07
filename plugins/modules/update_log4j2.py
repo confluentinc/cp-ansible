@@ -251,44 +251,27 @@ def main():
             if appender.get('SizeBasedTriggeringPolicy', {}).get('size') != size:
                 appender['SizeBasedTriggeringPolicy'] = {'size': size}
                 changed = True
-
-        # Fix filePattern: add index-based pattern %i if not present
-        # This is required for DefaultRolloverStrategy's max attribute to work properly
-        # We preserve date patterns and add %i to enable proper file counting and cleanup
         if 'filePattern' in appender:
             original_pattern = appender['filePattern']
 
-            # Check if filePattern already has %i - if so, skip
             if '%i' not in original_pattern:
-                # Add .%i to the end of the filePattern to enable index-based cleanup
-                # This preserves any date patterns (%d{...}) for human readability
-                # while adding the index counter needed for max attribute to work
                 new_pattern = original_pattern + '.%i'
                 appender['filePattern'] = new_pattern
                 changed = True
 
-        # Configure DefaultRolloverStrategy with Delete action for robust cleanup
-        # The Delete action uses glob patterns to match files, which ensures cleanup
-        # of both old-pattern files (without .%i) and new-pattern files (with .%i)
         max_backup_value = int(max_backup) if max_backup.isdigit() else max_backup
 
-        # Extract base path and filename for Delete action
         file_name = appender.get('fileName', '')
         if file_name:
-            # Extract directory and base filename
             if '/' in file_name:
-                # Handle paths like ${sys:kafka.logs.dir}/server.log
                 base_path = file_name[:file_name.rfind('/')]
                 base_file = file_name[file_name.rfind('/') + 1:]
             else:
                 base_path = '.'
                 base_file = file_name
 
-            # Create glob pattern to match all rotated versions
-            # This will match both old (server.log.2024-*) and new (server.log.2024-*.1) patterns
             glob_pattern = base_file + '.*'
 
-            # Build the DefaultRolloverStrategy with Delete action
             rollover_strategy = {
                 'Delete': {
                     'basePath': base_path,
@@ -302,12 +285,10 @@ def main():
                 }
             }
 
-            # Update if different from current configuration
             if appender.get('DefaultRolloverStrategy') != rollover_strategy:
                 appender['DefaultRolloverStrategy'] = rollover_strategy
                 changed = True
         else:
-            # Fallback to simple max attribute if we can't extract fileName
             if appender.get('DefaultRolloverStrategy', {}).get('max') != max_backup_value:
                 appender['DefaultRolloverStrategy'] = {'max': max_backup_value}
                 changed = True
