@@ -615,10 +615,14 @@ kafka_broker_properties:
                     plain_jaas_config, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'), kerberos_kafka_broker_primary,
                     sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, oauth_sub_claim, rbac_enabled, false, false) }}"
   broker_id:
-    enabled: "{{ inventory_hostname in groups.kafka_broker }}"
+    enabled: "{{ inventory_hostname in groups.kafka_broker and not enable_node_id|bool }}"
     properties:
-      # broker.id logic depends on inventory hostname being in kafka_broker host list, defaulting to 0 if non kafka broker host
       broker.id: "{{ broker_id | default( groups.kafka_broker.index(inventory_hostname) + 1 ) if inventory_hostname in groups.kafka_broker else 0 }}"
+  node_id:
+    enabled: "{{ inventory_hostname in groups.kafka_broker and enable_node_id|bool }}"
+    properties:
+      node.id: "{{ (node_id if node_id is defined else (broker_id if broker_id is defined else groups.kafka_broker.index(inventory_hostname) + 1)) if inventory_hostname in groups.kafka_broker else 0 }}"
+
   ssl:
     enabled: "{{ kafka_controller_ssl_enabled|bool or
     kafka_broker_listeners | confluent.platform.ssl_required(ssl_enabled) or
