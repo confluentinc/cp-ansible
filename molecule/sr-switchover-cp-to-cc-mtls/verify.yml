@@ -31,6 +31,38 @@
           - "':.test-context:automation.workflow-value' in subjects_list.json"
         fail_msg: "Test schemas were not created successfully"
 
+    - name: check mode of context test-context
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.test-context:"
+        method: GET
+        expected_status: 200
+        result_var: mode_check
+        operation_name: "Check Mode of Context"
+
+    - name: verify context is in READWRITE mode
+      assert:
+        that:
+          - mode_check.json.mode == 'READWRITE'
+        fail_msg: "Context is not in READWRITE mode"
+
+    - name: check mode of subject :.test-context:test-workflow-value
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects/:.test-context:test.user-value/mode"
+        method: GET
+        expected_status: 200
+        result_var: mode_check
+        operation_name: "Check Mode of Subjects"
+      assert:
+        that:
+          - mode_check.json.mode == 'READWRITE'
+        fail_msg: "Subjects are not in READWRITE mode"
+
     - name: Create new test schema in CC SR for import testing
       import_role:
         name: confluent.platform.common
@@ -284,9 +316,3 @@
         expected_status: 200
         result_var: sr_mode_check
         operation_name: "Check Schema Registry Mode"
-
-    - name: Verify Schema Registry is in correct mode
-      assert:
-        that:
-          - sr_mode_check.json.mode in ['READWRITE', 'READONLY', 'IMPORT', 'FORWARD']
-        fail_msg: "Schema Registry is in unexpected mode: {{ sr_mode_check.json.mode }}"
