@@ -152,7 +152,6 @@
   hosts: schema_registry
   serial: 1
   gather_facts: false
-  vars:
   tasks:
     - import_role:
         name: variables
@@ -328,34 +327,34 @@
               - schema_importers[0].config.schema_registry_endpoint == unified_stream_manager.schema_registry_endpoint
             fail_msg: "Pre-check failed: Importer and USM remote endpoints must match"
 
-        - name: Extract contexts from schema importer qualified subjects
-          set_fact:
-            importer_qualified_contexts: "{{ (schema_importers[0].subjects | default([])) | select('match', '^:\\.([^:]+):.*$') | map('regex_replace', '^:\\.([^:]+):.*$', '\\1') | list | unique }}"
-          when:
-            - schema_importers is defined
-            - schema_importers | length > 0
-            - schema_importers[0].subjects is defined
+        # - name: Extract contexts from schema importer qualified subjects
+        #   set_fact:
+        #     importer_qualified_contexts: "{{ (schema_importers[0].subjects | default([])) | select('match', '^:\\.([^:]+):.*$') | map('regex_replace', '^:\\.([^:]+):.*$', '\\1') | list | unique }}"
+        #   when:
+        #     - schema_importers is defined
+        #     - schema_importers | length > 0
+        #     - schema_importers[0].subjects is defined
 
-        - name: Validate no qualified subjects when USM context not configured
-          assert:
-            that:
-              - importer_qualified_contexts | length == 0
-            fail_msg: "Schema importer cannot use qualified subjects when USM remote_context is not configured. Remove context prefixes: {{ schema_importers[0].subjects | select('match', '^:\\.([^:]+):.*$') | list | join(', ') }}"
-          when:
-            - unified_stream_manager is defined
-            - unified_stream_manager.remote_context is not defined or unified_stream_manager.remote_context == ''
-            - importer_qualified_contexts is defined
+        # - name: Validate no qualified subjects when USM context not configured
+        #   assert:
+        #     that:
+        #       - importer_qualified_contexts | length == 0
+        #     fail_msg: "Schema importer cannot use qualified subjects when USM remote_context is not configured. Remove context prefixes: {{ schema_importers[0].subjects | select('match', '^:\\.([^:]+):.*$') | list | join(', ') }}"
+        #   when:
+        #     - unified_stream_manager is defined
+        #     - unified_stream_manager.remote_context is not defined or unified_stream_manager.remote_context == ''
+        #     - importer_qualified_contexts is defined
 
-        - name: Validate qualified subjects match USM remote context
-          assert:
-            that:
-              - importer_qualified_contexts | length == 0 and not (unified_stream_manager.remote_context is defined and unified_stream_manager.remote_context != '') or (importer_qualified_contexts | length == 1 and importer_qualified_contexts[0] == unified_stream_manager.remote_context)
-            fail_msg: "Schema importer qualified subjects must match USM remote_context '{{ unified_stream_manager.remote_context }}'. Found contexts: {{ importer_qualified_contexts | join(', ') }}"
-          when:
-            - unified_stream_manager is defined
-            - unified_stream_manager.remote_context is defined
-            - unified_stream_manager.remote_context != ''
-            - importer_qualified_contexts is defined
+        # - name: Validate qualified subjects match USM remote context
+        #   assert:
+        #     that:
+        #       - importer_qualified_contexts | length == 0 and not (unified_stream_manager.remote_context is defined and unified_stream_manager.remote_context != '') or (importer_qualified_contexts | length == 1 and importer_qualified_contexts[0] == unified_stream_manager.remote_context)
+        #     fail_msg: "Schema importer qualified subjects must match USM remote_context '{{ unified_stream_manager.remote_context }}'. Found contexts: {{ importer_qualified_contexts | join(', ') }}"
+        #   when:
+        #     - unified_stream_manager is defined
+        #     - unified_stream_manager.remote_context is defined
+        #     - unified_stream_manager.remote_context != ''
+        #     - importer_qualified_contexts is defined
       tags:
         - never
         - forward_to_cc
@@ -389,37 +388,49 @@
             request_retries: 5
             request_delay: 2
 
-        - name: "Switch CC SR to READWRITE mode (WRITE DOWNTIME ENDS)"
+        # Fetch all contexts and process each one
+        - name: Fetch all contexts from Schema Registry
           uri:
-            url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode"
-            method: PUT
-            body_format: json
-            body:
-              mode: "READWRITE"
-            status_code: 200
-            validate_certs: false
-            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
-            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
-          register: cc_sr_readwrite_mode
-          when: importer_qualified_contexts is not defined or importer_qualified_contexts | length == 0
-
-        - name: Verify CC SR is in READWRITE mode
-          uri:
-            url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode"
+            url: "{{ unified_stream_manager.schema_registry_endpoint }}/contexts?delete=true"
             method: GET
             status_code: 200
             validate_certs: false
             user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
             password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
-          register: cc_sr_mode_check
-          until: cc_sr_mode_check.json.mode == 'READWRITE'
-          retries: 5
-          delay: 2
-          when: importer_qualified_contexts is not defined or importer_qualified_contexts | length == 0
+          register: all_contexts_result
+          when:
+            - schema_importers[0].subjects is defined
+            - schema_importers[0].subjects | length > 0
+            - "':*:' in schema_importers[0].subjects"
 
-        - name: Switch CC SR contexts for each context to READWRITE mode
+        - name: Create context patterns by appending colons
+          set_fact:
+            context_patterns: >-
+              {{
+                all_contexts_result.json | map('regex_replace', '^', ':') | map('regex_replace', '$', ':') | list
+              }}
+          when:
+            - all_contexts_result is defined
+            - all_contexts_result.json is defined
+
+        # Process all subjects: normalize, set context mode, fetch subjects, set subject mode
+        # Step 1: Normalize all subject patterns
+        - name: Normalize subject patterns
+          set_fact:
+            normalized_subjects: >-
+              {{
+                (schema_importers[0].subjects | default([]) |
+                map('regex_replace', '^(:.+:)\*$', '\1') |
+                list) + (context_patterns | default([]))
+              }}
+          when:
+            - schema_importers[0].subjects is defined
+            - schema_importers[0].subjects | length > 0
+
+        # Step 2: Set mode at context level for all normalized subjects
+        - name: Switch mode at context level
           uri:
-            url: "{{ unified_stream_manager.schema_registry_endpoint }}/contexts/{{ item }}/mode"
+            url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode/{{ item }}?delete=true"
             method: PUT
             body_format: json
             body:
@@ -429,10 +440,49 @@
             user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
             password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
           register: context_mode_results
-          loop: "{{ importer_qualified_contexts | default([]) }}"
+          loop: "{{ normalized_subjects | default([]) }}"
           loop_control:
-            label: "Context {{ item }}"
-          when: importer_qualified_contexts | length > 0
+            label: "Setting context mode for {{ item }}"
+          when:
+            - normalized_subjects is defined
+            - normalized_subjects | length > 0
+
+        # Step 3: Fetch all subjects within each context
+        - name: Fetch all subjects for each context
+          uri:
+            url: "{{ unified_stream_manager.schema_registry_endpoint }}/subjects?subjectPrefix={{ item }}&delete=true"
+            method: GET
+            status_code: 200
+            validate_certs: false
+            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
+            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
+          register: context_subjects_results
+          loop: "{{ normalized_subjects | default([]) }}"
+          loop_control:
+            label: "Fetching subjects for {{ item }}"
+          when:
+            - normalized_subjects is defined
+            - normalized_subjects | length > 0
+
+        # Step 4: Set mode at subject level for all fetched subjects
+        - name: Switch mode at subject level for all subjects
+          uri:
+            url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode/{{ item.1 }}?delete=true"
+            method: PUT
+            body_format: json
+            body:
+              mode: "READWRITE"
+            status_code: 200
+            validate_certs: false
+            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
+            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
+          register: subject_mode_results
+          loop: "{{ context_subjects_results.results | subelements('json') }}"
+          loop_control:
+            label: "Setting subject mode for {{ item.1 }}"
+          when:
+            - context_subjects_results is defined
+            - context_subjects_results.results is defined
 
       rescue:
         - name: Handle Switchover failure
