@@ -379,20 +379,39 @@
                   {{
                     all_contexts_result.json | map('regex_replace', '^', ':') | map('regex_replace', '$', ':') | list
                   }}
+
+            - name: Set mode at context level for context patterns
+              uri:
+                url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode/{{ item }}"
+                method: PUT
+                body_format: json
+                body:
+                  mode: "READWRITE"
+                status_code: 200
+                validate_certs: false
+                user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
+                password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
+              register: context_patterns_mode_results
+              loop: "{{ context_patterns }}"
+              loop_control:
+                label: "Setting context mode for {{ item }}"
+              when:
+                - context_patterns is defined
+                - context_patterns | length > 0
           when:
             - schema_importers[0].subjects is defined
             - schema_importers[0].subjects | length > 0
             - "':*:' in schema_importers[0].subjects"
 
         # Process all subjects: normalize, set context mode, fetch subjects, set subject mode
-        # Step 1: Normalize all subject patterns
+        # Step 1: Normalize all subject patterns (excluding context_patterns to avoid duplication)
         - name: Normalize subject patterns
           set_fact:
             normalized_subjects: >-
               {{
-                ((schema_importers[0].subjects | default([]) |
+                (schema_importers[0].subjects | default([]) |
                 map('regex_replace', '^(:.+:)\*$', '\1') |
-                list) + (context_patterns | default([]))) | unique | list
+                list) | unique | list
               }}
           when:
             - schema_importers[0].subjects is defined
@@ -428,17 +447,31 @@
             user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
             password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
           register: context_subjects_results
-          loop: "{{ normalized_subjects | default([]) }}"
+          loop: "{{ (normalized_subjects | default([])) | unique | list }}"
           loop_control:
             label: "Fetching subjects for {{ item }}"
           when:
-            - normalized_subjects is defined
-            - normalized_subjects | length > 0
+            - (normalized_subjects is defined and normalized_subjects | length > 0)
 
-        # Step 4: Set mode at subject level for all fetched subjects
+        # Step 4: Deduplicate subjects before setting mode
+        - name: Collect and deduplicate all subjects
+          set_fact:
+            all_subjects: >-
+              {{
+                context_subjects_results.results |
+                map(attribute='json') |
+                flatten |
+                unique |
+                list
+              }}
+          when:
+            - context_subjects_results is defined
+            - context_subjects_results.results is defined
+
+        # Step 5: Set mode at subject level for all deduplicated subjects
         - name: Switch mode at subject level for all subjects
           uri:
-            url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode/{{ item.1 }}"
+            url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode/{{ item }}"
             method: PUT
             body_format: json
             body:
@@ -448,12 +481,12 @@
             user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
             password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
           register: subject_mode_results
-          loop: "{{ context_subjects_results.results | subelements('json') }}"
+          loop: "{{ all_subjects | default([]) }}"
           loop_control:
-            label: "Setting subject mode for {{ item.1 }}"
+            label: "Setting subject mode for {{ item }}"
           when:
-            - context_subjects_results is defined
-            - context_subjects_results.results is defined
+            - all_subjects is defined
+            - all_subjects | length > 0
 
       rescue:
         - name: Handle Switchover failure
