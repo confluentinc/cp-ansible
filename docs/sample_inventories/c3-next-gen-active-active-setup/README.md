@@ -1,6 +1,6 @@
 # C3 Next Gen Active Active Setup
 
-This directory contains a sample inventory file for setting up Confluent Platform with Control Center Next Gen in an active-active configuration for high availability and load distribution.
+This directory contains a sample inventory file for setting up Confluent Platform with Control Center Next Gen in an active-active configuration for high availability.
 
 ## Overview
 
