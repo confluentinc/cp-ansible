@@ -17,28 +17,51 @@
         property: kafkastore.update.handlers
         expected_value: io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler,io.confluent.schema.manager.SchemaCacheManagerUpdateHandler
 
-    - name: check mode of context test-context
+    - name: check mode of context test-context.cc
       import_role:
         name: confluent.platform.common
         tasks_from: schema_registry_operations.yml
       vars:
-        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.test-context:"
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.cc.test-context:"
         method: GET
+        expected_status: 200
         result_var: mode_check
         operation_name: "Check Mode of Context"
 
-    - name: verify context is in IMPORT mode
+    - name: verify context is in READWRITE mode
       assert:
         that:
-          - mode_check.json.error_code == '42205'
-        fail_msg: "Context is in READWRITE mode when it should be in IMPORT mode"
-    
+          - mode_check.json.mode == 'READWRITE'
+        fail_msg: "Context is not in READWRITE mode"
+
+    - name: get subjects list
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        method: GET
+        expected_status: 200
+        result_var: subjects_list
+        operation_name: "Get Subjects List"
+
+    - name: verify test schema exists
+      assert:
+        that:
+          - "':.cc.test-context:test-workflow-value' in subjects_list.json"
+        fail_msg: "Test schema was not created successfully"
+
+    - name: debug subjects list
+      debug:
+        var: subjects_list.json
+      tags: api
+
     - name: Create new test schema in CC SR for import testing
       import_role:
         name: confluent.platform.common
         tasks_from: schema_registry_operations.yml
       vars:
-        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects/test.test-value2/versions"
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects/:.cc.test-context:test.test-value3/versions"
         method: POST
         expected_status: 200
         result_var: cc_new_schema_creation
@@ -166,12 +189,17 @@
         operation_name: "Get Subjects List"
       tags: api
 
+    - name: debug subjects list
+      debug:
+        var: subjects_list.json
+      tags: api
+
     - name: Verify test schemas exist
       assert:
         that:
           - "'test.user-value' in subjects_list.json"
           - "'automation.workflow-value' in subjects_list.json"
-          - "'test.test-value2' in subjects_list.json"
+          - "':.test-context:test.test-value3' in subjects_list.json"
         fail_msg: "Test schemas were not created successfully"
       tags: api
 
@@ -282,7 +310,7 @@
         name: confluent.platform.common
         tasks_from: schema_registry_operations.yml
       vars:
-        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode"
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.test-context:"
         method: GET
         expected_status: 200
         result_var: sr_mode_check
