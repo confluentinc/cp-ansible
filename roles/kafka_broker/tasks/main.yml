@@ -15,7 +15,7 @@
     - ansible_fqdn
     - ansible_distribution
 
-# datadir is not supported way to provide data directories for kafka brokers
+# datadir is no longer supported method to provide data directories for kafka brokers
 - name: Assert that datadir is not present in the inventory
   assert:
     that: >
@@ -23,7 +23,7 @@
       hostvars[item].kafka_broker == None or
       'datadir' not in hostvars[item].kafka_broker
     fail_msg: |
-      "Providing 'datadir' in inventory file is no more supported way to configure data directories for kafka brokers."
+      "The 'datadir' configuration property is now obsolete for configuration of kafka broker data directories."
       "Please use 'log.dirs' under kafka_broker_custom_properties with comma separated directories."
   loop: "{{ groups['kafka_broker'] }}"
 
@@ -44,6 +44,18 @@
   tags:
     - package
     - cp_package
+
+- name: Validate Kafka Broker Jolokia Access Control Configuration
+  include_tasks: ../common/tasks/component_validations.yml
+  vars:
+    component_name: "Kafka Broker"
+    component_jolokia_enabled: "{{ kafka_broker_jolokia_enabled }}"
+    component_jolokia_access_control_enabled: "{{ kafka_broker_jolokia_access_control_enabled }}"
+    component_jolokia_access_control_custom_file_enabled: "{{ kafka_broker_jolokia_access_control_custom_file_enabled }}"
+    component_jolokia_access_control_file_src_path: "{{ kafka_broker_jolokia_access_control_file_src_path }}"
+  tags:
+    - validate
+    - validate_jolokia
 
 - name: Install the Kafka Broker Packages
   yum:
@@ -114,6 +126,7 @@
   when: installation_method == "archive"
   tags:
     - systemd
+    - privileged
 
 - include_role:
     name: ssl
@@ -353,6 +366,20 @@
   tags:
     - configuration
 
+- name: Copy Kafka Broker Jolokia Access Control File
+  copy:
+    src: "{{ kafka_broker_jolokia_access_control_file_src_path }}"
+    dest: "{{ kafka_broker_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_broker_user }}"
+    group: "{{ kafka_broker_group }}"
+  when:
+    - kafka_broker_jolokia_enabled|bool
+    - kafka_broker_jolokia_access_control_enabled|bool
+  notify: restart kafka
+  tags:
+    - configuration
+
 - name: Create Kafka Broker Jaas Config
   template:
     src: kafka_server_jaas.conf.j2
@@ -436,6 +463,7 @@
     mode: '750'
   tags:
     - systemd
+    - privileged
 
 - name: Write Service Overrides
   template:
@@ -448,6 +476,7 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - systemd
+    - privileged
 
 - name: Create sysctl directory on Debian distributions
   file:

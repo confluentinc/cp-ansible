@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.2.15
+Default:  7.3.14
 
 ***
 
@@ -100,6 +100,94 @@ Default:  password
 
 ***
 
+### jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control across all components
+
+Default:  false
+
+***
+
+### jolokia_access_control_custom_file_enabled
+
+Boolean to use custom Jolokia access control file. Must be set to true or false when Jolokia access control is enabled.
+
+Default:  false
+
+***
+
+### jolokia_access_control_file_src_path
+
+Full path on Ansible Controller to custom Jolokia access control XML file. Required when jolokia_access_control_custom_file_enabled is true
+
+Default:  ""
+
+***
+
+### zookeeper_jolokia_access_control_custom_file_enabled
+
+Component-specific custom file enabled flags (must be defined before src_path variables)
+
+Default:  "{{jolokia_access_control_custom_file_enabled}}"
+
+***
+
+### zookeeper_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Zookeeper (on control node)
+
+Default:  "{{ '' if zookeeper_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_broker_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka Broker (on control node)
+
+Default:  "{{ '' if kafka_broker_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### schema_registry_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Schema Registry (on control node)
+
+Default:  "{{ '' if schema_registry_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_rest_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka REST (on control node)
+
+Default:  "{{ '' if kafka_rest_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_connect_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka Connect (on control node)
+
+Default:  "{{ '' if kafka_connect_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### ksql_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for ksqlDB (on control node)
+
+Default:  "{{ '' if ksql_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_connect_replicator_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka Connect Replicator (on control node)
+
+Default:  "{{ '' if kafka_connect_replicator_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
 ### jmxexporter_url_remote
 
 To copy from Ansible control host or download
@@ -134,7 +222,7 @@ Default:  false
 
 ### fips_enabled
 
-Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
+Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8 or 11. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
 
 Default:  false
 
@@ -190,7 +278,7 @@ Default:  0
 
 ### kerberos_configure
 
-Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, keberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary
+Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, kerberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary. Optional variables: kerberos.kdc_port (default: 88), kerberos.admin_port (default: 749)
 
 Default:  true
 
@@ -465,6 +553,14 @@ Default:  none
 Boolean to configure components with TLS Encryption. Also manages Java Keystore creation
 
 Default:  false
+
+***
+
+### certificate_authority_expiration_days
+
+Set this variable to customize expiration days for certificate authority. Applies for all components of Confluent Platform.
+
+Default:  365
 
 ***
 
@@ -828,6 +924,22 @@ Default:  "{{jolokia_password}}"
 
 ***
 
+### zookeeper_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Zookeeper
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### zookeeper_jolokia_access_control_file_dest_path
+
+Path on target nodes where Zookeeper Jolokia access control XML file will be placed
+
+Default:  "{{ zookeeper.config_file | dirname }}/jolokia-access.xml"
+
+***
+
 ### zookeeper_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
@@ -1025,6 +1137,22 @@ Default:  "{{jolokia_user}}"
 Password for Kafka's Jolokia Agent when using Basic Auth
 
 Default:  "{{jolokia_password}}"
+
+***
+
+### kafka_broker_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Kafka Broker
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_broker_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Broker Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_broker.config_file | dirname }}/jolokia-access.xml"
 
 ***
 
@@ -1260,6 +1388,22 @@ Default:  "{{jolokia_password}}"
 
 ***
 
+### schema_registry_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Schema Registry
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### schema_registry_jolokia_access_control_file_dest_path
+
+Path on target nodes where Schema Registry Jolokia access control XML file will be placed
+
+Default:  "{{ schema_registry.config_file | dirname }}/jolokia-access.xml"
+
+***
+
 ### schema_registry_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on schema registry
@@ -1441,6 +1585,22 @@ Default:  "{{jolokia_user}}"
 Password for Rest Proxy's Jolokia Agent when using Basic Auth
 
 Default:  "{{jolokia_password}}"
+
+***
+
+### kafka_rest_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Rest Proxy
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_rest_jolokia_access_control_file_dest_path
+
+Path on target nodes where Rest Proxy Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_rest.config_file | dirname }}/jolokia-access.xml"
 
 ***
 
@@ -1668,6 +1828,22 @@ Default:  "{{jolokia_password}}"
 
 ***
 
+### kafka_connect_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Kafka Connect
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_connect_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Connect Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_connect.config_file | dirname }}/jolokia-access.xml"
+
+***
+
 ### kafka_connect_jmxexporter_enabled
 
 Boolean to enable Prometheus Exporter Agent installation and configuration on Connect
@@ -1889,6 +2065,22 @@ Default:  "{{jolokia_user}}"
 Password for ksqlDB's Jolokia Agent when using Basic Auth
 
 Default:  "{{jolokia_password}}"
+
+***
+
+### ksql_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on ksqlDB
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### ksql_jolokia_access_control_file_dest_path
+
+Path on target nodes where ksqlDB Jolokia access control XML file will be placed
+
+Default:  "{{ ksql.config_file | dirname }}/jolokia-access.xml"
 
 ***
 
@@ -2374,7 +2566,7 @@ Default:  false
 
 ### rbac_component_additional_system_admins
 
-List of users to be granted system admin Role Bindings across all components
+List of principals to be granted system admin Role Bindings across all components
 
 Default:  []
 
@@ -2382,7 +2574,7 @@ Default:  []
 
 ### kafka_broker_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the Kafka Cluster
+List of principals to be granted system admin Role Bindings on the Kafka Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -2390,7 +2582,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### schema_registry_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the Schema Registry Cluster
+List of principals to be granted system admin Role Bindings on the Schema Registry Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -2398,7 +2590,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### ksql_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the ksqlDB Cluster
+List of principals to be granted system admin Role Bindings on the ksqlDB Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -2406,7 +2598,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### kafka_connect_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the Connect Cluster
+List of principals to be granted system admin Role Bindings on the Connect Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -2414,7 +2606,7 @@ Default:  "{{rbac_component_additional_system_admins}}"
 
 ### control_center_additional_system_admins
 
-List of users to be granted system admin Role Bindings on the Control Center Cluster
+List of principals to be granted system admin Role Bindings on the Control Center Cluster
 
 Default:  "{{rbac_component_additional_system_admins}}"
 
@@ -3249,6 +3441,22 @@ Default:  "{{jolokia_user}}"
 Password for Jolokia Agent when using Basic Auth.
 
 Default:  "{{jolokia_password}}"
+
+***
+
+### kafka_connect_replicator_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Kafka Connect Replicator
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_connect_replicator_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Connect Replicator Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_connect_replicator.config_file | dirname }}/jolokia-access.xml"
 
 ***
 
@@ -4306,35 +4514,43 @@ Default:  "https://packages.confluent.io"
 
 ***
 
+### custom_java_path
+
+Full pre-existing Java path on custom nodes. CP-Ansible will use the provided path and will skip installing java as part of execution
+
+Default:  ""
+
+***
+
 ### install_java
 
-Boolean to have cp-ansible install Java on hosts
+Boolean to have cp-ansible install Java on Hosts depending on custom_java_path provided
 
-Default:  true
+Default:  "{{ false if custom_java_path | length > 0 else true }}"
 
 ***
 
 ### redhat_java_package_name
 
-Java Package to install on RHEL/Centos hosts. Possible values java-1.8.0-openjdk or java-11-openjdk
+Java Package to install on RHEL/Centos hosts. Possible values java-8-openjdk, java-11-openjdk or java-17-openjdk
 
-Default:  java-11-openjdk
+Default:  java-17-openjdk
 
 ***
 
 ### debian_java_package_name
 
-Java Package to install on Debian hosts. Possible values openjdk-8-jdk or openjdk-11-jdk
+Java Package to install on Debian hosts. Possible values openjdk-11-jdk, openjdk-8-jdk or openjdk-17-jdk
 
-Default:  openjdk-11-jdk
+Default:  openjdk-17-jdk
 
 ***
 
 ### ubuntu_java_package_name
 
-Java Package to install on Ubuntu hosts. Possible values openjdk-8-jdk or openjdk-11-jdk
+Java Package to install on Ubuntu hosts. Possible values openjdk-8-jdk, openjdk-11-jdk or openjdk-17-jdk
 
-Default:  openjdk-11-jdk
+Default:  openjdk-17-jdk
 
 ***
 
@@ -5133,6 +5349,14 @@ Default:  30
 # ssl
 
 Below are the supported variables for the role ssl
+
+***
+
+### keystore_expiration_days
+
+Set this variable to customize expiration days for keystore. Applies for all components of Confluent Platform.
+
+Default:  365
 
 ***
 

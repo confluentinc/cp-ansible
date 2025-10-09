@@ -4,15 +4,25 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-v7.2.15
+v7.3.15
+======
+
+Notable enhancements
+-------------
+- Added configurations to enable Jolokia Access Control
+
+Notable fixes
+-------------
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
+v7.3.14
 ======
 
 Notable fixes
 -------------
-
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.2.14
+v7.3.13
 ======
 
 Notable fixes
@@ -22,7 +32,7 @@ Notable fixes
 - Changed systemd service override directory permissions from 640 to 750
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.2.13
+v7.3.12
 ======
 
 Notable fixes
@@ -30,7 +40,7 @@ Notable fixes
 
 - Improved error handling in connectors.
 
-v7.2.12
+v7.3.11
 ======
 
 Notable fixes
@@ -38,7 +48,7 @@ Notable fixes
 
 - Critical security and vulnerability issues were fixed
 
-v7.2.11
+v7.3.10
 ======
 
 Notable fixes
@@ -46,7 +56,7 @@ Notable fixes
 
 - Ansible playbooks use archive debian10 repo since debian 10 reached EOL.
 
-v7.2.10
+v7.3.9
 ======
 
 Notable fixes
@@ -55,7 +65,8 @@ Notable fixes
 - Connect and Ksqldb clusters are correctly registered even for co-located components
 - Critical security and vulnerability issues were fixed
 
-v7.2.9
+
+v7.3.8
 ======
 
 Notable fixes
@@ -64,7 +75,7 @@ Notable fixes
 - Critical security and vulnerability issues were fixed.
 
 
-v7.2.8
+v7.3.7
 ======
 
 Notable fixes
@@ -73,7 +84,7 @@ Notable fixes
 - Critical security and vulnerability issues were fixed.
 
 
-v7.2.7
+v7.3.6
 ======
 
 Notable enhancements
@@ -83,7 +94,7 @@ Notable enhancements
 - Ansible builtin File mode is now string instead of octal
 
 
-v7.2.6
+v7.3.5
 ======
 
 Notable enhancements
@@ -94,18 +105,20 @@ Notable enhancements
 - Archived installation of Confluent Platform on Debian 9 since the OS version reached end-of-life
 
 
-v7.2.5
+v7.3.4
 ======
 
 Notable fixes
 -------------
 
-- Introduced timeouts while deploying connector
+- Introduced timeout while deploying connector
+- Added optional vars to configure kerberos.kdc_port (default: 88), kerberos.admin_port (default: 749)
 - Minor fixes to support confluent CLI v3
-- Added retries for few tasks
 - Fixed minor bugs in SSL principal mapping rule logic
+- Fixed some non-root CP deployment issues
+- Fixed mTLS healthchecks
 
-v7.2.4
+v7.3.3
 ======
 
 Notable enhancements
@@ -117,45 +130,57 @@ Notable enhancements
 - Fix export certificates logic from Keystore and Truststore
 - Fix JMX Exporter Rules
 - Support custom kerberos client config file and custom path
+- Add retries to register cluster task
 
 
-v7.2.3
+v7.3.2
+======
+
+Notable enhancements
+-------------
+
+- Added provision to configure Kafka Connect Replicator custom rest extension classes
+- For archive installations, fixed logic to use `config_prefix` variable for zookeeper, kafka broker, schema registry, kafka connect
+- Skip "Install pip" and "Upgrade pip" tasks using `package` tag
+- Introduced new tag `cp_package` for installing/ upgrading confluent packages
+
+
+v7.3.1
+======
+
+Notable enhancements
+-------------
+
+- Bug fixes to enable running playbook in ansible check mode.
+- Validation about python version - 3.6+
+- Bug fixes for rhel7 related to epel-release package
+
+
+v7.3.0
 ======
 
 New features
 -------------
 
-- Ansible Playbooks for Confluent Platform is now officially supported for Ansible 2.12 and 2.13 in addition to 2.11
+- CP-Ansible playbooks are Red Hat certified now and are available on Automation Hub starting 7.0.X
+- Confluent Platform and CP-Ansible now supports JDK 17, in addition to JDK 8 and JDK 11. CP-Ansible support is now available for custom Java installations too.
+- Day 2 Operations - upgrade from non-RBAC to RBAC using CP-Ansible is guarded with zero downtime and officially supported.
+- Ansible Playbooks for Confluent Platform is now officially supported for Ansible 2.12 and 2.13 in addition to 2.11.
 
 Notable enhancements
 -------------
 
-- Introduced fetch_logs_path - Path on component to store logs
+- Default confluent cli version has been updated to 2.28.1 from 2.19
+- New var ansible_become_localhost introduced to specify the become value for localhost - used when dealing with any file present on localhost/controller
 - Dedicated playbook to restart services manually
-- Fixed proxy settings for yum repo, It now supports both https_proxy and http_proxy
+- rbac_component_additional_system_admins now supports assignment of principals and not just users
 - Pip and python modules can/will now be installed on managed nodes via CP-Ansible
-- Added provision to configure Kafka Connect Replicator custom rest extension classes
-- Enable running playbook in ansible check mode
-- For archive installations, fixed logic to use `config_prefix` variable for zookeeper, kafka broker, schema registry, kafka connect
-- Make Pip install and Upgrade pip tasks skippable using `tags: package`
 
-
-v7.2.2
-======
-
-Notable enhancements
+Upgrade considerations
 -------------
 
- - Improved validation of certificates, accepts ssl key file in ansible-vault format
- - Optimise the process of copying mds pem file to host nodes, and other security improvements.
- - Minor code cleanup and refactoring.
- - Making Java SID Repo as optional.
- - Isolate truststore, keystore ceration when multiple kafka connect services run on same host.
- - Allow creation of keystore and truststore with custom password when using custom or self-signed certs
- - Improved Validations, Internet access check now considers whether proxy is set or not.
- - Fix typo kakfa to kafka
- - New Sample inventory with single node.
- - Cleanup Kafka Broker Custom properties
+- Upgrades to CP 7.3 can be taken up with CP-Ansible using Ansible 2.12 and 2.13 too.
+- Variable rbac_component_additional_system_admins now can be updated in inventory file for assignment of principals. Backward compatible.
 
 
 v7.2.1

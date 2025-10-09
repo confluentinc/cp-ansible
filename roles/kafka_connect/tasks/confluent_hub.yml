@@ -1,4 +1,13 @@
 ---
+- name: "Identify installed plugin versions"
+  find:
+    paths: "{{ kafka_connect_confluent_hub_plugins_dest }}/{{ item.split(':')[0] | replace('/', '-') }}"
+    patterns: "manifest.json"
+    contains: ".*\"version\" : \"{{ item.split(':')[1] }}\",$"
+  register: plugin_versions
+  with_items: "{{kafka_connect_confluent_hub_plugins}}"
+  when: kafka_connect_confluent_hub_plugins|length > 0
+
 - name: "Installing Kafka Connect Connector(s) from Confluent Hub"
   shell: |
     {{ binary_base_path }}/bin/confluent-hub install \
@@ -6,11 +15,13 @@
       {{ (installation_method == 'archive') | ternary('--worker-configs ' + kafka_connect.config_file, '') }} \
       {{ item }}
   register: install_connect_connector_result
-  until: install_connect_connector_result is success  or ansible_check_mode
+  until: install_connect_connector_result is success or ansible_check_mode
   retries: 5
   delay: 90
   with_items: "{{kafka_connect_confluent_hub_plugins}}"
-  when: kafka_connect_confluent_hub_plugins|length > 0
+  when:
+    - kafka_connect_confluent_hub_plugins|length > 0
+    - plugin_versions.results | selectattr('item', 'eq', item) | selectattr('matched', 'eq', 0) | length > 0
   notify: restart connect distributed
 
 - name: Set Permissions on Plugin Folder(s)
