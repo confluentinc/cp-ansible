@@ -284,6 +284,14 @@ Default:  3000
 
 ***
 
+### required_total_memory_mb_control_center_next_gen
+
+Variable to define the minimum amount of memory in MB required to run Control Center Next Gen. Calculated as default heap size plus 1GB for OS.
+
+Default:  7000
+
+***
+
 ### confluent_server_enabled
 
 Boolean to install commercially licensed confluent-server instead of community version: confluent-kafka
