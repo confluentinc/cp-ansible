@@ -51,13 +51,13 @@ unified_stream_manager:
 # Schema Exporter Configuration
 schema_exporters:
   - name: "cp-to-cc-exporter"
-    subjects: [":*:"]  # or [":.production:*"] for specific context
-    context_type: "NONE"
+    subjects: [":*:"]
+    context_type: "NONE"   # Copies the source context as-is, without prepending anything. This is useful to make an exact copy of the source Schema Registry in the destination.
 
 # Schema Importer Configuration (for reverse sync)
 schema_importers:
   - name: "cc-to-cp-importer"
-    subjects: [":*:"]  # or [":.production:*"] for specific context  
+    subjects: [":*:"]
 
 # Specify exporter for switchover
 sr_switch_over_exporter_name: "cp-to-cc-exporter"
@@ -81,7 +81,7 @@ unified_stream_manager:
 schema_exporters:
   - name: "production-exporter"
     subjects: ["*"]
-    context_type: "CUSTOM"
+    context_type: "CUSTOM"  # Prepends the source context with a custom context name, specified in context below.
     context: "site1"
 
 schema_importers:
