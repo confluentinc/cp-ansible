@@ -52,12 +52,12 @@ Ansible Playbooks for Confluent Platform (Confluent Ansible) offers a simplified
 
 ## Testing
 
-CP-Ansible's tests use the [Molecule](https://ansible.readthedocs.io/projects/molecule/) framework, and it is strongly advised to test this way before submitting a Pull Request. Please refer to the [HOW_TO_TEST.md](https://github.com/confluentinc/cp-ansible/blob/7.7.5-post/docs/HOW_TO_TEST.md)
+CP-Ansible's tests use the [Molecule](https://ansible.readthedocs.io/projects/molecule/) framework, and it is strongly advised to test this way before submitting a Pull Request. Please refer to the [HOW_TO_TEST.md](https://github.com/confluentinc/cp-ansible/blob/7.7.6-post/docs/HOW_TO_TEST.md)
 
 
 ## Contributing
 
-If you would like to contribute to the CP-Ansible project, please refer to the [CONTRIBUTE.md](https://github.com/confluentinc/cp-ansible/blob/7.7.5-post/docs/CONTRIBUTING.md)
+If you would like to contribute to the CP-Ansible project, please refer to the [CONTRIBUTE.md](https://github.com/confluentinc/cp-ansible/blob/7.7.6-post/docs/CONTRIBUTING.md)
 
 ## Support
 
@@ -69,4 +69,4 @@ This [page](https://docs.confluent.io/ansible/current/ansible-release-notes.html
 
 ## License
 
-[Apache 2.0](https://github.com/confluentinc/cp-ansible/blob/7.7.5-post/LICENSE.md)
+[Apache 2.0](https://github.com/confluentinc/cp-ansible/blob/7.7.6-post/LICENSE.md)
