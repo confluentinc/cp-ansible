@@ -98,14 +98,24 @@ ansible-playbook -i c3-next-gen-active-active.yml confluent.platform.all --tags 
 
 #### For Confluent Platform 8.0.2, 8.1.0 and above
 
+For active-active C3 Next Gen deployments with multiple nodes, you need to skip the host count validation by adding the following variable to your inventory file:
+
+```yaml
+all:
+  vars:
+    skip_control_center_next_gen_host_count_validation: true
+```
+
+Then run:
+
 ```bash
 # Install all components
-ansible-playbook -i c3-next-gen-active-active.yml confluent.platform.all --skip-tags 'skip_control_center_next_gen_host_count_validation'
+ansible-playbook -i c3-next-gen-active-active.yml confluent.platform.all
 
 # Or install components individually:
-ansible-playbook -i c3-next-gen-active-active.yml confluent.platform.all --tags kafka_controller --skip-tags 'skip_control_center_next_gen_host_count_validation'
-ansible-playbook -i c3-next-gen-active-active.yml confluent.platform.all --tags kafka_broker --skip-tags 'skip_control_center_next_gen_host_count_validation'
-ansible-playbook -i c3-next-gen-active-active.yml confluent.platform.all --tags control_center_next_gen --skip-tags 'skip_control_center_next_gen_host_count_validation'
+ansible-playbook -i c3-next-gen-active-active.yml confluent.platform.all --tags kafka_controller
+ansible-playbook -i c3-next-gen-active-active.yml confluent.platform.all --tags kafka_broker
+ansible-playbook -i c3-next-gen-active-active.yml confluent.platform.all --tags control_center_next_gen
 ```
 
 ## Configuration Details
@@ -133,4 +143,4 @@ The sample configures telemetry exporters on both Kafka Controller and Kafka Bro
 If you encounter validation errors during deployment:
 
 - **For versions 8.0.0-8.0.1**: Use `--skip-tags 'validate'`
-- **For versions 8.0.2+**: Use `--skip-tags 'skip_control_center_next_gen_host_count_validation'`
+- **For versions 8.0.2+**: Add `skip_control_center_next_gen_host_count_validation: true` to the `all.vars` section of your inventory file
