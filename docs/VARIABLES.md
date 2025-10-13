@@ -740,6 +740,14 @@ Default:  false
 
 ***
 
+### skip_control_center_next_gen_host_count_validation
+
+Boolean to skip Control Center Next Gen host count validation. Set to true to skip validation that requires exactly one Control Center Next Gen host.
+
+Default:  false
+
+***
+
 ### user_login_shell
 
 Variable to set the user login shell for all custom user created per component by cp-ansible.
