@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  8.0.1
+Default:  8.0.2
 
 ***
 
@@ -281,6 +281,14 @@ Default:  3000
 Variable to define the minimum amount of memory in MB required to run Kafka Connect Replicator. Calculated as default heap size plus 1GB for OS.
 
 Default:  3000
+
+***
+
+### required_total_memory_mb_control_center_next_gen
+
+Variable to define the minimum amount of memory in MB required to run Control Center Next Gen. Calculated as default heap size plus 1GB for OS.
+
+Default:  7000
 
 ***
 
