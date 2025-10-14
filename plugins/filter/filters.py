@@ -1,7 +1,4 @@
-from __future__ import (absolute_import, division, print_function)
 import re
-
-__metaclass__ = type
 
 DOCUMENTATION = '''
 ---
@@ -351,7 +348,7 @@ class FilterModule(object):
 
         return final_dict
 
-    def resolve_principal(self, common_names, rules):
+    def resolve_principal(self, common_names: str, rules: str):
         """
         This filter is to extract principle from the keystore based on the provided rule. This filter should be
         used when we have ssl.principal.mapping.rules variable set to some value.
@@ -375,34 +372,25 @@ class FilterModule(object):
         list_of_rules = [i for i in list_of_rules if i]
 
         for rule_str in list_of_rules:
-            tokens = rule_str.split('/')
-            if len(tokens) < 2:
-                raise ValueError(
-                    "Invalid rule format. Please ensure the rule has Mapping pattern and Mapping replacement.\n"
-                    "For details, please refer to "
-                    "https://cwiki.apache.org/confluence/display/KAFKA/KIP-371%3A+Add+a+configuration+to+build+custom+SSL+principal+name"
-                )
-
-            mapping_pattern = tokens[0]
-            mapping_value = tokens[1]
-            case = tokens[2] if len(tokens) > 2 else None
-
+            mapping_pattern, mapping_value, *options = rule_str.split('/')
             for common_name in common_names:
                 matched = re.match(mapping_pattern, common_name)
                 if bool(matched):
                     index = 1
                     for match_str in matched.groups():
-                        mapping_value = mapping_value.replace("${0}".format(index), match_str)
+                        mapping_value = mapping_value.replace(f"${index}", match_str)
                         index = index + 1
 
                     # Remove leading and trailing whitespaces
                     mapping_value = mapping_value.strip()
                     principal_mapping_value = mapping_value
-
-                    if case and case == 'L':
+                    case = [option for option in options[0].split(',') if option]
+                    if case and case[0] == 'L':
                         principal_mapping_value = mapping_value.lower()
-                    elif case and case == 'U':
+                    elif case and case[0] == 'U':
                         principal_mapping_value = mapping_value.upper()
                     break
-
+            if bool(matched):
+                # Remaining rules in the list are ignored when match is found
+                break
         return principal_mapping_value

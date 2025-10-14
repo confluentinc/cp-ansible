@@ -15,7 +15,7 @@
     - ansible_fqdn
     - ansible_distribution
 
-# datadir is not supported way to provide data directories for kafka brokers
+# datadir is no longer supported method to provide data directories for kafka brokers
 - name: Assert that datadir is not present in the inventory
   assert:
     that: >
@@ -23,7 +23,7 @@
       hostvars[item].kafka_broker == None or
       'datadir' not in hostvars[item].kafka_broker
     fail_msg: |
-      "Providing 'datadir' in inventory file is no more supported way to configure data directories for kafka brokers."
+      "The 'datadir' configuration property is now obsolete for configuration of kafka broker data directories."
       "Please use 'log.dirs' under kafka_broker_custom_properties with comma separated directories."
   loop: "{{ groups['kafka_broker'] }}"
 
@@ -44,6 +44,18 @@
   tags:
     - package
     - cp_package
+
+- name: Validate Kafka Broker Jolokia Access Control Configuration
+  include_tasks: ../common/tasks/component_validations.yml
+  vars:
+    component_name: "Kafka Broker"
+    component_jolokia_enabled: "{{ kafka_broker_jolokia_enabled }}"
+    component_jolokia_access_control_enabled: "{{ kafka_broker_jolokia_access_control_enabled }}"
+    component_jolokia_access_control_custom_file_enabled: "{{ kafka_broker_jolokia_access_control_custom_file_enabled }}"
+    component_jolokia_access_control_file_src_path: "{{ kafka_broker_jolokia_access_control_file_src_path }}"
+  tags:
+    - validate
+    - validate_jolokia
 
 - name: Install the Kafka Broker Packages
   yum:
@@ -114,6 +126,7 @@
   when: installation_method == "archive"
   tags:
     - systemd
+    - privileged
 
 - include_role:
     name: ssl
@@ -126,7 +139,7 @@
     service_name: kafka_broker
     user: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
-    hostnames: "{{ ([inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] + kafka_broker_listeners | confluent.platform.get_hostnames(inventory_hostname)) | unique }}"
+    hostnames: "{{ ([inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] + kafka_broker_listeners | confluent.platform.get_hostnames(inventory_hostname)) | unique }}"
     ca_cert_path: "{{kafka_broker_ca_cert_path}}"
     cert_path: "{{kafka_broker_cert_path}}"
     key_path: "{{kafka_broker_key_path}}"
@@ -218,7 +231,6 @@
   tags:
     - filesystem
 
-
 - name: Create Kafka Broker Config
   template:
     src: server.properties.j2
@@ -263,6 +275,7 @@
     mode: '770'
   tags:
     - filesystem
+    - log
 
 - name: Update Kafka log4j Config for Log Cleanup
   include_role:
@@ -278,6 +291,7 @@
   when: kafka_broker_custom_log4j|bool
   tags:
     - configuration
+    - log
 
 - name: Set Permissions on Log4j Conf
   file:
@@ -287,6 +301,46 @@
     mode: '640'
   tags:
     - filesystem
+    - log
+
+- name: Create logredactor rule file directory
+  file:
+    path: "{{ logredactor_rule_path | dirname }}"
+    state: directory
+    mode: '755'
+  when: (kafka_broker_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ logredactor_rule_path_local }}"
+    dest: "{{ logredactor_rule_path }}"
+    mode: '644'
+  when: (kafka_broker_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Configure logredactor
+  include_role:
+    name: common
+    tasks_from: configure_logredactor.yml
+  vars:
+    log4j_file: "{{kafka_broker.log4j_file}}"
+    logredactor_rule_var: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
+    logredactor_policy_refresh_interval_var: "{{logredactor_policy_refresh_interval}}"
+  with_items: "{{ kafka_broker_logredactor_logger_specs_list }}"
+  when: (kafka_broker_custom_log4j|bool) and (logredactor_enabled|bool)
+  tags:
+    - log
+
+- name: Restart kafka broker
+  ansible.builtin.debug:
+    msg: "restarting kafka broker"
+  notify: restart kafka
+  when: (kafka_broker_custom_log4j|bool) and (logredactor_enabled|bool) and (not kafka_broker_skip_restarts|bool)
+  tags:
+    - log
 
 - name: Create Kafka Broker Jolokia Config
   template:
@@ -298,6 +352,20 @@
   when: kafka_broker_jolokia_enabled|bool
   notify: restart kafka
   diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
+- name: Copy Kafka Broker Jolokia Access Control File
+  copy:
+    src: "{{ kafka_broker_jolokia_access_control_file_src_path }}"
+    dest: "{{ kafka_broker_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_broker_user }}"
+    group: "{{ kafka_broker_group }}"
+  when:
+    - kafka_broker_jolokia_enabled|bool
+    - kafka_broker_jolokia_access_control_enabled|bool
+  notify: restart kafka
   tags:
     - configuration
 
@@ -328,7 +396,7 @@
 
 - name: Create Zookeeper chroot
   shell: >
-    {{ binary_base_path }}/bin/zookeeper-shell {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} \
+    {{ binary_base_path }}/bin/zookeeper-shell {{ hostvars[groups['zookeeper'][0]] | confluent.platform.resolve_hostname }}:{{zookeeper_client_port}} \
       {% if zookeeper_ssl_enabled|bool %}-zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
       create {{zookeeper_chroot}} ""
   register: create_chroot
@@ -344,7 +412,7 @@
   shell: |
     {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
     {{ binary_base_path }}/bin/kafka-configs {% if zookeeper_ssl_enabled|bool %}--zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
-      --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
+      --zookeeper {{ hostvars[groups['zookeeper'][0]] | confluent.platform.resolve_hostname }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
       --add-config 'SCRAM-SHA-512=[password={{ item.value['password'] }}]' \
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram_users_final|dict2items }}"
@@ -356,7 +424,7 @@
   shell: |
     {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
     {{ binary_base_path }}/bin/kafka-configs {% if zookeeper_ssl_enabled|bool %}--zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
-      --zookeeper {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
+      --zookeeper {{ hostvars[groups['zookeeper'][0]] | confluent.platform.resolve_hostname }}:{{zookeeper_client_port}}{{zookeeper_chroot}} --alter \
       --add-config 'SCRAM-SHA-256=[password={{ item.value['password'] }}]' \
       --entity-type users --entity-name {{ item.value['principal'] }}
   loop: "{{ sasl_scram256_users_final|dict2items }}"
@@ -384,6 +452,7 @@
     mode: '750'
   tags:
     - systemd
+    - privileged
 
 - name: Write Service Overrides
   template:
@@ -396,6 +465,7 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - systemd
+    - privileged
 
 - name: Create sysctl directory on Debian distributions
   file:
@@ -417,7 +487,7 @@
     - privileged
 
 - name: Tune virtual memory settings
-  sysctl:
+  ansible.posix.sysctl:
     name: "{{ item.key }}"
     value: "{{ item.value }}"
     state: present
@@ -467,3 +537,13 @@
 - name: Create RBAC Rolebindings
   include_tasks: rbac_rolebindings.yml
   when: kafka_broker_additional_system_admins|length > 0
+
+- name: Delete temporary keys/certs when keystore and trustore is provided
+  file:
+    path: "{{item}}"
+    state: absent
+  loop:
+    - "{{kafka_broker_ca_cert_path}}"
+    - "{{kafka_broker_cert_path}}"
+    - "{{kafka_broker_key_path}}"
+  when: (ssl_provided_keystore_and_truststore | bool)

@@ -14,6 +14,18 @@
     - ansible_os_family
     - ansible_fqdn
 
+- name: Validate Schema Registry Jolokia Access Control Configuration
+  include_tasks: ../common/tasks/component_validations.yml
+  vars:
+    component_name: "Schema Registry"
+    component_jolokia_enabled: "{{ schema_registry_jolokia_enabled }}"
+    component_jolokia_access_control_enabled: "{{ schema_registry_jolokia_access_control_enabled }}"
+    component_jolokia_access_control_custom_file_enabled: "{{ schema_registry_jolokia_access_control_custom_file_enabled }}"
+    component_jolokia_access_control_file_src_path: "{{ schema_registry_jolokia_access_control_file_src_path }}"
+  tags:
+    - validate
+    - validate_jolokia
+
 - name: Stop Service and Remove Packages on Version Change
   include_role:
     name: common
@@ -107,7 +119,7 @@
     service_name: schema_registry
     user: "{{schema_registry_user}}"
     group: "{{schema_registry_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
     ca_cert_path: "{{schema_registry_ca_cert_path}}"
     cert_path: "{{schema_registry_cert_path}}"
     key_path: "{{schema_registry_key_path}}"
@@ -198,6 +210,7 @@
     mode: '770'
   tags:
     - filesystem
+    - log
 
 - name: Update log4j Config for Log Cleanup
   include_role:
@@ -210,6 +223,8 @@
     log4j_root_logger: "{{schema_registry_log4j_root_logger}}"
     handler: "restart schema-registry"
   when: schema_registry_custom_log4j|bool
+  tags:
+    - log
 
 - name: Set Permissions on Log4j Conf
   file:
@@ -219,6 +234,46 @@
     mode: '640'
   tags:
     - configuration
+    - log
+
+- name: Create logredactor rule file directory
+  file:
+    path: "{{ logredactor_rule_path | dirname }}"
+    state: directory
+    mode: '755'
+  when: (schema_registry_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ logredactor_rule_path_local }}"
+    dest: "{{ logredactor_rule_path }}"
+    mode: '644'
+  when: (schema_registry_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Configure logredactor
+  include_role:
+    name: common
+    tasks_from: configure_logredactor.yml
+  vars:
+    log4j_file: "{{schema_registry.log4j_file}}"
+    logredactor_rule_var: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
+    logredactor_policy_refresh_interval_var: "{{logredactor_policy_refresh_interval}}"
+  with_items: "{{ schema_registry_logredactor_logger_specs_list }}"
+  when: (schema_registry_custom_log4j|bool) and (logredactor_enabled|bool)
+  tags:
+    - log
+
+- name: Restart schema registry
+  ansible.builtin.debug:
+    msg: "restarting schema registry"
+  notify: restart schema-registry
+  when: (schema_registry_custom_log4j|bool) and (logredactor_enabled|bool) and (not schema_registry_skip_restarts|bool)
+  tags:
+    - log
 
 - name: Create Schema Registry Jolokia Config
   template:
@@ -230,6 +285,20 @@
   when: schema_registry_jolokia_enabled|bool
   notify: restart schema-registry
   diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
+- name: Copy Schema Registry Jolokia Access Control File
+  copy:
+    src: "{{ schema_registry_jolokia_access_control_file_src_path }}"
+    dest: "{{ schema_registry_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ schema_registry_user }}"
+    group: "{{ schema_registry_group }}"
+  when:
+    - schema_registry_jolokia_enabled|bool
+    - schema_registry_jolokia_access_control_enabled|bool
+  notify: restart schema-registry
   tags:
     - configuration
 
@@ -273,6 +342,7 @@
     mode: '750'
   tags:
     - systemd
+    - privileged
 
 - name: Write Service Overrides
   template:
@@ -285,6 +355,7 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - systemd
+    - privileged
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -311,3 +382,13 @@
 - name: Register Cluster
   include_tasks: register_cluster.yml
   when: schema_registry_cluster_name | length >0 and rbac_enabled|bool
+
+- name: Delete temporary keys/certs when keystore and trustore is provided
+  file:
+    path: "{{item}}"
+    state: absent
+  loop:
+    - "{{schema_registry_ca_cert_path}}"
+    - "{{schema_registry_cert_path}}"
+    - "{{schema_registry_key_path}}"
+  when: (ssl_provided_keystore_and_truststore | bool)

@@ -1,4 +1,12 @@
 ---
+- name: Ensure Custom Repo file is not in repos when repository_configuration is Confluent
+  file:
+    state: absent
+    path: /etc/yum.repos.d/custom-confluent.repo
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+
 - name: Add Confluent Repo file
   template:
     src: confluent.repo.j2
@@ -11,6 +19,13 @@
   when:
     - repository_configuration == 'confluent'
     - installation_method == "package"
+
+- name: Ensure Confluent Repo file is not in repos when repository_configuration is Custom
+  file:
+    state: absent
+    path: /etc/yum.repos.d/confluent.repo
+  when:
+    - repository_configuration == 'custom'
 
 - name: Add Custom Repo file
   copy:
@@ -26,8 +41,6 @@
 # Not using handler because of https://github.com/ansible/ansible/issues/41313
 - name: yum-clean-all
   command: yum clean all
-  args:
-    warn: false
   register: yum_clean_result
   until: yum_clean_result is success
   retries: 5
@@ -35,6 +48,9 @@
   when: >
     confluent_repo_result.changed|default(False) or
     repository_configuration == 'custom'
+
+- name: Custom Java Install
+  include_tasks: custom_java_install.yml
 
 - name: Install Java
   yum:
@@ -52,4 +68,33 @@
     name:
       - openssl
       - unzip
+  tags: package
+
+- name: Get Java Version
+  shell: java -version
+  register: version_output
+  check_mode: false
+  changed_when: false
+
+- name: Print Java Version
+  debug:
+    msg: "Current Java Version is: {{version_output.stderr_lines[0]}}"
+
+- name: Install pip
+  yum:
+    name:
+      - python3-pip
+    state: present
+  become: true
+  tags: package
+
+- name: Upgrade pip
+  ansible.builtin.pip:
+    name: pip
+    extra_args: --upgrade
+  tags: package
+
+- name: Install pip packages
+  ansible.builtin.pip:
+    name: "{{pip_packages}}"
   tags: package

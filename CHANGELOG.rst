@@ -4,7 +4,32 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-v7.1.16
+v7.3.16
+======
+
+Notable fixes
+-------------
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
+v7.3.15
+======
+
+Notable enhancements
+-------------
+- Added configurations to enable Jolokia Access Control
+
+Notable fixes
+-------------
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
+v7.3.14
+======
+
+Notable fixes
+-------------
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
+v7.3.13
 ======
 
 Notable fixes
@@ -14,14 +39,15 @@ Notable fixes
 - Changed systemd service override directory permissions from 640 to 750
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.1.15
+v7.3.12
 ======
 
 Notable fixes
 -------------
+
 - Improved error handling in connectors.
 
-v7.1.14
+v7.3.11
 ======
 
 Notable fixes
@@ -29,7 +55,7 @@ Notable fixes
 
 - Critical security and vulnerability issues were fixed
 
-v7.1.13
+v7.3.10
 ======
 
 Notable fixes
@@ -37,7 +63,7 @@ Notable fixes
 
 - Ansible playbooks use archive debian10 repo since debian 10 reached EOL.
 
-v7.1.12
+v7.3.9
 ======
 
 Notable fixes
@@ -46,25 +72,26 @@ Notable fixes
 - Connect and Ksqldb clusters are correctly registered even for co-located components
 - Critical security and vulnerability issues were fixed
 
-v7.1.11
+
+v7.3.8
 ======
 
-Notable enhancements
+Notable fixes
 -------------
 
-- Critical security and vulnerability issues were fixed
+- Critical security and vulnerability issues were fixed.
 
 
-v7.1.10
+v7.3.7
 ======
 
-Notable enhancements
+Notable fixes
 -------------
 
-- Critical security and vulnerability issues were fixed
+- Critical security and vulnerability issues were fixed.
 
 
-v7.1.9
+v7.3.6
 ======
 
 Notable enhancements
@@ -74,7 +101,7 @@ Notable enhancements
 - Ansible builtin File mode is now string instead of octal
 
 
-v7.1.8
+v7.3.5
 ======
 
 Notable enhancements
@@ -85,16 +112,20 @@ Notable enhancements
 - Archived installation of Confluent Platform on Debian 9 since the OS version reached end-of-life
 
 
-v7.1.7
+v7.3.4
 ======
 
 Notable fixes
 -------------
 
-- Introduce timeout while deploying connector
+- Introduced timeout while deploying connector
+- Added optional vars to configure kerberos.kdc_port (default: 88), kerberos.admin_port (default: 749)
 - Minor fixes to support confluent CLI v3
+- Fixed minor bugs in SSL principal mapping rule logic
+- Fixed some non-root CP deployment issues
+- Fixed mTLS healthchecks
 
-v7.1.6
+v7.3.3
 ======
 
 Notable enhancements
@@ -106,34 +137,76 @@ Notable enhancements
 - Fix export certificates logic from Keystore and Truststore
 - Fix JMX Exporter Rules
 - Support custom kerberos client config file and custom path
+- Add retries to register cluster task
 
 
-v7.1.5
+v7.3.2
 ======
 
 Notable enhancements
 -------------
 
-- Dedicated playbook to restart services manually
 - Added provision to configure Kafka Connect Replicator custom rest extension classes
-- Enable running playbook in ansible check mode
 - For archive installations, fixed logic to use `config_prefix` variable for zookeeper, kafka broker, schema registry, kafka connect
+- Skip "Install pip" and "Upgrade pip" tasks using `package` tag
 - Introduced new tag `cp_package` for installing/ upgrading confluent packages
 
-v7.1.4
+
+v7.3.1
 ======
 
 Notable enhancements
 -------------
 
- - Optimise the process of copying mds keys/certs to host nodes, and other security improvements.
- - Making SID Repo optional while installing Java.
- - Cleanup Kafka Broker Custom properties.
- - Introduced login shell for Linux users which are running the Component service.
- - Enhanced RBAC support with FIPS
- - Isolate truststore, keystore ceration when multiple kafka connect services run on same host.
- - Allow creation of keystore and truststore with custom password when using custom or self-signed certs
- - Minor code cleanup and refactoring.
+- Bug fixes to enable running playbook in ansible check mode.
+- Validation about python version - 3.6+
+- Bug fixes for rhel7 related to epel-release package
+
+
+v7.3.0
+======
+
+New features
+-------------
+
+- CP-Ansible playbooks are Red Hat certified now and are available on Automation Hub starting 7.0.X
+- Confluent Platform and CP-Ansible now supports JDK 17, in addition to JDK 8 and JDK 11. CP-Ansible support is now available for custom Java installations too.
+- Day 2 Operations - upgrade from non-RBAC to RBAC using CP-Ansible is guarded with zero downtime and officially supported.
+- Ansible Playbooks for Confluent Platform is now officially supported for Ansible 2.12 and 2.13 in addition to 2.11.
+
+Notable enhancements
+-------------
+
+- Default confluent cli version has been updated to 2.28.1 from 2.19
+- New var ansible_become_localhost introduced to specify the become value for localhost - used when dealing with any file present on localhost/controller
+- Dedicated playbook to restart services manually
+- rbac_component_additional_system_admins now supports assignment of principals and not just users
+- Pip and python modules can/will now be installed on managed nodes via CP-Ansible
+
+Upgrade considerations
+-------------
+
+- Upgrades to CP 7.3 can be taken up with CP-Ansible using Ansible 2.12 and 2.13 too.
+- Variable rbac_component_additional_system_admins now can be updated in inventory file for assignment of principals. Backward compatible.
+
+
+v7.2.1
+======
+
+New features
+-------------
+
+You can obfuscate sensitive information in Confluent Platform component logs and then create a single bundle of those logs to share with Confluent Support.
+
+Notable enhancements
+-------------
+
+You can configure CP-Ansible to use the JKS files existing on each worker node for TLS encryption. You dont need to provide the JKS files on the Ansible control node. For more information, see Configure Encryption for Confluent Platform with Ansible Playbooks.
+
+Upgrade considerations
+-------------
+
+CP-Ansible 7.2 does not support Ansible 2.9 or Python 2.x because those runtimes are end-of-life. Upgrade to Ansible 2.11+ or Python 3.6+ to use CP-Ansible 7.2 (https://docs.confluent.io/ansible/7.2.0/ansible-encrypt.html).
 
 
 v7.1.3

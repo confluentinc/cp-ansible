@@ -25,6 +25,18 @@
     - package
     - cp_package
 
+- name: Validate Kafka Connect Replicator Jolokia Access Control Configuration
+  include_tasks: ../common/tasks/component_validations.yml
+  vars:
+    component_name: "Kafka Connect Replicator"
+    component_jolokia_enabled: "{{ kafka_connect_replicator_jolokia_enabled }}"
+    component_jolokia_access_control_enabled: "{{ kafka_connect_replicator_jolokia_access_control_enabled }}"
+    component_jolokia_access_control_custom_file_enabled: "{{ kafka_connect_replicator_jolokia_access_control_custom_file_enabled }}"
+    component_jolokia_access_control_file_src_path: "{{ kafka_connect_replicator_jolokia_access_control_file_src_path }}"
+  tags:
+    - validate
+    - validate_jolokia
+
 - name: Install the Kafka Connect Replicator Packages
   yum:
     name: "{{ kafka_connect_replicator_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
@@ -86,7 +98,7 @@
     service_name: confluent-replicator
     user: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
     ca_cert_path: "{{kafka_connect_replicator_ca_cert_path}}"
     cert_path: "{{kafka_connect_replicator_cert_path}}"
     key_path: "{{kafka_connect_replicator_key_path}}"
@@ -115,7 +127,7 @@
     service_name: kafka-connect-replicator
     user: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
     ca_cert_path: "{{kafka_connect_replicator_consumer_ca_cert_path}}"
     cert_path: "{{kafka_connect_replicator_consumer_cert_path}}"
     key_path: "{{kafka_connect_replicator_consumer_key_path}}"
@@ -142,7 +154,7 @@
     service_name: kafka-connect-replicator
     user: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
     ca_cert_path: "{{kafka_connect_replicator_producer_ca_cert_path}}"
     cert_path: "{{kafka_connect_replicator_producer_cert_path}}"
     key_path: "{{kafka_connect_replicator_producer_key_path}}"
@@ -169,7 +181,7 @@
     service_name: kafka-connect-replicator
     user: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
-    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host, hostname|default(omit)] | unique }}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
     ca_cert_path: "{{kafka_connect_replicator_monitoring_interceptor_ca_cert_path}}"
     cert_path: "{{kafka_connect_replicator_monitoring_interceptor_cert_path}}"
     key_path: "{{kafka_connect_replicator_monitoring_interceptor_key_path}}"
@@ -246,19 +258,19 @@
 
 - name: Configure RBAC on Replicator configuration
   include_tasks: rbac_replicator.yml
-  when: kakfa_connect_replicator_rbac_enabled|bool
+  when: kafka_connect_replicator_rbac_enabled|bool
 
 - name: Configure RBAC on Replicator Consumer configuration
   include_tasks: rbac_replicator_consumer.yml
-  when: kakfa_connect_replicator_consumer_rbac_enabled|bool
+  when: kafka_connect_replicator_consumer_rbac_enabled|bool
 
 - name: Configure RBAC on Replicator Producer configuration
   include_tasks: rbac_replicator_producer.yml
-  when: kakfa_connect_replicator_producer_rbac_enabled|bool
+  when: kafka_connect_replicator_producer_rbac_enabled|bool
 
 - name: Configure RBAC on Replicator monitoring interceptor configuration
   include_tasks: rbac_replicator_monitoring.yml
-  when: kakfa_connect_replicator_monitoring_interceptor_rbac_enabled|bool
+  when: kafka_connect_replicator_monitoring_interceptor_rbac_enabled|bool
 
 - name: Create Kafka Connect Replicator Config directory
   file:
@@ -300,6 +312,20 @@
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
   when: kafka_connect_replicator_jolokia_enabled|bool
+  notify: Restart Kafka Connect Replicator
+  tags:
+    - configuration
+
+- name: Copy Kafka Connect Replicator Jolokia Access Control File
+  copy:
+    src: "{{ kafka_connect_replicator_jolokia_access_control_file_src_path }}"
+    dest: "{{ kafka_connect_replicator_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_connect_replicator_user }}"
+    group: "{{ kafka_connect_replicator_group }}"
+  when:
+    - kafka_connect_replicator_jolokia_enabled|bool
+    - kafka_connect_replicator_jolokia_access_control_enabled|bool
   notify: Restart Kafka Connect Replicator
   tags:
     - configuration
@@ -365,7 +391,7 @@
     owner: "{{kafka_connect_replicator_user}}"
     group: "{{kafka_connect_replicator_group}}"
     state: directory
-    mode: '640'
+    mode: '750'
   tags:
     - systemd
 
@@ -400,3 +426,22 @@
   when:
     - kafka_connect_replicator_health_checks_enabled|bool
     - not ansible_check_mode
+
+- name: Delete temporary keys/certs when keystore and trustore is provided
+  file:
+    path: "{{item}}"
+    state: absent
+  loop:
+    - "{{kafka_connect_replicator_ca_cert_path}}"
+    - "{{kafka_connect_replicator_cert_path}}"
+    - "{{kafka_connect_replicator_key_path}}"
+    - "{{kafka_connect_replicator_consumer_ca_cert_path}}"
+    - "{{kafka_connect_replicator_consumer_cert_path}}"
+    - "{{kafka_connect_replicator_consumer_key_path}}"
+    - "{{kafka_connect_replicator_producer_ca_cert_path}}"
+    - "{{kafka_connect_replicator_producer_cert_path}}"
+    - "{{kafka_connect_replicator_producer_key_path}}"
+    - "{{kafka_connect_replicator_monitoring_interceptor_ca_cert_path}}"
+    - "{{kafka_connect_replicator_monitoring_interceptor_cert_path}}"
+    - "{{kafka_connect_replicator_monitoring_interceptor_key_path}}"
+  when: (ssl_provided_keystore_and_truststore | bool)
