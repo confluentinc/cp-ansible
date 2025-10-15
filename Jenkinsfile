@@ -29,8 +29,8 @@ def confluent_release_quality = choice(name: 'CONFLUENT_RELEASE_QUALITY',
 
 // Parameter for the molecule test scenario to run
 def molecule_scenario_name = choice(name: 'SCENARIO_NAME',
-    choices: ['rbac-scram-custom-rhel', 'plaintext-rhel'],
-    defaultValue: 'rbac-scram-custom-rhel',
+    choices: ['rbac-mtls-rhel8', 'plaintext-rhel'],
+    defaultValue: 'rbac-mtls-rhel8',
     description: 'The Ansible Molecule scenario name to run',
 )
 
