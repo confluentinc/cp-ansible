@@ -6020,6 +6020,502 @@ Default:  yyyyyy
 
 ***
 
+### jolokia_access_control_custom_file_enabled
+
+Boolean to use custom Jolokia access control file. Must be set to true or false when Jolokia access control is enabled.
+
+Default:  false
+
+***
+
+### jolokia_access_control_file_src_path
+
+Full path on Ansible Controller to custom Jolokia access control XML file. Required when jolokia_access_control_custom_file_enabled is true
+
+Default:  ""
+
+***
+
+### kafka_controller_jolokia_access_control_custom_file_enabled
+
+Component-specific custom file enabled flags (must be defined before src_path variables)
+
+Default:  "{{jolokia_access_control_custom_file_enabled}}"
+
+***
+
+### kafka_controller_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Zookeeper (on control node)
+
+Default:  "{{ '' if kafka_controller_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_broker_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka Broker (on control node)
+
+Default:  "{{ '' if kafka_broker_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### schema_registry_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Schema Registry (on control node)
+
+Default:  "{{ '' if schema_registry_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_rest_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka REST (on control node)
+
+Default:  "{{ '' if kafka_rest_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_connect_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka Connect (on control node)
+
+Default:  "{{ '' if kafka_connect_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### ksql_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for ksqlDB (on control node)
+
+Default:  "{{ '' if ksql_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_connect_replicator_jolokia_access_control_file_src_path
+
+Path to Jolokia access control XML file for Kafka Connect Replicator (on control node)
+
+Default:  "{{ '' if kafka_connect_replicator_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+***
+
+### kafka_broker_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Kafka Broker
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_broker_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Broker Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_broker.config_file | dirname }}/jolokia-access.xml"
+
+***
+
+### schema_registry_jolokia_access_control_enabled
+
+Boolean to use custom Jolokia access control file for Schema Registry
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### schema_registry_jolokia_access_control_file_dest_path
+
+Path on target nodes where Schema Registry Jolokia access control XML file will be placed
+
+Default:  "{{ schema_registry.config_file | dirname }}/jolokia-access.xml"
+
+***
+
+### kafka_rest_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Rest Proxy
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_rest_jolokia_access_control_file_dest_path
+
+Path on target nodes where Rest Proxy Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_rest.config_file | dirname }}/jolokia-access.xml"
+
+***
+
+### kafka_connect_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Kafka Connect
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_connect_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Connect Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_connect.config_file | dirname }}/jolokia-access.xml"
+
+***
+
+### ksql_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on ksqlDB
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### ksql_jolokia_access_control_file_dest_path
+
+Path on target nodes where ksqlDB Jolokia access control XML file will be placed
+
+Default:  "{{ ksql.config_file | dirname }}/jolokia-access.xml"
+
+***
+
+### kafka_connect_replicator_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on Kafka Connect Replicator
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_connect_replicator_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Connect Replicator Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_connect_replicator.config_file | dirname }}/jolokia-access.xml"
+
+***
+
+### kafka_controller_jolokia_access_control_enabled
+
+Boolean to enable Jolokia access control on kafka controller
+
+Default:  "{{ jolokia_access_control_enabled }}"
+
+***
+
+### kafka_controller_jolokia_access_control_file_dest_path
+
+Path on target nodes where Kafka Controller Jolokia access control XML file will be placed
+
+Default:  "{{ kafka_controller.config_file | dirname }}/jolokia-access.xml"
+
+***
+
+### schema_registry_retries
+
+Number of retry attempts for Schema Registry API calls.
+
+Default:  30
+
+***
+
+### password_encoder_secret
+
+Property required for password encoding in Schema Exporter and Importer.
+
+Default:  ""
+
+***
+
+### confluent_usm_agent_package_version
+
+Version of Confluent USM Agent to install
+
+Default:  1.0.0
+
+***
+
+### usm_agent_copy_files
+
+Use to copy files from control node to USM Agent hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
+
+Default:  []
+
+***
+
+### usm_agent_health_checks_enabled
+
+Boolean to enable health checks for USM Agent
+
+Default:  "{{ health_checks_enabled }}"
+
+***
+
+### usm_agent_admin_port
+
+USM Agent admin port
+
+Default:  9901
+
+***
+
+### usm_agent_controlplane_port
+
+USM Agent controlplane port
+
+Default:  9999
+
+***
+
+### usm_agent_dataplane_port
+
+USM Agent dataplane port
+
+Default:  10000
+
+***
+
+### usm_agent_listener_monitoring_port
+
+USM Agent listener monitoring port
+
+Default:  9910
+
+***
+
+### usm_agent_basic_auth_enabled
+
+Boolean to enable basic authentication for communication between CP and USM Agent
+
+Default:  "false"
+
+***
+
+### usm_agent_ssl_enabled
+
+Boolean to enable TLS encryption for communication between CP and USM Agent
+
+Default:  "{{ ssl_enabled }}"
+
+***
+
+### usm_agent_ssl_mutual_auth_enabled
+
+Boolean to enable mTLS Authentication for communication between CP and USM Agent
+
+Default:  "{{ ssl_mutual_auth_enabled }}"
+
+***
+
+### usm_agent_basic_users
+
+USM Agent basic users. Set to dictionary of users with keys: principal and password. The users defined here will be allowed to authenticate with USM Agent using basic authentication.
+
+Default: 
+
+***
+
+### usm_agent_client_username
+
+USM Agent client username - this is the username that will be used to authenticate with USM Agent using basic authentication by CP components.
+
+Default:  "user1"
+
+***
+
+### usm_agent_client_password
+
+USM Agent client password - this is the password that will be used to authenticate with USM Agent using basic authentication by CP components.
+
+Default:  "user1-secret"
+
+***
+
+### kafka_broker_usm_agent_username
+
+Kafka Broker USM Agent username - this is the username that will be used to authenticate with USM Agent using basic authentication by Kafka Broker. Defaults to usm_agent_client_username.
+
+Default:  "{{ usm_agent_client_username }}"
+
+***
+
+### kafka_broker_usm_agent_password
+
+Kafka Broker USM Agent password - this is the password that will be used to authenticate with USM Agent using basic authentication by Kafka Broker. Defaults to usm_agent_client_password.
+
+Default:  "{{ usm_agent_client_password }}"
+
+***
+
+### kafka_controller_usm_agent_username
+
+Kafka Controller USM Agent username - this is the username that will be used to authenticate with USM Agent using basic authentication by Kafka Controller. Defaults to usm_agent_client_username.
+
+Default:  "{{ usm_agent_client_username }}"
+
+***
+
+### kafka_controller_usm_agent_password
+
+Kafka Controller USM Agent password - this is the password that will be used to authenticate with USM Agent using basic authentication by Kafka Controller. Defaults to usm_agent_client_password.
+
+Default:  "{{ usm_agent_client_password }}"
+
+***
+
+### kafka_connect_usm_agent_username
+
+Kafka Connect USM Agent username - this is the username that will be used to authenticate with USM Agent using basic authentication by Kafka Connect. Defaults to usm_agent_client_username.
+
+Default:  "{{ usm_agent_client_username }}"
+
+***
+
+### kafka_connect_usm_agent_password
+
+Kafka Connect USM Agent password - this is the password that will be used to authenticate with USM Agent using basic authentication by Kafka Connect. Defaults to usm_agent_client_password.
+
+Default:  "{{ usm_agent_client_password }}"
+
+***
+
+### usm_agent_config_prefix
+
+USM Agent config prefix path. Defaults to {{ config_prefix }}/confluent/usm-agent.
+
+Default:  "{{ config_prefix }}/confluent/usm-agent"
+
+***
+
+### usm_agent_skip_restarts
+
+Boolean to skip restarts for USM Agent. Defaults to {{ skip_restarts }}.
+
+Default:  "{{ skip_restarts }}"
+
+***
+
+### usm_agent_ccloud_ssl_trusted_ca_location
+
+USM Agent CCloud SSL trusted CA location. Defaults to '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem' if ansible_os_family is RedHat, otherwise '/etc/ssl/certs/ca-certificates.crt'.
+
+Default:  "{{ '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem' if ansible_os_family == 'RedHat' else '/etc/ssl/certs/ca-certificates.crt' }}"
+
+***
+
+### usm_agent_custom_properties
+
+USM Agent custom properties
+
+Default:  {}
+
+***
+
+### unified_stream_manager
+
+Unified Stream Manager configuration for remote Schema Registry connection
+
+Default: 
+
+***
+
+### kafka_connect_health_check_delay
+
+Time in seconds to wait before starting Connect Health Checks.
+
+Default:  30
+
+***
+
+### kafka_broker_health_check_delay
+
+Time in seconds to wait before starting Kafka Health Checks.
+
+Default:  20
+
+***
+
+### kafka_controller_health_check_delay
+
+Time in seconds to wait before starting Kafka Health Checks.
+
+Default:  20
+
+***
+
+### control_center_next_gen_health_check_delay
+
+Time in seconds to wait before starting Control Center Next Gen Health Checks.
+
+Default:  30
+
+***
+
+### kafka_connect_replicator_health_check_delay
+
+Time in seconds to wait before starting Kafka Connect Replicator Health Checks.
+
+Default:  30
+
+***
+
+### schema_registry_health_check_delay
+
+Time in seconds to wait before starting Schema Registry Health Checks.
+
+Default:  15
+
+***
+
+### kafka_rest_health_check_delay
+
+Time in seconds to wait before starting Rest Proxy Health Checks.
+
+Default:  15
+
+***
+
+### ksql_health_check_delay
+
+Time in seconds to wait before starting ksqlDB Health Checks.
+
+Default:  20
+
+***
+
+### usm_agent_health_check_delay
+
+Time in seconds to wait before starting USM agent Health Checks.
+
+Default:  30
+
+***
+
+### enable_schema_importer
+
+Boolean to enable schema importer and add the required properties to the schema registry
+
+Default:  false
+
+***
+
+### enable_schema_exporter
+
+Boolean to enable schema exporter and add the required properties to the schema registry
+
+Default:  false
+
+***
+
+### enable_node_id
+
+Boolean to enable node_id configuration. When enabled, node_id will be used instead of broker_id.
+
+Default:  true
+
+***
+
 # common
 
 Below are the supported variables for the role common
@@ -6186,6 +6682,14 @@ Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/
 
 ***
 
+### confluent_archive_usm_agent_file_source
+
+A path reference to a local archive file or URL for confluent-usm-agent archive. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
+
+Default:  "{{confluent_usm_agent_independent_repository_baseurl}}/archive/confluent-usm-agent-{{ confluent_usm_agent_full_package_version }}.tar.gz"
+
+***
+
 ### confluent_archive_file_remote
 
 Set to true to indicate the archive file is remote (i.e. already on the target node) or a URL. Set to false if the archive file is on the control node.
@@ -6197,6 +6701,14 @@ Default:  true
 ### confluent_archive_control_center_next_gen_file_remote
 
 Set to true to indicate the archive file for Confluent Control Center Next Gen is remote (i.e. already on the target node) or a URL. Set to false if the archive file is on the control node.
+
+Default:  true
+
+***
+
+### confluent_archive_usm_agent_file_remote
+
+Set to true to indicate the archive file for Confluent USM Agent is remote (i.e. already on the target node) or a URL. Set to false if the archive file is on the control node.
 
 Default:  true
 
@@ -6470,14 +6982,6 @@ Default:
 
 ***
 
-### control_center_next_gen_health_check_delay
-
-Time in seconds to wait before starting Control Center Next Gen Health Checks.
-
-Default:  30
-
-***
-
 # kafka_broker
 
 Below are the supported variables for the role kafka_broker
@@ -6553,14 +7057,6 @@ Default:
 Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
 
 Default: 
-
-***
-
-### kafka_broker_health_check_delay
-
-Time in seconds to wait before starting Kafka Health Checks.
-
-Default:  20
 
 ***
 
@@ -6658,14 +7154,6 @@ Default:
 
 ***
 
-### kafka_controller_health_check_delay
-
-Time in seconds to wait before starting Kafka Health Checks.
-
-Default:  20
-
-***
-
 ### kafka_controller_jmxexporter_startup_delay
 
 Time in seconds to wait before JMX exporter starts serving metrics. Any requests within the delay period will result in an empty metrics set.
@@ -6760,14 +7248,6 @@ Default:
 
 ***
 
-### kafka_connect_health_check_delay
-
-Time in seconds to wait before starting Connect Health Checks.
-
-Default:  30
-
-***
-
 ### kafka_connect_deploy_connector_timeout
 
 Time in seconds to wait while deploying kafka connector
@@ -6851,14 +7331,6 @@ Default:
 Overrides to the Unit Section of Rest Proxy Systemd File. This variable is a dictionary.
 
 Default: 
-
-***
-
-### kafka_rest_health_check_delay
-
-Time in seconds to wait before starting Rest Proxy Health Checks.
-
-Default:  15
 
 ***
 
@@ -6948,14 +7420,6 @@ Default:
 
 ***
 
-### ksql_health_check_delay
-
-Time in seconds to wait before starting ksqlDB Health Checks.
-
-Default:  20
-
-***
-
 # schema_registry
 
 Below are the supported variables for the role schema_registry
@@ -7034,6 +7498,7 @@ Default:
 
 ***
 
+<<<<<<< HEAD
 ### schema_registry_health_check_delay
 
 Time in seconds to wait before starting Schema Registry Health Checks.
@@ -7128,6 +7593,8 @@ Default:  5
 
 ***
 
+=======
+>>>>>>> df52ba92e (USM Docs Updates and Bugfix (SETU-1343) (#2285))
 # kafka_connect_replicator
 
 Below are the supported variables for the role kafka_connect_replicator
@@ -7179,14 +7646,6 @@ Default:
 Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
 
 Default: 
-
-***
-
-### kafka_connect_replicator_health_check_delay
-
-Time in seconds to wait before starting Kafka Connect Replicator Health Checks.
-
-Default:  30
 
 ***
 
