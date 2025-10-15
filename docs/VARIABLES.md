@@ -8272,3 +8272,21 @@ Default:  2048
 
 ***
 
+### broker_id
+
+Unique identifier for each Kafka broker node.
+
+Default: Automatic assignment based on inventory position or explicit configuration via broker_id variable
+
+***
+
+### node_id
+
+Unique identifier assigned to each Kafka node (controller or broker) during deployment.
+
+Default: automatically generated based on the node's inventory position or explicitly configured via the node_id variable.
+
+***
+
+
+
