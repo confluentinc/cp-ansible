@@ -37,3 +37,28 @@
         file_path: /etc/schema-registry/schema-registry.properties
         property: kafkastore.security.protocol
         expected_value: SASL_PLAINTEXT
+
+- name: Verify - ZooKeeper chroot creation with digest authentication
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Import Variables
+      import_role:
+        name: variables
+
+    - name: Verify chroot exists in ZooKeeper with authentication
+      shell: >
+        {% if kafka_broker_final_properties['zookeeper.set.acl']|default('false')|lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{kafka_broker.jaas_file}}'{% endif %} \
+        {{ binary_base_path }}/bin/zookeeper-shell {{ hostvars[groups['zookeeper'][0]] | confluent.platform.resolve_hostname }}:{{zookeeper_client_port}} \
+        ls /
+      register: zk_root_listing
+      run_once: true
+      changed_when: false
+      failed_when: false
+
+    - name: Assert chroot creation succeeded
+      assert:
+        that:
+          - zk_root_listing.rc == 0
+          - "zookeeper_chroot.lstrip('/') in zk_root_listing.stdout"
+        fail_msg: ZOOKEEPER CHROOT CREATION FAILED
