@@ -1,8 +1,46 @@
 # Primary Schema Registry Switchover: CP to Confluent Cloud
 
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [⚠️ Warning](#-warning-state-changing-operation-)
+- [Prerequisites](#prerequisites)
+- [Customer Scenarios](#customer-scenarios)
+  - [✅ Successful Scenarios](#-successful-scenarios)
+  - [⏳ Delayed Scenarios](#-delayed-scenarios)
+  - [❌ Failed Scenarios](#-failed-scenarios)
+- [Configuration Examples](#configuration-examples)
+  - [Mirror all schemas](#mirror-all-schemas)
+  - [Sync Schemas to a specific context](#sync-schemas-to-a-specific-context)
+  - [Greenfield setup](#greenfield-setup---enable-forwarding-and-importer)
+- [Usage](#usage)
+  - [Default Run](#default-run-schema-exporter-setup-only)
+  - [Individual Phases](#individual-phases)
+  - [Full Switchover](#full-switchover-complete-migration)
+  - [Execution Flow by Tag](#execution-flow-by-tag)
+- [Pre-check Validations](#pre-check-validations)
+- [Error Handling and Rollback](#error-handling-and-rollback)
+  - [Pre-check Failures](#pre-check-failures)
+  - [Switchover Failures](#switchover-failures)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+  - [Best Practices](#best-practices)
+- [Tags Reference](#tags-reference)
+- [Support](#support)
+
 ## Overview
 
 The `primary_sr_switchover_cp_to_cc.yml` playbook automates the process of switching a Confluent Platform (CP) Schema Registry from being the primary registry to using Confluent Cloud (CC) Schema Registry as the primary. This enables seamless migration of schema management from on-premises to cloud.
+
+## ⚠️ **WARNING: State-Changing Operation** ⚠️
+
+**This operation will change the state of Schema Registry in both Confluent Platform (CP) and Confluent Cloud (CC).**
+
+**Before proceeding, please ensure you have:**
+- Proper authorization and approval from your organization
+- Understanding of the impact on existing applications and services
+
+**This workflow will modify schema registry modes and create bidirectional synchronization between environments.**
 
 ## Prerequisites
 
