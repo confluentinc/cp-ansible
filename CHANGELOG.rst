@@ -4,6 +4,18 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v8.1.0
+======
+New features
+-------------
+- USM agent support has been added to CP-Ansible.
+- Schema Registry Switchover workflow for CP to CC has been added.
+
+Notable enhancements
+-------------
+- broker.id has been replaced with node.id for kafka broker.
+- Added configurations to enable Jolokia Access Control
+
 v8.0.0
 ======
 New features
