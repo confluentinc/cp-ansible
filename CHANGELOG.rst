@@ -8,7 +8,6 @@ v8.1.0
 ======
 New features
 -------------
-
 - USM agent support has been added to CP-Ansible.
 - Schema Registry Switchover workflow for CP to CC has been added.
 
