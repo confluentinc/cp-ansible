@@ -15,6 +15,7 @@ New features
 Notable enhancements
 -------------
 - broker.id has been replaced with node.id for kafka broker.
+- Added configurations to enable Jolokia Access Control
 
 v8.0.0
 ======
