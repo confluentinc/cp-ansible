@@ -4,6 +4,16 @@
 
 The `primary_sr_switchover_cp_to_cc.yml` playbook automates the process of switching a Confluent Platform (CP) Schema Registry from being the primary registry to using Confluent Cloud (CC) Schema Registry as the primary. This enables seamless migration of schema management from on-premises to cloud.
 
+## ⚠️ **WARNING: State-Changing Operation** ⚠️
+
+**This operation will change the state of Schema Registry in both Confluent Platform (CP) and Confluent Cloud (CC).**
+
+**Before proceeding, please ensure you have:**
+- Proper authorization and approval from your organization
+- Understanding of the impact on existing applications and services
+
+**This workflow will modify schema registry modes and create bidirectional synchronization between environments.**
+
 ## Prerequisites
 
 - Confluent Platform Schema Registry deployed and running
