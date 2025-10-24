@@ -587,7 +587,7 @@ class FilterModule(object):
                 ).decode()
         return username_with_hashed_passwords
 
-    def prometheus_client_properties(self, input_dict, ssl_enabled, truststore_path, truststore_storepass, 
+    def prometheus_client_properties(self, ssl_enabled, truststore_path, truststore_storepass, 
                                    keystore_path, keystore_storepass, keystore_keypass, 
                                    basic_auth_enabled, basic_auth_user_info, mtls_enabled, 
                                    service_name):
@@ -616,7 +616,7 @@ class FilterModule(object):
 
         return final_dict
 
-    def alertmanager_client_properties(self, input_dict, ssl_enabled, truststore_path, truststore_storepass,
+    def alertmanager_client_properties(self, ssl_enabled, truststore_path, truststore_storepass,
                                       keystore_path, keystore_storepass, keystore_keypass,
                                       basic_auth_enabled, basic_auth_user_info, mtls_enabled,
                                       service_name):
