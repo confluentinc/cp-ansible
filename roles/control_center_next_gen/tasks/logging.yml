@@ -1,0 +1,140 @@
+---
+- name: Create Control Center Next Gen Dependencies Prometheus & Alertmanager Logs Directory
+  file:
+    path: "{{ item }}"
+    state: directory
+    group: "{{ control_center_next_gen_group }}"
+    owner: "{{ control_center_next_gen_user }}"
+    mode: '770'
+  loop:
+    - "{{ control_center_next_gen_dep_prometheus.log_path }}"
+    - "{{ control_center_next_gen_dep_alertmanager.log_path }}"
+  tags:
+    - filesystem
+    - log
+
+- name: Create Control Center Next Gen Dependencies Prometheus & Alertmanager Systemd Override Directories
+  file:
+    path: "{{ item | dirname }}"
+    state: directory
+    mode: '755'
+    owner: root
+    group: root
+  loop:
+    - "{{ control_center_next_gen_dep_prometheus.systemd_override }}"
+    - "{{ control_center_next_gen_dep_alertmanager.systemd_override }}"
+  tags:
+    - systemd
+    - log
+
+- name: Configure Control Center Next Gen Dependencies Prometheus & Alertmanager Systemd Logging
+  template:
+    src: "{{ item.template }}"
+    dest: "{{ item.dest }}"
+    mode: '644'
+    owner: root
+    group: root
+  loop:
+    - template: "prometheus-logging.conf.j2"
+      dest: "{{ control_center_next_gen_dep_prometheus.systemd_override | dirname }}/logging.conf"
+    - template: "alertmanager-logging.conf.j2"
+      dest: "{{ control_center_next_gen_dep_alertmanager.systemd_override | dirname }}/logging.conf"
+  notify: restart control center next gen
+  tags:
+    - systemd
+    - log
+
+- name: Configure Control Center Next Gen Dependencies Prometheus & Alertmanager Logrotate
+  template:
+    src: "{{ item.template }}"
+    dest: "{{ item.dest }}"
+    mode: '644'
+    owner: root
+    group: root
+  loop:
+    - template: "prometheus.logrotate.j2"
+      dest: "/etc/logrotate.d/control-center-next-gen-prometheus"
+    - template: "alertmanager.logrotate.j2"
+      dest: "/etc/logrotate.d/control-center-next-gen-alertmanager"
+  when: control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - logrotate
+
+- name: Create Control Center Next Gen Dependencies Prometheus & Alertmanager Logrotate Wrapper Scripts
+  template:
+    src: "{{ item.template }}"
+    dest: "{{ item.dest }}"
+    mode: '755'
+    owner: root
+    group: root
+  loop:
+    - template: "logrotate-prometheus.sh.j2"
+      dest: "/usr/local/bin/logrotate-control-center-next-gen-prometheus.sh"
+    - template: "logrotate-alertmanager.sh.j2"
+      dest: "/usr/local/bin/logrotate-control-center-next-gen-alertmanager.sh"
+  when: control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - logrotate
+
+- name: Install Cron Package for Control Center Next Gen Dependencies Log Rotation
+  package:
+    name: "{{ 'cronie' if ansible_os_family == 'RedHat' else 'cron' }}"
+    state: present
+  register: install_cron_result
+  until: install_cron_result is success or ansible_check_mode
+  retries: 3
+  delay: 30
+  ignore_errors: "{{ ansible_check_mode }}"
+  when: control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - logrotate
+
+- name: Enable and Start Cron Service
+  systemd:
+    name: "{{ 'crond' if ansible_os_family == 'RedHat' else 'cron' }}"
+    enabled: true
+    state: started
+  when: control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - systemd
+    - logrotate
+
+- name: Add Control Center Next Gen Dependencies Prometheus & Alertmanager Logrotate Cron Jobs
+  cron:
+    name: "{{ item.name }}"
+    minute: "*/10"
+    job: "{{ item.job }}"
+    user: root
+  loop:
+    - name: "Control Center Next Gen Prometheus Log Rotation"
+      job: "/usr/local/bin/logrotate-control-center-next-gen-prometheus.sh >> /tmp/control-center-next-gen-prometheus-rotate.log 2>&1"
+    - name: "Control Center Next Gen Alertmanager Log Rotation"
+      job: "/usr/local/bin/logrotate-control-center-next-gen-alertmanager.sh >> /tmp/control-center-next-gen-alertmanager-rotate.log 2>&1"
+  when: control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - logrotate
+
+# Remove logrotate configuration if disabled
+- name: Remove Control Center Next Gen Dependencies Logrotate Configuration and Scripts
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/logrotate.d/control-center-next-gen-prometheus
+    - /etc/logrotate.d/control-center-next-gen-alertmanager
+    - /usr/local/bin/logrotate-control-center-next-gen-prometheus.sh
+    - /usr/local/bin/logrotate-control-center-next-gen-alertmanager.sh
+  when: not control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - disable_logrotate
+
+- name: Remove Control Center Next Gen Dependencies Logrotate Cron Jobs
+  cron:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - "Control Center Next Gen Prometheus Log Rotation"
+    - "Control Center Next Gen Alertmanager Log Rotation"
+  when: not control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - disable_logrotate
