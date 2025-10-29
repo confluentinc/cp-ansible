@@ -1,0 +1,325 @@
+---
+- include_role:
+    name: common
+  when: not common_role_completed|bool
+  tags: common
+
+- name: Gather OS Facts
+  setup:
+    filter: "{{item}}"
+    gather_subset:
+      - '!all'
+  loop:
+    - ansible_os_family
+    - ansible_fqdn
+# TODO: check if this can be removed (ca certs already present or another task is already present)
+- name: Install CA Certificates for TLS Communication with CCloud
+  package:
+    name: ca-certificates
+    state: present
+  register: install_ca_certificates_result
+  until: install_ca_certificates_result is success or ansible_check_mode
+  retries: 3
+  delay: 30
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags:
+    - package
+    - certificates
+
+- name: Update CA certificates (RedHat family)
+  command: update-ca-trust
+  when:
+    - ansible_os_family == "RedHat"
+    - install_ca_certificates_result is changed
+  tags:
+    - certificates
+
+- name: Update CA certificates (Debian family)
+  command: update-ca-certificates
+  when:
+    - ansible_os_family == "Debian"
+    - install_ca_certificates_result is changed
+  tags:
+    - certificates
+
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ usm_agent_service_name }}"
+  when: installation_method == "package"
+  tags:
+    - package
+    - cp_package
+
+- name: Install the USM Agent Packages (RedHat)
+  yum:
+    name: "{{ usm_agent_packages | product([confluent_usm_agent_package_redhat_suffix]) | map('join') | list }}"
+    state: latest
+  register: install_usm_agent_package_result
+  until: install_usm_agent_package_result is success or ansible_check_mode
+  retries: 5
+  delay: 90
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags:
+    - package
+    - cp_package
+  notify: restart usm agent
+
+- name: Install the USM Agent Packages (Debian)
+  apt:
+    name: "{{ usm_agent_packages | product([confluent_usm_agent_package_debian_suffix]) | map('join') | list }}"
+  register: install_usm_agent_package_result
+  until: install_usm_agent_package_result is success or ansible_check_mode
+  retries: 5
+  delay: 90
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
+  ignore_errors: "{{ ansible_check_mode }}"
+  tags:
+    - package
+    - cp_package
+  notify: restart usm agent
+
+- name: Create USM Agent Group
+  group:
+    name: "{{usm_agent_default_group}}"
+  tags:
+    - privileged
+
+- name: Check if USM Agent User Exists
+  getent:
+    database: passwd
+    key: "{{usm_agent_default_user}}"
+  failed_when: false
+
+- name: Create USM Agent User
+  user:
+    name: "{{usm_agent_default_user}}"
+    comment: Confluent USM Agent
+    system: true
+    shell: "{{user_login_shell}}"
+    group: "{{usm_agent_default_group}}"
+  when: (getent_passwd|default({}))[usm_agent_default_user] is not defined
+  tags:
+    - privileged
+
+- name: Expand remote USM Agent archive
+  unarchive:
+    src: "{{ usm_agent_archive_file_source }}"
+    remote_src: "{{ usm_agent_archive_file_remote }}"
+    dest: "{{archive_destination_path}}"
+    group: "{{ omit if archive_group == '' else archive_group }}"
+    owner: "{{ omit if archive_owner == '' else archive_owner }}"
+    mode: '755'
+    creates: "{{usm_agent_binary_base_path}}"
+  when: installation_method == "archive"
+
+- name: Copy USM Agent Service from archive file to system
+  copy:
+    src: "{{usm_agent_binary_base_path}}/lib/systemd/system/{{usm_agent.systemd_file|basename}}"
+    remote_src: true
+    dest: "{{usm_agent.systemd_file}}"
+    mode: '644'
+    force: true
+  when: installation_method == "archive"
+  tags:
+    - systemd
+
+- include_role:
+    name: ssl
+  vars:
+    truststore_storepass: "{{usm_agent_truststore_storepass}}"
+    truststore_path: "{{usm_agent_truststore_path}}"
+    keystore_path: "{{usm_agent_keystore_path}}"
+    keystore_storepass: "{{usm_agent_keystore_storepass}}"
+    keystore_keypass: "{{usm_agent_keystore_keypass}}"
+    service_name: usm_agent
+    user: "{{usm_agent_default_user}}"
+    group: "{{usm_agent_default_group}}"
+    hostnames: "{{ [inventory_hostname, ansible_fqdn, ansible_host, ansible_ssh_host|default(omit), hostname|default(omit)] | unique }}"
+    ca_cert_path: "{{usm_agent_ca_cert_path}}"
+    cert_path: "{{usm_agent_cert_path}}"
+    key_path: "{{usm_agent_key_path}}"
+    export_certs: "{{usm_agent_export_certs}}"
+  when: >
+    usm_agent_ssl_enabled|bool and not public_certificates_enabled|bool
+  tags: ssl
+
+- name: Create USM Agent SSL Key Password File
+  copy:
+    content: "{{ usm_agent_keystore_keypass }}"
+    dest: "{{ usm_agent_key_password_file }}"
+    mode: '600'
+    owner: "{{ usm_agent_default_user }}"
+    group: "{{ usm_agent_default_group }}"
+  when: usm_agent_ssl_enabled|bool
+  notify: restart usm agent
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+    - ssl
+
+- name: Set USM Agent SSL Certificate File Permissions
+  file:
+    path: "{{ item }}"
+    mode: '600'
+    owner: "{{ usm_agent_default_user }}"
+    group: "{{ usm_agent_default_group }}"
+  loop:
+    - "{{ usm_agent_ca_cert_path }}"
+    - "{{ usm_agent_cert_path }}"
+    - "{{ usm_agent_key_path }}"
+    - "{{ usm_agent_keystore_path }}"
+    - "{{ usm_agent_truststore_path }}"
+  when: usm_agent_ssl_enabled|bool
+  tags:
+    - configuration
+    - ssl
+
+- name: Copy Custom USM Agent Files
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{usm_agent_copy_files}}"
+    user: "{{usm_agent_default_user}}"
+    group: "{{usm_agent_default_group}}"
+  when: usm_agent_copy_files | length > 0
+  tags:
+    - configuration
+
+- name: Copy Custom Files From All Components List
+  include_role:
+    name: common
+    tasks_from: copy_files.yml
+  vars:
+    copy_files: "{{all_components_copy_files}}"
+    user: "{{usm_agent_default_user}}"
+    group: "{{usm_agent_default_group}}"
+  when: all_components_copy_files | length > 0
+  tags:
+    - configuration
+
+- name: Create USM Agent Config directory
+  file:
+    path: "{{ usm_agent.config_file | dirname }}"
+    state: directory
+    mode: '750'
+    owner: "{{usm_agent_default_user}}"
+    group: "{{usm_agent_default_group}}"
+  tags:
+    - configuration
+    - filesystem
+
+- name: Create USM Agent Config
+  template:
+    src: usm-agent.properties.j2
+    dest: "{{usm_agent.config_file}}"
+    mode: '644'
+    owner: "{{usm_agent_default_user}}"
+    group: "{{usm_agent_default_group}}"
+  notify: restart usm agent
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
+- name: Create USM Agent Secrets Directory
+  file:
+    path: "{{ usm_agent.ccloud_credential_file | dirname }}"
+    state: directory
+    mode: '700'
+    owner: "{{usm_agent_default_user}}"
+    group: "{{usm_agent_default_group}}"
+  tags:
+    - configuration
+    - filesystem
+
+- name: Create CCloud Credential File
+  template:
+    src: ccloud_credential.yaml.j2
+    dest: "{{ usm_agent.ccloud_credential_file }}"
+    mode: '600'
+    owner: "{{usm_agent_default_user}}"
+    group: "{{usm_agent_default_group}}"
+  notify: restart usm agent
+  tags:
+    - configuration
+
+- name: Create CP Credential File
+  template:
+    src: cp_credential.yaml.j2
+    dest: "{{ usm_agent.cp_credential_file }}"
+    mode: '600'
+    owner: "{{ usm_agent_default_user }}"
+    group: "{{ usm_agent_default_group }}"
+  when: usm_agent_basic_auth_enabled|bool
+  notify: restart usm agent
+  tags:
+    - configuration
+
+- name: Create Service Override Directory
+  file:
+    path: "{{usm_agent.systemd_override | dirname}}"
+    owner: "{{usm_agent_default_user}}"
+    group: "{{usm_agent_default_group}}"
+    state: directory
+    mode: '750'
+  tags:
+    - systemd
+    - privileged
+
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{usm_agent.systemd_override}}"
+    mode: '640'
+    owner: root
+    group: root
+  notify: restart usm agent
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - systemd
+    - privileged
+
+- name: Configure USM Agent Logging
+  include_tasks: logging.yml
+  tags:
+    - usm_agent_logging
+
+- name: Certs were Updated - Trigger Restart
+  command: /bin/true
+  notify: restart usm agent
+  when: certs_updated|bool
+
+- meta: flush_handlers
+
+- name: Start USM Agent Service
+  systemd:
+    name: "{{usm_agent_service_name}}"
+    enabled: true
+    state: started
+  tags:
+    - systemd
+
+- name: Health Check
+  include_tasks: health_check.yml
+  when:
+    - usm_agent_health_checks_enabled|bool
+    - not ansible_check_mode
+  tags: health_check
+
+- name: Delete temporary keys/certs when keystore and trustore is provided
+  file:
+    path: "{{item}}"
+    state: absent
+  loop:
+    - "{{usm_agent_ca_cert_path}}"
+    - "{{usm_agent_cert_path}}"
+    - "{{usm_agent_key_path}}"
+  when: (ssl_provided_keystore_and_truststore | bool)
