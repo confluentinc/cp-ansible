@@ -15,14 +15,14 @@ create-topic:
 
 # quorum related check commands
 leader-check:
-	kafka-metadata-quorum --bootstrap-controller controller1:9093,controller2:9093,controller3:9093,controller4:9093,controller5:9093 --command-config /etc/controller/server.properties describe --replication
+	kafka-metadata-quorum --bootstrap-controller controller1:9093,controller2:9093,controller3:9093 --command-config /etc/controller/server.properties describe --replication
 
 status-check:
-	kafka-metadata-quorum --bootstrap-controller controller1:9093,controller2:9093,controller3:9093,controller4:9093,controller5:9093 --command-config /etc/controller/server.properties describe --status
+	kafka-metadata-quorum --bootstrap-controller controller1:9093,controller2:9093,controller3:9093 --command-config /etc/controller/server.properties describe --status
 
 # check the version of the metadata
 metadata-v-check:
-	kafka-features --bootstrap-controller controller1:9093,controller2:9093,controller3:9093,controller4:9093,controller5:9093 --command-config /etc/controller/server.properties describe
+	kafka-features --bootstrap-controller controller1:9093,controller2:9093,controller3:9093 --command-config /etc/controller/server.properties describe
 
 metadata-v-check-old:
 	kafka-features --bootstrap-server kafka-broker1:9092,kafka-broker2:9092,kafka-broker3:9092 --command-config /etc/controller/server.properties describe
@@ -53,10 +53,10 @@ start-standalone:
 	kafka-metadata-recovery reconfig force-standalone --config /etc/controller/server.properties; systemctl restart confluent-kcontroller
 
 join-q:
-	kafka-metadata-quorum --bootstrap-controller controller1:9093,controller2:9093,controller3:9093,controller4:9093,controller5:9093 --command-config /etc/controller/server.properties add-controller
+	kafka-metadata-quorum --bootstrap-controller controller1:9093,controller2:9093,controller3:9093 --command-config /etc/controller/server.properties add-controller
 
 leave-q:
-	kafka-metadata-quorum --bootstrap-controller controller1:9093,controller2:9093,controller3:9093,controller4:9093,controller5:9093 --command-config /etc/controller/server.properties remove-controller --controller-id 999x --controller-directory-id hello
+	kafka-metadata-quorum --bootstrap-controller controller1:9093,controller2:9093,controller3:9093 --command-config /etc/controller/server.properties remove-controller --controller-id 999x --controller-directory-id hello
 # systemctl commands
 restart-kr:
 	systemctl restart confluent-kcontroller
