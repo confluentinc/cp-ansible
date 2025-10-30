@@ -615,10 +615,14 @@ kafka_broker_properties:
                     plain_jaas_config, kafka_broker_keytab_path, kafka_broker_kerberos_principal|default('kafka'), kerberos_kafka_broker_primary,
                     sasl_scram_users_final.admin.principal, sasl_scram_users_final.admin.password, sasl_scram256_users_final.admin.principal, sasl_scram256_users_final.admin.password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience, oauth_sub_claim, rbac_enabled, false, false) }}"
   broker_id:
-    enabled: "{{ inventory_hostname in groups.kafka_broker }}"
+    enabled: "{{ inventory_hostname in groups.kafka_broker and not enable_node_id|bool }}"
     properties:
-      # broker.id logic depends on inventory hostname being in kafka_broker host list, defaulting to 0 if non kafka broker host
       broker.id: "{{ broker_id | default( groups.kafka_broker.index(inventory_hostname) + 1 ) if inventory_hostname in groups.kafka_broker else 0 }}"
+  node_id:
+    enabled: "{{ inventory_hostname in groups.kafka_broker and enable_node_id|bool }}"
+    properties:
+      node.id: "{{ (node_id if node_id is defined else (broker_id if broker_id is defined else groups.kafka_broker.index(inventory_hostname) + 1)) if inventory_hostname in groups.kafka_broker else 0 }}"
+
   ssl:
     enabled: "{{ kafka_controller_ssl_enabled|bool or
     kafka_broker_listeners | confluent.platform.ssl_required(ssl_enabled) or
@@ -1352,15 +1356,15 @@ schema_registry_properties:
     properties:
       confluent.telemetry.labels.confluent.ansible.playbooks.version: "{{confluent_ansible_branch}}"
   schema_exporter:
-    enabled: "{{ schema_exporters is defined }}"
+    enabled: "{{ schema_exporters is defined or enable_schema_exporter }}"
     properties:
       kafkastore.update.handlers: io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler
   resource_extensions:
-    enabled: "{{ rbac_enabled or (schema_exporters is defined) or (schema_importers is defined) or (unified_stream_manager.schema_registry_endpoint != 'none')}}"
+    enabled: "{{ rbac_enabled or (schema_exporters is defined or sr_switch_over_exporter_name is defined or enable_schema_exporter) or (schema_importers is defined or enable_schema_importer) or (unified_stream_manager.schema_registry_endpoint != 'none')}}"
     properties:
-      schema.registry.resource.extension.class: "{{ rbac_enabled | confluent.platform.schema_registry_extension_classes(schema_exporters is defined, schema_importers is defined, (unified_stream_manager.schema_registry_endpoint != 'none')) }}"
+      schema.registry.resource.extension.class: "{{ rbac_enabled | confluent.platform.schema_registry_extension_classes(schema_exporters is defined or enable_schema_exporter, schema_importers is defined or enable_schema_importer, (unified_stream_manager.schema_registry_endpoint != 'none')) }}"
   schema_importer_and_exporter:
-    enabled: "{{ schema_importers is defined or schema_exporters is defined }}"
+    enabled: "{{ schema_importers is defined or schema_exporters is defined or enable_schema_importer or enable_schema_exporter }}"
     properties:
       password.encoder.secret: "{{ password_encoder_secret }}"
   usm_sr:
@@ -2863,8 +2867,6 @@ usm_agent_default_user: cp-usm-agent
 usm_agent_default_group: confluent
 confluent_usm_agent_archive_version: "{{confluent_usm_agent_full_package_version}}"
 usm_agent_binary_base_path: "{{ ((config_base_path,('confluent-usm-agent-',confluent_usm_agent_archive_version) | join) | path_join) if installation_method == 'archive' else '/usr' }}"
-usm_agent_archive_file_source: "{{confluent_usm_agent_independent_repository_baseurl}}/archive/confluent-usm-agent-{{ confluent_usm_agent_full_package_version }}.tar.gz"
-usm_agent_archive_file_remote: "{{ confluent_archive_file_remote | default(true) }}"
 usm_agent_config_prefix_path: "{{ usm_agent_config_prefix.strip('/') }}"
 
 usm_agent:
@@ -2878,7 +2880,7 @@ usm_agent:
 
 usm_agent_ccloud_environment_id: "{{ ccloud_environment_id }}"
 usm_agent_ccloud_host: "{{ ccloud_endpoint | urlsplit('hostname') }}"
-usm_agent_ccloud_port: "{{ ccloud_endpoint | urlsplit('port') | default(443) }}"
+usm_agent_ccloud_port: "{{ ccloud_endpoint | urlsplit('port') | default(443, true) }}"
 usm_agent_ccloud_ssl_enabled: true
 
 usm_agent_ccloud_credential:

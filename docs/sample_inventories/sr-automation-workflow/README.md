@@ -1,8 +1,46 @@
 # Primary Schema Registry Switchover: CP to Confluent Cloud
 
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [⚠️ Warning](#-warning-state-changing-operation-)
+- [Prerequisites](#prerequisites)
+- [Customer Scenarios](#customer-scenarios)
+  - [✅ Successful Scenarios](#-successful-scenarios)
+  - [⏳ Delayed Scenarios](#-delayed-scenarios)
+  - [❌ Failed Scenarios](#-failed-scenarios)
+- [Configuration Examples](#configuration-examples)
+  - [Mirror all schemas](#mirror-all-schemas)
+  - [Sync Schemas to a specific context](#sync-schemas-to-a-specific-context)
+  - [Greenfield setup](#greenfield-setup---enable-forwarding-and-importer)
+- [Usage](#usage)
+  - [Default Run](#default-run-schema-exporter-setup-only)
+  - [Individual Phases](#individual-phases)
+  - [Full Switchover](#full-switchover-complete-migration)
+  - [Execution Flow by Tag](#execution-flow-by-tag)
+- [Pre-check Validations](#pre-check-validations)
+- [Error Handling and Rollback](#error-handling-and-rollback)
+  - [Pre-check Failures](#pre-check-failures)
+  - [Switchover Failures](#switchover-failures)
+- [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+  - [Best Practices](#best-practices)
+- [Tags Reference](#tags-reference)
+- [Support](#support)
+
 ## Overview
 
 The `primary_sr_switchover_cp_to_cc.yml` playbook automates the process of switching a Confluent Platform (CP) Schema Registry from being the primary registry to using Confluent Cloud (CC) Schema Registry as the primary. This enables seamless migration of schema management from on-premises to cloud.
+
+## ⚠️ **WARNING: State-Changing Operation** ⚠️
+
+**This operation will change the state of Schema Registry in both Confluent Platform (CP) and Confluent Cloud (CC).**
+
+**Before proceeding, please ensure you have:**
+- Proper authorization and approval from your organization
+- Understanding of the impact on existing applications and services
+
+**This workflow will modify schema registry modes and create bidirectional synchronization between environments.**
 
 ## Prerequisites
 
@@ -34,13 +72,12 @@ The `primary_sr_switchover_cp_to_cc.yml` playbook automates the process of switc
 | **Missing Exporter Name** | • USM enabled<br/>• Exporter = RUNNING<br/>• No `sr_switch_over_exporter_name` provided | **Fails in pre-checks** | Importer is not created |
 | **Exporter URL Mismatch** | • Exporter's destination URL ≠ USM remote endpoint | **Fails in pre-checks** | Configuration error - URLs must match |
 | **Importer Config Mismatch** | • Importer's source URL ≠ USM remote endpoint | **Fails in pre-checks** | Configuration error - URLs must match |
-| **Context Mismatch** | • Importer qualified subjects don't match USM remote_context | **Fails in pre-checks** | Context configuration error |
 | **USM Not Configured** | • Exporter = RUNNING<br/>• USM not configured (`endpoint: none`) | **Fails in pre-checks** | USM remote endpoint must be set |
 | **CC SR Mode Switch Failure** | • Automation fails to set CC SR to READWRITE | **Rollback triggered** | CP SR restored to READWRITE mode |
 
 ## Configuration Examples
 
-### Basic Configuration
+### Mirror all schemas
 ```yaml
 # Unified Stream Manager Configuration
 unified_stream_manager:
@@ -48,50 +85,95 @@ unified_stream_manager:
   authentication_type: basic
   basic_username: "your-cc-api-key"
   basic_password: "your-cc-api-secret"
-  remote_context: "production"  # Optional
 
 # Schema Exporter Configuration
 schema_exporters:
   - name: "cp-to-cc-exporter"
-    subjects: ["*"]  # or [":.production:*"] for specific context
-    context_type: "AUTO"
-    config:
-      schema_registry_endpoint: "https://psrc-xyz.us-east-1.aws.confluent.cloud"
-      authentication_type: basic
-      basic_username: "your-cc-api-key"  
-      basic_password: "your-cc-api-secret"
+    subjects: [":*:"]
+    context_type: "NONE"   # Copies the source context as-is, without prepending anything. This is useful to make an exact copy of the source Schema Registry in the destination.
 
 # Schema Importer Configuration (for reverse sync)
 schema_importers:
   - name: "cc-to-cp-importer"
-    subjects: ["*"]  # or [":.production:*"] for specific context  
-    config:
-      schema_registry_endpoint: "https://psrc-xyz.us-east-1.aws.confluent.cloud"
-      authentication_type: basic
-      basic_username: "your-cc-api-key"
-      basic_password: "your-cc-api-secret"
+    subjects: [":*:"]
 
 # Specify exporter for switchover
 sr_switch_over_exporter_name: "cp-to-cc-exporter"
+
+password_encorder_secret: <secret>
 ```
 
-### Context-Aware Configuration
+### Sync Schemas to a specific context
+
+1. exports default context in CP to site1 context in CC ,imports all schemas in site1 context in CC to default context in CP
+
 ```yaml
 # When using contexts
 unified_stream_manager:
   schema_registry_endpoint: "https://psrc-xyz.us-east-1.aws.confluent.cloud"
-  remote_context: "production"
+  authentication_type: basic
+  basic_username: "your-cc-api-key"
+  basic_password: "your-cc-api-secret"
+  remote_context: "site1"
 
 schema_exporters:
   - name: "production-exporter"
-    subjects: [":.production:orders", ":.production:users"]  # Must match remote_context
-    context_type: "CUSTOM"
-    context: "production"
+    subjects: ["*"]
+    context_type: "CUSTOM"  # Prepends the source context with a custom context name, specified in context below.
+    context: "site1"
 
 schema_importers:
   - name: "production-importer"
-    subjects: [":.production:*"]  # Must match remote_context
+    subjects: [":.site1:*"]
+    context: "."
+
+sr_switch_over_exporter_name: "production-exporter"
+
+password_encorder_secret: <secret>
 ```
+
+2. exports corp context in CP to site1 context in CC ,imports all schemas in site1.corp context in CC to corp context in CP
+
+```yaml
+# When using contexts
+unified_stream_manager:
+  schema_registry_endpoint: "https://psrc-xyz.us-east-1.aws.confluent.cloud"
+  authentication_type: basic
+  basic_username: "your-cc-api-key"
+  basic_password: "your-cc-api-secret"
+  remote_context: "site1"
+
+schema_exporters:
+  - name: "production-exporter-2"
+    subjects: [":.corp:*"]
+    context_type: "CUSTOM"
+    context: "site1"
+
+schema_importers:
+  - name: "production-importer-2"
+    subjects: [":.site1.corp:*"]
+    context: "site1"
+
+sr_switch_over_exporter_name: "production-exporter-2"
+
+password_encorder_secret: <secret>
+```
+
+### Greenfield setup - enable forwarding and importer
+
+```yaml
+# When using contexts
+unified_stream_manager:
+  schema_registry_endpoint: "https://psrc-xyz.us-east-1.aws.confluent.cloud"
+  authentication_type: basic
+  basic_username: "your-cc-api-key"
+  basic_password: "your-cc-api-secret"
+
+schema_importers:
+  - name: "production-importer-2"
+    subjects: [":*:"]    #set according to scenario 1 or scenario 2
+
+password_encorder_secret: <secret>
 
 ## Usage
 
@@ -101,16 +183,10 @@ ansible-playbook playbooks/primary_sr_switchover_cp_to_cc.yml
 ```
 → Runs schema exporter setup only
 
-### Full Switchover (Complete Migration)
-```bash
-ansible-playbook playbooks/primary_sr_switchover_cp_to_cc.yml --tags switchover_to_cc
-```
-→ Runs exporter + switchover + reverse sync
-
 ### Individual Phases
 ```bash
 # Schema exporter setup only
-ansible-playbook playbooks/primary_sr_switchover_cp_to_cc.yml --tags schema_exporter
+ansible-playbook playbooks/primary_sr_switchover_cp_to_cc.yml --tags schema_exporter (same as default run)
 
 # Forward to CC (pre-checks + forward mode)
 ansible-playbook playbooks/primary_sr_switchover_cp_to_cc.yml --tags forward_to_cc
@@ -118,6 +194,13 @@ ansible-playbook playbooks/primary_sr_switchover_cp_to_cc.yml --tags forward_to_
 # Schema importer setup (reverse sync)
 ansible-playbook playbooks/primary_sr_switchover_cp_to_cc.yml --tags schema_importer
 ```
+
+### Full Switchover (Complete Migration)
+```bash
+ansible-playbook playbooks/primary_sr_switchover_cp_to_cc.yml --tags switchover_to_cc
+```
+→ Runs exporter + switchover + reverse sync
+
 
 ### Execution Flow by Tag
 
@@ -178,13 +261,6 @@ Pre-check failed: Exporter and USM remote endpoints must match
 ```
 **Solution**: Ensure exporter `config.schema_registry_endpoint` matches `unified_stream_manager.schema_registry_endpoint`.
 
-#### Context Mismatch Error
-```
-Schema importer qualified subjects (:.context:subject) must use USM remote_context. 
-Found contexts: staging, Expected: production
-```
-**Solution**: Update importer subjects to use the correct context or fix USM `remote_context`.
-
 #### Missing Exporter Name Error
 ```
 Pre-check failed: sr_switch_over_exporter_name must be defined
@@ -208,7 +284,6 @@ Pre-check failed: sr_switch_over_exporter_name must be defined
 | `forward_to_cc` | Forward mode only | Pre-checks → CP SR → FORWARD mode | ⚠️ **Caution** - CP write downtime |
 | `switchover_to_cc` | Complete migration | Pre-checks → Exporter → Switchover → Importer | ⚠️ **Caution** - Full migration |
 | `schema_importer` | Reverse sync setup | Schema Importer Only | ✅ **Safe** - Adds reverse sync |
-| `never` | Safety mechanism | Prevents accidental execution | 🔒 **Protection** - Explicit tag required |
 
 ## Support
 

@@ -24,7 +24,7 @@
 #   - schema_importer: Setup schema importer (reverse sync)
 #   - switchover_to_cc: Run switchover and reverse sync in addition to exporter
 
-- name: Schema Registry Automation Workflow
+- name: Schema Registry Automation Workflow Prerequisites
   hosts: schema_registry
   gather_facts: true
   vars:
@@ -95,93 +95,87 @@
         - always
 
     # Ensure schema registry is configured with required automation properties
-    - name: "Configure Schema Registry Properties for Automation"
+    - name: Configure Schema Registry Properties for Automation
       block:
-        - name: Configure schema registry with required automation properties
-          debug:
-            msg: |
-              Configuring Schema Registry with automation properties (will create or update existing configuration).
-              Required properties for exporter/importer functionality:
-              - kafkastore.update.handlers=io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler
-              - schema.registry.resource.extension.class=...SchemaExporterResourceExtension,SchemaImporterResourceExtension...
-              - password.encoder.secret={{ password_encoder_secret | default('***') }}
-              {% if unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none' %}
-              USM Properties (for Confluent Cloud integration):
-              - usm.schema.registry.remote.endpoint={{ unified_stream_manager.schema_registry_endpoint }}
-              - usm.schema.registry.remote.api.key={{ unified_stream_manager.basic_username }}
-              - usm.schema.registry.remote.api.secret=***
-              {% endif %}
-              {% if unified_stream_manager is defined and unified_stream_manager.remote_context is defined and unified_stream_manager.remote_context != '' %}
-              - usm.schema.registry.remote.context.prefix={{ unified_stream_manager.remote_context }}
-              {% endif %}
+        - name: Load schema registry role defaults
+          include_vars: "../roles/schema_registry/defaults/main.yml"
 
-        - name: Add/Update required automation properties to schema registry config makes more sense.
-          set_fact:
-            sr_core_properties:
-              - property: "kafkastore.update.handlers"
-                value: "io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler"
-              - property: "password.encoder.secret"
-                value: "{{ password_encoder_secret }}"
+        - name: Read current config file content
+          slurp:
+            src: "{{ schema_registry.config_file }}"
+          register: current_config_content
 
-        - name: Add/Update schema registry extension classes
-          set_fact:
-            sr_extension_classes: "{{ rbac_enabled | confluent.platform.schema_registry_extension_classes(schema_exporters is defined, schema_importers is defined, (unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none')) }}"
+        - name: Create Schema Registry config with automation properties
+          template:
+            src: ../roles/schema_registry/templates/schema-registry.properties.j2
+            dest: "{{ schema_registry.config_file }}"
+            mode: '640'
+            owner: "{{ schema_registry_user }}"
+            group: "{{ schema_registry_group }}"
+          register: sr_config_result
+          tags:
+            - configuration
 
-        - name: Append extension class property
-          set_fact:
-            sr_core_properties: "{{ sr_core_properties + [{'property': 'schema.registry.resource.extension.class', 'value': sr_extension_classes}] }}"
-
-        - name: Prepare USM properties for configuration
-          set_fact:
-            sr_usm_properties:
-              - property: "usm.schema.registry.remote.endpoint"
-                value: "{{ unified_stream_manager.schema_registry_endpoint }}"
-              - property: "usm.schema.registry.remote.api.key"
-                value: "{{ unified_stream_manager.basic_username }}"
-              - property: "usm.schema.registry.remote.api.secret"
-                value: "{{ unified_stream_manager.basic_password }}"
-          when: unified_stream_manager is defined and unified_stream_manager.schema_registry_endpoint != 'none'
-
-        - name: Prepare USM context prefix property
-          set_fact:
-            sr_context_properties:
-              - property: "usm.schema.registry.remote.context.prefix"
-                value: "{{ unified_stream_manager.remote_context }}"
+        - name: Create Schema Registry Config with Secrets Protection
+          include_role:
+            name: common
+            tasks_from: secrets_protection.yml
+          vars:
+            final_properties: "{{ schema_registry_final_properties }}"
+            encrypt_passwords: "{{ schema_registry_secrets_protection_encrypt_passwords }}"
+            encrypt_properties: "{{ schema_registry_secrets_protection_encrypt_properties }}"
+            config_path: "{{ schema_registry.config_file }}"
+            secrets_file: "{{ schema_registry_secrets_protection_file }}"
+            secrets_file_owner: "{{schema_registry_user}}"
+            secrets_file_group: "{{schema_registry_group}}"
+            ca_cert_path: "{{ schema_registry_ca_cert_path if schema_registry_ssl_enabled|bool else '' }}"
+            handler: "no-op"
+          tags:
+            - configuration
           when:
-            - unified_stream_manager is defined
-            - unified_stream_manager.remote_context is defined
-            - unified_stream_manager.remote_context != ''
+            - schema_registry_secrets_protection_enabled|bool
+            - rbac_enabled|bool or confluent_cli_version is version('3.0.0', '>=')
 
-        - name: Combine all properties for configuration
-          set_fact:
-            sr_all_properties: "{{ sr_core_properties + (sr_usm_properties | default([])) + (sr_context_properties | default([])) }}"
+        - name: Read new config file content after template
+          slurp:
+            src: "{{ schema_registry.config_file }}"
+          register: new_config_content
 
-        - name: Configure Schema Registry automation properties
-          lineinfile:
-            path: "{{ schema_registry.config_file }}"
-            regexp: "^{{ item.property | regex_escape }}="
-            line: "{{ item.property }}={{ item.value }}"
-            backup: yes  # Create backup of the file
-          loop: "{{ sr_all_properties }}"
-          loop_control:
-            label: "{{ item.property }}"
-          register: sr_properties_results
-          retries: 3
-          delay: 5
-
-        - name: Check if any automation properties were changed
+        - name: Check if automation properties were actually added/changed
           set_fact:
             automation_properties_added:
-              changed: "{{ sr_properties_results.results | selectattr('changed', 'defined') | selectattr('changed') | list | length > 0 }}"
+              changed: "{{ (current_config_content.content) != (new_config_content.content) }}"
+  tags:
+    - always
+# Restart Schema Registry serially to apply configuration changes
+- name: Restart Schema Registry Serially
+  hosts: schema_registry
+  serial: 1
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+    - name: Include Schema Registry restart tasks
+      include_tasks: ../roles/schema_registry/tasks/restart_and_wait.yml
+      when:
+        - automation_properties_added.changed | default(false)
+        - not schema_registry_skip_restarts | default(false) | bool
+    - name: Health check
+      include_tasks: ../roles/schema_registry/tasks/health_check.yml
+  tags:
+    - always
 
-        - name: Restart schema registry if properties were added
-          systemd:
-            name: "{{ schema_registry_service_name }}"
-            state: restarted
-          when:
-            - automation_properties_added is defined
-            - automation_properties_added.changed
+- name: Schema Registry Automation Workflow
+  hosts: schema_registry
+  gather_facts: true
+  vars:
+    # Status tracking
+    workflow_status: "started"
+    failed_step: ""
 
+  tasks:
+    - name: Schema Registry Automation Workflow Prerequisites
+      block:
         - name: Wait for Schema Registry to be ready after reconfiguration
           include_tasks: ../roles/common/tasks/schema_registry_operations.yml
           vars:
@@ -195,134 +189,9 @@
             request_delay: 5
 
         # RBAC Role Bindings for Schema Registry Automation (when RBAC is enabled)
-        - name: "Setup RBAC Role Bindings for Schema Registry Automation"
-          block:
-            - name: Grant Schema Registry user ClusterAdmin role for exporter endpoint access
-              uri:
-                url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_basic_users_final.admin.principal}}/roles/ClusterAdmin"
-                method: POST
-                validate_certs: false
-                headers:
-                  Content-Type: application/json
-                  Authorization: "Bearer {{ authorization_token }}"
-                client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt if ssl_mutual_auth_enabled | default(false) else omit }}"
-                client_key: "{{ ssl_file_dir_final }}/schema_registry.key if ssl_mutual_auth_enabled | default(false) else omit }}"
-                body_format: json
-                body: >
-                  {
-                    "clusters": {
-                      "kafka-cluster": "{{kafka_cluster_id}}",
-                      "schema-registry-cluster": "{{schema_registry_final_properties['schema.registry.group.id']}}"
-                    }
-                  }
-                status_code: 204
-              register: sr_cluster_admin_result
-              until: sr_cluster_admin_result.status == 204
-              retries: "{{ mds_retries | default(3) }}"
-              delay: 5
-              when: 
-                - rbac_enabled | default(false)
-                - mds_bootstrap_server_urls is defined
-                - authorization_token is defined
-                - kafka_cluster_id is defined
-                - schema_registry_final_properties is defined
-                - schema_registry_basic_users_final.admin.principal is defined
-
-            - name: Grant Schema Registry user ResourceOwner role for automation topics
-              uri:
-                url: "{{mds_bootstrap_server_urls.split(',')[0]}}/security/1.0/principals/User:{{schema_registry_basic_users_final.admin.principal}}/roles/ResourceOwner/bindings"
-                method: POST
-                validate_certs: false
-                headers:
-                  Content-Type: application/json
-                  Authorization: "Bearer {{ authorization_token }}"
-                client_cert: "{{ ssl_file_dir_final }}/schema_registry.crt if ssl_mutual_auth_enabled | default(false) else omit }}"
-                client_key: "{{ ssl_file_dir_final }}/schema_registry.key if ssl_mutual_auth_enabled | default(false) else omit }}"
-                body_format: json
-                body: >
-                  {
-                    "scope": {
-                      "clusters": {
-                        "kafka-cluster": "{{kafka_cluster_id}}"
-                      }
-                    },
-                    "resourcePatterns": [
-                      {
-                        "resourceType":"Group",
-                        "name": "{{schema_registry_final_properties['schema.registry.group.id']}}",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "{{schema_registry_final_properties['kafkastore.topic']}}",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "{{schema_registry_final_properties['confluent.license.topic']}}",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_exporter_configs",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_exporter_states",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_importer_configs",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_importer_states",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_dek_registry_keys",
-                        "patternType":"LITERAL"
-                      },
-                      {
-                        "resourceType":"Topic",
-                        "name": "_dek_registry_keks",
-                        "patternType":"LITERAL"
-                      }
-                    ]
-                  }
-                status_code: 204
-              register: sr_mds_result
-              until: sr_mds_result.status == 204
-              retries: "{{ mds_retries | default(3) }}"
-              delay: 5
-              when: 
-                - rbac_enabled | default(false)
-                - mds_bootstrap_server_urls is defined
-                - authorization_token is defined
-                - kafka_cluster_id is defined
-                - schema_registry_final_properties is defined
-                - schema_registry_basic_users_final.admin.principal is defined
-
-            - name: Log RBAC role binding completion
-              debug:
-                msg: |
-                  RBAC Role Bindings for Schema Registry Automation completed:
-                  - ClusterAdmin role granted for exporter endpoint access
-                  - ResourceOwner role granted for automation topics
-                  - Automation topics: _exporter_configs, _exporter_states, _importer_configs, _importer_states, _dek_registry_keys, _dek_registry_keks
-              when: 
-                - rbac_enabled | default(false)
-                - sr_cluster_admin_result is defined
-                - sr_mds_result is defined
-
-          when: rbac_enabled | default(false)
-          tags:
-            - always
-            - rbac
+        - name: Configure RBAC for Schema Registry
+          include_tasks: ../roles/schema_registry/tasks/configure_rbac.yml
+          when: rbac_enabled|bool
       tags:
         - always  # This configuration is required for all automation features
 
@@ -439,12 +308,6 @@
         - switchover_to_cc
       run_once: true
 
-    # PRE-CHECKS: Validate configuration before making any changes
-    - name: Set exporter name for operations
-      set_fact:
-        exporter_name: "{{ sr_switch_over_exporter_name }}"
-
-
     # Context validation for schema importers - handles both scenarios:
     # 1. When USM remote_context is defined: qualified subjects must match the context
     # 2. When USM remote_context is NOT defined: only unqualified subjects allowed
@@ -463,35 +326,6 @@
             that:
               - schema_importers[0].config.schema_registry_endpoint == unified_stream_manager.schema_registry_endpoint
             fail_msg: "Pre-check failed: Importer and USM remote endpoints must match"
-
-        - name: Extract contexts from schema importer qualified subjects
-          set_fact:
-            importer_qualified_contexts: "{{ (schema_importers[0].subjects | default([])) | select('match', '^:\\.([^:]+):.*$') | map('regex_replace', '^:\\.([^:]+):.*$', '\\1') | list | unique }}"
-          when:
-            - schema_importers is defined
-            - schema_importers | length > 0
-            - schema_importers[0].subjects is defined
-
-        - name: Validate no qualified subjects when USM context not configured
-          assert:
-            that:
-              - importer_qualified_contexts | length == 0
-            fail_msg: "Schema importer cannot use qualified subjects when USM remote_context is not configured. Remove context prefixes: {{ schema_importers[0].subjects | select('match', '^:\\.([^:]+):.*$') | list | join(', ') }}"
-          when:
-            - unified_stream_manager is defined
-            - unified_stream_manager.remote_context is not defined or unified_stream_manager.remote_context == ''
-            - importer_qualified_contexts is defined
-
-        - name: Validate qualified subjects match USM remote context
-          assert:
-            that:
-              - importer_qualified_contexts | length == 0 and not (unified_stream_manager.remote_context is defined and unified_stream_manager.remote_context != '') or (importer_qualified_contexts | length == 1 and importer_qualified_contexts[0] == unified_stream_manager.remote_context)
-            fail_msg: "Schema importer qualified subjects must match USM remote_context '{{ unified_stream_manager.remote_context }}'. Found contexts: {{ importer_qualified_contexts | join(', ') }}"
-          when:
-            - unified_stream_manager is defined
-            - unified_stream_manager.remote_context is defined
-            - unified_stream_manager.remote_context != ''
-            - importer_qualified_contexts is defined
       tags:
         - never
         - forward_to_cc
@@ -525,37 +359,67 @@
             request_retries: 5
             request_delay: 2
 
-        - name: "Switch CC SR to READWRITE mode (WRITE DOWNTIME ENDS)"
-          uri:
-            url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode"
-            method: PUT
-            body_format: json
-            body:
-              mode: "READWRITE"
-            status_code: 200
-            validate_certs: false
-            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
-            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
-          register: cc_sr_readwrite_mode
-          when: importer_qualified_contexts is not defined or importer_qualified_contexts | length == 0
+        # Special handling for ":*:" pattern - fetch all contexts and process them
+        - name: Handle ":*:" pattern by fetching all contexts
+          block:
+            - name: Fetch all contexts from Schema Registry
+              uri:
+                url: "{{ unified_stream_manager.schema_registry_endpoint }}/contexts"
+                method: GET
+                status_code: 200
+                validate_certs: false
+                user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
+                password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
+              register: all_contexts_result
 
-        - name: Verify CC SR is in READWRITE mode
-          uri:
-            url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode"
-            method: GET
-            status_code: 200
-            validate_certs: false
-            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
-            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
-          register: cc_sr_mode_check
-          until: cc_sr_mode_check.json.mode == 'READWRITE'
-          retries: 5
-          delay: 2
-          when: importer_qualified_contexts is not defined or importer_qualified_contexts | length == 0
+            - name: Create context patterns by appending colons
+              set_fact:
+                context_patterns: >-
+                  {{
+                    all_contexts_result.json | map('regex_replace', '^', ':') | map('regex_replace', '$', ':') | list
+                  }}
 
-        - name: Switch CC SR contexts for each context to READWRITE mode
+            - name: Set mode at context level for context patterns
+              uri:
+                url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode/{{ item }}"
+                method: PUT
+                body_format: json
+                body:
+                  mode: "READWRITE"
+                status_code: 200
+                validate_certs: false
+                user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
+                password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
+              register: context_patterns_mode_results
+              loop: "{{ context_patterns }}"
+              loop_control:
+                label: "Setting context mode for {{ item }}"
+              when:
+                - context_patterns is defined
+                - context_patterns | length > 0
+          when:
+            - schema_importers[0].subjects is defined
+            - schema_importers[0].subjects | length > 0
+            - "':*:' in schema_importers[0].subjects"
+
+        # Process all subjects: normalize, set context mode, fetch subjects, set subject mode
+        # Step 1: Normalize all subject patterns (excluding context_patterns to avoid duplication)
+        - name: Normalize subject patterns
+          set_fact:
+            normalized_subjects: >-
+              {{
+                (schema_importers[0].subjects | default([]) |
+                map('regex_replace', '^(:.+:)\*$', '\1') |
+                list) | unique | list
+              }}
+          when:
+            - schema_importers[0].subjects is defined
+            - schema_importers[0].subjects | length > 0
+
+        # Step 2: Set mode at context level for all normalized subjects
+        - name: Switch mode at context level
           uri:
-            url: "{{ unified_stream_manager.schema_registry_endpoint }}/contexts/{{ item }}/mode"
+            url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode/{{ item }}"
             method: PUT
             body_format: json
             body:
@@ -565,10 +429,63 @@
             user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
             password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
           register: context_mode_results
-          loop: "{{ importer_qualified_contexts | default([]) }}"
+          loop: "{{ normalized_subjects | default([]) }}"
           loop_control:
-            label: "Context {{ item }}"
-          when: importer_qualified_contexts | length > 0
+            label: "Setting context mode for {{ item }}"
+          when:
+            - normalized_subjects is defined
+            - normalized_subjects | length > 0
+
+        # Step 3: Fetch all subjects within each context
+        - name: Fetch all subjects for each context
+          uri:
+            url: "{{ unified_stream_manager.schema_registry_endpoint }}/subjects?subjectPrefix={{ item }}&deleted=true"
+            method: GET
+            status_code: 200
+            validate_certs: false
+            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
+            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
+          register: context_subjects_results
+          loop: "{{ (normalized_subjects | default([])) | unique | list }}"
+          loop_control:
+            label: "Fetching subjects for {{ item }}"
+          when:
+            - (normalized_subjects is defined and normalized_subjects | length > 0)
+
+        # Step 4: Deduplicate subjects before setting mode
+        - name: Collect and deduplicate all subjects
+          set_fact:
+            all_subjects: >-
+              {{
+                context_subjects_results.results |
+                map(attribute='json') |
+                flatten |
+                unique |
+                list
+              }}
+          when:
+            - context_subjects_results is defined
+            - context_subjects_results.results is defined
+
+        # Step 5: Set mode at subject level for all deduplicated subjects
+        - name: Switch mode at subject level for all subjects
+          uri:
+            url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode/{{ item }}"
+            method: PUT
+            body_format: json
+            body:
+              mode: "READWRITE"
+            status_code: 200
+            validate_certs: false
+            user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
+            password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
+          register: subject_mode_results
+          loop: "{{ all_subjects | default([]) }}"
+          loop_control:
+            label: "Setting subject mode for {{ item }}"
+          when:
+            - all_subjects is defined
+            - all_subjects | length > 0
 
       rescue:
         - name: Handle Switchover failure

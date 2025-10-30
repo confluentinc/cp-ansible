@@ -165,10 +165,49 @@ platforms:
       - "9022:9022"
     networks:
       - name: confluent
+  - name: usm-agent1
+    hostname: usm-agent1.confluent
+    groups:
+      - usm_agent
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ccloud-mock-service
+    hostname: ccloud-mock-service.confluent
+    groups:
+      - ccloud_mock
+    image: usmagent-mock-ccloud:latest
+    pre_build_image: true
+    command: ""
+    published_ports:
+      - "8081:8081"
+    networks:
+      - name: confluent
+    env:
+      MOCK_SERVER_HOST: "0.0.0.0"
+      MOCK_SERVER_PORT: "8081"
+      MOCK_SERVER_USE_TLS: "false"
+      MOCK_SERVER_REQUIRE_BASIC_AUTH: "true"
+      MOCK_SERVER_USERNAME: "ccloud-user"
+      MOCK_SERVER_PASSWORD: "ccloud-secret"
+      MOCK_SERVER_REQUIRE_MTLS: "false"
 provisioner:
   playbooks:
     converge: ../collections_converge.yml
   inventory:
+    host_vars:
+      ccloud-mock-service:
+        ansible_connection: local
+        gather_facts: false
+      usm-agent1:
+        usm_agent_custom_properties:
+          confluent.usm-agent.ccloud.ssl.enabled: "false"
+        usm_agent_health_check_enabled: false
     group_vars:
       all:
         control_center_next_gen_port: 9022
@@ -205,14 +244,6 @@ provisioner:
         oauth_issuer_url: https://oauth1:8443/realms/cp-ansible-realm
         oauth_jwks_uri: https://oauth1:8443/realms/cp-ansible-realm/protocol/openid-connect/certs
         oauth_expected_audience: Confluent,account,api://default
-
-        confluent_common_repository_baseurl: "https://staging-confluent-packages-654654529379-us-west-2.s3.us-west-2.amazonaws.com"
-        confluent_package_version: "8.0.0"
-        confluent_control_center_next_gen_independent_repository_baseurl: "https://dev-control-center-packages-654654529379-us-west-2.s3.us-west-2.amazonaws.com/confluent-control-center-next-gen/master/99"
-        confluent_control_center_next_gen_package_version: "2.2.0-0"
-        confluent_control_center_next_gen_full_package_version: "2.2.0-0.1.0"
-        confluent_control_center_next_gen_package_redhat_suffix: "-2.2.0-0.1.0"
-        confluent_control_center_next_gen_package_debian_suffix: "=2.2.0~0-1"
 
         ksql_oauth_client_assertion_enabled: true
         ksql_oauth_client_assertion_issuer: ksql
@@ -292,3 +323,30 @@ provisioner:
         sso_client_id: ${OKTA_CLIENT:-user}
         sso_client_password: ${OKTA_PASSWORD:-pass}
         sso_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/ssocertfile.pem"
+
+        # USM Agent Configuration - CCloud Mock Server
+        ccloud_endpoint: http://ccloud-mock-service:8081
+        ccloud_environment_id: env-mock-123
+        ccloud_credential:
+          username: ccloud-user
+          password: ccloud-secret
+
+        # USM Agent Authentication Configuration - BASIC AUTHENTICATION
+        usm_agent_basic_auth_enabled: true
+        usm_agent_ssl_enabled: false
+        usm_agent_ssl_mutual_auth_enabled: false
+        # USM Agent Basic Users Configuration
+        usm_agent_basic_users:
+          admin:
+            principal: admin
+            password: admin-secret
+          user1:
+            principal: user1
+            password: user1-secret
+          user2:
+            principal: user2
+            password: user2-secret
+
+        # Client credentials for USM Agent (required for basic auth)
+        usm_agent_client_username: "user1"
+        usm_agent_client_password: "user1-secret"
