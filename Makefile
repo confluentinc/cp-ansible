@@ -9,9 +9,6 @@ send-mk-c:
 print-meta:
 	cat /var/lib/controller/data/meta.properties
 
-edit-meta:
-	vim /var/lib/controller/data/meta.properties
-
 # topic
 create-topic:
 	kafka-topics --create --topic test-topic --bootstrap-server kafka-broker1:9092,kafka-broker2:9092,kafka-broker3:9092 --command-config /etc/kafka/client.properties --replication-factor 1 --partitions 3
