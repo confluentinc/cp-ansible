@@ -25,6 +25,18 @@
     - package
     - cp_package
 
+- name: Validate KSQL Jolokia Access Control Configuration
+  include_tasks: ../common/tasks/component_validations.yml
+  vars:
+    component_name: "KSQL"
+    component_jolokia_enabled: "{{ ksql_jolokia_enabled }}"
+    component_jolokia_access_control_enabled: "{{ ksql_jolokia_access_control_enabled }}"
+    component_jolokia_access_control_custom_file_enabled: "{{ ksql_jolokia_access_control_custom_file_enabled }}"
+    component_jolokia_access_control_file_src_path: "{{ ksql_jolokia_access_control_file_src_path }}"
+  tags:
+    - validate
+    - validate_jolokia
+
 - name: Install the Ksql Packages
   yum:
     name: "{{ ksql_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
@@ -294,6 +306,20 @@
   tags:
     - configuration
 
+- name: Copy KSQL Jolokia Access Control File
+  copy:
+    src: "{{ ksql_jolokia_access_control_file_src_path }}"
+    dest: "{{ ksql_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ ksql_user }}"
+    group: "{{ ksql_group }}"
+  when:
+    - ksql_jolokia_enabled|bool
+    - ksql_jolokia_access_control_enabled|bool
+  notify: restart ksql
+  tags:
+    - configuration
+
 - name: Create RocksDB Directory
   file:
     path: "{{ksql_rocksdb_path}}"
@@ -355,6 +381,7 @@
     mode: '750'
   tags:
     - systemd
+    - privileged
 
 - name: Write Service Overrides
   template:
@@ -367,9 +394,11 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - systemd
+    - privileged
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
+  changed_when: false
   notify: restart ksql
   when: certs_updated|bool
 
@@ -413,6 +442,9 @@
       - control_center_parallel
       - control_center_serial
       - schema_registry
+      - kafka_controller
+      - kafka_controller_parallel
+      - kafka_controller_serial
   set_fact:
     parent_ksql_cluster_group: "{{ (group_names | difference(keywords))[0] | default('ksql') }}"
     parent_ksql_cluster_id: "{{ ksql_final_properties['ksql.service.id'] }}"

@@ -30,6 +30,16 @@
     - repository_configuration == 'confluent'
     - installation_method == "package"
 
+- name: Ensure Custom Apt Repo does not Exists when repository_configuration is Confluent
+  file:
+    state: absent
+    path: /etc/apt/sources.list.d/custom_confluent.list
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
+  notify:
+    - apt-get update
+
 - name: Add Confluent Apt Repo
   apt_repository:
     repo: "{{confluent_common_repository_debian_repository}}"
@@ -62,10 +72,25 @@
     - repository_configuration == 'confluent'
     - installation_method == "package"
 
+- name: Ensure Confluent Apt Repo does not Exists when repository_configuration is Custom
+  apt_repository:
+    repo: "{{confluent_common_repository_debian_repository}}"
+    state: absent
+  when:
+    - repository_configuration == 'custom'
+
+- name: Ensure Confluent Clients Apt Repo does not Exists when repository_configuration is Custom
+  apt_repository:
+    repo: "{{confluent_common_repository_debian_clients_repository}}"
+    state: absent
+  when:
+    - repository_configuration == 'custom'
+
 - name: Add Custom Apt Repo
   copy:
     src: "{{custom_apt_repo_filepath}}"
     dest: /etc/apt/sources.list.d/custom_confluent.list
+    mode: '644'
   register: apt_custom_add_result
   until: apt_custom_add_result is success
   retries: 5
@@ -81,6 +106,9 @@
     path: /usr/share/man/man1
     state: directory
     mode: '755'
+
+- name: Custom Java Install
+  include_tasks: custom_java_install.yml
 
 - name: Add open JDK repo
   apt_repository:
@@ -109,6 +137,16 @@
   apt:
     name: openssl
   tags: package
+
+- name: Get Java Version
+  command: java -version
+  register: version_output
+  check_mode: false
+  changed_when: false
+
+- name: Print Java Version
+  debug:
+    msg: "Current Java Version is: {{version_output.stderr_lines[0]}}"
 
 - name: Install pip
   apt:

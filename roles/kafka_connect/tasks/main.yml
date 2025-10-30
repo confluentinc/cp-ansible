@@ -25,6 +25,18 @@
     - package
     - cp_package
 
+- name: Validate Kafka Connect Jolokia Access Control Configuration
+  include_tasks: ../common/tasks/component_validations.yml
+  vars:
+    component_name: "Kafka Connect"
+    component_jolokia_enabled: "{{ kafka_connect_jolokia_enabled }}"
+    component_jolokia_access_control_enabled: "{{ kafka_connect_jolokia_access_control_enabled }}"
+    component_jolokia_access_control_custom_file_enabled: "{{ kafka_connect_jolokia_access_control_custom_file_enabled }}"
+    component_jolokia_access_control_file_src_path: "{{ kafka_connect_jolokia_access_control_file_src_path }}"
+  tags:
+    - validate
+    - validate_jolokia
+
 - name: Install the Kafka Connect Packages
   yum:
     name: "{{ kafka_connect_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
@@ -94,6 +106,7 @@
   when: installation_method == "archive"
   tags:
     - systemd
+    - privileged
 
 # Non-Archive File deployments need to create SystemD service units when the user changes the service name
 - name: Copy Kafka Connect Service from default install to system
@@ -104,6 +117,8 @@
     mode: '644'
     force: true
   when: installation_method != "archive" and kafka_connect_default_service_name != kafka_connect_service_name
+  tags:
+    - privileged
 
 - include_role:
     name: ssl
@@ -294,6 +309,20 @@
   tags:
     - configuration
 
+- name: Copy Kafka Connect Jolokia Access Control File
+  copy:
+    src: "{{ kafka_connect_jolokia_access_control_file_src_path }}"
+    dest: "{{ kafka_connect_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_connect_user }}"
+    group: "{{ kafka_connect_group }}"
+  when:
+    - kafka_connect_jolokia_enabled|bool
+    - kafka_connect_jolokia_access_control_enabled|bool
+  notify: restart connect distributed
+  tags:
+    - configuration
+
 - name: Deploy JMX Exporter Config File
   copy:
     src: "{{kafka_connect_jmxexporter_config_source_path}}"
@@ -334,6 +363,7 @@
     mode: '750'
   tags:
     - systemd
+    - privileged
 
 - name: Write Service Overrides
   template:
@@ -346,10 +376,12 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - systemd
+    - privileged
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
   notify: restart connect distributed
+  changed_when: false
   when: certs_updated|bool
 
 - meta: flush_handlers
@@ -393,6 +425,9 @@
       - ksql_parallel
       - ksql_serial
       - schema_registry
+      - kafka_controller
+      - kafka_controller_parallel
+      - kafka_controller_serial
   set_fact:
     parent_kafka_connect_cluster_group: "{{ (group_names | difference(keywords))[0] | default('kafka_connect') }}"
     parent_kafka_connect_cluster_id: "{{ kafka_connect_final_properties['group.id'] }}"

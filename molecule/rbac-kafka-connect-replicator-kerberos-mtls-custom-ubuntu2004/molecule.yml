@@ -34,13 +34,13 @@ platforms:
     networks:
       - name: confluent
   # MDS Zookeeper and Kafka
-  - name: mds-zookeeper1
-    hostname: mds-zookeeper1.confluent
+  - name: mds-${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: mds-${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
       - mds
     image: geerlingguy/docker-ubuntu2004-ansible
-    dockerfile: ../Dockerfile-ubuntu2004.j2
+    dockerfile: ../Dockerfile-ubuntu2004-java11.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -53,7 +53,7 @@ platforms:
       - kafka_broker
       - mds
     image: geerlingguy/docker-ubuntu2004-ansible
-    dockerfile: ../Dockerfile-ubuntu2004.j2
+    dockerfile: ../Dockerfile-ubuntu2004-java11.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -66,7 +66,7 @@ platforms:
       - kafka_broker
       - mds
     image: geerlingguy/docker-ubuntu2004-ansible
-    dockerfile: ../Dockerfile-ubuntu2004.j2
+    dockerfile: ../Dockerfile-ubuntu2004-java11.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -79,7 +79,7 @@ platforms:
       - kafka_broker
       - mds
     image: geerlingguy/docker-ubuntu2004-ansible
-    dockerfile: ../Dockerfile-ubuntu2004.j2
+    dockerfile: ../Dockerfile-ubuntu2004-java11.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -87,13 +87,13 @@ platforms:
     networks:
       - name: confluent
   # Cluster 2 goups, groupnames will be changed during converge phase
-  - name: zookeeper1
-    hostname: zookeeper1.confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper2
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}2
       - cluster2
     image: geerlingguy/docker-ubuntu2004-ansible
-    dockerfile: ../Dockerfile-ubuntu2004.j2
+    dockerfile: ../Dockerfile-ubuntu2004-java11.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -106,7 +106,7 @@ platforms:
       - kafka_broker2
       - cluster2
     image: geerlingguy/docker-ubuntu2004-ansible
-    dockerfile: ../Dockerfile-ubuntu2004.j2
+    dockerfile: ../Dockerfile-ubuntu2004-java11.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -119,7 +119,7 @@ platforms:
       - kafka_broker2
       - cluster2
     image: geerlingguy/docker-ubuntu2004-ansible
-    dockerfile: ../Dockerfile-ubuntu2004.j2
+    dockerfile: ../Dockerfile-ubuntu2004-java11.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -132,7 +132,7 @@ platforms:
       - kafka_broker2
       - cluster2
     image: geerlingguy/docker-ubuntu2004-ansible
-    dockerfile: ../Dockerfile-ubuntu2004.j2
+    dockerfile: ../Dockerfile-ubuntu2004-java11.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -145,7 +145,7 @@ platforms:
       - kafka_connect_replicator2
       - cluster2
     image: geerlingguy/docker-ubuntu2004-ansible
-    dockerfile: ../Dockerfile-ubuntu2004.j2
+    dockerfile: ../Dockerfile-ubuntu2004-java11.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -160,8 +160,15 @@ provisioner:
       # Shared properties among mds cluster and cluster2 groups (as well as kerberos and ldap)
       all:
         scenario_name: rbac-kafka-connect-replicator-kerberos-mtls-custom-ubuntu2004
+        ubuntu_java_package_name: openjdk-11-jdk
 
         rbac_enabled: true
+
+        rbac_super_users:
+          - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker
+          - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_controller
+          - User:CN=kafka_controller,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
+          - User:CN=kafka_broker,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
 
         create_mds_certs: false
         token_services_public_pem_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/public.pem"
@@ -178,11 +185,15 @@ provisioner:
         kafka_broker_ldap_user: kafka_broker
         kafka_broker_ldap_password: password
 
+        kafka_controller_ldap_user: kafka_controller
+        kafka_controller_ldap_password: password
+
         kafka_connect_replicator_ldap_user: replicator
         kafka_connect_replicator_ldap_password: password
 
         rbac_component_additional_system_admins:
           - user1
+          - User:user2
 
         kerberos_kafka_broker_primary: kafka
         kerberos:
@@ -190,10 +201,14 @@ provisioner:
           kdc_hostname: mds-kerberos1
           admin_hostname: mds-kerberos1
 
-        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
         kafka_broker_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
+
+        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
+
+        kafka_controller_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{ansible_host}}.confluent@{{kerberos.realm | upper}}"
+        kafka_controller_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_controller-{{ansible_host}}.keytab"
 
       mds:
         ssl_enabled: false
@@ -348,6 +363,10 @@ provisioner:
             password: "{{kafka_connect_replicator_ldap_password}}"
             uid: 9991
             guid: 91
+          - username: "{{kafka_controller_ldap_user}}"
+            password: "{{kafka_controller_ldap_password}}"
+            uid: 9990
+            guid: 90
 
       kerberos_server:
         realm_name: "{{ kerberos.realm | upper }}"
@@ -357,6 +376,8 @@ provisioner:
         kerberos_principals:
           - principal: "zookeeper/mds-zookeeper1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/zookeeper-mds-zookeeper1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/mds-controller1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-mds-controller1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-mds-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/mds-kafka-broker2.confluent@{{kerberos.realm | upper}}"
@@ -365,6 +386,8 @@ provisioner:
             keytab_path: "keytabs/kafka_broker-mds-kafka-broker3.keytab"
           - principal: "zookeeper/zookeeper1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
+          - principal: "{{kerberos_kafka_broker_primary}}/controller1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: "keytabs/kafka_controller-controller1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker2.confluent@{{kerberos.realm | upper}}"

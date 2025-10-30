@@ -25,6 +25,18 @@
     - package
     - cp_package
 
+- name: Validate Zookeeper Jolokia Access Control Configuration
+  include_tasks: ../common/tasks/component_validations.yml
+  vars:
+    component_name: "Zookeeper"
+    component_jolokia_enabled: "{{ zookeeper_jolokia_enabled }}"
+    component_jolokia_access_control_enabled: "{{ zookeeper_jolokia_access_control_enabled }}"
+    component_jolokia_access_control_custom_file_enabled: "{{ zookeeper_jolokia_access_control_custom_file_enabled }}"
+    component_jolokia_access_control_file_src_path: "{{ zookeeper_jolokia_access_control_file_src_path }}"
+  tags:
+    - validate
+    - validate_jolokia
+
 # Install Packages
 - name: Install the Zookeeper Packages
   yum:
@@ -298,6 +310,20 @@
   tags:
     - configuration
 
+- name: Copy Zookeeper Jolokia Access Control File
+  copy:
+    src: "{{ zookeeper_jolokia_access_control_file_src_path }}"
+    dest: "{{ zookeeper_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ zookeeper_user }}"
+    group: "{{ zookeeper_group }}"
+  when:
+    - zookeeper_jolokia_enabled|bool
+    - zookeeper_jolokia_access_control_enabled|bool
+  notify: restart zookeeper
+  tags:
+    - configuration
+
 - name: Create Zookeeper Jaas config
   template:
     src: zookeeper_jaas.conf.j2
@@ -331,6 +357,7 @@
     mode: '750'
   tags:
     - systemd
+    - privileged
 
 - name: Write Service Overrides
   template:
@@ -343,11 +370,13 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - systemd
+    - privileged
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
   notify: restart zookeeper
   when: certs_updated|bool
+  changed_when: false
 
 - meta: flush_handlers
 

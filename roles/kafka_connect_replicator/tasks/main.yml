@@ -25,6 +25,18 @@
     - package
     - cp_package
 
+- name: Validate Kafka Connect Replicator Jolokia Access Control Configuration
+  include_tasks: ../common/tasks/component_validations.yml
+  vars:
+    component_name: "Kafka Connect Replicator"
+    component_jolokia_enabled: "{{ kafka_connect_replicator_jolokia_enabled }}"
+    component_jolokia_access_control_enabled: "{{ kafka_connect_replicator_jolokia_access_control_enabled }}"
+    component_jolokia_access_control_custom_file_enabled: "{{ kafka_connect_replicator_jolokia_access_control_custom_file_enabled }}"
+    component_jolokia_access_control_file_src_path: "{{ kafka_connect_replicator_jolokia_access_control_file_src_path }}"
+  tags:
+    - validate
+    - validate_jolokia
+
 - name: Install the Kafka Connect Replicator Packages
   yum:
     name: "{{ kafka_connect_replicator_packages | product([confluent_package_redhat_suffix]) | map('join') | list }}"
@@ -304,6 +316,20 @@
   tags:
     - configuration
 
+- name: Copy Kafka Connect Replicator Jolokia Access Control File
+  copy:
+    src: "{{ kafka_connect_replicator_jolokia_access_control_file_src_path }}"
+    dest: "{{ kafka_connect_replicator_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_connect_replicator_user }}"
+    group: "{{ kafka_connect_replicator_group }}"
+  when:
+    - kafka_connect_replicator_jolokia_enabled|bool
+    - kafka_connect_replicator_jolokia_access_control_enabled|bool
+  notify: Restart Kafka Connect Replicator
+  tags:
+    - configuration
+
 - name: Create Kafka Connect Replicator Config
   template:
     src: kafka-connect-replicator.properties.j2
@@ -383,6 +409,7 @@
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
   notify: Restart Kafka Connect Replicator
+  changed_when: false
   when: certs_updated|bool
 
 - meta: flush_handlers

@@ -2,7 +2,7 @@
 # Custom filters used in this file are defined in plugins/filter/filters.py
 
 ### Version of Confluent Platform to install
-confluent_package_version: 7.2.15
+confluent_package_version: 7.4.12
 
 confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
@@ -46,6 +46,45 @@ jolokia_user: admin
 ### Password for Jolokia Agent when using Basic Auth
 jolokia_password: password
 
+### Boolean to enable Jolokia access control across all components
+jolokia_access_control_enabled: false
+
+### Boolean to use custom Jolokia access control file. Must be set to true or false when Jolokia access control is enabled.
+jolokia_access_control_custom_file_enabled: false
+
+### Full path on Ansible Controller to custom Jolokia access control XML file. Required when jolokia_access_control_custom_file_enabled is true
+jolokia_access_control_file_src_path: ""
+
+### Component-specific custom file enabled flags (must be defined before src_path variables)
+zookeeper_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
+kafka_broker_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
+schema_registry_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
+kafka_rest_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
+kafka_connect_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
+ksql_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
+kafka_connect_replicator_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
+
+### Path to Jolokia access control XML file for Zookeeper (on control node)
+zookeeper_jolokia_access_control_file_src_path: "{{ '' if zookeeper_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+### Path to Jolokia access control XML file for Kafka Broker (on control node)
+kafka_broker_jolokia_access_control_file_src_path: "{{ '' if kafka_broker_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+### Path to Jolokia access control XML file for Schema Registry (on control node)
+schema_registry_jolokia_access_control_file_src_path: "{{ '' if schema_registry_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+### Path to Jolokia access control XML file for Kafka REST (on control node)
+kafka_rest_jolokia_access_control_file_src_path: "{{ '' if kafka_rest_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+### Path to Jolokia access control XML file for Kafka Connect (on control node)
+kafka_connect_jolokia_access_control_file_src_path: "{{ '' if kafka_connect_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+### Path to Jolokia access control XML file for ksqlDB (on control node)
+ksql_jolokia_access_control_file_src_path: "{{ '' if ksql_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+### Path to Jolokia access control XML file for Kafka Connect Replicator (on control node)
+kafka_connect_replicator_jolokia_access_control_file_src_path: "{{ '' if kafka_connect_replicator_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
 ### To copy from Ansible control host or download
 jmxexporter_url_remote: true
 
@@ -58,7 +97,7 @@ jmxexporter_jar_path: /opt/prometheus/jmx_prometheus_javaagent.jar
 ### Boolean to force update of Prometheus Exporter Agent Jar (must be set to true if jmxexporter_jar_path already exists)
 jmxexporter_jar_url_force: false
 
-### Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
+### Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true and use Java 8 or 11. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true.
 fips_enabled: false
 
 ### Boolean to configure ZK, Kafka Broker, Kafka Connect, and ksqlDB's logging with the RollingFileAppender and log cleanup functionality. Not necessary for other components.
@@ -79,7 +118,7 @@ logredactor_rule_url: ""
 ### If present, it's used to specify a time in ms for how often the file system or URL of the policy rules will be checked for changes. Default is 0 and it means that the policy rules will be checked only at startup. Can be specified as logredactor_policy_refresh_interval: 7000
 logredactor_policy_refresh_interval: 0
 
-### Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, keberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary
+### Boolean to configure Kerberos krb5.conf file, must also set kerberos.realm, kerberos.kdc_hostname, kerberos.admin_hostname, where kerberos is a dictionary. Optional variables: kerberos.kdc_port (default: 88), kerberos.admin_port (default: 749)
 kerberos_configure: true
 
 ### Custom path for the location of kerberos client configuration file, works with any value of kerberos_configure
@@ -88,6 +127,8 @@ kerberos_client_config_file_dest: /etc/krb5.conf
 # Deprecated variable now that primary can be pulled from kafka_broker_kerberos_principal
 kerberos_kafka_broker_primary: "{{ (hostvars[ groups['kafka_broker'][0] | default('kafka') ] | default({})) ['kafka_broker_kerberos_principal'] | default('kafka/host@EXAMPLE>COM') | regex_replace('/.*') }}"
 
+# primary can be pulled from kafka_controller_kerberos_principal
+kerberos_kafka_controller_primary: "{{ kerberos_kafka_broker_primary }}"
 
 # TODO document the rest of the kerberos variables, also admin_hostname should default to kdc_hostname
 
@@ -98,6 +139,9 @@ required_disk_space_mb: 1000
 
 ### Variable to define the minimum amount of memory in MB required to run zookeeper.  Calculated as default heap size plus 1GB for OS.
 required_total_memory_mb_zookeeper: 2000
+
+### Variable to define the minimum amount of memory in MB required to run kafka controller. Calculated as default heap size plus 1GB for OS.
+required_total_memory_mb_kafka_controller: 7000
 
 ### Variable to define the minimum amount of memory in MB required to run kafka Broker. Calculated as default heap size plus 1GB for OS.
 required_total_memory_mb_kafka_broker: 7000
@@ -130,6 +174,9 @@ health_checks_enabled: true
 zookeeper_health_checks_enabled: "{{health_checks_enabled}}"
 
 ### Boolean to enable health checks on Kafka
+kafka_controller_health_checks_enabled: "{{health_checks_enabled}}"
+
+### Boolean to enable health checks on Kafka
 kafka_broker_health_checks_enabled: "{{health_checks_enabled}}"
 
 ### Boolean to enable health checks on Schema Registry
@@ -157,9 +204,6 @@ monitoring_interceptors_enabled: "{{ 'control_center' in groups }}"
 ### The method of installation. Valid values are "package" or "archive". If "archive" is selected then services will not be installed via the use of yum or apt, but will instead be installed via expanding the target .tar.gz file from the Confluent archive into the path defined by `archive_destination_path`. Configuration files are also kept in this directory structure instead of `/etc`. SystemD service units are copied from the ardhive for each target service and overrides are created pointing at the new paths. The "package" installation method is the default behavior that utilizes yum/apt.
 installation_method: "package"
 
-## <deprecated, should be removed> The Scala version of the Confluent Platform archive to download. Possible values: 2.11, 2.12, etc. If you don't have a specific version requirement then use the default.
-confluent_archive_scala_version: 2.12
-
 ### The path the downloaded archive is expanded into. Using the default with a `confluent_package_version` of *5.5.1* results in the following installation path `/opt/confluent/confluent-5.5.1/` that contains directories such as `bin` and `share`, but may be overridden usinf the `binary_base_path` property.
 archive_destination_path: "/opt/confluent"
 
@@ -170,7 +214,6 @@ archive_owner: ""
 
 ### Group Owner of the downloaded archive. Not mandatory to set.
 archive_group: ""
-
 
 ### If the installation_method is 'archive' then this will be the base path for the configuration files, otherwise configuration files are in the default /etc locations. For example, configuration files may be placed in `/opt/confluent/etc` using this variable.
 archive_config_base_path: "{{ archive_destination_path }}"
@@ -191,7 +234,7 @@ confluent_cli_base_path: /opt/confluent-cli
 confluent_cli_path: "/usr/local/bin/confluent"
 
 ### Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
-confluent_cli_version: 2.38.1
+confluent_cli_version: 3.65.0
 
 ### Recommended replication factor, defaults to 3. When splitting your cluster across 2 DCs with 4 or more Brokers, this should be increased to 4 to balance topic replicas.
 default_internal_replication_factor: 3
@@ -201,6 +244,9 @@ sasl_protocol: none
 
 ### Boolean to configure components with TLS Encryption. Also manages Java Keystore creation
 ssl_enabled: false
+
+### Set this variable to customize expiration days for certificate authority. Applies for all components of Confluent Platform.
+certificate_authority_expiration_days: 365
 
 ### Boolean to enable mTLS Authentication on all components. Configures all components to use mTLS for authentication into Kafka
 ssl_mutual_auth_enabled: false
@@ -365,6 +411,12 @@ zookeeper_jolokia_user: "{{jolokia_user}}"
 ### Password for Zookeeper's Jolokia Agent when using Basic Auth
 zookeeper_jolokia_password: "{{jolokia_password}}"
 
+### Boolean to enable Jolokia access control on Zookeeper
+zookeeper_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
+
+### Path on target nodes where Zookeeper Jolokia access control XML file will be placed
+zookeeper_jolokia_access_control_file_dest_path: "{{ zookeeper.config_file | dirname }}/jolokia-access.xml"
+
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
 zookeeper_jmxexporter_enabled: "{{jmxexporter_enabled}}"
 
@@ -377,17 +429,18 @@ zookeeper_jmxexporter_config_source_path: zookeeper.yml
 ### Destination path for Zookeeper jmx config file
 zookeeper_jmxexporter_config_path: /opt/prometheus/zookeeper.yml
 
-zookeeper_health_check_command: "{{ binary_base_path }}/bin/kafka-run-class
-{% if zookeeper_ssl_enabled|bool %}
--Dzookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
--Dzookeeper.ssl.trustStore.location={{zookeeper_truststore_path}}
--Dzookeeper.ssl.trustStore.password={{zookeeper_truststore_storepass}}
--Dzookeeper.ssl.keyStore.location={{zookeeper_keystore_path}}
--Dzookeeper.ssl.keyStore.password={{zookeeper_keystore_storepass}}
--Dzookeeper.client.secure=true
-{% endif %}
-org.apache.zookeeper.client.FourLetterWordMain {{zookeeper_health_check_host | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname) }} {{zookeeper_client_port}} srvr
-{% if zookeeper_ssl_enabled|bool %}true{% endif %}"
+zookeeper_health_check_command: >-
+  {{ binary_base_path }}/bin/kafka-run-class
+  {% if zookeeper_ssl_enabled|bool %}
+  -Dzookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+  -Dzookeeper.ssl.trustStore.location={{zookeeper_truststore_path}}
+  -Dzookeeper.ssl.trustStore.password={{zookeeper_truststore_storepass}}
+  -Dzookeeper.ssl.keyStore.location={{zookeeper_keystore_path}}
+  -Dzookeeper.ssl.keyStore.password={{zookeeper_keystore_storepass}}
+  -Dzookeeper.client.secure=true
+  {% endif %}
+  org.apache.zookeeper.client.FourLetterWordMain {{zookeeper_health_check_host | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname) }} {{zookeeper_client_port}} srvr
+  {% if zookeeper_ssl_enabled|bool %}true{% endif %}
 
 zookeeper_current_node_hostname: "{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}"
 
@@ -406,6 +459,141 @@ zookeeper_custom_properties: {}
 
 ### Boolean used for disabling of systemd service restarts when rootless install is executed
 zookeeper_skip_restarts: "{{ skip_restarts }}"
+
+#### kafka Controller variables ####
+
+### Default controller quorum voters
+kafka_controller_quorum_voters: "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{controller_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+
+### Default Kafka config prefix. Only valid to customize when installation_method: archive
+kafka_controller_config_prefix: "{{ config_prefix }}/controller"
+
+kafka_controller_listeners: "{
+  'controller': {
+    'name': 'CONTROLLER',
+    'port': {{kafka_controller_port}},
+    'ssl_enabled': {{kafka_controller_ssl_enabled|string|lower}},
+    'ssl_mutual_auth_enabled': {{kafka_controller_ssl_mutual_auth_enabled|string|lower}},
+    'sasl_protocol': '{{kafka_controller_sasl_protocol}}'
+  }
+}"
+
+### Port to expose Kraft Controller
+kafka_controller_port: 9093
+
+### Boolean to configure controller with TLS Encryption. Also manages Java Keystore creation
+kafka_controller_ssl_enabled: "{{ssl_enabled}}"
+
+### Boolean to enable mTLS Authentication on controller (Server to Server and Client to Server). Configures kafka to authenticate with mTLS.
+kafka_controller_ssl_mutual_auth_enabled: "{{ssl_mutual_auth_enabled}}"
+
+### SASL Mechanism for controller Server to Server and Server to Client Authentication. Options are plain, kerberos, none
+kafka_controller_sasl_protocol: "{{sasl_protocol}}"
+
+# Uses custom filter to create a list of all sasl_protocols, removes ['none'], and reduces to unique items
+kafka_controller_sasl_enabled_mechanisms: "{{ kafka_controller_listeners | confluent.platform.get_sasl_mechanisms(kafka_controller_sasl_protocol) | difference(['none']) | unique }}"
+
+### Set this variable to customize the Linux User that the Kafka controller Service runs with. Default user is cp-kafka.
+kafka_controller_user: "{{kafka_controller_default_user}}"
+
+### Set this variable to customize the Linux Group that the Kafka controller Service user belongs to. Default group is confluent.
+kafka_controller_group: "{{kafka_controller_default_group}}"
+
+### Set this variable to customize the directory that the Kafka controller writes log files to. Default location is /var/log/controller.
+kafka_controller_log_dir: "{{kafka_controller_default_log_dir}}"
+
+kafka_controller_packages:
+  - confluent-common
+  - confluent-rest-utils
+  - confluent-metadata-service
+  - confluent-ce-kafka-http-server
+  - confluent-kafka-rest
+  - confluent-server-rest
+  - confluent-telemetry
+  - "{{ kafka_controller_main_package }}"
+  - confluent-rebalancer
+  - confluent-security
+
+kafka_controller_truststore_path: "{{kafka_controller_bcfks_truststore_path if fips_enabled|bool else kafka_controller_pkcs12_truststore_path}}"
+kafka_controller_keystore_path: "{{kafka_controller_bcfks_keystore_path if fips_enabled|bool else kafka_controller_pkcs12_keystore_path}}"
+
+kafka_controller_bcfks_truststore_path: "{{ ssl_file_dir_final }}/kafka_controller.truststore.bcfks"
+kafka_controller_bcfks_keystore_path: "{{ ssl_file_dir_final }}/kafka_controller.keystore.bcfks"
+
+kafka_controller_pkcs12_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_controller.truststore.jks{% endif %}"
+kafka_controller_pkcs12_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/kafka_controller.keystore.jks{% endif %}"
+
+kafka_controller_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+kafka_controller_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+kafka_controller_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else kafka_controller_keystore_storepass }}"
+kafka_controller_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+kafka_controller_cert_path: "{{ ssl_file_dir_final }}/kafka_controller.crt"
+kafka_controller_key_path: "{{ ssl_file_dir_final }}/kafka_controller.key"
+kafka_controller_export_certs: "{{ssl_mutual_auth_enabled}}"
+kafka_controller_keytab_path: /etc/security/keytabs/kafka_controller.keytab
+
+### Boolean to enable Jolokia Agent installation and configuration on kafka
+kafka_controller_jolokia_enabled: "{{jolokia_enabled}}"
+
+### Port to expose kafka jolokia metrics. Beware of port collisions if colocating components on same host
+kafka_controller_jolokia_port: 7770
+
+### Boolean to enable TLS encryption on Kafka jolokia metrics
+kafka_controller_jolokia_ssl_enabled: "{{ ssl_enabled }}"
+
+### Path on Kafka host for Jolokia Configuration file
+kafka_controller_jolokia_config: "{{ (config_base_path, kafka_controller_config_prefix_path, 'kafka_jolokia.properties') | path_join }}"
+
+### Authentication Mode for Kafka's Jolokia Agent. Possible values: none, basic. If selecting basic, you must set kafka_controller_jolokia_user and kafka_controller_jolokia_password
+kafka_controller_jolokia_auth_mode: "{{jolokia_auth_mode}}"
+
+### Username for Kafka's Jolokia Agent when using Basic Auth
+kafka_controller_jolokia_user: "{{jolokia_user}}"
+
+### Password for Kafka's Jolokia Agent when using Basic Auth
+kafka_controller_jolokia_password: "{{jolokia_password}}"
+
+# TODO move these to vars, should not be customizable, do they even belong w the shared vars
+kafka_controller_jolokia_java_arg_ssl_addon: ",keystore={{kafka_controller_keystore_path}},keystorePassword={{kafka_controller_keystore_storepass}},protocol=https"
+kafka_controller_jolokia_urp_url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
+kafka_controller_jolokia_active_controller_url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_controller_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ActiveControllerCount"
+kafka_controller_erp_clusters_url: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname, True) }}:{{mds_port}}/kafka/v3/clusters"
+
+### Boolean to enable Prometheus Exporter Agent installation and configuration on kafka
+kafka_controller_jmxexporter_enabled: "{{jmxexporter_enabled}}"
+
+### Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
+kafka_controller_jmxexporter_port: 8079
+
+### Path on Ansible Controller for Kafka Broker jmx config file. Only necessary to set for custom config.
+kafka_controller_jmxexporter_config_source_path: kafka.yml.j2
+
+### Destination path for Kafka controller jmx config file
+kafka_controller_jmxexporter_config_path: /opt/prometheus/kafka.yml
+
+### Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
+kafka_controller_copy_files: []
+
+### Replication Factor for internal topics. Defaults to the minimum of the number of controllers and can be overridden via default replication factor (see default_internal_replication_factor).
+kafka_controller_default_internal_replication_factor: "{{ [ groups['kafka_controller'] | default(['localhost']) | length, default_internal_replication_factor ] | min }}"
+
+### Boolean to enable the kafka's metrics reporter. Defaults to true if Control Center in inventory. Enable if you wish to have metrics reported to a centralized monitoring cluster.
+kafka_controller_metrics_reporter_enabled: "{{ confluent_server_enabled and 'control_center' in groups }}"
+
+### Use to set custom kafka properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+kafka_controller_custom_properties: {}
+
+### Use to add custom properties to variable kafka_controller_client_properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.
+kafka_controller_custom_client_properties: {}
+
+### Boolean to enable the embedded rest proxy within Kraft Controller. Not yet supported.
+kafka_controller_rest_proxy_enabled: false
+
+### Use to register and identify your Kafka cluster in the MDS.
+kafka_controller_cluster_name: ""
+
+### Boolean used for disabling of systemd service restarts when rootless install is executed
+kafka_controller_skip_restarts: "{{ skip_restarts }}"
 
 #### Kafka Broker Variables ####
 
@@ -426,7 +614,7 @@ kafka_broker_default_listeners: "{
     'ssl_enabled': {{ssl_enabled|string|lower}},
     'ssl_mutual_auth_enabled': {{ssl_mutual_auth_enabled|string|lower}},
     'sasl_protocol': '{{sasl_protocol}}'
-  }{% if kafka_broker_configure_control_plane_listener|bool %},
+  }{% if kafka_broker_configure_control_plane_listener|bool and not kraft_enabled|bool %},
   'controller': {
     'name': 'CONTROLLER',
     'port': 9089,
@@ -520,10 +708,12 @@ kafka_broker_jolokia_user: "{{jolokia_user}}"
 ### Password for Kafka's Jolokia Agent when using Basic Auth
 kafka_broker_jolokia_password: "{{jolokia_password}}"
 
-# TODO move these to vars, should not be customizable, do they even belong w the shared vars
-kafka_broker_jolokia_java_arg_ssl_addon: ",keystore={{kafka_broker_keystore_path}},keystorePassword={{kafka_broker_keystore_storepass}},protocol=https"
-kafka_broker_jolokia_urp_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions"
-kafka_broker_jolokia_active_controller_url: "{{ 'https' if kafka_broker_jolokia_ssl_enabled|bool else 'http' }}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_jolokia_port}}/jolokia/read/kafka.controller:type=KafkaController,name=ActiveControllerCount"
+### Boolean to enable Jolokia access control on Kafka Broker
+kafka_broker_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
+
+### Path on target nodes where Kafka Broker Jolokia access control XML file will be placed
+kafka_broker_jolokia_access_control_file_dest_path: "{{ kafka_broker.config_file | dirname }}/jolokia-access.xml"
+
 kafka_broker_erp_clusters_url: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname, True) }}:{{mds_port}}/kafka/v3/clusters"
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on kafka
@@ -554,7 +744,7 @@ kafka_broker_custom_properties: {}
 kafka_broker_custom_client_properties: {}
 
 ### Boolean to enable the embedded rest proxy within Kafka. NOTE- Embedded Rest Proxy must be enabled if RBAC is enabled and Confluent Server must be enabled
-kafka_broker_rest_proxy_enabled: "{{confluent_server_enabled and not ccloud_kafka_enabled}}"
+kafka_broker_rest_proxy_enabled: "{{confluent_server_enabled and not ccloud_kafka_enabled }}"
 
 ### Authentication type to add to Kafka's embedded rest proxy or Admin API. Do not set when RBAC is enabled. Options: [basic, none]
 kafka_broker_rest_proxy_authentication_type: none
@@ -640,6 +830,12 @@ schema_registry_jolokia_user: "{{jolokia_user}}"
 
 ### Password for Schema Registry's Jolokia Agent when using Basic Auth
 schema_registry_jolokia_password: "{{jolokia_password}}"
+
+### Boolean to enable Jolokia access control on Schema Registry
+schema_registry_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
+
+### Path on target nodes where Schema Registry Jolokia access control XML file will be placed
+schema_registry_jolokia_access_control_file_dest_path: "{{ schema_registry.config_file | dirname }}/jolokia-access.xml"
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on schema registry
 schema_registry_jmxexporter_enabled: "{{jmxexporter_enabled}}"
@@ -737,6 +933,12 @@ kafka_rest_jolokia_user: "{{jolokia_user}}"
 
 ### Password for Rest Proxy's Jolokia Agent when using Basic Auth
 kafka_rest_jolokia_password: "{{jolokia_password}}"
+
+### Boolean to enable Jolokia access control on Rest Proxy
+kafka_rest_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
+
+### Path on target nodes where Rest Proxy Jolokia access control XML file will be placed
+kafka_rest_jolokia_access_control_file_dest_path: "{{ kafka_rest.config_file | dirname }}/jolokia-access.xml"
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on Rest Proxy
 kafka_rest_jmxexporter_enabled: "{{jmxexporter_enabled}}"
@@ -852,6 +1054,12 @@ kafka_connect_jolokia_user: "{{jolokia_user}}"
 
 ### Password for Connect's Jolokia Agent when using Basic Auth
 kafka_connect_jolokia_password: "{{jolokia_password}}"
+
+### Boolean to enable Jolokia access control on Kafka Connect
+kafka_connect_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
+
+### Path on target nodes where Kafka Connect Jolokia access control XML file will be placed
+kafka_connect_jolokia_access_control_file_dest_path: "{{ kafka_connect.config_file | dirname }}/jolokia-access.xml"
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on Connect
 kafka_connect_jmxexporter_enabled: "{{jmxexporter_enabled}}"
@@ -980,6 +1188,12 @@ ksql_jolokia_user: "{{jolokia_user}}"
 
 ### Password for ksqlDB's Jolokia Agent when using Basic Auth
 ksql_jolokia_password: "{{jolokia_password}}"
+
+### Boolean to enable Jolokia access control on ksqlDB
+ksql_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
+
+### Path on target nodes where ksqlDB Jolokia access control XML file will be placed
+ksql_jolokia_access_control_file_dest_path: "{{ ksql.config_file | dirname }}/jolokia-access.xml"
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on ksqlDB
 ksql_jmxexporter_enabled: "{{jmxexporter_enabled}}"
@@ -1275,6 +1489,9 @@ mds_acls_enabled: "{{rbac_enabled}}"
 rbac_enabled_public_pem_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{token_services_public_pem_file}}{% else %}{{ ssl_file_dir_final }}/public.pem{% endif %}"
 rbac_enabled_private_pem_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{token_services_private_pem_file}}{% else %}{{ ssl_file_dir_final }}/tokenKeypair.pem{% endif %}"
 
+### Additional list of super user principals for RBAC clusters. In case when mTLS is enabled on brokers or controllers their certificate principals should be passed in this list.
+rbac_super_users: []
+
 ### LDAP User which will be granted super user permissions to create role bindings in the MDS
 mds_super_user: mds
 
@@ -1289,6 +1506,12 @@ kafka_broker_ldap_user: "{{mds_super_user}}"
 
 ### Password to kafka_broker_ldap_user LDAP User
 kafka_broker_ldap_password: "{{mds_super_user_password}}"
+
+### LDAP User for Kafkas Embedded Rest Service to authenticate as
+kafka_controller_ldap_user: "{{mds_super_user}}"
+
+### Password to kafka_controller_ldap_user LDAP User
+kafka_controller_ldap_password: "{{mds_super_user_password}}"
 
 ### Unique advertised hostname for Metadata Server
 mds_advertised_listener_hostname: ""
@@ -1369,23 +1592,26 @@ token_services_private_pem_file: generated_ssl_files/tokenKeypair.pem
 ### To regenerate MDS Token Pem files on subsequent runs of the playbook, set this to true.
 regenerate_token_pem: false
 
-### List of users to be granted system admin Role Bindings across all components
+### List of principals to be granted system admin Role Bindings across all components
 rbac_component_additional_system_admins: []
 
-### List of users to be granted system admin Role Bindings on the Kafka Cluster
+### List of principals to be granted system admin Role Bindings on the Kafka controller Cluster
+kafka_controller_additional_system_admins: "{{rbac_component_additional_system_admins}}"
+
+### List of principals to be granted system admin Role Bindings on the Kafka Cluster
 kafka_broker_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
-### List of users to be granted system admin Role Bindings on the Schema Registry Cluster
+### List of principals to be granted system admin Role Bindings on the Schema Registry Cluster
 schema_registry_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
-### List of users to be granted system admin Role Bindings on the ksqlDB Cluster
+### List of principals to be granted system admin Role Bindings on the ksqlDB Cluster
 ksql_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
-### List of users to be granted system admin Role Bindings on the Connect Cluster
+### List of principals to be granted system admin Role Bindings on the Connect Cluster
 kafka_connect_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
 # TODO Investigate proper rolebinding for c3 system admins
-### List of users to be granted system admin Role Bindings on the Control Center Cluster
+### List of principals to be granted system admin Role Bindings on the Control Center Cluster
 control_center_additional_system_admins: "{{rbac_component_additional_system_admins}}"
 
 # Secrets Protection Variables
@@ -1404,6 +1630,24 @@ secrets_protection_security_file: generated_ssl_files/security.properties
 
 ### Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config'.
 secrets_protection_encrypt_passwords: "{{secrets_protection_enabled}}"
+
+### Boolean to enable secrets protection in Kafka controller
+kafka_controller_secrets_protection_enabled: "{{secrets_protection_enabled}}"
+
+### Boolean to enable secrets protection on kafka controller client configuration.
+kafka_controller_client_secrets_protection_enabled: "{{secrets_protection_enabled}}"
+
+### Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Kafka.
+kafka_controller_client_secrets_protection_encrypt_passwords: "{{secrets_protection_encrypt_passwords}}"
+
+### List of Kafka client properties to encrypt. Can be used in addition to kafka_controller_client_secrets_protection_encrypt_passwords.
+kafka_controller_client_secrets_protection_encrypt_properties: []
+
+### Boolean to encrypt sensitive properties, such as those containing 'password', 'basic.auth.user.info', or 'sasl.jaas.config' for Kafka.
+kafka_controller_secrets_protection_encrypt_passwords: "{{secrets_protection_encrypt_passwords}}"
+
+### List of Kafka properties to encrypt. Can be used in addition to kafka_controller_secrets_protection_encrypt_passwords.
+kafka_controller_secrets_protection_encrypt_properties: []
 
 ### Boolean to enable secrets protection in Kafka broker.
 kafka_broker_secrets_protection_enabled: "{{secrets_protection_enabled}}"
@@ -1487,6 +1731,12 @@ telemetry_proxy_username: ""
 
 ### Password for Proxy Server used by Telemetry. Only set if Proxy Server requires authentication
 telemetry_proxy_password: ""
+
+### Boolean to configure Telemetry on Kafka. Must also set telemetry_api_key and telemetry_api_secret
+kafka_controller_telemetry_enabled: "{{telemetry_enabled}}"
+
+### Boolean to send cp-ansible Telemetry Metrics from Kafka. Currently only sends cp-ansible version data
+kafka_controller_telemetry_ansible_labels_enabled: "{{kafka_controller_telemetry_enabled}}"
 
 ### Boolean to configure Telemetry on Kafka. Must also set telemetry_api_key and telemetry_api_secret
 kafka_broker_telemetry_enabled: "{{telemetry_enabled}}"
@@ -1721,6 +1971,12 @@ kafka_connect_replicator_jolokia_user: "{{jolokia_user}}"
 
 ### Password for Jolokia Agent when using Basic Auth.
 kafka_connect_replicator_jolokia_password: "{{jolokia_password}}"
+
+### Boolean to enable Jolokia access control on Kafka Connect Replicator
+kafka_connect_replicator_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
+
+### Path on target nodes where Kafka Connect Replicator Jolokia access control XML file will be placed
+kafka_connect_replicator_jolokia_access_control_file_dest_path: "{{ kafka_connect_replicator.config_file | dirname }}/jolokia-access.xml"
 
 ### Port for Jolokia agent for Kafka Connect Replicator.
 kafka_connect_replicator_jolokia_port: 7777
@@ -2104,6 +2360,9 @@ kafka_connect_replicator_monitoring_interceptor_rbac_enabled_public_pem_path: "{
 ### Deployment strategy for Zookeeper. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 zookeeper_deployment_strategy: "{{deployment_strategy}}"
 
+### Deployment strategy for Kafka controller. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
+kafka_controller_deployment_strategy: "{{deployment_strategy}}"
+
 ### Deployment strategy for Kafka. Set to parallel to run all provisionging tasks in parallel on all hosts, which may cause downtime.
 kafka_broker_deployment_strategy: "{{deployment_strategy}}"
 
@@ -2127,6 +2386,9 @@ pause_rolling_deployment: false
 
 ### Boolean to Pause Rolling Deployment after each Zookeeper Node starts up.
 zookeeper_pause_rolling_deployment: "{{pause_rolling_deployment}}"
+
+### Boolean to Pause Rolling Deployment after each Kafka controller Node starts up.
+kafka_controller_pause_rolling_deployment: "{{pause_rolling_deployment}}"
 
 ### Boolean to Pause Rolling Deployment after each Kafka Node starts up.
 kafka_broker_pause_rolling_deployment: "{{pause_rolling_deployment}}"

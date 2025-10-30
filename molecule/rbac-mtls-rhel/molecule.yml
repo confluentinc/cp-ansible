@@ -1,8 +1,9 @@
 ---
-### Installs Confluent Platform Cluster on CentOS7.
+### Installs Confluent Platform Cluster on centos8.
 ### RBAC enabled.
 ### MTLS enabled.
-### Secrets protection disabled
+### Secrets protection enabled
+### FIPS enabled.
 ### Kafka Broker Customer Listener.
 ### RBAC Additional System Admin.
 ### Provided SSL Principal Mapping rule
@@ -22,12 +23,12 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: zookeeper1
-    hostname: zookeeper1.confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - zookeeper
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -38,8 +39,8 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -50,8 +51,8 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -62,8 +63,8 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -74,8 +75,8 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -86,8 +87,8 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -98,8 +99,8 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -110,8 +111,8 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -122,8 +123,8 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
-    image: geerlingguy/docker-centos7-ansible
-    dockerfile: ../Dockerfile.j2
+    image: geerlingguy/docker-centos8-ansible
+    dockerfile: ../Dockerfile-rhel-base.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -137,7 +138,13 @@ provisioner:
     group_vars:
       all:
         scenario_name: rbac-mtls-rhel
+
+        rbac_super_users:
+          - User:CONFLUENT
+
+        redhat_java_package_name: java-11-openjdk
         ssl_enabled: true
+        fips_enabled: true
         ssl_mutual_auth_enabled: true
 
         secrets_protection_enabled: true
@@ -168,6 +175,8 @@ provisioner:
 
         kafka_broker_custom_properties:
           super.users: User:dom;User:jeff
+        kafka_controller_custom_properties:
+          ssl.principal.mapping.rules: "RULE:.*O=(.*?),OU=TEST.*$$/$$1/"  #since we are providing mapping.rules to broker and have mTLS between broker and controller
 
       kafka_broker:
         kafka_broker_cluster_name: Test-Broker

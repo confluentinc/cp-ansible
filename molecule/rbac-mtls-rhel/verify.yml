@@ -19,6 +19,52 @@
         service_cert: /var/ssl/private/zookeeper.crt
         service_key: /var/ssl/private/zookeeper.key
 
+- name: Verify - kafka_controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: confluent.metadata.ssl.keystore.location
+        expected_value: /var/ssl/private/kafka_controller.keystore.bcfks
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: confluent.metadata.ssl.keystore.password
+        expected_value: ${securepass:/var/ssl/private/kafka_controller-security.properties:server.properties/confluent.metadata.ssl.keystore.password}
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: ssl.truststore.password
+        expected_value: ${securepass:/var/ssl/private/kafka_controller-security.properties:server.properties/ssl.truststore.password}
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/controller/server.properties
+        property: ssl.principal.mapping.rules
+        expected_value: RULE:.*O=(.*?),OU=TEST.*$/$1/
+
+    - name: Get super.users
+      shell: grep "super.users" /etc/controller/server.properties
+      register: super_users_grep
+
+    - name: Assert super users found in server.properties
+      assert:
+        that:
+          - "'User:CONFLUENT' in super_users_grep.stdout"
+        fail_msg: "Super Users property: {{super_users_grep.stdout}} does not contain User:CONFLUENT"
+
 - name: Verify - kafka_broker
   hosts: kafka_broker
   gather_facts: false
@@ -29,7 +75,7 @@
       vars:
         file_path: /etc/kafka/server.properties
         property: confluent.metadata.server.ssl.keystore.location
-        expected_value: /var/ssl/private/kafka_broker.keystore.jks
+        expected_value: /var/ssl/private/kafka_broker.keystore.bcfks
 
     - import_role:
         name: confluent.test
@@ -309,28 +355,28 @@
     - name: Assert Broker Cluster ID as expected
       assert:
         that:
-          - broker_name == "{{cluster_name_query_json[0]['clusterName']}}"
+          - broker_name == cluster_name_query_json[0].clusterName
         fail_msg: "Broker ID set to {{cluster_name_query_json[0]['clusterName']}} not {{broker_name}}"
         quiet: true
 
     - name: Assert Kafka Connect Cluster ID as expected
       assert:
         that:
-          - connect_name == "{{cluster_name_query_json[1]['clusterName']}}"
+          - connect_name == cluster_name_query_json[1].clusterName
         fail_msg: "Connect Cluster ID set to {{cluster_name_query_json[1]['clusterName']}} not {{connect_name}}"
         quiet: true
 
     - name: Assert KSQL Cluster ID as expected
       assert:
         that:
-          - ksql_name == "{{cluster_name_query_json[2]['clusterName']}}"
+          - ksql_name == cluster_name_query_json[2].clusterName
         fail_msg: "KSQL Cluster ID set to {{cluster_name_query_json[2]['clusterName']}} not {{ksql_name}}"
         quiet: true
 
     - name: Assert Schema Registry Cluster ID as expected
       assert:
         that:
-          - schema_registry_name == "{{cluster_name_query_json[3]['clusterName']}}"
+          - schema_registry_name == cluster_name_query_json[3].clusterName
         fail_msg: "Schema Registry Cluster ID set to {{cluster_name_query_json[3]['clusterName']}} not {{schema_registry_name}}"
         quiet: true
 

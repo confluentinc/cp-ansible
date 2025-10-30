@@ -5,8 +5,60 @@
 ### Validates that each component is running with the correct custom user.
 ### Validates that each component is running with the correct custom logging path.
 
+- name: Verify - kafka_controller
+  hosts: kafka_controller
+  gather_facts: true
+  vars:
+    controller_user: kc-test-user
+    ansible_os_family: RedHat
+  tasks:
+    - name: Create Controller User
+      user:
+        name: "{{controller_user}}"
+        comment: "Controller User"
+        system: true
+        group: cp-test-group
+
+    - name: Create Controller Log Directory
+      file:
+        path: /kafka/logs/
+        state: directory
+        recurse: true
+        group: cp-test-group
+        owner: "{{controller_user}}"
+        mode: 0770
+
+    - name: Restart Service
+      systemd:
+        daemon_reload: true
+        name: "{{kafka_controller_service_name}}"
+        state: restarted
+
+    - import_role:
+        name: kafka_controller
+        tasks_from: health_check.yml
+
+    - name: Restart Service
+      systemd:
+        daemon_reload: true
+        name: "{{kafka_broker_service_name}}"
+        state: restarted
+
+    - import_role:
+        name: kafka_broker
+        tasks_from: health_check.yml
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_ownership.yml
+      vars:
+        file_name: controller.log
+        custom_path: /kafka/logs/
+        group: cp-test-group
+        user: kc-test-user
+
 - name: Verify - Zookeeper User Change and custom logging path
-  hosts: zookeeper1-kafka-broker1
+  hosts: zookeeper
   gather_facts: true
   vars:
     zookeeper_user: zk-test-user
