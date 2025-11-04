@@ -4,6 +4,20 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v8.0.1
+======
+
+Notable enhancements
+-------------
+- Added configurations to enable Jolokia Access Control
+
+Notable fixes
+-------------
+- Removed Confluent Metrics Reporter config from broker and controller
+- Prometheus/Alertmanager Health Check fixed for Control Center Next Gen
+- Bug Fix to enable Control Center Next Gen systemd service for archive installations
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
 v8.0.0
 ======
 New features

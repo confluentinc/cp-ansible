@@ -14,6 +14,18 @@
     - ansible_os_family
     - ansible_fqdn
 
+- name: Validate KSQL Jolokia Access Control Configuration
+  include_tasks: ../common/tasks/component_validations.yml
+  vars:
+    component_name: "KSQL"
+    component_jolokia_enabled: "{{ ksql_jolokia_enabled }}"
+    component_jolokia_access_control_enabled: "{{ ksql_jolokia_access_control_enabled }}"
+    component_jolokia_access_control_custom_file_enabled: "{{ ksql_jolokia_access_control_custom_file_enabled }}"
+    component_jolokia_access_control_file_src_path: "{{ ksql_jolokia_access_control_file_src_path }}"
+  tags:
+    - validate
+    - validate_jolokia
+
 - name: Stop Service and Remove Packages on Version Change
   include_role:
     name: common
@@ -345,6 +357,7 @@
     src: "{{ ksql.log4j_file }}"
     dest: "{{ ksql.log4j_file }}.bak"
     remote_src: true
+    mode: '640'
   when: log4j_file_stat.stat.exists
   tags:
     - log
@@ -384,6 +397,20 @@
   when: ksql_jolokia_enabled|bool
   notify: restart ksql
   diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
+- name: Copy KSQL Jolokia Access Control File
+  copy:
+    src: "{{ ksql_jolokia_access_control_file_src_path }}"
+    dest: "{{ ksql_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ ksql_user }}"
+    group: "{{ ksql_group }}"
+  when:
+    - ksql_jolokia_enabled|bool
+    - ksql_jolokia_access_control_enabled|bool
+  notify: restart ksql
   tags:
     - configuration
 
@@ -465,6 +492,7 @@
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
+  changed_when: false
   notify: restart ksql
   when: certs_updated|bool
 
