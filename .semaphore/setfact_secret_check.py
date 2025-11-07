@@ -17,20 +17,16 @@ def get_base_branch():
     if base_branch:
         return base_branch
 
-    try:
-        with open('galaxy.yml', 'r') as f:
-            galaxy_content = yaml.safe_load(f)
+    with open('galaxy.yml', 'r') as f:
+        galaxy_content = yaml.safe_load(f)
 
-        version = galaxy_content.get('version', '')
-        version_parts = version.split('.')
+    version = galaxy_content.get('version', '')
+    version_parts = version.split('.')
 
-        if len(version_parts) >= 2:
-            return f"{version_parts[0]}.{version_parts[1]}.x"
+    if len(version_parts) >= 2:
+        return f"{version_parts[0]}.{version_parts[1]}.x"
 
-        return version
-    except Exception as e:
-        print(f"Warning: Could not read galaxy.yml: {e}")
-        return None
+    return version
 
 
 def fetch_remote_branches(collection_root):
@@ -79,34 +75,20 @@ def find_valid_base_branch(base_branch, collection_root):
     return None
 
 
-def get_git_diff(base_branch, collection_root):
+def get_git_diff(base_branch, feature_branch, collection_root):
     """Get the git diff content for analysis."""
-    current_branch = os.environ.get('SEMAPHORE_GIT_PR_BRANCH', 'HEAD')
-    print(f"Comparing {current_branch} against base branch: {base_branch}")
+    print(f"Comparing {feature_branch} against base branch: {base_branch}")
 
-    # Build command list based on available base branch
-    if base_branch:
-        commands = [
-            ['git', 'diff', f'origin/{base_branch}...HEAD'],
-            ['git', 'diff', f'origin/{base_branch}', 'HEAD'],
-            ['git', 'diff', f'origin/{base_branch}..HEAD']
-        ]
-    else:
-        commands = [
-            ['git', 'diff', 'HEAD~1...HEAD'],
-            ['git', 'diff', 'HEAD~5...HEAD']
-        ]
-
-    # Try each command until one succeeds
-    for cmd in commands:
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=collection_root, check=False)
-        if result.returncode == 0:
-            print(f"Successfully got diff using: {' '.join(cmd)}")
-            return result.stdout
-        print(f"Failed command: {' '.join(cmd)}")
-
+    # Simple diff command using the branches directly
+    cmd = ['git', 'diff', f'{base_branch}...{feature_branch}']
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=collection_root, check=False)
+    
+    if result.returncode == 0:
+        print(f"Successfully got diff using: {' '.join(cmd)}")
+        return result.stdout
+    
+    print(f"Failed to get diff: {' '.join(cmd)}")
     return None
-
 
 def parse_diff_for_setfact(diff_content):
     """
@@ -138,7 +120,8 @@ def parse_diff_for_setfact(diff_content):
             line_number += 1
             line_content = line[1:]  # Remove '+' prefix
 
-            if (current_file and current_file.endswith(('.yml', '.yaml')) and ('set_fact:' in line_content or 'ansible.builtin.set_fact:' in line_content)):
+            set_fact_pattern = r'\bset_fact\s*:'
+            if (current_file and current_file.endswith(('.yml', '.yaml')) and re.search(set_fact_pattern, line_content)):
 
                 issues.append({
                     'file': current_file,
@@ -160,15 +143,16 @@ def main():
 
     try:
         # Get base branch and fetch remote refs
-        base_branch = get_base_branch()
-        fetch_remote_branches(collection_root)
-        valid_base_branch = find_valid_base_branch(base_branch, collection_root)
+               # Get branches from SemaphoreCI environment variables
+        feature_branch = os.environ.get('SEMAPHORE_GIT_PR_BRANCH', 'HEAD')
+        base_branch = os.environ.get('SEMAPHORE_GIT_PR_BASE_BRANCH') or os.environ.get('SEMAPHORE_GIT_BRANCH', 'main')
 
         # Get and parse git diff
-        diff_content = get_git_diff(valid_base_branch, collection_root)
+        diff_content = get_git_diff(base_branch, feature_branch, collection_root)
+
         if not diff_content:
             print("Error: Could not retrieve git diff")
-            return 0
+            return 1  # Fail if we can't get the diff - the check didn't run
 
         issues = parse_diff_for_setfact(diff_content)
 
@@ -188,14 +172,16 @@ def main():
             print("-" * 40)
 
         print("\n⚠️  IMPORTANT: Please manually verify these set_fact tasks do not leak sensitive information!")
-        print("   Consider adding 'no_log: true' if they handle secrets.")
+        print("   Consider adding 'no_log: true' if not already added and if they handle secrets.")
         print("   These are warnings and will not fail the build.")
 
         return 0  # Don't fail the build, just warn
 
     except Exception as e:
         print(f"Error during set_fact check: {e}")
-        return 0  # Don't fail on script errors
+        import traceback
+        traceback.print_exc()
+        return 1  # Fail the build
 
 
 if __name__ == '__main__':
