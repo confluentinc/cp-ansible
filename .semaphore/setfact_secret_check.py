@@ -80,7 +80,7 @@ def get_git_diff(base_branch, feature_branch, collection_root):
     print(f"Comparing {feature_branch} against base branch: {base_branch}")
 
     # Simple diff command using the branches directly
-    cmd = ['git', 'diff', f'{base_branch}...{feature_branch}']
+    cmd = ['git', 'diff', f'origin/{base_branch}...origin/{feature_branch}']
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=collection_root, check=False)
 
     if result.returncode == 0:
