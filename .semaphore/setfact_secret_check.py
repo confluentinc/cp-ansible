@@ -7,7 +7,6 @@ import os
 import sys
 import re
 import subprocess
-import yaml
 
 
 def get_git_diff(base_branch, feature_branch, collection_root):

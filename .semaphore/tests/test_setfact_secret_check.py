@@ -4,8 +4,7 @@ Tests for setfact_secret_check.py
 
 import os
 import sys
-import subprocess
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, MagicMock
 
 # Add parent directory to path to import the script
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
