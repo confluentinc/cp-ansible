@@ -74,7 +74,7 @@ This document explains the variables used in the USM Agent sample inventories fo
 ### `usm_agent_ccloud_host`
 - **Purpose**: Confluent Cloud API endpoint
 - **Required**: For all USM Agent deployments
-- **Default**: `https://api.confluent.cloud`
+- **Example**: `https://api.confluent.cloud:443`
 
 ### `usm_agent_ccloud_environment_id`
 - **Purpose**: Confluent Cloud environment ID
@@ -117,22 +117,3 @@ ansible-playbook -i docs/sample_inventories/usm_agent/usm_agent_basic_auth.yml p
 ansible-playbook -i docs/sample_inventories/usm_agent/usm_agent_basic_auth_tls.yml playbook.yml
 ansible-playbook -i docs/sample_inventories/usm_agent/usm_agent_mtls.yml playbook.yml
 ```
-
-## Migration Guide
-
-### Upgrading Security Levels
-
-1. **No Auth → Basic Auth**
-   - Add `usm_agent_basic_users` configuration
-   - Add client credentials
-   - Update `usm_agent_basic_auth_enabled` to `true`
-
-2. **Basic Auth → Basic Auth + TLS**
-   - Add SSL certificate configuration
-   - Set `usm_agent_ssl_enabled: true`
-
-3. **Basic Auth + TLS → mTLS**
-   - Remove basic auth configuration
-   - Set `usm_agent_basic_auth_enabled: false`
-   - Set `usm_agent_ssl_mutual_auth_enabled: true`
-   - Remove client credentials
