@@ -79,15 +79,26 @@ def get_git_diff(base_branch, feature_branch, collection_root):
     """Get the git diff content for analysis."""
     print(f"Comparing {feature_branch} against base branch: {base_branch}")
 
-    # Simple diff command using the branches directly
+    # Fetch the base branch since SemaphoreCI uses --single-branch clone
+    print(f"Fetching base branch {base_branch}...")
+    fetch_result = subprocess.run(
+        ['git', 'fetch', 'origin', f'{base_branch}:refs/remotes/origin/{base_branch}'],
+        capture_output=True, text=True, cwd=collection_root, check=False
+    )
+    if fetch_result.returncode != 0:
+        print(f"Warning: Failed to fetch base branch: {fetch_result.stderr}")
+
+    # Now try the diff command
     cmd = ['git', 'diff', f'origin/{base_branch}...origin/{feature_branch}']
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=collection_root, check=False)
 
-    if result.returncode == 0:
+    if result.returncode == 0 and result.stdout.strip():
         print(f"Successfully got diff using: {' '.join(cmd)}")
         return result.stdout
 
     print(f"Failed to get diff: {' '.join(cmd)}")
+    if result.stderr:
+        print(f"Error: {result.stderr}")
     return None
 
 
