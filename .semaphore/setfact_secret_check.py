@@ -82,11 +82,11 @@ def get_git_diff(base_branch, feature_branch, collection_root):
     # Simple diff command using the branches directly
     cmd = ['git', 'diff', f'{base_branch}...{feature_branch}']
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=collection_root, check=False)
-    
+
     if result.returncode == 0:
         print(f"Successfully got diff using: {' '.join(cmd)}")
         return result.stdout
-    
+
     print(f"Failed to get diff: {' '.join(cmd)}")
     return None
 
