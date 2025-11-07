@@ -90,6 +90,7 @@ def get_git_diff(base_branch, feature_branch, collection_root):
     print(f"Failed to get diff: {' '.join(cmd)}")
     return None
 
+
 def parse_diff_for_setfact(diff_content):
     """
     Parse git diff to find set_fact usage in added/modified lines.
@@ -142,8 +143,7 @@ def main():
     collection_root = os.environ.get('PATH_TO_CPA', os.getcwd())
 
     try:
-        # Get base branch and fetch remote refs
-               # Get branches from SemaphoreCI environment variables
+        # Get branches from SemaphoreCI environment variables
         feature_branch = os.environ.get('SEMAPHORE_GIT_PR_BRANCH', 'HEAD')
         base_branch = os.environ.get('SEMAPHORE_GIT_PR_BASE_BRANCH') or os.environ.get('SEMAPHORE_GIT_BRANCH', 'main')
 
