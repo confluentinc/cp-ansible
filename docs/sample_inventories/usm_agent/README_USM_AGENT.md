@@ -66,17 +66,17 @@ This document explains the variables used in the USM Agent sample inventories fo
 
 ## CCloud Integration Variables
 
-### `usm_agent_ccloud_credential`
+### `ccloud_credential`
 - **Purpose**: Confluent Cloud API credentials
 - **Required**: For all USM Agent deployments
 - **Structure**: Contains username (API key) and password (API secret)
 
-### `usm_agent_ccloud_host`
+### `ccloud_endpoint`
 - **Purpose**: Confluent Cloud API endpoint
 - **Required**: For all USM Agent deployments
 - **Example**: `https://api.confluent.cloud:443`
 
-### `usm_agent_ccloud_environment_id`
+### `ccloud_environment_id`
 - **Purpose**: Confluent Cloud environment ID
 - **Required**: For all USM Agent deployments
 - **Usage**: Identifies the target environment for USM Agent
