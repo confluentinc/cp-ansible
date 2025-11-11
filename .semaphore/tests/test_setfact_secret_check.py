@@ -38,7 +38,8 @@ index 1234567..abcdefg 100644
         assert len(issues) == 1
         assert issues[0]['file'] == 'roles/test/tasks/main.yml'
         assert 'set_fact' in issues[0]['content']
-        assert issues[0]['line'] > 0
+        # Hunk starts at line 10, +2 context lines = line 12
+        assert issues[0]['line'] == 12
 
     def test_finds_multiple_set_fact_instances(self):
         """Test that multiple set_fact instances are detected"""
@@ -286,5 +287,14 @@ index 1234567..abcdefg 100644
 
         exit_code = main()
         assert exit_code == 0
-        # Verify it tried to use fallback (main)
-        assert any('main' in str(call) for call in mock_subprocess.call_args_list)
+        # Verify it tried to use a base branch (should be 'main' or whatever SEMAPHORE_GIT_BRANCH is set to)
+        # Check that git diff was called with a base branch
+        diff_call = None
+        for call in mock_subprocess.call_args_list:
+            if len(call[0]) > 0 and isinstance(call[0][0], list) and 'git' in call[0][0] and 'diff' in call[0][0]:
+                diff_call = call[0][0]
+                break
+        assert diff_call is not None, "git diff should have been called"
+        # Verify it contains origin/ and a branch name
+        diff_str = ' '.join(diff_call)
+        assert 'origin/' in diff_str, "git diff should reference origin/ branch"

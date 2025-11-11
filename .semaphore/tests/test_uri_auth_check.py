@@ -278,6 +278,68 @@ class TestCheckFileForAuthIssues:
         finally:
             os.unlink(temp_path)
 
+    def test_playbook_format_with_nested_tasks(self):
+        """Test that playbook format with nested tasks is handled correctly"""
+        yaml_content = """
+- name: Test Play
+  hosts: all
+  tasks:
+    - name: API call without no_log
+      uri:
+        url: https://api.example.com
+        Authorization: Bearer token123
+
+    - name: Another task
+      debug:
+        msg: "test"
+"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
+            f.write(yaml_content)
+            temp_path = f.name
+
+        try:
+            issues = check_file_for_auth_issues(temp_path)
+            assert len(issues) == 1
+            assert 'Authorization' in issues[0]['message'] or 'authorization' in issues[0]['message'].lower()
+        finally:
+            os.unlink(temp_path)
+
+    def test_playbook_format_with_multiple_plays(self):
+        """Test that playbook with multiple plays extracts tasks from all plays"""
+        yaml_content = """
+- name: First Play
+  hosts: group1
+  tasks:
+    - name: API call 1
+      uri:
+        url: https://api1.example.com
+        Authorization: Bearer token1
+
+- name: Second Play
+  hosts: group2
+  tasks:
+    - name: API call 2
+      block:
+        - name: nested block
+          block:
+            - name: test nested block 2
+              block:
+                - name: API call 2
+                  uri:
+                    url: https://api2.example.com
+                    headers:
+                    Authorization: Bearer token2
+"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
+            f.write(yaml_content)
+            temp_path = f.name
+
+        try:
+            issues = check_file_for_auth_issues(temp_path)
+            assert len(issues) == 2
+        finally:
+            os.unlink(temp_path)
+
 
 class TestGetAllYamlFiles:
     """Tests for get_all_yaml_files function"""

@@ -43,44 +43,85 @@ def parse_diff_for_setfact(diff_content):
     Returns list of issues found in the format:
     [{'file': str, 'line': int, 'content': str, 'message': str}, ...]
     """
+    # Constants
+    SET_FACT_PATTERN = r'\bset_fact\s*:'
+    YAML_EXTENSIONS = ('.yml', '.yaml')
+    WARNING_MESSAGE = 'set_fact task found in changed lines - please verify no sensitive data is exposed'
+
+    # Regex patterns
+    HUNK_HEADER_PATTERN = re.compile(r'@@\s*-\d+(?:,\d+)?\s*\+(\d+)(?:,(\d+))?\s*@@')
+    SET_FACT_REGEX = re.compile(SET_FACT_PATTERN)
+
     issues = []
     current_file = None
-    line_number = 0
+    new_file_line_number = 0
 
     for line in diff_content.split('\n'):
+        # Detect new file in diff
         if line.startswith('diff --git'):
-            # Extract target filename: "diff --git a/file.yml b/file.yml"
-            parts = line.split()
-            if len(parts) >= 4:
-                current_file = parts[3][2:]  # Remove "b/" prefix
-                line_number = 0
+            current_file = _extract_filename_from_diff_header(line)
+            new_file_line_number = 0
+            continue
 
-        elif line.startswith('@@'):
-            # Parse hunk header: @@ -old_start,old_count +new_start,new_count @@
-            match = re.search(r'@@\s*-\d+(?:,\d+)?\s*\+(\d+)(?:,(\d+))?\s*@@', line)
-            if match:
-                line_number = int(match.group(1)) - 1  # Will increment before checking
+        # Parse hunk header to get starting line number in new file
+        if line.startswith('@@'):
+            new_file_line_number = _parse_hunk_header(line, HUNK_HEADER_PATTERN)
+            continue
 
-        elif line.startswith('+') and not line.startswith('+++'):
-            # Added line - check for set_fact usage
-            line_number += 1
+        # Process added lines
+        if line.startswith('+') and not line.startswith('+++'):
+            new_file_line_number += 1
             line_content = line[1:]  # Remove '+' prefix
 
-            set_fact_pattern = r'\bset_fact\s*:'
-            if (current_file and current_file.endswith(('.yml', '.yaml')) and re.search(set_fact_pattern, line_content)):
-
+            if _is_set_fact_in_yaml(current_file, line_content, YAML_EXTENSIONS, SET_FACT_REGEX):
                 issues.append({
                     'file': current_file,
-                    'line': line_number,
+                    'line': new_file_line_number,
                     'content': line_content.strip(),
-                    'message': 'set_fact task found in changed lines - please verify no sensitive data is exposed'
+                    'message': WARNING_MESSAGE
                 })
+            continue
 
-        elif not line.startswith('-') and line_number > 0:
-            # Context line - increment line counter
-            line_number += 1
+        # Handle context lines and empty lines (increment line counter for new file)
+        if _is_context_line(line, new_file_line_number):
+            new_file_line_number += 1
+        # Removed lines (starting with '-') are ignored - they don't exist in new file
 
     return issues
+
+
+def _extract_filename_from_diff_header(diff_line):
+    """Extract filename from 'diff --git a/file.yml b/file.yml' format."""
+    parts = diff_line.split()
+    if len(parts) >= 4:
+        return parts[3][2:]  # Remove "b/" prefix
+    return None
+
+
+def _parse_hunk_header(hunk_line, pattern):
+    """
+    Parse hunk header to get starting line number in new file.
+
+    Example: '@@ -1,6 +1,10 @@' returns 0 (will be incremented to 1 before use)
+    """
+    match = pattern.search(hunk_line)
+    if match:
+        return int(match.group(1)) - 1  # Set to one less, will increment before processing
+    return 0
+
+
+def _is_set_fact_in_yaml(file_path, line_content, yaml_extensions, set_fact_pattern):
+    """Check if line contains set_fact and file is a YAML file."""
+    if not file_path:
+        return False
+    if not file_path.endswith(yaml_extensions):
+        return False
+    return set_fact_pattern.search(line_content) is not None
+
+
+def _is_context_line(line, line_number):
+    """Check if line is a context line (unchanged) or empty line within a hunk."""
+    return line.startswith(' ') or (line == '' and line_number > 0)
 
 
 def main():

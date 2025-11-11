@@ -59,3 +59,43 @@ Tests cover:
 
 - **setfact_secret_check.py**: Returns 0 (warnings only, doesn't fail build)
 - **uri_auth_check.py**: Returns 1 when issues found (fails build), 0 when no issues
+
+## Running Scripts Locally
+
+### setfact_secret_check.py
+
+To run the set_fact secret check script locally:
+
+**Option 1: Set environment variables and run**
+
+```bash
+cd .semaphore
+
+export SEMAPHORE_GIT_PR_BRANCH=sanity-checks-for-secrets-check  # or your current branch
+export SEMAPHORE_GIT_PR_BASE_BRANCH=7.4.x  # or whatever base branch you want to compare against
+export PATH_TO_CPA=/path/to/ansible_collections/confluent/platform
+
+python3 setfact_secret_check.py
+```
+
+
+**Option 2: Test the parser logic with unit tests**
+
+```bash
+cd .semaphore/tests
+pytest test_setfact_secret_check.py -v
+```
+
+### uri_auth_check.py
+
+To run the URI authorization check script locally:
+
+```bash
+cd .semaphore
+
+export PATH_TO_CPA=/path/to/ansible_collections/confluent/platform
+
+python3 uri_auth_check.py
+```
+
+**Note**: The `uri_auth_check.py` script scans all YAML files in the collection, so it doesn't require git branch information.
