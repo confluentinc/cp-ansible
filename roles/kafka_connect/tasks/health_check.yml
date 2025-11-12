@@ -22,11 +22,28 @@
     oauth_client_assertion_template_file: "{{ kafka_connect_oauth_client_assertion_template_file_dest_path }}"
   when: rbac_enabled or kafka_connect_oauth_enabled
 
+# Set health check hostname for z/OS compatibility
+# Use health_check_hostname if defined (for z/OS), otherwise use default resolution
+- name: Set health check hostname
+  set_fact:
+    connect_health_check_hostname: "{{ health_check_hostname | default(hostvars[inventory_hostname]|confluent.platform.resolve_and_format_hostname) }}"
+
+- name: Log health check hostname being used
+  debug:
+    msg: "Kafka Connect health check will use hostname: {{ connect_health_check_hostname }}{% if health_check_hostname is defined %} (from health_check_hostname variable){% else %} (from default hostname resolution){% endif %}"
+
 # Cannot use Block/Rescue in Ansible Handlers: https://github.com/ansible/ansible/issues/14270
 # Implementing try/catch logic with ignore_errors and conditionals
+- name: Log health check URL for basic auth (non-mTLS)
+  debug:
+    msg: "Starting Kafka Connect health check - URL: {{kafka_connect_http_protocol}}://{{ connect_health_check_hostname }}:{{kafka_connect_rest_port}}/connectors, Retries: {{ kafka_connect_health_check_retries | default(80) }}, Delay: {{ kafka_connect_health_check_delay | default(15) }}s"
+  when:
+    - kafka_connect_authentication_type != 'mtls'
+    - not ( rbac_enabled or kafka_connect_oauth_enabled)
+
 - name: Wait for API to return 200
   uri:
-    url: "{{kafka_connect_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.health_check_hostname }}:{{kafka_connect_rest_port}}/connectors"
+    url: "{{kafka_connect_http_protocol}}://{{ connect_health_check_hostname }}:{{kafka_connect_rest_port}}/connectors"
     status_code: 200
     validate_certs: false
     # Basic auth header is redundant for non rbac install
@@ -35,24 +52,31 @@
     force_basic_auth: true
   register: result1
   until: result1.status == 200
-  retries: 80
-  delay: 10
+  retries: "{{ kafka_connect_health_check_retries | default(80) }}"
+  delay: "{{ kafka_connect_health_check_delay | default(15) }}"
   when:
     - kafka_connect_authentication_type != 'mtls'
     - not ( rbac_enabled or kafka_connect_oauth_enabled)
   ignore_errors: true
 
+- name: Log health check URL for OAuth (non-mTLS)
+  debug:
+    msg: "Starting Kafka Connect health check (OAuth) - URL: {{kafka_connect_http_protocol}}://{{ connect_health_check_hostname }}:{{kafka_connect_rest_port}}/connectors, Retries: {{ kafka_connect_health_check_retries | default(80) }}, Delay: {{ kafka_connect_health_check_delay | default(15) }}s"
+  when:
+    - kafka_connect_authentication_type != 'mtls'
+    - rbac_enabled or kafka_connect_oauth_enabled
+
 - name: Wait for API to return 200
   uri:
-    url: "{{kafka_connect_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_and_format_hostname }}:{{kafka_connect_rest_port}}/connectors"
+    url: "{{kafka_connect_http_protocol}}://{{ connect_health_check_hostname }}:{{kafka_connect_rest_port}}/connectors"
     status_code: 200
     validate_certs: false
     headers:
       Authorization: "Bearer {{ authorization_token }}"
   register: result1_oauth
   until: result1_oauth.status == 200
-  retries: 40
-  delay: 10
+  retries: "{{ kafka_connect_health_check_retries | default(80) }}"
+  delay: "{{ kafka_connect_health_check_delay | default(15) }}"
   no_log: "{{mask_secrets|bool}}"
   when:
     - kafka_connect_authentication_type != 'mtls'
@@ -62,9 +86,16 @@
 - set_fact:
     certs_chain: "{{ssl_file_dir_final}}/{{ kafka_connect_service_name if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect' }}.chain"
 
+- name: Log health check URL for basic auth (mTLS)
+  debug:
+    msg: "Starting Kafka Connect health check (mTLS) - URL: {{kafka_connect_http_protocol}}://{{ connect_health_check_hostname }}:{{kafka_connect_rest_port}}/connectors, Retries: {{ kafka_connect_health_check_retries | default(80) }}, Delay: {{ kafka_connect_health_check_delay | default(15) }}s"
+  when:
+    - kafka_connect_authentication_type == 'mtls'
+    - not (rbac_enabled or kafka_connect_oauth_enabled)
+
 - name: Wait for API to return 200 - mTLS
   uri:
-    url: "{{kafka_connect_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.health_check_hostname }}:{{kafka_connect_rest_port}}/connectors"
+    url: "{{kafka_connect_http_protocol}}://{{ connect_health_check_hostname }}:{{kafka_connect_rest_port}}/connectors"
     status_code: 200
     validate_certs: false
     client_cert: "{{ kafka_connect_cert_path if ssl_provided_keystore_and_truststore else certs_chain }}"
@@ -75,16 +106,23 @@
     force_basic_auth: true
   register: result2
   until: result2.status == 200
-  retries: 80
-  delay: 10
+  retries: "{{ kafka_connect_health_check_retries | default(80) }}"
+  delay: "{{ kafka_connect_health_check_delay | default(15) }}"
   when:
     - kafka_connect_authentication_type == 'mtls'
     - not (rbac_enabled or kafka_connect_oauth_enabled)
   ignore_errors: true
 
+- name: Log health check URL for OAuth (mTLS)
+  debug:
+    msg: "Starting Kafka Connect health check (OAuth + mTLS) - URL: {{kafka_connect_http_protocol}}://{{ connect_health_check_hostname }}:{{kafka_connect_rest_port}}/connectors, Retries: {{ kafka_connect_health_check_retries | default(80) }}, Delay: {{ kafka_connect_health_check_delay | default(15) }}s"
+  when:
+    - kafka_connect_authentication_type == 'mtls'
+    - rbac_enabled or kafka_connect_oauth_enabled
+
 - name: Wait for API to return 200 - mTLS
   uri:
-    url: "{{kafka_connect_http_protocol}}://{{ hostvars[inventory_hostname]|confluent.platform.resolve_and_format_hostname }}:{{kafka_connect_rest_port}}/connectors"
+    url: "{{kafka_connect_http_protocol}}://{{ connect_health_check_hostname }}:{{kafka_connect_rest_port}}/connectors"
     status_code: 200
     validate_certs: false
     client_cert: "{{ kafka_connect_cert_path if ssl_provided_keystore_and_truststore else certs_chain }}"
@@ -93,8 +131,8 @@
       Authorization: "Bearer {{ authorization_token }}"
   register: result2_oauth
   until: result2_oauth.status == 200
-  retries: 40
-  delay: 10
+  retries: "{{ kafka_connect_health_check_retries | default(80) }}"
+  delay: "{{ kafka_connect_health_check_delay | default(15) }}"
   no_log: "{{mask_secrets|bool}}"
   when:
     - kafka_connect_authentication_type == 'mtls'
