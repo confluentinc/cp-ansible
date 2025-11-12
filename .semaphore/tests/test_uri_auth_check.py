@@ -23,12 +23,14 @@ class TestIsUriTaskWithAuth:
     """Tests for is_uri_task_with_auth function"""
 
     def test_uri_with_authorization_header(self):
-        """Test URI task with Authorization header is detected"""
+        """Test URI task with Authorization header in headers dict is detected"""
         task = {
             'name': 'Test task',
             'uri': {
                 'url': 'https://api.example.com',
-                'Authorization': 'Bearer token123'
+                'headers': {
+                    'Authorization': 'Bearer token123'
+                }
             }
         }
         assert is_uri_task_with_auth(task) is True
@@ -177,7 +179,8 @@ class TestCheckFileForAuthIssues:
 - name: API call
   uri:
     url: https://api.example.com
-    Authorization: Bearer token123
+    headers:
+      Authorization: Bearer token123
 """
         with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
             f.write(yaml_content)
@@ -233,7 +236,8 @@ class TestCheckFileForAuthIssues:
 - name: API call 1
   uri:
     url: https://api.example.com
-    Authorization: Bearer token1
+    headers:
+      Authorization: Bearer token1
 
 - name: API call 2
   uri:
@@ -287,7 +291,8 @@ class TestCheckFileForAuthIssues:
     - name: API call without no_log
       uri:
         url: https://api.example.com
-        Authorization: Bearer token123
+        headers:
+          Authorization: Bearer token123
 
     - name: Another task
       debug:
@@ -313,7 +318,8 @@ class TestCheckFileForAuthIssues:
     - name: API call 1
       uri:
         url: https://api1.example.com
-        Authorization: Bearer token1
+        headers:
+          Authorization: Bearer token1
 
 - name: Second Play
   hosts: group2
@@ -328,7 +334,7 @@ class TestCheckFileForAuthIssues:
                   uri:
                     url: https://api2.example.com
                     headers:
-                    Authorization: Bearer token2
+                      Authorization: Bearer token2
 """
         with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
             f.write(yaml_content)
@@ -389,7 +395,8 @@ class TestMain:
 - name: API call
   uri:
     url: https://api.example.com
-    Authorization: Bearer token123
+    headers:
+      Authorization: Bearer token123
 """)
             temp_path = f.name
 
@@ -432,7 +439,8 @@ class TestMain:
 - name: API call {i}
   uri:
     url: https://api{i}.example.com
-    Authorization: Bearer token{i}
+    headers:
+      Authorization: Bearer token{i}
 """)
                 f.close()
                 temp_files.append(f.name)

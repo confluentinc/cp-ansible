@@ -15,7 +15,7 @@ YAML_FILE_PATTERNS = [
     ('roles', '*', 'handlers', '*.yml'),
     ('playbooks', '*.yml'),
 ]
-AUTH_HEADER_KEYWORDS = ['authorization', 'auth']
+AUTH_HEADER_KEYWORDS = ['authorization']
 CREDENTIAL_KEYWORDS = ['password', 'token']
 TASK_MODULE_INDICATORS = ['name', 'debug', 'set_fact', 'include_role', 'import_role']
 WARNING_MESSAGE = 'URI task with authorization should have no_log: true to prevent credential exposure'
@@ -43,11 +43,8 @@ def is_uri_task_with_auth(task):
     if not isinstance(uri_params, dict):
         return False
 
-    # Check for direct Authorization header
-    if 'Authorization' in uri_params:
-        return True
-
     # Check headers dict for authorization
+    # Note: Authorization must be in headers dict, not a direct parameter
     if _has_auth_in_headers(uri_params.get('headers', {})):
         return True
 
@@ -100,16 +97,32 @@ def has_no_log_protection(task):
     return False
 
 
-def get_task_line_number(content, task_name, task_index):
-    """Get approximate line number for a task in the file content."""
+def get_task_line_number(content, task_name, task_index, occurrence=1):
+    """
+    Get approximate line number for a task in the file content.
+
+    Args:
+        content: File content as string
+        task_name: Name of the task
+        task_index: Index of task in the tasks list (fallback)
+        occurrence: Which occurrence of this task name to find (1-based)
+
+    Returns:
+        Line number (1-based) where the task is found
+    """
     if not task_name:
         return task_index + 1
 
     lines = content.split('\n')
+    found_count = 0
+
     for i, line in enumerate(lines):
         if task_name in line and 'name:' in line:
-            return i + 1
+            found_count += 1
+            if found_count == occurrence:
+                return i + 1
 
+    # Fallback: if we couldn't find the Nth occurrence, return index-based estimate
     return task_index + 1
 
 
@@ -140,6 +153,19 @@ def check_file_for_auth_issues(file_path):
         all_tasks = _extract_tasks_from_yaml(parsed_content)
 
         # Check each task for URI authorization issues
+        # First pass: count all tasks with each name to determine occurrence numbers
+        task_name_to_indices = {}
+        for i, task in enumerate(all_tasks):
+            if isinstance(task, dict):
+                task_name = task.get('name', '')
+                if task_name:
+                    if task_name not in task_name_to_indices:
+                        task_name_to_indices[task_name] = []
+                    task_name_to_indices[task_name].append(i)
+
+        # Track which occurrence we're processing for tasks with authorization issues
+        task_name_processed_counts = {}
+
         for i, task in enumerate(all_tasks):
             if not isinstance(task, dict):
                 continue
@@ -147,7 +173,13 @@ def check_file_for_auth_issues(file_path):
             # Check for URI task with auth but no logging protection
             if is_uri_task_with_auth(task) and not has_no_log_protection(task):
                 task_name = task.get('name', f'Task {i + 1}')
-                line_number = get_task_line_number(content, task_name, i)
+                # Find which occurrence this is among all tasks with this name
+                if task_name in task_name_to_indices:
+                    # Find the position of current index in the list of all indices for this name
+                    occurrence = task_name_to_indices[task_name].index(i) + 1
+                else:
+                    occurrence = 1
+                line_number = get_task_line_number(content, task_name, i, occurrence)
 
                 issues.append({
                     'file': file_path,
@@ -233,15 +265,14 @@ def _extract_tasks_from_task(task):
                         tasks.extend(_extract_tasks_from_task(nested_task))
 
     # If this is a direct task (not just a block wrapper), add it
-    # Check if it has task-like properties (uri, name, etc.) and isn't just a block
-    if _is_task(task) and 'block' not in task and 'rescue' not in task and 'always' not in task:
+    # Check if it has task-like properties and isn't just a block wrapper
+    has_block_structure = 'block' in task or 'rescue' in task or 'always' in task
+
+    if _is_task(task) and not has_block_structure:
+        # It's a direct task without block structure
         tasks.append(task)
-    elif 'block' in task or 'rescue' in task or 'always' in task:
-        # It's a block/rescue/always wrapper, don't add it as a task itself
-        pass
-    elif isinstance(task, dict) and any(key in task for key in ['name', 'uri', 'debug']):
-        # It's a task without block structure
-        tasks.append(task)
+    # If it has block/rescue/always, we've already extracted nested tasks above
+    # Don't add the wrapper itself as a task
 
     return tasks
 
