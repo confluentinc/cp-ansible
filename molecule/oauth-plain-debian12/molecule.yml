@@ -32,11 +32,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}1
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+  - name: controller1
+    hostname: controller1.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -45,11 +44,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}2
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
+  - name: controller2
+    hostname: controller2.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -58,11 +56,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}3
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}3.confluent
+  - name: controller3
+    hostname: controller3.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -75,7 +72,6 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -88,7 +84,6 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -101,7 +96,6 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -114,7 +108,6 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-      - schema_registry_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -127,7 +120,6 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
-      - kafka_rest_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -140,7 +132,6 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
-      - kafka_connect_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -153,35 +144,18 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-      - ksql_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
-    networks:
-      - name: confluent
-  - name: control-center1
-    hostname: control-center1.confluent
-    groups:
-      - control_center
-      - control_center_migration
-    image: debian:12
-    dockerfile: ../Dockerfile-debian12-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    published_ports:
-      - "9021:9021"
     networks:
       - name: confluent
   - name: control-center-next-gen
     hostname: control-center-next-gen.confluent
     groups:
       - control_center_next_gen
-      - control_center_next_gen_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -192,22 +166,9 @@ platforms:
       - "9022:9022"
     networks:
       - name: confluent
-    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  - name: controller1-mig
-    hostname: controller1-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: debian:12
-    dockerfile: ../Dockerfile-debian12-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
 provisioner:
   playbooks:
-    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
+    converge: ../collections_converge.yml
   inventory:
     group_vars:
       all:
@@ -247,17 +208,11 @@ provisioner:
         kafka_connect_oauth_user: kafka_connect
         kafka_connect_oauth_password: my-secret
 
-        control_center_next_gen_oauth_user: control_center
+        control_center_next_gen_oauth_user: control_center_next_gen
         control_center_next_gen_oauth_password: my-secret
-
-        control_center_oauth_user: control_center
-        control_center_oauth_password: my-secret
 
         ksql_oauth_user: ksql
         ksql_oauth_password: my-secret
-
-        zookeeper_custom_properties:
-          dataDir: /opt/zookeeper
 
         kafka_broker_custom_client_properties:
           default.api.timeout.ms: 40000
@@ -285,44 +240,49 @@ provisioner:
               file: "/etc/kafka/connect-distributed.properties"
               topics: "test_topic"
 
-        zookeeper_service_unit_overrides:
-          Description: Custom Zookeeper description
-
-        zookeeper_log4j_root_logger: INFO, zkAppender
-
         kafka_controller_service_unit_overrides:
           Description: Custom Controller description
 
-        kafka_controller_log4j_root_logger: "INFO, kafkaAppender"
+        kafka_controller_log4j2_root_logger_level: "INFO"
+        kafka_controller_log4j2_root_appenders:
+          - KafkaAppender
 
         kafka_broker_service_unit_overrides:
           Description: Custom Kafka description
 
-        kafka_broker_log4j_root_logger: "INFO, kafkaAppender"
+        kafka_broker_log4j2_root_logger_level: "INFO"
+        kafka_broker_log4j2_root_appenders:
+           - KafkaAppender
 
-        schema_registry_log4j_root_logger: INFO, file
+        schema_registry_log4j2_root_logger_level: "INFO"
+        schema_registry_log4j2_root_appenders:
+           - file
 
         kafka_connect_service_unit_overrides:
           Description: Custom Connect description
 
-        kafka_connect_log4j_root_logger: "INFO, connectAppender"
+        kafka_connect_log4j2_root_logger_level: "INFO"
+        kafka_connect_log4j2_root_appenders:
+          - "ConnectAppender"
 
         kafka_rest_service_unit_overrides:
           Description: Custom Rest Proxy description
 
-        kafka_rest_log4j_root_logger: INFO, file
+        kafka_rest_log4j2_root_logger_level: INFO
+        kafka_rest_log4j2_root_appenders:
+          - file
 
         ksql_service_unit_overrides:
           Description: Custom KSQLDB description
 
-        ksql_log4j_root_logger: INFO, main
-
-        control_center_service_unit_overrides:
-          Description: Custom C3 description
-
-        control_center_log4j_root_logger: INFO, stdout, main
+        ksql_log4j2_root_logger_level: INFO
+        ksql_log4j2_root_appenders:
+          - main
 
         control_center_next_gen_service_unit_overrides:
           Description: Custom C3 description
 
-        control_center_next_gen_log4j_root_logger: INFO, stdout, main
+        control_center_next_gen_log4j2_root_logger_level: INFO
+        control_center_next_gen_log4j2_root_appenders:
+          - Streams
+          - Main

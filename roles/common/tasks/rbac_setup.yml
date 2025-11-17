@@ -10,6 +10,14 @@
     mtls_client_cert: "{{ mds_super_user_external_cert_path if delegated_to_localhost|bool else kafka_broker_cert_path }}"
     mtls_client_key: "{{ mds_super_user_external_key_path if delegated_to_localhost|bool else kafka_broker_key_path }}"
     cert_auth_only_enabled: "{{ cert_auth_only_enabled_for_rbac|bool }}"
+    oauth_client_assertion_enabled: "{{ oauth_superuser_client_assertion_enabled }}"
+    oauth_client_assertion_issuer: "{{ oauth_superuser_client_assertion_issuer }}"
+    oauth_client_assertion_sub: "{{ oauth_superuser_client_assertion_sub }}"
+    oauth_client_assertion_audience: "{{ oauth_superuser_client_assertion_audience }}"
+    oauth_client_assertion_private_key_file: "{{ oauth_superuser_client_assertion_private_key_file_dest_path }}"
+    oauth_client_assertion_private_key_passphrase: "{{ oauth_superuser_client_assertion_private_key_passphrase }}"
+    oauth_client_assertion_file: "{{ oauth_superuser_third_party_client_assertion_config.superuser }}"
+    oauth_client_assertion_template_file: "{{ oauth_superuser_client_assertion_template_file_dest_path }}"
 
 - set_fact:
     send_client_cert: "{{ erp_ssl_client_authentication in ['required', 'requested'] }}"
@@ -39,28 +47,6 @@
   set_fact:
     kafka_cluster_id: "{{ cluster_id_query.json.data[0].cluster_id }}"
   when: (cluster_id_source | default('erp') == 'erp') and not ansible_check_mode
-  delegate_to: "{{ inventory_hostname }}"
-
-- name: Get Kafka Cluster ID from Zookeeper
-  shell: >
-      {{ binary_base_path }}/bin/zookeeper-shell {{ groups['zookeeper'][0] }}:{{zookeeper_client_port}} \
-      {% if zookeeper_ssl_enabled|bool %}-zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file \
-      if kafka_broker_secrets_protection_enabled else kafka_broker.config_file }}{% endif %} \
-      get /cluster/id | grep version
-  register: zk_cluster_id_query
-  when: cluster_id_source | default('erp') == 'zookeeper'
-  delegate_to: "{{ inventory_hostname }}"
-  changed_when: false
-
-- set_fact:
-    cluster_id_json: "{{ zk_cluster_id_query.stdout }}"
-  when: cluster_id_source | default('erp') == 'zookeeper'
-  delegate_to: "{{ inventory_hostname }}"
-
-- name: Set kafka_cluster_id Variable
-  set_fact:
-    kafka_cluster_id: "{{ cluster_id_json.id }}"
-  when: cluster_id_source | default('erp') == 'zookeeper'
   delegate_to: "{{ inventory_hostname }}"
 
 - name: Create SSL Certificate Directory

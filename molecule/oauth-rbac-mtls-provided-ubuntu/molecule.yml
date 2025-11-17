@@ -44,13 +44,12 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}1
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+  - name: controller1
+    hostname: controller1.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
     image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu.j2
+    dockerfile: ../Dockerfile-ubuntu-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -61,9 +60,8 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu.j2
+    dockerfile: ../Dockerfile-ubuntu-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -74,9 +72,8 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu.j2
+    dockerfile: ../Dockerfile-ubuntu-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -87,9 +84,8 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu.j2
+    dockerfile: ../Dockerfile-ubuntu-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -100,9 +96,8 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-      - schema_registry_migration
     image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu.j2
+    dockerfile: ../Dockerfile-ubuntu-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -113,9 +108,8 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
-      - kafka_rest_migration
     image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu.j2
+    dockerfile: ../Dockerfile-ubuntu-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -126,9 +120,8 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
-      - kafka_connect_migration
     image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu.j2
+    dockerfile: ../Dockerfile-ubuntu-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -139,37 +132,20 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-      - ksql_migration
     image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu.j2
+    dockerfile: ../Dockerfile-ubuntu-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
-    networks:
-      - name: confluent
-  - name: control-center1
-    hostname: control-center1.confluent
-    groups:
-      - control_center
-      - control_center_migration
-    image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    published_ports:
-      - "9021:9021"
     networks:
       - name: confluent
   - name: control-center-next-gen
     hostname: control-center-next-gen.confluent
     groups:
       - control_center_next_gen
-      - control_center_next_gen_migration
     image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu.j2
+    dockerfile: ../Dockerfile-ubuntu-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
@@ -178,51 +154,14 @@ platforms:
       - "9022:9022"
     networks:
       - name: confluent
-    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  - name: controller1-mig
-    hostname: controller1-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
-  - name: controller2-mig
-    hostname: controller2-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
-  - name: controller3-mig
-    hostname: controller3-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: geerlingguy/docker-ubuntu2404-ansible
-    dockerfile: ../Dockerfile-ubuntu.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
 provisioner:
   playbooks:
-    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
+    converge: ../collections_converge.yml
   inventory:
     group_vars:
       all:
         scenario_name: oauth-rbac-mtls-provided-ubuntu
-
+        ubuntu_java_package_name: openjdk-17-jdk
         rbac_super_users:
           - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker
           - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_controller
@@ -279,10 +218,7 @@ provisioner:
         kafka_connect_oauth_user: kafka_connect
         kafka_connect_oauth_password: my-secret
 
-        control_center_oauth_user: control_center
-        control_center_oauth_password: my-secret
-
-        control_center_next_gen_oauth_user: control_center
+        control_center_next_gen_oauth_user: control_center_next_gen
         control_center_next_gen_oauth_password: my-secret
 
         ksql_oauth_user: ksql
@@ -308,17 +244,11 @@ provisioner:
         kafka_rest_ldap_user: kafka_rest
         kafka_rest_ldap_password: password
 
-        control_center_ldap_user: control_center
-        control_center_ldap_password: password
-
         control_center_next_gen_ldap_user: control_center
         control_center_next_gen_ldap_password: password
 
         rbac_component_additional_system_admins:
           - User:user1
-
-      zookeeper:
-        zookeeper_export_certs: true
 
       kafka_broker:
         ldap_config: |
@@ -370,10 +300,6 @@ provisioner:
             password: "{{ksql_ldap_password}}"
             uid: 9996
             guid: 96
-#          - username: "{{control_center_ldap_user}}"
-#            password: "{{control_center_ldap_password}}"
-#            uid: 9995
-#            guid: 95
           - username: "{{control_center_next_gen_ldap_user}}"
             password: "{{control_center_next_gen_ldap_password}}"
             uid: 9995

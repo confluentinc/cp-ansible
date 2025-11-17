@@ -35,11 +35,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}1
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+  - name: controller1
+    hostname: controller1.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -52,7 +51,6 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -65,7 +63,6 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -78,7 +75,6 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -91,7 +87,6 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-      - schema_registry_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -104,7 +99,6 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
-      - kafka_rest_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -117,7 +111,6 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
-      - kafka_connect_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -130,35 +123,18 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-      - ksql_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
-    networks:
-      - name: confluent
-  - name: control-center1
-    hostname: control-center1.confluent
-    groups:
-      - control_center
-      - control_center_migration
-    image: debian:12
-    dockerfile: ../Dockerfile-debian12-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    published_ports:
-      - "9021:9021"
     networks:
       - name: confluent
   - name: control-center-next-gen
     hostname: control-center-next-gen.confluent
     groups:
       - control_center_next_gen
-      - control_center_next_gen_migration
     image: debian:12
     dockerfile: ../Dockerfile-debian12-java17.j2
     command: ""
@@ -169,22 +145,9 @@ platforms:
       - "9022:9022"
     networks:
       - name: confluent
-   # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  - name: controller1-mig
-    hostname: controller1-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: debian:12
-    dockerfile: ../Dockerfile-debian12-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    privileged: true
-    networks:
-      - name: confluent
 provisioner:
   playbooks:
-    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
+    converge: ../collections_converge.yml
   inventory:
     group_vars:
       all:
@@ -192,6 +155,14 @@ provisioner:
         control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
         control_center_next_gen_dependency_alertmanager_basic_auth_enabled: true
         scenario_name: rbac-kerberos-debian12
+
+        logredactor_enabled: true
+        logredactor_rule_path_local: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/rules.json"
+        logredactor_rule_path: "/etc/tmp/rules.json"
+
+        kafka_broker_logredactor_logger_specs_list:
+          - { logger_name: "Root", appenderRefs: "KafkaAppender" }
+          - { logger_name: "io.confluent.security.auth", appenderRefs: "MetadataServiceAppender" }
 
         ssl_enabled: false
         sasl_protocol: kerberos
@@ -230,9 +201,6 @@ provisioner:
         kafka_rest_ldap_user: kafka_rest
         kafka_rest_ldap_password: password
 
-        control_center_ldap_user: control_center
-        control_center_ldap_password: password
-
         control_center_next_gen_ldap_user: control_center
         control_center_next_gen_ldap_password: password
 
@@ -255,10 +223,6 @@ provisioner:
           ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
           ldap.user.object.class: account
 
-      zookeeper:
-        zookeeper_kerberos_principal: "zookeeper/{{inventory_hostname}}.confluent@REALM.EXAMPLE.COM"
-        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
-
       kafka_controller:
         kafka_controller_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@REALM.EXAMPLE.COM"
         kafka_controller_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_controller-{{inventory_hostname}}.keytab"
@@ -278,12 +242,8 @@ provisioner:
         keytab_output_directory: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs"
 
         kerberos_principals:
-          - principal: "zookeeper/zookeeper1.confluent@REALM.EXAMPLE.COM"
-            keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/controller1.confluent@REALM.EXAMPLE.COM"
             keytab_path: "keytabs/kafka_controller-controller1.keytab"
-          - principal: "{{kerberos_kafka_broker_primary}}/controller1-mig.confluent@REALM.EXAMPLE.COM"
-            keytab_path: "keytabs/kafka_controller-controller1-mig.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@REALM.EXAMPLE.COM"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker2.confluent@REALM.EXAMPLE.COM"
@@ -320,10 +280,6 @@ provisioner:
             password: "{{ksql_ldap_password}}"
             uid: 9996
             guid: 96
-#          - username: "{{control_center_ldap_user}}"
-#            password: "{{control_center_ldap_password}}"
-#            uid: 9995
-#            guid: 95
           - username: "{{control_center_next_gen_ldap_user}}"
             password: "{{control_center_next_gen_ldap_password}}"
             uid: 9995

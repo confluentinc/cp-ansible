@@ -46,17 +46,17 @@
         status_code: 200
 
 - name: Verify Java
-  hosts: all,!kafka_controller_migration  #Workaround to skip the task in migration test, need to remove in CP 8.0
+  hosts: all
   gather_facts: false
   tasks:
     - name: Get Java Version
       shell: java -version
       register: version_output
 
-    - name: Assert Java Version is 17
+    - name: Assert Java Version is 21
       assert:
         that:
-          - version_output.stderr_lines[0] | regex_search("17\.0\.")
+          - version_output.stderr_lines[0] | regex_search("21\.")
         fail_msg: "Current Java Version is: {{version_output.stderr_lines[0]}}. Verify again"
         quiet: true
 
@@ -64,18 +64,6 @@
   hosts: kafka_broker
   gather_facts: false
   tasks:
-    - set_fact:
-        kraft_mode: "{{ ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) }}"
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/kafka/server.properties
-        property: listener.security.protocol.map
-        expected_value: INTERNAL:SSL,BROKER:SSL
-      when: not kraft_mode|bool
-
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
@@ -83,7 +71,6 @@
         file_path: /etc/kafka/server.properties
         property: listener.security.protocol.map
         expected_value: CONTROLLER:SSL,INTERNAL:SSL,BROKER:SSL
-      when: kraft_mode|bool
 
     - import_role:
         name: confluent.test
@@ -296,47 +283,6 @@
         property: authMode
         expected_value: basic
 
-- name: Verify - control_center
-  hosts: control_center
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
-        property: confluent.controlcenter.streams.security.protocol
-        expected_value: SSL
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
-        property: confluent.controlcenter.internal.topics.replication
-        expected_value: "4"
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
-        property: confluent.metrics.topic.replication
-        expected_value: "4"
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
-        property: confluent.monitoring.interceptor.topic.replication
-        expected_value: "4"
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
-        property: confluent.controlcenter.command.topic.replication
-        expected_value: "4"
-
 - name: Verify - control_center_next_gen
   hosts: control_center_next_gen
   gather_facts: false
@@ -379,7 +325,7 @@
         expected_value: "4"
 
 - name: Verify - CLI
-  hosts: all,!kafka_controller_migration  #Workaround to skip the task in migration test, need to remove in CP 8.0
+  hosts: all
   gather_facts: false
   tasks:
     - shell: confluent --help

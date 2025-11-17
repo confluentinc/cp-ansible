@@ -20,7 +20,6 @@
     msg: "Warning: Please add list of broker and controller certificate principals in rbac_super_users variable"
   when:
     - rbac_enabled|bool
-    - kraft_enabled|bool
     - ssl_mutual_auth_enabled|bool
     - rbac_super_users | length == 0
 
@@ -35,18 +34,6 @@
       "The 'datadir' configuration property is now obsolete for configuration of kafka broker data directories."
       "Please use 'log.dirs' under kafka_broker_custom_properties with comma separated directories."
   loop: "{{ groups['kafka_broker'] }}"
-
-- name: Validate Kafka Broker Jolokia Access Control Configuration
-  include_tasks: ../common/tasks/component_validations.yml
-  vars:
-    component_name: "Kafka Broker"
-    component_jolokia_enabled: "{{ kafka_broker_jolokia_enabled }}"
-    component_jolokia_access_control_enabled: "{{ kafka_broker_jolokia_access_control_enabled }}"
-    component_jolokia_access_control_custom_file_enabled: "{{ kafka_broker_jolokia_access_control_custom_file_enabled }}"
-    component_jolokia_access_control_file_src_path: "{{ kafka_broker_jolokia_access_control_file_src_path }}"
-  tags:
-    - validate
-    - validate_jolokia
 
 # To avoid a catastrophic user error where root directory permissions get recursively changed
 - name: Assert log.dirs Property not Misconfigured
@@ -65,6 +52,19 @@
   tags:
     - package
     - cp_package
+
+
+- name: Validate Kafka Broker Jolokia Access Control Configuration
+  include_tasks: ../common/tasks/component_validations.yml
+  vars:
+    component_name: "Kafka Broker"
+    component_jolokia_enabled: "{{ kafka_broker_jolokia_enabled }}"
+    component_jolokia_access_control_enabled: "{{ kafka_broker_jolokia_access_control_enabled }}"
+    component_jolokia_access_control_custom_file_enabled: "{{ kafka_broker_jolokia_access_control_custom_file_enabled }}"
+    component_jolokia_access_control_file_src_path: "{{ kafka_broker_jolokia_access_control_file_src_path }}"
+  tags:
+    - validate
+    - validate_jolokia
 
 - name: Install the Kafka Broker Packages
   yum:
@@ -157,7 +157,7 @@
     bcfks_truststore_path: "{{kafka_broker_bcfks_truststore_path}}"
     bcfks_keystore_path: "{{kafka_broker_bcfks_keystore_path}}"
   when: >
-    zookeeper_ssl_enabled|bool or
+    kafka_controller_ssl_enabled|bool or
     kafka_broker_listeners | confluent.platform.ssl_required(ssl_enabled) or
     kafka_broker_rest_ssl_enabled|bool or
     mds_broker_listener.ssl_enabled|bool or
@@ -214,7 +214,7 @@
     kerberos_keytab_path: "{{kafka_broker_kerberos_keytab_path}}"
     kerberos_keytab_destination_path: "{{kafka_broker_keytab_path}}"
     kerberos_handler: "restart kafka"
-  when: "'GSSAPI' in kafka_sasl_enabled_mechanisms or zookeeper_client_authentication_type == 'kerberos' or mds_broker_listener.sasl_protocol =='kerberos'"
+  when: "'GSSAPI' in kafka_sasl_enabled_mechanisms or mds_broker_listener.sasl_protocol =='kerberos'"
 
 - name: Copy Custom Kafka Files
   include_role:
@@ -261,10 +261,50 @@
   tags:
     - filesystem
 
-- name: Get kafka broker secrets protection file status
-  stat:
-    path: "{{ kafka_broker_secrets_protection_file }}"
-  register: kafka_broker_secrets_protection_file_status
+- name: Copy SuperUser client assertion files
+  include_role:
+    name: common
+    tasks_from: copy_client_assertion_files.yml
+  vars:
+    user: "{{kafka_broker_user}}"
+    group: "{{kafka_broker_group}}"
+    client_assertion_files:
+      - src: "{{ oauth_superuser_client_assertion_private_key_file }}"
+        dest: "{{ oauth_superuser_client_assertion_private_key_file_dest_path }}"
+      - src: "{{ oauth_superuser_client_assertion_template_file }}"
+        dest: "{{ oauth_superuser_client_assertion_template_file_dest_path }}"
+  tags:
+    - configuration
+
+- name: Copy broker client assertion files
+  include_role:
+    name: common
+    tasks_from: copy_client_assertion_files.yml
+  vars:
+    user: "{{kafka_broker_user}}"
+    group: "{{kafka_broker_group}}"
+    client_assertion_files:
+      - src: "{{ kafka_broker_oauth_client_assertion_private_key_file }}"
+        dest: "{{ kafka_broker_oauth_client_assertion_private_key_file_dest_path }}"
+      - src: "{{ kafka_broker_oauth_client_assertion_template_file }}"
+        dest: "{{ kafka_broker_oauth_client_assertion_template_file_dest_path }}"
+  tags:
+    - configuration
+
+- name: Copy schema registry client assertion files
+  include_role:
+    name: common
+    tasks_from: copy_client_assertion_files.yml
+  vars:
+    user: "{{kafka_broker_user}}"
+    group: "{{kafka_broker_group}}"
+    client_assertion_files:
+      - src: "{{ schema_registry_oauth_client_assertion_private_key_file }}"
+        dest: "{{ kafka_broker_sr_oauth_client_assertion_private_key_file_dest_path }}"
+      - src: "{{ schema_registry_oauth_client_assertion_template_file }}"
+        dest: "{{ kafka_broker_sr_oauth_client_assertion_template_file_dest_path }}"
+  tags:
+    - configuration
 
 - name: Create Kafka Broker Config
   template:
@@ -298,19 +338,6 @@
 
 - name: Include Kraft Cluster Data
   include_tasks: get_meta_properties.yml
-  when: kraft_enabled|bool and not kraft_migration|bool
-
-# Zookeeper shell cannot read server.properties if secrets protection is enabled. Keeping a separate file.
-- name: Create Zookeeper TLS Client Config
-  template:
-    src: zookeeper-tls-client.properties.j2
-    dest: "{{kafka_broker.zookeeper_tls_client_config_file}}"
-    mode: '640'
-    owner: "{{kafka_broker_user}}"
-    group: "{{kafka_broker_group}}"
-  when: zookeeper_ssl_enabled|bool and not kraft_enabled|bool
-  tags:
-    - configuration
 
 - name: Create Logs Directory
   file:
@@ -351,18 +378,55 @@
   tags:
     - filesystem
 
+- name: Create logredactor rule file directory
+  file:
+    path: "{{ logredactor_rule_path | dirname }}"
+    state: directory
+    mode: '755'
+  when: (kafka_broker_custom_log4j2|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Copy logredactor rule file from control node to component node
+  copy:
+    src: "{{ logredactor_rule_path_local }}"
+    dest: "{{ logredactor_rule_path }}"
+    mode: '644'
+  when: (kafka_broker_custom_log4j2|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
+  tags:
+    - log
+
+- name: Check if Kafka log4j file exists
+  stat:
+    path: "{{ kafka_broker.log4j_file }}"
+  register: log4j_file_stat
+  tags:
+    - log
+
+- name: Backup Kafka log4j file if it exists
+  copy:
+    src: "{{ kafka_broker.log4j_file }}"
+    dest: "{{ kafka_broker.log4j_file }}.bak"
+    remote_src: true
+    mode: '640'
+  when: log4j_file_stat.stat.exists
+  tags:
+    - log
+
 - name: Update Kafka log4j Config for Log Cleanup
-  include_role:
-    name: common
-    tasks_from: update_log4j.yml
-  vars:
-    log4j_file: "{{kafka_broker.log4j_file}}"
-    log4j_max_backup_index: "{{kafka_broker_max_log_files}}"
-    log4j_max_file_size: "{{kafka_broker_log_file_size}}"
-    log4j_root_logger: "{{kafka_broker_log4j_root_logger}}"
-    log4j_replace_loggers: "{{kafka_broker_log4j_replace_loggers}}"
-    handler: "restart kafka"
-  when: kafka_broker_custom_log4j|bool
+  confluent.platform.update_log4j2:
+    path: "{{kafka_broker.log4j_file}}"
+    max: "{{kafka_broker_max_log_files}}"
+    size: "{{kafka_broker_log_file_size}}"
+    root_level: "{{kafka_broker_log4j2_root_logger_level}}"
+    root_appenders: "{{ kafka_broker_log4j2_root_appenders }}"
+    add_redactor: "{{ logredactor_enabled|bool }}"
+    redactor_refs: "{{ kafka_broker_logredactor_logger_specs_list | map(attribute='appenderRefs') | list }}"
+    redactor_rules: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
+    redactor_policy_refresh_interval: "{{ logredactor_policy_refresh_interval }}"
+    redactor_logger_names: "{{ kafka_broker_logredactor_logger_specs_list | map(attribute='logger_name') | list }}"
+  notify: restart kafka
+  when: kafka_broker_custom_log4j2|bool
   tags:
     - configuration
     - log
@@ -377,56 +441,13 @@
     - filesystem
     - log
 
-- name: Create logredactor rule file directory
-  file:
-    path: "{{ logredactor_rule_path | dirname }}"
-    state: directory
-    mode: '755'
-  when: (kafka_broker_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
-  tags:
-    - log
-
-- name: Copy logredactor rule file from control node to component node
-  copy:
-    src: "{{ logredactor_rule_path_local }}"
-    dest: "{{ logredactor_rule_path }}"
-    mode: '644'
-  when: (kafka_broker_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
-  tags:
-    - log
-
-- name: Configure logredactor
-  include_role:
-    name: common
-    tasks_from: configure_logredactor.yml
-  vars:
-    log4j_file: "{{kafka_broker.log4j_file}}"
-    logredactor_rule_var: "{% if logredactor_rule_url == '' %}{{logredactor_rule_path}}{% else %}{{logredactor_rule_url}}{% endif %}"
-    logredactor_policy_refresh_interval_var: "{{logredactor_policy_refresh_interval}}"
-  with_items: "{{ kafka_broker_logredactor_logger_specs_list }}"
-  when: (kafka_broker_custom_log4j|bool) and (logredactor_enabled|bool)
-  tags:
-    - log
-
 - name: Restart kafka broker
   ansible.builtin.debug:
     msg: "restarting kafka broker"
   notify: restart kafka
-  when: (kafka_broker_custom_log4j|bool) and (logredactor_enabled|bool) and (not kafka_broker_skip_restarts|bool)
+  when: (kafka_broker_custom_log4j2|bool) and (logredactor_enabled|bool) and (not kafka_broker_skip_restarts|bool)
   tags:
     - log
-
-
-- name: Copy Jolokia Access Control File
-  copy:
-    src: "{{ kafka_broker_jolokia_access_control_file_src_path }}"
-    dest: "{{ kafka_broker_jolokia_access_control_file_dest_path }}"
-    mode: '640'
-    owner: "{{ kafka_broker_user }}"
-    group: "{{ kafka_broker_group }}"
-  when: kafka_broker_jolokia_enabled|bool and kafka_broker_jolokia_access_control_enabled|bool
-  tags:
-    - configuration
 
 - name: Create Kafka Broker Jolokia Config
   template:
@@ -441,6 +462,21 @@
   tags:
     - configuration
 
+
+- name: Copy Kafka Broker Jolokia Access Control File
+  copy:
+    src: "{{ kafka_broker_jolokia_access_control_file_src_path }}"
+    dest: "{{ kafka_broker_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_broker_user }}"
+    group: "{{ kafka_broker_group }}"
+  when:
+    - kafka_broker_jolokia_enabled|bool
+    - kafka_broker_jolokia_access_control_enabled|bool
+  notify: restart kafka
+  tags:
+    - configuration
+
 - name: Create Kafka Broker Jaas Config
   template:
     src: kafka_server_jaas.conf.j2
@@ -449,7 +485,6 @@
     owner: "{{kafka_broker_user}}"
     group: "{{kafka_broker_group}}"
   when: "'GSSAPI' in kafka_sasl_enabled_mechanisms or
-          zookeeper_client_authentication_type in ['kerberos', 'digest'] or
           (kafka_broker_rest_proxy_enabled and (not rbac_enabled or (rbac_enabled and external_mds_enabled)) and kafka_broker_rest_proxy_authentication_type == 'basic')"
   notify: restart kafka
   tags:
@@ -602,7 +637,6 @@
     - rbac_enabled|bool
     - (kafka_controller_ssl_mutual_auth_enabled|bool and rbac_super_users | length == 0)
       or ( not external_mds_enabled|bool and confluent_cli_version is version('3.0.0', '<'))
-    - kraft_enabled|bool
   run_once: true
 
 - meta: flush_handlers
@@ -634,7 +668,6 @@
   changed_when: true
   when:
     - "'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms"
-    - kraft_enabled|bool
     - not ( kafka_broker_client_secrets_protection_enabled|bool )
   no_log: "{{ mask_secrets|bool }}"
 
@@ -650,7 +683,6 @@
   changed_when: true
   when:
     - "'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms"
-    - kraft_enabled|bool
     - not ( kafka_broker_client_secrets_protection_enabled|bool )
   no_log: "{{ mask_secrets|bool }}"
 
@@ -668,7 +700,6 @@
   changed_when: true
   when:
     - "'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms"
-    - kraft_enabled|bool
     - kafka_broker_client_secrets_protection_enabled|bool
   no_log: "{{ mask_secrets|bool }}"
 
@@ -686,7 +717,6 @@
   changed_when: true
   when:
     - "'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms"
-    - kraft_enabled|bool
     - kafka_broker_client_secrets_protection_enabled|bool
   no_log: "{{ mask_secrets|bool }}"
 
