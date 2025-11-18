@@ -15,6 +15,18 @@
     - ansible_fqdn
     - ansible_distribution
 
+- name: Validate Kafka Controller Jolokia Access Control Configuration
+  include_tasks: ../common/tasks/component_validations.yml
+  vars:
+    component_name: "Kafka Controller"
+    component_jolokia_enabled: "{{ kafka_controller_jolokia_enabled }}"
+    component_jolokia_access_control_enabled: "{{ kafka_controller_jolokia_access_control_enabled }}"
+    component_jolokia_access_control_custom_file_enabled: "{{ kafka_controller_jolokia_access_control_custom_file_enabled }}"
+    component_jolokia_access_control_file_src_path: "{{ kafka_controller_jolokia_access_control_file_src_path }}"
+  tags:
+    - validate
+    - validate_jolokia
+
 - name: Validate cert principals defined in inventory for RBAC mTLS setup
   debug:
     msg: "Warning: Please add list of broker and controller certificate principals in rbac_super_users variable"
@@ -340,6 +352,7 @@
     src: "{{ kafka_controller.log4j_file }}"
     dest: "{{ kafka_controller.log4j_file }}.bak"
     remote_src: true
+    mode: '640'
   when: log4j_file_stat.stat.exists
   tags:
     - log
@@ -394,6 +407,20 @@
   tags:
     - configuration
     - privileged
+
+- name: Copy Kafka Controller Jolokia Access Control File
+  copy:
+    src: "{{ kafka_controller_jolokia_access_control_file_src_path }}"
+    dest: "{{ kafka_controller_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_controller_user }}"
+    group: "{{ kafka_controller_group }}"
+  when:
+    - kafka_controller_jolokia_enabled|bool
+    - kafka_controller_jolokia_access_control_enabled|bool
+  notify: restart Kafka Controller
+  tags:
+    - configuration
 
 - name: Create Kafka Controller Jaas Config
   template:
@@ -468,6 +495,7 @@
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
+  changed_when: false
   notify: restart Kafka Controller
   when: certs_updated|bool
 
