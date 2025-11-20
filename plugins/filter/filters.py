@@ -590,13 +590,15 @@ class FilterModule(object):
                 ).decode()
         return username_with_hashed_passwords
 
-    def prometheus_client_properties(self, ssl_enabled, truststore_path, truststore_storepass,
+    def prometheus_client_properties(self, input_dict, ssl_enabled, truststore_path, truststore_storepass,
                                      keystore_path, keystore_storepass, keystore_keypass,
                                      basic_auth_enabled, basic_auth_user_info, mtls_enabled,
                                      service_name):
         """
         Generate Prometheus client properties for Control Center Next Gen.
         Uses the same logic as client_properties filter but with Prometheus-specific prefixes.
+        Args:
+            input_dict: The input from the pipe operator (typically an empty dict {}). This parameter is required for Ansible filter syntax but is not used.
         """
         final_dict = {}
         config_prefix = 'confluent.controlcenter.prometheus.'
@@ -619,13 +621,15 @@ class FilterModule(object):
 
         return final_dict
 
-    def alertmanager_client_properties(self, ssl_enabled, truststore_path, truststore_storepass,
+    def alertmanager_client_properties(self, input_dict, ssl_enabled, truststore_path, truststore_storepass,
                                        keystore_path, keystore_storepass, keystore_keypass,
                                        basic_auth_enabled, basic_auth_user_info, mtls_enabled,
                                        service_name):
         """
         Generate Alertmanager client properties for Control Center Next Gen.
         Uses the same logic as client_properties filter but with Alertmanager-specific prefixes.
+        Args:
+            input_dict: The input from the pipe operator (typically an empty dict {}). This parameter is required for Ansible filter syntax but is not used.
         """
         final_dict = {}
         config_prefix = 'confluent.controlcenter.alertmanager.'
