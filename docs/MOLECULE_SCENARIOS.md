@@ -32,6 +32,8 @@ Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-
 
 Custom log dirs for all components.
 
+USM Agent Basic Auth
+
 #### Scenario archive-plain-debian verify test's the following:
 
 Validates that SASL SSL protocol is set across all components
@@ -92,6 +94,8 @@ Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-
 
 Custom log dirs for all components.
 
+USM Agent Authentication Configuration - BASIC + TLS AUTHENTICATION with self signed certs.
+
 #### Scenario archive-plain-ubuntu verify test's the following:
 
 Validates that protocol is set to sasl plain.
@@ -114,6 +118,8 @@ TLS Enabled.
 
 Custom Archive owner.
 
+USM Agent Authentication Configuration - BASIC + TLS AUTHENTICATION with self signed certs.
+
 #### Scenario archive-scram-rhel verify test's the following:
 
 Validates that customer user and group on archive are set.
@@ -135,6 +141,8 @@ MTLS enabled.
 Installs Three unique Kafka Connect Clusters with unique connectors.
 
 Installs two unique KSQL Clusters.
+
+USM Agent Authentication Configuration - MTLS AUTHENTICATION with self signed certs.
 
 #### Scenario broker-scale-up verify test's the following:
 
@@ -174,6 +182,8 @@ TLS Enabled.
 
 Custom TLS certificates.
 
+USM Agent Authentication Configuration - BASIC + TLS AUTHENTICATION with custom certs.
+
 #### Scenario confluent-kafka-kerberos-customcerts-rhel verify test's the following:
 
 Validates GSSAPI Protocol for Kerberos is set.
@@ -210,6 +220,8 @@ Kafka broker has custom listener at port 9093
 
 Kraft Controller is running at port 9094
 
+USM Agent Authentication Configuration - BASIC AUTHENTICATION
+
 #### Scenario cp-kafka-plain-rhel verify test's the following:
 
 Validates that SASL Plaintext protocol is set.
@@ -227,6 +239,8 @@ Custom user set on each component.
 Custom log appender path on each component.
 
 Controller and Broker co-located while migration
+
+USM Agent Authentication Configuration - NO AUTHENTICATION
 
 #### Scenario custom-user-plaintext-rhel verify test's the following:
 
@@ -286,6 +300,8 @@ TLS Enabled with custom certs.
 
 Kerberos enabled.
 
+USM Agent Authentication Configuration - BASIC + TLS AUTHENTICATION with custom certs.
+
 #### Scenario kerberos-customcerts-rhel verify test's the following:
 
 Validates that Kerberos is enabled across all components.
@@ -303,6 +319,8 @@ Installation of Confluent Platform on Oracle Linux 9.
 Kerberos enabled with custom client config path
 
 Creates a Connector in Connect cluster
+
+USM Agent Authentication Configuration - BASIC AUTHENTICATION
 
 #### Scenario kerberos-rhel verify test's the following:
 
@@ -353,6 +371,8 @@ RBAC over mTLS enabled.
 Centralized MDS.
 
 File based login to C3 using overrides.
+
+USM Agent Authentication Configuration - MTLS AUTHENTICATION with custom certs.
 
 #### Scenario mini-setup-ext-mds-mtls verify test's the following:
 
@@ -1577,6 +1597,76 @@ SCRAM enabled.
 #### Scenario scram-rhel verify test's the following:
 
 Validates that SCRAM is enabled on all components except kafka controller.
+
+***
+
+### molecule/sr-switchover-cp-to-cc-ldap-mtls
+
+#### Scenario sr-switchover-cp-to-cc-ldap-mtls test's the following:
+
+SR Automation Workflow Testing - LDAP/RBAC + mTLS
+
+Tests SR automation features with LDAP authentication, RBAC authorization, and mTLS
+
+Enterprise directory + certificate authentication scenario
+
+#### Scenario sr-switchover-cp-to-cc-ldap-mtls verify test's the following:
+
+SR Automation Workflow Verification - LDAP/RBAC + mTLS
+
+Includes base verification and adds LDAP + mTLS specific checks
+
+***
+
+### molecule/sr-switchover-cp-to-cc-mtls
+
+#### Scenario sr-switchover-cp-to-cc-mtls test's the following:
+
+Schema Registry Automation Workflow Testing Configuration
+
+Tests SR automation features including exporters, importers, and switchover workflow
+
+Uses multiple SR instances to simulate CP SR -> CC SR automation
+
+#### Scenario sr-switchover-cp-to-cc-mtls verify test's the following:
+
+SR Automation Workflow Verification
+
+***
+
+### molecule/sr-switchover-cp-to-cc-oauth-rbac
+
+#### Scenario sr-switchover-cp-to-cc-oauth-rbac test's the following:
+
+SR Automation Workflow Testing - OAuth + RBAC
+
+Tests SR automation features with OAuth authentication and RBAC authorization
+
+Modern enterprise authentication scenario
+
+#### Scenario sr-switchover-cp-to-cc-oauth-rbac verify test's the following:
+
+SR Automation Workflow Verification - OAuth + RBAC
+
+Includes base verification and adds OAuth + RBAC specific checks
+
+***
+
+### molecule/sr-switchover-cp-to-cc-plaintext
+
+#### Scenario sr-switchover-cp-to-cc-plaintext test's the following:
+
+SR Automation Workflow Testing - Plaintext/No Auth
+
+Tests SR automation features with no security/authentication
+
+Simplest baseline scenario for automation workflow testing
+
+#### Scenario sr-switchover-cp-to-cc-plaintext verify test's the following:
+
+SR Automation Workflow Verification - Plaintext/No Auth
+
+Includes base verification and adds plaintext-specific checks
 
 ***
 
