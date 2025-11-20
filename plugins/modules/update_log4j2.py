@@ -193,7 +193,10 @@ def main():
     result = dict(changed=False, message='')
     module = AnsibleModule(argument_spec=module_args, supports_check_mode=True)
     if not HAS_YAML:
-        module.fail_json(msg="The python PyYAML module is required on Target nodes. Install it with 'pip install PyYAML'")
+        module.fail_json(
+            msg="The python PyYAML module is required on Target nodes. "
+                "Install it with 'pip install PyYAML'"
+        )
 
     path = module.params['path']
     size = module.params['size']
@@ -217,7 +220,11 @@ def main():
         if not redactor_logger_names:
             module.fail_json(msg="redactor_logger_names is required when add_redactor=true", **result)
         if len(redactor_refs) != len(redactor_logger_names):
-            module.fail_json(msg=f"number of appenderRefs ({len(redactor_refs)}) and logger_name ({len(redactor_logger_names)}) must be equal", **result)
+            module.fail_json(
+                msg=f"number of appenderRefs ({len(redactor_refs)}) and "
+                    f"logger_name ({len(redactor_logger_names)}) must be equal",
+                **result
+            )
 
     if not os.path.exists(path):
         module.fail_json(msg=f"File {path} does not exist.", **result)
@@ -294,7 +301,10 @@ def main():
                 changed = True
     # Write back as dict if only one RollingFile appender, else as list
     if rollingfiles:
-        data['Configuration']['Appenders']['RollingFile'] = rollingfiles[0] if single_rollingfile and len(rollingfiles) == 1 else rollingfiles
+        data['Configuration']['Appenders']['RollingFile'] = (
+            rollingfiles[0] if single_rollingfile and len(rollingfiles) == 1
+            else rollingfiles
+        )
 
     # Optionally update root logger level and update root logger appenders
     loggers = data['Configuration'].get('Loggers', {})
@@ -398,7 +408,13 @@ def main():
         with open(path, 'w') as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
-        result['message'] = f"Updated {path}: removed TimeBasedTriggeringPolicy, added/updated SizeBasedTriggeringPolicy, added index counter (%i) to filePattern while preserving date information, and configured DefaultRolloverStrategy with Delete action to ensure proper cleanup of old and new log files when count exceeds {max_backup}."
+        result['message'] = (
+            f"Updated {path}: removed TimeBasedTriggeringPolicy, "
+            f"added/updated SizeBasedTriggeringPolicy, added index counter (%i) "
+            f"to filePattern while preserving date information, and configured "
+            f"DefaultRolloverStrategy with Delete action to ensure proper cleanup "
+            f"of old and new log files when count exceeds {max_backup}."
+        )
         if root_level:
             result['message'] += f" Set root logger level to {root_level}."
 
@@ -407,7 +423,11 @@ def main():
             result['message'] += f" Set root logger appenders to {root_appenders}."
 
         if add_redactor:
-            result['message'] += f" Added/updated Rewrite appender '{redactor_name}', referencing {redactor_refs} to {len(redactor_logger_names)} logger(s)."
+            result['message'] += (
+                f" Added/updated Rewrite appender '{redactor_name}', "
+                f"referencing {redactor_refs} to {len(redactor_logger_names)} "
+                f"logger(s)."
+            )
     else:
         result['message'] = "No changes needed."
 
