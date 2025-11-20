@@ -18,80 +18,65 @@
   delay: 90
   tags: package
 
-- name: Add Confluent Apt Key
-  apt_key:
-    url: "{{item}}"
-    state: present
-  loop:
-    - "{{confluent_common_repository_debian_key_url}}"
-    - "{{confluent_control_center_next_gen_repository_debian_key_url}}"
-  register: apt_add_key_result
-  until: apt_add_key_result is success
+- name: Install python3-debian for deb822_repository module
+  apt:
+    name: python3-debian
+  register: install_python_debian_result
+  until: install_python_debian_result is success or ansible_check_mode
   retries: 5
   delay: 90
+  tags: package
+
+- name: Add Confluent Repositories using deb822_repository
+  deb822_repository:
+    name: "{{ item.name }}"
+    types:
+      - deb
+    uris:
+      - "{{ item.uri }}"
+    suites:
+      - "{{ item.suite }}"
+    components:
+      - main
+    signed_by: "{{ item.signed_by }}"
+    state: present
+  loop:
+    - name: confluent-clients
+      uri: "{{ confluent_clients_repository_baseurl }}/clients/deb"
+      suite: "{{ ansible_distribution_release }}"
+      signed_by: "{{ confluent_common_repository_debian_clients_key_url }}"
+    - name: confluent-common
+      uri: "{{ confluent_common_repository_baseurl }}/deb/{{ confluent_repo_version }}"
+      suite: stable
+      signed_by: "{{ confluent_common_repository_debian_key_url }}"
+    - name: confluent-control-center-next-gen
+      uri: "{{ confluent_control_center_next_gen_repository_debian_baseurl }}"
+      suite: stable
+      signed_by: "{{ confluent_control_center_next_gen_repository_debian_key_url }}"
   when:
     - repository_configuration == 'confluent'
     - installation_method == "package"
+  tags: package
+  notify:
+    - apt-get update
 
-- name: Ensure Custom Apt Repo does not Exists when repository_configuration is Confluent
+
+- name: Ensure custom Confluent Apt Repo file does not exist when using Confluent repositories
   file:
     state: absent
     path: /etc/apt/sources.list.d/custom_confluent.list
   when:
     - repository_configuration == 'confluent'
     - installation_method == "package"
-  notify:
-    - apt-get update
 
-- name: Add Confluent Apt Repo
-  apt_repository:
-    repo: "{{item}}"
-    state: present
-  loop:
-    - "{{confluent_common_repository_debian_repository}}"
-    - "{{confluent_control_center_next_gen_repository_debian_repository}}"
-  register: apt_add_result
-  until: apt_add_result is success
-  retries: 5
-  delay: 90
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Add Confluent Clients Apt Key
-  apt_key:
-    url: "{{confluent_common_repository_debian_clients_key_url}}"
-    state: present
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Add Confluent Clients Apt Repo
-  apt_repository:
-    repo: "{{confluent_common_repository_debian_clients_repository}}"
-    state: present
-  register: apt_add_result
-  until: apt_add_result is success
-  retries: 10
-  delay: 5
-  when:
-    - repository_configuration == 'confluent'
-    - installation_method == "package"
-
-- name: Ensure Confluent Apt Repo does not Exists when repository_configuration is Custom
-  apt_repository:
-    repo: "{{item}}"
+- name: Ensure Confluent deb822 repositories are not present when repository_configuration is custom
+  deb822_repository:
+    name: "{{ item }}"
     state: absent
   loop:
-    - "{{confluent_common_repository_debian_repository}}"
-    - "{{confluent_control_center_next_gen_repository_debian_repository}}"
-  when:
-    - repository_configuration == 'custom'
-
-- name: Ensure Confluent Clients Apt Repo does not Exists when repository_configuration is Custom
-  apt_repository:
-    repo: "{{confluent_common_repository_debian_clients_repository}}"
-    state: absent
+    - confluent-clients
+    - confluent-common
+    - confluent-control-center-next-gen
   when:
     - repository_configuration == 'custom'
 
@@ -107,8 +92,6 @@
   when: repository_configuration == 'custom'
   notify:
     - apt-get update
-
-- meta: flush_handlers
 
 - name: Make Sure man pages Directory Exists
   file:
