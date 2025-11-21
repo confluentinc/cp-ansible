@@ -594,6 +594,8 @@ class FilterModule(object):
         """
         Generate Prometheus client properties for Control Center Next Gen.
         Uses the same logic as client_properties filter but with Prometheus-specific prefixes.
+        Args:
+            ssl_enabled: The input from the pipe operator (boolean indicating if SSL is enabled).
         """
         final_dict = {}
         config_prefix = 'confluent.controlcenter.prometheus.'
@@ -623,6 +625,8 @@ class FilterModule(object):
         """
         Generate Alertmanager client properties for Control Center Next Gen.
         Uses the same logic as client_properties filter but with Alertmanager-specific prefixes.
+        Args:
+            ssl_enabled: The input from the pipe operator (boolean indicating if SSL is enabled).
         """
         final_dict = {}
         config_prefix = 'confluent.controlcenter.alertmanager.'
