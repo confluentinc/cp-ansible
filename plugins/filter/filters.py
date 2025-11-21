@@ -587,6 +587,35 @@ class FilterModule(object):
                 ).decode()
         return username_with_hashed_passwords
 
+    def _dependency_client_properties(self, config_prefix, ssl_enabled, truststore_path, truststore_storepass,
+                                      keystore_path, keystore_storepass, keystore_keypass,
+                                      basic_auth_enabled, basic_auth_user_info, mtls_enabled,
+                                      service_name):
+        """
+        Common helper function to generate client properties for Control Center Next Gen dependencies.
+        Args:
+            config_prefix: The configuration prefix (e.g., 'confluent.controlcenter.prometheus.' or 'confluent.controlcenter.alertmanager.')
+        """
+        final_dict = {}
+
+        # SSL/TLS properties
+        if ssl_enabled:
+            final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
+            final_dict[config_prefix + 'ssl.truststore.password'] = truststore_storepass
+            final_dict[config_prefix + 'alias.name'] = service_name
+
+            # mTLS properties
+            if mtls_enabled:
+                final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
+                final_dict[config_prefix + 'ssl.keystore.password'] = keystore_storepass
+                final_dict[config_prefix + 'ssl.key.password'] = keystore_keypass
+
+        # Basic authentication
+        if basic_auth_enabled:
+            final_dict[config_prefix + 'basic.auth.user.info'] = basic_auth_user_info
+
+        return final_dict
+
     def prometheus_client_properties(self, ssl_enabled, truststore_path, truststore_storepass,
                                      keystore_path, keystore_storepass, keystore_keypass,
                                      basic_auth_enabled, basic_auth_user_info, mtls_enabled,
@@ -594,27 +623,16 @@ class FilterModule(object):
         """
         Generate Prometheus client properties for Control Center Next Gen.
         Uses the same logic as client_properties filter but with Prometheus-specific prefixes.
+        Args:
+            ssl_enabled: The input from the pipe operator (boolean indicating if SSL is enabled).
         """
-        final_dict = {}
-        config_prefix = 'confluent.controlcenter.prometheus.'
-
-        # SSL/TLS properties
-        if ssl_enabled:
-            final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
-            final_dict[config_prefix + 'ssl.truststore.password'] = str(truststore_storepass)
-            final_dict[config_prefix + 'alias.name'] = service_name
-
-            # mTLS properties
-            if mtls_enabled:
-                final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
-                final_dict[config_prefix + 'ssl.keystore.password'] = str(keystore_storepass)
-                final_dict[config_prefix + 'ssl.key.password'] = str(keystore_keypass)
-
-        # Basic authentication
-        if basic_auth_enabled and basic_auth_user_info:
-            final_dict[config_prefix + 'basic.auth.user.info'] = basic_auth_user_info
-
-        return final_dict
+        return self._dependency_client_properties(
+            'confluent.controlcenter.prometheus.',
+            ssl_enabled, truststore_path, truststore_storepass,
+            keystore_path, keystore_storepass, keystore_keypass,
+            basic_auth_enabled, basic_auth_user_info, mtls_enabled,
+            service_name
+        )
 
     def alertmanager_client_properties(self, ssl_enabled, truststore_path, truststore_storepass,
                                        keystore_path, keystore_storepass, keystore_keypass,
@@ -623,24 +641,13 @@ class FilterModule(object):
         """
         Generate Alertmanager client properties for Control Center Next Gen.
         Uses the same logic as client_properties filter but with Alertmanager-specific prefixes.
+        Args:
+            ssl_enabled: The input from the pipe operator (boolean indicating if SSL is enabled).
         """
-        final_dict = {}
-        config_prefix = 'confluent.controlcenter.alertmanager.'
-
-        # SSL/TLS properties
-        if ssl_enabled:
-            final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
-            final_dict[config_prefix + 'ssl.truststore.password'] = str(truststore_storepass)
-            final_dict[config_prefix + 'alias.name'] = service_name
-
-            # mTLS properties
-            if mtls_enabled:
-                final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
-                final_dict[config_prefix + 'ssl.keystore.password'] = str(keystore_storepass)
-                final_dict[config_prefix + 'ssl.key.password'] = str(keystore_keypass)
-
-        # Basic authentication
-        if basic_auth_enabled and basic_auth_user_info:
-            final_dict[config_prefix + 'basic.auth.user.info'] = basic_auth_user_info
-
-        return final_dict
+        return self._dependency_client_properties(
+            'confluent.controlcenter.alertmanager.',
+            ssl_enabled, truststore_path, truststore_storepass,
+            keystore_path, keystore_storepass, keystore_keypass,
+            basic_auth_enabled, basic_auth_user_info, mtls_enabled,
+            service_name
+        )
