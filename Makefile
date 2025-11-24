@@ -32,15 +32,15 @@ go-c1:
 
 # molecule commands
 converge:
-	molecule converge -s aprf
+	molecule converge -s aprf-fips
 verify:
-	molecule verify -s aprf
+	molecule verify -s aprf-fips
 destroy:
-	molecule destroy -s aprf
+	molecule destroy -s aprf-fips
 
 # edit molecule file
 edit-mole:
-	vim molecule/aprf/molecule.yml
+	vim molecule/aprf-fips/molecule.yml
 
 setup:
 	sudo yum install -y vim
