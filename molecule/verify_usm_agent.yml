@@ -45,55 +45,24 @@
         path: "{{ usm_agent_log_file }}"
       register: log_file_stat
 
-    - name: Wait for USM Agent to send events (initial grace period)
-      pause:
-        seconds: 30
-        prompt: "Waiting 30 seconds for USM Agent to collect and send events..."
-      when: log_file_stat.stat.exists
-
-    - name: Search for v1/events endpoint in logs (204) with retries
-      shell: "grep -c 'POST.*v1/events.*204' {{ usm_agent_log_file }} 2>/dev/null || echo '0'"
+    - name: Search for v1/events endpoint in logs (204)
+      shell: "grep -c 'POST.*v1/events.*204' {{ usm_agent_log_file }} || true"
       register: events_grep_result
-      retries: 12
-      delay: 10
-      until: (events_grep_result.stdout | int) > 0
       when: log_file_stat.stat.exists
-      failed_when: false
 
     - name: Search for v1/metrics endpoint in logs (200)
-      shell: "grep -c 'POST.*v1/metrics.*200' {{ usm_agent_log_file }} 2>/dev/null || echo '0'"
+      shell: "grep -c 'POST.*v1/metrics.*200' {{ usm_agent_log_file }} || true"
       register: metrics_grep_result
       when: log_file_stat.stat.exists
 
-    - name: Debug - Show events count
-      debug:
-        msg: "Events found: {{ events_grep_result.stdout | default('0') }}, Metrics found: {{ metrics_grep_result.stdout | default('0') }}"
-      when: log_file_stat.stat.exists
-
-    - name: Debug - Show last 20 lines of USM Agent access log
-      shell: "tail -20 {{ usm_agent_log_file }}"
-      register: access_log_tail
-      when: 
-        - log_file_stat.stat.exists
-        - (events_grep_result.stdout | default('0') | int) == 0
-      failed_when: false
-
-    - name: Debug - Display access log tail if no events found
-      debug:
-        msg: "{{ access_log_tail.stdout_lines }}"
-      when:
-        - log_file_stat.stat.exists
-        - (events_grep_result.stdout | default('0') | int) == 0
-        - access_log_tail.stdout is defined
-
     - name: Set events endpoint found fact
       set_fact:
-        events_endpoint_found: "{{ (events_grep_result.stdout | default('0') | int) > 0 }}"
+        events_endpoint_found: "{{ (events_grep_result.stdout | int) > 0 }}"
       when: log_file_stat.stat.exists
 
     - name: Set metrics endpoint found fact
       set_fact:
-        metrics_endpoint_found: "{{ (metrics_grep_result.stdout | default('0') | int) > 0 }}"
+        metrics_endpoint_found: "{{ (metrics_grep_result.stdout | int) > 0 }}"
       when: log_file_stat.stat.exists
 
     # Verification assertions
