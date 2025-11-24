@@ -601,14 +601,14 @@ class FilterModule(object):
         # SSL/TLS properties
         if ssl_enabled:
             final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
-            final_dict[config_prefix + 'ssl.truststore.password'] = truststore_storepass
+            final_dict[config_prefix + 'ssl.truststore.password'] = str(truststore_storepass)
             final_dict[config_prefix + 'alias.name'] = service_name
 
             # mTLS properties
             if mtls_enabled:
                 final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
-                final_dict[config_prefix + 'ssl.keystore.password'] = keystore_storepass
-                final_dict[config_prefix + 'ssl.key.password'] = keystore_keypass
+                final_dict[config_prefix + 'ssl.keystore.password'] = str(keystore_storepass)
+                final_dict[config_prefix + 'ssl.key.password'] = str(keystore_keypass)
 
         # Basic authentication
         if basic_auth_enabled:
