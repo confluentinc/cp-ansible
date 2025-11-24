@@ -16,15 +16,6 @@
 
   tasks:
     # USM Agent Health Check
-    - name: Check USM Agent service is running
-      shell: "systemctl is-active confluent-usm-agent || systemctl status confluent-usm-agent"
-      register: usm_service_status
-      failed_when: false
-
-    - name: Debug - USM Agent service status
-      debug:
-        msg: "USM Agent service status: {{ usm_service_status.stdout_lines }}"
-
     - name: Check USM Agent health
       uri:
         url: "http://{{ usm_agent_host }}:{{ usm_agent_controlplane_port }}/healthz"
@@ -35,28 +26,6 @@
       retries: 5
       delay: 10
       until: usm_healthz_check.status == 200
-
-    - name: Check if any clients are registered with USM Agent
-      uri:
-        url: "http://{{ usm_agent_host }}:{{ usm_agent_controlplane_port }}/api/v1/clients"
-        method: GET
-        status_code: 200
-        timeout: 10
-      register: usm_clients
-      failed_when: false
-
-    - name: Debug - Registered clients
-      debug:
-        msg: "Registered clients: {{ usm_clients.json | default('Unable to fetch clients') }}"
-
-    - name: Check if USM Agent can reach CCloud mock service
-      shell: "curl -v http://{{ ccloud_mock_host }}:{{ ccloud_mock_port }}/healthz 2>&1"
-      register: ccloud_connectivity
-      failed_when: false
-
-    - name: Debug - CCloud mock connectivity
-      debug:
-        msg: "CCloud mock connectivity: {{ ccloud_connectivity.stdout_lines }}"
 
     # Get baseline events count
     - name: Get baseline events count
@@ -101,22 +70,6 @@
         msg: "Events found: {{ events_grep_result.stdout | default('0') }}, Metrics found: {{ metrics_grep_result.stdout | default('0') }}"
       when: log_file_stat.stat.exists
 
-    - name: Check USM Agent main log for errors
-      shell: "tail -50 /var/log/confluent/usm-agent/usm-agent.log | grep -iE 'error|failed|exception' || echo 'No errors found'"
-      register: usm_main_log_errors
-      when: 
-        - log_file_stat.stat.exists
-        - (events_grep_result.stdout | default('0') | int) == 0
-      failed_when: false
-
-    - name: Debug - USM Agent main log errors
-      debug:
-        msg: "{{ usm_main_log_errors.stdout_lines }}"
-      when:
-        - log_file_stat.stat.exists
-        - (events_grep_result.stdout | default('0') | int) == 0
-        - usm_main_log_errors.stdout is defined
-
     - name: Debug - Show last 20 lines of USM Agent access log
       shell: "tail -20 {{ usm_agent_log_file }}"
       register: access_log_tail
@@ -132,25 +85,6 @@
         - log_file_stat.stat.exists
         - (events_grep_result.stdout | default('0') | int) == 0
         - access_log_tail.stdout is defined
-
-    - name: Check if Kafka brokers are configured to use USM Agent
-      shell: "grep -iE 'usm.agent|usage.telemetry' /etc/kafka/server.properties || echo 'No USM Agent config found'"
-      register: broker_usm_config
-      delegate_to: "{{ groups['kafka_broker'][0] }}"
-      when:
-        - log_file_stat.stat.exists
-        - (events_grep_result.stdout | default('0') | int) == 0
-        - "'kafka_broker' in groups"
-        - groups['kafka_broker'] | length > 0
-      failed_when: false
-
-    - name: Debug - Kafka broker USM Agent configuration
-      debug:
-        msg: "{{ broker_usm_config.stdout_lines }}"
-      when:
-        - log_file_stat.stat.exists
-        - (events_grep_result.stdout | default('0') | int) == 0
-        - broker_usm_config.stdout is defined
 
     - name: Set events endpoint found fact
       set_fact:
