@@ -25,35 +25,6 @@
       debug:
         msg: "USM Agent service status: {{ usm_service_status.stdout_lines }}"
 
-    - name: Check if USM Agent process is running
-      shell: "ps aux | grep -E '[u]sm-agent|[c]onfluent-usm-agent' || echo 'No USM Agent process found'"
-      register: usm_process_check
-      failed_when: false
-
-    - name: Debug - USM Agent process
-      debug:
-        msg: "{{ usm_process_check.stdout_lines }}"
-
-    - name: Check what's listening on USM Agent ports
-      shell: "ss -tlnp | grep -E ':9999|:10000' || echo 'No listeners on 9999 or 10000'"
-      register: usm_ports_check
-      failed_when: false
-
-    - name: Debug - USM Agent port listeners
-      debug:
-        msg: "{{ usm_ports_check.stdout_lines }}"
-
-    - name: Get USM Agent service logs if inactive
-      shell: "journalctl -u confluent-usm-agent -n 50 --no-pager"
-      register: usm_service_logs
-      when: "'inactive' in usm_service_status.stdout"
-      failed_when: false
-
-    - name: Debug - USM Agent service logs
-      debug:
-        msg: "{{ usm_service_logs.stdout_lines }}"
-      when: "'inactive' in usm_service_status.stdout"
-
     - name: Check USM Agent health
       uri:
         url: "http://{{ usm_agent_host }}:{{ usm_agent_controlplane_port }}/healthz"
@@ -163,7 +134,7 @@
         - access_log_tail.stdout is defined
 
     - name: Check if Kafka brokers are configured to use USM Agent
-      shell: "grep -iE 'usm.agent|usage.telemetry|confluent.telemetry' /etc/kafka/server.properties || echo 'No USM Agent config found'"
+      shell: "grep -iE 'usm.agent|usage.telemetry' /etc/kafka/server.properties || echo 'No USM Agent config found'"
       register: broker_usm_config
       delegate_to: "{{ groups['kafka_broker'][0] }}"
       when:
@@ -180,22 +151,6 @@
         - log_file_stat.stat.exists
         - (events_grep_result.stdout | default('0') | int) == 0
         - broker_usm_config.stdout is defined
-
-    - name: Check USM Agent configuration file
-      shell: "cat /etc/confluent/usm-agent/usm-agent.yaml | grep -E 'port|listen' || echo 'Unable to read config'"
-      register: usm_config_check
-      when:
-        - log_file_stat.stat.exists
-        - (events_grep_result.stdout | default('0') | int) == 0
-      failed_when: false
-
-    - name: Debug - USM Agent configuration
-      debug:
-        msg: "{{ usm_config_check.stdout_lines }}"
-      when:
-        - log_file_stat.stat.exists
-        - (events_grep_result.stdout | default('0') | int) == 0
-        - usm_config_check.stdout is defined
 
     - name: Set events endpoint found fact
       set_fact:
