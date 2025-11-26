@@ -38,6 +38,8 @@ class FilterModule(object):
             'resolve_and_format_hostnames': self.resolve_and_format_hostnames,
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
             'replace_client_assertion_file': self.replace_client_assertion_file,
+            'prometheus_client_properties': self.prometheus_client_properties,
+            'alertmanager_client_properties': self.alertmanager_client_properties,
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
