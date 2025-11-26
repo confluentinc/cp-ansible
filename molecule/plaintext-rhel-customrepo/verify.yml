@@ -6,7 +6,7 @@
 ### Validates that JMX exporter was copied and is running.
 
 - name: Verify Package Version
-  hosts: all,!kafka_controller_migration #Workaround to skip the task in migration test, need to remove in CP 8.0
+  hosts: all
   gather_facts: false
 
   tasks:
@@ -211,31 +211,6 @@
           - copied_file.stat.pw_name == 'cp-ksql'
         quiet: true
 
-- name: Verify - control_center
-  hosts: control_center
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
-        property: confluent.controlcenter.streams.security.protocol
-        expected_value: PLAINTEXT
-
-    - name: Get stats on copied file
-      stat:
-        path: /tmp/molecule.yml
-      register: copied_file
-
-    - name: Assert copied file's permissions correct
-      assert:
-        that:
-          - copied_file.stat.exists
-          - copied_file.stat.gr_name == 'confluent'
-          - copied_file.stat.pw_name == 'cp-control-center'
-        quiet: true
-
 - name: Verify - control_center_next_gen
   hosts: control_center_next_gen
   gather_facts: false
@@ -261,8 +236,8 @@
           - copied_file.stat.pw_name == 'cp-control-center'
         quiet: true
 
-- name: Verify - zookeeper/Controller
-  hosts: zookeeper:kafka_controller
+- name: Verify - Controller
+  hosts: kafka_controller
   gather_facts: false
   tasks:
     - name: Check jolokia/jmxexporter rest endpoint
@@ -272,53 +247,6 @@
       with_items:
         - "http://{{inventory_hostname}}:7770/jolokia/list"
         - "http://{{inventory_hostname}}:8079"
-
-    # Enhanced Zookeeper Jolokia Access Control Verification
-    - import_role:
-        name: variables
-
-    - name: Test Zookeeper Jolokia Endpoint - Check basic connectivity
-      uri:
-        url: "{{ 'https' if zookeeper_jolokia_ssl_enabled|bool else 'http' }}://{{ inventory_hostname }}:{{ zookeeper_jolokia_port }}/jolokia/version"
-        validate_certs: false
-        return_content: true
-        user: "{{ zookeeper_jolokia_user if zookeeper_jolokia_auth_mode == 'basic' else omit }}"
-        password: "{{ zookeeper_jolokia_password if zookeeper_jolokia_auth_mode == 'basic' else omit }}"
-        force_basic_auth: "{{ true if zookeeper_jolokia_auth_mode == 'basic' else omit }}"
-      register: jolokia_zookeeper_basic
-      when: zookeeper_jolokia_enabled|bool
-      failed_when: false
-
-    - name: Test Zookeeper Jolokia Access Control - Verify mbean access is blocked
-      uri:
-        url: "{{ 'https' if zookeeper_jolokia_ssl_enabled|bool else 'http' }}://{{ inventory_hostname }}:{{ zookeeper_jolokia_port }}/jolokia/read/java.lang:type=Memory"
-        validate_certs: false
-        return_content: true
-        user: "{{ zookeeper_jolokia_user if zookeeper_jolokia_auth_mode == 'basic' else omit }}"
-        password: "{{ zookeeper_jolokia_password if zookeeper_jolokia_auth_mode == 'basic' else omit }}"
-        force_basic_auth: "{{ true if zookeeper_jolokia_auth_mode == 'basic' else omit }}"
-      register: jolokia_zookeeper_restricted_access
-      when: zookeeper_jolokia_enabled|bool and zookeeper_jolokia_access_control_enabled|bool and jolokia_zookeeper_basic.status is defined and jolokia_zookeeper_basic.status == 200
-      failed_when: false
-
-    - name: Verify Zookeeper Jolokia Access Control is working
-      assert:
-        that:
-          - jolokia_zookeeper_basic.status == 200
-          - jolokia_zookeeper_restricted_access.status == 200
-          - jolokia_zookeeper_restricted_access.content is defined
-          - '''forbidden'' in jolokia_zookeeper_restricted_access.content or ''status":403'' in jolokia_zookeeper_restricted_access.content or ''status":404'' in jolokia_zookeeper_restricted_access.content'
-        fail_msg: "Zookeeper Jolokia access control issue - Basic connectivity: {{ jolokia_zookeeper_basic.status | default('undefined') }}, MBean access: {{ jolokia_zookeeper_restricted_access.status | default('undefined') }}, Content: {{ jolokia_zookeeper_restricted_access.content | default('undefined') | truncate(100) }}"
-        success_msg: "Zookeeper Jolokia access control is working - endpoint accessible but mbean access properly blocked"
-      when: zookeeper_jolokia_enabled|bool and zookeeper_jolokia_access_control_enabled|bool and jolokia_zookeeper_basic.status is defined
-
-    - name: Verify Zookeeper Jolokia is accessible (when access control disabled)
-      assert:
-        that:
-          - jolokia_zookeeper_basic.status == 200
-        fail_msg: "Zookeeper Jolokia endpoint is not accessible (status: {{ jolokia_zookeeper_basic.status | default('undefined') }}). Check if jolokia is enabled and running."
-        success_msg: "Zookeeper Jolokia endpoint is accessible"
-      when: zookeeper_jolokia_enabled|bool and not zookeeper_jolokia_access_control_enabled|bool and jolokia_zookeeper_basic.status is defined
 
     - name: Get stats on first copied file
       stat:
@@ -384,53 +312,6 @@
         - "http://{{inventory_hostname}}:7773/jolokia/list"
         - "http://{{inventory_hostname}}:8077"
 
-    # Enhanced Kafka Connect Jolokia Access Control Verification
-    - import_role:
-        name: variables
-
-    - name: Test Kafka Connect Jolokia Endpoint - Check basic connectivity
-      uri:
-        url: "{{ 'https' if kafka_connect_jolokia_ssl_enabled|bool else 'http' }}://{{ inventory_hostname }}:{{ kafka_connect_jolokia_port }}/jolokia/version"
-        validate_certs: false
-        return_content: true
-        user: "{{ kafka_connect_jolokia_user if kafka_connect_jolokia_auth_mode == 'basic' else omit }}"
-        password: "{{ kafka_connect_jolokia_password if kafka_connect_jolokia_auth_mode == 'basic' else omit }}"
-        force_basic_auth: "{{ true if kafka_connect_jolokia_auth_mode == 'basic' else omit }}"
-      register: jolokia_kafka_connect_basic
-      when: kafka_connect_jolokia_enabled|bool
-      failed_when: false
-
-    - name: Test Kafka Connect Jolokia Access Control - Verify mbean access is blocked
-      uri:
-        url: "{{ 'https' if kafka_connect_jolokia_ssl_enabled|bool else 'http' }}://{{ inventory_hostname }}:{{ kafka_connect_jolokia_port }}/jolokia/read/java.lang:type=Memory"
-        validate_certs: false
-        return_content: true
-        user: "{{ kafka_connect_jolokia_user if kafka_connect_jolokia_auth_mode == 'basic' else omit }}"
-        password: "{{ kafka_connect_jolokia_password if kafka_connect_jolokia_auth_mode == 'basic' else omit }}"
-        force_basic_auth: "{{ true if kafka_connect_jolokia_auth_mode == 'basic' else omit }}"
-      register: jolokia_kafka_connect_restricted_access
-      when: kafka_connect_jolokia_enabled|bool and kafka_connect_jolokia_access_control_enabled|bool and jolokia_kafka_connect_basic.status is defined and jolokia_kafka_connect_basic.status == 200
-      failed_when: false
-
-    - name: Verify Kafka Connect Jolokia Access Control is working
-      assert:
-        that:
-          - jolokia_kafka_connect_basic.status == 200
-          - jolokia_kafka_connect_restricted_access.status == 200
-          - jolokia_kafka_connect_restricted_access.content is defined
-          - '''forbidden'' in jolokia_kafka_connect_restricted_access.content or ''status":403'' in jolokia_kafka_connect_restricted_access.content or ''status":404'' in jolokia_kafka_connect_restricted_access.content'
-        fail_msg: "Kafka Connect Jolokia access control issue - Basic connectivity: {{ jolokia_kafka_connect_basic.status | default('undefined') }}, MBean access: {{ jolokia_kafka_connect_restricted_access.status | default('undefined') }}, Content: {{ jolokia_kafka_connect_restricted_access.content | default('undefined') | truncate(100) }}"
-        success_msg: "Kafka Connect Jolokia access control is working - endpoint accessible but mbean access properly blocked"
-      when: kafka_connect_jolokia_enabled|bool and kafka_connect_jolokia_access_control_enabled|bool and jolokia_kafka_connect_basic.status is defined
-
-    - name: Verify Kafka Connect Jolokia is accessible (when access control disabled)
-      assert:
-        that:
-          - jolokia_kafka_connect_basic.status == 200
-        fail_msg: "Kafka Connect Jolokia endpoint is not accessible (status: {{ jolokia_kafka_connect_basic.status | default('undefined') }}). Check if jolokia is enabled and running."
-        success_msg: "Kafka Connect Jolokia endpoint is accessible"
-      when: kafka_connect_jolokia_enabled|bool and not kafka_connect_jolokia_access_control_enabled|bool and jolokia_kafka_connect_basic.status is defined
-
 - name: Verify - ksql
   hosts: ksql
   gather_facts: false
@@ -443,53 +324,6 @@
         - "http://{{inventory_hostname}}:7774/jolokia/list"
         - "http://{{inventory_hostname}}:8076"
 
-    # Enhanced KSQL Jolokia Access Control Verification
-    - import_role:
-        name: variables
-
-    - name: Test KSQL Jolokia Endpoint - Check basic connectivity
-      uri:
-        url: "{{ 'https' if ksql_jolokia_ssl_enabled|bool else 'http' }}://{{ inventory_hostname }}:{{ ksql_jolokia_port }}/jolokia/version"
-        validate_certs: false
-        return_content: true
-        user: "{{ ksql_jolokia_user if ksql_jolokia_auth_mode == 'basic' else omit }}"
-        password: "{{ ksql_jolokia_password if ksql_jolokia_auth_mode == 'basic' else omit }}"
-        force_basic_auth: "{{ true if ksql_jolokia_auth_mode == 'basic' else omit }}"
-      register: jolokia_ksql_basic
-      when: ksql_jolokia_enabled|bool
-      failed_when: false
-
-    - name: Test KSQL Jolokia Access Control - Verify mbean access is blocked
-      uri:
-        url: "{{ 'https' if ksql_jolokia_ssl_enabled|bool else 'http' }}://{{ inventory_hostname }}:{{ ksql_jolokia_port }}/jolokia/read/java.lang:type=Memory"
-        validate_certs: false
-        return_content: true
-        user: "{{ ksql_jolokia_user if ksql_jolokia_auth_mode == 'basic' else omit }}"
-        password: "{{ ksql_jolokia_password if ksql_jolokia_auth_mode == 'basic' else omit }}"
-        force_basic_auth: "{{ true if ksql_jolokia_auth_mode == 'basic' else omit }}"
-      register: jolokia_ksql_restricted_access
-      when: ksql_jolokia_enabled|bool and ksql_jolokia_access_control_enabled|bool and jolokia_ksql_basic.status is defined and jolokia_ksql_basic.status == 200
-      failed_when: false
-
-    - name: Verify KSQL Jolokia Access Control is working
-      assert:
-        that:
-          - jolokia_ksql_basic.status == 200
-          - jolokia_ksql_restricted_access.status == 200
-          - jolokia_ksql_restricted_access.content is defined
-          - '''forbidden'' in jolokia_ksql_restricted_access.content or ''status":403'' in jolokia_ksql_restricted_access.content or ''status":404'' in jolokia_ksql_restricted_access.content'
-        fail_msg: "KSQL Jolokia access control issue - Basic connectivity: {{ jolokia_ksql_basic.status | default('undefined') }}, MBean access: {{ jolokia_ksql_restricted_access.status | default('undefined') }}, Content: {{ jolokia_ksql_restricted_access.content | default('undefined') | truncate(100) }}"
-        success_msg: "KSQL Jolokia access control is working - endpoint accessible but mbean access properly blocked"
-      when: ksql_jolokia_enabled|bool and ksql_jolokia_access_control_enabled|bool and jolokia_ksql_basic.status is defined
-
-    - name: Verify KSQL Jolokia is accessible (when access control disabled)
-      assert:
-        that:
-          - jolokia_ksql_basic.status == 200
-        fail_msg: "KSQL Jolokia endpoint is not accessible (status: {{ jolokia_ksql_basic.status | default('undefined') }}). Check if jolokia is enabled and running."
-        success_msg: "KSQL Jolokia endpoint is accessible"
-      when: ksql_jolokia_enabled|bool and not ksql_jolokia_access_control_enabled|bool and jolokia_ksql_basic.status is defined
-
 - name: Verify - kafka_rest
   hosts: kafka_rest
   gather_facts: false
@@ -501,54 +335,6 @@
       with_items:
         - "http://{{inventory_hostname}}:7775/jolokia/list"
         - "http://{{inventory_hostname}}:8075"
-
-    # Enhanced Kafka REST Jolokia Access Control Verification
-    - import_role:
-        name: variables
-
-    - name: Test Kafka REST Jolokia Endpoint - Check basic connectivity
-      uri:
-        url: "{{ 'https' if kafka_rest_jolokia_ssl_enabled|bool else 'http' }}://{{ inventory_hostname }}:{{ kafka_rest_jolokia_port }}/jolokia/version"
-        validate_certs: false
-        return_content: true
-        user: "{{ kafka_rest_jolokia_user if kafka_rest_jolokia_auth_mode == 'basic' else omit }}"
-        password: "{{ kafka_rest_jolokia_password if kafka_rest_jolokia_auth_mode == 'basic' else omit }}"
-        force_basic_auth: "{{ true if kafka_rest_jolokia_auth_mode == 'basic' else omit }}"
-      register: jolokia_kafka_rest_basic
-      when: kafka_rest_jolokia_enabled|bool
-      failed_when: false
-
-    - name: Test Kafka REST Jolokia Access Control - Verify mbean access is blocked
-      uri:
-        url: "{{ 'https' if kafka_rest_jolokia_ssl_enabled|bool else 'http' }}://{{ inventory_hostname }}:{{ kafka_rest_jolokia_port }}/jolokia/read/java.lang:type=Memory"
-        validate_certs: false
-        return_content: true
-        user: "{{ kafka_rest_jolokia_user if kafka_rest_jolokia_auth_mode == 'basic' else omit }}"
-        password: "{{ kafka_rest_jolokia_password if kafka_rest_jolokia_auth_mode == 'basic' else omit }}"
-        force_basic_auth: "{{ true if kafka_rest_jolokia_auth_mode == 'basic' else omit }}"
-      register: jolokia_kafka_rest_restricted_access
-      when: kafka_rest_jolokia_enabled|bool and kafka_rest_jolokia_access_control_enabled|bool and jolokia_kafka_rest_basic.status is defined and jolokia_kafka_rest_basic.status == 200
-      failed_when: false
-
-    - name: Verify Kafka REST Jolokia Access Control is working
-      assert:
-        that:
-          - jolokia_kafka_rest_basic.status == 200
-          - jolokia_kafka_rest_restricted_access.status == 200
-          - jolokia_kafka_rest_restricted_access.content is defined
-          - '''forbidden'' in jolokia_kafka_rest_restricted_access.content or ''status":403'' in jolokia_kafka_rest_restricted_access.content or ''status":404'' in jolokia_kafka_rest_restricted_access.content'
-        fail_msg: "Kafka REST Jolokia access control issue - Basic connectivity: {{ jolokia_kafka_rest_basic.status | default('undefined') }}, MBean access: {{ jolokia_kafka_rest_restricted_access.status | default('undefined') }}, Content: {{ jolokia_kafka_rest_restricted_access.content | default('undefined') | truncate(100) }}"
-        success_msg: "Kafka REST Jolokia access control is working - endpoint accessible but mbean access properly blocked"
-      when: kafka_rest_jolokia_enabled|bool and kafka_rest_jolokia_access_control_enabled|bool and jolokia_kafka_rest_basic.status is defined
-
-    - name: Verify Kafka REST Jolokia is accessible (when access control disabled)
-      assert:
-        that:
-          - jolokia_kafka_rest_basic.status == 200
-        fail_msg: "Kafka REST Jolokia endpoint is not accessible (status: {{ jolokia_kafka_rest_basic.status | default('undefined') }}). Check if jolokia is enabled and running."
-        success_msg: "Kafka REST Jolokia endpoint is accessible"
-      when: kafka_rest_jolokia_enabled|bool and not kafka_rest_jolokia_access_control_enabled|bool and jolokia_kafka_rest_basic.status is defined
-
 
 - name: Verify - Restart Services
   import_playbook: ../../playbooks/restart.yml

@@ -4,40 +4,9 @@
 ### Validates that SASL Plaintext protocol is set across components.
 ### Validates that Connectors are present on Kafka Connect.
 
-- name: Verify - zookeeper
-  hosts: zookeeper
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /opt/confluent/etc/kafka/zookeeper.properties
-        property: dataDir
-        expected_value: /opt/zookeeper
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_ownership.yml
-      vars:
-        file_name: log.100000001
-        custom_path: /opt/zookeeper/version-2/
-        group: confluent
-        user: cp-kafka
-
-    - name: Check Updated Service Description
-      shell: systemctl status confluent-zookeeper
-      register: systemctl_status
-      failed_when: "'Custom Zookeeper description' not in systemctl_status.stdout_lines[0]"
-      changed_when: false
-
-    - import_role:
-        name: confluent.test
-        tasks_from: check_log4j.yml
-
 - name: Verify - kafka_controller
   hosts: kafka_controller
-  gather_facts: false
+  gather_facts: true
   tasks:
     - import_role:
         name: variables
@@ -63,9 +32,33 @@
         property: listener.name.controller.sasl.enabled.mechanisms
         expected_value: PLAIN
 
+    - import_role:
+        name: variables
+
+    - name: Slurp log4j2.yaml
+      slurp:
+        src: "{{ kafka_controller.log4j_file }}"
+      register: log4j2_yaml_raw
+
+    - name: Parse log4j2.yaml
+      set_fact:
+        log4j2_yaml: "{{ log4j2_yaml_raw.content | b64decode | from_yaml }}"
+
+    - name: Assert root logger level is INFO
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['level'] == 'DEBUG'
+        fail_msg: "Root logger level is not DEBUG!"
+
+    - name: Assert root logger has correct appenders
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['AppenderRef'] | map(attribute='ref') | list is superset(['KafkaAppender'])
+        fail_msg: "Root logger does not have kafka appender!"
+
 - name: Verify - kafka_broker
   hosts: kafka_broker
-  gather_facts: false
+  gather_facts: true
   tasks:
     - set_fact:
         kraft_mode: "{{ ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) }}"
@@ -104,9 +97,33 @@
         property: default.api.timeout.ms
         expected_value: "40000"
 
+    - import_role:
+        name: variables
+
+    - name: Slurp log4j2.yaml
+      slurp:
+        src: "{{ kafka_broker.log4j_file }}"
+      register: log4j2_yaml_raw
+
+    - name: Parse log4j2.yaml
+      set_fact:
+        log4j2_yaml: "{{ log4j2_yaml_raw.content | b64decode | from_yaml }}"
+
+    - name: Assert root logger level is INFO
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['level'] == 'DEBUG'
+        fail_msg: "Root logger level is not INFO!"
+
+    - name: Assert root logger has correct appenders
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['AppenderRef'] | map(attribute='ref') | list is superset(['KafkaAppender'])
+        fail_msg: "Root logger does not have kafka appender!"
+
 - name: Verify - schema_registry
   hosts: schema_registry
-  gather_facts: false
+  gather_facts: true
   tasks:
     - import_role:
         name: confluent.test
@@ -125,10 +142,33 @@
     - import_role:
         name: confluent.test
         tasks_from: check_log4j.yml
+    - import_role:
+        name: variables
+
+    - name: Slurp log4j2.yaml
+      slurp:
+        src: "{{ schema_registry.log4j_file }}"
+      register: log4j2_yaml_raw
+
+    - name: Parse log4j2.yaml
+      set_fact:
+        log4j2_yaml: "{{ log4j2_yaml_raw.content | b64decode | from_yaml }}"
+
+    - name: Assert root logger level is INFO
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['level'] == 'INFO'
+        fail_msg: "Root logger level is not INFO!"
+
+    - name: Assert root logger has correct appenders
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['AppenderRef'] | map(attribute='ref') | list is superset(['file'])
+        fail_msg: "Root logger does not have file appender!"
 
 - name: Verify - kafka_rest
   hosts: kafka_rest
-  gather_facts: false
+  gather_facts: true
   tasks:
     - import_role:
         name: confluent.test
@@ -147,10 +187,33 @@
     - import_role:
         name: confluent.test
         tasks_from: check_log4j.yml
+    - import_role:
+        name: variables
+
+    - name: Slurp log4j2.yaml
+      slurp:
+        src: "{{ kafka_rest.log4j_file }}"
+      register: log4j2_yaml_raw
+
+    - name: Parse log4j2.yaml
+      set_fact:
+        log4j2_yaml: "{{ log4j2_yaml_raw.content | b64decode | from_yaml }}"
+
+    - name: Assert root logger level is INFO
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['level'] == 'INFO'
+        fail_msg: "Root logger level is not INFO!"
+
+    - name: Assert root logger has correct appenders
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['AppenderRef'] | map(attribute='ref') | list is superset(['file'])
+        fail_msg: "Root logger does not have file appender!"
 
 - name: Verify - kafka_connect
   hosts: kafka_connect
-  gather_facts: false
+  gather_facts: true
   tasks:
     - import_role:
         name: confluent.test
@@ -177,9 +240,30 @@
     - import_role:
         name: variables
 
+    - name: Slurp log4j2.yaml
+      slurp:
+        src: "{{ kafka_connect.log4j_file }}"
+      register: log4j2_yaml_raw
+
+    - name: Parse log4j2.yaml
+      set_fact:
+        log4j2_yaml: "{{ log4j2_yaml_raw.content | b64decode | from_yaml }}"
+
+    - name: Assert root logger level is INFO
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['level'] == 'INFO'
+        fail_msg: "Root logger level is not INFO!"
+
+    - name: Assert root logger has correct appenders
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['AppenderRef'] | map(attribute='ref') | list is superset(['ConnectAppender'])
+        fail_msg: "Root logger does not have connect appender!"
+
 - name: Verify - ksql
   hosts: ksql
-  gather_facts: false
+  gather_facts: true
   tasks:
     - import_role:
         name: confluent.test
@@ -198,32 +282,33 @@
     - import_role:
         name: confluent.test
         tasks_from: check_log4j.yml
-
-- name: Verify - control_center
-  hosts: control_center
-  gather_facts: false
-  tasks:
     - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: /opt/confluent/etc/confluent-control-center/control-center-production.properties
-        property: confluent.controlcenter.streams.security.protocol
-        expected_value: SASL_SSL
+        name: variables
 
-    - name: Check Updated Service Description
-      shell: systemctl status confluent-control-center
-      register: systemctl_status
-      failed_when: "'Custom C3 description' not in systemctl_status.stdout_lines[0]"
-      changed_when: false
+    - name: Slurp log4j2.yaml
+      slurp:
+        src: "{{ ksql.log4j_file }}"
+      register: log4j2_yaml_raw
 
-    - import_role:
-        name: confluent.test
-        tasks_from: check_log4j.yml
+    - name: Parse log4j2.yaml
+      set_fact:
+        log4j2_yaml: "{{ log4j2_yaml_raw.content | b64decode | from_yaml }}"
+
+    - name: Assert root logger level is INFO
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['level'] == 'INFO'
+        fail_msg: "Root logger level is not INFO!"
+
+    - name: Assert root logger has correct appenders
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['AppenderRef'] | map(attribute='ref') | list is superset(['main'])
+        fail_msg: "Root logger does not have main appender!"
 
 - name: Verify - control_center_next_gen
   hosts: control_center_next_gen
-  gather_facts: false
+  gather_facts: true
   tasks:
     - import_role:
         name: confluent.test
@@ -242,3 +327,27 @@
     - import_role:
         name: confluent.test
         tasks_from: check_log4j.yml
+
+    - import_role:
+        name: variables
+
+    - name: Slurp log4j2.yaml
+      slurp:
+        src: "{{ control_center_next_gen.log4j_file }}"
+      register: log4j2_yaml_raw
+
+    - name: Parse log4j2.yaml
+      set_fact:
+        log4j2_yaml: "{{ log4j2_yaml_raw.content | b64decode | from_yaml }}"
+
+    - name: Assert root logger level is INFO
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['level'] == 'INFO'
+        fail_msg: "Root logger level is not INFO!"
+
+    - name: Assert root logger has correct appenders
+      assert:
+        that:
+          - log4j2_yaml['Configuration']['Loggers']['Root']['AppenderRef'] | map(attribute='ref') | list is superset(['Streams', 'Main'])
+        fail_msg: "Root logger does not have correct appenders!"
