@@ -631,71 +631,67 @@ class FilterModule(object):
                 ).decode()
         return username_with_hashed_passwords
 
-    def combine_enabled_values(self, config_dict):
+    def _dependency_client_properties(self, config_prefix, ssl_enabled, truststore_path, truststore_storepass,
+                                      keystore_path, keystore_storepass, keystore_keypass,
+                                      basic_auth_enabled, basic_auth_user_info, mtls_enabled,
+                                      service_name):
         """
-        Combines values from multiple enabled configurations into a comma-separated string.
-
+        Common helper function to generate client properties for Control Center Next Gen dependencies.
         Args:
-            config_dict (dict): Dictionary where keys are feature names and values are lists
-                               of [enabled_condition, value_to_include]
-
-        Returns:
-            str: Comma-separated list of values for enabled features
+            config_prefix: The configuration prefix (e.g., 'confluent.controlcenter.prometheus.' or 'confluent.controlcenter.alertmanager.')
         """
-        if not isinstance(config_dict, dict):
-            return ''
+        final_dict = {}
 
-        enabled_values = []
+        # SSL/TLS properties
+        if ssl_enabled:
+            final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
+            final_dict[config_prefix + 'ssl.truststore.password'] = str(truststore_storepass)
+            final_dict[config_prefix + 'alias.name'] = service_name
 
-        for config in config_dict.values():
-            if not isinstance(config, (list, tuple)) or len(config) != 2:
-                raise ValueError(f"Malformed config entry: {config}")
+            # mTLS properties
+            if mtls_enabled:
+                final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
+                final_dict[config_prefix + 'ssl.keystore.password'] = str(keystore_storepass)
+                final_dict[config_prefix + 'ssl.key.password'] = str(keystore_keypass)
 
-            enabled = config[0]
-            value = config[1]
+        # Basic authentication
+        if basic_auth_enabled:
+            final_dict[config_prefix + 'basic.auth.user.info'] = basic_auth_user_info
 
-            # Convert string boolean values to actual booleans
-            if isinstance(enabled, str):
-                enabled = enabled.lower() in ('true', 'yes', '1')
+        return final_dict
 
-            # Add value if feature is enabled
-            if enabled and value and value.strip():
-                enabled_values.append(value.strip())
-
-        return ','.join(enabled_values)
-
-    def schema_registry_extension_classes(self, rbac_enabled, schema_exporters_defined, schema_importers_defined, usm_enabled):
+    def prometheus_client_properties(self, ssl_enabled, truststore_path, truststore_storepass,
+                                     keystore_path, keystore_storepass, keystore_keypass,
+                                     basic_auth_enabled, basic_auth_user_info, mtls_enabled,
+                                     service_name):
         """
-        Generates comma-separated list of Schema Registry resource extension classes based on enabled features.
-        """
-        extensions_dict = {
-            'rbac': [rbac_enabled, 'io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension'],
-            'schema_exporter': [schema_exporters_defined, 'io.confluent.schema.exporter.SchemaExporterResourceExtension'],
-            'schema_importer': [schema_importers_defined, 'io.confluent.schema.importer.SchemaImporterResourceExtension'],
-            'dek_registry': [schema_importers_defined, 'io.confluent.dekregistry.DekRegistryResourceExtension'],
-            'usm_sr': [usm_enabled, 'io.confluent.schema.registry.usm.UsmSchemaRegistryExtension'],
-        }
-        return self.combine_enabled_values(extensions_dict)
-
-    def usm_sha1_password_hash(self, password):
-        """
-        Generates a SHA1 hash of the provided password in the format required for USM agent basic auth.
-        Returns the hash in base64 format with {SHA} prefix.
-
+        Generate Prometheus client properties for Control Center Next Gen.
+        Uses the same logic as client_properties filter but with Prometheus-specific prefixes.
         Args:
-            password (str): The plain text password to hash
-
-        Returns:
-            str: The SHA1 hash in format {SHA}base64_hash
+            ssl_enabled: The input from the pipe operator (boolean indicating if SSL is enabled).
         """
-        if not password:
-            return ''
+        return self._dependency_client_properties(
+            'confluent.controlcenter.prometheus.',
+            ssl_enabled, truststore_path, truststore_storepass,
+            keystore_path, keystore_storepass, keystore_keypass,
+            basic_auth_enabled, basic_auth_user_info, mtls_enabled,
+            service_name
+        )
 
-        # Generate SHA1 hash
-        sha1_hash = hashlib.sha1(password.encode('utf-8')).digest()
-
-        # Encode to base64
-        base64_hash = base64.b64encode(sha1_hash).decode('utf-8')
-
-        # Return in format required for basic auth: {SHA}base64_hash
-        return f"{{SHA}}{base64_hash}"
+    def alertmanager_client_properties(self, ssl_enabled, truststore_path, truststore_storepass,
+                                       keystore_path, keystore_storepass, keystore_keypass,
+                                       basic_auth_enabled, basic_auth_user_info, mtls_enabled,
+                                       service_name):
+        """
+        Generate Alertmanager client properties for Control Center Next Gen.
+        Uses the same logic as client_properties filter but with Alertmanager-specific prefixes.
+        Args:
+            ssl_enabled: The input from the pipe operator (boolean indicating if SSL is enabled).
+        """
+        return self._dependency_client_properties(
+            'confluent.controlcenter.alertmanager.',
+            ssl_enabled, truststore_path, truststore_storepass,
+            keystore_path, keystore_storepass, keystore_keypass,
+            basic_auth_enabled, basic_auth_user_info, mtls_enabled,
+            service_name
+        )
