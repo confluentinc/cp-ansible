@@ -2,7 +2,7 @@
 # Custom filters used in this file are defined in plugins/filter/filters.py
 
 ### Version of Confluent Platform to install
-confluent_package_version: 8.0.2
+confluent_package_version: 8.1.0
 
 confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
@@ -202,7 +202,7 @@ confluent_cli_base_path: /opt/confluent-cli
 confluent_cli_path: "/usr/local/bin/confluent"
 
 ### Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
-confluent_cli_version: 4.27.0
+confluent_cli_version: 4.39.0
 
 ### Recommended replication factor, defaults to 3. When splitting your cluster across 2 DCs with 4 or more Brokers, this should be increased to 4 to balance topic replicas.
 default_internal_replication_factor: 3
@@ -375,10 +375,7 @@ kafka_controller_log_dir: "{{kafka_controller_default_log_dir}}"
 
 kafka_controller_packages:
   - confluent-common
-  - confluent-rest-utils
-  - confluent-metadata-service
   - confluent-ce-kafka-http-server
-  - confluent-kafka-rest
   - confluent-server-rest
   - confluent-telemetry
   - "{{ kafka_controller_main_package }}"
@@ -3128,6 +3125,12 @@ control_center_next_gen_pause_rolling_deployment: "{{pause_rolling_deployment}}"
 ### Boolean to Pause Rolling Deployment after each Kafka Connect Replicator Node starts up.
 kafka_connect_replicator_pause_rolling_deployment: "{{pause_rolling_deployment}}"
 
+### Deployment strategy for USM Agent. Set to parallel to run all provisioning tasks in parallel on all hosts, which may cause downtime.
+usm_agent_deployment_strategy: "{{deployment_strategy}}"
+
+### Boolean to Pause Rolling Deployment after each USM Agent Node starts up.
+usm_agent_pause_rolling_deployment: "{{pause_rolling_deployment}}"
+
 ### user for the user used to do healthcheck on Control Center Next Gen (prometheus)
 control_center_next_gen_dependency_prometheus_health_check_user: "{{control_center_next_gen_dependency_prometheus_basic_users.admin.principal}}"
 
@@ -3313,3 +3316,153 @@ kafka_controller_jolokia_access_control_enabled: "{{ jolokia_access_control_enab
 
 ### Path on target nodes where Kafka Controller Jolokia access control XML file will be placed
 kafka_controller_jolokia_access_control_file_dest_path: "{{ kafka_controller.config_file | dirname }}/jolokia-access.xml"
+### Number of retry attempts for Schema Registry API calls.
+schema_registry_retries: 30
+
+### Property required for password encoding in Schema Exporter and Importer.
+password_encoder_secret: ""
+
+# USM Agent Variables
+
+### Version of Confluent USM Agent to install
+confluent_usm_agent_package_version: 1.0.0
+
+confluent_usm_agent_goarch:
+  x86_64: "amd64"
+  aarch64: "arm64"
+
+confluent_usm_agent_full_package_version: "{{ confluent_usm_agent_package_version }}-{{confluent_usm_agent_goarch[ansible_architecture]}}"
+confluent_usm_agent_package_redhat_suffix: "{{ '-' + confluent_usm_agent_package_version }}"
+confluent_usm_agent_package_debian_suffix: "{{ '=' + confluent_usm_agent_package_version }}"
+
+usm_agent_packages:
+  - confluent-usm-agent
+
+### Use to copy files from control node to USM Agent hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
+usm_agent_copy_files: []
+
+### Boolean to enable health checks for USM Agent
+usm_agent_health_checks_enabled: "{{ health_checks_enabled }}"
+
+### USM Agent admin port
+usm_agent_admin_port: 9901
+
+### USM Agent controlplane port
+usm_agent_controlplane_port: 9999
+
+### USM Agent dataplane port
+usm_agent_dataplane_port: 10000
+
+### USM Agent listener monitoring port
+usm_agent_listener_monitoring_port: 9910
+
+### Boolean to enable basic authentication for communication between CP and USM Agent
+usm_agent_basic_auth_enabled: "false"
+
+### Boolean to enable TLS encryption for communication between CP and USM Agent
+usm_agent_ssl_enabled: "{{ ssl_enabled }}"
+
+### Boolean to enable mTLS Authentication for communication between CP and USM Agent
+usm_agent_ssl_mutual_auth_enabled: "{{ ssl_mutual_auth_enabled }}"
+
+### USM Agent basic users. Set to dictionary of users with keys: principal and password. The users defined here will be allowed to authenticate with USM Agent using basic authentication.
+usm_agent_basic_users:
+  admin:
+    principal: admin
+    password: admin-secret
+
+usm_agent_http_protocol: "{{ 'https' if usm_agent_ssl_enabled|bool else 'http' }}"
+
+usm_agent_url: "{{ (groups.get('usm_agent') if groups.get('usm_agent') else ['localhost']) | confluent.platform.resolve_and_format_hostnames(hostvars) | map('regex_replace', '^', usm_agent_http_protocol + '://') | map('regex_replace', '$', ':' + usm_agent_dataplane_port|string) | join(',') }}"
+
+### USM Agent client username - this is the username that will be used to authenticate with USM Agent using basic authentication by CP components.
+usm_agent_client_username: "user1"
+
+### USM Agent client password - this is the password that will be used to authenticate with USM Agent using basic authentication by CP components.
+usm_agent_client_password: "user1-secret"
+
+### Kafka Broker USM Agent username - this is the username that will be used to authenticate with USM Agent using basic authentication by Kafka Broker. Defaults to usm_agent_client_username.
+kafka_broker_usm_agent_username: "{{ usm_agent_client_username }}"
+
+### Kafka Broker USM Agent password - this is the password that will be used to authenticate with USM Agent using basic authentication by Kafka Broker. Defaults to usm_agent_client_password.
+kafka_broker_usm_agent_password: "{{ usm_agent_client_password }}"
+
+### Kafka Controller USM Agent username - this is the username that will be used to authenticate with USM Agent using basic authentication by Kafka Controller. Defaults to usm_agent_client_username.
+kafka_controller_usm_agent_username: "{{ usm_agent_client_username }}"
+
+### Kafka Controller USM Agent password - this is the password that will be used to authenticate with USM Agent using basic authentication by Kafka Controller. Defaults to usm_agent_client_password.
+kafka_controller_usm_agent_password: "{{ usm_agent_client_password }}"
+
+### Kafka Connect USM Agent username - this is the username that will be used to authenticate with USM Agent using basic authentication by Kafka Connect. Defaults to usm_agent_client_username.
+kafka_connect_usm_agent_username: "{{ usm_agent_client_username }}"
+
+### Kafka Connect USM Agent password - this is the password that will be used to authenticate with USM Agent using basic authentication by Kafka Connect. Defaults to usm_agent_client_password.
+kafka_connect_usm_agent_password: "{{ usm_agent_client_password }}"
+
+### USM Agent config prefix path. Defaults to {{ config_prefix }}/confluent/usm-agent.
+usm_agent_config_prefix: "{{ config_prefix }}/confluent/usm-agent"
+
+### Boolean to skip restarts for USM Agent. Defaults to {{ skip_restarts }}.
+usm_agent_skip_restarts: "{{ skip_restarts }}"
+
+usm_agent_truststore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_truststore_filepath}}{% else %}{{ ssl_file_dir_final }}/usm_agent.truststore.jks{% endif %}"
+usm_agent_keystore_path: "{% if ssl_provided_keystore_and_truststore_remote_src %}{{ssl_keystore_filepath}}{% else %}{{ ssl_file_dir_final }}/usm_agent.keystore.jks{% endif %}"
+usm_agent_truststore_storepass: "{{ ssl_truststore_password if ssl_keystore_and_truststore_custom_password|bool else 'confluenttruststorepass'}}"
+usm_agent_keystore_storepass: "{{ ssl_keystore_store_password if ssl_keystore_and_truststore_custom_password|bool else 'confluentkeystorestorepass'}}"
+usm_agent_keystore_keypass: "{{ ssl_keystore_key_password if ssl_provided_keystore_and_truststore|bool else usm_agent_keystore_storepass }}"
+usm_agent_key_password_file: "{{ ssl_file_dir_final }}/usm_agent_key_password.txt"
+usm_agent_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
+usm_agent_cert_path: "{{ ssl_file_dir_final }}/usm_agent.crt"
+usm_agent_key_path: "{{ ssl_file_dir_final }}/usm_agent.key"
+usm_agent_export_certs: "true"
+usm_agent_keytab_path: /etc/security/keytabs/usm_agent.keytab
+
+### USM Agent CCloud SSL trusted CA location. Defaults to '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem' if ansible_os_family is RedHat, otherwise '/etc/ssl/certs/ca-certificates.crt'.
+usm_agent_ccloud_ssl_trusted_ca_location: "{{ '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem' if ansible_os_family == 'RedHat' else '/etc/ssl/certs/ca-certificates.crt' }}"
+
+### USM Agent custom properties
+usm_agent_custom_properties: {}
+
+### Unified Stream Manager configuration for remote Schema Registry connection
+unified_stream_manager:
+  schema_registry_endpoint: none
+  remote_context: ""
+  remote_authentication_type: basic
+  basic_username: none
+  basic_password: none
+
+### Time in seconds to wait before starting Connect Health Checks.
+kafka_connect_health_check_delay: 30
+
+### Time in seconds to wait before starting Kafka Health Checks.
+kafka_broker_health_check_delay: 20
+
+### Time in seconds to wait before starting Kafka Health Checks.
+kafka_controller_health_check_delay: 20
+
+### Time in seconds to wait before starting Control Center Next Gen Health Checks.
+control_center_next_gen_health_check_delay: 30
+
+### Time in seconds to wait before starting Kafka Connect Replicator Health Checks.
+kafka_connect_replicator_health_check_delay: 30
+
+### Time in seconds to wait before starting Schema Registry Health Checks.
+schema_registry_health_check_delay: 15
+
+### Time in seconds to wait before starting Rest Proxy Health Checks.
+kafka_rest_health_check_delay: 15
+
+### Time in seconds to wait before starting ksqlDB Health Checks.
+ksql_health_check_delay: 20
+
+### Time in seconds to wait before starting USM agent Health Checks.
+usm_agent_health_check_delay: 30
+
+### Boolean to enable schema importer and add the required properties to the schema registry
+enable_schema_importer: false
+
+### Boolean to enable schema exporter and add the required properties to the schema registry
+enable_schema_exporter: false
+
+### Boolean to enable node_id configuration. When enabled, node_id will be used instead of broker_id.
+enable_node_id: true

@@ -1,5 +1,7 @@
 import re
 import ipaddress
+import hashlib
+import base64
 
 DOCUMENTATION = '''
 ---
@@ -37,7 +39,9 @@ class FilterModule(object):
             'resolve_and_format_hostname': self.resolve_and_format_hostname,
             'resolve_and_format_hostnames': self.resolve_and_format_hostnames,
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
+            'usm_sha1_password_hash': self.usm_sha1_password_hash,
             'replace_client_assertion_file': self.replace_client_assertion_file,
+            'schema_registry_extension_classes': self.schema_registry_extension_classes,
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
