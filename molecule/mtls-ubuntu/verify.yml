@@ -27,12 +27,27 @@
   gather_facts: false
   tasks:
     - import_role:
+        name: variables
+
+    - import_role:
         name: confluent.test
         tasks_from: check_property.yml
       vars:
         file_path: /etc/kafka/server.properties
         property: listener.security.protocol.map
         expected_value: CONTROLLER:SSL,INTERNAL:SSL,BROKER:SSL
+
+    - name: Verify node.id matches expected value from inventory
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: node.id
+        expected_value: "{{ node_id | string }}"
+      when:
+        - enable_node_id | bool
+        - node_id is defined
 
 - name: Verify - schema_registry
   hosts: schema_registry
@@ -243,3 +258,6 @@
         fail_msg: "Kafka Connect Jolokia endpoint is not accessible (status: {{ jolokia_kafka_connect_basic.status | default('undefined') }}). Check if jolokia is enabled and running."
         success_msg: "Kafka Connect Jolokia endpoint is accessible"
       when: kafka_connect_jolokia_enabled|bool and not kafka_connect_jolokia_access_control_enabled|bool and jolokia_kafka_connect_basic.status is defined
+
+- name: Verify - USM Agent Functionality
+  import_playbook: ../verify_usm_agent.yml

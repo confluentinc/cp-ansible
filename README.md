@@ -27,13 +27,9 @@ Prerequisites for installing CP can be found at [General Requirements](https://d
 
 ## Installation
 
-Red Hat customers can install this collection from Ansible Automation Hub.
+You can install this collection from Ansible Automation Hub and Ansible Galaxy by following [Download Ansible Playbooks for Confluent Platform](https://docs.confluent.io/ansible/current/ansible-download.html).
 
-Non Red Hat customers can install this collection from Ansible Galaxy.
-
-For detailed instructions, follow [Download Ansible Playbooks for Confluent Platform](https://docs.confluent.io/ansible/current/ansible-download.html).
-
-As an alternative to the recommended methods above, non-RedHat customers can also install the package directly from the source repository.
+As an alternative to the recommended methods above, you can install the package directly from the source repository.
 
 * Create a directory with the following structure:<br>
 ```mkdir -p <path_to_cp-ansible>/ansible_collections/confluent/```
@@ -51,16 +47,17 @@ Ansible Playbooks for Confluent Platform (Confluent Ansible) offers a simplified
 
 ## Testing
 
-CP-Ansible's tests use the [Molecule](https://ansible.readthedocs.io/projects/molecule/) framework, and it is strongly advised to test this way before submitting a Pull Request. Please refer to the [HOW_TO_TEST.md](https://github.com/confluentinc/cp-ansible/blob/8.0.2-post/docs/HOW_TO_TEST.md)
+CP-Ansible's tests use the [Molecule](https://ansible.readthedocs.io/projects/molecule/) framework, and it is strongly advised to test this way before submitting a Pull Request. Please refer to the [HOW_TO_TEST.md](docs/HOW_TO_TEST.md)
 
 
 ## Contributing
 
-If you would like to contribute to the CP-Ansible project, please refer to the [CONTRIBUTE.md](https://github.com/confluentinc/cp-ansible/blob/8.0.2-post/docs/CONTRIBUTING.md)
+If you would like to contribute to the CP-Ansible project, please refer to the [CONTRIBUTE.md](docs/CONTRIBUTING.md)
 
 ## Support
 
 For any support request, please reach out to [Confluent Support Portal](https://support.confluent.io/).
+> **Disclaimer:** This collection contains a dependency on `community.crypto` that is currently not certified. If an issue is encountered that is determined to be caused by this unsupported module, the collection will not be supported under the Redhat support program. A certified and fully supported alternative will be introduced in a future release.
 
 ## Release Notes
 
@@ -68,4 +65,4 @@ This [page](https://docs.confluent.io/ansible/current/ansible-release-notes.html
 
 ## License
 
-[Apache 2.0](https://github.com/confluentinc/cp-ansible/blob/8.0.2-post/LICENSE.md)
+[Apache 2.0](LICENSE.md)
