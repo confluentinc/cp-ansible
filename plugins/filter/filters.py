@@ -630,7 +630,7 @@ class FilterModule(object):
                     users_dict[user].get('password').encode("utf-8"), bcrypt.gensalt()
                 ).decode()
         return username_with_hashed_passwords
-    
+
     def _dependency_client_properties(self, config_prefix, ssl_enabled, truststore_path, truststore_storepass,
                                       keystore_path, keystore_storepass, keystore_keypass,
                                       basic_auth_enabled, basic_auth_user_info, mtls_enabled,
