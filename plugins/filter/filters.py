@@ -40,6 +40,7 @@ class FilterModule(object):
             'replace_client_assertion_file': self.replace_client_assertion_file,
             'prometheus_client_properties': self.prometheus_client_properties,
             'alertmanager_client_properties': self.alertmanager_client_properties,
+            'schema_registry_extension_classes': self.schema_registry_extension_classes,
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
