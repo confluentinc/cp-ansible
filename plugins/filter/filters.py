@@ -44,6 +44,8 @@ class FilterModule(object):
             'prometheus_client_properties': self.prometheus_client_properties,
             'alertmanager_client_properties': self.alertmanager_client_properties,
             'schema_registry_extension_classes': self.schema_registry_extension_classes,
+            'prometheus_client_properties': self.prometheus_client_properties,
+            'alertmanager_client_properties': self.alertmanager_client_properties,
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
