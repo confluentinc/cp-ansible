@@ -243,6 +243,11 @@
   tags:
     - configuration
 
+- name: Get kafka connect secrets protection file status
+  stat:
+    path: "{{ kafka_connect_secrets_protection_file }}"
+  register: kafka_connect_secrets_protection_file_status
+
 - name: Create Kafka Connect Config
   template:
     src: connect-distributed.properties.j2
@@ -252,8 +257,14 @@
     group: "{{kafka_connect_group}}"
   notify: restart connect distributed
   diff: "{{ not mask_sensitive_diff|bool }}"
+  when: not kafka_connect_secrets_protection_enabled|bool or not kafka_connect_secrets_protection_file_status.stat.exists
   tags:
     - configuration
+
+- name: Empty master key fact when regenerate_masterkey
+  set_fact:
+    secrets_protection_masterkey: ""
+  when: regenerate_masterkey|bool
 
 - name: Create Kafka Connect Config with Secrets Protection
   include_role:
