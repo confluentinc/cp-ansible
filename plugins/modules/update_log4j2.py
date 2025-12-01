@@ -11,7 +11,8 @@ version_added: "1.0.0"
 description:
     - Removes TimeBasedTriggeringPolicy from RollingFile appenders in a log4j2 YAML file and adds/updates SizeBasedTriggeringPolicy and DefaultRolloverStrategy.
     - Adds index-based rotation pattern (%i) to filePattern if not present, preserving any existing date patterns (%d{...}) for human readability.
-    - Configures DefaultRolloverStrategy with Delete action using glob patterns to ensure proper cleanup of both old-pattern and new-pattern log files when file count exceeds the specified maximum.
+    - Configures DefaultRolloverStrategy with Delete action using glob patterns to ensure proper cleanup of both old-pattern and new-pattern
+      log files when file count exceeds the specified maximum.
     - Optionally updates the root logger level and adds a Rewrite appender with RedactorPolicy for log redaction.
 requirements:
     - PyYAML
@@ -131,7 +132,6 @@ message:
 '''
 
 import os
-import re
 from ansible.module_utils.basic import AnsibleModule
 try:
     import yaml
