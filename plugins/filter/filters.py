@@ -1,5 +1,7 @@
 import re
 import ipaddress
+import hashlib
+import base64
 
 DOCUMENTATION = '''
 ---
@@ -37,6 +39,7 @@ class FilterModule(object):
             'resolve_and_format_hostname': self.resolve_and_format_hostname,
             'resolve_and_format_hostnames': self.resolve_and_format_hostnames,
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
+            'usm_sha1_password_hash': self.usm_sha1_password_hash,
             'replace_client_assertion_file': self.replace_client_assertion_file,
             'prometheus_client_properties': self.prometheus_client_properties,
             'alertmanager_client_properties': self.alertmanager_client_properties,
@@ -694,3 +697,72 @@ class FilterModule(object):
             basic_auth_enabled, basic_auth_user_info, mtls_enabled,
             service_name
         )
+
+    def combine_enabled_values(self, config_dict):
+        """
+        Combines values from multiple enabled configurations into a comma-separated string.
+
+        Args:
+            config_dict (dict): Dictionary where keys are feature names and values are lists
+                               of [enabled_condition, value_to_include]
+
+        Returns:
+            str: Comma-separated list of values for enabled features
+        """
+        if not isinstance(config_dict, dict):
+            return ''
+
+        enabled_values = []
+
+        for config in config_dict.values():
+            if not isinstance(config, (list, tuple)) or len(config) != 2:
+                raise ValueError(f"Malformed config entry: {config}")
+
+            enabled = config[0]
+            value = config[1]
+
+            # Convert string boolean values to actual booleans
+            if isinstance(enabled, str):
+                enabled = enabled.lower() in ('true', 'yes', '1')
+
+            # Add value if feature is enabled
+            if enabled and value and value.strip():
+                enabled_values.append(value.strip())
+
+        return ','.join(enabled_values)
+
+    def schema_registry_extension_classes(self, rbac_enabled, schema_exporters_defined, schema_importers_defined, usm_enabled):
+        """
+        Generates comma-separated list of Schema Registry resource extension classes based on enabled features.
+        """
+        extensions_dict = {
+            'rbac': [rbac_enabled, 'io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension'],
+            'schema_exporter': [schema_exporters_defined, 'io.confluent.schema.exporter.SchemaExporterResourceExtension'],
+            'schema_importer': [schema_importers_defined, 'io.confluent.schema.importer.SchemaImporterResourceExtension'],
+            'dek_registry': [schema_importers_defined, 'io.confluent.dekregistry.DekRegistryResourceExtension'],
+            'usm_sr': [usm_enabled, 'io.confluent.schema.registry.usm.UsmSchemaRegistryExtension'],
+        }
+        return self.combine_enabled_values(extensions_dict)
+
+    def usm_sha1_password_hash(self, password):
+        """
+        Generates a SHA1 hash of the provided password in the format required for USM agent basic auth.
+        Returns the hash in base64 format with {SHA} prefix.
+
+        Args:
+            password (str): The plain text password to hash
+
+        Returns:
+            str: The SHA1 hash in format {SHA}base64_hash
+        """
+        if not password:
+            return ''
+
+        # Generate SHA1 hash
+        sha1_hash = hashlib.sha1(password.encode('utf-8')).digest()
+
+        # Encode to base64
+        base64_hash = base64.b64encode(sha1_hash).decode('utf-8')
+
+        # Return in format required for basic auth: {SHA}base64_hash
+        return f"{{SHA}}{base64_hash}"
