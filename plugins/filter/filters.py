@@ -41,6 +41,8 @@ class FilterModule(object):
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
             'usm_sha1_password_hash': self.usm_sha1_password_hash,
             'replace_client_assertion_file': self.replace_client_assertion_file,
+            'prometheus_client_properties': self.prometheus_client_properties,
+            'alertmanager_client_properties': self.alertmanager_client_properties,
             'schema_registry_extension_classes': self.schema_registry_extension_classes,
         }
 
