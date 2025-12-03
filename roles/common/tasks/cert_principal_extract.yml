@@ -5,17 +5,23 @@
   # Search for first "Owner" line
   # Extract DNAME from line
   # Remove spaces after commas
-  # we dont need to handle fips seperately as in fips bouncy castle is used but normal jks keystore is also present.
-  # In case we try to fetch from bouncy castle keystore we need to handle each component differently as it is only present on kafka others dont have it
   shell: |
+    set -o pipefail
     keytool -list -keystore {{keystore_path}} \
         -storepass {{keystore_storepass}} \
+        {% if fips_enabled|bool %}
+        -storetype BCFKS \
+        -providerclass org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider \
+        -providerpath {{ (binary_base_path, 'share/java/kafka/bc-fips-*.jar') | path_join }} \
+        {% endif %}
         -v \
         | grep PrivateKeyEntry -A1000 \
         | grep Owner -m1 \
         | cut -d ":" -f2 \
         | cut -c2- \
         | sed 's/\s*,\s*/,/g'
+  args:
+    executable: /bin/bash
   register: distinguished_name_from_keystore
   changed_when: false
   no_log: "{{ mask_sensitive_logs|bool }}"
