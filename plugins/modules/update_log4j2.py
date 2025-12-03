@@ -10,6 +10,9 @@ short_description: Update log4j2 YAML RollingFile policies and configure log red
 version_added: "1.0.0"
 description:
     - Removes TimeBasedTriggeringPolicy from RollingFile appenders in a log4j2 YAML file and adds/updates SizeBasedTriggeringPolicy and DefaultRolloverStrategy.
+    - Adds index-based rotation pattern (%i) to filePattern if not present, preserving any existing date patterns (%d{...}) for human readability.
+    - Configures DefaultRolloverStrategy with Delete action using glob patterns to ensure proper cleanup of both old-pattern and new-pattern
+      log files when file count exceeds the specified maximum.
     - Optionally updates the root logger level and adds a Rewrite appender with RedactorPolicy for log redaction.
 requirements:
     - PyYAML
@@ -77,7 +80,7 @@ author:
 '''
 
 EXAMPLES = '''
-# Update log4j2.yaml policies only
+# Update log4j2.yaml policies and configure robust log cleanup
 - name: Update log4j2.yaml policies
   update_log4j2:
     path: /path/to/log4j2.yaml
@@ -86,6 +89,12 @@ EXAMPLES = '''
     root_level: INFO
     root_appenders:
       - RollingFile
+# Result:
+# - Removes TimeBasedTriggeringPolicy, adds SizeBasedTriggeringPolicy
+# - Adds %i to filePattern (e.g., server.log.%d{yyyy-MM-dd-HH}.%i)
+# - Configures DefaultRolloverStrategy with Delete action using glob pattern (server.log.*)
+# - Delete action ensures cleanup of BOTH old files (server.log.2024-10-06-14)
+#   and new files (server.log.2024-10-06-15.1) when total count exceeds 10
 
 # Update log4j2.yaml with log redaction using Rewrite appender
 - name: Update log4j2.yaml with redactor appender
@@ -184,7 +193,10 @@ def main():
     result = dict(changed=False, message='')
     module = AnsibleModule(argument_spec=module_args, supports_check_mode=True)
     if not HAS_YAML:
-        module.fail_json(msg="The python PyYAML module is required on Target nodes. Install it with 'pip install PyYAML'")
+        module.fail_json(
+            msg="The python PyYAML module is required on Target nodes. "
+                "Install it with 'pip install PyYAML'"
+        )
 
     path = module.params['path']
     size = module.params['size']
@@ -208,7 +220,11 @@ def main():
         if not redactor_logger_names:
             module.fail_json(msg="redactor_logger_names is required when add_redactor=true", **result)
         if len(redactor_refs) != len(redactor_logger_names):
-            module.fail_json(msg=f"number of appenderRefs ({len(redactor_refs)}) and logger_name ({len(redactor_logger_names)}) must be equal", **result)
+            module.fail_json(
+                msg=f"number of appenderRefs ({len(redactor_refs)}) and "
+                    f"logger_name ({len(redactor_logger_names)}) must be equal",
+                **result
+            )
 
     if not os.path.exists(path):
         module.fail_json(msg=f"File {path} does not exist.", **result)
@@ -242,14 +258,53 @@ def main():
             if appender.get('SizeBasedTriggeringPolicy', {}).get('size') != size:
                 appender['SizeBasedTriggeringPolicy'] = {'size': size}
                 changed = True
-        # Add or update DefaultRolloverStrategy
+        if 'filePattern' in appender:
+            original_pattern = appender['filePattern']
+
+            if '%i' not in original_pattern:
+                new_pattern = original_pattern + '.%i'
+                appender['filePattern'] = new_pattern
+                changed = True
+
         max_backup_value = int(max_backup) if max_backup.isdigit() else max_backup
-        if appender.get('DefaultRolloverStrategy', {}).get('max') != max_backup_value:
-            appender['DefaultRolloverStrategy'] = {'max': max_backup_value}
-            changed = True
+
+        file_name = appender.get('fileName', '')
+        if file_name:
+            if '/' in file_name:
+                base_path = file_name[:file_name.rfind('/')]
+                base_file = file_name[file_name.rfind('/') + 1:]
+            else:
+                base_path = '.'
+                base_file = file_name
+
+            glob_pattern = base_file + '.*'
+
+            rollover_strategy = {
+                'Delete': {
+                    'basePath': base_path,
+                    'maxDepth': 1,
+                    'IfFileName': {
+                        'glob': glob_pattern
+                    },
+                    'IfAccumulatedFileCount': {
+                        'exceeds': max_backup_value
+                    }
+                }
+            }
+
+            if appender.get('DefaultRolloverStrategy') != rollover_strategy:
+                appender['DefaultRolloverStrategy'] = rollover_strategy
+                changed = True
+        else:
+            if appender.get('DefaultRolloverStrategy', {}).get('max') != max_backup_value:
+                appender['DefaultRolloverStrategy'] = {'max': max_backup_value}
+                changed = True
     # Write back as dict if only one RollingFile appender, else as list
     if rollingfiles:
-        data['Configuration']['Appenders']['RollingFile'] = rollingfiles[0] if single_rollingfile and len(rollingfiles) == 1 else rollingfiles
+        data['Configuration']['Appenders']['RollingFile'] = (
+            rollingfiles[0] if single_rollingfile and len(rollingfiles) == 1
+            else rollingfiles
+        )
 
     # Optionally update root logger level and update root logger appenders
     loggers = data['Configuration'].get('Loggers', {})
@@ -353,7 +408,13 @@ def main():
         with open(path, 'w') as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
-        result['message'] = f"Updated {path}: removed TimeBasedTriggeringPolicy and added/updated SizeBasedTriggeringPolicy for all RollingFile appenders."
+        result['message'] = (
+            f"Updated {path}: removed TimeBasedTriggeringPolicy, "
+            f"added/updated SizeBasedTriggeringPolicy, added index counter (%i) "
+            f"to filePattern while preserving date information, and configured "
+            f"DefaultRolloverStrategy with Delete action to ensure proper cleanup "
+            f"of old and new log files when count exceeds {max_backup}."
+        )
         if root_level:
             result['message'] += f" Set root logger level to {root_level}."
 
@@ -362,7 +423,11 @@ def main():
             result['message'] += f" Set root logger appenders to {root_appenders}."
 
         if add_redactor:
-            result['message'] += f" Added/updated Rewrite appender '{redactor_name}', referencing {redactor_refs} to {len(redactor_logger_names)} logger(s)."
+            result['message'] += (
+                f" Added/updated Rewrite appender '{redactor_name}', "
+                f"referencing {redactor_refs} to {len(redactor_logger_names)} "
+                f"logger(s)."
+            )
     else:
         result['message'] = "No changes needed."
 
