@@ -9,63 +9,17 @@
           and ansible_facts.packages['confluent-common'][0].version
             not in [confluent_package_version, confluent_full_package_version] }}
 
-- name: Determine if Control Center Next Gen Package Version Will Change
+- name: Get installed Confluent Packages
   set_fact:
-    confluent_control_center_next_gen_package_version_changed: >-
-      {{ ansible_facts.packages['confluent-control-center-next-gen'] is defined
-          and ansible_facts.packages['confluent-control-center-next-gen'][0].version
-            not in [confluent_control_center_next_gen_package_version, confluent_control_center_next_gen_full_package_version] }}
+    confluent_packages_actual: >
+      {{ ansible_facts.packages | dict2items | map(attribute='key') | select('match', 'confluent-') | list }}
 
-- name: Determine if USM Agent Package Version Will Change
-  set_fact:
-    confluent_usm_agent_package_version_changed: >-
-      {{ ansible_facts.packages['confluent-usm-agent'] is defined
-          and ansible_facts.packages['confluent-usm-agent'][0].version
-            != confluent_usm_agent_package_version }}
-
-- name: Get installed Confluent Platform Packages
-  set_fact:
-    confluent_platform_packages_actual: >
-      {{ ansible_facts.packages | dict2items | map(attribute='key') |
-         select('match', 'confluent-') |
-         reject('match', 'confluent-control-center-next-gen') |
-         reject('match', 'confluent-usm-agent') | list }}
-
-- name: Get installed Control Center Next Gen Packages
-  set_fact:
-    confluent_control_center_next_gen_packages_actual: >
-      {{ ansible_facts.packages | dict2items | map(attribute='key') |
-         select('match', 'confluent-control-center-next-gen') | list }}
-
-- name: Get installed USM Agent Packages
-  set_fact:
-    confluent_usm_agent_packages_actual: >
-      {{ ansible_facts.packages | dict2items | map(attribute='key') |
-         select('match', 'confluent-usm-agent') | list }}
-
-- name: Determine Confluent Platform Packages to Remove
-  set_fact:
-    confluent_platform_packages_removed: >
-      {{ confluent_platform_packages_actual if confluent_package_version_changed|bool else
-          confluent_platform_packages_actual | intersect(['confluent-kafka']) if confluent_server_enabled else
-          confluent_platform_packages_actual | intersect(['confluent-server']) }}
-
-- name: Determine Control Center Next Gen Packages to Remove
-  set_fact:
-    confluent_control_center_next_gen_packages_removed: >
-      {{ confluent_control_center_next_gen_packages_actual if confluent_control_center_next_gen_package_version_changed|bool else [] }}
-
-- name: Determine USM Agent Packages to Remove
-  set_fact:
-    confluent_usm_agent_packages_removed: >
-      {{ confluent_usm_agent_packages_actual if confluent_usm_agent_package_version_changed|bool else [] }}
-
-- name: Combine all packages to remove
+- name: Determine Confluent Packages to Remove
   set_fact:
     confluent_packages_removed: >
-      {{ (confluent_platform_packages_removed +
-          confluent_control_center_next_gen_packages_removed +
-          confluent_usm_agent_packages_removed) | unique }}
+      {{ confluent_packages_actual if confluent_package_version_changed|bool else
+          confluent_packages_actual | intersect(['confluent-kafka']) if confluent_server_enabled else
+          confluent_packages_actual | intersect(['confluent-server']) }}
 
 - name: Debug Confluent Packages to Remove
   debug:
