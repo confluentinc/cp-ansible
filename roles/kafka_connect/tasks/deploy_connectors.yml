@@ -1,7 +1,7 @@
 ---
 - name: Register Kafka Connect Subgroups
   set_fact:
-    subgroups: "{{ ((subgroups | default([])) + hostvars[item].group_names) | difference(['kafka_broker', 'ksql', 'kafka_connect', 'kafka_rest', 'kerberos', 'schema_registry', 'zookeeper', 'kafka_broker_parallel', 'ksql_parallel', 'kafka_connect_parallel', 'kafka_rest_parallel', 'kerberos_parallel', 'ksql_parallel', 'schema_registry_parallel', 'zookeeper_parallel', 'kafka_controller', 'kafka_controller_parallel']) }}"
+    subgroups: "{{ ((subgroups | default([])) + hostvars[item].group_names) | difference('kafka_broker, ksql, kafka_connect, kafka_rest, kerberos, ksql, schema_registry, zookeeper, kafka_broker_parallel, ksql_parallel, kafka_connect_parallel, kafka_rest_parallel, kerberos_parallel, ksql_parallel, schema_registry_parallel, zookeeper_parallel, kafka_controller, kafka_controller_parallel') }}"
   with_items: "{{groups['kafka_connect']}}"
 
 - name: Extract Connect Principal from cert
@@ -79,58 +79,6 @@
     - subgroups|length == 0
   run_once: true
 
-- name: Set parent Cluster
-  set_fact:
-    connector_deployment_keywords:
-      - kafka_connect
-      - kafka_connect_parallel
-      - kafka_connect_serial
-      - kafka_broker
-      - kafka_broker_parallel
-      - kafka_broker_serial
-      - zookeeper
-      - zookeeper_parallel
-      - zookeeper_serial
-      - kafka_rest
-      - kafka_rest_parallel
-      - kafka_rest_serial
-      - control_center
-      - control_center_parallel
-      - control_center_serial
-      - control_center_next_gen
-      - control_center_next_gen_parallel
-      - control_center_next_gen_serial
-      - ksql
-      - ksql_parallel
-      - ksql_serial
-      - schema_registry
-      - kafka_controller
-      - kafka_controller_parallel
-      - kafka_controller_serial
-
-- name: Find parent cluster group by matching group.id
-  vars:
-    candidate_groups: "{{ group_names | difference(connector_deployment_keywords) }}"
-  set_fact:
-    connectors_deploy_cluster_group: "{{ item }}"
-  loop: "{{ candidate_groups }}"
-  when:
-    - connectors_deploy_cluster_group is not defined
-    - groups[item] is defined
-    - groups[item] | length > 0
-    - hostvars[groups[item][0]].kafka_connect_connectors is defined
-  failed_when: false
-  changed_when: false
-
-- name: Set default parent cluster group if not found
-  set_fact:
-    connectors_deploy_cluster_group: "{{ connectors_deploy_cluster_group | default((group_names | difference(connector_deployment_keywords))[0] | default('kafka_connect')) }}"
-
-- name: Filter subgroups to current host's cluster
-  set_fact:
-    filtered_subgroups: "{{ [connectors_deploy_cluster_group] if ((kafka_connect_deployment_strategy == 'rolling' or kafka_connect_deployment_strategy == 'serial') and connectors_deploy_cluster_group is defined and connectors_deploy_cluster_group in subgroups) else subgroups }}"
-  when: subgroups is defined
-
 - name: Register connector configs and remove deleted connectors for Multiple Clusters
   confluent.platform.kafka_connectors:
     connect_url: "http{% if hostvars[groups[item][0]].kafka_connect_ssl_enabled|default(kafka_connect_ssl_enabled) %}s{% endif %}://{{ hostvars[groups[item][0]] | confluent.platform.resolve_and_format_hostname }}:{{ hostvars[groups[item][0]].kafka_connect_rest_port|default(kafka_connect_rest_port) }}/connectors"
@@ -141,5 +89,5 @@
     client_key: "{% if hostvars[groups[item][0]].kafka_connect_ssl_mutual_auth_enabled|default(kafka_connect_ssl_mutual_auth_enabled) %}{{hostvars[groups[item][0]].kafka_connect_key_path|default(kafka_connect_key_path)}}{% else %}{{none}}{% endif %}"
   when: hostvars[groups[item][0]].kafka_connect_connectors is defined
   delegate_to: "{{ groups[item][0] }}"
-  loop: "{{ filtered_subgroups | default(subgroups) }}"
+  loop: "{{subgroups}}"
   run_once: true
