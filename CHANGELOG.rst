@@ -4,6 +4,29 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.6.9
+======
+
+Notable fixes
+-------------
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
+New features
+-------------
+- Made retries and delays in health checks configurable for customers 
+- Introduced Indexing and default rollover strategy for log42j file
+
+Notable enhancements
+-------------
+- Added the possiblity to override a list of loggers using the update_log4j task in the common role
+- Enhanced security by masking potentially exposed sensitive secrets
+
+Bug fixes
+-------------
+- Fixes idempotency on config files when using secrets protection feature
+- Fixed Connector deployment failures for mtls enabled with provided keystore/trustore in rolling deployments
+- Fixed bug related to zookeeper chroot creation
+
 v7.6.8
 ======
 
