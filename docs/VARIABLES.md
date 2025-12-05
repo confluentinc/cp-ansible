@@ -52,6 +52,14 @@ Default:  true
 
 ***
 
+### shell_executable
+
+Path to bash executable for shell tasks that require pipefail. Override if bash is at a different location on your systems.
+
+Default:  /bin/bash
+
+***
+
 ### jolokia_url_remote
 
 To copy from Ansible control host or download
@@ -1462,7 +1470,7 @@ Default:  []
 
 ### schema_registry_custom_properties
 
-Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
+Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.NOTE- kafka_broker.properties is deprecated.
 
 Default:  {}
 
@@ -7624,6 +7632,30 @@ Default:
 
 ***
 
+### control_center_next_gen_health_check_delay
+
+Time in seconds to wait before starting Control Center Next Gen Health Checks.
+
+Default:  30
+
+***
+
+### control_center_next_gen_health_check_retries
+
+Number of retries for Control Center Next Gen health checks
+
+Default:  40
+
+***
+
+### control_center_next_gen_health_check_retry_delay
+
+Delay in seconds between Control Center Next Gen health check retries
+
+Default:  10
+
+***
+
 # kafka_broker
 
 Below are the supported variables for the role kafka_broker
@@ -7699,6 +7731,38 @@ Default:
 Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
 
 Default: 
+
+***
+
+### kafka_broker_health_check_delay
+
+Time in seconds to wait before starting Kafka Health Checks.
+
+Default:  20
+
+***
+
+### kafka_broker_health_check_urp_retries
+
+Number of retries for Under Replicated Partitions check
+
+Default:  15
+
+***
+
+### kafka_broker_health_check_urp_delay
+
+Delay in seconds between Under Replicated Partitions check retries
+
+Default:  5
+
+***
+
+### kafka_broker_health_check_retry_delay
+
+Delay in seconds between health check retries for MDS and Embedded Rest Proxy
+
+Default:  5
 
 ***
 
@@ -7906,6 +7970,30 @@ Default:
 
 ***
 
+### kafka_connect_health_check_delay
+
+Time in seconds to wait before starting Connect Health Checks.
+
+Default:  30
+
+***
+
+### kafka_connect_health_check_retries
+
+Number of retries for Kafka Connect health checks
+
+Default:  40
+
+***
+
+### kafka_connect_health_check_retry_delay
+
+Delay in seconds between Kafka Connect health check retries
+
+Default:  10
+
+***
+
 ### kafka_connect_deploy_connector_timeout
 
 Time in seconds to wait while deploying kafka connector
@@ -7997,6 +8085,30 @@ Default:
 Overrides to the Unit Section of Rest Proxy Systemd File. This variable is a dictionary.
 
 Default: 
+
+***
+
+### kafka_rest_health_check_delay
+
+Time in seconds to wait before starting Rest Proxy Health Checks.
+
+Default:  15
+
+***
+
+### kafka_rest_health_check_retries
+
+Number of retries for Rest Proxy health checks
+
+Default:  30
+
+***
+
+### kafka_rest_health_check_retry_delay
+
+Delay in seconds between Rest Proxy health check retries
+
+Default:  5
 
 ***
 
@@ -8094,6 +8206,30 @@ Default:
 
 ***
 
+### ksql_health_check_delay
+
+Time in seconds to wait before starting ksqlDB Health Checks.
+
+Default:  20
+
+***
+
+### ksql_health_check_retries
+
+Number of retries for ksqlDB health checks
+
+Default:  40
+
+***
+
+### ksql_health_check_retry_delay
+
+Delay in seconds between ksqlDB health check retries
+
+Default:  5
+
+***
+
 # schema_registry
 
 Below are the supported variables for the role schema_registry
@@ -8180,6 +8316,30 @@ Default:
 
 ***
 
+### schema_registry_health_check_delay
+
+Time in seconds to wait before starting Schema Registry Health Checks.
+
+Default:  15
+
+***
+
+### schema_registry_health_check_retries
+
+Number of retries for Schema Registry health checks
+
+Default:  30
+
+***
+
+### schema_registry_health_check_retry_delay
+
+Delay in seconds between Schema Registry health check retries
+
+Default:  5
+
+***
+
 # kafka_connect_replicator
 
 Below are the supported variables for the role kafka_connect_replicator
@@ -8239,6 +8399,30 @@ Default:
 Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
 
 Default: 
+
+***
+
+### kafka_connect_replicator_health_check_delay
+
+Time in seconds to wait before starting Kafka Connect Replicator Health Checks.
+
+Default:  30
+
+***
+
+### kafka_connect_replicator_health_check_retries
+
+Number of retries for Kafka Connect Replicator health checks
+
+Default:  30
+
+***
+
+### kafka_connect_replicator_health_check_retry_delay
+
+Delay in seconds between Kafka Connect Replicator health check retries
+
+Default:  10
 
 ***
 
