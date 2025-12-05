@@ -4,6 +4,27 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v8.1.1
+======
+New features
+-------------
+- Made retries and delays in health checks configurable for customers 
+- Introduced Indexing and default rollover strategy for log42j file
+
+Notable enhancements
+-------------
+- Added the possiblity to override a list of loggers using the update_log4j task in the common role
+- Add apt-key approach was deprecated in ubuntu os. Made the changes to move to a modern approach
+- Enhanced security by masking potentially exposed sensitive secrets
+
+Bug fixes
+-------------
+- Fixes idempotency on config files when using secrets protection feature
+- Fixed Connector deployment failures for mtls enabled with provided keystore/trustore in rolling deployments
+- Zookeeper based kafka cluster on JBOD can use migration playbook to move to KRaft 
+
+
+
 v8.1.0
 ======
 New features
