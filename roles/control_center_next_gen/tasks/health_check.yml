@@ -21,8 +21,8 @@
     timeout: 5
   register: prometheus_health_check
   until: prometheus_health_check.status == 200
-  retries: 40
-  delay: 10
+  retries: "{{ control_center_next_gen_health_check_retries }}"
+  delay: "{{ control_center_next_gen_health_check_retry_delay }}"
   no_log: "{{ mask_secrets|bool }}"
   ignore_errors: true
 
@@ -47,8 +47,8 @@
     timeout: 5
   register: alertmanager_health_check
   until: alertmanager_health_check.status == 200
-  retries: 40
-  delay: 10
+  retries: "{{ control_center_next_gen_health_check_retries }}"
+  delay: "{{ control_center_next_gen_health_check_retry_delay }}"
   no_log: "{{ mask_secrets|bool }}"
   ignore_errors: true
 
@@ -62,8 +62,8 @@
     force_basic_auth: true
   register: control_center_health_check_passed
   until: control_center_health_check_passed.status == 200
-  retries: 40
-  delay: 10
+  retries: "{{ control_center_next_gen_health_check_retries }}"
+  delay: "{{ control_center_next_gen_health_check_retry_delay }}"
   when: not rbac_enabled|bool
   ignore_errors: true
 
@@ -78,14 +78,15 @@
   until:
     - control_center_feature_flags_check.status == 200
     - control_center_feature_flags_check.json['confluent.controlcenter.prometheus.enable'] == true
-  retries: 40
-  delay: 10
+  retries: "{{ control_center_next_gen_health_check_retries }}"
+  delay: "{{ control_center_next_gen_health_check_retry_delay }}"
   ignore_errors: true
 
 # Logrotate Validation Tasks
 - name: Validate Logrotate Package Installation
   command: which logrotate
   register: logrotate_package_check
+  changed_when: false
   failed_when: logrotate_package_check.rc != 0
   when: control_center_next_gen_logrotate_enabled|bool
   tags:
@@ -108,6 +109,7 @@
   command: logrotate -d "{{ item.item }}"
   register: logrotate_config_validation
   loop: "{{ logrotate_config_files.results }}"
+  changed_when: false
   failed_when: logrotate_config_validation.rc != 0
   when:
     - control_center_next_gen_logrotate_enabled|bool
@@ -132,6 +134,7 @@
   command: "{{ item.item }}"
   register: logrotate_wrapper_execution
   loop: "{{ logrotate_wrapper_scripts.results }}"
+  changed_when: false
   failed_when: logrotate_wrapper_execution.rc != 0
   when:
     - control_center_next_gen_logrotate_enabled|bool
@@ -142,8 +145,13 @@
     - validation
 
 - name: Validate Cron Jobs for Logrotate
-  shell: crontab -l | grep -c "{{ item }}"
+  shell: |
+    set -o pipefail
+    crontab -l | grep -c "{{ item }}"
+  args:
+    executable: "{{ shell_executable }}"
   register: logrotate_cron_validation
+  changed_when: false
   loop:
     - "Control Center Next Gen Prometheus Log Rotation"
     - "Control Center Next Gen Alertmanager Log Rotation"
