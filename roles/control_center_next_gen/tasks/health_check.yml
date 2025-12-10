@@ -21,8 +21,9 @@
     timeout: 5
   register: prometheus_health_check
   until: prometheus_health_check.status == 200
-  retries: 40
-  delay: 10
+  retries: "{{ control_center_next_gen_health_check_retries }}"
+  delay: "{{ control_center_next_gen_health_check_retry_delay }}"
+  no_log: "{{ mask_secrets|bool }}"
   ignore_errors: true
 
 - name: Set basic_auth variable conditionally for Alertmanager Health Check
@@ -46,8 +47,9 @@
     timeout: 5
   register: alertmanager_health_check
   until: alertmanager_health_check.status == 200
-  retries: 40
-  delay: 10
+  retries: "{{ control_center_next_gen_health_check_retries }}"
+  delay: "{{ control_center_next_gen_health_check_retry_delay }}"
+  no_log: "{{ mask_secrets|bool }}"
   ignore_errors: true
 
 - name: Wait for webpage (Control-Center-Next-Gen) to serve content
@@ -60,8 +62,8 @@
     force_basic_auth: true
   register: control_center_health_check_passed
   until: control_center_health_check_passed.status == 200
-  retries: 40
-  delay: 10
+  retries: "{{ control_center_next_gen_health_check_retries }}"
+  delay: "{{ control_center_next_gen_health_check_retry_delay }}"
   when: not rbac_enabled|bool
   ignore_errors: true
 
@@ -76,9 +78,139 @@
   until:
     - control_center_feature_flags_check.status == 200
     - control_center_feature_flags_check.json['confluent.controlcenter.prometheus.enable'] == true
-  retries: 40
-  delay: 10
+  retries: "{{ control_center_next_gen_health_check_retries }}"
+  delay: "{{ control_center_next_gen_health_check_retry_delay }}"
   ignore_errors: true
+
+# Logrotate Validation Tasks
+- name: Validate Logrotate Package Installation
+  command: which logrotate
+  register: logrotate_package_check
+  changed_when: false
+  failed_when: logrotate_package_check.rc != 0
+  when: control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - logrotate_validation
+    - validation
+
+- name: Validate Logrotate Configuration Files Exist
+  stat:
+    path: "{{ item }}"
+  register: logrotate_config_files
+  loop:
+    - /etc/logrotate.d/control-center-next-gen-prometheus
+    - /etc/logrotate.d/control-center-next-gen-alertmanager
+  when: control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - logrotate_validation
+    - validation
+
+- name: Validate Logrotate Configuration Files Content
+  command: logrotate -d "{{ item.item }}"
+  register: logrotate_config_validation
+  changed_when: false
+  loop: "{{ logrotate_config_files.results }}"
+  failed_when: logrotate_config_validation.rc != 0
+  when:
+    - control_center_next_gen_logrotate_enabled|bool
+    - item.stat.exists
+  tags:
+    - logrotate_validation
+    - validation
+
+- name: Validate Logrotate Wrapper Scripts Exist and Executable
+  stat:
+    path: "{{ item }}"
+  register: logrotate_wrapper_scripts
+  loop:
+    - /usr/local/bin/logrotate-control-center-next-gen-prometheus.sh
+    - /usr/local/bin/logrotate-control-center-next-gen-alertmanager.sh
+  when: control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - logrotate_validation
+    - validation
+
+- name: Validate Logrotate Wrapper Scripts Execution
+  command: "{{ item.item }}"
+  register: logrotate_wrapper_execution
+  changed_when: false
+  loop: "{{ logrotate_wrapper_scripts.results }}"
+  failed_when: logrotate_wrapper_execution.rc != 0
+  when:
+    - control_center_next_gen_logrotate_enabled|bool
+    - item.stat.exists
+    - item.stat.executable
+  tags:
+    - logrotate_validation
+    - validation
+
+- name: Validate Cron Jobs for Logrotate
+  shell: set -o pipefail && crontab -l | grep -c "{{ item }}"
+  args:
+    executable: "{{ shell_executable }}"
+  register: logrotate_cron_validation
+  changed_when: false
+  loop:
+    - "Control Center Next Gen Prometheus Log Rotation"
+    - "Control Center Next Gen Alertmanager Log Rotation"
+  when: control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - logrotate_validation
+    - validation
+
+- name: Validate Log Files Ownership
+  stat:
+    path: "{{ item }}"
+  register: log_files_ownership
+  loop:
+    - "{{ control_center_next_gen_dep_prometheus.log_path }}/prometheus_access.log"
+    - "{{ control_center_next_gen_dep_prometheus.log_path }}/prometheus_application.log"
+    - "{{ control_center_next_gen_dep_alertmanager.log_path }}/alertmanager_access.log"
+    - "{{ control_center_next_gen_dep_alertmanager.log_path }}/alertmanager_application.log"
+  when: control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - logrotate_validation
+    - validation
+
+- name: Validate Logrotate Status Files
+  stat:
+    path: "{{ item }}"
+  register: logrotate_status_files
+  loop:
+    - /var/lib/logrotate/status-control-center-next-gen-prometheus
+    - /var/lib/logrotate/status-control-center-next-gen-alertmanager
+  when: control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - logrotate_validation
+    - validation
+
+- name: Validate Systemd Logging Configuration
+  stat:
+    path: "{{ item }}"
+  register: systemd_logging_config
+  loop:
+    - "{{ control_center_next_gen_dep_prometheus.systemd_override | dirname }}/logging.conf"
+    - "{{ control_center_next_gen_dep_alertmanager.systemd_override | dirname }}/logging.conf"
+  when: control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - logrotate_validation
+    - validation
+
+- name: Logrotate Validation Summary
+  debug:
+    msg: |
+      Logrotate Validation Results:
+      - Package Installation: {{ 'PASS' if logrotate_package_check.rc == 0 else 'FAIL' }}
+      - Configuration Files: {{ logrotate_config_files.results | selectattr('stat.exists') | list | length }}/2 files exist
+      - Wrapper Scripts: {{ logrotate_wrapper_scripts.results | selectattr('stat.exists') | list | length }}/2 scripts exist
+      - Cron Jobs: {{ logrotate_cron_validation.results | selectattr('stdout', 'defined') | map(attribute='stdout') | map('int') | sum }}/2 jobs configured
+      - Log Files: {{ log_files_ownership.results | selectattr('stat.exists') | list | length }}/4 files exist
+      - Status Files: {{ logrotate_status_files.results | selectattr('stat.exists') | list | length }}/2 files exist
+      - Systemd Config: {{ systemd_logging_config.results | selectattr('stat.exists') | list | length }}/2 configs exist
+  when: control_center_next_gen_logrotate_enabled|bool
+  tags:
+    - logrotate_validation
+    - validation
 
 - name: Fetch Log Files and Error out
   block:

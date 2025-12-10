@@ -239,6 +239,11 @@
     - configuration
     - filesystem
 
+- name: Get control center secrets protection file status
+  stat:
+    path: "{{ control_center_secrets_protection_file }}"
+  register: control_center_secrets_protection_file_status
+
 - name: Create Control Center Config
   template:
     src: control-center.properties.j2
@@ -248,8 +253,14 @@
     group: "{{control_center_group}}"
   notify: restart control center
   diff: "{{ not mask_sensitive_diff|bool }}"
+  when: not control_center_secrets_protection_enabled|bool or not control_center_secrets_protection_file_status.stat.exists
   tags:
     - configuration
+
+- name: Empty master key fact when regenerate_masterkey
+  set_fact:
+    secrets_protection_masterkey: ""
+  when: regenerate_masterkey|bool
 
 - name: Create Control Center Config with Secrets Protection
   include_role:
