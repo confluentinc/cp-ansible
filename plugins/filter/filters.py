@@ -39,6 +39,7 @@ class FilterModule(object):
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
             'prometheus_client_properties': self.prometheus_client_properties,
             'alertmanager_client_properties': self.alertmanager_client_properties,
+            'schema_registry_extension_classes': self.schema_registry_extension_classes,
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
