@@ -655,7 +655,6 @@ class FilterModule(object):
             service_name
         )
 
-    
     def usm_sha1_password_hash(self, password):
         """
         Generates a SHA1 hash of the provided password in the format required for USM agent basic auth.
