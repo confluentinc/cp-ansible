@@ -9,6 +9,23 @@
   ignore_errors: false
   changed_when: false
   check_mode: false
+  when:
+    - not kafka_controller_client_secrets_protection_enabled|bool
+
+
+- name: Check Kafka Metadata Quorum with Secrets Protection enabled
+  shell: |
+    {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-server {{inventory_hostname}}:{{kafka_controller_port}} \
+      --command-config {{kafka_controller.client_config_file}} describe --replication
+  environment:
+    CONFLUENT_SECURITY_MASTER_KEY: "{{ secrets_protection_masterkey }}"
+    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+  ignore_errors: false
+  changed_when: false
+  check_mode: false
+  when:
+    - kafka_controller_client_secrets_protection_enabled|bool
+
 
 #Registers LEO of controllers only if Metadata Quorum passed in the above task
 - name: Register LogEndOffset
@@ -24,6 +41,23 @@
   ignore_errors: false
   changed_when: false
   check_mode: false
+  when:
+    - not kafka_controller_client_secrets_protection_enabled|bool
+
+#Registers LEO of controllers only if Metadata Quorum passed in the above task
+- name: Register LogEndOffset with Secrets Protection enabled
+  shell: |
+    {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-server {{inventory_hostname}}:{{kafka_controller_port}} \
+      --command-config {{kafka_controller.client_config_file}} describe --replication |  grep -v Observer | awk '{print $2}'
+  environment:
+    CONFLUENT_SECURITY_MASTER_KEY: "{{ secrets_protection_masterkey }}"
+    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+  register: LEO_SECRETS_PROTECTION
+  ignore_errors: false
+  changed_when: false
+  check_mode: false
+  when:
+    - kafka_controller_client_secrets_protection_enabled|bool
 
 - name: Check LogEndOffset values
   assert:
@@ -35,12 +69,27 @@
   ignore_errors: false
   changed_when: false
   check_mode: false
+  when:
+    - not kafka_controller_client_secrets_protection_enabled|bool
+
+- name: Check LogEndOffset values with Secrets Protection enabled
+  assert:
+    that:
+      - "{{ item|int > 0 and LEO_SECRETS_PROTECTION.stdout_lines[1:]|max|int - item|int < 1000 }}"
+    fail_msg: "UnreachableQuorumMember or Found at least one quorum voter with an offset {{ item }}, while the primary controller was at offset {{ LEO_SECRETS_PROTECTION.stdout_lines[1:]|max}}
+               The max allowed offset lag is 1000"
+  loop: "{{ LEO_SECRETS_PROTECTION.stdout_lines[1:] }}"
+  ignore_errors: false
+  changed_when: false
+  check_mode: false
+  when:
+    - kafka_controller_client_secrets_protection_enabled|bool
 
 - name: Remove confluent.use.controller.listener config from Client Properties
   lineinfile:
     path: "{{ kafka_controller.client_config_file }}"
     state: absent
-    line: confluent.use.controller.listener=true
+    regexp: '^confluent.use.controller.listener.*'
   changed_when: false
   check_mode: false
   when: not kraft_migration|bool
