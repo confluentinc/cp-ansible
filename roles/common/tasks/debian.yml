@@ -20,6 +20,7 @@
   apt:
     name: apt-transport-https
     state: present
+    update_cache: true
   register: install_apt_transport_result
   until: install_apt_transport_result is success or ansible_check_mode
   retries: 5
@@ -32,6 +33,7 @@
   loop:
     - "{{confluent_common_repository_debian_key_url}}"
     - "{{confluent_control_center_next_gen_repository_debian_key_url}}"
+    - "{{confluent_usm_agent_repository_debian_key_url}}"
   register: apt_add_key_result
   until: apt_add_key_result is success
   retries: 5
@@ -57,6 +59,7 @@
   loop:
     - "{{confluent_common_repository_debian_repository}}"
     - "{{confluent_control_center_next_gen_repository_debian_repository}}"
+    - "{{confluent_usm_agent_repository_debian_repository}}"
   register: apt_add_result
   until: apt_add_result is success
   retries: 5
@@ -92,6 +95,7 @@
   loop:
     - "{{confluent_common_repository_debian_repository}}"
     - "{{confluent_control_center_next_gen_repository_debian_repository}}"
+    - "{{confluent_usm_agent_repository_debian_repository}}"
   when:
     - repository_configuration == 'custom'
 
@@ -183,6 +187,15 @@
 
 - meta: flush_handlers
 
+- name: Make Sure man pages Directory Exists (Debian != 12)
+  file:
+    path: /usr/share/man/man1
+    state: directory
+    mode: '755'
+  when:
+    - install_java|bool
+    - ansible_distribution_major_version != "12"
+
 - name: Install Java - jessie
   apt:
     name: "{{ debian_java_package_name }}"
@@ -226,6 +239,15 @@
     - repository_configuration == 'confluent'
     - ansible_distribution_release == "buster"
 
+- name: Make Sure man pages Directory Exists (Debian == 12)
+  file:
+    path: /usr/share/man/man1
+    state: directory
+    mode: '755'
+  when:
+    - install_java|bool
+    - ansible_distribution_major_version == "12"
+
 - name: Install Java - bookworm
   apt:
     name: "{{ debian_java_package_name }}"
@@ -259,6 +281,7 @@
       - openssl
       - unzip
       - curl
+    update_cache: true
   tags: package
 
 - name: Get Java Version
@@ -276,6 +299,7 @@
     name:
       - python3-pip
     state: present
+    update_cache: true
   become: true
   tags:
     - package
@@ -304,6 +328,7 @@
     name:
       - "python3-{{item}}"
     state: present
+    update_cache: true
   become: true
   loop: "{{pip_packages}}"
   tags: package
