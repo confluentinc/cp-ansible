@@ -13,6 +13,38 @@
     group: root
     mode: '644'
 
+- name: Enable kernel-level FIPS (when explicitly requested)
+  block:
+    - name: Check if kernel FIPS is already enabled
+      command: fips-mode-setup --is-enabled
+      register: kernel_fips_status
+      changed_when: false
+      failed_when: false
+      become: true
+
+    - name: Run fips-mode-setup --enable
+      command: fips-mode-setup --enable
+      register: fips_kernel_setup
+      become: true
+      when: kernel_fips_status.rc != 0
+
+    - name: Reboot for kernel-level FIPS enforcement
+      reboot:
+        reboot_timeout: "{{ fips_reboot_timeout }}"
+        msg: "Rebooting to enable FIPS kernel enforcement"
+      when: fips_kernel_setup is changed
+      become: true
+
+    - name: Wait for system to be reachable
+      wait_for_connection:
+        delay: 10
+        timeout: "{{ fips_reboot_timeout }}"
+      when: fips_kernel_setup is changed
+
+  when:
+    - fips_enabled | bool
+    - fips_kernel_level_enabled | bool
+
 - name: Configure crypto policies for Redhat
   command: update-crypto-policies --set FIPS
   become: true
