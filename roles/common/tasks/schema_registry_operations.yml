@@ -1,0 +1,120 @@
+---
+- name: "{{ operation_name | default('Schema Registry API Call') }} - Basic/No Auth"
+  uri:
+    url: "{{ request_url }}"
+    method: "{{ method }}"
+    status_code: "{{ expected_status }}"
+    validate_certs: false
+    url_username: "{{ username if schema_registry_authentication_type == 'basic' else omit }}"
+    url_password: "{{ password if schema_registry_authentication_type == 'basic' else omit }}"
+    force_basic_auth: "{{ true if schema_registry_authentication_type == 'basic' else false }}"
+    body_format: "{{ request_body_format | default(omit) }}"
+    body: "{{ request_body | default(omit) }}"
+  register: request_call_result
+  until: (until_condition | default('true')) | replace('RESULT_VAR', 'request_call_result')
+  retries: "{{ request_retries | default(1) }}"
+  delay: "{{ request_delay | default(1) }}"
+  no_log: "{{ mask_secrets|bool }}"
+  when:
+    - when_condition | default(true)
+    - schema_registry_authentication_type != 'mtls'
+    - not (rbac_enabled or schema_registry_oauth_enabled)
+  ignore_errors: "{{ ignore_errors | default(false) }}"
+
+- name: Get Authorization Token for Schema Registry User
+  import_role:
+    name: common
+    tasks_from: get_authorization_token.yml
+  vars:
+    oauth: "{{ schema_registry_oauth_enabled }}"
+    oauth_user: "{{ schema_registry_oauth_user }}"
+    oauth_password: "{{ schema_registry_oauth_password }}"
+    ldap_user: "{{ schema_registry_ldap_user }}"
+    ldap_password: "{{ schema_registry_ldap_password }}"
+    mtls_client_cert: "{{ schema_registry_cert_path }}"
+    mtls_client_key: "{{ schema_registry_key_path }}"
+    cert_auth_only_enabled: "{{ schema_registry_mds_cert_auth_only|bool }}"
+    oauth_client_assertion_enabled: "{{ schema_registry_oauth_client_assertion_enabled }}"
+    oauth_client_assertion_issuer: "{{ schema_registry_oauth_client_assertion_issuer }}"
+    oauth_client_assertion_sub: "{{ schema_registry_oauth_client_assertion_sub }}"
+    oauth_client_assertion_audience: "{{ schema_registry_oauth_client_assertion_audience }}"
+    oauth_client_assertion_private_key_file: "{{ schema_registry_oauth_client_assertion_private_key_file_dest_path }}"
+    oauth_client_assertion_private_key_passphrase: "{{ schema_registry_oauth_client_assertion_private_key_passphrase }}"
+    oauth_client_assertion_file: "{{ schema_registry_third_party_oauth_client_assertion_config.schema_registry }}"
+    oauth_client_assertion_template_file: "{{ schema_registry_oauth_client_assertion_template_file_dest_path }}"
+  when: rbac_enabled or schema_registry_oauth_enabled
+
+- name: "{{ operation_name | default('Schema Registry API Call') }} - OAuth"
+  uri:
+    url: "{{ request_url }}"
+    method: "{{ method }}"
+    status_code: "{{ expected_status }}"
+    validate_certs: false
+    headers:
+      Authorization: "Bearer {{ authorization_token }}"
+    body_format: "{{ request_body_format | default(omit) }}"
+    body: "{{ request_body | default(omit) }}"
+  register: result_oauth
+  until: until_condition | default(true) | replace('RESULT_VAR', 'result_oauth')
+  retries: "{{ request_retries | default(1) }}"
+  delay: "{{ request_delay | default(1) }}"
+  no_log: "{{ mask_secrets|bool }}"
+  when:
+    - when_condition | default(true)
+    - schema_registry_authentication_type != 'mtls'
+    - rbac_enabled or schema_registry_oauth_enabled
+  ignore_errors: "{{ ignore_errors | default(false) }}"
+
+- name: "{{ operation_name | default('Schema Registry API Call') }} - mTLS"
+  uri:
+    url: "{{ request_url }}"
+    method: "{{ method }}"
+    status_code: "{{ expected_status }}"
+    validate_certs: false
+    client_cert: "{{ schema_registry_cert_path if ssl_provided_keystore_and_truststore else certs_chain }}"
+    client_key: "{{ schema_registry_key_path }}"
+    force_basic_auth: true
+    body_format: "{{ request_body_format | default(omit) }}"
+    body: "{{ request_body | default(omit) }}"
+  register: request_call_result_mtls
+  until: until_condition | default(true) | replace('RESULT_VAR', 'request_call_result_mtls')
+  retries: "{{ request_retries | default(1) }}"
+  delay: "{{ request_delay | default(1) }}"
+  no_log: "{{ mask_secrets|bool }}"
+  when:
+    - when_condition | default(true)
+    - schema_registry_authentication_type == 'mtls'
+    - not (rbac_enabled or schema_registry_oauth_enabled)
+  ignore_errors: "{{ ignore_errors | default(false) }}"
+
+- name: "{{ operation_name | default('Schema Registry API Call') }} - mTLS + OAuth/Rbac"
+  uri:
+    url: "{{ request_url }}"
+    method: "{{ method }}"
+    status_code: "{{ expected_status }}"
+    validate_certs: false
+    client_cert: "{{ schema_registry_cert_path if ssl_provided_keystore_and_truststore else certs_chain }}"
+    client_key: "{{ schema_registry_key_path }}"
+    headers:
+      Authorization: "Bearer {{ authorization_token }}"
+    body_format: "{{ request_body_format | default(omit) }}"
+    body: "{{ request_body | default(omit) }}"
+  register: request_call_result_mtls_oauth
+  until: until_condition | default(true) | replace('RESULT_VAR', 'request_call_result_mtls_oauth')
+  retries: "{{ request_retries | default(1) }}"
+  delay: "{{ request_delay | default(1) }}"
+  no_log: "{{ mask_secrets|bool }}"
+  when:
+    - when_condition | default(true)
+    - schema_registry_authentication_type == 'mtls'
+    - rbac_enabled or schema_registry_oauth_enabled
+  ignore_errors: "{{ ignore_errors | default(false) }}"
+
+- name: "Set unified {{ result_var }} result"
+  set_fact:
+    "{{ result_var }}": "{{
+      request_call_result if (request_call_result is defined and not request_call_result.skipped | default(false)) else
+      result_oauth if (result_oauth is defined and not result_oauth.skipped | default(false)) else
+      request_call_result_mtls if (request_call_result_mtls is defined and not request_call_result_mtls.skipped | default(false)) else
+      request_call_result_mtls_oauth
+    }}"
