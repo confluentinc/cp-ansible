@@ -2,20 +2,32 @@
 - name: Install OpenSSL Rsync and Java
   hosts: kafka_broker[0]
   tasks:
-    - name: Install OpenSSL Rsync and Java
+    - name: Install OpenSSL Rsync
       yum:
         name:
           - openssl
           - rsync
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install Java 17 on Rhel 8,9
+      yum:
+        name:
           - java-17-openjdk
         state: present
-      when: ansible_os_family == "RedHat" and ansible_distribution != "Amazon"
+      when: ansible_os_family == "RedHat" and ansible_distribution != "Amazon" and ansible_distribution_major_version in ['8', '9']
 
-    - name: Install OpenSSL Rsync and Java
+    # Java 21 is available in RHEL 10 repositories but Java 17 is not available
+    - name: Install Java 21 on Rhel 10
       yum:
         name:
-          - openssl
-          - rsync
+          - java-21-openjdk
+        state: present
+      when: ansible_os_family == "RedHat" and ansible_distribution != "Amazon" and ansible_distribution_major_version == '10'
+
+    - name: Install Java on Amazon
+      yum:
+        name:
           - java-17-amazon-corretto
         state: present
       when: ansible_os_family == "RedHat" and ansible_distribution == "Amazon"
@@ -47,7 +59,7 @@
       register: java_path
       when:
         - fips_enabled|default(false) | bool
-        - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+        - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9', '10']
 
     - name: Disable JVM level FIPS
       lineinfile:
@@ -59,13 +71,13 @@
         mode: '644'
       when:
         - fips_enabled|default(false) | bool
-        - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+        - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9', '10']
 
     - name: Configure crypto policies
       shell: update-crypto-policies --set FIPS
       when:
         - fips_enabled|default(false) | bool
-        - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+        - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9', '10']
 
     - name: Create SSL Certificate Generation Directory
       file:
