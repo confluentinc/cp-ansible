@@ -137,10 +137,11 @@
 
 - name: Check the OS when using FIPS mode
   fail:
-    msg: "FIPS mode is only supported on RedHat based OS"
+    msg: "FIPS mode is only supported on RedHat and Ubuntu OS"
   when:
     - fips_enabled | bool
     - ansible_os_family != "RedHat"
+    - ansible_distribution != "Ubuntu"
   tags: validate
 
 - name: Check if FIPS is enabled on Local Host
@@ -179,6 +180,44 @@
   when:
     - fips_enabled | bool
     - ansible_os_family == "RedHat"
+  tags: validate
+
+- name: Check if FIPS is enabled on Ubuntu Local Host
+  command: cat /proc/sys/crypto/fips_enabled
+  delegate_to: localhost
+  register: ubuntu_fips_output_localhost
+  changed_when: false
+  when:
+    - fips_enabled | bool
+    - ansible_distribution == "Ubuntu"
+  tags: validate
+
+- assert:
+    that:
+      - ubuntu_fips_output_localhost.stdout == "1"
+    fail_msg: "FIPS is not enabled on your Ubuntu localhost, please enable fips on your Local Host using 'ua enable fips'."
+  delegate_to: localhost
+  when:
+    - fips_enabled | bool
+    - ansible_distribution == "Ubuntu"
+  tags: validate
+
+- name: Check if FIPS is enabled on Ubuntu Remote Host
+  command: cat /proc/sys/crypto/fips_enabled
+  register: ubuntu_fips_output_remotehost
+  changed_when: false
+  when:
+    - fips_enabled | bool
+    - ansible_distribution == "Ubuntu"
+  tags: validate
+
+- assert:
+    that:
+      - ubuntu_fips_output_remotehost.stdout == "1"
+    fail_msg: "FIPS is not enabled on your Ubuntu remote host, please enable fips on your Remote Host using 'ua enable fips'."
+  when:
+    - fips_enabled | bool
+    - ansible_distribution == "Ubuntu"
   tags: validate
 
 - name: Validate fips_mode value
