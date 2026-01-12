@@ -45,9 +45,8 @@ sudo apt install -y shellcheck
 # prepend the desired default python version to .python-version file
 { echo "$PYTHON_VERSION"; cat .python-version 2>/dev/null || true; } > .python-version.tmp && mv .python-version.tmp .python-version
 
-# Explicitly activate the desired Python version
-eval "$(pyenv init -)"
-pyenv shell $PYTHON_VERSION
+# Explicitly activate the desired Python version using Semaphore's sem-version
+sem-version python $PYTHON_VERSION
 
 pip install wheel
 pip install pylint
