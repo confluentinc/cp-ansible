@@ -84,7 +84,7 @@ for line in `sed '/^$/d' $filename`; do
              -in $KEYSTORE_FILENAME \
              -passin pass:keystorepass \
              -passout pass:keypass \
-             -nodes -nocerts \
+             -nodes -nocerts -nomacver \
              -out $KEY_FILENAME
       fi
 
