@@ -399,7 +399,7 @@
             - schema_importers[0].subjects | length > 0
             - "':*:' in schema_importers[0].subjects"
 
-        # Process all subjects: normalize, set context mode, fetch subjects, set subject mode
+        # Process all subjects: normalize, delete context mode, fetch subjects
         # Step 1: Normalize all subject patterns (excluding context_patterns to avoid duplication)
         - name: Normalize subject patterns
           set_fact:
@@ -428,9 +428,9 @@
           when:
             - normalized_subjects is defined
             - normalized_subjects | length > 0
-            - "':.:' not in schema_importers[0].subjects"
+            - "(':.:' not in schema_importers[0].subjects) and ('.' not in schema_importers[0].subjects)"
 
-        # Step 2: Set mode at context level for all normalized subjects
+        # Step 2: Delete mode at context level for all normalized subjects
         - name: Delete mode at context level
           uri:
             url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode/:{{ item }}:?recursive=true"
@@ -447,6 +447,18 @@
             - remote_context_result is defined
             - remote_context_result.results is defined
             - remote_context_result.results | length > 0
+
+        - name: Delete mode at default context level (.)
+            uri:
+              url: "{{ unified_stream_manager.schema_registry_endpoint }}/mode?recursive=true"
+              method: DELETE
+              status_code: 200
+              validate_certs: false
+              user: "{{ unified_stream_manager.basic_username if unified_stream_manager.authentication_type == 'basic' else omit }}"
+              password: "{{ unified_stream_manager.basic_password if unified_stream_manager.authentication_type == 'basic' else omit }}"
+            register: default_context_mode_results
+            when:
+             - "(':.:' in schema_importers[0].subjects) or ('.' in schema_importers[0].subjects)"
 
       rescue:
         - name: Handle Switchover failure
