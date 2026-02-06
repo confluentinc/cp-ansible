@@ -7140,6 +7140,32 @@ Default:  {}
 
 ***
 
+### usm_client_metrics_enabled
+
+Boolean to enable USM client metrics. When set to true, configures Kafka Broker and Kafka Controller (KRaft) with external client metrics settings for USM.
+
+**Prerequisite:** USM Agent must be configured in the inventory (`usm_agent` host group). This setting only takes effect when USM Agent is deployed.
+
+**Affected Components:**
+- Kafka Broker
+- Kafka Controller (KRaft)
+
+**Not Supported:**
+- Kafka Connect (will fail validation if enabled for Connect)
+
+**Properties configured when enabled:**
+- confluent.telemetry.external.client.metrics.usm.push.enabled: true
+- confluent.telemetry.external.client.metrics.push.enabled: true
+- confluent.telemetry.external.client.metrics.delta.temporality: true
+- confluent.telemetry.external.client.metrics.subscription.interval.ms.list: 60000
+- confluent.telemetry.external.client.metrics.subscription.metrics.list: (consumer and producer metrics)
+
+**Note:** This setting should not be enabled simultaneously with Control Center (C3) client metrics. Refer to C3 documentation which states that client metrics overrides cannot be added when USM has client metrics enabled.
+
+Default:  false
+
+***
+
 ### unified_stream_manager
 
 Unified Stream Manager configuration for remote Schema Registry connection
