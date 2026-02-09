@@ -10,7 +10,6 @@ New features
 -------------
 - USM agent support has been added to CP-Ansible.
 - Schema Registry Switchover workflow for CP to CC has been added.
-- USM Client Metrics support: New ``usm_client_metrics_enabled`` variable to enable external client metrics collection for USM. When enabled, configures Kafka Broker and Kafka Controller (KRaft) with telemetry properties for client metrics. Note: This feature is not supported for Kafka Connect. Also, this should not be enabled simultaneously with Control Center (C3) client metrics - refer to C3 documentation.
 
 Notable enhancements
 -------------
