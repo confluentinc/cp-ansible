@@ -111,20 +111,10 @@ This document explains the variables used in the USM Agent sample inventories fo
 ## USM Client Metrics
 
 ### `usm_client_metrics_enabled`
-- **Values**: `true` or `false`
 - **Default**: `false`
 - **Purpose**: Enables external client metrics collection for USM
 - **Affected Components**: Kafka Broker, Kafka Controller (KRaft)
-- **Not Supported**: Kafka Connect (will fail validation if enabled for Connect)
-- **Properties configured when enabled**:
-  - `confluent.telemetry.external.client.metrics.usm.push.enabled: true`
-  - `confluent.telemetry.external.client.metrics.push.enabled: true`
-  - `confluent.telemetry.external.client.metrics.delta.temporality: true`
-  - `confluent.telemetry.external.client.metrics.subscription.interval.ms.list: 60000`
-  - `confluent.telemetry.external.client.metrics.subscription.metrics.list`: (consumer and producer metrics)
-
-**Note**: This setting should not be enabled simultaneously with Control Center (C3) client metrics.
-Refer to C3 documentation which states that client metrics overrides cannot be added when USM has client metrics enabled.
+- **Not Supported**: Kafka Connect
 
 ## Usage
 
@@ -134,7 +124,4 @@ ansible-playbook -i docs/sample_inventories/usm_agent/usm_agent_no_auth.yml play
 ansible-playbook -i docs/sample_inventories/usm_agent/usm_agent_basic_auth.yml playbook.yml
 ansible-playbook -i docs/sample_inventories/usm_agent/usm_agent_basic_auth_tls.yml playbook.yml
 ansible-playbook -i docs/sample_inventories/usm_agent/usm_agent_mtls.yml playbook.yml
-
-# Deploy with USM client metrics enabled
-ansible-playbook -i docs/sample_inventories/usm_agent/usm_agent_client_metrics.yml playbook.yml
 ```
