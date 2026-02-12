@@ -113,8 +113,6 @@ This document explains the variables used in the USM Agent sample inventories fo
 ### `usm_client_metrics_enabled`
 - **Default**: `false`
 - **Purpose**: Enables external client metrics collection for USM
-- **Affected Components**: Kafka Broker, Kafka Controller (KRaft)
-- **Not Supported**: Kafka Connect
 
 ## Usage
 
