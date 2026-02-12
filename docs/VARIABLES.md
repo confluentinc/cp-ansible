@@ -7142,7 +7142,7 @@ Default:  {}
 
 ### usm_client_metrics_enabled
 
-Boolean to enable USM client metrics for Kafka Broker and Kafka Controller (KRaft). Requires USM Agent to be configured. Not supported for Kafka Connect.
+Boolean to Enable Kafka Client Metrics for USM.
 
 Default:  false
 
