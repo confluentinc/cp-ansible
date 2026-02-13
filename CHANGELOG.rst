@@ -14,10 +14,8 @@ Notable fixes
 New features
 -------------
 - Add SSM Support for managing connection to VMs
-- Made retries and delays in health checks configurable for customers
+- Made retries and delays in health checks configurable for customers 
 - Introduced Indexing and default rollover strategy for log42j file
-- USM agent support has been added to CP-Ansible.
-- Schema Registry Switchover workflow for CP to CC has been added.
 
 Notable enhancements
 -------------
