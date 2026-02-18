@@ -6420,6 +6420,14 @@ Default:  {}
 
 ***
 
+### usm_client_metrics_enabled
+
+Boolean to Enable Kafka Client Metrics for USM.
+
+Default:  false
+
+***
+
 ### unified_stream_manager
 
 Unified Stream Manager configuration for remote Schema Registry connection
