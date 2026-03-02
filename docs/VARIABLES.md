@@ -456,7 +456,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  4.39.0
+Default:  4.50.0
 
 ***
 
@@ -7129,6 +7129,14 @@ Default:  "{{ '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem' if ansible_os_
 USM Agent custom properties
 
 Default:  {}
+
+***
+
+### usm_client_metrics_enabled
+
+Boolean to Enable Kafka Client Metrics for USM.
+
+Default:  false
 
 ***
 
