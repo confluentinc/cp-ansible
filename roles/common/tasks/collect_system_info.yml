@@ -1,0 +1,84 @@
+---
+# System Information Collection Task
+# Collects OS, Java, memory, disk, network, hostname, and environment information
+
+- name: Collect OS information
+  shell: |
+    echo "=== OS Information ===" > {{ remote_temp_dir }}/system/os_info.txt
+    uname -a >> {{ remote_temp_dir }}/system/os_info.txt
+    echo "---" >> {{ remote_temp_dir }}/system/os_info.txt
+    cat /etc/os-release >> {{ remote_temp_dir }}/system/os_info.txt 2>/dev/null || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Collect Java version
+  shell: |
+    java -version 2>&1 > {{ remote_temp_dir }}/system/java_version.txt
+    echo "---" >> {{ remote_temp_dir }}/system/java_version.txt
+    echo "JAVA_HOME: $JAVA_HOME" >> {{ remote_temp_dir }}/system/java_version.txt
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Collect memory information
+  shell: |
+    free -h > {{ remote_temp_dir }}/system/memory.txt 2>&1
+    echo "---" >> {{ remote_temp_dir }}/system/memory.txt
+    cat /proc/meminfo >> {{ remote_temp_dir }}/system/memory.txt 2>/dev/null || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Collect disk information
+  shell: |
+    df -h > {{ remote_temp_dir }}/system/disk.txt 2>&1
+    echo "---" >> {{ remote_temp_dir }}/system/disk.txt
+    lsblk >> {{ remote_temp_dir }}/system/disk.txt 2>/dev/null || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Collect network configuration
+  shell: |
+    ip addr > {{ remote_temp_dir }}/system/network.txt 2>/dev/null || ifconfig >> {{ remote_temp_dir }}/system/network.txt 2>&1
+    echo "---" >> {{ remote_temp_dir }}/system/network.txt
+    ip route >> {{ remote_temp_dir }}/system/network.txt 2>/dev/null || netstat -rn >> {{ remote_temp_dir }}/system/network.txt 2>&1
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Collect hostname and DNS
+  shell: |
+    echo "Hostname: $(hostname)" > {{ remote_temp_dir }}/system/hostname.txt
+    echo "FQDN: $(hostname -f 2>/dev/null || hostname)" >> {{ remote_temp_dir }}/system/hostname.txt
+    echo "---" >> {{ remote_temp_dir }}/system/hostname.txt
+    cat /etc/hosts >> {{ remote_temp_dir }}/system/hostname.txt 2>/dev/null || true
+    echo "---" >> {{ remote_temp_dir }}/system/hostname.txt
+    cat /etc/resolv.conf >> {{ remote_temp_dir }}/system/hostname.txt 2>/dev/null || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Collect environment variables (sanitized)
+  shell: |
+    env | grep -E 'JAVA|KAFKA|CONFLUENT|PATH|USER|HOME' | grep -v -E 'PASSWORD|SECRET|KEY|TOKEN' > {{ remote_temp_dir }}/system/environment.txt 2>&1
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Save Ansible facts
+  copy:
+    content: |
+      Ansible Version: {{ ansible_version.full }}
+      OS Family: {{ ansible_os_family }}
+      Distribution: {{ ansible_distribution }} {{ ansible_distribution_version }}
+      Kernel: {{ ansible_kernel }}
+      Architecture: {{ ansible_architecture }}
+      Memory (MB): {{ ansible_memtotal_mb }}
+      Processor Count: {{ ansible_processor_count }}
+      Processor Cores: {{ ansible_processor_cores }}
+      Python Version: {{ ansible_python_version }}
+    dest: "{{ remote_temp_dir }}/system/ansible_facts.txt"
+    mode: '0644'
+  ignore_errors: true

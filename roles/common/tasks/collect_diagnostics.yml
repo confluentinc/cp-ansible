@@ -1,0 +1,58 @@
+---
+# Runtime Diagnostics Collection Task
+# Collects service status, journalctl logs, process info, ports, open files, ulimits, and sysctl
+
+- name: Check service status
+  shell: |
+    systemctl status {{ service_name }} --no-pager -l > {{ remote_temp_dir }}/diagnostics/service_status.txt 2>&1 || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Collect journalctl logs
+  shell: |
+    journalctl -u {{ service_name }} -n {{ support_bundle_journalctl_lines }} --no-pager > {{ remote_temp_dir }}/diagnostics/journalctl.log 2>&1 || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Collect process information
+  shell: |
+    ps aux | grep -E '{{ service_name }}|java' | grep -v grep > {{ remote_temp_dir }}/diagnostics/processes.txt 2>&1
+    echo "---" >> {{ remote_temp_dir }}/diagnostics/processes.txt
+    pgrep -f {{ service_name }} | xargs -r ps -f -p >> {{ remote_temp_dir }}/diagnostics/processes.txt 2>/dev/null || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Collect listening ports
+  shell: |
+    ss -tulpn > {{ remote_temp_dir }}/diagnostics/ports.txt 2>/dev/null || netstat -tulpn > {{ remote_temp_dir }}/diagnostics/ports.txt 2>&1 || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Collect open files for service
+  shell: |
+    pgrep -f {{ service_name }} | xargs -r lsof -p > {{ remote_temp_dir }}/diagnostics/open_files.txt 2>/dev/null || echo "lsof not available or no process found" > {{ remote_temp_dir }}/diagnostics/open_files.txt
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Collect ulimit settings
+  shell: |
+    echo "Current user limits:" > {{ remote_temp_dir }}/diagnostics/ulimit.txt
+    ulimit -a >> {{ remote_temp_dir }}/diagnostics/ulimit.txt 2>&1
+    echo "---" >> {{ remote_temp_dir }}/diagnostics/ulimit.txt
+    echo "Service user limits:" >> {{ remote_temp_dir }}/diagnostics/ulimit.txt
+    su - {{ user }} -s /bin/bash -c "ulimit -a" >> {{ remote_temp_dir }}/diagnostics/ulimit.txt 2>/dev/null || echo "Could not retrieve service user limits" >> {{ remote_temp_dir }}/diagnostics/ulimit.txt
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Collect kernel parameters
+  shell: |
+    sysctl -a 2>/dev/null | grep -E 'vm\.|net\.|fs\.' > {{ remote_temp_dir }}/diagnostics/sysctl.txt || echo "Could not retrieve sysctl parameters" > {{ remote_temp_dir }}/diagnostics/sysctl.txt
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true

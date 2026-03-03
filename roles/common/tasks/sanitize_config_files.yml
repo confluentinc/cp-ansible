@@ -1,0 +1,134 @@
+---
+# Configuration File Sanitization Task
+# Redacts sensitive data (passwords, secrets, keys) from config files before collection
+
+# Sanitize .properties files
+- name: Find all .properties files in configs directory
+  find:
+    paths: "{{ remote_temp_dir }}/configs"
+    patterns: "*.properties"
+  register: properties_files
+  ignore_errors: true
+
+- name: Sanitize .properties files
+  shell: |
+    # Create backup
+    cp {{ item.path }} {{ item.path }}.original
+
+    # Sanitize sensitive values - replace anything after '=' for sensitive keys
+    sed -i -E 's/(.*password.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(.*secret.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(.*\.key=).*/\1 ***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(.*credential.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(.*token.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(.*truststore\.password.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(.*keystore\.password.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(.*ssl\.key\.password.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(.*sasl\.jaas\.config.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(.*basic\.auth\.credentials\.source.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(.*ldap\..*password.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
+
+    # Add sanitization notice at the top
+    echo "# THIS FILE HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED" | cat - {{ item.path }} > {{ item.path }}.tmp
+    mv {{ item.path }}.tmp {{ item.path }}
+
+    # Remove original backup
+    rm -f {{ item.path }}.original
+  args:
+    executable: "{{ shell_executable }}"
+  loop: "{{ properties_files.files }}"
+  when: properties_files.matched > 0
+  ignore_errors: true
+
+# Sanitize JAAS files (contain plaintext passwords)
+- name: Find all JAAS config files
+  find:
+    paths: "{{ remote_temp_dir }}/configs"
+    patterns: "*jaas.conf,*_jaas.conf"
+  register: jaas_files
+  ignore_errors: true
+
+- name: Sanitize JAAS files
+  shell: |
+    # Create backup
+    cp {{ item.path }} {{ item.path }}.original
+
+    # Redact password values in JAAS files
+    sed -i -E 's/(password=")[^"]*"/\1***REDACTED***"/gi' {{ item.path }}
+    sed -i -E "s/(password=')[^']*'/\1***REDACTED***'/gi" {{ item.path }}
+    sed -i -E 's/(password=)[^; \t]*/\1***REDACTED***/gi' {{ item.path }}
+
+    # Add sanitization notice at the top
+    echo "// THIS FILE HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED" | cat - {{ item.path }} > {{ item.path }}.tmp
+    mv {{ item.path }}.tmp {{ item.path }}
+
+    # Remove original backup
+    rm -f {{ item.path }}.original
+  args:
+    executable: "{{ shell_executable }}"
+  loop: "{{ jaas_files.files }}"
+  when: jaas_files.matched > 0
+  ignore_errors: true
+
+# Sanitize override.conf files (may contain env vars with secrets)
+- name: Find systemd override files
+  find:
+    paths: "{{ remote_temp_dir }}/configs"
+    patterns: "override.conf"
+  register: override_files
+  ignore_errors: true
+
+- name: Sanitize systemd override files
+  shell: |
+    # Create backup
+    cp {{ item.path }} {{ item.path }}.original
+
+    # Redact environment variables with sensitive values
+    sed -i -E 's/(Environment=.*PASSWORD.*=).*/\1***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(Environment=.*SECRET.*=).*/\1***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(Environment=.*KEY.*=).*/\1***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(Environment=.*TOKEN.*=).*/\1***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(Environment=.*CREDENTIAL.*=).*/\1***REDACTED***/gi' {{ item.path }}
+    sed -i -E 's/(Environment=CONFLUENT_SECURITY_MASTER_KEY=).*/\1***REDACTED***/gi' {{ item.path }}
+
+    # Add sanitization notice at the top
+    echo "# THIS FILE HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED" | cat - {{ item.path }} > {{ item.path }}.tmp
+    mv {{ item.path }}.tmp {{ item.path }}
+
+    # Remove original backup
+    rm -f {{ item.path }}.original
+  args:
+    executable: "{{ shell_executable }}"
+  loop: "{{ override_files.files }}"
+  when: override_files.matched > 0
+  ignore_errors: true
+
+# Never collect password.properties files - just note their existence
+- name: Remove password.properties files if accidentally collected
+  shell: |
+    find {{ remote_temp_dir }}/configs -name "*password.properties" -type f -exec rm -f {} \;
+    find {{ remote_temp_dir }}/configs -name "*password.properties" -type f -exec echo "File removed: {}" \; > {{ remote_temp_dir }}/configs/removed_password_files.txt 2>&1 || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Create sanitization report
+  shell: |
+    echo "=== Configuration File Sanitization Report ===" > {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "Timestamp: $(date)" >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "" >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "Sanitized .properties files: {{ properties_files.matched | default(0) }}" >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "Sanitized JAAS files: {{ jaas_files.matched | default(0) }}" >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "Sanitized override files: {{ override_files.matched | default(0) }}" >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "" >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "Sensitive patterns redacted:" >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "  - password, secret, key, token, credential" >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "  - keystore.password, truststore.password" >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "  - sasl.jaas.config, ldap passwords" >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "  - CONFLUENT_SECURITY_MASTER_KEY" >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "" >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "WARNING: While sanitization has been performed, please review" >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+    echo "         files before sharing to ensure no sensitive data remains." >> {{ remote_temp_dir }}/configs/SANITIZATION_REPORT.txt
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true

@@ -1,0 +1,214 @@
+---
+# Core Support Bundle Collection Task
+# Orchestrates collection of configs, logs, SSL metadata, system info, and diagnostics
+
+- name: Set bundle facts
+  set_fact:
+    host_bundle_dir: "{{ hostvars['localhost']['bundle_path'] }}/{{ inventory_hostname }}"
+    remote_temp_dir: "{{ support_bundle_base_path }}/support_bundle_{{ inventory_hostname }}"
+
+- name: Create host bundle directories on localhost
+  file:
+    path: "{{ host_bundle_dir }}/{{ item }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: "{{ ansible_become_localhost }}"
+  loop:
+    - configs
+    - logs
+    - ssl
+    - system
+    - diagnostics
+
+- name: Remove old remote temporary directory
+  file:
+    path: "{{ remote_temp_dir }}"
+    state: absent
+
+- name: Create remote temporary directory
+  file:
+    path: "{{ remote_temp_dir }}/{{ item }}"
+    state: directory
+    mode: '0750'
+    owner: "{{ user }}"
+    group: "{{ group }}"
+  loop:
+    - configs
+    - logs
+    - ssl
+    - system
+    - diagnostics
+
+# COLLECT CONFIGURATION FILES
+- name: Collect config files (conditionally sanitized)
+  block:
+    - name: Copy main config file
+      copy:
+        src: "{{ config_file }}"
+        dest: "{{ remote_temp_dir }}/configs/"
+        remote_src: true
+        mode: '0640'
+      ignore_errors: true
+      register: config_copy_result
+      when: not support_bundle_skip_configs
+
+    - name: Copy JAAS config file
+      copy:
+        src: "{{ component.jaas_file }}"
+        dest: "{{ remote_temp_dir }}/configs/"
+        remote_src: true
+        mode: '0640'
+      ignore_errors: true
+      when:
+        - component.jaas_file is defined
+        - not support_bundle_skip_configs
+
+    - name: Copy Log4j config file
+      copy:
+        src: "{{ component.log4j_file }}"
+        dest: "{{ remote_temp_dir }}/configs/"
+        remote_src: true
+        mode: '0640'
+      ignore_errors: true
+      when:
+        - component.log4j_file is defined
+        - not support_bundle_skip_configs
+
+    - name: Copy systemd service file
+      copy:
+        src: "{{ component.systemd_file }}"
+        dest: "{{ remote_temp_dir }}/configs/"
+        remote_src: true
+        mode: '0640'
+      ignore_errors: true
+      when:
+        - component.systemd_file is defined
+        - not support_bundle_skip_configs
+
+    - name: Copy systemd override file
+      copy:
+        src: "{{ component.systemd_override }}"
+        dest: "{{ remote_temp_dir }}/configs/"
+        remote_src: true
+        mode: '0640'
+      ignore_errors: true
+      when:
+        - component.systemd_override is defined
+        - not support_bundle_skip_configs
+
+    - name: Copy client config file (if exists)
+      copy:
+        src: "{{ component.client_config_file }}"
+        dest: "{{ remote_temp_dir }}/configs/"
+        remote_src: true
+        mode: '0640'
+      ignore_errors: true
+      when:
+        - component.client_config_file is defined
+        - not support_bundle_skip_configs
+
+    # SANITIZE CONFIG FILES
+    - name: Sanitize sensitive data from config files
+      include_tasks: sanitize_config_files.yml
+      when:
+        - support_bundle_sanitize_configs
+        - not support_bundle_skip_configs
+
+    # COLLECT METADATA ONLY (if skipping configs)
+    - name: Collect config file metadata only
+      shell: |
+        echo "=== Configuration Files Metadata ===" > {{ remote_temp_dir }}/configs/config_files_metadata.txt
+        {% if config_file is defined %}
+        ls -lh {{ config_file }} >> {{ remote_temp_dir }}/configs/config_files_metadata.txt 2>&1 || echo "{{ config_file }}: Not found" >> {{ remote_temp_dir }}/configs/config_files_metadata.txt
+        {% endif %}
+        {% if component.jaas_file is defined %}
+        ls -lh {{ component.jaas_file }} >> {{ remote_temp_dir }}/configs/config_files_metadata.txt 2>&1 || echo "{{ component.jaas_file }}: Not found" >> {{ remote_temp_dir }}/configs/config_files_metadata.txt
+        {% endif %}
+        {% if component.log4j_file is defined %}
+        ls -lh {{ component.log4j_file }} >> {{ remote_temp_dir }}/configs/config_files_metadata.txt 2>&1 || echo "{{ component.log4j_file }}: Not found" >> {{ remote_temp_dir }}/configs/config_files_metadata.txt
+        {% endif %}
+      args:
+        executable: "{{ shell_executable }}"
+      ignore_errors: true
+      when: support_bundle_skip_configs
+
+# COLLECT LOG FILES
+- name: Find log files
+  find:
+    paths: "{{ log_dir }}"
+    recurse: false
+  register: log_files_found
+  ignore_errors: true
+
+- name: Copy log files to temporary directory
+  copy:
+    src: "{{ item.path }}"
+    dest: "{{ remote_temp_dir }}/logs/"
+    remote_src: true
+    mode: '0640'
+  loop: "{{ log_files_found.files }}"
+  ignore_errors: true
+  when: log_files_found.matched > 0
+
+# COLLECT SSL CERTIFICATE METADATA
+- name: Collect SSL metadata
+  include_tasks: collect_ssl_metadata.yml
+  when: ssl_enabled | default(false)
+
+# COLLECT SYSTEM INFORMATION
+- name: Collect system information
+  include_tasks: collect_system_info.yml
+
+# COLLECT RUNTIME DIAGNOSTICS
+- name: Collect runtime diagnostics
+  include_tasks: collect_diagnostics.yml
+
+# GENERATE HOST MANIFEST
+- name: Generate host manifest
+  template:
+    src: host_manifest.yml.j2
+    dest: "{{ remote_temp_dir }}/host_manifest.yml"
+    mode: '0644'
+  ignore_errors: true
+
+# ARCHIVE AND FETCH
+- name: Archive remote bundle
+  archive:
+    path: "{{ remote_temp_dir }}"
+    dest: "{{ remote_temp_dir }}.tar.gz"
+    format: gz
+    remove: true
+  ignore_errors: true
+
+- name: Fetch bundle to localhost
+  fetch:
+    src: "{{ remote_temp_dir }}.tar.gz"
+    dest: "{{ host_bundle_dir }}/"
+    flat: true
+  ignore_errors: true
+
+- name: Extract bundle on localhost
+  unarchive:
+    src: "{{ host_bundle_dir }}/support_bundle_{{ inventory_hostname }}.tar.gz"
+    dest: "{{ host_bundle_dir }}/"
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+  ignore_errors: true
+
+- name: Remove archive from localhost (keep extracted files)
+  file:
+    path: "{{ host_bundle_dir }}/support_bundle_{{ inventory_hostname }}.tar.gz"
+    state: absent
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+
+- name: Clean up remote temp files
+  file:
+    path: "{{ remote_temp_dir }}.tar.gz"
+    state: absent
+  ignore_errors: true

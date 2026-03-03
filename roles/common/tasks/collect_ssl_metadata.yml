@@ -1,0 +1,55 @@
+---
+# SSL Certificate Metadata Collection Task
+# Collects only metadata (expiry, subject, issuer) from certificates, NOT the actual files
+
+- name: Find keystore files
+  find:
+    paths: "{{ ssl_file_dir_final }}"
+    patterns: "*.jks,*.p12,*.pfx,*.bcfks"
+  register: keystore_files
+  ignore_errors: true
+
+- name: Extract certificate metadata from keystores
+  shell: |
+    echo "=== {{ item.path }} ===" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+    echo "File: {{ item.path }}" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+    echo "Size: {{ item.size }} bytes" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+    echo "Modified: {{ item.mtime }}" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+    echo "" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+    keytool -list -v -keystore {{ item.path }} -storepass:file <(echo "{{ lookup('vars', component_name + '_keystore_storepass', default='changeit') }}") 2>/dev/null | grep -E 'Alias|Owner|Issuer|Valid from|Valid until|SHA256' >> {{ remote_temp_dir }}/ssl/certificates_info.txt 2>&1 || echo "Could not read keystore" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+    echo "---" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+    echo "" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+  args:
+    executable: "{{ shell_executable }}"
+  loop: "{{ keystore_files.files }}"
+  when: keystore_files.matched > 0
+  ignore_errors: true
+  no_log: "{{ mask_sensitive_logs }}"
+
+- name: Find PEM certificate files
+  find:
+    paths: "{{ ssl_file_dir_final }}"
+    patterns: "*.crt,*.pem,ca.crt"
+  register: cert_files
+  ignore_errors: true
+
+- name: Extract certificate metadata from PEM files
+  shell: |
+    echo "=== {{ item.path }} ===" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+    echo "File: {{ item.path }}" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+    echo "" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+    openssl x509 -in {{ item.path }} -noout -text 2>/dev/null | grep -E 'Subject:|Issuer:|Not Before|Not After|Public-Key' >> {{ remote_temp_dir }}/ssl/certificates_info.txt 2>&1 || echo "Could not read certificate" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+    echo "---" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+    echo "" >> {{ remote_temp_dir }}/ssl/certificates_info.txt
+  args:
+    executable: "{{ shell_executable }}"
+  loop: "{{ cert_files.files }}"
+  when: cert_files.matched > 0
+  ignore_errors: true
+
+- name: List SSL file permissions (metadata only, no content)
+  shell: |
+    ls -lh {{ ssl_file_dir_final }}/ > {{ remote_temp_dir }}/ssl/file_permissions.txt 2>&1 || echo "Could not list SSL directory" > {{ remote_temp_dir }}/ssl/file_permissions.txt
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
