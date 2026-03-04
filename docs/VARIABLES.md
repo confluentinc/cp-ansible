@@ -54,7 +54,7 @@ Default:  true
 
 ### shell_executable
 
-Path to bash executable for shell tasks that require pipefail. Override if bash is at a different location on your systems.
+Path to bash executable for shell tasks. Override if bash is at a different location on your systems.
 
 Default:  /bin/bash
 
