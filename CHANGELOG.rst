@@ -4,7 +4,7 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-v7.9.5
+v8.0.3
 ======
 
 Notable fixes
@@ -13,13 +13,13 @@ Notable fixes
 
 New features
 -------------
-- Add SSM Support for managing connection to VMs
 - Made retries and delays in health checks configurable for customers 
 - Introduced Indexing and default rollover strategy for log42j file
 
 Notable enhancements
 -------------
 - Added the possiblity to override a list of loggers using the update_log4j task in the common role
+- Add apt-key approach was deprecated in ubuntu os. Made the changes to move to a modern approach
 - Enhanced security by masking potentially exposed sensitive secrets
 
 Bug fixes
@@ -27,16 +27,15 @@ Bug fixes
 - Fixes idempotency on config files when using secrets protection feature
 - Fixed Connector deployment failures for mtls enabled with provided keystore/trustore in rolling deployments
 - Zookeeper based kafka cluster on JBOD can use migration playbook to move to KRaft 
-- Fixed bug related to zookeeper chroot creation
 
-v7.9.4
+v8.0.2
 ======
 
 Notable fixes
 -------------
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.9.3
+v8.0.1
 ======
 
 Notable enhancements
@@ -50,32 +49,33 @@ Notable fixes
 - Bug Fix to enable Control Center Next Gen systemd service for archive installations
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.9.2
+v8.0.0
 ======
+New features
+-------------
+- Zookeeper support has been removed. All users must now use the KRaft Controller architecture.
+- Legacy Control Center has been deprecated. The Next Gen Control Center is now the default.
+- Full IPv6 support is now available across all Confluent Platform components, including Control Center Next Gen.
+- log4j1 support is removed — Components have been migrated to log4j2.
+- CP Ansible now uses Confluent CLI instead of Confluent Hub Client for managing connectors.
+- OAuth client assertion support (i.e. passwordless authentication) is now available across all CP components.
+- Cluster migration to RBAC with mTLS is now supported for those currently using LDAP or OAuth authentication.
 
 Notable enhancements
 -------------
+- Default Confluent CLI version upgraded to v4.26.0.
+- Support added for Ansible versions 10 and 11.
+- Support added for Java 21.
+- Jetty upgraded from version 9 to version 12.
+- SNI headers are now required by default.
+- Users can now explicitly whitelist IdP endpoints.
 
-- Enabled support for brownfield migrations to RBAC over mTLs
-
-Notable fixes
+Deprecations
 -------------
-
-- Resolved issue where component restart was not triggered after adding IDP certificates to the truststore.
-- Fixed assignment of role binding to certificate principals which contain spaces in their names
-- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
-
-v7.9.1
-======
-
-New features
--------------
-- Confluent Control Center Next Gen Support (Only on IPv4 based deployments)
-- IPv6 support for all CP components except Control Center Next Gen
-
-Notable Fixes
--------------
-- KSQL will now prefer OAuth over LDAP for MDS communication when both are configured on MDS server.
+- Confluent Hub Client is now deprecated.
+- Java 8 and Java 11 are no longer supported.
+- Ansible versions 7 and 8 are no longer supported.
+- Python versions earlier than 3.10 are no longer supported.
 
 v7.9.0
 ======

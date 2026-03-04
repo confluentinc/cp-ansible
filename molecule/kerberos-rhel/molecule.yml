@@ -2,7 +2,6 @@
 ### Installation of Confluent Platform on Oracle Linux 9.
 ### Kerberos enabled with custom client config path
 ### Creates a Connector in Connect cluster
-### USM Agent Authentication Configuration - BASIC AUTHENTICATION
 
 driver:
   name: docker
@@ -20,11 +19,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}1
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+  - name: controller1
+    hostname: controller1.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -34,11 +32,10 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}2
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
+  - name: controller2
+    hostname: controller2.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -52,7 +49,6 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -66,7 +62,6 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -80,7 +75,6 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
@@ -142,21 +136,6 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: control-center1
-    hostname: control-center1.confluent
-    groups:
-      - control_center
-    image: redhat/ubi9-minimal
-    dockerfile: ../Dockerfile-rhel-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    cgroupns_mode: host
-    privileged: true
-    published_ports:
-      - "9021:9021"
-    networks:
-      - name: confluent
   - name: control-center-next-gen
     hostname: control-center-next-gen.confluent
     groups:
@@ -172,107 +151,15 @@ platforms:
       - "9022:9022"
     networks:
       - name: confluent
-    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  - name: controller1-mig
-    hostname: controller1-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: redhat/ubi9-minimal
-    dockerfile: ../Dockerfile-rhel-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    cgroupns_mode: host
-    privileged: true
-    networks:
-      - name: confluent
-  - name: usm-agent1
-    hostname: usm-agent1.confluent
-    groups:
-      - usm_agent
-    image: redhat/ubi9-minimal
-    dockerfile: ../Dockerfile-rhel-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    cgroupns_mode: host
-    privileged: true
-    networks:
-      - name: confluent
-  - name: controller2-mig
-    hostname: controller2-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: redhat/ubi9-minimal
-    dockerfile: ../Dockerfile-rhel-java17.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    cgroupns_mode: host
-    privileged: true
-    networks:
-      - name: confluent
-  - name: ccloud-mock-service
-    hostname: ccloud-mock-service.confluent
-    groups:
-      - ccloud_mock
-    image: usmagent-mock-ccloud:latest
-    pre_build_image: true
-    command: ""
-    published_ports:
-      - "8081:8081"
-    networks:
-      - name: confluent
-    env:
-      MOCK_SERVER_HOST: "0.0.0.0"
-      MOCK_SERVER_PORT: "8081"
-      MOCK_SERVER_USE_TLS: "false"
-      MOCK_SERVER_REQUIRE_BASIC_AUTH: "true"
-      MOCK_SERVER_USERNAME: "ccloud-user"
-      MOCK_SERVER_PASSWORD: "ccloud-secret"
-      MOCK_SERVER_REQUIRE_MTLS: "false"
 provisioner:
   playbooks:
-    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
+    converge: ../collections_converge.yml
   inventory:
-    host_vars:
-      ccloud-mock-service:
-        ansible_connection: local
-        gather_facts: false
-      usm-agent1:
-        usm_agent_custom_properties:
-          confluent.usm-agent.ccloud.ssl.enabled: "false"
-        usm_agent_health_check_enabled: false
     group_vars:
       all:
         control_center_next_gen_port: 9022
         scenario_name: kerberos-rhel
         sasl_protocol: kerberos,plain
-
-        usm_agent_basic_auth_enabled: true
-        usm_agent_ssl_enabled: false
-        usm_agent_ssl_mutual_auth_enabled: false
-
-        usm_agent_basic_users:
-          admin:
-            principal: admin
-            password: admin-secret
-          user1:
-            principal: user1
-            password: user1-secret
-          user2:
-            principal: user2
-            password: user2-secret
-
-        usm_agent_client_username: "user1"
-        usm_agent_client_password: "user1-secret"
-
-        # USM Agent Configuration - CCloud Mock Server
-        ccloud_endpoint: http://ccloud-mock-service:8081
-        ccloud_environment_id: env-mock-123
-        ccloud_credential:
-          username: ccloud-user
-          password: ccloud-secret
 
         kerberos:
           realm: realm.example.com
@@ -293,9 +180,6 @@ provisioner:
               file: "/etc/kafka/connect-distributed.properties"
               topics: "test_topic"
 
-      zookeeper:
-        zookeeper_kerberos_principal: "zk/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        zookeeper_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/zookeeper-{{inventory_hostname}}.keytab"
       kafka_controller:
         kafka_controller_kerberos_principal: "kafka-a/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         kafka_controller_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_controller-{{inventory_hostname}}.keytab"
@@ -314,9 +198,6 @@ provisioner:
       ksql:
         ksql_kerberos_principal: "ksql/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         ksql_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/ksql-{{inventory_hostname}}.keytab"
-      control_center:
-        control_center_kerberos_principal: "control_center/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
-        control_center_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/control_center-{{inventory_hostname}}.keytab"
       control_center_next_gen:
         control_center_next_gen_kerberos_principal: "control_center_next_gen/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
         control_center_next_gen_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/control_center_next_gen-{{inventory_hostname}}.keytab"
@@ -328,24 +209,11 @@ provisioner:
 
         kerberos_principals:
           # Wish there was a better way to create this list, this will do for now
-          # zookeeper keytabs and principal is not  used in Kraft mode, it will be removed once we drop zookeeper support
-          - principal: "zk/zookeeper1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
-
-          - principal: "zk/zookeeper2.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/zookeeper-zookeeper2.keytab"
-
           - principal: "kafka-a/controller1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_controller-controller1.keytab"
 
-          - principal: "kafka-a/controller1-mig.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/kafka_controller-controller1-mig.keytab"
-
           - principal: "kafka-a/controller2.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_controller-controller2.keytab"
-
-          - principal: "kafka-a/controller2-mig.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/kafka_controller-controller2-mig.keytab"
 
           - principal: "kafka-a/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"
@@ -367,9 +235,6 @@ provisioner:
 
           - principal: "ksql/ksql1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/ksql-ksql1.keytab"
-
-          - principal: "control_center/control-center1.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/control_center-control-center1.keytab"
 
           - principal: "control_center_next_gen/control-center-next-gen.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/control_center_next_gen-control-center-next-gen.keytab"
