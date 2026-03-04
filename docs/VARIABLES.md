@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  8.1.1
+Default:  8.2.0
 
 ***
 
@@ -464,7 +464,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  4.39.0
+Default:  4.50.0
 
 ***
 
@@ -1470,7 +1470,7 @@ Default:  []
 
 ### schema_registry_custom_properties
 
-Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.NOTE- kafka_broker.properties is deprecated.
+Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
 
 Default:  {}
 
@@ -4248,7 +4248,7 @@ Default:  localhost:9092
 
 Listener Dictionary that describes how kafka clusters connect to MDS Kafka cluster. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
-Default: 
+Default:
 
 ***
 
@@ -4832,7 +4832,7 @@ Default:  localhost:9092
 
 Listener Dictionary that describes how kafka clients connect to Audit Log Destination Kafka cluster. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol.
 
-Default: 
+Default:
 
 ***
 
@@ -5408,7 +5408,7 @@ Default:  ""
 
 Listener Dictionary that describes Kafka Connect Replicator Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
-Default: 
+Default:
 
 ***
 
@@ -5712,7 +5712,7 @@ Default:  "{{  kafka_connect_replicator_keystore_storepass }}"
 
 Listener Dictionary that describes Kafka Connect Replicator Consumer Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
-Default: 
+Default:
 
 ***
 
@@ -6016,7 +6016,7 @@ Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
 
 Listener Dictionary that describes Kafka Connect Replicator Producer Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
-Default: 
+Default:
 
 ***
 
@@ -6312,7 +6312,7 @@ Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
 
 Listener Dictionary that describes Kafka Connect Replicator Monitoring Interceptor Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
-Default: 
+Default:
 
 ***
 
@@ -7040,7 +7040,7 @@ Default:  "{{ ssl_mutual_auth_enabled }}"
 
 USM Agent basic users. Set to dictionary of users with keys: principal and password. The users defined here will be allowed to authenticate with USM Agent using basic authentication.
 
-Default: 
+Default:
 
 ***
 
@@ -7152,7 +7152,7 @@ Default:  false
 
 Unified Stream Manager configuration for remote Schema Registry connection
 
-Default: 
+Default:
 
 ***
 
@@ -7508,7 +7508,7 @@ Default:  "INFO"
 
 Root logger appender within Control Center Next Gen's log4j2 config. Only honored if control_center_next_gen_custom_log4j2: true
 
-Default: 
+Default:
 
 ***
 
@@ -7532,7 +7532,7 @@ Default:  100MB
 
 List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
-Default: 
+Default:
 
 ***
 
@@ -7572,7 +7572,7 @@ Default:  "{{ config_prefix }}/confluent-control-center"
 
 Overrides to the Service Section of Control Center Next Gen Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7580,7 +7580,7 @@ Default:
 
 Overrides to the Service Section of Prometheus Control Center Next Gen Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7588,7 +7588,7 @@ Default:
 
 Overrides to the Service Section of AlertManager Control Center Next Gen Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7596,7 +7596,7 @@ Default:
 
 Environment Variables to be added to the Control Center Next Gen Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7604,7 +7604,7 @@ Default:
 
 Environment Variables to be added to the Prometheus (Control Center Next Gen's dependency) Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7612,7 +7612,7 @@ Default:
 
 Environment Variables to be added to the AlertManager (Control Center Next Gen's dependency) Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7620,7 +7620,7 @@ Default:
 
 Overrides to the Unit Section of Control Center Next Gen Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7628,7 +7628,7 @@ Default:
 
 Overrides to the Unit Section of Prometheus Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7636,31 +7636,7 @@ Default:
 
 Overrides to the Unit Section of Alert Manager Systemd File. This variable is a dictionary.
 
-Default: 
-
-***
-
-### control_center_next_gen_health_check_delay
-
-Time in seconds to wait before starting Control Center Next Gen Health Checks.
-
-Default:  30
-
-***
-
-### control_center_next_gen_health_check_retries
-
-Number of retries for Control Center Next Gen health checks
-
-Default:  40
-
-***
-
-### control_center_next_gen_health_check_retry_delay
-
-Delay in seconds between Control Center Next Gen health check retries
-
-Default:  10
+Default:
 
 ***
 
@@ -7706,7 +7682,7 @@ Default:  100MB
 
 List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
-Default: 
+Default:
 
 ***
 
@@ -7722,7 +7698,7 @@ Default:  ""
 
 Overrides to the Service Section of Kafka Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7730,7 +7706,7 @@ Default:
 
 Environment Variables to be added to the Kafka Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7738,39 +7714,7 @@ Default:
 
 Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
 
-Default: 
-
-***
-
-### kafka_broker_health_check_delay
-
-Time in seconds to wait before starting Kafka Health Checks.
-
-Default:  20
-
-***
-
-### kafka_broker_health_check_urp_retries
-
-Number of retries for Under Replicated Partitions check
-
-Default:  15
-
-***
-
-### kafka_broker_health_check_urp_delay
-
-Delay in seconds between Under Replicated Partitions check retries
-
-Default:  5
-
-***
-
-### kafka_broker_health_check_retry_delay
-
-Delay in seconds between health check retries for MDS and Embedded Rest Proxy
-
-Default:  5
+Default:
 
 ***
 
@@ -7816,7 +7760,7 @@ Default:  "INFO"
 
 Root logger appender within Kafka's log4j2 config. Only honored if kafka_controller_custom_log4j2: true
 
-Default: 
+Default:
 
 ***
 
@@ -7840,7 +7784,7 @@ Default:  100MB
 
 List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
-Default: 
+Default:
 
 ***
 
@@ -7856,7 +7800,7 @@ Default:  ""
 
 Overrides to the Service Section of Kafka Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7864,7 +7808,7 @@ Default:
 
 Environment Variables to be added to the Kafka Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7872,7 +7816,7 @@ Default:
 
 Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7918,7 +7862,7 @@ Default:  "INFO"
 
 Root logger appender within Kafka Connect's log4j2 config. Only honored if kafka_connect_custom_log4j2: true
 
-Default: 
+Default:
 
 ***
 
@@ -7942,7 +7886,7 @@ Default:  100MB
 
 List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
-Default: 
+Default:
 
 ***
 
@@ -7958,7 +7902,7 @@ Default:  ""
 
 Overrides to the Service Section of Connect Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7966,7 +7910,7 @@ Default:
 
 Environment Variables to be added to the Connect Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -7974,31 +7918,7 @@ Default:
 
 Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
 
-Default: 
-
-***
-
-### kafka_connect_health_check_delay
-
-Time in seconds to wait before starting Connect Health Checks.
-
-Default:  30
-
-***
-
-### kafka_connect_health_check_retries
-
-Number of retries for Kafka Connect health checks
-
-Default:  40
-
-***
-
-### kafka_connect_health_check_retry_delay
-
-Delay in seconds between Kafka Connect health check retries
-
-Default:  10
+Default:
 
 ***
 
@@ -8036,7 +7956,7 @@ Default:  "INFO"
 
 Root logger appender within Rest Proxy's log4j2 config. Only honored if kafka_rest_custom_log4j2: true
 
-Default: 
+Default:
 
 ***
 
@@ -8060,7 +7980,7 @@ Default:  100MB
 
 List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
-Default: 
+Default:
 
 ***
 
@@ -8076,7 +7996,7 @@ Default:  ""
 
 Overrides to the Service Section of Rest Proxy Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -8084,7 +8004,7 @@ Default:
 
 Environment Variables to be added to the Rest Proxy Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -8092,31 +8012,7 @@ Default:
 
 Overrides to the Unit Section of Rest Proxy Systemd File. This variable is a dictionary.
 
-Default: 
-
-***
-
-### kafka_rest_health_check_delay
-
-Time in seconds to wait before starting Rest Proxy Health Checks.
-
-Default:  15
-
-***
-
-### kafka_rest_health_check_retries
-
-Number of retries for Rest Proxy health checks
-
-Default:  30
-
-***
-
-### kafka_rest_health_check_retry_delay
-
-Delay in seconds between Rest Proxy health check retries
-
-Default:  5
+Default:
 
 ***
 
@@ -8146,7 +8042,7 @@ Default:  "INFO"
 
 Root logger appender within ksqlDB's log4j2 config. Only honored if ksql_custom_log4j2: true
 
-Default: 
+Default:
 
 ***
 
@@ -8170,7 +8066,7 @@ Default:  10MB
 
 List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
-Default: 
+Default:
 
 ***
 
@@ -8194,7 +8090,7 @@ Default:  /tmp/ksqldb
 
 Overrides to the Service Section of ksqlDB Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -8202,7 +8098,7 @@ Default:
 
 Environment Variables to be added to the ksqlDB Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -8210,31 +8106,7 @@ Default:
 
 Overrides to the Unit Section of ksqlDB Systemd File. This variable is a dictionary.
 
-Default: 
-
-***
-
-### ksql_health_check_delay
-
-Time in seconds to wait before starting ksqlDB Health Checks.
-
-Default:  20
-
-***
-
-### ksql_health_check_retries
-
-Number of retries for ksqlDB health checks
-
-Default:  40
-
-***
-
-### ksql_health_check_retry_delay
-
-Delay in seconds between ksqlDB health check retries
-
-Default:  5
+Default:
 
 ***
 
@@ -8264,7 +8136,7 @@ Default:  "INFO"
 
 Root logger appender within Schema Registry's log4j2 config. Only honored if schema_registry_custom_log4j2: true
 
-Default: 
+Default:
 
 ***
 
@@ -8288,7 +8160,7 @@ Default:  100MB
 
 List of loggers to redact. This is specified alongside the appenderRefs to be used in redactor definition.
 
-Default: 
+Default:
 
 ***
 
@@ -8304,7 +8176,7 @@ Default:  ""
 
 Overrides to the Service Section of Schema Registry Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -8312,7 +8184,7 @@ Default:
 
 Environment Variables to be added to the Schema Registry Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -8320,31 +8192,7 @@ Default:
 
 Overrides to the Unit Section of Schema Registry Systemd File. This variable is a dictionary.
 
-Default: 
-
-***
-
-### schema_registry_health_check_delay
-
-Time in seconds to wait before starting Schema Registry Health Checks.
-
-Default:  15
-
-***
-
-### schema_registry_health_check_retries
-
-Number of retries for Schema Registry health checks
-
-Default:  30
-
-***
-
-### schema_registry_health_check_retry_delay
-
-Delay in seconds between Schema Registry health check retries
-
-Default:  5
+Default:
 
 ***
 
@@ -8374,7 +8222,7 @@ Default:  "INFO"
 
 Root logger appender within Kafka Connect Replicator's log4j config. Only honored if kafka_connect_replicator_custom_log4j2: true
 
-Default: 
+Default:
 
 ***
 
@@ -8390,7 +8238,7 @@ Default:  ""
 
 Overrides to the Service Section of Kafka Connect Replicator Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -8398,7 +8246,7 @@ Default:
 
 Environment Variables to be added to the Kafka Connect Replicator Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -8406,31 +8254,7 @@ Default:
 
 Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
 
-Default: 
-
-***
-
-### kafka_connect_replicator_health_check_delay
-
-Time in seconds to wait before starting Kafka Connect Replicator Health Checks.
-
-Default:  30
-
-***
-
-### kafka_connect_replicator_health_check_retries
-
-Number of retries for Kafka Connect Replicator health checks
-
-Default:  30
-
-***
-
-### kafka_connect_replicator_health_check_retry_delay
-
-Delay in seconds between Kafka Connect Replicator health check retries
-
-Default:  10
+Default:
 
 ***
 
@@ -8463,4 +8287,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-
