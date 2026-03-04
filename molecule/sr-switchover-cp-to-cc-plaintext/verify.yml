@@ -1,0 +1,456 @@
+---
+### SR Automation Workflow Verification - Plaintext/No Auth
+### Includes base verification and adds plaintext-specific checks
+- name: Verify mock CC Schema Registry Automation Configuration
+  hosts: schema_registry
+  gather_facts: false
+  vars:
+
+  tasks:
+    - name: Check core automation properties are configured
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: kafkastore.update.handlers
+        expected_value: io.confluent.schema.exporter.storage.SchemaExporterUpdateHandler,io.confluent.schema.manager.SchemaCacheManagerUpdateHandler
+
+    - name: Check if test schemas were exported to CC SR
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        method: GET
+        expected_status: 200
+        result_var: cc_subjects_list
+        operation_name: "Get CC Schema Registry Subjects"
+        url_username: "{{ unified_stream_manager.basic_username }}"
+        url_password: "{{ unified_stream_manager.basic_password }}"
+
+    - name: Verify test schemas exist in CC SR
+      assert:
+        that:
+          - "'test.user-value' in cc_subjects_list.json"
+        fail_msg: "Test schemas were not successfully exported to CC Schema Registry"
+
+    - name: check mode of context test-context
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.test-context:"
+        method: GET
+        expected_status: 200
+        result_var: mode_check
+        operation_name: "Check Mode of Context"
+
+    - name: verify context test-context is in READWRITE mode
+      assert:
+        that:
+          - mode_check.json.mode == 'READWRITE'
+        fail_msg: "Context is not in READWRITE mode"
+
+    - name: check mode of context test-context2
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.test-context2:"
+        method: GET
+        expected_status: 200
+        result_var: mode_check
+        operation_name: "Check Mode of Context"
+
+    - name: verify context test-context2 is in READWRITE mode
+      assert:
+        that:
+          - mode_check.json.mode == 'READWRITE'
+        fail_msg: "Context is not in READWRITE mode"
+
+    - name: check mode of subject :.test-context:test-workflow-value
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.test-context:test-workflow-value"
+        method: GET
+        expected_status: 200
+        result_var: mode_check
+        operation_name: "Check Mode of Subject"
+
+    - name: verify subject :.test-context:test-workflow-value is in READWRITE mode
+      assert:
+        that:
+          - mode_check.json.mode == 'READWRITE'
+        fail_msg: "Subject is not in READWRITE mode"
+
+    - name: check mode of subject :.test-context2:test-workflow-value
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode/:.test-context2:test-workflow-value"
+        method: GET
+        expected_status: 200
+        result_var: mode_check
+        operation_name: "Check Mode of Subject"
+
+    - name: verify subject :.test-context2:test-workflow-value is in READWRITE mode
+      assert:
+        that:
+          - mode_check.json.mode == 'READWRITE'
+        fail_msg: "Subject is not in READWRITE mode"
+
+    - name: Create new test schema in CC SR for import testing
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects/test.test-value2/versions"
+        method: POST
+        expected_status: 200
+        result_var: cc_new_schema_creation
+        operation_name: "Create New Schema in CC SR for Import Test"
+        request_body_format: json
+        request_body:
+          schema: |
+            {
+              "type": "record",
+              "name": "ImportTest",
+              "namespace": "import.test",
+              "fields": [
+                {"name": "test_id", "type": "string"},
+                {"name": "test_data", "type": "string"},
+                {"name": "created_at", "type": "long"},
+                {"name": "import_flag", "type": "boolean", "default": true}
+              ]
+            }
+    - name: Create new test schema in CC SR for import testing with custom context
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects/:.custom-context:test.test-value2/versions"
+        method: POST
+        expected_status: 200
+        result_var: cc_new_schema_creation_custom_context
+        operation_name: "Create New Schema in CC SR for Import Test"
+        request_body_format: json
+        request_body:
+          schema: |
+            {
+              "type": "record",
+              "name": "ImportTest2",
+              "namespace": "import.test2",
+              "fields": [
+                {"name": "test_id", "type": "string"},
+                {"name": "test_data", "type": "string"},
+                {"name": "created_at", "type": "long"},
+                {"name": "import_flag", "type": "boolean", "default": true}
+              ]
+            }
+
+- name: Rename Groups After CC Deployment
+  hosts: cc_cluster
+  gather_facts: false
+  tasks:
+    - name: "Rename CC Groups to Avoid Conflicts with CP Deployment"
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: "{{item}}:"
+        line: "{{item}}_cc:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - kafka_controller
+        - kafka_broker
+        - schema_registry
+
+- name: Rename Groups After CC Deployment
+  hosts: all:!cc_cluster
+  gather_facts: false
+  tasks:
+    - name: "Rename CP Groups to Standard Names for Deployment"
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: "{{item}}_cp:"
+        line: "{{item}}:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - kafka_controller
+        - kafka_broker
+        - schema_registry
+
+    - name: Refresh Inventory
+      meta: refresh_inventory
+
+- name: Load Variables for SR Automation Verification
+  hosts: all
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.platform.variables
+
+- name: Verify Schema Registry Automation Configuration
+  hosts: schema_registry
+  gather_facts: false
+  vars:
+
+  tasks:
+    - name: Check password encoder secret is configured
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: password.encoder.secret
+        expected_value: "{{ password_encoder_secret }}"
+      tags: config
+
+    - name: Check USM remote endpoint configuration
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/schema-registry/schema-registry.properties
+        property: usm.schema.registry.remote.endpoint
+        expected_value: "{{ unified_stream_manager.schema_registry_endpoint }}"
+      when: unified_stream_manager.schema_registry_endpoint != 'none'
+      tags: config
+
+    - name: Check resource extension classes for automation
+      shell: |
+        grep "schema.registry.resource.extension.class.*SchemaExporterResourceExtension" /etc/schema-registry/schema-registry.properties
+      register: extension_check
+      changed_when: false
+      failed_when: extension_check.rc != 0
+      tags: config
+
+- name: Verify Schema Registry API Functionality
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+    - name: Wait for Schema Registry to be ready
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        method: GET
+        expected_status: 200
+        result_var: sr_ready_check
+        operation_name: "Schema Registry API Readiness Check"
+        request_retries: 10
+        request_delay: 5
+      tags: api
+
+    - name: Get subjects list for validation
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        method: GET
+        expected_status: 200
+        result_var: subjects_list
+        operation_name: "Get Subjects List"
+      tags: api
+
+    - name: Verify test schemas exist
+      assert:
+        that:
+          - "'test.user-value' in subjects_list.json"
+          - "'automation.workflow-value' in subjects_list.json"
+        fail_msg: "Test schemas were not created successfully"
+      tags: api
+
+- name: Verify Schema Automation Extensions Loaded (Cluster-wide)
+  hosts: schema_registry  # Verify automation extensions on all SR instances
+  gather_facts: false
+  tasks:
+    - name: Verify automation extensions are loaded
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters"
+        method: GET
+        expected_status: 200
+        result_var: automation_extensions_check
+        operation_name: "Verify Automation Extensions on {{ inventory_hostname }}"
+      tags: automation
+
+- name: Verify Schema Automation Features (Primary Only)
+  hosts: schema-registry1  # Only verify active management on CP SR
+  gather_facts: false
+  tasks:
+    - name: Check exporters endpoint accessibility
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters"
+        method: GET
+        expected_status: 200
+        result_var: exporters_list
+        operation_name: "Get Exporters List"
+      tags: automation
+
+    - name: Check importers endpoint accessibility
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/importers"
+        method: GET
+        expected_status: 200
+        result_var: importers_list
+        operation_name: "Get Importers List"
+      tags: automation
+
+    - name: Check if test exporter was created
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}"
+        method: GET
+        expected_status: [200, 404]
+        result_var: exporter_check
+        operation_name: "Check Test Exporter"
+        ignore_errors: true
+      when: sr_switch_over_exporter_name is defined
+      tags: automation
+
+    - name: Verify exporter configuration if it exists
+      block:
+        - name: Check exporter status
+          import_role:
+            name: confluent.platform.common
+            tasks_from: schema_registry_operations.yml
+          vars:
+            request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}/status"
+            method: GET
+            expected_status: 200
+            result_var: exporter_status
+            operation_name: "Check Exporter Status"
+          
+        - name: Verify exporter is in expected state
+          assert:
+            that:
+              - exporter_status.json.state in ['RUNNING', 'PAUSED']
+            fail_msg: "Exporter is not in expected state: {{ exporter_status.json.state }}"
+
+        - name: Check exporter configuration
+          import_role:
+            name: confluent.platform.common
+            tasks_from: schema_registry_operations.yml
+          vars:
+            request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/exporters/{{ sr_switch_over_exporter_name }}/config"
+            method: GET
+            expected_status: 200
+            result_var: exporter_config
+            operation_name: "Check Exporter Configuration"
+          
+        - name: Verify exporter target endpoint
+          assert:
+            that:
+              - exporter_config.json['schema.registry.url'] == unified_stream_manager.schema_registry_endpoint
+            fail_msg: "Exporter endpoint mismatch: {{ exporter_config.json['schema.registry.url'] }}"
+      when: 
+        - exporter_check.status == 200
+        - sr_switch_over_exporter_name is defined
+      tags: automation
+
+- name: Verify Security Configuration
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+    - name: Check Schema Registry mode
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/mode"
+        method: GET
+        expected_status: 200
+        result_var: sr_mode_check
+        operation_name: "Check Schema Registry Mode"
+      tags: security
+
+    - name: Verify Schema Registry is in correct mode
+      assert:
+        that:
+          - sr_mode_check.json.mode in ['READWRITE', 'READONLY', 'IMPORT', 'FORWARD']
+        fail_msg: "Schema Registry is in unexpected mode: {{ sr_mode_check.json.mode }}"
+      tags: security
+
+    - name: Display automation workflow test summary
+      debug:
+        msg: |
+          SR Automation Workflow Test Results ({{ scenario_name | default('unknown') }}):
+          ✓ Schema Registry Mode: {{ sr_mode_check.json.mode }}
+          ✓ Security Configuration: {{ 'mTLS' if ssl_mutual_auth_enabled | default(false) else ('OAuth' if oauth_enabled | default(false) else ('LDAP' if ldap_enabled | default(false) else 'Plaintext')) }}
+          ✓ Available Exporters: {{ exporters_list.json | length }}
+          ✓ Available Importers: {{ importers_list.json | length }}
+          ✓ Test Schemas Created: {{ subjects_list.json | select('match', '(test|automation)\..*') | list | length }}
+          ✓ Automation Features: {{ 'ENABLED' if (exporters_list.json | length > 0 or importers_list.json | length > 0) else 'DISABLED' }}
+      tags: summary
+
+- name: Test Schema Import Functionality
+  hosts: schema-registry1  # Only test import on CP SR
+  gather_facts: false
+  tasks:
+
+    - name: Check if imported schema exists in CP SR
+      import_role:
+        name: confluent.platform.common
+        tasks_from: schema_registry_operations.yml
+      vars:
+        request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects"
+        method: GET
+        expected_status: 200
+        result_var: cp_subjects_after_import
+        operation_name: "Get CP Subjects After Import"
+      tags: import_test
+
+    - name: Verify imported schema exists in CP SR
+      assert:
+        that:
+          - "'test.test-value2' in cp_subjects_after_import.json"
+          - "':.custom-context:test.test-value2' in cp_subjects_after_import.json"
+        fail_msg: "Schema 'test.test-value2' was not successfully imported from CC SR"
+
+    - name: Verify imported schema content matches
+      block:
+        - name: Get imported schema from CP SR
+          import_role:
+            name: confluent.platform.common
+            tasks_from: schema_registry_operations.yml
+          vars:
+            request_url: "{{ schema_registry_http_protocol }}://{{ inventory_hostname }}:{{ schema_registry_listener_port }}/subjects/test.test-value2/versions/latest"
+            method: GET
+            expected_status: 200
+            result_var: cp_imported_schema
+            operation_name: "Get Imported Schema from CP SR"
+
+        - name: Get original schema from CC SR
+          import_role:
+            name: confluent.platform.common
+            tasks_from: schema_registry_operations.yml
+          vars:
+            request_url: "{{ unified_stream_manager.schema_registry_endpoint }}/subjects/test.test-value2/versions/latest"
+            method: GET
+            expected_status: 200
+            result_var: cc_original_schema
+            operation_name: "Get Original Schema from CC SR"
+
+        - name: Verify schema content matches
+          assert:
+            that:
+              - cp_imported_schema.json.schema == cc_original_schema.json.schema
+            fail_msg: "Imported schema content does not match original schema"
+      tags: import_test

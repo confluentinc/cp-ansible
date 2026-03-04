@@ -4,13 +4,8 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-v8.0.3
+v8.1.1
 ======
-
-Notable fixes
--------------
-- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
-
 New features
 -------------
 - Made retries and delays in health checks configurable for customers 
@@ -28,26 +23,19 @@ Bug fixes
 - Fixed Connector deployment failures for mtls enabled with provided keystore/trustore in rolling deployments
 - Zookeeper based kafka cluster on JBOD can use migration playbook to move to KRaft 
 
-v8.0.2
-======
 
-Notable fixes
+
+v8.1.0
+======
+New features
 -------------
-- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
-
-v8.0.1
-======
+- USM agent support has been added to CP-Ansible.
+- Schema Registry Switchover workflow for CP to CC has been added.
 
 Notable enhancements
 -------------
-- Added configurations to enable Jolokia Access Control
-
-Notable fixes
--------------
-- Removed Confluent Metrics Reporter config from broker and controller
-- Prometheus/Alertmanager Health Check fixed for Control Center Next Gen
-- Bug Fix to enable Control Center Next Gen systemd service for archive installations
-- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+- broker.id has been replaced with node.id for kafka broker.
+- Added configurations to enable Jolokia Access Control.
 
 v8.0.0
 ======
