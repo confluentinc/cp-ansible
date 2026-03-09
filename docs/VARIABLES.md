@@ -7164,65 +7164,9 @@ Default:
 
 ***
 
-### kafka_connect_health_check_delay
-
-Time in seconds to wait before starting Connect Health Checks.
-
-Default:  30
-
-***
-
-### kafka_broker_health_check_delay
-
-Time in seconds to wait before starting Kafka Health Checks.
-
-Default:  20
-
-***
-
 ### kafka_controller_health_check_delay
 
 Time in seconds to wait before starting Kafka Health Checks.
-
-Default:  20
-
-***
-
-### control_center_next_gen_health_check_delay
-
-Time in seconds to wait before starting Control Center Next Gen Health Checks.
-
-Default:  30
-
-***
-
-### kafka_connect_replicator_health_check_delay
-
-Time in seconds to wait before starting Kafka Connect Replicator Health Checks.
-
-Default:  30
-
-***
-
-### schema_registry_health_check_delay
-
-Time in seconds to wait before starting Schema Registry Health Checks.
-
-Default:  15
-
-***
-
-### kafka_rest_health_check_delay
-
-Time in seconds to wait before starting Rest Proxy Health Checks.
-
-Default:  15
-
-***
-
-### ksql_health_check_delay
-
-Time in seconds to wait before starting ksqlDB Health Checks.
 
 Default:  20
 
