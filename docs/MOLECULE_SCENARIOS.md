@@ -1102,7 +1102,7 @@ Validates that each component has a unique auth user.
 
 Validates that Rest Proxy has correct auth property.
 
-Validates that Java 17 is in Use
+Validates that Java 21 is in Use
 
 ***
 
