@@ -14,7 +14,7 @@ New features
 
 Notable enhancements
 -------------
-- Enhanced Schema Registry switchover automation to use mode deletion with recursive flag instead of explicit READWRITE mode setting, improving efficiency.
+- The Unified Stream Manager Schema Registry automation workflow has been optimized for improved performance.
 
 Notable Fixes
 -------------
