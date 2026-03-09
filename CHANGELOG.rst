@@ -4,6 +4,22 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v8.2.0
+======
+New features
+-------------
+- You can now use Confluent Ansible to deploy Confluent Platform components on Red Hat Enterprise Linux (RHEL) 10 hosts.
+- You can use Confluent Ansible to deploy Confluent Platform in FIPS 140-3 environments.
+- CP Ansible now supports AWS Systems Manager (SSM) for managing connections with host machines
+
+Notable enhancements
+-------------
+- Enhanced Schema Registry switchover automation to use mode deletion with recursive flag instead of explicit READWRITE mode setting, improving efficiency.
+
+Notable Fixes
+-------------
+- Fixed pipefail issue which caused failure when extracting distinguished name from keystore in MTLS setups
+
 v8.1.0
 ======
 New features
