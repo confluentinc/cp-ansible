@@ -44,6 +44,14 @@ Default:  true
 
 ***
 
+### shell_executable
+
+Path to bash executable for shell tasks. Override if bash is at a different location on your systems.
+
+Default:  /bin/bash
+
+***
+
 ### jolokia_url_remote
 
 To copy from Ansible control host or download
@@ -2896,7 +2904,7 @@ Default:  localhost:9092
 
 Listener Dictionary that describes how kafka clusters connect to MDS Kafka cluster. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
-Default: 
+Default:
 
 ***
 
@@ -3448,7 +3456,7 @@ Default:  localhost:9092
 
 Listener Dictionary that describes how kafka clients connect to Audit Log Destination Kafka cluster. Make sure it contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol.
 
-Default: 
+Default:
 
 ***
 
@@ -4016,7 +4024,7 @@ Default:  ""
 
 Listener Dictionary that describes Kafka Connect Replicator Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
-Default: 
+Default:
 
 ***
 
@@ -4216,7 +4224,7 @@ Default:  "{{  kafka_connect_replicator_keystore_storepass }}"
 
 Listener Dictionary that describes Kafka Connect Replicator Consumer Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
-Default: 
+Default:
 
 ***
 
@@ -4416,7 +4424,7 @@ Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
 
 Listener Dictionary that describes Kafka Connect Replicator Producer Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
-Default: 
+Default:
 
 ***
 
@@ -4624,7 +4632,7 @@ Default:  "{{ kafka_connect_replicator_keystore_storepass }}"
 
 Listener Dictionary that describes Kafka Connect Replicator Monitoring Interceptor Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 
-Default: 
+Default:
 
 ***
 
@@ -5124,7 +5132,7 @@ Default:  100MB
 
 List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
-Default: 
+Default:
 
 ***
 
@@ -5148,7 +5156,7 @@ Default:  ""
 
 Overrides to the Service Section of Control Center Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5156,7 +5164,7 @@ Default:
 
 Environment Variables to be added to the Control Center Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5164,7 +5172,7 @@ Default:
 
 Overrides to the Unit Section of Control Center Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5242,7 +5250,7 @@ Default:  100MB
 
 List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
-Default: 
+Default:
 
 ***
 
@@ -5258,7 +5266,7 @@ Default:  ""
 
 Overrides to the Service Section of Kafka Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5266,7 +5274,7 @@ Default:
 
 Environment Variables to be added to the Kafka Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5274,7 +5282,7 @@ Default:
 
 Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5368,7 +5376,7 @@ Default:  100MB
 
 List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
-Default: 
+Default:
 
 ***
 
@@ -5384,7 +5392,7 @@ Default:  ""
 
 Overrides to the Service Section of Kafka Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5392,7 +5400,7 @@ Default:
 
 Environment Variables to be added to the Kafka Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5400,7 +5408,7 @@ Default:
 
 Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5470,7 +5478,7 @@ Default:  100MB
 
 List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
-Default: 
+Default:
 
 ***
 
@@ -5486,7 +5494,7 @@ Default:  ""
 
 Overrides to the Service Section of Connect Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5494,7 +5502,7 @@ Default:
 
 Environment Variables to be added to the Connect Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5502,7 +5510,7 @@ Default:
 
 Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5580,7 +5588,7 @@ Default:  100MB
 
 List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
-Default: 
+Default:
 
 ***
 
@@ -5596,7 +5604,7 @@ Default:  ""
 
 Overrides to the Service Section of Rest Proxy Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5604,7 +5612,7 @@ Default:
 
 Environment Variables to be added to the Rest Proxy Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5612,7 +5620,7 @@ Default:
 
 Overrides to the Unit Section of Rest Proxy Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5682,7 +5690,7 @@ Default:  10MB
 
 List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
-Default: 
+Default:
 
 ***
 
@@ -5706,7 +5714,7 @@ Default:  /tmp/ksqldb
 
 Overrides to the Service Section of ksqlDB Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5714,7 +5722,7 @@ Default:
 
 Environment Variables to be added to the ksqlDB Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5722,7 +5730,7 @@ Default:
 
 Overrides to the Unit Section of ksqlDB Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5792,7 +5800,7 @@ Default:  100MB
 
 List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
-Default: 
+Default:
 
 ***
 
@@ -5808,7 +5816,7 @@ Default:  ""
 
 Overrides to the Service Section of Schema Registry Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5816,7 +5824,7 @@ Default:
 
 Environment Variables to be added to the Schema Registry Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5824,7 +5832,7 @@ Default:
 
 Overrides to the Unit Section of Schema Registry Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5894,7 +5902,7 @@ Default:  100MB
 
 List of loggers to redact. This is specified alongside the user defined redactor name and appenderRefs to be used in redactor definition. The redactor name should be unique for each logger.
 
-Default: 
+Default:
 
 ***
 
@@ -5910,7 +5918,7 @@ Default:  ""
 
 Overrides to the Service Section of Zookeeper Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5918,7 +5926,7 @@ Default:
 
 Environment Variables to be added to the Zookeeper Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5926,7 +5934,7 @@ Default:
 
 Overrides to the Unit Section of Zookeeper Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5988,7 +5996,7 @@ Default:  ""
 
 Overrides to the Service Section of Kafka Connect Replicator Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -5996,7 +6004,7 @@ Default:
 
 Environment Variables to be added to the Kafka Connect Replicator Service. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -6004,7 +6012,7 @@ Default:
 
 Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
 
-Default: 
+Default:
 
 ***
 
@@ -6061,4 +6069,3 @@ Key Size used by keytool -genkeypair command when creating Keystores. Only used 
 Default:  2048
 
 ***
-
