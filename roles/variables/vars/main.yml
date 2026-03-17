@@ -303,6 +303,7 @@ kafka_controller_properties:
       controller.listener.names: "{{kafka_controller_listeners['controller']['name']}}"
       listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %},{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}"
       listeners: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
+      advertised.listeners: "{{kafka_controller_listeners['controller']['name']}}://{{ kafka_controller_listeners['controller']['hostname'] | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname) | confluent.platform.format_hostname }}:{{kafka_controller_listeners['controller']['port']}}"
       node.id: "{{ node_id|default(groups.kafka_controller.index(inventory_hostname)|int + 9991) if inventory_hostname in groups.kafka_controller else 0}}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
   broker_listener:
@@ -532,6 +533,14 @@ kafka_controller_properties:
       confluent.telemetry.exporter._usm.events.https.ssl.keystore.location: "{{ kafka_controller_keystore_path }}"
       confluent.telemetry.exporter._usm.events.https.ssl.keystore.password: "{{ kafka_controller_keystore_storepass }}"
       confluent.telemetry.exporter._usm.events.https.ssl.key.password: "{{ kafka_controller_keystore_keypass }}"
+  usm_client_metrics:
+    enabled: "{{ 'usm_agent' in groups and usm_client_metrics_enabled }}"
+    properties:
+      confluent.telemetry.external.client.metrics.usm.push.enabled: "true"
+      confluent.telemetry.external.client.metrics.push.enabled: "true"
+      confluent.telemetry.external.client.metrics.delta.temporality: "true"
+      confluent.telemetry.external.client.metrics.subscription.interval.ms.list: "60000"
+      confluent.telemetry.external.client.metrics.subscription.metrics.list: "org.apache.kafka.consumer.fetch.manager.fetch.latency.avg,org.apache.kafka.consumer.connection.creation.total,org.apache.kafka.consumer.fetch.manager.fetch.total,org.apache.kafka.consumer.fetch.manager.bytes.consumed.rate,org.apache.kafka.consumer.request.total,org.apache.kafka.producer.bufferpool.wait.ratio,org.apache.kafka.producer.record.queue.time.avg,org.apache.kafka.producer.request.latency.avg,org.apache.kafka.producer.produce.throttle.time.avg,org.apache.kafka.producer.connection.creation.total,org.apache.kafka.producer.request.total,org.apache.kafka.producer.topic.byte.rate"
 
 kafka_controller_combined_properties: "{{kafka_controller_properties | confluent.platform.combine_properties}}"
 
@@ -1150,6 +1159,14 @@ kafka_broker_properties:
       confluent.telemetry.exporter._usm.https.ssl.keystore.location: "{{ kafka_broker_keystore_path }}"
       confluent.telemetry.exporter._usm.https.ssl.keystore.password: "{{ kafka_broker_keystore_storepass }}"
       confluent.telemetry.exporter._usm.https.ssl.key.password: "{{ kafka_broker_keystore_keypass }}"
+  usm_client_metrics:
+    enabled: "{{ 'usm_agent' in groups and usm_client_metrics_enabled }}"
+    properties:
+      confluent.telemetry.external.client.metrics.usm.push.enabled: "true"
+      confluent.telemetry.external.client.metrics.push.enabled: "true"
+      confluent.telemetry.external.client.metrics.delta.temporality: "true"
+      confluent.telemetry.external.client.metrics.subscription.interval.ms.list: "60000"
+      confluent.telemetry.external.client.metrics.subscription.metrics.list: "org.apache.kafka.consumer.fetch.manager.fetch.latency.avg,org.apache.kafka.consumer.connection.creation.total,org.apache.kafka.consumer.fetch.manager.fetch.total,org.apache.kafka.consumer.fetch.manager.bytes.consumed.rate,org.apache.kafka.consumer.request.total,org.apache.kafka.producer.bufferpool.wait.ratio,org.apache.kafka.producer.record.queue.time.avg,org.apache.kafka.producer.request.latency.avg,org.apache.kafka.producer.produce.throttle.time.avg,org.apache.kafka.producer.connection.creation.total,org.apache.kafka.producer.request.total,org.apache.kafka.producer.topic.byte.rate"
 
 kafka_broker_combined_properties: "{{kafka_broker_properties | confluent.platform.combine_properties}}"
 
@@ -2367,7 +2384,7 @@ control_center_next_gen_properties:
       confluent.controlcenter.prometheus.rules.file: "{{control_center_next_gen_dep_prometheus.trigger_rules_config_file}}"
       confluent.controlcenter.alertmanager.config.file: "{{control_center_next_gen_dep_alertmanager.config_file}}"
   prometheus_client:
-    enabled: "{{control_center_next_gen_dependency_prometheus_ssl_enabled}}"
+    enabled: "{{control_center_next_gen_dependency_prometheus_ssl_enabled | bool or control_center_next_gen_dependency_prometheus_basic_auth_enabled | bool}}"
     properties: "{{ control_center_next_gen_dependency_prometheus_ssl_enabled | confluent.platform.prometheus_client_properties(
         control_center_next_gen_dependency_prometheus_truststore_path,
         control_center_next_gen_dependency_prometheus_truststore_storepass,
@@ -2380,7 +2397,7 @@ control_center_next_gen_properties:
         control_center_next_gen_dependency_prometheus_service_name
       ) }}"
   alertmanager_client:
-    enabled: "{{control_center_next_gen_dependency_alertmanager_ssl_enabled}}"
+    enabled: "{{control_center_next_gen_dependency_alertmanager_ssl_enabled | bool or control_center_next_gen_dependency_alertmanager_basic_auth_enabled | bool}}"
     properties: "{{ control_center_next_gen_dependency_alertmanager_ssl_enabled | confluent.platform.alertmanager_client_properties(
         control_center_next_gen_dependency_alertmanager_truststore_path,
         control_center_next_gen_dependency_alertmanager_truststore_storepass,
