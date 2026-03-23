@@ -204,7 +204,7 @@ def update_existing_connector(connect_url, name, config, timeout):
     existing_config = config.copy()
     existing_config.update({'name': name})
 
-    if current_config == existing_config:
+    if all(current_config.get(k) == v for k, v in existing_config.items()):
         return True, False, "no configuration change"
 
     success = True
