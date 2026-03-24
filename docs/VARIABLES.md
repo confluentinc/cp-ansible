@@ -52,6 +52,14 @@ Default:  true
 
 ***
 
+### shell_executable
+
+Path to bash executable for shell tasks. Override if bash is at a different location on your systems.
+
+Default:  /bin/bash
+
+***
+
 ### jolokia_url_remote
 
 To copy from Ansible control host or download
@@ -145,6 +153,14 @@ Default:  false
 Boolean to have cp-ansible configure components with FIPS security settings. Must have ssl_enabled: true. Only valid for self signed certs and ssl_custom_certs: true, not ssl_provided_keystore_and_truststore: true. Refer CP-Ansible docs for prerequisites.
 
 Default:  false
+
+***
+
+### fips_mode
+
+FIPS mode version. Defaults to 140-3 for CP 8.2+. Valid values: fips-140-2, fips-140-3
+
+Default:  "fips-140-3"
 
 ***
 
@@ -456,7 +472,7 @@ Default:  "/usr/local/bin/confluent"
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  4.39.0
+Default:  4.50.0
 
 ***
 
@@ -1462,7 +1478,7 @@ Default:  []
 
 ### schema_registry_custom_properties
 
-Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_broker.properties is deprecated.
+Use to set custom schema registry properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case.NOTE- kafka_broker.properties is deprecated.
 
 Default:  {}
 
@@ -7132,6 +7148,14 @@ Default:  {}
 
 ***
 
+### usm_client_metrics_enabled
+
+Boolean to Enable Kafka Client Metrics for USM.
+
+Default:  false
+
+***
+
 ### unified_stream_manager
 
 Unified Stream Manager configuration for remote Schema Registry connection
@@ -7624,6 +7648,22 @@ Default:
 
 ***
 
+### control_center_next_gen_health_check_retries
+
+Number of retries for Control Center Next Gen health checks
+
+Default:  40
+
+***
+
+### control_center_next_gen_health_check_retry_delay
+
+Delay in seconds between Control Center Next Gen health check retries
+
+Default:  10
+
+***
+
 # kafka_broker
 
 Below are the supported variables for the role kafka_broker
@@ -7699,6 +7739,30 @@ Default:
 Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
 
 Default: 
+
+***
+
+### kafka_broker_health_check_urp_retries
+
+Number of retries for Under Replicated Partitions check
+
+Default:  15
+
+***
+
+### kafka_broker_health_check_urp_delay
+
+Delay in seconds between Under Replicated Partitions check retries
+
+Default:  5
+
+***
+
+### kafka_broker_health_check_retry_delay
+
+Delay in seconds between health check retries for MDS and Embedded Rest Proxy
+
+Default:  5
 
 ***
 
@@ -7906,6 +7970,22 @@ Default:
 
 ***
 
+### kafka_connect_health_check_retries
+
+Number of retries for Kafka Connect health checks
+
+Default:  40
+
+***
+
+### kafka_connect_health_check_retry_delay
+
+Delay in seconds between Kafka Connect health check retries
+
+Default:  10
+
+***
+
 ### kafka_connect_deploy_connector_timeout
 
 Time in seconds to wait while deploying kafka connector
@@ -7997,6 +8077,22 @@ Default:
 Overrides to the Unit Section of Rest Proxy Systemd File. This variable is a dictionary.
 
 Default: 
+
+***
+
+### kafka_rest_health_check_retries
+
+Number of retries for Rest Proxy health checks
+
+Default:  30
+
+***
+
+### kafka_rest_health_check_retry_delay
+
+Delay in seconds between Rest Proxy health check retries
+
+Default:  5
 
 ***
 
@@ -8094,6 +8190,22 @@ Default:
 
 ***
 
+### ksql_health_check_retries
+
+Number of retries for ksqlDB health checks
+
+Default:  40
+
+***
+
+### ksql_health_check_retry_delay
+
+Delay in seconds between ksqlDB health check retries
+
+Default:  5
+
+***
+
 # schema_registry
 
 Below are the supported variables for the role schema_registry
@@ -8180,6 +8292,22 @@ Default:
 
 ***
 
+### schema_registry_health_check_retries
+
+Number of retries for Schema Registry health checks
+
+Default:  30
+
+***
+
+### schema_registry_health_check_retry_delay
+
+Delay in seconds between Schema Registry health check retries
+
+Default:  5
+
+***
+
 # kafka_connect_replicator
 
 Below are the supported variables for the role kafka_connect_replicator
@@ -8239,6 +8367,22 @@ Default:
 Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
 
 Default: 
+
+***
+
+### kafka_connect_replicator_health_check_retries
+
+Number of retries for Kafka Connect Replicator health checks
+
+Default:  30
+
+***
+
+### kafka_connect_replicator_health_check_retry_delay
+
+Delay in seconds between Kafka Connect Replicator health check retries
+
+Default:  10
 
 ***
 

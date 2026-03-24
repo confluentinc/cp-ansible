@@ -108,6 +108,12 @@ This document explains the variables used in the USM Agent sample inventories fo
 - No client credentials needed (certificate-based)
 - SSL certificates required for both client and server
 
+## USM Client Metrics
+
+### `usm_client_metrics_enabled`
+- **Default**: `false`
+- **Purpose**: Enables external client metrics collection for USM
+
 ## Usage
 
 ```bash
