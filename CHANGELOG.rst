@@ -4,6 +4,20 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+7.8.7
+======
+Notable fixes
+-------------
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
+New features
+-------------
+- CP Ansible now supports AWS Systems Manager (SSM) for managing connections with host machines
+
+Bug fixes
+-------------
+- Fixed pipefail issue which caused failure when extracting distinguished name from keystore in MTLS setups
+
 v7.8.6
 ======
 
