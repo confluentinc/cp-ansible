@@ -4,6 +4,16 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v8.1.2
+======
+New features
+-------------
+- CP Ansible now supports AWS Systems Manager (SSM) for managing connections with host machines
+
+Bug fixes
+-------------
+- Fixed pipefail issue which caused failure when extracting distinguished name from keystore in MTLS setups
+
 v8.1.1
 ======
 New features
