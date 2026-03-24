@@ -6,6 +6,11 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 7.9.6
 ======
+
+Notable fixes
+-------------
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
 New features
 -------------
 - USM Agent support is now available for ZooKeeper and KRaft, enabling clusters to send metrics and metadata to Confluent Cloud via USM with all supported authentication modes (no auth, basic, TLS, mTLS).
