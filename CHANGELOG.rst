@@ -9,16 +9,16 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 Notable fixes
 -------------
-- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+- For the list of security and vulnerability issues fixed in this release, see https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
 New features
 -------------
-- USM Agent support is now available for ZooKeeper and KRaft, enabling clusters to send metrics and metadata to Confluent Cloud via USM with all supported authentication modes (no auth, basic, TLS, mTLS).
-- CP Ansible now supports AWS Systems Manager (SSM) for managing connections with host machines
+- USM Agent now supports ZooKeeper and KRaft, enabling clusters to send metrics and metadata to Confluent Cloud via USM with all supported authentication modes such as no auth, basic, TLS, and mTLS.
+- Confluent Ansible now supports using AWS Systems Manager (SSM) to establish connections to managed nodes.
 
 Bug fixes
 -------------
-- Fixed pipefail issue which caused failure when extracting distinguished name from keystore in MTLS setups
+- Fixed an issue where pipefail caused failures when extracting distinguished names from keystores in mTLS setups.
 
 v7.9.5
 ======
