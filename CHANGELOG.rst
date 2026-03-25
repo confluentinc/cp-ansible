@@ -14,7 +14,7 @@ Notable fixes
 New features
 -------------
 - USM Agent now supports ZooKeeper and KRaft, enabling clusters to send metrics and metadata to Confluent Cloud via USM with all supported authentication modes such as no auth, basic, TLS, and mTLS.
-- Confluent Ansible now supports using AWS Systems Manager (SSM) to establish connections to managed nodes.
+- CP Ansible now supports using AWS Systems Manager (SSM) to establish connections to managed nodes.
 
 Bug fixes
 -------------
