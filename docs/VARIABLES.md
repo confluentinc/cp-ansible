@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  7.9.5
+Default:  7.9.6
 
 ***
 
@@ -5916,6 +5916,22 @@ Default:  "{{pause_rolling_deployment}}"
 
 ***
 
+### usm_agent_deployment_strategy
+
+Deployment strategy for USM Agent. Set to parallel to run all provisioning tasks in parallel on all hosts, which may cause downtime.
+
+Default:  "{{deployment_strategy}}"
+
+***
+
+### usm_agent_pause_rolling_deployment
+
+Boolean to Pause Rolling Deployment after each USM Agent Node starts up.
+
+Default:  "{{pause_rolling_deployment}}"
+
+***
+
 ### control_center_next_gen_dependency_prometheus_health_check_user
 
 user for the user used to do healthcheck on Control Center Next Gen (prometheus)
@@ -6025,198 +6041,6 @@ Default:  xxxxx
 CCloud Schema Registry Secret
 
 Default:  yyyyyy
-
-***
-
-### jolokia_access_control_custom_file_enabled
-
-Boolean to use custom Jolokia access control file. Must be set to true or false when Jolokia access control is enabled.
-
-Default:  false
-
-***
-
-### jolokia_access_control_file_src_path
-
-Full path on Ansible Controller to custom Jolokia access control XML file. Required when jolokia_access_control_custom_file_enabled is true
-
-Default:  ""
-
-***
-
-### kafka_controller_jolokia_access_control_custom_file_enabled
-
-Component-specific custom file enabled flags (must be defined before src_path variables)
-
-Default:  "{{jolokia_access_control_custom_file_enabled}}"
-
-***
-
-### kafka_controller_jolokia_access_control_file_src_path
-
-Path to Jolokia access control XML file for Zookeeper (on control node)
-
-Default:  "{{ '' if kafka_controller_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
-
-***
-
-### kafka_broker_jolokia_access_control_file_src_path
-
-Path to Jolokia access control XML file for Kafka Broker (on control node)
-
-Default:  "{{ '' if kafka_broker_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
-
-***
-
-### schema_registry_jolokia_access_control_file_src_path
-
-Path to Jolokia access control XML file for Schema Registry (on control node)
-
-Default:  "{{ '' if schema_registry_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
-
-***
-
-### kafka_rest_jolokia_access_control_file_src_path
-
-Path to Jolokia access control XML file for Kafka REST (on control node)
-
-Default:  "{{ '' if kafka_rest_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
-
-***
-
-### kafka_connect_jolokia_access_control_file_src_path
-
-Path to Jolokia access control XML file for Kafka Connect (on control node)
-
-Default:  "{{ '' if kafka_connect_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
-
-***
-
-### ksql_jolokia_access_control_file_src_path
-
-Path to Jolokia access control XML file for ksqlDB (on control node)
-
-Default:  "{{ '' if ksql_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
-
-***
-
-### kafka_connect_replicator_jolokia_access_control_file_src_path
-
-Path to Jolokia access control XML file for Kafka Connect Replicator (on control node)
-
-Default:  "{{ '' if kafka_connect_replicator_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
-
-***
-
-### kafka_broker_jolokia_access_control_enabled
-
-Boolean to enable Jolokia access control on Kafka Broker
-
-Default:  "{{ jolokia_access_control_enabled }}"
-
-***
-
-### kafka_broker_jolokia_access_control_file_dest_path
-
-Path on target nodes where Kafka Broker Jolokia access control XML file will be placed
-
-Default:  "{{ kafka_broker.config_file | dirname }}/jolokia-access.xml"
-
-***
-
-### schema_registry_jolokia_access_control_enabled
-
-Boolean to use custom Jolokia access control file for Schema Registry
-
-Default:  "{{ jolokia_access_control_enabled }}"
-
-***
-
-### schema_registry_jolokia_access_control_file_dest_path
-
-Path on target nodes where Schema Registry Jolokia access control XML file will be placed
-
-Default:  "{{ schema_registry.config_file | dirname }}/jolokia-access.xml"
-
-***
-
-### kafka_rest_jolokia_access_control_enabled
-
-Boolean to enable Jolokia access control on Rest Proxy
-
-Default:  "{{ jolokia_access_control_enabled }}"
-
-***
-
-### kafka_rest_jolokia_access_control_file_dest_path
-
-Path on target nodes where Rest Proxy Jolokia access control XML file will be placed
-
-Default:  "{{ kafka_rest.config_file | dirname }}/jolokia-access.xml"
-
-***
-
-### kafka_connect_jolokia_access_control_enabled
-
-Boolean to enable Jolokia access control on Kafka Connect
-
-Default:  "{{ jolokia_access_control_enabled }}"
-
-***
-
-### kafka_connect_jolokia_access_control_file_dest_path
-
-Path on target nodes where Kafka Connect Jolokia access control XML file will be placed
-
-Default:  "{{ kafka_connect.config_file | dirname }}/jolokia-access.xml"
-
-***
-
-### ksql_jolokia_access_control_enabled
-
-Boolean to enable Jolokia access control on ksqlDB
-
-Default:  "{{ jolokia_access_control_enabled }}"
-
-***
-
-### ksql_jolokia_access_control_file_dest_path
-
-Path on target nodes where ksqlDB Jolokia access control XML file will be placed
-
-Default:  "{{ ksql.config_file | dirname }}/jolokia-access.xml"
-
-***
-
-### kafka_connect_replicator_jolokia_access_control_enabled
-
-Boolean to enable Jolokia access control on Kafka Connect Replicator
-
-Default:  "{{ jolokia_access_control_enabled }}"
-
-***
-
-### kafka_connect_replicator_jolokia_access_control_file_dest_path
-
-Path on target nodes where Kafka Connect Replicator Jolokia access control XML file will be placed
-
-Default:  "{{ kafka_connect_replicator.config_file | dirname }}/jolokia-access.xml"
-
-***
-
-### kafka_controller_jolokia_access_control_enabled
-
-Boolean to enable Jolokia access control on kafka controller
-
-Default:  "{{ jolokia_access_control_enabled }}"
-
-***
-
-### kafka_controller_jolokia_access_control_file_dest_path
-
-Path on target nodes where Kafka Controller Jolokia access control XML file will be placed
-
-Default:  "{{ kafka_controller.config_file | dirname }}/jolokia-access.xml"
 
 ***
 
@@ -6436,70 +6260,6 @@ Default:
 
 ***
 
-### kafka_connect_health_check_delay
-
-Time in seconds to wait before starting Connect Health Checks.
-
-Default:  30
-
-***
-
-### kafka_broker_health_check_delay
-
-Time in seconds to wait before starting Kafka Health Checks.
-
-Default:  20
-
-***
-
-### kafka_controller_health_check_delay
-
-Time in seconds to wait before starting Kafka Health Checks.
-
-Default:  20
-
-***
-
-### control_center_next_gen_health_check_delay
-
-Time in seconds to wait before starting Control Center Next Gen Health Checks.
-
-Default:  30
-
-***
-
-### kafka_connect_replicator_health_check_delay
-
-Time in seconds to wait before starting Kafka Connect Replicator Health Checks.
-
-Default:  30
-
-***
-
-### schema_registry_health_check_delay
-
-Time in seconds to wait before starting Schema Registry Health Checks.
-
-Default:  15
-
-***
-
-### kafka_rest_health_check_delay
-
-Time in seconds to wait before starting Rest Proxy Health Checks.
-
-Default:  15
-
-***
-
-### ksql_health_check_delay
-
-Time in seconds to wait before starting ksqlDB Health Checks.
-
-Default:  20
-
-***
-
 ### usm_agent_health_check_delay
 
 Time in seconds to wait before starting USM agent Health Checks.
@@ -6521,14 +6281,6 @@ Default:  false
 Boolean to enable schema exporter and add the required properties to the schema registry
 
 Default:  false
-
-***
-
-### enable_node_id
-
-Boolean to enable node_id configuration. When enabled, node_id will be used instead of broker_id.
-
-Default:  true
 
 ***
 
@@ -6583,6 +6335,14 @@ Default:  "https://packages.confluent.io"
 Confluent independent release packages RPM and Debian Package Repositories
 
 Default:  "https://packages.confluent.io"
+
+***
+
+### confluent_usm_agent_independent_repository_baseurl
+
+Confluent USM Agent RPM and Debian Package Repositories
+
+Default:  "{{confluent_independent_repository_baseurl}}/confluent-usm-agent"
 
 ***
 
@@ -7247,6 +7007,14 @@ Default:
 Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
 
 Default: 
+
+***
+
+### kafka_controller_health_check_delay
+
+Time in seconds to wait before starting Kafka Health Checks.
+
+Default:  20
 
 ***
 
