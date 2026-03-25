@@ -4,6 +4,21 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+8.0.4
+======
+
+Notable fixes
+-------------
+- For the list of security and vulnerability issues fixed in this release, see https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
+New features
+-------------
+- Confluent Ansible now supports using AWS Systems Manager (SSM) to establish connections to managed nodes.
+
+Bug fixes
+-------------
+- Fixed an issue where pipefail caused failures when extracting distinguished names from keystores in mTLS setups.
+
 v8.0.3
 ======
 
