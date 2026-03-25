@@ -13,7 +13,7 @@ Notable fixes
 
 New features
 -------------
-- Confluent Ansible now supports using AWS Systems Manager (SSM) to establish connections to managed nodes.
+- CP Ansible now supports using AWS Systems Manager (SSM) to establish connections to managed nodes.
 
 Bug fixes
 -------------
