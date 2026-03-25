@@ -4,6 +4,16 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.4.14
+======
+Notable fixes
+-------------
+- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
+Bug fixes
+-------------
+- Fixed pipefail issue which caused failure when extracting distinguished name from keystore in MTLS setups
+
 v7.4.13
 ======
 
