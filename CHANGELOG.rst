@@ -9,11 +9,11 @@ v8.1.2
 
 Notable fixes
 -------------
-- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+- For the list of security and vulnerability issues fixed in this release, see https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
 New features
 -------------
-- CP Ansible now supports AWS Systems Manager (SSM) for managing connections with host machines
+- CP Ansible now supports using AWS Systems Manager (SSM) to establish connections to managed nodes.
 
 Bug fixes
 -------------
