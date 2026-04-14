@@ -1,0 +1,55 @@
+---
+- name: Configure IPv6 Preference
+  import_playbook: ../configure_ipv6.yml
+
+- name: Remove the Kafka Rest Groups from Inventory
+  hosts: kafka_rest
+  gather_facts: false
+  tasks:
+    - name: Change group names for non ccloud instances
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: "{{item}}:"
+        line: "{{item}}_ccloud:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - schema_registry
+        - kafka_connect
+        - kafka_rest
+        - ksql
+        - control_center_next_gen
+
+    # There are two schema_registry groups in the inventory file
+    - name: Change schema_registry group name
+      lineinfile:
+        path: "{{inventory_dir}}/ansible_inventory.yml"
+        regexp: "ccloud_schema_registry:"
+        line: "schema_registry:"
+      delegate_to: 127.0.0.1
+      run_once: true
+
+    - name: Refresh Inventory
+      meta: refresh_inventory
+
+- name: Converge
+  import_playbook: confluent.platform.all
+
+- name: Prepare other Components
+  hosts: schema_registry_ccloud:kafka_connect_ccloud:kafka_rest_ccloud:ksql_ccloud:control_center_next_gen_ccloud
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Copy CA Cert to Host
+      copy:
+        src: "../../playbooks/generated_ssl_files/{{ssl_self_signed_ca_cert_filepath|basename}}"
+        dest: /tmp/ca.crt
+
+    - name: Import CA into Java Trusted CAs
+      shell: |
+        keytool -noprompt -keystore /usr/lib/jvm/jre/lib/security/cacerts \
+          -alias CARoot \
+          -importcert -file /tmp/ca.crt \
+          -storepass changeit
