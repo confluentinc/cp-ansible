@@ -21,17 +21,29 @@ CONTAINER_CONFIGS = {
     "kafka-broker1": {
         "client_id": "kafka_broker",
         "base_path": "/tmp",
-        "components": ["mds_client", "kafka_broker_client", "embedded_rest_proxy_client", "embedded_rest_proxy_rbac_oauth_client", "metrics_reporter_client", "audit_logs_destination_client", "audit_logs_destination_admin_client"]
+        "components": [
+            "mds_client", "kafka_broker_client", "embedded_rest_proxy_client",
+            "embedded_rest_proxy_rbac_oauth_client", "metrics_reporter_client",
+            "audit_logs_destination_client", "audit_logs_destination_admin_client"
+        ]
     },
     "kafka-broker2": {
         "client_id": "kafka_broker",
         "base_path": "/tmp",
-        "components": ["mds_client", "kafka_broker_client", "embedded_rest_proxy_client", "embedded_rest_proxy_rbac_oauth_client", "metrics_reporter_client", "audit_logs_destination_client", "audit_logs_destination_admin_client"]
+        "components": [
+            "mds_client", "kafka_broker_client", "embedded_rest_proxy_client",
+            "embedded_rest_proxy_rbac_oauth_client", "metrics_reporter_client",
+            "audit_logs_destination_client", "audit_logs_destination_admin_client"
+        ]
     },
     "kafka-broker3": {
         "client_id": "kafka_broker",
         "base_path": "/tmp",
-        "components": ["mds_client", "kafka_broker_client", "embedded_rest_proxy_client", "embedded_rest_proxy_rbac_oauth_client", "metrics_reporter_client", "audit_logs_destination_client", "audit_logs_destination_admin_client"]
+        "components": [
+            "mds_client", "kafka_broker_client", "embedded_rest_proxy_client",
+            "embedded_rest_proxy_rbac_oauth_client", "metrics_reporter_client",
+            "audit_logs_destination_client", "audit_logs_destination_admin_client"
+        ]
     },
     # Controller containers
     "controller1": {
@@ -59,7 +71,12 @@ CONTAINER_CONFIGS = {
     # "kafka-connect1": {
     #     "client_id": "kafka_connect",
     #     "base_path": "/tmp",
-    #     "components": ["kafka_client", "producer_client", "consumer_client", "mds_client", "producer_monitoring_interceptor_client","consumer_monitoring_interceptor_client","secret_registry_client","kafka_connect_client"],
+    #     "components": [
+    #         "kafka_client", "producer_client", "consumer_client", "mds_client",
+    #         "producer_monitoring_interceptor_client",
+    #         "consumer_monitoring_interceptor_client",
+    #         "secret_registry_client", "kafka_connect_client"
+    #     ],
     #     "max_workers": 12  # Higher concurrency for kafka-connect
     # },
     # "ksql1": {
@@ -220,9 +237,9 @@ def process_single_component(container_name, component, client_id, base_path):
         for attempt in range(max_retries):
             try:
                 subprocess.run(
-                    ["docker", "cp", tmp_path, f"{container_name}:{container_dest_path}"], 
-                    check=True, 
-                    stdout=subprocess.DEVNULL, 
+                    ["docker", "cp", tmp_path, f"{container_name}:{container_dest_path}"],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     timeout=30  # Add timeout to prevent hanging
                 )
@@ -287,9 +304,9 @@ def write_and_copy_component_tokens_optimized(container_name, config):
 
 def process_container_batch(container_configs, batch_name=""):
     """Process a batch of container configurations in parallel."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Processing {batch_name} batch...")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     # Determine optimal concurrency based on container types
     priority_containers = ["kafka-connect1", "kafka-rest1"]
     max_container_workers = 10
@@ -329,9 +346,9 @@ def list_container_files(container_name, base_path):
 
 def verify_tokens():
     """Verify that tokens were created successfully."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("VERIFICATION - Files in containers:")
-    print("="*60)
+    print("=" * 60)
     all_containers = {}
     all_containers.update(CONTAINER_CONFIGS)
     all_containers.update(CONTAINER_CONFIGS2)
@@ -358,7 +375,7 @@ def verify_tokens():
 def main():
     """Main execution function with optimized parallel processing."""
     print("JWT Token Generator for Confluent Platform Components")
-    print("="*60)
+    print("=" * 60)
 
     start_time = time.time()
 
@@ -379,9 +396,9 @@ def main():
     end_time = time.time()
     # Verify the results
     # verify_tokens()
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Token generation completed in {end_time - start_time:.2f} seconds!")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
 
 def run_continuous():
