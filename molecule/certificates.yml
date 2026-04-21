@@ -17,11 +17,11 @@
         state: present
       when: ansible_os_family == "RedHat" and ansible_distribution != "Amazon" and ansible_distribution_major_version in ['8', '9']
 
-    # Java 21 is available in RHEL 10 repositories but Java 17 is not available
-    - name: Install Java 21 on Rhel 10
+    # Java 25 is the default, Java 17 is not available on RHEL 10
+    - name: Install Java 25 on Rhel 10
       yum:
         name:
-          - java-21-openjdk
+          - java-25-openjdk
         state: present
       when: ansible_os_family == "RedHat" and ansible_distribution != "Amazon" and ansible_distribution_major_version == '10'
 
@@ -61,7 +61,7 @@
         - fips_enabled|default(false) | bool
         - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9', '10']
 
-    - name: Disable JVM level FIPS
+    - name: Disable JVM level FIPS (JDK 21 and earlier)
       lineinfile:
         path: "{{java_path.stdout}}/conf/security/java.security"
         search_string: 'security.useSystemPropertiesFile=true'
@@ -71,7 +71,19 @@
         mode: '644'
       when:
         - fips_enabled|default(false) | bool
-        - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9', '10']
+        - ansible_os_family == "RedHat" and ansible_distribution_major_version in ['8', '9']
+
+    - name: Disable JVM level FIPS (JDK 25+)
+      lineinfile:
+        path: "{{java_path.stdout}}/conf/security/redhat/crypto-policies.properties"
+        regexp: '^include true/crypto-policies.properties$'
+        line: 'include false/crypto-policies.properties'
+        owner: root
+        group: root
+        mode: '644'
+      when:
+        - fips_enabled|default(false) | bool
+        - ansible_os_family == "RedHat" and ansible_distribution_major_version == '10'
 
     - name: Configure crypto policies
       shell: update-crypto-policies --set FIPS
