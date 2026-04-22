@@ -6,8 +6,17 @@
 - name: Support Bundle Setup
   hosts: localhost
   connection: local
-  gather_facts: true
+  gather_facts: false
+  tags: always
+  vars:
+    ansible_become: false
   tasks:
+    - name: Gather facts without become
+      setup:
+
+    - import_role:
+        name: confluent.platform.variables
+
     - name: Generate bundle timestamp
       set_fact:
         bundle_timestamp: "{{ ansible_date_time.date | regex_replace('-','') }}_{{ ansible_date_time.time | regex_replace(':','') }}"
@@ -23,35 +32,90 @@
         state: directory
         mode: '0755'
 
-    - name: Save Ansible version info
-      copy:
-        content: |
-          Ansible Version: {{ ansible_version.full }}
-          Python Version: {{ ansible_python.version.major }}.{{ ansible_python.version.minor }}.{{ ansible_python.version.micro }}
-          Playbook: support_bundle.yml
-          Timestamp: {{ ansible_date_time.iso8601 }}
-        dest: "{{ bundle_path }}/ansible/ansible_version.txt"
-        mode: '0644'
-
     - name: Save execution context
       copy:
         content: "{{ {'timestamp': ansible_date_time.iso8601, 'groups': groups, 'ansible_version': ansible_version.full} | to_nice_yaml }}"
         dest: "{{ bundle_path }}/ansible/execution_context.yml"
         mode: '0644'
 
-    - name: Save sanitized inventory
+    - name: Determine inventory file path
+      set_fact:
+        resolved_inventory_path: "{{ support_bundle_inventory_file_path if (support_bundle_inventory_file_path | length > 0) else (ansible_inventory_sources[0] | default('', true)) }}"
+
+    - name: Debug - Show inventory resolution
+      debug:
+        msg:
+          - "Inventory Resolution:"
+          - "  support_bundle_inventory_file_path: {{ support_bundle_inventory_file_path | default('(not set)') }}"
+          - "  ansible_inventory_sources: {{ ansible_inventory_sources | default(['(not available)']) }}"
+          - "  resolved_inventory_path: {{ resolved_inventory_path | default('(no path resolved)') }}"
+
+    - name: Copy inventory file to bundle
       copy:
-        content: "{{ hostvars | to_nice_json }}"
-        dest: "{{ bundle_path }}/ansible/inventory_sanitized.yml"
+        src: "{{ resolved_inventory_path }}"
+        dest: "{{ bundle_path }}/ansible/inventory_raw.yml"
         mode: '0644'
-      no_log: "{{ mask_sensitive_logs }}"
+      when:
+        - resolved_inventory_path is defined
+        - resolved_inventory_path | length > 0
+        - resolved_inventory_path is file
+      ignore_errors: true
+      register: inventory_file_copied
+
+    - name: Generate inventory structure from groups (fallback if no file provided)
+      copy:
+        content: |
+          # Inventory structure (generated from runtime groups)
+          # Note: This is a simplified view. Set support_bundle_inventory_file_path for full inventory.
+          {% for group_name in groups.keys() %}
+          {% if group_name != 'ungrouped' %}
+          {{ group_name }}:
+          {% if group_name == 'all' %}
+            vars: {}
+          {% else %}
+            hosts:
+          {% for host in groups[group_name] %}
+              {{ host }}: {}
+          {% endfor %}
+          {% endif %}
+          {% endif %}
+          {% endfor %}
+        dest: "{{ bundle_path }}/ansible/inventory_raw.yml"
+        mode: '0644'
+      when: inventory_file_copied is failed or inventory_file_copied is skipped
+
+    - name: Sanitize sensitive data in inventory
+      shell: |
+        # Add header indicating sanitization
+        echo "# THIS INVENTORY HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED" > {{ bundle_path }}/ansible/inventory_sanitized.yml
+        echo "" >> {{ bundle_path }}/ansible/inventory_sanitized.yml
+        cat {{ bundle_path }}/ansible/inventory_raw.yml >> {{ bundle_path }}/ansible/inventory_sanitized.yml
+
+        # Redact SSH keys and credentials
+        sed -i.bak -E 's|(ansible_ssh_private_key_file:).*|\1 ***REDACTED***|g' {{ bundle_path }}/ansible/inventory_sanitized.yml
+        sed -i.bak -E 's|(ansible_password:).*|\1 ***REDACTED***|g' {{ bundle_path }}/ansible/inventory_sanitized.yml
+        sed -i.bak -E 's|(ansible_become_password:).*|\1 ***REDACTED***|g' {{ bundle_path }}/ansible/inventory_sanitized.yml
+
+        # Redact any password, secret, key, token, credential fields (but not comments)
+        sed -i.bak -E 's|^([[:space:]]*[^#]*password[^:]*:).*|\1 ***REDACTED***|gi' {{ bundle_path }}/ansible/inventory_sanitized.yml
+        sed -i.bak -E 's|^([[:space:]]*[^#]*secret[^:]*:).*|\1 ***REDACTED***|gi' {{ bundle_path }}/ansible/inventory_sanitized.yml
+        sed -i.bak -E 's|^([[:space:]]*[^#]*_key[^:]*:).*|\1 ***REDACTED***|gi' {{ bundle_path }}/ansible/inventory_sanitized.yml
+        sed -i.bak -E 's|^([[:space:]]*[^#]*token[^:]*:).*|\1 ***REDACTED***|gi' {{ bundle_path }}/ansible/inventory_sanitized.yml
+        sed -i.bak -E 's|^([[:space:]]*[^#]*credential[^:]*:).*|\1 ***REDACTED***|gi' {{ bundle_path }}/ansible/inventory_sanitized.yml
+
+        # Clean up
+        rm -f {{ bundle_path }}/ansible/inventory_raw.yml
+        rm -f {{ bundle_path }}/ansible/inventory_sanitized.yml.bak
+      args:
+        executable: /bin/bash
+      ignore_errors: true
 
 - name: Import all variables
   hosts: all
   tags: always
   tasks:
     - import_role:
-        name: variables
+        name: confluent.platform.variables
 
 - name: Zookeeper Support Bundle
   hosts: zookeeper
@@ -59,7 +123,7 @@
   tags: zookeeper
   tasks:
     - include_role:
-        name: common
+        name: confluent.platform.common
         tasks_from: collect_support_bundle.yml
       vars:
         service_name: "{{ zookeeper_service_name }}"
@@ -76,7 +140,7 @@
   tags: kafka_controller
   tasks:
     - include_role:
-        name: common
+        name: confluent.platform.common
         tasks_from: collect_support_bundle.yml
       vars:
         service_name: "{{ kafka_controller_service_name }}"
@@ -93,7 +157,7 @@
   tags: kafka_broker
   tasks:
     - include_role:
-        name: common
+        name: confluent.platform.common
         tasks_from: collect_support_bundle.yml
       vars:
         service_name: "{{ kafka_broker_service_name }}"
@@ -110,7 +174,7 @@
   tags: schema_registry
   tasks:
     - include_role:
-        name: common
+        name: confluent.platform.common
         tasks_from: collect_support_bundle.yml
       vars:
         service_name: "{{ schema_registry_service_name }}"
@@ -127,7 +191,7 @@
   tags: kafka_connect
   tasks:
     - include_role:
-        name: common
+        name: confluent.platform.common
         tasks_from: collect_support_bundle.yml
       vars:
         service_name: "{{ kafka_connect_service_name }}"
@@ -144,7 +208,7 @@
   tags: kafka_connect_replicator
   tasks:
     - include_role:
-        name: common
+        name: confluent.platform.common
         tasks_from: collect_support_bundle.yml
       vars:
         service_name: "{{ kafka_connect_replicator_service_name }}"
@@ -161,7 +225,7 @@
   tags: ksql
   tasks:
     - include_role:
-        name: common
+        name: confluent.platform.common
         tasks_from: collect_support_bundle.yml
       vars:
         service_name: "{{ ksql_service_name }}"
@@ -178,7 +242,7 @@
   tags: kafka_rest
   tasks:
     - include_role:
-        name: common
+        name: confluent.platform.common
         tasks_from: collect_support_bundle.yml
       vars:
         service_name: "{{ kafka_rest_service_name }}"
@@ -195,7 +259,7 @@
   tags: control_center
   tasks:
     - include_role:
-        name: common
+        name: confluent.platform.common
         tasks_from: collect_support_bundle.yml
       vars:
         service_name: "{{ control_center_service_name }}"
@@ -212,7 +276,7 @@
   tags: control_center_next_gen
   tasks:
     - include_role:
-        name: common
+        name: confluent.platform.common
         tasks_from: collect_support_bundle.yml
       vars:
         service_name: "{{ control_center_next_gen_service_name }}"
@@ -223,16 +287,47 @@
         user: "{{ control_center_next_gen_user }}"
         group: "{{ control_center_next_gen_group }}"
 
+- name: USM Agent Support Bundle
+  hosts: usm_agent
+  gather_facts: true
+  tags: usm_agent
+  tasks:
+    - include_role:
+        name: confluent.platform.common
+        tasks_from: collect_support_bundle.yml
+      vars:
+        service_name: "{{ usm_agent_service_name }}"
+        component_name: "usm_agent"
+        component: "{{ usm_agent }}"
+        config_file: "{{ usm_agent.config_file }}"
+        log_dir: "{{ usm_agent.log_dir }}"
+        user: "{{ usm_agent_default_user }}"
+        group: "{{ usm_agent_default_group }}"
+
 - name: Finalize Support Bundle
   hosts: localhost
   connection: local
   gather_facts: false
+  tags: always
+  vars:
+    ansible_become: false
   tasks:
+    - import_role:
+        name: confluent.platform.variables
+
     - name: Generate bundle manifest
       template:
         src: "{{ playbook_dir }}/../roles/common/templates/bundle_manifest.yml.j2"
         dest: "{{ hostvars['localhost']['bundle_path'] }}/bundle_manifest.yml"
         mode: '0644'
+
+    - name: Copy Ansible playbook execution log to bundle
+      copy:
+        src: "{{ support_bundle_ansible_log_path }}"
+        dest: "{{ hostvars['localhost']['bundle_path'] }}/ansible/ansible_playbook.log"
+        mode: '0644'
+      when: support_bundle_ansible_log_path | length > 0
+      ignore_errors: true
 
     - name: Archive support bundle
       archive:
