@@ -16,31 +16,31 @@
 - name: Sanitize .properties files
   shell: |
     # Create backup
-    cp {{ item.path }} {{ item.path }}.original
+    cp {{ item.path | quote }} {{ (item.path ~ '.original') | quote }}
 
     # Sanitize sensitive values - replace anything after '=' for sensitive keys
-    sed -i '' -E 's/(.*password.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(.*secret.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(.*\.key=).*/\1 ***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(.*credential.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(.*token.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(.*truststore\.password.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(.*keystore\.password.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(.*ssl\.key\.password.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(.*sasl\.jaas\.config.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(.*basic\.auth\.credentials\.source.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(.*ldap\..*password.*=).*/\1 ***REDACTED***/gi' {{ item.path }}
+    sed -i.bak -E 's/(.*password.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(.*secret.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(.*\.key=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(.*credential.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(.*token.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(.*truststore\.password.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(.*keystore\.password.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(.*ssl\.key\.password.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(.*sasl\.jaas\.config.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(.*basic\.auth\.credentials\.source.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(.*ldap\..*password.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
 
     # Add sanitization notice at the top
-    echo "# THIS FILE HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED" | cat - {{ item.path }} > {{ item.path }}.tmp
-    mv {{ item.path }}.tmp {{ item.path }}
+    echo "# THIS FILE HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED" | cat - {{ item.path | quote }} > {{ (item.path ~ '.tmp') | quote }}
+    mv {{ (item.path ~ '.tmp') | quote }} {{ item.path | quote }}
 
-    # Remove original backup
-    rm -f {{ item.path }}.original
+    # Remove original and sed backup files
+    rm -f {{ (item.path ~ '.original') | quote }} {{ (item.path ~ '.bak') | quote }}
   args:
     executable: /bin/bash
   loop: "{{ properties_files.files }}"
-  when: properties_files.matched > 0
+  when: properties_files.matched | default(0) > 0
   delegate_to: localhost
   vars:
     ansible_connection: local
@@ -50,7 +50,9 @@
 - name: Find all JAAS config files
   find:
     paths: "{{ host_bundle_dir }}/configs"
-    patterns: "*jaas.conf,*_jaas.conf"
+    patterns:
+      - "*jaas.conf"
+      - "*_jaas.conf"
   register: jaas_files
   delegate_to: localhost
   vars:
@@ -60,23 +62,23 @@
 - name: Sanitize JAAS files
   shell: |
     # Create backup
-    cp {{ item.path }} {{ item.path }}.original
+    cp {{ item.path | quote }} {{ (item.path ~ '.original') | quote }}
 
     # Redact password values in JAAS files
-    sed -i '' -E 's/(password=")[^"]*"/\1***REDACTED***"/gi' {{ item.path }}
-    sed -i '' -E "s/(password=')[^']*'/\1***REDACTED***'/gi" {{ item.path }}
-    sed -i '' -E 's/(password=)[^; \t]*/\1***REDACTED***/gi' {{ item.path }}
+    sed -i.bak -E 's/(password=")[^"]*"/\1***REDACTED***"/gi' {{ item.path | quote }}
+    sed -i.bak -E "s/(password=')[^']*'/\1***REDACTED***'/gi" {{ item.path | quote }}
+    sed -i.bak -E 's/(password=)[^; \t]*/\1***REDACTED***/gi' {{ item.path | quote }}
 
     # Add sanitization notice at the top
-    echo "// THIS FILE HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED" | cat - {{ item.path }} > {{ item.path }}.tmp
-    mv {{ item.path }}.tmp {{ item.path }}
+    echo "// THIS FILE HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED" | cat - {{ item.path | quote }} > {{ (item.path ~ '.tmp') | quote }}
+    mv {{ (item.path ~ '.tmp') | quote }} {{ item.path | quote }}
 
-    # Remove original backup
-    rm -f {{ item.path }}.original
+    # Remove original and sed backup files
+    rm -f {{ (item.path ~ '.original') | quote }} {{ (item.path ~ '.bak') | quote }}
   args:
     executable: /bin/bash
   loop: "{{ jaas_files.files }}"
-  when: jaas_files.matched > 0
+  when: jaas_files.matched | default(0) > 0
   delegate_to: localhost
   vars:
     ansible_connection: local
@@ -96,26 +98,26 @@
 - name: Sanitize systemd override files
   shell: |
     # Create backup
-    cp {{ item.path }} {{ item.path }}.original
+    cp {{ item.path | quote }} {{ (item.path ~ '.original') | quote }}
 
     # Redact environment variables with sensitive values
-    sed -i '' -E 's/(Environment=.*PASSWORD.*=).*/\1***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(Environment=.*SECRET.*=).*/\1***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(Environment=.*KEY.*=).*/\1***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(Environment=.*TOKEN.*=).*/\1***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(Environment=.*CREDENTIAL.*=).*/\1***REDACTED***/gi' {{ item.path }}
-    sed -i '' -E 's/(Environment=CONFLUENT_SECURITY_MASTER_KEY=).*/\1***REDACTED***/gi' {{ item.path }}
+    sed -i.bak -E 's/(Environment=.*PASSWORD.*=).*/\1***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(Environment=.*SECRET.*=).*/\1***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(Environment=.*KEY.*=).*/\1***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(Environment=.*TOKEN.*=).*/\1***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(Environment=.*CREDENTIAL.*=).*/\1***REDACTED***/gi' {{ item.path | quote }}
+    sed -i.bak -E 's/(Environment=CONFLUENT_SECURITY_MASTER_KEY=).*/\1***REDACTED***/gi' {{ item.path | quote }}
 
     # Add sanitization notice at the top
-    echo "# THIS FILE HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED" | cat - {{ item.path }} > {{ item.path }}.tmp
-    mv {{ item.path }}.tmp {{ item.path }}
+    echo "# THIS FILE HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED" | cat - {{ item.path | quote }} > {{ (item.path ~ '.tmp') | quote }}
+    mv {{ (item.path ~ '.tmp') | quote }} {{ item.path | quote }}
 
-    # Remove original backup
-    rm -f {{ item.path }}.original
+    # Remove original and sed backup files
+    rm -f {{ (item.path ~ '.original') | quote }} {{ (item.path ~ '.bak') | quote }}
   args:
     executable: /bin/bash
   loop: "{{ override_files.files }}"
-  when: override_files.matched > 0
+  when: override_files.matched | default(0) > 0
   delegate_to: localhost
   vars:
     ansible_connection: local
