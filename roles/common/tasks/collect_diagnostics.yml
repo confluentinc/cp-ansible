@@ -1,0 +1,127 @@
+---
+# Runtime Diagnostics Collection Task
+# Collects service status, journalctl logs, and process info only
+# Direct fetch approach - creates temp files on remote and fetches to localhost
+
+- name: Check service status
+  shell: |
+    systemctl status {{ service_name }} --no-pager -l > /tmp/service_status_{{ inventory_hostname }}.txt 2>&1 || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Fetch service status
+  fetch:
+    src: "/tmp/service_status_{{ inventory_hostname }}.txt"
+    dest: "{{ host_bundle_dir }}/diagnostics/service_status.txt"
+    flat: true
+  ignore_errors: true
+
+- name: Collect journalctl logs
+  shell: |
+    journalctl -u {{ service_name }} -n {{ support_bundle_journalctl_lines }} --no-pager > /tmp/journalctl_{{ inventory_hostname }}.log 2>&1 || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Fetch journalctl logs
+  fetch:
+    src: "/tmp/journalctl_{{ inventory_hostname }}.log"
+    dest: "{{ host_bundle_dir }}/diagnostics/journalctl.log"
+    flat: true
+  ignore_errors: true
+
+- name: Collect process information
+  shell: |
+    ps aux | grep -E '{{ service_name }}|java' | grep -v grep > /tmp/processes_{{ inventory_hostname }}.txt 2>&1
+    echo "---" >> /tmp/processes_{{ inventory_hostname }}.txt
+    pgrep -f {{ service_name }} | xargs -r ps -f -p >> /tmp/processes_{{ inventory_hostname }}.txt 2>/dev/null || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Fetch process information
+  fetch:
+    src: "/tmp/processes_{{ inventory_hostname }}.txt"
+    dest: "{{ host_bundle_dir }}/diagnostics/processes.txt"
+    flat: true
+  ignore_errors: true
+
+# REMOVED: Listening ports collection (not needed for basic diagnostics)
+# - name: Collect listening ports
+#   shell: |
+#     ss -tulpn > /tmp/ports_{{ inventory_hostname }}.txt 2>/dev/null || netstat -tulpn > /tmp/ports_{{ inventory_hostname }}.txt 2>&1 || true
+#   args:
+#     executable: "{{ shell_executable }}"
+#   ignore_errors: true
+#
+# - name: Fetch listening ports
+#   fetch:
+#     src: "/tmp/ports_{{ inventory_hostname }}.txt"
+#     dest: "{{ host_bundle_dir }}/diagnostics/ports.txt"
+#     flat: true
+#   ignore_errors: true
+
+# REMOVED: Open files collection (not needed for basic diagnostics)
+# - name: Collect open files for service
+#   shell: |
+#     pgrep -f {{ service_name }} | xargs -r lsof -p > /tmp/open_files_{{ inventory_hostname }}.txt 2>/dev/null || echo "lsof not available or no process found" > /tmp/open_files_{{ inventory_hostname }}.txt
+#   args:
+#     executable: "{{ shell_executable }}"
+#   ignore_errors: true
+#
+# - name: Fetch open files information
+#   fetch:
+#     src: "/tmp/open_files_{{ inventory_hostname }}.txt"
+#     dest: "{{ host_bundle_dir }}/diagnostics/open_files.txt"
+#     flat: true
+#   ignore_errors: true
+
+# REMOVED: Ulimit collection (not needed for basic diagnostics)
+# - name: Collect ulimit settings
+#   shell: |
+#     echo "Current user limits:" > /tmp/ulimit_{{ inventory_hostname }}.txt
+#     ulimit -a >> /tmp/ulimit_{{ inventory_hostname }}.txt 2>&1
+#     echo "---" >> /tmp/ulimit_{{ inventory_hostname }}.txt
+#     echo "Service user limits:" >> /tmp/ulimit_{{ inventory_hostname }}.txt
+#     su - {{ user }} -s /bin/bash -c "ulimit -a" >> /tmp/ulimit_{{ inventory_hostname }}.txt 2>/dev/null || echo "Could not retrieve service user limits" >> /tmp/ulimit_{{ inventory_hostname }}.txt
+#   args:
+#     executable: "{{ shell_executable }}"
+#   ignore_errors: true
+#
+# - name: Fetch ulimit settings
+#   fetch:
+#     src: "/tmp/ulimit_{{ inventory_hostname }}.txt"
+#     dest: "{{ host_bundle_dir }}/diagnostics/ulimit.txt"
+#     flat: true
+#   ignore_errors: true
+
+# REMOVED: Kernel parameters collection (not needed for basic diagnostics)
+# - name: Collect kernel parameters
+#   shell: |
+#     sysctl -a 2>/dev/null | grep -E 'vm\.|net\.|fs\.' > /tmp/sysctl_{{ inventory_hostname }}.txt || echo "Could not retrieve sysctl parameters" > /tmp/sysctl_{{ inventory_hostname }}.txt
+#   args:
+#     executable: "{{ shell_executable }}"
+#   ignore_errors: true
+#
+# - name: Fetch kernel parameters
+#   fetch:
+#     src: "/tmp/sysctl_{{ inventory_hostname }}.txt"
+#     dest: "{{ host_bundle_dir }}/diagnostics/sysctl.txt"
+#     flat: true
+#   ignore_errors: true
+
+- name: Clean up remote diagnostics temp files
+  file:
+    path: "/tmp/{{ item }}_{{ inventory_hostname }}.txt"
+    state: absent
+  loop:
+    - service_status
+    - processes
+  ignore_errors: true
+
+- name: Clean up remote journalctl temp file
+  file:
+    path: "/tmp/journalctl_{{ inventory_hostname }}.log"
+    state: absent
+  ignore_errors: true
