@@ -125,23 +125,28 @@
         - metadata_created is defined
 
 # COLLECT LOG FILES
-- name: Find log files
+# Bounded collection to prevent bundle bloat - defaults to *.log files, max 20 most recent
+- name: Find log files with bounded defaults
   find:
     paths: "{{ log_dir }}"
     recurse: false
+    file_type: file
+    patterns: "{{ support_bundle_log_patterns | default(['*.log']) }}"
+    size: "{{ support_bundle_log_max_size | default(omit) }}"
+    age: "{{ support_bundle_log_age | default(omit) }}"
   become: true
   register: log_files_found
   ignore_errors: true
 
-- name: Fetch log files directly to localhost
+- name: Fetch selected log files directly to localhost
   fetch:
     src: "{{ item.path }}"
     dest: "{{ host_bundle_dir }}/logs/"
     flat: true
   become: true
-  loop: "{{ log_files_found.files }}"
+  loop: "{{ (log_files_found.files | default([]) | sort(attribute='mtime', reverse=true))[:(support_bundle_log_max_count | default(20) | int)] }}"
   ignore_errors: true
-  when: log_files_found.matched > 0
+  when: log_files_found.matched | default(0) > 0
 
 # COLLECT SSL CERTIFICATE METADATA - SKIPPED FOR SECURITY
 # Note: SSL metadata collection is disabled by default due to security concerns
