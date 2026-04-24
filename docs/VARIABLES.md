@@ -1454,7 +1454,7 @@ Default:  "{{ config_prefix }}/kafka"
 
 ### kafka_broker_custom_listeners
 
-Dictionary to put additional listeners to be configured within Kafka. Each listener must include a 'name' and 'port' key. Optionally they can include the keys 'ssl_enabled', 'ssl_mutual_auth_enabled', and 'sasl_protocol'
+Dictionary to put additional listeners to be configured within Kafka. Each listener must include a 'name' and 'port' key. Optional keys: 'ssl_enabled', 'ssl_mutual_auth_enabled', 'ssl_client_authentication', 'sasl_protocol'. IMPORTANT: To disable mTLS on a listener when global ssl_mutual_auth_enabled=true, you MUST define BOTH 'ssl_mutual_auth_enabled': false AND 'ssl_client_authentication': 'none' for that listener. Setting only one will NOT work.
 
 Default:  {}
 
