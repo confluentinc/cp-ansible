@@ -1,0 +1,83 @@
+---
+### Verify that after deploy + rolling key rotation + re-run with diverged keys:
+### 1. override.conf exists on each broker and contains a masterkey
+### 2. kafka-storage format ran successfully (meta.properties exists)
+### 3. Each broker has a different masterkey (rolling with regenerate_masterkey generates
+###    a unique key per broker since run_once applies per serial batch)
+### 4. Phase 3 re-run succeeded despite diverged keys (the real test — get_meta_properties
+###    reads each broker's own override.conf, not a global value)
+
+- name: Verify - masterkey present in override.conf on all brokers
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Check override.conf exists
+      stat:
+        path: /etc/systemd/system/confluent-kafka.service.d/override.conf
+      register: override_file
+
+    - name: Assert override.conf exists
+      assert:
+        that: override_file.stat.exists
+        fail_msg: "override.conf does not exist on {{ inventory_hostname }}"
+
+    - name: Read override.conf
+      slurp:
+        src: /etc/systemd/system/confluent-kafka.service.d/override.conf
+      register: override_content
+
+    - name: Assert masterkey is present in override.conf
+      assert:
+        that: "'CONFLUENT_SECURITY_MASTER_KEY' in (override_content.content | b64decode)"
+        fail_msg: "CONFLUENT_SECURITY_MASTER_KEY not found in override.conf on {{ inventory_hostname }}"
+
+    - name: Extract masterkey from override.conf
+      set_fact:
+        extracted_key: "{{ (override_content.content | b64decode).split('\n') |
+          select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') |
+          list | first | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Assert extracted masterkey is not empty
+      assert:
+        that: extracted_key | length > 0
+        fail_msg: "Extracted masterkey is empty on {{ inventory_hostname }}"
+
+- name: Verify - kafka-storage format succeeded
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Check meta.properties exists
+      stat:
+        path: /tmp/kafka-logs/meta.properties
+      register: meta_props
+
+    - name: Assert meta.properties exists
+      assert:
+        that: meta_props.stat.exists
+        fail_msg: "meta.properties missing — kafka-storage format likely failed on {{ inventory_hostname }}"
+
+- name: Verify - masterkeys diverged across brokers after rolling restart
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Read override.conf
+      slurp:
+        src: /etc/systemd/system/confluent-kafka.service.d/override.conf
+      register: final_override
+
+    - name: Extract final masterkey
+      set_fact:
+        final_key: "{{ (final_override.content | b64decode).split('\n') |
+          select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') |
+          list | first | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Collect all broker masterkeys
+      set_fact:
+        all_keys: "{{ groups['kafka_broker'] | map('extract', hostvars, 'final_key') | list }}"
+      run_once: true
+
+    - name: Assert brokers have different masterkeys
+      assert:
+        that: all_keys | unique | length == all_keys | length
+        fail_msg: "Expected each broker to have a unique masterkey after rolling restart, but got duplicates: {{ all_keys }}"
+      run_once: true

@@ -1,0 +1,20 @@
+---
+- name: Check if override.conf exists
+  stat:
+    path: "{{ systemd_override_path }}"
+  register: override_stat
+
+- name: Load override.conf for master key
+  slurp:
+    src: "{{ systemd_override_path }}"
+  register: slurped_override
+  when: override_stat.stat.exists | default(false)
+
+- name: Extract CONFLUENT_SECURITY_MASTER_KEY from override.conf
+  set_fact:
+    existing_masterkey: "{{ (slurped_override.content | b64decode).split('\n') |
+      select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') |
+      list | first | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+  when:
+    - slurped_override is not skipped
+    - slurped_override.content | default('') | b64decode is search('CONFLUENT_SECURITY_MASTER_KEY')
