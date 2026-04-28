@@ -24,7 +24,6 @@
   shell: |
     java -version > /tmp/java_version_{{ inventory_hostname }}.txt 2>&1
     echo "---" >> /tmp/java_version_{{ inventory_hostname }}.txt
-    echo "JAVA_HOME: $JAVA_HOME" >> /tmp/java_version_{{ inventory_hostname }}.txt
   args:
     executable: "{{ shell_executable }}"
   ignore_errors: true
@@ -68,55 +67,6 @@
     flat: true
   ignore_errors: true
 
-- name: Collect network configuration
-  shell: |
-    ip addr > /tmp/network_{{ inventory_hostname }}.txt 2>/dev/null || ifconfig >> /tmp/network_{{ inventory_hostname }}.txt 2>&1
-    echo "---" >> /tmp/network_{{ inventory_hostname }}.txt
-    ip route >> /tmp/network_{{ inventory_hostname }}.txt 2>/dev/null || netstat -rn >> /tmp/network_{{ inventory_hostname }}.txt 2>&1
-  args:
-    executable: "{{ shell_executable }}"
-  ignore_errors: true
-
-- name: Fetch network configuration
-  fetch:
-    src: "/tmp/network_{{ inventory_hostname }}.txt"
-    dest: "{{ host_bundle_dir }}/system/network.txt"
-    flat: true
-  ignore_errors: true
-
-- name: Collect hostname and DNS
-  shell: |
-    echo "Hostname: $(hostname)" > /tmp/hostname_{{ inventory_hostname }}.txt
-    echo "FQDN: $(hostname -f 2>/dev/null || hostname)" >> /tmp/hostname_{{ inventory_hostname }}.txt
-    echo "---" >> /tmp/hostname_{{ inventory_hostname }}.txt
-    cat /etc/hosts >> /tmp/hostname_{{ inventory_hostname }}.txt 2>/dev/null || true
-    echo "---" >> /tmp/hostname_{{ inventory_hostname }}.txt
-    cat /etc/resolv.conf >> /tmp/hostname_{{ inventory_hostname }}.txt 2>/dev/null || true
-  args:
-    executable: "{{ shell_executable }}"
-  ignore_errors: true
-
-- name: Fetch hostname and DNS info
-  fetch:
-    src: "/tmp/hostname_{{ inventory_hostname }}.txt"
-    dest: "{{ host_bundle_dir }}/system/hostname.txt"
-    flat: true
-  ignore_errors: true
-
-- name: Collect environment variables (sanitized)
-  shell: |
-    env | grep -E 'JAVA|KAFKA|CONFLUENT|PATH|USER|HOME' | grep -v -E 'PASSWORD|SECRET|KEY|TOKEN' > /tmp/environment_{{ inventory_hostname }}.txt 2>&1
-  args:
-    executable: "{{ shell_executable }}"
-  ignore_errors: true
-
-- name: Fetch environment variables
-  fetch:
-    src: "/tmp/environment_{{ inventory_hostname }}.txt"
-    dest: "{{ host_bundle_dir }}/system/environment.txt"
-    flat: true
-  ignore_errors: true
-
 - name: Save Ansible facts on localhost
   copy:
     content: |
@@ -134,6 +84,7 @@
   delegate_to: localhost
   vars:
     ansible_connection: local
+    ansible_become: false
   ignore_errors: true
 
 - name: Clean up remote system info temp files
@@ -145,7 +96,4 @@
     - java_version
     - memory
     - disk
-    - network
-    - hostname
-    - environment
   ignore_errors: true

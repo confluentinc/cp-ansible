@@ -1,9 +1,9 @@
 ---
-# Configuration File Sanitization Task (Localhost)
-# Redacts sensitive data (passwords, secrets, keys) from config files after fetching to localhost
+# Sanitizes config files: .properties (if not encrypted), override.conf (always)
+# Variable: skip_properties_sanitization - skips .properties if secrets protection enabled
+# Uses script module - automatically finds sanitize_properties.py in roles/common/files/
 
-# Sanitize .properties files
-- name: Find all .properties files in configs directory
+- name: Find .properties files
   find:
     paths: "{{ host_bundle_dir }}/configs"
     patterns: "*.properties"
@@ -11,81 +11,25 @@
   delegate_to: localhost
   vars:
     ansible_connection: local
+    ansible_become: false
+  when: not (skip_properties_sanitization | default(false) | bool)
   ignore_errors: true
 
 - name: Sanitize .properties files
-  shell: |
-    # Create backup
-    cp {{ item.path | quote }} {{ (item.path ~ '.original') | quote }}
-
-    # Sanitize sensitive values - replace anything after '=' for sensitive keys
-    sed -i.bak -E 's/(.*password.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(.*secret.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(.*\.key=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(.*credential.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(.*token.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(.*truststore\.password.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(.*keystore\.password.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(.*ssl\.key\.password.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(.*sasl\.jaas\.config.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(.*basic\.auth\.credentials\.source.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(.*ldap\..*password.*=).*/\1 ***REDACTED***/gi' {{ item.path | quote }}
-
-    # Add sanitization notice at the top
-    echo "# THIS FILE HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED" | cat - {{ item.path | quote }} > {{ (item.path ~ '.tmp') | quote }}
-    mv {{ (item.path ~ '.tmp') | quote }} {{ item.path | quote }}
-
-    # Remove original and sed backup files
-    rm -f {{ (item.path ~ '.original') | quote }} {{ (item.path ~ '.bak') | quote }}
-  args:
-    executable: /bin/bash
-  loop: "{{ properties_files.files }}"
-  when: properties_files.matched | default(0) > 0
+  script:
+    cmd: sanitize_properties.py "{{ item.path }}" --type properties
+    executable: python3
+  loop: "{{ properties_files.files | default([]) }}"
+  when:
+    - not (skip_properties_sanitization | default(false) | bool)
+    - properties_files.matched | default(0) > 0
   delegate_to: localhost
   vars:
     ansible_connection: local
+    ansible_become: false
   ignore_errors: true
 
-# Sanitize JAAS files (contain plaintext passwords)
-- name: Find all JAAS config files
-  find:
-    paths: "{{ host_bundle_dir }}/configs"
-    patterns:
-      - "*jaas.conf"
-      - "*_jaas.conf"
-  register: jaas_files
-  delegate_to: localhost
-  vars:
-    ansible_connection: local
-  ignore_errors: true
-
-- name: Sanitize JAAS files
-  shell: |
-    # Create backup
-    cp {{ item.path | quote }} {{ (item.path ~ '.original') | quote }}
-
-    # Redact password values in JAAS files
-    sed -i.bak -E 's/(password=")[^"]*"/\1***REDACTED***"/gi' {{ item.path | quote }}
-    sed -i.bak -E "s/(password=')[^']*'/\1***REDACTED***'/gi" {{ item.path | quote }}
-    sed -i.bak -E 's/(password=)[^; \t]*/\1***REDACTED***/gi' {{ item.path | quote }}
-
-    # Add sanitization notice at the top
-    echo "// THIS FILE HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED" | cat - {{ item.path | quote }} > {{ (item.path ~ '.tmp') | quote }}
-    mv {{ (item.path ~ '.tmp') | quote }} {{ item.path | quote }}
-
-    # Remove original and sed backup files
-    rm -f {{ (item.path ~ '.original') | quote }} {{ (item.path ~ '.bak') | quote }}
-  args:
-    executable: /bin/bash
-  loop: "{{ jaas_files.files }}"
-  when: jaas_files.matched | default(0) > 0
-  delegate_to: localhost
-  vars:
-    ansible_connection: local
-  ignore_errors: true
-
-# Sanitize override.conf files (may contain env vars with secrets)
-- name: Find systemd override files
+- name: Find override.conf files
   find:
     paths: "{{ host_bundle_dir }}/configs"
     patterns: "override.conf"
@@ -93,69 +37,53 @@
   delegate_to: localhost
   vars:
     ansible_connection: local
+    ansible_become: false
   ignore_errors: true
 
-- name: Sanitize systemd override files
-  shell: |
-    # Create backup
-    cp {{ item.path | quote }} {{ (item.path ~ '.original') | quote }}
-
-    # Redact environment variables with sensitive values
-    sed -i.bak -E 's/(Environment=.*PASSWORD.*=).*/\1***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(Environment=.*SECRET.*=).*/\1***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(Environment=.*KEY.*=).*/\1***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(Environment=.*TOKEN.*=).*/\1***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(Environment=.*CREDENTIAL.*=).*/\1***REDACTED***/gi' {{ item.path | quote }}
-    sed -i.bak -E 's/(Environment=CONFLUENT_SECURITY_MASTER_KEY=).*/\1***REDACTED***/gi' {{ item.path | quote }}
-
-    # Add sanitization notice at the top
-    echo "# THIS FILE HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED" | cat - {{ item.path | quote }} > {{ (item.path ~ '.tmp') | quote }}
-    mv {{ (item.path ~ '.tmp') | quote }} {{ item.path | quote }}
-
-    # Remove original and sed backup files
-    rm -f {{ (item.path ~ '.original') | quote }} {{ (item.path ~ '.bak') | quote }}
-  args:
-    executable: /bin/bash
-  loop: "{{ override_files.files }}"
+- name: Sanitize override files
+  script:
+    cmd: sanitize_properties.py "{{ item.path }}" --type override
+    executable: python3
+  loop: "{{ override_files.files | default([]) }}"
   when: override_files.matched | default(0) > 0
   delegate_to: localhost
   vars:
     ansible_connection: local
+    ansible_become: false
   ignore_errors: true
 
-# Never collect password.properties files - just note their existence
-- name: Remove password.properties files if accidentally collected
-  shell: |
-    find {{ host_bundle_dir }}/configs -name "*password.properties" -type f -exec rm -f {} \;
-    find {{ host_bundle_dir }}/configs -name "*password.properties" -type f -exec echo "File removed: {}" \; > {{ host_bundle_dir }}/configs/removed_password_files.txt 2>&1 || true
-  args:
-    executable: /bin/bash
+- name: Remove password.properties files
+  shell: find {{ host_bundle_dir }}/configs -name "*password.properties" -type f -delete
   delegate_to: localhost
   vars:
     ansible_connection: local
+    ansible_become: false
   ignore_errors: true
 
 - name: Create sanitization report
   copy:
     content: |
-      === Configuration File Sanitization Report ===
-      Timestamp: {{ ansible_date_time.iso8601 }}
+      Sanitization Report - {{ ansible_date_time.iso8601 }}
 
-      Sanitized .properties files: {{ properties_files.matched | default(0) }}
-      Sanitized JAAS files: {{ jaas_files.matched | default(0) }}
-      Sanitized override files: {{ override_files.matched | default(0) }}
+      Files Processed:
+        .properties: {{ 'SKIPPED (encrypted)' if skip_properties_sanitization | default(false) else properties_files.matched | default(0) }}
+        override.conf: {{ override_files.matched | default(0) }}
 
-      Sensitive patterns redacted:
-        - password, secret, key, token, credential
-        - keystore.password, truststore.password
-        - sasl.jaas.config, ldap passwords
-        - CONFLUENT_SECURITY_MASTER_KEY
+      {% if skip_properties_sanitization | default(false) %}
+      Secrets Protection: ENABLED
+        - .properties files contain encrypted values (safe to share)
+        - override.conf sanitized (may contain MASTER_KEY)
+      {% else %}
+      Sanitization Applied:
+        - Passwords, secrets, credentials → ***REDACTED***
+        - Non-sensitive metadata preserved (paths, algorithms, timeouts)
+      {% endif %}
 
-      WARNING: While sanitization has been performed, please review
-               files before sharing to ensure no sensitive data remains.
+      Review files before sharing externally.
     dest: "{{ host_bundle_dir }}/configs/SANITIZATION_REPORT.txt"
     mode: '0644'
   delegate_to: localhost
   vars:
     ansible_connection: local
+    ansible_become: false
   ignore_errors: true
