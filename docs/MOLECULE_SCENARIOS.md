@@ -32,8 +32,6 @@ Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-
 
 Custom log dirs for all components.
 
-USM Agent Basic Auth
-
 #### Scenario archive-plain-debian verify test's the following:
 
 Validates that SASL SSL protocol is set across all components
@@ -94,8 +92,6 @@ Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-
 
 Custom log dirs for all components.
 
-USM Agent Authentication Configuration - BASIC + TLS AUTHENTICATION with self signed certs.
-
 #### Scenario archive-plain-ubuntu verify test's the following:
 
 Validates that protocol is set to sasl plain.
@@ -118,8 +114,6 @@ TLS Enabled.
 
 Custom Archive owner.
 
-USM Agent Authentication Configuration - BASIC + TLS AUTHENTICATION with self signed certs.
-
 #### Scenario archive-scram-rhel verify test's the following:
 
 Validates that customer user and group on archive are set.
@@ -127,32 +121,6 @@ Validates that customer user and group on archive are set.
 Validates that SASL SCRAM is Protocol is set.
 
 Validates that TLS is configured properly.
-
-***
-
-### molecule/archive-zookeeper-tls-rhel-fips
-
-#### Scenario archive-zookeeper-tls-rhel-fips test's the following:
-
-Installs Confluent Platform on Rocky linux 8
-
-Enables SASL SCRAM Auth on Zookeeper.
-
-TLS enabled.
-
-Customer zookeeper root.
-
-Jolokia has TLS disabled.
-
-FIPS enabled
-
-#### Scenario archive-zookeeper-tls-rhel-fips verify test's the following:
-
-Validates that Zookeeper is using TLS.
-
-Validates that other components are using SCRAM for auth.
-
-Validates that FIPS is in use in OpenSSL.
 
 ***
 
@@ -167,8 +135,6 @@ MTLS enabled.
 Installs Three unique Kafka Connect Clusters with unique connectors.
 
 Installs two unique KSQL Clusters.
-
-USM Agent Authentication Configuration - MTLS AUTHENTICATION with self signed certs.
 
 #### Scenario broker-scale-up verify test's the following:
 
@@ -208,8 +174,6 @@ TLS Enabled.
 
 Custom TLS certificates.
 
-USM Agent Authentication Configuration - BASIC + TLS AUTHENTICATION with custom certs.
-
 #### Scenario confluent-kafka-kerberos-customcerts-rhel verify test's the following:
 
 Validates GSSAPI Protocol for Kerberos is set.
@@ -240,13 +204,11 @@ Installation of Confluent Community Edition on RHEL8.
 
 SASL Plain Auth.
 
-Zookeeper, Broker and Kraft Controller co-located while Migration
+Broker and Kraft Controller co-located while Migration
 
 Kafka broker has custom listener at port 9093
 
 Kraft Controller is running at port 9094
-
-USM Agent Authentication Configuration - BASIC AUTHENTICATION
 
 #### Scenario cp-kafka-plain-rhel verify test's the following:
 
@@ -264,17 +226,15 @@ Custom user set on each component.
 
 Custom log appender path on each component.
 
-Zookeeper, Controller and Broker co-located while migration
-
-USM Agent Authentication Configuration - NO AUTHENTICATION
+Controller and Broker co-located while migration
 
 #### Scenario custom-user-plaintext-rhel verify test's the following:
 
-Creates custom user for Zookeeper.
+Creates custom user for kafka controller.
 
-Creates custom log directory for zookeeper.
+Creates custom log directory for kafka controller.
 
-Restarts Zookeeper and runs health check to validate changes.
+Restarts kafka controller and runs health check to validate changes.
 
 Validates that each component is running with the correct custom user.
 
@@ -326,8 +286,6 @@ TLS Enabled with custom certs.
 
 Kerberos enabled.
 
-USM Agent Authentication Configuration - BASIC + TLS AUTHENTICATION with custom certs.
-
 #### Scenario kerberos-customcerts-rhel verify test's the following:
 
 Validates that Kerberos is enabled across all components.
@@ -345,8 +303,6 @@ Installation of Confluent Platform on Oracle Linux 9.
 Kerberos enabled with custom client config path
 
 Creates a Connector in Connect cluster
-
-USM Agent Authentication Configuration - BASIC AUTHENTICATION
 
 #### Scenario kerberos-rhel verify test's the following:
 
@@ -397,8 +353,6 @@ RBAC over mTLS enabled.
 Centralized MDS.
 
 File based login to C3 using overrides.
-
-USM Agent Authentication Configuration - MTLS AUTHENTICATION with custom certs.
 
 #### Scenario mini-setup-ext-mds-mtls verify test's the following:
 
@@ -564,8 +518,6 @@ MTLS Enabled with custom certificates.
 
 Tests custom filtering properties for Secrets Protection.
 
-TLS is disabled for Zookeeper.
-
 FIPS enabled
 
 #### Scenario mtls-custombundle-rhel-fips verify test's the following:
@@ -626,41 +578,39 @@ Validates that Java 17 is in Use
 
 ***
 
-### molecule/mtls-java11-rhel-fips
+### molecule/mtls-java17-ubuntu
 
-#### Scenario mtls-java11-rhel-fips test's the following:
-
-Installation of Confluent Platform on Alma Linux 9.
-
-MTLS enabled.
-
-Java 11.
-
-FIPS enabled
-
-#### Scenario mtls-java11-rhel-fips verify test's the following:
-
-Validates that Java 11 is in use.
-
-Validates that FIPS security is enabled on the Brokers.
-
-Validates that FIPS is in use in OpenSSL.
-
-***
-
-### molecule/mtls-java8-ubuntu
-
-#### Scenario mtls-java8-ubuntu test's the following:
+#### Scenario mtls-java17-ubuntu test's the following:
 
 Installation of Confluent Platform on Ubuntu2404.
 
 MTLS enabled.
 
-Java 8.
+#### Scenario mtls-java17-ubuntu verify test's the following:
 
-#### Scenario mtls-java8-ubuntu verify test's the following:
+Validates that protocol is set to SSl across all components.
 
-Validates that Java 11 is in use.
+***
+
+### molecule/mtls-java21-rhel-fips
+
+#### Scenario mtls-java21-rhel-fips test's the following:
+
+Installation of Confluent Platform on Alma Linux 9.
+
+MTLS enabled.
+
+Java 21.
+
+FIPS enabled
+
+#### Scenario mtls-java21-rhel-fips verify test's the following:
+
+Validates that Java 21 is in use.
+
+Validates that FIPS security is enabled on the Brokers.
+
+Validates that FIPS is in use in OpenSSL.
 
 ***
 
@@ -771,8 +721,6 @@ Validates that client ID's are set correctly on Replicator.
 Installation of Confluent Platform on Debian10.
 
 MTLS enabled.
-
-Java 11.
 
 #### Scenario oauth-mtls-debian verify test's the following:
 
@@ -1496,7 +1444,7 @@ Provided SSL Principal Mapping rule
 
 Creates two unique Connectors in Connect cluster.
 
-Zookeeper, Broker and Kraft Controller co-located while Migration
+Broker and Kraft Controller co-located while Migration
 
 Kafka broker has custom listener at port 9093
 
@@ -1629,170 +1577,6 @@ SCRAM enabled.
 #### Scenario scram-rhel verify test's the following:
 
 Validates that SCRAM is enabled on all components except kafka controller.
-
-***
-
-### molecule/sr-switchover-cp-to-cc-ldap-mtls
-
-#### Scenario sr-switchover-cp-to-cc-ldap-mtls test's the following:
-
-SR Automation Workflow Testing - LDAP/RBAC + mTLS
-
-Tests SR automation features with LDAP authentication, RBAC authorization, and mTLS
-
-Enterprise directory + certificate authentication scenario
-
-#### Scenario sr-switchover-cp-to-cc-ldap-mtls verify test's the following:
-
-SR Automation Workflow Verification - LDAP/RBAC + mTLS
-
-Includes base verification and adds LDAP + mTLS specific checks
-
-***
-
-### molecule/sr-switchover-cp-to-cc-mtls
-
-#### Scenario sr-switchover-cp-to-cc-mtls test's the following:
-
-Schema Registry Automation Workflow Testing Configuration
-
-Tests SR automation features including exporters, importers, and switchover workflow
-
-Uses multiple SR instances to simulate CP SR -> CC SR automation
-
-#### Scenario sr-switchover-cp-to-cc-mtls verify test's the following:
-
-SR Automation Workflow Verification
-
-***
-
-### molecule/sr-switchover-cp-to-cc-oauth-rbac
-
-#### Scenario sr-switchover-cp-to-cc-oauth-rbac test's the following:
-
-SR Automation Workflow Testing - OAuth + RBAC
-
-Tests SR automation features with OAuth authentication and RBAC authorization
-
-Modern enterprise authentication scenario
-
-#### Scenario sr-switchover-cp-to-cc-oauth-rbac verify test's the following:
-
-SR Automation Workflow Verification - OAuth + RBAC
-
-Includes base verification and adds OAuth + RBAC specific checks
-
-***
-
-### molecule/sr-switchover-cp-to-cc-plaintext
-
-#### Scenario sr-switchover-cp-to-cc-plaintext test's the following:
-
-SR Automation Workflow Testing - Plaintext/No Auth
-
-Tests SR automation features with no security/authentication
-
-Simplest baseline scenario for automation workflow testing
-
-#### Scenario sr-switchover-cp-to-cc-plaintext verify test's the following:
-
-SR Automation Workflow Verification - Plaintext/No Auth
-
-Includes base verification and adds plaintext-specific checks
-
-***
-
-### molecule/zookeeper-digest-mtls-secrets-rhel
-
-#### Scenario zookeeper-digest-mtls-secrets-rhel test's the following:
-
-Installs Confluent Platform on RHEL8
-
-Enables SASL SCRAM Auth on Zookeeper.
-
-TLS enabled.
-
-Customer zookeeper root.
-
-Secrets Protection enabled.
-
-Jolokia has TLS disabled.
-
-#### Scenario zookeeper-digest-mtls-secrets-rhel verify test's the following:
-
-Validates that Confluent CLI is installed.
-
-Validates that Zookeeper is using SCRAM for auth.
-
-Validates that other components are using SCRAM for auth.
-
-Validates that Secrets protection is applied to the correct properties.
-
-***
-
-### molecule/zookeeper-digest-rhel
-
-#### Scenario zookeeper-digest-rhel test's the following:
-
-Installs Zookeeper, Kafka Broker, Schema Registry on RHEL8
-
-Digest authentication enabled.
-
-SASL PLAIN enabled.
-
-Customer Zookeeper Root.
-
-Migration of Zk cluster with digest auth to Kraft cluster
-
-#### Scenario zookeeper-digest-rhel verify test's the following:
-
-Validates authorization mechanism as SASL.
-
-Validates that SASL PLAIN is enabled on the Kafka Broker and Schema Registry.
-
-***
-
-### molecule/zookeeper-kerberos-rhel
-
-#### Scenario zookeeper-kerberos-rhel test's the following:
-
-Installs Confluent Platform on RHEL8
-
-Enables Kerberos on Zookeeper.
-
-SASL SCRAM enabled on all components except Zookeeper.
-
-#### Scenario zookeeper-kerberos-rhel verify test's the following:
-
-Validates Zookeeper sasl mechanism.
-
-Validates Kafka Broker and Schema Registry is set to SCRAM.
-
-***
-
-### molecule/zookeeper-mtls-rhel
-
-#### Scenario zookeeper-mtls-rhel test's the following:
-
-Installs Confluent Platform on Alma Linux 8.
-
-Enables MTLS Auth on Zookeeper.
-
-SASL SCRAM enabled on all components except Zookeeper.
-
-Customer zookeeper root.
-
-Secrets Protection enabled.
-
-#### Scenario zookeeper-mtls-rhel verify test's the following:
-
-Validates that Confluent CLI is installed.
-
-Validates that Zookeeper is using MTLS for auth.
-
-Validates that other components are using SCRAM for auth.
-
-Validates that Secrets protection is applied to the correct properties.
 
 ***
 
