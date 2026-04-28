@@ -50,16 +50,28 @@
           - "  ansible_inventory_sources: {{ ansible_inventory_sources | default(['(not available)']) }}"
           - "  resolved_inventory_sources: {{ resolved_inventory_sources | default(['(no sources)']) }}"
 
-    - name: Copy inventory files to bundle
-      copy:
-        src: "{{ item }}"
-        dest: "{{ bundle_path }}/ansible/inventory_{{ loop.index }}_raw.yml"
-        mode: '0644'
+    - name: Check inventory file existence
+      stat:
+        path: "{{ item }}"
       loop: "{{ resolved_inventory_sources }}"
       when:
         - item is defined
         - item | length > 0
-        - item is file
+      register: inventory_file_stats
+      ignore_errors: true
+
+    - name: Copy inventory files to bundle
+      copy:
+        src: "{{ item.item }}"
+        dest: "{{ bundle_path }}/ansible/inventory_{{ idx + 1 }}_raw.yml"
+        mode: '0644'
+      loop: "{{ inventory_file_stats.results | default([]) }}"
+      loop_control:
+        index_var: idx
+      when:
+        - item.stat is defined
+        - item.stat.exists
+        - item.stat.isreg
       ignore_errors: true
       register: inventory_files_copied
 
@@ -83,43 +95,10 @@
           {% endfor %}
         dest: "{{ bundle_path }}/ansible/inventory_1_raw.yml"
         mode: '0644'
-      when: inventory_files_copied.results | selectattr('changed', 'equalto', true) | list | length == 0
+      when: (inventory_files_copied.results | default([]) | selectattr('changed', 'equalto', true) | list | length == 0)
 
-    - name: Sanitize inventory files using script module
-      script:
-        cmd: sanitize_properties.py "{{ item.dest }}" --type inventory
-        executable: python3
-      loop: "{{ inventory_files_copied.results | selectattr('changed', 'equalto', true) | list }}"
-      delegate_to: localhost
-      vars:
-        ansible_connection: local
-      ignore_errors: true
-      register: sanitize_inventory_results
-
-    - name: Sanitize generated inventory (if fallback was used)
-      script:
-        cmd: sanitize_properties.py "{{ bundle_path }}/ansible/inventory_1_raw.yml" --type inventory
-        executable: python3
-      when: inventory_files_copied.results | selectattr('changed', 'equalto', true) | list | length == 0
-      delegate_to: localhost
-      vars:
-        ansible_connection: local
-      ignore_errors: true
-
-    - name: Rename sanitized inventory files
-      shell: |
-        for file in {{ bundle_path }}/ansible/inventory_*_raw.yml; do
-          if [ -f "$file" ]; then
-            base=$(basename "$file" _raw.yml)
-            mv "$file" "{{ bundle_path }}/ansible/${base}_sanitized.yml"
-          fi
-        done
-      args:
-        executable: /bin/bash
-      delegate_to: localhost
-      vars:
-        ansible_connection: local
-      ignore_errors: true
+    - name: Sanitize inventory files
+      include_tasks: ../roles/common/tasks/sanitize_inventory_files_local.yml
 
 - name: Import all variables
   hosts: all
