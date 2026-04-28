@@ -252,13 +252,104 @@ class PropertySanitizer:
         else:
             return sanitized_content
 
+    def sanitize_inventory_file(self, file_path, in_place=True):
+        """
+        Sanitize an Ansible inventory file (YAML format).
+
+        Args:
+            file_path: Path to the inventory file
+            in_place: If True, modify file in place; if False, return sanitized content
+        """
+        path = Path(file_path)
+        if not path.exists():
+            print(f"Warning: File not found: {file_path}", file=sys.stderr)
+            return None
+
+        lines = []
+        sanitized_count = 0
+
+        with open(path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.readlines()
+
+        # Add sanitization header
+        lines.append("# THIS INVENTORY HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED\n")
+
+        # Ansible-specific sensitive variables
+        ansible_sensitive_vars = [
+            'ansible_ssh_private_key_file',
+            'ansible_password',
+            'ansible_become_password',
+            'ansible_ssh_pass',
+            'ansible_become_pass',
+        ]
+
+        for line in content:
+            # Skip existing sanitization headers
+            if 'THIS INVENTORY HAS BEEN SANITIZED' in line:
+                continue
+
+            # Skip comments
+            if line.strip().startswith('#'):
+                lines.append(line)
+                continue
+
+            # Check for Ansible-specific sensitive variables (exact match)
+            sanitized = False
+            for var in ansible_sensitive_vars:
+                # Match: ansible_password: value or ansible_password=value
+                pattern = rf'^(\s*{var}\s*[:=]\s*).*$'
+                match = re.match(pattern, line)
+                if match:
+                    lines.append(f"{match.group(1)}***REDACTED***\n")
+                    sanitized_count += 1
+                    sanitized = True
+                    break
+
+            if sanitized:
+                continue
+
+            # Check for general sensitive patterns (password, secret, key, token, credential)
+            # But only in YAML value context (after : or =)
+            if ':' in line or '=' in line:
+                lower_line = line.lower()
+
+                # Avoid false positives like 'ssl_key_path' by being more specific
+                if any(pattern in lower_line for pattern in ['password:', 'password=',
+                                                               'secret:', 'secret=',
+                                                               'token:', 'token=',
+                                                               'credential:', 'credential=']):
+                    # Don't sanitize if it's a path/location/algorithm/provider
+                    if not any(exclude in lower_line for exclude in ['_path:', '_path=',
+                                                                      '_location:', '_location=',
+                                                                      '_algorithm:', '_algorithm=',
+                                                                      '_provider:', '_provider=']):
+                        # Extract key and redact value
+                        match = re.match(r'^(\s*[^#:=]+[:=]\s*).*$', line)
+                        if match:
+                            lines.append(f"{match.group(1)}***REDACTED***\n")
+                            sanitized_count += 1
+                            continue
+
+            # No sanitization needed, keep line as-is
+            lines.append(line)
+
+        sanitized_content = ''.join(lines)
+
+        if in_place:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(sanitized_content)
+            print(f"Sanitized {sanitized_count} variables in {file_path}")
+            return None
+        else:
+            return sanitized_content
+
 
 def main():
     parser = argparse.ArgumentParser(
         description='Sanitize Confluent Platform configuration files'
     )
     parser.add_argument('file', help='File to sanitize')
-    parser.add_argument('--type', choices=['properties', 'jaas', 'override'],
+    parser.add_argument('--type', choices=['properties', 'jaas', 'override', 'inventory'],
                        help='File type (auto-detected if not specified)')
     parser.add_argument('--dry-run', action='store_true',
                        help='Print sanitized output without modifying file')
@@ -276,6 +367,8 @@ def main():
             file_type = 'jaas'
         elif file_path.name == 'override.conf':
             file_type = 'override'
+        elif file_path.suffix in ['.yml', '.yaml'] or 'inventory' in file_path.name.lower():
+            file_type = 'inventory'
         else:
             print(f"Error: Cannot auto-detect file type for {args.file}", file=sys.stderr)
             sys.exit(1)
@@ -289,6 +382,8 @@ def main():
         result = sanitizer.sanitize_jaas_file(args.file, in_place=not args.dry_run)
     elif file_type == 'override':
         result = sanitizer.sanitize_override_file(args.file, in_place=not args.dry_run)
+    elif file_type == 'inventory':
+        result = sanitizer.sanitize_inventory_file(args.file, in_place=not args.dry_run)
 
     if args.dry_run and result:
         print(result)

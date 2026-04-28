@@ -1,16 +1,7 @@
 ---
 # Sanitizes config files: .properties (if not encrypted), override.conf (always)
 # Variable: skip_properties_sanitization - skips .properties if secrets protection enabled
-
-- name: Copy sanitization script
-  copy:
-    src: sanitize_properties.py
-    dest: /tmp/sanitize_properties.py
-    mode: '0755'
-  delegate_to: localhost
-  vars:
-    ansible_connection: local
-  ignore_errors: true
+# Uses script module - automatically finds sanitize_properties.py in roles/common/files/
 
 - name: Find .properties files
   find:
@@ -24,7 +15,9 @@
   ignore_errors: true
 
 - name: Sanitize .properties files
-  command: python3 /tmp/sanitize_properties.py "{{ item.path }}" --type properties
+  script:
+    cmd: sanitize_properties.py "{{ item.path }}" --type properties
+    executable: python3
   loop: "{{ properties_files.files | default([]) }}"
   when:
     - not (skip_properties_sanitization | default(false) | bool)
@@ -45,7 +38,9 @@
   ignore_errors: true
 
 - name: Sanitize override files
-  command: python3 /tmp/sanitize_properties.py "{{ item.path }}" --type override
+  script:
+    cmd: sanitize_properties.py "{{ item.path }}" --type override
+    executable: python3
   loop: "{{ override_files.files | default([]) }}"
   when: override_files.matched | default(0) > 0
   delegate_to: localhost
@@ -82,15 +77,6 @@
       Review files before sharing externally.
     dest: "{{ host_bundle_dir }}/configs/SANITIZATION_REPORT.txt"
     mode: '0644'
-  delegate_to: localhost
-  vars:
-    ansible_connection: local
-  ignore_errors: true
-
-- name: Cleanup
-  file:
-    path: /tmp/sanitize_properties.py
-    state: absent
   delegate_to: localhost
   vars:
     ansible_connection: local
