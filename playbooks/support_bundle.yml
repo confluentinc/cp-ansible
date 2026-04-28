@@ -1,0 +1,368 @@
+---
+# Support Bundle Collection Playbook
+# Collects comprehensive diagnostic information from Confluent Platform deployment
+# including configs, logs, system info, diagnostics, and SSL metadata
+
+- name: Support Bundle Setup
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: always
+  vars:
+    ansible_become: false
+  tasks:
+    - name: Gather facts without become
+      setup:
+
+    - import_role:
+        name: confluent.platform.variables
+
+    - name: Generate bundle timestamp
+      set_fact:
+        bundle_timestamp: "{{ ansible_date_time.date | regex_replace('-','') }}_{{ ansible_date_time.time | regex_replace(':','') }}"
+
+    - name: Set bundle name
+      set_fact:
+        bundle_name: "support_bundle_{{ bundle_timestamp }}_{{ support_bundle_cluster_name }}"
+        bundle_path: "{{ support_bundle_output_path }}/support_bundle_{{ bundle_timestamp }}_{{ support_bundle_cluster_name }}"
+
+    - name: Create bundle directory structure
+      file:
+        path: "{{ bundle_path }}/ansible"
+        state: directory
+        mode: '0755'
+
+    - name: Save execution context
+      copy:
+        content: "{{ {'timestamp': ansible_date_time.iso8601, 'groups': groups, 'ansible_version': ansible_version.full} | to_nice_yaml }}"
+        dest: "{{ bundle_path }}/ansible/execution_context.yml"
+        mode: '0644'
+
+    - name: Determine inventory sources
+      set_fact:
+        resolved_inventory_sources: "{{ [support_bundle_inventory_file_path] if (support_bundle_inventory_file_path | length > 0) else (ansible_inventory_sources | default([])) }}"
+
+    - name: Debug - Show inventory resolution
+      debug:
+        msg:
+          - "Inventory Resolution:"
+          - "  support_bundle_inventory_file_path: {{ support_bundle_inventory_file_path | default('(not set)') }}"
+          - "  ansible_inventory_sources: {{ ansible_inventory_sources | default(['(not available)']) }}"
+          - "  resolved_inventory_sources: {{ resolved_inventory_sources | default(['(no sources)']) }}"
+
+    - name: Copy inventory files to bundle
+      copy:
+        src: "{{ item }}"
+        dest: "{{ bundle_path }}/ansible/inventory_{{ loop.index }}_raw.yml"
+        mode: '0644'
+      loop: "{{ resolved_inventory_sources }}"
+      when:
+        - item is defined
+        - item | length > 0
+        - item is file
+      ignore_errors: true
+      register: inventory_files_copied
+
+    - name: Generate inventory structure from groups (fallback if no files copied)
+      copy:
+        content: |
+          # Inventory structure (generated from runtime groups)
+          # Note: This is a simplified view. Set support_bundle_inventory_file_path for full inventory.
+          {% for group_name in groups.keys() %}
+          {% if group_name != 'ungrouped' %}
+          {{ group_name }}:
+          {% if group_name == 'all' %}
+            vars: {}
+          {% else %}
+            hosts:
+          {% for host in groups[group_name] %}
+              {{ host }}: {}
+          {% endfor %}
+          {% endif %}
+          {% endif %}
+          {% endfor %}
+        dest: "{{ bundle_path }}/ansible/inventory_1_raw.yml"
+        mode: '0644'
+      when: inventory_files_copied.results | selectattr('changed', 'equalto', true) | list | length == 0
+
+    - name: Sanitize inventory files using script module
+      script:
+        cmd: sanitize_properties.py "{{ item.dest }}" --type inventory
+        executable: python3
+      loop: "{{ inventory_files_copied.results | selectattr('changed', 'equalto', true) | list }}"
+      delegate_to: localhost
+      vars:
+        ansible_connection: local
+      ignore_errors: true
+      register: sanitize_inventory_results
+
+    - name: Sanitize generated inventory (if fallback was used)
+      script:
+        cmd: sanitize_properties.py "{{ bundle_path }}/ansible/inventory_1_raw.yml" --type inventory
+        executable: python3
+      when: inventory_files_copied.results | selectattr('changed', 'equalto', true) | list | length == 0
+      delegate_to: localhost
+      vars:
+        ansible_connection: local
+      ignore_errors: true
+
+    - name: Rename sanitized inventory files
+      shell: |
+        for file in {{ bundle_path }}/ansible/inventory_*_raw.yml; do
+          if [ -f "$file" ]; then
+            base=$(basename "$file" _raw.yml)
+            mv "$file" "{{ bundle_path }}/ansible/${base}_sanitized.yml"
+          fi
+        done
+      args:
+        executable: /bin/bash
+      delegate_to: localhost
+      vars:
+        ansible_connection: local
+      ignore_errors: true
+
+- name: Import all variables
+  hosts: all
+  tags: always
+  tasks:
+    - import_role:
+        name: confluent.platform.variables
+
+- name: Zookeeper Support Bundle
+  hosts: zookeeper
+  gather_facts: true
+  tags: zookeeper
+  tasks:
+    - include_role:
+        name: confluent.platform.common
+        tasks_from: collect_support_bundle.yml
+      vars:
+        service_name: "{{ zookeeper_service_name }}"
+        component_name: "zookeeper"
+        component: "{{ zookeeper }}"
+        config_file: "{{ zookeeper.config_file }}"
+        log_dir: "{{ zookeeper_log_dir }}"
+        user: "{{ zookeeper_user }}"
+        group: "{{ zookeeper_group }}"
+
+- name: Kafka Controller Support Bundle
+  hosts: kafka_controller
+  gather_facts: true
+  tags: kafka_controller
+  tasks:
+    - include_role:
+        name: confluent.platform.common
+        tasks_from: collect_support_bundle.yml
+      vars:
+        service_name: "{{ kafka_controller_service_name }}"
+        component_name: "kafka_controller"
+        component: "{{ kafka_controller }}"
+        config_file: "{{ kafka_controller.config_file }}"
+        log_dir: "{{ kafka_controller_log_dir }}"
+        user: "{{ kafka_controller_user }}"
+        group: "{{ kafka_controller_group }}"
+
+- name: Kafka Broker Support Bundle
+  hosts: kafka_broker
+  gather_facts: true
+  tags: kafka_broker
+  tasks:
+    - include_role:
+        name: confluent.platform.common
+        tasks_from: collect_support_bundle.yml
+      vars:
+        service_name: "{{ kafka_broker_service_name }}"
+        component_name: "kafka_broker"
+        component: "{{ kafka_broker }}"
+        config_file: "{{ kafka_broker.config_file }}"
+        log_dir: "{{ kafka_broker_log_dir }}"
+        user: "{{ kafka_broker_user }}"
+        group: "{{ kafka_broker_group }}"
+
+- name: Schema Registry Support Bundle
+  hosts: schema_registry
+  gather_facts: true
+  tags: schema_registry
+  tasks:
+    - include_role:
+        name: confluent.platform.common
+        tasks_from: collect_support_bundle.yml
+      vars:
+        service_name: "{{ schema_registry_service_name }}"
+        component_name: "schema_registry"
+        component: "{{ schema_registry }}"
+        config_file: "{{ schema_registry.config_file }}"
+        log_dir: "{{ schema_registry_log_dir }}"
+        user: "{{ schema_registry_user }}"
+        group: "{{ schema_registry_group }}"
+
+- name: Kafka Connect Support Bundle
+  hosts: kafka_connect
+  gather_facts: true
+  tags: kafka_connect
+  tasks:
+    - include_role:
+        name: confluent.platform.common
+        tasks_from: collect_support_bundle.yml
+      vars:
+        service_name: "{{ kafka_connect_service_name }}"
+        component_name: "kafka_connect"
+        component: "{{ kafka_connect }}"
+        config_file: "{{ kafka_connect.config_file }}"
+        log_dir: "{{ kafka_connect_log_dir }}"
+        user: "{{ kafka_connect_user }}"
+        group: "{{ kafka_connect_group }}"
+
+- name: Kafka Connect Replicator Support Bundle
+  hosts: kafka_connect_replicator
+  gather_facts: true
+  tags: kafka_connect_replicator
+  tasks:
+    - include_role:
+        name: confluent.platform.common
+        tasks_from: collect_support_bundle.yml
+      vars:
+        service_name: "{{ kafka_connect_replicator_service_name }}"
+        component_name: "kafka_connect_replicator"
+        component: "{{ kafka_connect_replicator }}"
+        config_file: "{{ kafka_connect_replicator.config_file }}"
+        log_dir: "{{ kafka_connect_replicator_log_dir }}"
+        user: "{{ kafka_connect_replicator_user }}"
+        group: "{{ kafka_connect_replicator_group }}"
+
+- name: KSQL Support Bundle
+  hosts: ksql
+  gather_facts: true
+  tags: ksql
+  tasks:
+    - include_role:
+        name: confluent.platform.common
+        tasks_from: collect_support_bundle.yml
+      vars:
+        service_name: "{{ ksql_service_name }}"
+        component_name: "ksql"
+        component: "{{ ksql }}"
+        config_file: "{{ ksql.config_file }}"
+        log_dir: "{{ ksql_log_dir }}"
+        user: "{{ ksql_user }}"
+        group: "{{ ksql_group }}"
+
+- name: Kafka Rest Support Bundle
+  hosts: kafka_rest
+  gather_facts: true
+  tags: kafka_rest
+  tasks:
+    - include_role:
+        name: confluent.platform.common
+        tasks_from: collect_support_bundle.yml
+      vars:
+        service_name: "{{ kafka_rest_service_name }}"
+        component_name: "kafka_rest"
+        component: "{{ kafka_rest }}"
+        config_file: "{{ kafka_rest.config_file }}"
+        log_dir: "{{ kafka_rest_log_dir }}"
+        user: "{{ kafka_rest_user }}"
+        group: "{{ kafka_rest_group }}"
+
+- name: Control Center Support Bundle
+  hosts: control_center
+  gather_facts: true
+  tags: control_center
+  tasks:
+    - include_role:
+        name: confluent.platform.common
+        tasks_from: collect_support_bundle.yml
+      vars:
+        service_name: "{{ control_center_service_name }}"
+        component_name: "control_center"
+        component: "{{ control_center }}"
+        config_file: "{{ control_center.config_file }}"
+        log_dir: "{{ control_center_log_dir }}"
+        user: "{{ control_center_user }}"
+        group: "{{ control_center_group }}"
+
+- name: Control Center Next Gen Support Bundle
+  hosts: control_center_next_gen
+  gather_facts: true
+  tags: control_center_next_gen
+  tasks:
+    - include_role:
+        name: confluent.platform.common
+        tasks_from: collect_support_bundle.yml
+      vars:
+        service_name: "{{ control_center_next_gen_service_name }}"
+        component_name: "control_center_next_gen"
+        component: "{{ control_center_next_gen }}"
+        config_file: "{{ control_center_next_gen.config_file }}"
+        log_dir: "{{ control_center_next_gen_log_dir }}"
+        user: "{{ control_center_next_gen_user }}"
+        group: "{{ control_center_next_gen_group }}"
+
+- name: USM Agent Support Bundle
+  hosts: usm_agent
+  gather_facts: true
+  tags: usm_agent
+  tasks:
+    - include_role:
+        name: confluent.platform.common
+        tasks_from: collect_support_bundle.yml
+      vars:
+        service_name: "{{ usm_agent_service_name }}"
+        component_name: "usm_agent"
+        component: "{{ usm_agent }}"
+        config_file: "{{ usm_agent.config_file }}"
+        log_dir: "{{ usm_agent.log_dir }}"
+        user: "{{ usm_agent_default_user }}"
+        group: "{{ usm_agent_default_group }}"
+
+- name: Finalize Support Bundle
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: always
+  vars:
+    ansible_become: false
+  tasks:
+    - import_role:
+        name: confluent.platform.variables
+
+    - name: Generate bundle manifest
+      template:
+        src: "{{ playbook_dir }}/../roles/common/templates/bundle_manifest.yml.j2"
+        dest: "{{ hostvars['localhost']['bundle_path'] }}/bundle_manifest.yml"
+        mode: '0644'
+
+    - name: Copy Ansible playbook execution log to bundle
+      copy:
+        src: "{{ support_bundle_ansible_log_path }}"
+        dest: "{{ hostvars['localhost']['bundle_path'] }}/ansible/ansible_playbook.log"
+        mode: '0644'
+      when: support_bundle_ansible_log_path | length > 0
+      ignore_errors: true
+
+    - name: Archive support bundle
+      archive:
+        path: "{{ hostvars['localhost']['bundle_path'] }}"
+        dest: "{{ support_bundle_output_path }}/{{ hostvars['localhost']['bundle_name'] }}.tar.gz"
+        format: gz
+
+    - name: Remove uncompressed bundle directory
+      file:
+        path: "{{ hostvars['localhost']['bundle_path'] }}"
+        state: absent
+
+    - name: Get archive file stats
+      stat:
+        path: "{{ support_bundle_output_path }}/{{ hostvars['localhost']['bundle_name'] }}.tar.gz"
+      register: bundle_archive_stats
+
+    - name: Display completion message
+      debug:
+        msg: |
+          ========================================
+          Support Bundle Created Successfully
+          ========================================
+          Location: {{ support_bundle_output_path }}/{{ hostvars['localhost']['bundle_name'] }}.tar.gz
+          Size: {{ (bundle_archive_stats.stat.size / 1024 / 1024) | round(2) }} MB
+
+          Please upload this file to your support ticket.
