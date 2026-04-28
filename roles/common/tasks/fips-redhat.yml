@@ -4,7 +4,14 @@
   register: java_path
   changed_when: false
 
-- name: Disable JVM level FIPS
+# JDK 25 deprecated security.useSystemPropertiesFile. Presence of this Red Hat
+# crypto-policies file marks the new mechanism; absence means use the legacy path.
+- name: Check for JDK 25+ crypto-policies file
+  stat:
+    path: "{{java_path.stdout}}/conf/security/redhat/crypto-policies.properties"
+  register: crypto_policies_file
+
+- name: Disable JVM level FIPS (JDK < 25)
   lineinfile:
     path: "{{java_path.stdout}}/conf/security/java.security"
     search_string: 'security.useSystemPropertiesFile=true'
@@ -12,6 +19,17 @@
     owner: root
     group: root
     mode: '644'
+  when: not crypto_policies_file.stat.exists
+
+- name: Disable JVM level FIPS (JDK 25+)
+  lineinfile:
+    path: "{{java_path.stdout}}/conf/security/redhat/crypto-policies.properties"
+    search_string: 'include true/crypto-policies.properties'
+    line: 'include false/crypto-policies.properties'
+    owner: root
+    group: root
+    mode: '644'
+  when: crypto_policies_file.stat.exists
 
 - name: Configure crypto policies for Redhat
   command: update-crypto-policies --set FIPS
