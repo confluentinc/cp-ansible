@@ -3,7 +3,7 @@
 """
 Ansible callback plugin to automatically collect support bundle on playbook failure.
 
-This plugin detects when the main deployment playbook (all.yml) fails and
+This plugin detects when any Confluent Platform playbook fails and
 automatically triggers support bundle collection if enabled.
 
 Configuration:
@@ -15,9 +15,10 @@ Configuration:
     support_bundle_auto_collect_on_failure: true
 
 Usage:
-  ansible-playbook -i inventory.yml all.yml
+  ansible-playbook -i inventory.yml <any-playbook.yml>
   # Set support_bundle_auto_collect_on_failure: true in inventory
-  # If deployment fails, support bundle is automatically collected
+  # If playbook fails, support bundle is automatically collected
+  # Note: support_bundle.yml itself is excluded to prevent recursion
 """
 
 from __future__ import (absolute_import, division, print_function)
@@ -29,8 +30,9 @@ DOCUMENTATION = '''
     short_description: Automatically collect support bundle on playbook failure
     version_added: "1.0"
     description:
-        - This callback plugin detects when a Confluent Platform deployment fails
+        - This callback plugin detects when any Confluent Platform playbook fails
         - Automatically triggers support bundle collection if enabled
+        - Works for all playbooks except support_bundle.yml (to prevent recursion)
         - Re-raises the original error after collection
     requirements:
       - Ansible >= 2.9
@@ -131,9 +133,9 @@ class CallbackModule(CallbackBase):
         """
         Called when playbook completes - check for failures and trigger support bundle.
         """
-        # Check if this is the main deployment playbook
-        if self.playbook_name not in ['all.yml', 'confluent.yml']:
-            display.vvv("Skipping support bundle collection - not main playbook (%s)" % self.playbook_name)
+        # Skip support bundle collection if we're already running support_bundle.yml (prevent recursion)
+        if self.playbook_name == 'support_bundle.yml':
+            display.vvv("Skipping support bundle collection - already running support bundle playbook")
             return
 
         # Check if there were any failures
@@ -161,7 +163,7 @@ class CallbackModule(CallbackBase):
         if not auto_collect:
             display.display("")
             display.display("=" * 80, color=C.COLOR_ERROR)
-            display.display("Confluent Platform Deployment FAILED", color=C.COLOR_ERROR)
+            display.display("Playbook FAILED: %s" % self.playbook_name, color=C.COLOR_ERROR)
             display.display("=" * 80, color=C.COLOR_ERROR)
             display.display("")
             display.display("To collect diagnostics, run:", color=C.COLOR_HIGHLIGHT)
@@ -175,7 +177,7 @@ class CallbackModule(CallbackBase):
         # Auto-collection is enabled - collect support bundle
         display.display("")
         display.display("=" * 80, color=C.COLOR_ERROR)
-        display.display("Deployment Failed - Auto-collecting Support Bundle", color=C.COLOR_ERROR)
+        display.display("Playbook Failed: %s - Auto-collecting Support Bundle" % self.playbook_name, color=C.COLOR_ERROR)
         display.display("=" * 80, color=C.COLOR_ERROR)
         display.display("")
 
