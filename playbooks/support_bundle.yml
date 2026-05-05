@@ -63,28 +63,6 @@
       ignore_errors: true
       register: inventory_files_copied
 
-    - name: Generate inventory structure from groups (fallback if no files copied)
-      copy:
-        content: |
-          # Inventory structure (generated from runtime groups)
-          # Note: This is a simplified view based on Ansible's runtime group membership.
-          {% for group_name in groups.keys() %}
-          {% if group_name != 'ungrouped' %}
-          {{ group_name }}:
-          {% if group_name == 'all' %}
-            vars: {}
-          {% else %}
-            hosts:
-          {% for host in groups[group_name] %}
-              {{ host }}: {}
-          {% endfor %}
-          {% endif %}
-          {% endif %}
-          {% endfor %}
-        dest: "{{ bundle_path }}/ansible/inventory_1_raw.yml"
-        mode: '0644'
-      when: (inventory_files_copied.results | default([]) | selectattr('changed', 'equalto', true) | list | length == 0)
-
     - name: Sanitize inventory files
       include_tasks: ../roles/common/tasks/sanitize_inventory_files_local.yml
 
@@ -324,11 +302,6 @@
         dest: "{{ (support_bundle_output_path | regex_replace('/$', '')) }}/{{ hostvars['localhost']['bundle_name'] }}.tar.gz"
         format: gz
 
-    - name: Remove uncompressed bundle directory
-      file:
-        path: "{{ hostvars['localhost']['bundle_path'] }}"
-        state: absent
-
     - name: Get archive file stats
       stat:
         path: "{{ (support_bundle_output_path | regex_replace('/$', '')) }}/{{ hostvars['localhost']['bundle_name'] }}.tar.gz"
@@ -340,7 +313,14 @@
           ========================================
           Support Bundle Created Successfully
           ========================================
-          Location: {{ (support_bundle_output_path | regex_replace('/$', '')) }}/{{ hostvars['localhost']['bundle_name'] }}.tar.gz
-          Size: {{ (bundle_archive_stats.stat.size / 1024 / 1024) | round(2) }} MB
+          Archive: {{ (support_bundle_output_path | regex_replace('/$', '')) }}/{{ hostvars['localhost']['bundle_name'] }}.tar.gz
 
-          Please upload this file to your support ticket.
+          Uncompressed Directory: {{ hostvars['localhost']['bundle_path'] }}
+
+          IMPORTANT:
+          - Review the uncompressed directory contents before sharing
+          - Verify automatic sanitization removed all sensitive data
+          - Manually redact any additional sensitive information if needed
+          - Delete the uncompressed directory after review
+
+          Please upload the .tar.gz file to your support ticket.
