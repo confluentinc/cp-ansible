@@ -24,7 +24,7 @@
     - name: Set bundle name
       set_fact:
         bundle_name: "support_bundle_{{ bundle_timestamp }}_{{ support_bundle_cluster_name }}"
-        bundle_path: "{{ support_bundle_output_path }}/support_bundle_{{ bundle_timestamp }}_{{ support_bundle_cluster_name }}"
+        bundle_path: "{{ (support_bundle_output_path | regex_replace('/$', '')) }}/support_bundle_{{ bundle_timestamp }}_{{ support_bundle_cluster_name }}"
 
     - name: Create bundle directory structure
       file:
@@ -38,22 +38,10 @@
         dest: "{{ bundle_path }}/ansible/execution_context.yml"
         mode: '0644'
 
-    - name: Determine inventory sources
-      set_fact:
-        resolved_inventory_sources: "{{ [support_bundle_inventory_file_path] if (support_bundle_inventory_file_path | length > 0) else (ansible_inventory_sources | default([])) }}"
-
-    - name: Debug - Show inventory resolution
-      debug:
-        msg:
-          - "Inventory Resolution:"
-          - "  support_bundle_inventory_file_path: {{ support_bundle_inventory_file_path | default('(not set)') }}"
-          - "  ansible_inventory_sources: {{ ansible_inventory_sources | default(['(not available)']) }}"
-          - "  resolved_inventory_sources: {{ resolved_inventory_sources | default(['(no sources)']) }}"
-
     - name: Check inventory file existence
       stat:
         path: "{{ item }}"
-      loop: "{{ resolved_inventory_sources }}"
+      loop: "{{ ansible_inventory_sources }}"
       when:
         - item is defined
         - item | length > 0
@@ -79,7 +67,7 @@
       copy:
         content: |
           # Inventory structure (generated from runtime groups)
-          # Note: This is a simplified view. Set support_bundle_inventory_file_path for full inventory.
+          # Note: This is a simplified view based on Ansible's runtime group membership.
           {% for group_name in groups.keys() %}
           {% if group_name != 'ungrouped' %}
           {{ group_name }}:
@@ -322,7 +310,7 @@
     - name: Archive support bundle
       archive:
         path: "{{ hostvars['localhost']['bundle_path'] }}"
-        dest: "{{ support_bundle_output_path }}/{{ hostvars['localhost']['bundle_name'] }}.tar.gz"
+        dest: "{{ (support_bundle_output_path | regex_replace('/$', '')) }}/{{ hostvars['localhost']['bundle_name'] }}.tar.gz"
         format: gz
 
     - name: Remove uncompressed bundle directory
@@ -332,7 +320,7 @@
 
     - name: Get archive file stats
       stat:
-        path: "{{ support_bundle_output_path }}/{{ hostvars['localhost']['bundle_name'] }}.tar.gz"
+        path: "{{ (support_bundle_output_path | regex_replace('/$', '')) }}/{{ hostvars['localhost']['bundle_name'] }}.tar.gz"
       register: bundle_archive_stats
 
     - name: Display completion message
@@ -341,7 +329,7 @@
           ========================================
           Support Bundle Created Successfully
           ========================================
-          Location: {{ support_bundle_output_path }}/{{ hostvars['localhost']['bundle_name'] }}.tar.gz
+          Location: {{ (support_bundle_output_path | regex_replace('/$', '')) }}/{{ hostvars['localhost']['bundle_name'] }}.tar.gz
           Size: {{ (bundle_archive_stats.stat.size / 1024 / 1024) | round(2) }} MB
 
           Please upload this file to your support ticket.
