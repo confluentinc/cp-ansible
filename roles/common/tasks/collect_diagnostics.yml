@@ -1,19 +1,22 @@
 ---
 # Runtime Diagnostics Collection Task
 # Collects service status, journalctl logs, and process info only
-# Direct fetch approach - creates temp files on remote and fetches to localhost
 
-- name: Check service status
-  shell: |
-    systemctl status {{ service_name }} --no-pager -l > /tmp/service_status_{{ inventory_hostname }}.txt 2>&1 || true
+- name: Get service status
+  shell: systemctl status {{ service_name }} --no-pager -l 2>&1 || true
   args:
     executable: "{{ shell_executable }}"
+  register: service_status_output
 
-- name: Fetch service status
-  fetch:
-    src: "/tmp/service_status_{{ inventory_hostname }}.txt"
+- name: Save service status to file
+  copy:
+    content: "{{ service_status_output.stdout }}"
     dest: "{{ host_bundle_dir }}/diagnostics/service_status.txt"
-    flat: true
+    mode: '0644'
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
 
 - name: Collect journalctl logs
   shell: |
@@ -27,31 +30,26 @@
     dest: "{{ host_bundle_dir }}/diagnostics/journalctl.log"
     flat: true
 
-- name: Collect process information
+- name: Get process information
   shell: |
-    ps aux | grep -E '{{ service_name }}|java' | grep -v grep > /tmp/processes_{{ inventory_hostname }}.txt 2>&1
-    echo "---" >> /tmp/processes_{{ inventory_hostname }}.txt
-    pgrep -f {{ service_name }} | xargs -r ps -f -p >> /tmp/processes_{{ inventory_hostname }}.txt 2>/dev/null || true
+    ps aux | grep -E '{{ service_name }}|java' | grep -v grep 2>&1
+    echo "---"
+    pgrep -f {{ service_name }} | xargs -r ps -f -p 2>/dev/null || true
   args:
     executable: "{{ shell_executable }}"
+  register: process_info_output
 
-- name: Fetch process information
-  fetch:
-    src: "/tmp/processes_{{ inventory_hostname }}.txt"
+- name: Save process information to file
+  copy:
+    content: "{{ process_info_output.stdout }}"
     dest: "{{ host_bundle_dir }}/diagnostics/processes.txt"
-    flat: true
-
-- name: Clean up remote diagnostics temp files
-  file:
-    path: "/tmp/{{ item }}_{{ inventory_hostname }}.txt"
-    state: absent
-  loop:
-    - service_status
-    - processes
-  ignore_errors: true
+    mode: '0644'
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
 
 - name: Clean up remote journalctl temp file
   file:
     path: "/tmp/journalctl_{{ inventory_hostname }}.log"
     state: absent
-  ignore_errors: true

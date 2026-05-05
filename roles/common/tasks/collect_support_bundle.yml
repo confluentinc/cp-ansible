@@ -22,6 +22,7 @@
     - configs
     - logs
     - diagnostics
+    - system
 
 # COLLECT CONFIGURATION FILES
 - name: Collect config files (direct fetch)
@@ -64,16 +65,6 @@
         - component.systemd_override is defined
         - not support_bundle_skip_configs
 
-    - name: Fetch client config file (if exists)
-      fetch:
-        src: "{{ component.client_config_file }}"
-        dest: "{{ host_bundle_dir }}/configs/"
-        flat: true
-      become: true
-      when:
-        - component.client_config_file is defined
-        - not support_bundle_skip_configs
-
     # SANITIZE CONFIG FILES (on localhost after fetch)
     # Note: Always runs when sanitization enabled, even with secrets_protection,
     #       because override.conf is not encrypted by secrets protection
@@ -86,49 +77,44 @@
         - not support_bundle_skip_configs
 
     # COLLECT METADATA ONLY (if skipping configs)
-    - name: Collect config file metadata only
+    - name: Get config file metadata
       shell: |
-        echo "=== Configuration Files Metadata ===" > /tmp/config_files_metadata_{{ inventory_hostname }}.txt
+        echo "=== Configuration Files Metadata ==="
         {% if config_file is defined %}
-        ls -lh {{ config_file }} >> /tmp/config_files_metadata_{{ inventory_hostname }}.txt 2>&1 || echo "{{ config_file }}: Not found" >> /tmp/config_files_metadata_{{ inventory_hostname }}.txt
+        ls -lh {{ config_file }} 2>&1 || echo "{{ config_file }}: Not found"
         {% endif %}
         {% if component.log4j_file is defined %}
-        ls -lh {{ component.log4j_file }} >> /tmp/config_files_metadata_{{ inventory_hostname }}.txt 2>&1 || echo "{{ component.log4j_file }}: Not found" >> /tmp/config_files_metadata_{{ inventory_hostname }}.txt
+        ls -lh {{ component.log4j_file }} 2>&1 || echo "{{ component.log4j_file }}: Not found"
         {% endif %}
       args:
         executable: "{{ shell_executable }}"
       become: true
       when: support_bundle_skip_configs
-      register: metadata_created
+      register: config_metadata_output
 
-    - name: Fetch config metadata file
-      fetch:
-        src: "/tmp/config_files_metadata_{{ inventory_hostname }}.txt"
+    - name: Save config file metadata to file
+      copy:
+        content: "{{ config_metadata_output.stdout }}"
         dest: "{{ host_bundle_dir }}/configs/config_files_metadata.txt"
-        flat: true
-      become: true
+        mode: '0644'
+      delegate_to: localhost
+      vars:
+        ansible_connection: local
+        ansible_become: false
       when:
         - support_bundle_skip_configs
-        - metadata_created is defined
-
-    - name: Clean up remote metadata file
-      file:
-        path: "/tmp/config_files_metadata_{{ inventory_hostname }}.txt"
-        state: absent
-      become: true
-      when:
-        - support_bundle_skip_configs
-        - metadata_created is defined
+        - config_metadata_output is defined
 
 # COLLECT LOG FILES
 # Bounded collection to prevent bundle bloat - defaults to *.log files, max 20 most recent
+# Only collect non-empty log files
 - name: Find log files with bounded defaults
   find:
     paths: "{{ log_dir }}"
     recurse: false
     file_type: file
     patterns: "{{ support_bundle_log_patterns | default(['*.log']) }}"
-    size: "{{ support_bundle_log_max_size | default(omit) }}"
+    size: "1"
     age: "{{ support_bundle_log_age | default(omit) }}"
   become: true
   register: log_files_found
