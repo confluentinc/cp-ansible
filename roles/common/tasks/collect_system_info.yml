@@ -1,0 +1,99 @@
+---
+# System Information Collection Task
+# Collects OS, Java, memory, disk, network, hostname, and environment information
+# Direct fetch approach - creates temp files on remote and fetches to localhost
+
+- name: Collect OS information
+  shell: |
+    echo "=== OS Information ===" > /tmp/os_info_{{ inventory_hostname }}.txt
+    uname -a >> /tmp/os_info_{{ inventory_hostname }}.txt
+    echo "---" >> /tmp/os_info_{{ inventory_hostname }}.txt
+    cat /etc/os-release >> /tmp/os_info_{{ inventory_hostname }}.txt 2>/dev/null || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Fetch OS information
+  fetch:
+    src: "/tmp/os_info_{{ inventory_hostname }}.txt"
+    dest: "{{ host_bundle_dir }}/system/os_info.txt"
+    flat: true
+  ignore_errors: true
+
+- name: Collect Java version
+  shell: |
+    java -version > /tmp/java_version_{{ inventory_hostname }}.txt 2>&1
+    echo "---" >> /tmp/java_version_{{ inventory_hostname }}.txt
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Fetch Java version
+  fetch:
+    src: "/tmp/java_version_{{ inventory_hostname }}.txt"
+    dest: "{{ host_bundle_dir }}/system/java_version.txt"
+    flat: true
+  ignore_errors: true
+
+- name: Collect memory information
+  shell: |
+    free -h > /tmp/memory_{{ inventory_hostname }}.txt 2>&1
+    echo "---" >> /tmp/memory_{{ inventory_hostname }}.txt
+    cat /proc/meminfo >> /tmp/memory_{{ inventory_hostname }}.txt 2>/dev/null || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Fetch memory information
+  fetch:
+    src: "/tmp/memory_{{ inventory_hostname }}.txt"
+    dest: "{{ host_bundle_dir }}/system/memory.txt"
+    flat: true
+  ignore_errors: true
+
+- name: Collect disk information
+  shell: |
+    df -h > /tmp/disk_{{ inventory_hostname }}.txt 2>&1
+    echo "---" >> /tmp/disk_{{ inventory_hostname }}.txt
+    lsblk >> /tmp/disk_{{ inventory_hostname }}.txt 2>/dev/null || true
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
+
+- name: Fetch disk information
+  fetch:
+    src: "/tmp/disk_{{ inventory_hostname }}.txt"
+    dest: "{{ host_bundle_dir }}/system/disk.txt"
+    flat: true
+  ignore_errors: true
+
+- name: Save Ansible facts on localhost
+  copy:
+    content: |
+      Ansible Version: {{ ansible_version.full }}
+      OS Family: {{ ansible_os_family }}
+      Distribution: {{ ansible_distribution }} {{ ansible_distribution_version }}
+      Kernel: {{ ansible_kernel }}
+      Architecture: {{ ansible_architecture }}
+      Memory (MB): {{ ansible_memtotal_mb }}
+      Processor Count: {{ ansible_processor_count }}
+      Processor Cores: {{ ansible_processor_cores }}
+      Python Version: {{ ansible_python_version }}
+    dest: "{{ host_bundle_dir }}/system/ansible_facts.txt"
+    mode: '0644'
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
+  ignore_errors: true
+
+- name: Clean up remote system info temp files
+  file:
+    path: "/tmp/{{ item }}_{{ inventory_hostname }}.txt"
+    state: absent
+  loop:
+    - os_info
+    - java_version
+    - memory
+    - disk
+  ignore_errors: true

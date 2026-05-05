@@ -1,0 +1,173 @@
+---
+# Core Support Bundle Collection Task
+# Fetches diagnostic information directly from remote hosts to Ansible controller
+# No remote temporary directories - direct fetch approach per comment #8
+# Directory structure: bundle_path/<component_name>/<hostname>/
+
+- name: Set bundle facts
+  set_fact:
+    host_bundle_dir: "{{ hostvars['localhost']['bundle_path'] }}/{{ component_name }}/{{ inventory_hostname }}"
+  become: false
+
+- name: Create host bundle directories on localhost
+  file:
+    path: "{{ host_bundle_dir }}/{{ item }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: "{{ ansible_become_localhost }}"
+  loop:
+    - configs
+    - logs
+    - diagnostics
+
+# COLLECT CONFIGURATION FILES
+- name: Collect config files (direct fetch)
+  block:
+    - name: Fetch main config file
+      fetch:
+        src: "{{ config_file }}"
+        dest: "{{ host_bundle_dir }}/configs/"
+        flat: true
+      become: true
+      ignore_errors: true
+      when: not support_bundle_skip_configs
+
+    - name: Fetch Log4j config file
+      fetch:
+        src: "{{ component.log4j_file }}"
+        dest: "{{ host_bundle_dir }}/configs/"
+        flat: true
+      become: true
+      ignore_errors: true
+      when:
+        - component.log4j_file is defined
+        - not support_bundle_skip_configs
+
+    - name: Fetch systemd service file
+      fetch:
+        src: "{{ component.systemd_file }}"
+        dest: "{{ host_bundle_dir }}/configs/"
+        flat: true
+      become: true
+      ignore_errors: true
+      when:
+        - component.systemd_file is defined
+        - not support_bundle_skip_configs
+
+    - name: Fetch systemd override file
+      fetch:
+        src: "{{ component.systemd_override }}"
+        dest: "{{ host_bundle_dir }}/configs/"
+        flat: true
+      become: true
+      ignore_errors: true
+      when:
+        - component.systemd_override is defined
+        - not support_bundle_skip_configs
+
+    - name: Fetch client config file (if exists)
+      fetch:
+        src: "{{ component.client_config_file }}"
+        dest: "{{ host_bundle_dir }}/configs/"
+        flat: true
+      become: true
+      ignore_errors: true
+      when:
+        - component.client_config_file is defined
+        - not support_bundle_skip_configs
+
+    # SANITIZE CONFIG FILES (on localhost after fetch)
+    # Note: Always runs when sanitization enabled, even with secrets_protection,
+    #       because override.conf is not encrypted by secrets protection
+    - name: Sanitize sensitive data from config files
+      include_tasks: sanitize_config_files_local.yml
+      vars:
+        skip_properties_sanitization: "{{ secrets_protection_enabled | default(false) | bool }}"
+      when:
+        - support_bundle_sanitize_configs
+        - not support_bundle_skip_configs
+
+    # COLLECT METADATA ONLY (if skipping configs)
+    - name: Collect config file metadata only
+      shell: |
+        echo "=== Configuration Files Metadata ===" > /tmp/config_files_metadata_{{ inventory_hostname }}.txt
+        {% if config_file is defined %}
+        ls -lh {{ config_file }} >> /tmp/config_files_metadata_{{ inventory_hostname }}.txt 2>&1 || echo "{{ config_file }}: Not found" >> /tmp/config_files_metadata_{{ inventory_hostname }}.txt
+        {% endif %}
+        {% if component.log4j_file is defined %}
+        ls -lh {{ component.log4j_file }} >> /tmp/config_files_metadata_{{ inventory_hostname }}.txt 2>&1 || echo "{{ component.log4j_file }}: Not found" >> /tmp/config_files_metadata_{{ inventory_hostname }}.txt
+        {% endif %}
+      args:
+        executable: "{{ shell_executable }}"
+      become: true
+      ignore_errors: true
+      when: support_bundle_skip_configs
+      register: metadata_created
+
+    - name: Fetch config metadata file
+      fetch:
+        src: "/tmp/config_files_metadata_{{ inventory_hostname }}.txt"
+        dest: "{{ host_bundle_dir }}/configs/config_files_metadata.txt"
+        flat: true
+      become: true
+      ignore_errors: true
+      when:
+        - support_bundle_skip_configs
+        - metadata_created is defined
+
+    - name: Clean up remote metadata file
+      file:
+        path: "/tmp/config_files_metadata_{{ inventory_hostname }}.txt"
+        state: absent
+      become: true
+      ignore_errors: true
+      when:
+        - support_bundle_skip_configs
+        - metadata_created is defined
+
+# COLLECT LOG FILES
+# Bounded collection to prevent bundle bloat - defaults to *.log files, max 20 most recent
+- name: Find log files with bounded defaults
+  find:
+    paths: "{{ log_dir }}"
+    recurse: false
+    file_type: file
+    patterns: "{{ support_bundle_log_patterns | default(['*.log']) }}"
+    size: "{{ support_bundle_log_max_size | default(omit) }}"
+    age: "{{ support_bundle_log_age | default(omit) }}"
+  become: true
+  register: log_files_found
+  ignore_errors: true
+
+- name: Fetch selected log files directly to localhost
+  fetch:
+    src: "{{ item.path }}"
+    dest: "{{ host_bundle_dir }}/logs/"
+    flat: true
+  become: true
+  loop: "{{ (log_files_found.files | default([]) | sort(attribute='mtime', reverse=true))[:(support_bundle_log_max_count | default(20) | int)] }}"
+  ignore_errors: true
+  when: log_files_found.matched | default(0) > 0
+
+# COLLECT SYSTEM INFORMATION - REMOVED (Comment #16: not needed by default)
+- name: Collect system information
+  include_tasks: collect_system_info.yml
+
+# COLLECT RUNTIME DIAGNOSTICS
+- name: Collect runtime diagnostics
+  include_tasks: collect_diagnostics.yml
+
+# GENERATE HOST MANIFEST
+- name: Generate host manifest on localhost
+  template:
+    src: host_manifest.yml.j2
+    dest: "{{ host_bundle_dir }}/host_manifest.yml"
+    mode: '0644'
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
+  ignore_errors: true
