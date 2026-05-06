@@ -1,0 +1,56 @@
+---
+# Sanitizes config files: .properties (if not encrypted), override.conf (always)
+# Variable: skip_properties_sanitization - skips .properties if secrets protection enabled
+# Uses script module - automatically finds sanitize_properties.py in roles/common/files/
+
+- name: Find .properties files
+  find:
+    paths: "{{ host_bundle_dir }}/configs"
+    patterns: "*.properties"
+  register: properties_files
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
+  when: not (skip_properties_sanitization | default(false) | bool)
+
+- name: Sanitize .properties files
+  script:
+    cmd: sanitize_properties.py "{{ item.path }}" --type properties
+    executable: python3
+  loop: "{{ properties_files.files | default([]) }}"
+  when:
+    - not (skip_properties_sanitization | default(false) | bool)
+    - properties_files.matched | default(0) > 0
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
+
+- name: Find override.conf files
+  find:
+    paths: "{{ host_bundle_dir }}/configs"
+    patterns: "override.conf"
+  register: override_files
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
+
+- name: Sanitize override files
+  script:
+    cmd: sanitize_properties.py "{{ item.path }}" --type override
+    executable: python3
+  loop: "{{ override_files.files | default([]) }}"
+  when: override_files.matched | default(0) > 0
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
+
+- name: Remove password.properties files
+  shell: find {{ host_bundle_dir }}/configs -name "*password.properties" -type f -delete
+  delegate_to: localhost
+  vars:
+    ansible_connection: local
+    ansible_become: false
