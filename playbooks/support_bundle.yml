@@ -32,12 +32,6 @@
         state: directory
         mode: '0755'
 
-    - name: Save execution context
-      copy:
-        content: "{{ {'groups': groups, 'ansible_version': ansible_version.full} | to_nice_yaml }}"
-        dest: "{{ bundle_path }}/ansible/execution_context.yml"
-        mode: '0644'
-
     - name: Check inventory file existence
       stat:
         path: "{{ item }}"
@@ -72,6 +66,34 @@
   tasks:
     - import_role:
         name: confluent.platform.variables
+
+    - name: Gather Java version and memory info
+      shell: |
+        java -version 2>&1 | head -1 || echo "N/A"
+      args:
+        executable: "{{ shell_executable }}"
+      register: java_version_raw
+      ignore_errors: true
+
+    - name: Set Java version fact
+      set_fact:
+        java_version_info: "{{ java_version_raw.stdout | default('N/A') }}"
+
+    - name: Gather memory statistics
+      shell: |
+        free -m | awk 'NR==2{print $2","$3","$4","$7}'
+      args:
+        executable: "{{ shell_executable }}"
+      register: memory_stats_raw
+      ignore_errors: true
+
+    - name: Set memory facts
+      set_fact:
+        memory_total_mb: "{{ memory_stats_raw.stdout.split(',')[0] | default(ansible_memtotal_mb) }}"
+        memory_used_mb: "{{ memory_stats_raw.stdout.split(',')[1] | default('N/A') }}"
+        memory_free_mb: "{{ memory_stats_raw.stdout.split(',')[2] | default('N/A') }}"
+        memory_available_mb: "{{ memory_stats_raw.stdout.split(',')[3] | default('N/A') }}"
+      when: memory_stats_raw is succeeded
 
 - name: Zookeeper Support Bundle
   hosts: zookeeper
