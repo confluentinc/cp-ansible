@@ -5,6 +5,38 @@
 - import_playbook: kafka_controller.yml
   tags: migrate_to_dual_write
 
+- name: Run Migration Pre-Flight Check
+  hosts: kafka_controller[0]
+  gather_facts: false
+  any_errors_fatal: true
+  tags: migrate_to_dual_write
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Run kafka-migration-check preflight
+      shell: |
+        {{ kafka_migration_check_path }} preflight-check --controller-config {{ controller_config_path }}
+      register: migration_preflight_output
+      failed_when: false
+      changed_when: false
+      vars:
+        kafka_migration_check_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/kafka-migration-check{% else %}kafka-migration-check{% endif %}"
+        controller_config_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/etc/kafka/server.properties{% else %}/etc/kafka/server.properties{% endif %}"
+
+    - name: Display preflight check results
+      debug:
+        var: migration_preflight_output.stdout_lines
+
+    - name: Fail if preflight check did not pass
+      fail:
+        msg: |
+          MIGRATION PRE-FLIGHT CHECK FAILED
+          migration_preflight_output: {{ migration_preflight_output.stdout }}
+      when: >
+        migration_preflight_output.stdout is not search('All preflight checks passed.') or
+        migration_preflight_output.stdout is search('ERROR:')
+
 - name: Validate Jolokia Endpoint Access
   hosts: kafka_controller
   gather_facts: false
