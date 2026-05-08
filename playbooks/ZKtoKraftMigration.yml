@@ -16,7 +16,7 @@
 
     - name: Run kafka-migration-check preflight
       shell: |
-        {{ kafka_migration_check_path }} preflight-check --controller-config {{ controller_config_path }}
+        {{ kafka_migration_check_path }} preflight-check --controller-config {{ controller_config_path }} 2>&1
       register: migration_preflight_output
       failed_when: false
       changed_when: false
@@ -26,15 +26,26 @@
 
     - name: Display preflight check results
       debug:
-        var: migration_preflight_output.stdout_lines
+        msg: |
+          Return code: {{ migration_preflight_output.rc }}
+          Output:
+          {{ migration_preflight_output.stdout }}
 
     - name: Fail if preflight check did not pass
       fail:
         msg: |
+          ============================================================
           MIGRATION PRE-FLIGHT CHECK FAILED
-          migration_preflight_output: {{ migration_preflight_output.stdout }}
+          ============================================================
+          Return code: {{ migration_preflight_output.rc }}
+
+          {{ migration_preflight_output.stdout }}
+
+          Please resolve the errors above before proceeding with migration.
+          ============================================================
       when: >
-        migration_preflight_output.stdout is not search('All preflight checks passed.') or
+        migration_preflight_output.rc != 0 or
+        migration_preflight_output.stdout is not search('All preflight checks passed\.') or
         migration_preflight_output.stdout is search('ERROR:')
 
 - name: Validate Jolokia Endpoint Access
