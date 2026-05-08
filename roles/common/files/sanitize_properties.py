@@ -78,8 +78,11 @@ class PropertySanitizer:
 
     def sanitize_jaas_partial(self, value):
         """
-        Partially sanitize JAAS config: redact passwords and keytabs,
-        but preserve principals (they're identifiers, not secrets).
+        DEPRECATED: This method is no longer used.
+
+        Previously did partial JAAS sanitization (redact passwords/keytabs, preserve principals).
+        Now we do full redaction of all JAAS configs for maximum security.
+        Kept for backward compatibility but not called by any sanitization methods.
         """
         # Redact password values (quoted and unquoted)
         value = re.sub(r'(password\s*=\s*")[^"]*"', r'\1***REDACTED***"', value, flags=re.IGNORECASE)
@@ -139,13 +142,8 @@ class PropertySanitizer:
 
             # Check if this property should be sanitized
             if self.is_sensitive(key):
-                # Special handling for JAAS configs - partial sanitization
-                if key.lower().endswith('.sasl.jaas.config'):
-                    sanitized_value = self.sanitize_jaas_partial(value)
-                    lines.append(f"{key}={sanitized_value}\n")
-                else:
-                    # Full redaction
-                    lines.append(f"{key}= ***REDACTED***\n")
+                # Full redaction for all sensitive properties (including JAAS configs)
+                lines.append(f"{key}=***REDACTED***\n")
                 sanitized_count += 1
             else:
                 lines.append(line)
@@ -173,17 +171,11 @@ class PropertySanitizer:
             print(f"Warning: File not found: {file_path}", file=sys.stderr)
             return None
 
-        with open(path, 'r', encoding='utf-8', errors='replace') as f:
-            content = f.read()
-
-        # Add sanitization header
-        sanitized_content = "// THIS FILE HAS BEEN SANITIZED - SENSITIVE VALUES REDACTED\n\n"
-
-        # Remove existing header if present
-        content = re.sub(r'^//\s*THIS FILE HAS BEEN SANITIZED[^\n]*\n\n?', '', content)
-
-        # Partial sanitization: redact passwords and keytabs, preserve principals
-        sanitized_content += self.sanitize_jaas_partial(content)
+        # Full redaction - replace entire JAAS file content
+        sanitized_content = "// THIS FILE HAS BEEN SANITIZED - ALL CONTENT REDACTED\n\n"
+        sanitized_content += "// JAAS configuration has been completely redacted for security.\n"
+        sanitized_content += "// Original file contained sensitive authentication credentials.\n"
+        sanitized_content += "***REDACTED***\n"
 
         if in_place:
             with open(path, 'w', encoding='utf-8') as f:
