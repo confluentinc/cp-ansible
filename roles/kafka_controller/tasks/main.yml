@@ -478,6 +478,19 @@
   notify: restart Kafka Controller
   when: certs_updated|bool
 
+# Run migration preflight check if ZK to KRaft migration is enabled
+- name: Run kafka-migration-check preflight
+  shell: |
+    {{ kafka_migration_check_path }} preflight-check --controller-config {{ kafka_controller.config_file }} 2>&1
+  register: migration_preflight_output
+  failed_when: migration_preflight_output.rc != 0
+  changed_when: false
+  when: kraft_migration | bool
+  environment:
+    KAFKA_OPTS: "{{ kafka_controller_service_environment_overrides.KAFKA_OPTS }}"
+  vars:
+    kafka_migration_check_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/kafka-migration-check{% else %}kafka-migration-check{% endif %}"
+
 # We need to start MDS here to proceed with secrets protection
 - meta: flush_handlers
 
