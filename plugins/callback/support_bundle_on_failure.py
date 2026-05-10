@@ -1,25 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
-"""
-Ansible callback plugin to automatically collect support bundle on playbook failure.
-
-This plugin detects when any Confluent Platform playbook fails and
-automatically triggers support bundle collection if enabled.
-
-Configuration:
-  Enable in ansible.cfg:
-    [defaults]
-    callbacks_enabled = support_bundle_on_failure
-
-  Enable auto-collection:
-    support_bundle_auto_collect_on_failure: true
-
-Usage:
-  ansible-playbook -i inventory.yml <any-playbook.yml>
-  # Set support_bundle_auto_collect_on_failure: true in inventory
-  # If playbook fails, support bundle is automatically collected
-  # Note: support_bundle.yml itself is excluded to prevent recursion
-"""
+"""Ansible callback plugin to auto-collect support bundle on playbook failure."""
 
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
@@ -28,31 +9,22 @@ DOCUMENTATION = '''
     callback: support_bundle_on_failure
     type: notification
     short_description: Automatically collect support bundle on playbook failure
-    version_added: "1.0"
     description:
-        - This callback plugin detects when any Confluent Platform playbook fails
-        - Automatically triggers support bundle collection if enabled
-        - Works for all playbooks except support_bundle.yml (to prevent recursion)
-        - Re-raises the original error after collection
-    requirements:
-      - Ansible >= 2.9
+        - Triggers support_bundle.yml when any playbook fails
+        - Skips support_bundle.yml itself to prevent recursion
+        - Defaults to true (matches role default in confluent.platform.variables)
+        - Priority: inventory vars > role default (true)
     options:
       support_bundle_auto_collect_on_failure:
         description: Enable automatic support bundle collection on failure
-        default: False
+        default: True
         type: bool
-        env:
-          - name: SUPPORT_BUNDLE_AUTO_COLLECT_ON_FAILURE
-        ini:
-          - section: defaults
-            key: support_bundle_auto_collect_on_failure
         vars:
           - name: support_bundle_auto_collect_on_failure
 '''
 
 import os
 import subprocess
-import sys
 from ansible.plugins.callback import CallbackBase
 from ansible import constants as C
 from ansible import context
@@ -62,9 +34,6 @@ display = Display()
 
 
 class CallbackModule(CallbackBase):
-    """
-    Callback plugin to auto-collect support bundle on playbook failure.
-    """
     CALLBACK_VERSION = 2.0
     CALLBACK_TYPE = 'notification'
     CALLBACK_NAME = 'support_bundle_on_failure'
@@ -74,216 +43,79 @@ class CallbackModule(CallbackBase):
         super(CallbackModule, self).__init__()
         self.playbook_name = None
         self.playbook_dir = None
-        self.deployment_failed = False
         self.auto_collect_enabled = None
-        self.play_context = None
+        self.variable_found_in_inventory = False
 
     def v2_playbook_on_start(self, playbook):
-        """
-        Called when playbook starts - capture playbook info.
-        """
         self.playbook_name = os.path.basename(playbook._file_name)
         self.playbook_dir = os.path.dirname(os.path.abspath(playbook._file_name))
 
-        display.vvv("Support bundle callback loaded for playbook: %s" % self.playbook_name)
-
     def v2_playbook_on_play_start(self, play):
-        """
-        Called when a play starts - capture variables from play context.
-        """
-        # Skip if we already found the variable
-        if self.auto_collect_enabled:
+        if self.variable_found_in_inventory or not play or not hasattr(play, '_variable_manager'):
             return
 
-        # Try to get the auto-collect setting from play variables
-        if play and hasattr(play, '_variable_manager'):
-            try:
-                # Get the variable manager and inventory
-                variable_manager = play.get_variable_manager()
-                inventory = variable_manager._inventory
+        try:
+            variable_manager = play.get_variable_manager()
+            inventory = variable_manager._inventory
 
-                # Get actual hosts from the play (resolves groups to hosts)
-                actual_hosts = inventory.get_hosts(pattern=play.hosts)
+            # Check group-level variables only (not host-level overrides)
+            # Look in 'all' group variables which apply to entire deployment
+            all_group = inventory.groups.get('all')
+            if all_group:
+                group_vars = all_group.get_vars()
+                value = group_vars.get('support_bundle_auto_collect_on_failure')
 
-                display.vvv("Play '%s' has %d hosts: %s" % (play.get_name(), len(actual_hosts), [h.name for h in actual_hosts]))
-
-                # Check variables for each actual host
-                if actual_hosts:
-                    for host_obj in actual_hosts:
-                        try:
-                            all_vars = variable_manager.get_vars(play=play, host=host_obj, task=None)
-
-                            # Check for the auto-collect flag
-                            auto_collect = all_vars.get('support_bundle_auto_collect_on_failure', False)
-
-                            display.vvv("Checking host %s: support_bundle_auto_collect_on_failure = %s" % (host_obj.name, auto_collect))
-
-                            if auto_collect in [True, 'true', 'True', 'yes', '1']:
-                                self.auto_collect_enabled = True
-                                display.vvv("Auto-collect enabled via inventory/vars for host %s" % host_obj.name)
-                                break  # Found it, no need to check other hosts
-                        except Exception as e:
-                            display.vvv("Error checking host %s: %s" % (host_obj.name, str(e)))
-                else:
-                    display.vvv("No hosts in play: %s" % play.get_name())
-            except Exception as e:
-                display.vvv("Could not read support_bundle_auto_collect_on_failure from play vars: %s" % str(e))
+                if value is not None:
+                    self.variable_found_in_inventory = True
+                    self.auto_collect_enabled = value in [True, 'true', 'True', 'yes', '1']
+        except Exception:
+            pass
 
     def v2_playbook_on_stats(self, stats):
-        """
-        Called when playbook completes - check for failures and trigger support bundle.
-        """
-        # Skip support bundle collection if we're already running support_bundle.yml (prevent recursion)
+        # Skip support_bundle.yml itself to prevent recursion
         if self.playbook_name == 'support_bundle.yml':
-            display.vvv("Skipping support bundle collection - already running support bundle playbook")
             return
 
         # Check if there were any failures
-        hosts = sorted(stats.processed.keys())
-        failed_hosts = []
-        unreachable_hosts = []
+        failed = any(
+            stats.summarize(h).get('failures', 0) > 0 or
+            stats.summarize(h).get('unreachable', 0) > 0
+            for h in stats.processed
+        )
 
-        for host in hosts:
-            summary = stats.summarize(host)
-            if summary.get('failures', 0) > 0:
-                failed_hosts.append(host)
-            if summary.get('unreachable', 0) > 0:
-                unreachable_hosts.append(host)
-
-        # Determine if deployment failed
-        self.deployment_failed = len(failed_hosts) > 0 or len(unreachable_hosts) > 0
-
-        if not self.deployment_failed:
-            display.vvv("Playbook succeeded - no support bundle needed")
+        if not failed:
             return
 
-        # Check if auto-collection is enabled (check all sources)
-        auto_collect = self._get_auto_collect_setting()
+        # Use inventory value if found, otherwise default to true (role default)
+        auto_collect = self.auto_collect_enabled if self.variable_found_in_inventory else True
 
         if not auto_collect:
-            display.display("")
-            display.display("=" * 80, color=C.COLOR_ERROR)
-            display.display("Playbook FAILED: %s" % self.playbook_name, color=C.COLOR_ERROR)
-            display.display("=" * 80, color=C.COLOR_ERROR)
-            display.display("")
-            display.display("To collect diagnostics, run:", color=C.COLOR_HIGHLIGHT)
-            display.display("  ansible-playbook support_bundle.yml", color=C.COLOR_HIGHLIGHT)
-            display.display("")
-            display.display("Or enable auto-collection:", color=C.COLOR_HIGHLIGHT)
-            display.display("  support_bundle_auto_collect_on_failure: true", color=C.COLOR_HIGHLIGHT)
-            display.display("")
+            display.display("\nTo collect diagnostics: ansible-playbook support_bundle.yml", color=C.COLOR_HIGHLIGHT)
+            display.display("Or set: support_bundle_auto_collect_on_failure: true\n", color=C.COLOR_HIGHLIGHT)
             return
 
-        # Auto-collection is enabled - collect support bundle
-        display.display("")
-        display.display("=" * 80, color=C.COLOR_ERROR)
-        display.display("Playbook Failed: %s - Auto-collecting Support Bundle" % self.playbook_name, color=C.COLOR_ERROR)
-        display.display("=" * 80, color=C.COLOR_ERROR)
-        display.display("")
-
-        try:
-            self._collect_support_bundle()
-        except Exception as e:
-            display.warning("Support bundle collection failed: %s" % str(e))
-            display.display("")
-            display.display("Run manually: ansible-playbook support_bundle.yml", color=C.COLOR_HIGHLIGHT)
-            display.display("")
-
-    def _get_auto_collect_setting(self):
-        """
-        Get the support_bundle_auto_collect_on_failure setting.
-        Check in order: inventory/play vars (captured earlier), extra vars, environment.
-        """
-        # Check if we captured it from play vars (highest priority for inventory)
-        if self.auto_collect_enabled is True:
-            display.vvv("Using auto-collect setting from inventory/play vars: True")
-            return True
-
-        # Check extra vars from CLI args
-        try:
-            if hasattr(context, 'CLIARGS') and context.CLIARGS:
-                extra_vars = context.CLIARGS.get('extra_vars', [])
-                for extra_var_dict in extra_vars:
-                    if isinstance(extra_var_dict, dict):
-                        if extra_var_dict.get('support_bundle_auto_collect_on_failure') in [True, 'true', 'True', 'yes', '1']:
-                            display.vvv("Auto-collect enabled via CLI extra_vars")
-                            return True
-        except Exception as e:
-            display.vvv("Could not check CLIARGS for extra_vars: %s" % str(e))
-
-        # Check environment variable
-        env_value = os.environ.get('SUPPORT_BUNDLE_AUTO_COLLECT_ON_FAILURE', '').lower()
-        if env_value in ['true', '1', 'yes']:
-            display.vvv("Auto-collect enabled via environment variable")
-            return True
-
-        # Check if passed via sys.argv (command line)
-        for arg in sys.argv:
-            if 'support_bundle_auto_collect_on_failure=true' in arg.lower():
-                display.vvv("Auto-collect enabled via command line argument")
-                return True
-
-        display.vvv("Auto-collect disabled (not enabled in any source)")
-        return False
+        self._collect_support_bundle()
 
     def _collect_support_bundle(self):
-        """
-        Execute support_bundle.yml playbook.
-        """
         support_bundle_playbook = os.path.join(self.playbook_dir, 'support_bundle.yml')
-
         if not os.path.exists(support_bundle_playbook):
-            raise Exception("support_bundle.yml not found at: %s" % support_bundle_playbook)
+            display.warning("support_bundle.yml not found at: %s" % support_bundle_playbook)
+            return
 
-        # Collection root is parent of playbook_dir (for ansible.cfg and collection resolution)
         collection_root = os.path.dirname(self.playbook_dir)
+        cmd = ['ansible-playbook', support_bundle_playbook]
 
-        # Build ansible-playbook command with relative path from collection root
-        cmd = ['ansible-playbook', 'playbooks/support_bundle.yml']
+        # Get inventory and verbosity from CLIARGS
+        if hasattr(context, 'CLIARGS') and context.CLIARGS:
+            inventory = context.CLIARGS.get('inventory')
+            if inventory:
+                # inventory is a tuple of paths - add each with -i
+                for inv_path in (inventory if isinstance(inventory, tuple) else [inventory]):
+                    cmd.extend(['-i', os.path.abspath(str(inv_path))])
 
-        # Get inventory from CLIARGS
-        try:
-            if hasattr(context, 'CLIARGS') and context.CLIARGS:
-                inventory = context.CLIARGS.get('inventory')
-                if inventory:
-                    # Handle different inventory formats
-                    if isinstance(inventory, (list, tuple)):
-                        inventory_path = str(inventory[0])
-                    else:
-                        inventory_path = str(inventory)
-                    cmd.extend(['-i', inventory_path])
+            verbosity = context.CLIARGS.get('verbosity', 0)
+            if verbosity > 0:
+                cmd.append('-' + 'v' * verbosity)
 
-                # Get verbosity
-                verbosity = context.CLIARGS.get('verbosity', 0)
-                if verbosity > 0:
-                    cmd.append('-' + 'v' * verbosity)
-        except Exception as e:
-            display.vvv("Could not get inventory/verbosity from CLIARGS: %s" % str(e))
-
-        display.display("Executing: %s" % ' '.join(cmd), color=C.COLOR_DEBUG)
-        display.display("")
-
-        # Execute support bundle collection
-        try:
-            result = subprocess.run(
-                cmd,
-                cwd=collection_root,
-                capture_output=False,  # Show output in real-time
-                text=True
-            )
-
-            display.display("")
-            if result.returncode == 0:
-                display.display("=" * 80, color=C.COLOR_OK)
-                display.display("Support Bundle Collected Successfully", color=C.COLOR_OK)
-                display.display("=" * 80, color=C.COLOR_OK)
-                display.display("Check support_bundle_*.tar.gz in output directory", color=C.COLOR_HIGHLIGHT)
-            else:
-                display.display("=" * 80, color=C.COLOR_ERROR)
-                display.display("Support Bundle Collection Failed", color=C.COLOR_ERROR)
-                display.display("=" * 80, color=C.COLOR_ERROR)
-                display.display("Run manually: ansible-playbook support_bundle.yml", color=C.COLOR_HIGHLIGHT)
-            display.display("")
-
-        except Exception as e:
-            raise Exception("Failed to execute support_bundle.yml: %s" % str(e))
+        display.vvv("Executing: %s" % ' '.join(cmd))
+        subprocess.run(cmd, cwd=collection_root)
