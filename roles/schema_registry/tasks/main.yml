@@ -26,6 +26,38 @@
     - validate
     - validate_jolokia
 
+# Validate package availability BEFORE removing old packages to ensure we don't leave the node in a broken state if new packages aren't available
+- name: Validate Package Availability Before Removing Old Packages (RedHat)
+  shell: |
+    yum list available {{ item }}{{ confluent_package_redhat_suffix }} 2>/dev/null || yum list installed {{ item }}{{ confluent_package_redhat_suffix }} 2>/dev/null
+  register: package_availability_check_redhat
+  changed_when: false
+  failed_when: package_availability_check_redhat.rc != 0
+  check_mode: false
+  loop: "{{ schema_registry_packages }}"
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
+  tags:
+    - package
+    - cp_package
+
+- name: Validate Package Availability Before Removing Old Packages (Debian)
+  shell: |
+    apt-cache policy {{ item }}{{ confluent_package_debian_suffix }} 2>/dev/null | grep -E 'Candidate:' | grep -v 'Candidate: (none)'
+  register: package_availability_check_debian
+  changed_when: false
+  failed_when: package_availability_check_debian.rc != 0
+  check_mode: false
+  loop: "{{ schema_registry_packages }}"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
+  tags:
+    - package
+    - cp_package
+
+# Only remove old packages after validating new packages are available
 - name: Stop Service and Remove Packages on Version Change
   include_role:
     name: common

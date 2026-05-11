@@ -55,19 +55,8 @@
       - kafka_controller_final_properties['log.dirs'] != "/" and not ',' in kafka_controller_final_properties['log.dirs']
     fail_msg: "If you have log.dirs in kafka_controller_custom_properties, make sure you only provide one directory."
 
-
-- name: Stop Service and Remove Packages on Version Change
-  include_role:
-    name: common
-    tasks_from: remove_packages.yml
-  vars:
-    service_name: "{{ kafka_controller_service_name }}"
-  when: installation_method == "package"
-  tags:
-    - package
-    - cp_package
-
-- name: Validate Package Availability Before Installation (RedHat)
+# Validate package availability BEFORE removing old packages to ensure we don't leave the node in a broken state if new packages aren't available
+- name: Validate Package Availability Before Removing Old Packages (RedHat)
   shell: |
     yum list available {{ item }}{{ confluent_package_redhat_suffix }} 2>/dev/null || yum list installed {{ item }}{{ confluent_package_redhat_suffix }} 2>/dev/null
   register: package_availability_check_redhat
@@ -82,7 +71,7 @@
     - package
     - cp_package
 
-- name: Validate Package Availability Before Installation (Debian)
+- name: Validate Package Availability Before Removing Old Packages (Debian)
   shell: |
     apt-cache policy {{ item }}{{ confluent_package_debian_suffix }} 2>/dev/null | grep -E 'Candidate:' | grep -v 'Candidate: (none)'
   register: package_availability_check_debian
@@ -93,6 +82,18 @@
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
+  tags:
+    - package
+    - cp_package
+
+# Only remove old packages after validating new packages are available
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ kafka_controller_service_name }}"
+  when: installation_method == "package"
   tags:
     - package
     - cp_package
