@@ -1,0 +1,69 @@
+---
+# migration_rollback_phase2_converge.yml
+#
+# Molecule converge for the plaintext-rhel-rollback-phase2 scenario.
+#
+# Cluster state reached before rollback: PREMIGRATION (Phase 2)
+#   - KRaft controllers provisioned and running with zookeeper.connect set
+#   - Brokers untouched — still in pure ZooKeeper mode, no migration flag
+#
+# This is the state after kafka_controller.yml has run with kraft_migration: true
+# but BEFORE the broker restart that activates dual-write (migrate_to_dual_write).
+#
+# Rollback action: stop controllers only, no broker changes needed.
+
+# ── Step 1: Transform inventory groups ────────────────────────────────────────
+# Rename ZK-cluster groups so the KRaft group names can take their place.
+# After this transformation:
+#   - zookeeper    → original ZK node (was zookeeper_migration)
+#   - kafka_broker → original ZK-mode broker (was kafka_broker_migration)
+#   - kafka_controller → dedicated KRaft controller (was kafka_controller_migration)
+- name: Transform inventory groups for migration
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Rename ZK cluster groups out of the way
+      lineinfile:
+        path: "{{ inventory_dir }}/ansible_inventory.yml"
+        regexp: "{{ item }}:"
+        line: "{{ item }}_zoo:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - zookeeper
+        - kafka_broker
+
+    - name: Activate KRaft cluster groups
+      lineinfile:
+        path: "{{ inventory_dir }}/ansible_inventory.yml"
+        regexp: "{{ item }}_migration:"
+        line: "{{ item }}:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - kafka_controller
+        - kafka_broker
+        - zookeeper
+
+    - name: Refresh inventory
+      meta: refresh_inventory
+
+# ── Step 2: Pre-migration checks ─────────────────────────────────────────────
+- name: Run migration pre-flight checks
+  import_playbook: ../playbooks/migration_precheck.yml
+  vars:
+    kraft_migration: true
+
+# ── Step 3: Provision KRaft controllers (PREMIGRATION state) ─────────────────
+# kafka_controller.yml with kraft_migration: true configures controllers with
+# zookeeper.connect so they join the existing ZK quorum. Brokers are untouched.
+- name: Provision KRaft controllers
+  import_playbook: ../playbooks/kafka_controller.yml
+  vars:
+    kraft_migration: true
+
+# ── Step 4: Run Phase 2 rollback ──────────────────────────────────────────────
+- name: Run KRaft migration rollback
+  import_playbook: ../playbooks/kraft_migration_rollback.yml
+  vars:
+    kraft_migration: true

@@ -1,0 +1,75 @@
+---
+### Verify Phase 4 (PURE_DUAL_WRITE) Rollback
+### After rollback, the cluster must be in pure ZooKeeper mode:
+###   - Controller service stopped and disabled
+###   - Broker config: broker.id set, zookeeper.connect present
+###   - Broker config: no KRaft/migration properties (process.roles, migration flag,
+###     controller.quorum.voters, controller.listener.names, node.id)
+###   - Broker service healthy and connected to ZooKeeper
+
+- name: Verify KRaft controller is stopped after Phase 4 rollback
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - name: Check controller service state
+      systemd:
+        name: "{{ kafka_controller_service_name }}"
+      register: ctrl_state
+
+    - name: Assert controller service is stopped
+      assert:
+        that:
+          - ctrl_state.status.ActiveState != 'active'
+        fail_msg: >-
+          Controller service '{{ kafka_controller_service_name }}' is still running
+          after Phase 4 rollback. It must be stopped.
+
+- name: Verify broker config is in ZooKeeper-only mode after Phase 4 rollback
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - name: Check broker.id is set
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: "{{ kafka_broker.config_file }}"
+        property: broker.id
+        expected_value: "1"
+
+    - name: Check zookeeper.connect is present
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: "{{ kafka_broker.config_file }}"
+        property: zookeeper.connect
+
+    - name: Verify KRaft and migration properties are absent
+      # Phase 4 rollback also strips node.id (added by ZKtoKraftMigration.yml lineinfile)
+      shell: |
+        grep -E '^(process\.roles|zookeeper\.metadata\.migration\.enable|controller\.quorum\.voters|controller\.listener\.names|node\.id)\s*=' \
+          {{ kafka_broker.config_file }} || echo "CLEAN"
+      register: kraft_props_check
+      changed_when: false
+
+    - name: Assert no KRaft/migration properties remain
+      assert:
+        that:
+          - kraft_props_check.stdout == 'CLEAN'
+        fail_msg: >-
+          Unexpected KRaft/migration properties still present in broker config
+          after Phase 4 rollback: {{ kraft_props_check.stdout_lines }}
+
+    - name: Run broker health check
+      import_role:
+        name: kafka_broker
+        tasks_from: health_check.yml

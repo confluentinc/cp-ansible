@@ -1,0 +1,71 @@
+---
+### Verify Phase 2 (PREMIGRATION) Rollback
+### After rollback, the cluster must be in pure ZooKeeper mode:
+###   - Controller service stopped and disabled
+###   - Broker config: broker.id set, zookeeper.connect present
+###   - Broker config: no KRaft-only properties (process.roles, migration flag)
+###   - Broker service healthy
+
+- name: Verify KRaft controller is stopped after Phase 2 rollback
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - name: Assert controller service is stopped
+      systemd:
+        name: "{{ kafka_controller_service_name }}"
+      register: ctrl_state
+
+    - name: Fail if controller service is still running
+      assert:
+        that:
+          - ctrl_state.status.ActiveState != 'active'
+        fail_msg: >-
+          Controller service '{{ kafka_controller_service_name }}' is still running
+          after Phase 2 rollback. It must be stopped.
+
+- name: Verify broker config is in ZooKeeper-only mode after Phase 2 rollback
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - name: Check broker.id is set
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: "{{ kafka_broker.config_file }}"
+        property: broker.id
+        expected_value: "1"
+
+    - name: Check zookeeper.connect is present
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: "{{ kafka_broker.config_file }}"
+        property: zookeeper.connect
+
+    - name: Verify process.roles is absent from broker config
+      shell: grep -E '^process\.roles\s*=' {{ kafka_broker.config_file }}
+      register: process_roles_check
+      changed_when: false
+      failed_when: process_roles_check.rc == 0
+      # rc=1 means grep found nothing — that is the expected (passing) result
+
+    - name: Verify migration flag is absent from broker config
+      shell: grep -E '^zookeeper\.metadata\.migration\.enable\s*=' {{ kafka_broker.config_file }}
+      register: migration_flag_check
+      changed_when: false
+      failed_when: migration_flag_check.rc == 0
+
+    - name: Run broker health check
+      import_role:
+        name: kafka_broker
+        tasks_from: health_check.yml
