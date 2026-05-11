@@ -1,0 +1,63 @@
+---
+### KRaft Migration Rollback — Phase 4 (PURE_DUAL_WRITE)
+### Tests rollback from fully-migrated broker state: brokers had process.roles=broker
+### and no zookeeper.connect. Requires three rolling broker restarts.
+
+driver:
+  name: docker
+platforms:
+  # ZooKeeper node — serves as ZK quorum during migration and after rollback
+  - name: zookeeper1
+    hostname: zookeeper1.confluent
+    groups:
+      - zookeeper
+      - zookeeper_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Kafka broker — migrates fully to KRaft mode then rolled all the way back
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - kafka_broker_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Dedicated KRaft controller — provisioned during migration, stopped by rollback
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+
+provisioner:
+  playbooks:
+    converge: ../migration_rollback_phase4_converge.yml
+  inventory:
+    group_vars:
+      all:
+        scenario_name: plaintext-rhel-rollback-phase4
+        kraft_migration: true

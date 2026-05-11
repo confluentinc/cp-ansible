@@ -1,0 +1,807 @@
+---
+# KRaft Migration Rollback Playbook
+#
+# Reverts a ZooKeeper → KRaft migration back to ZooKeeper-only mode.
+# Supports Phase 2, 3, and 4 rollback. Phase 5 is irreversible.
+#
+# Reference:
+#   https://docs.confluent.io/ansible/7.9/ansible-migrate-kraft.html#roll-back-to-zk
+#   https://docs.confluent.io/platform/8.2/installation/migrate-zk-kraft.html
+#
+# ┌──────────────────────────────────────────────────────────────────────────┐
+# │ MIGRATION PHASE → ROLLBACK COMPLEXITY                                    │
+# │                                                                          │
+# │ Phase 2: Controllers provisioned, no dual-write started                  │
+# │          → Stop controllers only. No broker changes. (LOW)               │
+# │                                                                          │
+# │ Phase 3: Hybrid/dual-write mode (ZkMigrationState=1, brokers have       │
+# │          zookeeper.connect, no process.roles=broker)                     │
+# │          → 1 rolling broker restart + controller stop. (MEDIUM)          │
+# │                                                                          │
+# │ Phase 4: Brokers in KRaft mode (ZkMigrationState=1, process.roles=broker│
+# │          set, zookeeper.connect removed by ZKtoKraftMigration.yml:96)    │
+# │          → 3 rolling broker restarts + controller stop. (HIGH)           │
+# │                                                                          │
+# │ Phase 5: ZkMigrationState=3 — IRREVERSIBLE. Playbook aborts.            │
+# └──────────────────────────────────────────────────────────────────────────┘
+#
+# USAGE:
+#   # Auto-detects phase and runs only the applicable rollback plays:
+#   ansible-playbook -i <inventory> playbooks/kraft_migration_rollback.yml
+#
+#   # Or invoke from the migration playbook directly:
+#   ansible-playbook -i <inventory> playbooks/ZKtoKraftMigration.yml --tags rollback
+#
+#   # Dry run (pre-flight + phase detection only):
+#   ansible-playbook -i <inventory> playbooks/kraft_migration_rollback.yml \
+#     --tags validate --check
+#
+#   # Phase-specific tags (for re-runs or manual override — phase guard still enforced):
+#   ansible-playbook -i <inventory> playbooks/kraft_migration_rollback.yml \
+#     --tags rollback_phase2   # or rollback_phase3 / rollback_phase4
+#
+# REQUIRED INVENTORY STATE:
+#   all:vars:
+#     kraft_migration: true     ← MUST remain true until rollback is complete
+#   Groups: zookeeper, kafka_broker, kafka_controller all must be present.
+#
+# KEY IMPLEMENTATION NOTES:
+#
+# 1. kraft_migration: true must stay set during rollback — it is what allows
+#    ZooKeeper + kafka_controller to coexist without failing the common role
+#    check (roles/common/tasks/main.yml:26).
+#
+# 2. zookeeper_connect is auto-computed from the 'zookeeper' inventory group
+#    (roles/variables/vars/main.yml:406). No manual variable needed.
+#
+# 3. broker.id is NOT changed to node.id for brokers in this codebase.
+#    node.id is only for controllers (index + 9991). Brokers always use
+#    broker.id = index + 1 (roles/variables/vars/main.yml:437-441).
+#
+# 4. Phase 5 is COMMENTED OUT in ZKtoKraftMigration.yml (lines 140-213).
+#    ZkMigrationState=3 can only be reached by manual intervention.
+#
+# 5. The RBAC ACL (confluent.authorizer.access.rule.providers) is auto-set to
+#    ZK_ACL when kraft_migration=true (roles/variables/vars/main.yml:548).
+#    In Phase 4, the lineinfile change (KRAFT_ACL) must be explicitly reverted
+#    before ZK_ACL takes effect via the template.
+
+#==============================================================================
+# PRE-FLIGHT VALIDATIONS (always runs)
+#==============================================================================
+- import_playbook: validations/kraft_migration_rollback_validations.yml
+  tags:
+    - validate
+    - always
+
+#==============================================================================
+# PROPAGATE PHASE DETECTION TO ALL TARGET HOSTS
+# Makes the migration_state, rollback_allowed facts (set on
+# localhost in validations) available to all plays targeting remote hosts.
+#==============================================================================
+- name: Propagate migration state facts to all hosts
+  hosts: kafka_controller:kafka_broker:zookeeper
+  gather_facts: false
+  tags: always
+
+  tasks:
+    - name: Inherit migration state from localhost detection
+      set_fact:
+        migration_state: "{{ hostvars['localhost']['migration_state'] }}"
+        rollback_allowed: "{{ hostvars['localhost']['rollback_allowed'] }}"
+
+#==============================================================================
+# PHASE 2 ROLLBACK: Stop KRaft Controllers
+#
+# State: Controllers are running but no dual-write has started.
+# Brokers are still fully in ZooKeeper mode — no changes needed.
+# Action: Stop and disable controller services. Optionally clean data dirs.
+#==============================================================================
+- name: "Rollback Phase 2: Stop KRaft Controllers"
+  hosts: kafka_controller
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  tags: rollback_phase2
+
+  tasks:
+    - name: Skip — detected state is '{{ migration_state }}', Phase 2 rollback requires PREMIGRATION
+      meta: end_play
+      when: migration_state != 'PREMIGRATION'
+
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - name: Back up controller configuration before stopping
+      copy:
+        src: "{{ kafka_controller.config_file }}"
+        dest: "{{ kafka_controller.config_file }}.phase2_rollback"
+        remote_src: true
+        mode: preserve
+
+    - name: Stop KRaft controller service
+      systemd:
+        name: "{{ kafka_controller_service_name }}"
+        state: stopped
+        enabled: false
+
+    - name: Verify controller service is stopped
+      systemd:
+        name: "{{ kafka_controller_service_name }}"
+      register: ctrl_state
+      failed_when: ctrl_state.status.ActiveState == 'active'
+
+    - name: Phase 2 rollback complete on {{ inventory_hostname }}
+      debug:
+        msg: >-
+          Controller stopped. Brokers were never affected — cluster continues in ZooKeeper mode.
+          NEXT STEPS: Remove kafka_controller group from inventory. Set kraft_migration: false.
+
+#==============================================================================
+# PHASE 3 ROLLBACK
+#
+# State: Brokers are in hybrid/dual-write mode (ZkMigrationState=1).
+#        Broker config has zookeeper.metadata.migration.enable=true and
+#        zookeeper.connect. process.roles is NOT set on brokers.
+#
+# Order (per official Confluent docs):
+#   Step 1: Stop KRaft controllers + clean controller __cluster_metadata
+#   Step 2: Clean ZooKeeper znodes (/controller, /migration) + wait for election
+#   Step 3: Clean broker __cluster_metadata dirs (all brokers, no restart yet)
+#   Step 4: Rolling broker restart — remove KRaft props, restore ZK config
+#
+# Stopping controllers FIRST is critical: it prevents further KRaft metadata
+# writes while brokers are being reconfigured. Only then is it safe to restart
+# brokers into ZooKeeper-only mode.
+#==============================================================================
+
+# STEP 1: Stop KRaft controllers and clean their metadata
+- name: "Rollback Phase 3 - Step 1: Stop KRaft Controllers"
+  hosts: kafka_controller
+  gather_facts: true
+  any_errors_fatal: true
+  tags: rollback_phase3
+
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - block:
+        - name: Back up controller config
+          copy:
+            src: "{{ kafka_controller.config_file }}"
+            dest: "{{ kafka_controller.config_file }}.pre_rollback"
+            remote_src: true
+            mode: preserve
+
+        - name: Stop KRaft controller service
+          systemd:
+            name: "{{ kafka_controller_service_name }}"
+            state: stopped
+
+        - name: Disable KRaft controller service
+          systemd:
+            name: "{{ kafka_controller_service_name }}"
+            enabled: false
+
+        # Controllers also write __cluster_metadata. Clean them here while
+        # the process is stopped to avoid stale KRaft log on future re-migration.
+        - name: Find __cluster_metadata directories on controller
+          find:
+            paths: "{{ kafka_controller_final_properties['log.dirs'].split(',') | map('trim') | list }}"
+            patterns: "__cluster_metadata*"
+            file_type: directory
+          register: controller_metadata_dirs
+
+        - name: Delete __cluster_metadata directories from controller
+          file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ controller_metadata_dirs.files }}"
+          loop_control:
+            label: "{{ item.path }}"
+          when: controller_metadata_dirs.files | length > 0
+
+        - debug:
+            msg: "Controller {{ inventory_hostname }} stopped, disabled, and metadata cleaned"
+      when: migration_state == 'HYBRID_DUAL_WRITE'
+
+# STEP 2: Clean ZooKeeper migration state and wait for broker election
+- name: "Rollback Phase 3 - Step 2: Clean ZooKeeper Migration State"
+  hosts: zookeeper[0]
+  gather_facts: true
+  any_errors_fatal: true
+  tags: rollback_phase3
+
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - block:
+        # deleteall handles child znodes; plain delete fails if children exist.
+        - name: Delete ZooKeeper /controller znode
+          shell: |
+            echo "deleteall /controller" | {{ zookeeper_cli_path }} localhost:{{ zookeeper_client_port }}
+          register: zk_delete_controller
+          failed_when: false
+          changed_when: "'Node does not exist' not in zk_delete_controller.stderr"
+          vars:
+            zookeeper_cli_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
+
+        - name: Delete ZooKeeper /migration znode
+          shell: |
+            echo "delete /migration" | {{ zookeeper_cli_path }} localhost:{{ zookeeper_client_port }}
+          register: zk_delete_migration
+          failed_when: false
+          changed_when: "'Node does not exist' not in zk_delete_migration.stderr"
+          vars:
+            zookeeper_cli_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
+
+        # Wait for a broker to register itself as the ZK controller before
+        # proceeding — confirms the cluster is operational in ZK-only mode.
+        - name: Wait for ZooKeeper to elect a new broker controller
+          shell: |
+            echo "get /controller" | {{ zookeeper_cli_path }} localhost:{{ zookeeper_client_port }} \
+              | grep -v "^Connecting\|^Welcome\|^WATCHER\|^$" || true
+          register: zk_controller_elected
+          retries: 10
+          delay: 5
+          until: zk_controller_elected.stdout | length > 0
+          changed_when: false
+          failed_when: false
+          vars:
+            zookeeper_cli_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
+
+        - debug:
+            msg: "ZooKeeper state cleaned. New broker controller: {{ zk_controller_elected.stdout | default('(still electing — verify manually)') }}"
+      when: migration_state == 'HYBRID_DUAL_WRITE'
+
+# STEP 3: Clean __cluster_metadata on all brokers before restart
+# Done as a separate non-rolling step so all brokers are cleaned before any
+# restart begins — avoids a situation where a restarted broker tries to
+# replicate stale metadata from a peer that hasn't been cleaned yet.
+- name: "Rollback Phase 3 - Step 3: Clean Broker Metadata Logs"
+  hosts: kafka_broker
+  gather_facts: true
+  any_errors_fatal: true
+  tags: rollback_phase3
+
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - block:
+        - name: Find __cluster_metadata directories in broker log dirs
+          find:
+            paths: "{{ kafka_broker_final_properties['log.dirs'].split(',') | map('trim') | list }}"
+            patterns: "__cluster_metadata*"
+            file_type: directory
+          register: broker_metadata_dirs
+
+        - name: Delete __cluster_metadata directories
+          file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ broker_metadata_dirs.files }}"
+          loop_control:
+            label: "{{ item.path }}"
+          when: broker_metadata_dirs.files | length > 0
+
+        - debug:
+            msg: "Metadata logs cleaned on {{ inventory_hostname }}"
+      when: migration_state == 'HYBRID_DUAL_WRITE'
+
+# STEP 4: Rolling broker restart — remove KRaft props, restore ZK-only config
+- name: "Rollback Phase 3 - Step 4: Rolling Broker Restart to ZooKeeper Mode"
+  hosts: kafka_broker
+  gather_facts: true
+  serial: '1'
+  any_errors_fatal: true
+  tags: rollback_phase3
+
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - block:
+        - name: Back up broker config before modification
+          copy:
+            src: "{{ kafka_broker.config_file }}"
+            dest: "{{ kafka_broker.config_file }}.pre_rollback"
+            remote_src: true
+            mode: preserve
+
+        # Remove all KRaft and migration-mode properties. Each is a no-op if
+        # the property is already absent, so this is safe to re-run.
+        - name: Remove KRaft and migration properties from broker config
+          lineinfile:
+            path: "{{ kafka_broker.config_file }}"
+            state: absent
+            regexp: "^{{ item }}.*"
+          loop:
+            - process\.roles
+            - controller\.listener\.names
+            - controller\.quorum\.voters
+            - controller\.quorum\.bootstrap\.servers
+            - zookeeper\.metadata\.migration\.enable
+            - inter\.broker\.protocol\.version
+            - confluent\.cluster\.link\.metadata\.topic\.enable
+
+        # zookeeper.connect was removed by ZKtoKraftMigration.yml (regexp "^zookeeper*").
+        # Reconstruct it from the zookeeper inventory group, including chroot if set.
+        - name: Ensure zookeeper.connect is present in broker config
+          lineinfile:
+            path: "{{ kafka_broker.config_file }}"
+            regexp: '^zookeeper\.connect\s*='
+            line: "zookeeper.connect={% for host in groups['zookeeper'] %}{{ host }}:{{ zookeeper_client_port }}{% if not loop.last %},{% endif %}{% endfor %}{{ '/' + kafka_broker_default_final_properties['zookeeper.chroot'] if kafka_broker_default_final_properties['zookeeper.chroot'] | default('') != '' else '' }}"
+            state: present
+
+        # ZKtoKraftMigration.yml:117-123 set KRAFT_ACL via lineinfile, bypassing
+        # the template. Revert explicitly — vars/main.yml:548 keeps ZK_ACL correct
+        # on subsequent kafka_broker.yml runs once kraft_migration=true.
+        - name: Revert KRAFT_ACL to ZK_ACL (RBAC clusters only)
+          lineinfile:
+            path: "{{ kafka_broker.config_file }}"
+            regexp: '^confluent\.authorizer\.access\.rule\.providers\s*='
+            line: "confluent.authorizer.access.rule.providers=CONFLUENT,ZK_ACL"
+            state: present
+          when: rbac_enabled | bool
+
+        - name: Restart broker and wait
+          include_role:
+            name: kafka_broker
+            tasks_from: restart_and_wait.yml
+
+        - name: Run broker health check
+          include_role:
+            name: kafka_broker
+            tasks_from: health_check.yml
+          tags: health_check
+
+        - debug:
+            msg: "Broker {{ inventory_hostname }} rolled back and rejoined ZooKeeper cluster"
+      when: migration_state == 'HYBRID_DUAL_WRITE'
+
+#==============================================================================
+# PHASE 4 ROLLBACK
+#
+# State: Brokers fully in KRaft mode (process.roles=broker set, zookeeper.*
+#        removed by ZKtoKraftMigration.yml). Controllers still in dual-write.
+#
+# Steps:
+#   Step 1: Rolling broker restart — regenerate config from template.
+#           With kraft_migration=true still in inventory, the variables role
+#           activates migration_mode (zookeeper.connect + migration.enable +
+#           inter.broker.protocol.version) and omits process.roles automatically.
+#           No manual property patching needed.
+#   Step 2: Deprovision KRaft controllers + clean controller __cluster_metadata
+#   Step 3: Clean ZooKeeper state (/controller, /migration znodes)
+#   Step 4: Clean broker __cluster_metadata (parallel, no restart — controllers
+#           are already stopped so these dirs are no longer written to)
+#   Step 5: Final rolling broker restart — regenerate config, then strip
+#           remaining migration-mode properties, restart into pure ZK mode.
+#
+# ACL HANDLING:
+#   RBAC clusters: confluent.authorizer.access.rule.providers is reverted from
+#     KRAFT_ACL to ZK_ACL via lineinfile in Step 5. Single run sufficient.
+#
+#   Non-RBAC ACL clusters (authorizer.class.name): the customer changed this
+#     in inventory between Phase 1 and Phase 2 of forward migration. To revert:
+#
+#     Run 1 — complete Steps 1-4 only:
+#       ansible-playbook kraft_migration_rollback.yml --skip-tags phase4_rollback_finalize
+#
+#     Then revert in inventory:
+#       kafka_broker_custom_properties:
+#         authorizer.class.name: kafka.security.authorizer.AclAuthorizer
+#
+#     Run 2 — complete Step 5 (template picks up the reverted authorizer):
+#       ansible-playbook kraft_migration_rollback.yml --skip-tags phase4_rollback_prepare
+#==============================================================================
+
+# ── Step 1: First broker restart — revert to hybrid/migration mode ─────────
+- name: "Rollback Phase 4 - Step 1: First Broker Restart (Revert to Hybrid Mode)"
+  hosts: kafka_broker
+  gather_facts: true
+  serial: '1'
+  any_errors_fatal: true
+  tags:
+    - rollback_phase4
+    - phase4_rollback_prepare
+
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - block:
+        - name: Back up broker config before Phase 4 Step 1
+          copy:
+            src: "{{ kafka_broker.config_file }}"
+            dest: "{{ kafka_broker.config_file }}.phase4_rollback_step1"
+            remote_src: true
+
+        # Regenerate server.properties from template.
+        # With kraft_migration=true in inventory the variables role sets:
+        #   migration_mode enabled  → zookeeper.connect, zookeeper.metadata.migration.enable=true,
+        #                             inter.broker.protocol.version included automatically
+        #   non_migration_mode disabled → process.roles=broker NOT included
+        # No manual lineinfile patching required.
+        - name: Regenerate broker config from template (migration_mode active)
+          template:
+            src: server.properties.j2
+            dest: "{{ kafka_broker.config_file }}"
+            mode: '640'
+            owner: "{{ kafka_broker_user }}"
+            group: "{{ kafka_broker_group }}"
+
+        - name: Apply secrets protection to broker config
+          include_role:
+            name: common
+            tasks_from: secrets_protection.yml
+          vars:
+            final_properties: "{{ kafka_broker_final_properties }}"
+            encrypt_passwords: "{{ kafka_broker_secrets_protection_encrypt_passwords }}"
+            encrypt_properties: "{{ kafka_broker_secrets_protection_encrypt_properties }}"
+            config_path: "{{ kafka_broker.config_file }}"
+            secrets_file: "{{ kafka_broker_secrets_protection_file }}"
+            secrets_file_owner: "{{ kafka_broker_user }}"
+            secrets_file_group: "{{ kafka_broker_group }}"
+            ca_cert_path: "{{ kafka_broker_ca_cert_path if ssl_enabled | bool else '' }}"
+            handler: "no-op"
+          when:
+            - kafka_broker_secrets_protection_enabled | bool
+            - rbac_enabled | bool or confluent_cli_version is version('3.0.0', '>=')
+
+        - name: Restart broker and wait
+          include_role:
+            name: kafka_broker
+            tasks_from: restart_and_wait.yml
+
+        - name: Run broker health check after Step 1
+          include_role:
+            name: kafka_broker
+            tasks_from: health_check.yml
+
+        - debug:
+            msg: "Broker {{ inventory_hostname }} Step 1 done — reverted to hybrid/migration mode"
+      when: migration_state == 'PURE_DUAL_WRITE'
+
+# ── Step 2: Deprovision KRaft controllers ─────────────────────────────────
+- name: "Rollback Phase 4 - Step 2: Deprovision KRaft Controllers"
+  hosts: kafka_controller
+  gather_facts: true
+  any_errors_fatal: true
+  tags:
+    - rollback_phase4
+    - phase4_rollback_prepare
+
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - block:
+        - name: Back up controller config
+          copy:
+            src: "{{ kafka_controller.config_file }}"
+            dest: "{{ kafka_controller.config_file }}.phase4_rollback"
+            remote_src: true
+
+        - name: Stop KRaft controller service
+          systemd:
+            name: "{{ kafka_controller_service_name }}"
+            state: stopped
+
+        - name: Disable KRaft controller service
+          systemd:
+            name: "{{ kafka_controller_service_name }}"
+            enabled: false
+
+        - name: Find __cluster_metadata directories on controller
+          find:
+            paths: "{{ kafka_controller_final_properties['log.dirs'].split(',') | map('trim') | list }}"
+            patterns: "__cluster_metadata*"
+            file_type: directory
+          register: controller_metadata_dirs
+
+        - name: Delete __cluster_metadata directories from controller
+          file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ controller_metadata_dirs.files }}"
+          loop_control:
+            label: "{{ item.path }}"
+          when: controller_metadata_dirs.files | length > 0
+
+        - debug:
+            msg: "Controller {{ inventory_hostname }} stopped, disabled, and metadata cleaned"
+      when: migration_state == 'PURE_DUAL_WRITE'
+
+# ── Step 3: Clean ZooKeeper migration state ────────────────────────────────
+- name: "Rollback Phase 4 - Step 3: Clean ZooKeeper State"
+  hosts: zookeeper[0]
+  gather_facts: true
+  any_errors_fatal: true
+  tags:
+    - rollback_phase4
+    - phase4_rollback_prepare
+
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - block:
+        - name: Delete ZooKeeper /controller znode
+          shell: |
+            echo "deleteall /controller" | {{ zookeeper_cli_path }} localhost:{{ zookeeper_client_port }}
+          register: zk_delete_controller
+          failed_when: false
+          changed_when: "'Node does not exist' not in zk_delete_controller.stderr"
+          vars:
+            zookeeper_cli_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
+
+        - name: Delete ZooKeeper /migration znode
+          shell: |
+            echo "delete /migration" | {{ zookeeper_cli_path }} localhost:{{ zookeeper_client_port }}
+          register: zk_delete_migration
+          failed_when: false
+          changed_when: "'Node does not exist' not in zk_delete_migration.stderr"
+          vars:
+            zookeeper_cli_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
+
+        - name: Wait for ZooKeeper to elect a new broker controller
+          shell: |
+            echo "get /controller" | {{ zookeeper_cli_path }} localhost:{{ zookeeper_client_port }} \
+              | grep -v "^Connecting\|^Welcome\|^WATCHER\|^$" || true
+          register: zk_new_controller
+          retries: 10
+          delay: 5
+          until: zk_new_controller.stdout | length > 0
+          changed_when: false
+          failed_when: false
+          vars:
+            zookeeper_cli_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
+
+        - debug:
+            msg: "ZooKeeper state cleaned. New broker controller: {{ zk_new_controller.stdout | default('(still electing — verify manually)') }}"
+      when: migration_state == 'PURE_DUAL_WRITE'
+
+# ── Step 4: Clean broker __cluster_metadata (parallel, no restart) ─────────
+# Controllers are stopped — these dirs are no longer written to.
+# Cleaning without a broker restart avoids unnecessary downtime per broker.
+- name: "Rollback Phase 4 - Step 4: Clean Broker Metadata Logs"
+  hosts: kafka_broker
+  gather_facts: true
+  any_errors_fatal: true
+  tags:
+    - rollback_phase4
+    - phase4_rollback_prepare
+
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - block:
+        - name: Find __cluster_metadata directories in broker log dirs
+          find:
+            paths: "{{ kafka_broker_final_properties['log.dirs'].split(',') | map('trim') | list }}"
+            patterns: "__cluster_metadata*"
+            file_type: directory
+          register: broker_metadata_dirs
+
+        - name: Delete __cluster_metadata directories
+          file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ broker_metadata_dirs.files }}"
+          loop_control:
+            label: "{{ item.path }}"
+          when: broker_metadata_dirs.files | length > 0
+
+        - debug:
+            msg: "Broker metadata logs cleaned on {{ inventory_hostname }}"
+      when: migration_state == 'PURE_DUAL_WRITE'
+
+# ── Step 5: Final broker restart — pure ZooKeeper mode ─────────────────────
+- name: "Rollback Phase 4 - Step 5: Final Broker Restart (Pure ZooKeeper Mode)"
+  hosts: kafka_broker
+  gather_facts: true
+  serial: '1'
+  any_errors_fatal: true
+  tags:
+    - rollback_phase4
+    - phase4_rollback_finalize
+
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - block:
+        - name: Back up broker config before final restart
+          copy:
+            src: "{{ kafka_broker.config_file }}"
+            dest: "{{ kafka_broker.config_file }}.phase4_rollback_final"
+            remote_src: true
+
+        # Regenerate from template — this picks up authorizer.class.name from inventory
+        # if the operator has reverted it (non-RBAC ACL two-run workflow).
+        # kraft_migration=true is still set, so migration_mode properties are included
+        # by the template — they are stripped by lineinfile immediately below.
+        - name: Regenerate broker config from template
+          template:
+            src: server.properties.j2
+            dest: "{{ kafka_broker.config_file }}"
+            mode: '640'
+            owner: "{{ kafka_broker_user }}"
+            group: "{{ kafka_broker_group }}"
+
+        - name: Apply secrets protection to broker config
+          include_role:
+            name: common
+            tasks_from: secrets_protection.yml
+          vars:
+            final_properties: "{{ kafka_broker_final_properties }}"
+            encrypt_passwords: "{{ kafka_broker_secrets_protection_encrypt_passwords }}"
+            encrypt_properties: "{{ kafka_broker_secrets_protection_encrypt_properties }}"
+            config_path: "{{ kafka_broker.config_file }}"
+            secrets_file: "{{ kafka_broker_secrets_protection_file }}"
+            secrets_file_owner: "{{ kafka_broker_user }}"
+            secrets_file_group: "{{ kafka_broker_group }}"
+            ca_cert_path: "{{ kafka_broker_ca_cert_path if ssl_enabled | bool else '' }}"
+            handler: "no-op"
+          when:
+            - kafka_broker_secrets_protection_enabled | bool
+            - rbac_enabled | bool or confluent_cli_version is version('3.0.0', '>=')
+
+        # Strip migration-mode and KRaft properties that the template still
+        # includes because kraft_migration=true is set. Safe no-ops if absent.
+        - name: Remove KRaft and migration properties (final cleanup)
+          lineinfile:
+            path: "{{ kafka_broker.config_file }}"
+            state: absent
+            regexp: "^{{ item }}.*"
+          loop:
+            - process\.roles
+            - controller\.listener\.names
+            - controller\.quorum\.voters
+            - controller\.quorum\.bootstrap\.servers
+            - zookeeper\.metadata\.migration\.enable
+            - inter\.broker\.protocol\.version
+            - confluent\.cluster\.link\.metadata\.topic\.enable
+            - node\.id
+
+        # RBAC: ZKtoKraftMigration.yml:117-123 set KRAFT_ACL via lineinfile,
+        # bypassing the template. Revert explicitly — re-running kafka_broker.yml
+        # with kraft_migration=true will then keep it correct via vars/main.yml:548.
+        - name: Revert KRAFT_ACL to ZK_ACL (RBAC clusters)
+          lineinfile:
+            path: "{{ kafka_broker.config_file }}"
+            regexp: '^confluent\.authorizer\.access\.rule\.providers\s*='
+            line: "confluent.authorizer.access.rule.providers=CONFLUENT,ZK_ACL"
+            state: present
+          when: rbac_enabled | bool
+
+        - name: Restart broker and wait
+          include_role:
+            name: kafka_broker
+            tasks_from: restart_and_wait.yml
+
+        - name: Run broker health check after final restart
+          include_role:
+            name: kafka_broker
+            tasks_from: health_check.yml
+
+        - debug:
+            msg: "Broker {{ inventory_hostname }} fully rolled back to ZooKeeper mode"
+      # PURE_DUAL_WRITE: single-run path (Steps 1-5 in one run)
+      # HYBRID_DUAL_WRITE: two-run path — Steps 1-4 completed in first run,
+      #   controllers are stopped, detection now returns HYBRID_DUAL_WRITE.
+      #   Step 5 must still execute to finalize the rollback.
+      when: migration_state in ['PURE_DUAL_WRITE', 'HYBRID_DUAL_WRITE']
+
+#==============================================================================
+# POST-ROLLBACK VERIFICATION (All Phases)
+# Runs after any phase rollback to confirm the cluster is stable in ZK mode.
+#==============================================================================
+- name: Post-Rollback Cluster Verification
+  hosts: kafka_broker
+  gather_facts: false
+  tags:
+    - rollback_phase2
+    - rollback_phase3
+    - rollback_phase4
+
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - name: Verify no KRaft-only properties remain in broker config
+      shell: |
+        grep -E '^(process\.roles|zookeeper\.metadata\.migration\.enable)\s*=' \
+          {{ kafka_broker.config_file }} || echo "CLEAN"
+      register: leftover_check
+      changed_when: false
+      check_mode: false
+
+    - name: Warn if KRaft properties still present
+      debug:
+        msg: "WARNING: Unexpected KRaft properties still present: {{ leftover_check.stdout_lines }}"
+      when:
+        - leftover_check.stdout != 'CLEAN'
+        - migration_state in ['HYBRID_DUAL_WRITE', 'PURE_DUAL_WRITE']
+
+    - name: Verify broker.id is set
+      shell: |
+        grep -E '^broker\.id\s*=' {{ kafka_broker.config_file }}
+      register: broker_id_check
+      changed_when: false
+      failed_when: broker_id_check.rc != 0
+
+    - name: Verify zookeeper.connect is set (Phase 3 and 4)
+      shell: |
+        grep -E '^zookeeper\.connect\s*=' {{ kafka_broker.config_file }}
+      register: zk_connect_check
+      changed_when: false
+      failed_when: zk_connect_check.rc != 0
+      when: migration_state in ['HYBRID_DUAL_WRITE', 'PURE_DUAL_WRITE']
+
+    - name: Final health check
+      include_role:
+        name: kafka_broker
+        tasks_from: health_check.yml
+
+- name: Post-Rollback Summary
+  hosts: localhost
+  gather_facts: false
+  tags:
+    - rollback_phase2
+    - rollback_phase3
+    - rollback_phase4
+
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - name: Display rollback completion message
+      debug:
+        msg: |
+          ====================================================================
+          ROLLBACK TO ZOOKEEPER COMPLETED SUCCESSFULLY
+          ====================================================================
+          State rolled back: {{ migration_state }}
+
+          REQUIRED NEXT STEPS:
+            1. Update inventory — set kraft_migration: false
+            2. Remove or comment out the kafka_controller host group
+            3. Re-run: ansible-playbook playbooks/kafka_broker.yml
+               (this re-applies ZK-mode config via proper templates and
+                removes any remaining KRaft-specific settings)
+
+          OPTIONAL CLEANUP (if reusing controller hardware):
+            - Remove KRaft metadata dirs:
+              find /var/lib/kafka -type d -name "__cluster_metadata*" -delete
+            - Uninstall controller service on controller nodes
+
+          Configuration backups created:
+          {% if migration_state == 'PREMIGRATION' %}
+            - {{ kafka_controller.config_file }}.phase2_rollback (on each controller)
+          {% elif migration_state == 'HYBRID_DUAL_WRITE' %}
+            - {{ kafka_broker.config_file }}.pre_rollback (on each broker)
+            - {{ kafka_controller.config_file }}.pre_rollback (on each controller)
+          {% elif migration_state == 'PURE_DUAL_WRITE' %}
+            - {{ kafka_broker.config_file }}.phase4_rollback_step1 (after Restart 1)
+            - {{ kafka_broker.config_file }}.phase4_rollback_final (after Restart 3)
+            - {{ kafka_controller.config_file }}.phase4_rollback (on each controller)
+          {% endif %}
+          ====================================================================

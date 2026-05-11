@@ -1,0 +1,277 @@
+---
+# Migration Phase Detection
+#
+# Determines the current ZK-to-KRaft migration state using:
+#   Jolokia ZkMigrationState MBean + broker/controller config inspection.
+#
+# kafka-migration-check status is NOT used. As of May 2025 it has known
+# reliability issues (confluentinc/cp-ansible #C047XH0S012).
+#
+# Output Variables:
+#   - migration_state:          PREMIGRATION | HYBRID_DUAL_WRITE | PURE_DUAL_WRITE | FINALIZED
+#   - rollback_allowed:         Boolean
+#   - migration_state_detected: Boolean
+#
+# State definitions:
+#   PREMIGRATION      = Phase 2: Controllers running on KRaft, zookeeper.connect
+#                       still in controller config, no migration flag in broker config.
+#   HYBRID_DUAL_WRITE = Phase 3: ZkMigrationState=1, migration flag in broker config,
+#                       process.roles NOT set on brokers.
+#   PURE_DUAL_WRITE   = Phase 4: ZkMigrationState=1, process.roles=broker set
+#                       (zookeeper.connect removed from broker by ZKtoKraftMigration.yml).
+#   FINALIZED         = Phase 5: ZkMigrationState=3 OR zookeeper.connect removed
+#                       from controller config. IRREVERSIBLE.
+#
+# Phase 3 vs Phase 4 distinction:
+#   Both show ZkMigrationState=1 via Jolokia. Differentiated by broker config:
+#     Phase 3: zookeeper.metadata.migration.enable=true present AND process.roles absent
+#     Phase 4: process.roles=broker present (zookeeper.connect removed by migration)
+
+- name: Initialize migration state detection variables
+  set_fact:
+    migration_state: "UNKNOWN"
+    rollback_allowed: false
+    migration_state_detected: false
+    zk_migration_state: -1
+    jolokia_available: false
+
+# Gather facts so that hostvars are populated for resolve_hostname filter
+- name: Gather facts on controller
+  setup:
+    gather_subset:
+      - '!all'
+      - '!min'
+      - 'os_family'
+  delegate_to: "{{ groups['kafka_controller'][0] }}"
+  delegate_facts: true
+  when: groups['kafka_controller'] | length > 0
+
+- name: Gather facts on broker
+  setup:
+    gather_subset:
+      - '!all'
+      - '!min'
+      - 'os_family'
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  delegate_facts: true
+  when: groups['kafka_broker'] | length > 0
+
+#==============================================================================
+# Step 1: Check controller service is running (Jolokia requires running process)
+#==============================================================================
+
+- name: Check if controller service is running
+  shell: systemctl is-active {{ kafka_controller_service_name }}
+  register: controller_status
+  delegate_to: "{{ groups['kafka_controller'][0] }}"
+  failed_when: false
+  changed_when: false
+  when: groups['kafka_controller'] | length > 0
+
+#==============================================================================
+# Step 2: Query Jolokia for ZkMigrationState
+# Uses resolve_hostname filter so FQDN/IP overrides in hostvars are respected.
+# Values: 0=pre-migration, 1=dual-write (Phase 3 OR Phase 4), 3=KRaft-only (Phase 5)
+#==============================================================================
+
+- name: Query Jolokia ZkMigrationState (no auth)
+  uri:
+    url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled | bool else 'http' }}://{{ hostvars[groups['kafka_controller'][0]] | confluent.platform.resolve_hostname }}:{{ kafka_controller_jolokia_port }}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    timeout: 10
+  register: jolokia_result
+  delegate_to: localhost
+  failed_when: false
+  changed_when: false
+  when:
+    - groups['kafka_controller'] | length > 0
+    - controller_status.rc is defined
+    - controller_status.rc == 0
+    - jolokia_auth_mode | default('none') == 'none'
+
+- name: Query Jolokia ZkMigrationState (basic auth)
+  uri:
+    url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled | bool else 'http' }}://{{ hostvars[groups['kafka_controller'][0]] | confluent.platform.resolve_hostname }}:{{ kafka_controller_jolokia_port }}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+    validate_certs: false
+    return_content: true
+    force_basic_auth: true
+    url_username: "{{ jolokia_user }}"
+    url_password: "{{ jolokia_password }}"
+    status_code: 200
+    timeout: 10
+  register: jolokia_result
+  delegate_to: localhost
+  failed_when: false
+  changed_when: false
+  no_log: "{{ mask_secrets | bool }}"
+  when:
+    - groups['kafka_controller'] | length > 0
+    - controller_status.rc is defined
+    - controller_status.rc == 0
+    - jolokia_auth_mode | default('none') == 'basic'
+
+- name: Parse Jolokia ZkMigrationState value
+  set_fact:
+    zk_migration_state: "{{ (jolokia_result.content | from_json).value.Value }}"
+    jolokia_available: true
+  when:
+    - jolokia_result is defined
+    - jolokia_result.status is defined
+    - jolokia_result.status == 200
+
+#==============================================================================
+# Step 3: Inspect config files for phase disambiguation
+#
+# These checks are needed because:
+#   - ZkMigrationState=1 covers both Phase 3 (HYBRID_DUAL_WRITE) and
+#     Phase 4 (PURE_DUAL_WRITE)
+#   - ZkMigrationState may be unavailable if controllers are not yet started
+#     (Phase 2 / PREMIGRATION), requiring config-only detection
+#==============================================================================
+
+- name: Check controller config for zookeeper.connect
+  shell: grep -q "^zookeeper.connect" "{{ hostvars[groups['kafka_controller'][0]]['kafka_controller']['config_file'] | default(kafka_controller.config_file) }}"
+  register: controller_zk_config
+  delegate_to: "{{ groups['kafka_controller'][0] }}"
+  failed_when: false
+  changed_when: false
+  when: groups['kafka_controller'] | length > 0
+
+- name: Check broker config for zookeeper.metadata.migration.enable=true
+  shell: grep -q "^zookeeper.metadata.migration.enable=true" "{{ hostvars[groups['kafka_broker'][0]]['kafka_broker']['config_file'] | default(kafka_broker.config_file) }}"
+  register: broker_migration_flag
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  failed_when: false
+  changed_when: false
+  when: groups['kafka_broker'] | length > 0
+
+- name: Read broker config process.roles value
+  shell: grep "^process.roles" "{{ hostvars[groups['kafka_broker'][0]]['kafka_broker']['config_file'] | default(kafka_broker.config_file) }}" | cut -d'=' -f2 | tr -d ' '
+  register: broker_process_roles
+  delegate_to: "{{ groups['kafka_broker'][0] }}"
+  failed_when: false
+  changed_when: false
+  when: groups['kafka_broker'] | length > 0
+
+#==============================================================================
+# Step 4: Determine phase
+#
+# Evaluation order matters — FINALIZED is checked first (irreversible).
+# Then PREMIGRATION (controllers not yet active or ZkMigrationState=0).
+# Then HYBRID_DUAL_WRITE vs PURE_DUAL_WRITE (both have ZkMigrationState=1).
+#==============================================================================
+
+# Phase 5: ZkMigrationState=3 means KRaft is sole source of truth.
+# Also treat loss of zookeeper.connect from controller config as FINALIZED
+# since it indicates the controller was re-provisioned in pure-KRaft mode.
+- name: Determine phase - FINALIZED (Phase 5, irreversible)
+  set_fact:
+    migration_state: "FINALIZED"
+    rollback_allowed: false
+    migration_state_detected: true
+  when:
+    - (zk_migration_state | int) == 3 or
+      (controller_zk_config.rc is defined and controller_zk_config.rc != 0)
+
+# Phase 2: Controllers provisioned but migration not yet activated.
+# ZkMigrationState=0 (or Jolokia unavailable), no migration flag in broker config,
+# and controller still has zookeeper.connect.
+- name: Determine phase - PREMIGRATION (Phase 2)
+  set_fact:
+    migration_state: "PREMIGRATION"
+    rollback_allowed: true
+    migration_state_detected: true
+  when:
+    - migration_state == "UNKNOWN"
+    - controller_zk_config.rc is defined
+    - controller_zk_config.rc == 0
+    - broker_migration_flag.rc is defined
+    - broker_migration_flag.rc != 0
+    - (zk_migration_state | int) == 0 or not jolokia_available | bool
+
+# Phase 3: Dual-write active, brokers still in ZooKeeper mode.
+# Primary signal: ZkMigrationState=1 via Jolokia.
+# Fallback (Jolokia unavailable — e.g. controllers stopped mid-rollback):
+#   config signals alone are unambiguous when migration flag is present and
+#   process.roles is absent. This covers the Phase 4 two-run rollback scenario
+#   where Steps 1-4 have completed (controllers stopped, brokers in hybrid mode)
+#   and the second run needs to proceed to Step 5.
+- name: Determine phase - HYBRID_DUAL_WRITE (Phase 3)
+  set_fact:
+    migration_state: "HYBRID_DUAL_WRITE"
+    rollback_allowed: true
+    migration_state_detected: true
+  when:
+    - migration_state == "UNKNOWN"
+    - (zk_migration_state | int) == 1 or not jolokia_available | bool
+    - broker_migration_flag.rc is defined
+    - broker_migration_flag.rc == 0
+    - broker_process_roles.stdout is defined
+    - broker_process_roles.stdout == "" or broker_process_roles.rc != 0
+
+# Phase 4: Brokers migrated to KRaft, controllers still in dual-write mode.
+# ZkMigrationState=1, process.roles=broker set (migration flag removed by
+# ZKtoKraftMigration.yml lineinfile which also removed zookeeper.connect).
+- name: Determine phase - PURE_DUAL_WRITE (Phase 4)
+  set_fact:
+    migration_state: "PURE_DUAL_WRITE"
+    rollback_allowed: true
+    migration_state_detected: true
+  when:
+    - migration_state == "UNKNOWN"
+    - (zk_migration_state | int) == 1
+    - broker_process_roles.stdout is defined
+    - broker_process_roles.stdout == "broker"
+    - controller_zk_config.rc is defined
+    - controller_zk_config.rc == 0
+
+#==============================================================================
+# Step 5: Final gate and output
+#==============================================================================
+
+- name: Fail if migration state could not be determined
+  fail:
+    msg: |
+      ERROR: Could not determine migration state.
+
+      This may indicate an inconsistent cluster state. Diagnostic information:
+        - Jolokia available: {{ jolokia_available }}
+        - ZkMigrationState (Jolokia): {{ zk_migration_state }}
+        - Controller has zookeeper.connect: {{ 'yes' if controller_zk_config.rc is defined and controller_zk_config.rc == 0 else 'no' }}
+        - Broker process.roles: {{ broker_process_roles.stdout | default('not set') }}
+        - Broker migration flag (zookeeper.metadata.migration.enable=true): {{ 'yes' if broker_migration_flag.rc is defined and broker_migration_flag.rc == 0 else 'no' }}
+
+      Possible causes:
+        - Jolokia not reachable on controllers (set kafka_controller_jolokia_enabled: true)
+        - Controller or broker server.properties not readable
+        - Cluster is in an unexpected intermediate state
+
+      To bypass auto-detection, set migration_state manually in inventory and
+      use --tags rollback_phase2, rollback_phase3, or rollback_phase4.
+  when: not migration_state_detected
+
+- name: Display detected migration state
+  debug:
+    msg: |
+      ======================================================================
+      MIGRATION STATE DETECTED
+      ======================================================================
+      State:              {{ migration_state }}
+      Rollback Allowed:   {{ rollback_allowed }}
+      Detection method:   Jolokia (ZkMigrationState={{ zk_migration_state }}) + config inspection
+
+      {% if migration_state == "PREMIGRATION" %}
+      PREMIGRATION: Controllers provisioned, migration not yet activated.
+      Rollback: Stop controllers only — brokers are untouched.
+      {% elif migration_state == "HYBRID_DUAL_WRITE" %}
+      HYBRID_DUAL_WRITE: Dual-write active, brokers still in ZooKeeper mode.
+      Rollback: One rolling broker restart + ZK znode cleanup + stop controllers.
+      {% elif migration_state == "PURE_DUAL_WRITE" %}
+      PURE_DUAL_WRITE: Brokers migrated to KRaft, controllers in dual-write mode.
+      Rollback: THREE broker restarts + ZK znode cleanup + stop controllers.
+      {% elif migration_state == "FINALIZED" %}
+      FINALIZED: ZooKeeper no longer used. Rollback is IMPOSSIBLE.
+      {% endif %}
+      ======================================================================

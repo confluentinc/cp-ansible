@@ -1,0 +1,63 @@
+---
+### KRaft Migration Rollback — Phase 2 (PREMIGRATION)
+### Tests that controllers can be stopped cleanly when migration has not yet
+### activated dual-write mode (brokers are still in pure ZooKeeper mode).
+
+driver:
+  name: docker
+platforms:
+  # ZooKeeper node — also serves as the ZK target after rollback
+  - name: zookeeper1
+    hostname: zookeeper1.confluent
+    groups:
+      - zookeeper
+      - zookeeper_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Kafka broker — starts in ZK mode, stays in ZK mode (no migration activation)
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+      - kafka_broker_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+
+  # Dedicated KRaft controller — provisioned during migration, stopped by rollback
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+
+provisioner:
+  playbooks:
+    converge: ../migration_rollback_phase2_converge.yml
+  inventory:
+    group_vars:
+      all:
+        scenario_name: plaintext-rhel-rollback-phase2
+        kraft_migration: true
