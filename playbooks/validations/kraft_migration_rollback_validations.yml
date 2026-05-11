@@ -1,0 +1,171 @@
+---
+# kraft_migration_rollback_validations.yml
+#
+# Pre-flight validations for the KRaft migration rollback playbook.
+# Run as part of kraft_migration_rollback.yml (imported with tags: always).
+#
+# Key design decisions (informed by full repo analysis):
+#
+# 1. kraft_migration: true MUST remain set in inventory during rollback.
+#    roles/common/tasks/main.yml:26 allows ZK + Controller co-existence ONLY
+#    when kraft_migration|bool is true. Without it, the common role would fail
+#    with "Providing Zookeeper and Controller both are not supported".
+#
+# 2. zookeeper_connect is NOT an operator-supplied variable — it is auto-computed
+#    from the 'zookeeper' inventory group (roles/variables/vars/main.yml:406/424).
+#    The zookeeper group must simply exist in inventory.
+#
+# 3. broker.id is NOT node.id for brokers — roles/variables/vars/main.yml:437-441
+#    shows brokers always use broker.id = index + 1. node.id is only for controllers
+#    (index + 9991). No per-host broker ID mapping is needed.
+#
+# 4. kafka_controller_jolokia_enabled is automatically true when kraft_migration=true
+#    (roles/variables/defaults/main.yml:563: "{{jolokia_enabled or kraft_migration}}").
+
+- name: KRaft Migration Rollback Pre-flight Validations
+  hosts: localhost
+  gather_facts: false
+  any_errors_fatal: true
+
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+      tags: always
+
+    # ---- Inventory structure checks ----------------------------------------
+
+    - name: Assert kraft_migration is set to true in inventory
+      assert:
+        that:
+          - kraft_migration | bool
+        fail_msg: >-
+          'kraft_migration: true' must be set in your inventory [all:vars] to perform rollback.
+          This flag is required to:
+            (a) allow ZooKeeper and kafka_controller to coexist in the same inventory
+                (roles/common/tasks/main.yml bypasses the ZK+Controller check when
+                kraft_migration=true)
+            (b) correctly compute ZooKeeper connection strings for broker/controller configs
+          Do NOT set kraft_migration: false until AFTER rollback completes.
+      tags: validate
+
+    - name: Assert zookeeper group is present in inventory
+      assert:
+        that:
+          - "'zookeeper' in groups"
+          - "groups['zookeeper'] | length > 0"
+        fail_msg: >-
+          The 'zookeeper' host group must exist in your inventory with at least one host.
+          ZooKeeper must be running and reachable for rollback to succeed.
+      tags: validate
+
+    - name: Assert kafka_controller group is present in inventory
+      assert:
+        that:
+          - "'kafka_controller' in groups"
+          - "groups['kafka_controller'] | length > 0"
+        fail_msg: >-
+          The 'kafka_controller' host group must exist in your inventory.
+          Controllers must be present to detect migration phase and stop them.
+      tags: validate
+
+    - name: Assert kafka_broker group is present in inventory
+      assert:
+        that:
+          - "'kafka_broker' in groups"
+          - "groups['kafka_broker'] | length > 0"
+        fail_msg: "The 'kafka_broker' host group must exist in your inventory."
+      tags: validate
+
+    # ---- ZooKeeper health check --------------------------------------------
+    # No ZK health validation exists anywhere in the migration workflow.
+    # This is the first point where it is enforced before config changes.
+
+    - name: Check ZooKeeper service status on all ZK nodes
+      systemd:
+        name: "{{ zookeeper_service_name }}"
+      register: zk_service_status
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['zookeeper'] }}"
+      tags: validate
+
+    - name: Assert all ZooKeeper services are active
+      assert:
+        that:
+          - item.status.ActiveState == 'active'
+        fail_msg: >-
+          ZooKeeper service is not running on '{{ item.item }}'.
+          All ZooKeeper nodes must be active before rollback can proceed.
+      loop: "{{ zk_service_status.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      tags: validate
+
+    # ---- Migration phase detection -----------------------------------------
+    # Uses the same Jolokia MBean as ZKtoKraftMigration.yml uses to wait for
+    # phase completion: kafka.controller:type=KafkaController,name=ZkMigrationState
+    # Values: 0=pre-migration, 1=dual-write, 3=kraft-only (irreversible)
+    #
+    # Phase 5 NOTE: ZKtoKraftMigration.yml has Phase 5 entirely commented out
+    # (lines 140-213). This means ZkMigrationState=3 can only be reached via
+    # manual CLI intervention, not through this collection's automation.
+
+    - name: Run migration phase detection
+      include_tasks: ../tasks/detect_migration_phase.yml
+      tags: validate
+
+    - name: Fail if rollback is not possible (FINALIZED state)
+      fail:
+        msg: >-
+          ROLLBACK ABORTED: Migration is in FINALIZED state.
+          ZooKeeper is no longer the source of truth. Rollback is IMPOSSIBLE.
+
+          Note: ZKtoKraftMigration.yml has Phase 5 commented out (lines 140-213).
+          If you reached this state, it was triggered manually. You must proceed
+          with KRaft or restore the entire cluster from backup.
+      when: not rollback_allowed | bool
+      tags: validate
+
+    # ---- Authorizer state check -------------------------------------------
+    # ZKtoKraftMigration.yml (line 120) sets KRAFT_ACL for RBAC during Phase 4
+    # via lineinfile. vars/main.yml:548 auto-computes ZK_ACL when kraft_migration=true,
+    # but the lineinfile bypasses the template. The rollback playbook explicitly
+    # reverts it for PURE_DUAL_WRITE state only.
+
+    - name: Inform about RBAC ACL reversion for PURE_DUAL_WRITE state
+      debug:
+        msg: >-
+          RBAC ACL note: confluent.authorizer.access.rule.providers was set to
+          CONFLUENT,KRAFT_ACL by ZKtoKraftMigration.yml (line 120) via lineinfile.
+          The rollback playbook will explicitly revert it to CONFLUENT,ZK_ACL
+          during Restart 3. After rollback, re-running kafka_broker.yml with
+          kraft_migration=true will keep ZK_ACL via vars/main.yml:548.
+      when:
+        - rbac_enabled | bool
+        - migration_state == 'PURE_DUAL_WRITE'
+      tags: validate
+
+    # ---- Pre-flight summary -----------------------------------------------
+
+    - name: Pre-flight validation passed — display rollback plan
+      debug:
+        msg: |
+          ====================================================================
+          ROLLBACK PRE-FLIGHT PASSED
+          ====================================================================
+          Detected state: {{ migration_state }}
+          Rollback target: ZooKeeper-only mode
+
+          Brokers to revert: {{ groups['kafka_broker'] | join(', ') }}
+          Controllers to stop: {{ groups['kafka_controller'] | join(', ') }}
+          ZooKeeper cluster: {{ groups['zookeeper'] | join(', ') }}
+
+          {% if migration_state == 'PREMIGRATION' %}
+          Rollback complexity: LOW — controllers only, no broker changes needed
+          {% elif migration_state == 'HYBRID_DUAL_WRITE' %}
+          Rollback complexity: MEDIUM — one rolling broker restart
+          {% elif migration_state == 'PURE_DUAL_WRITE' %}
+          Rollback complexity: HIGH — THREE broker restarts per broker required
+          {% endif %}
+          ====================================================================
+      tags: validate

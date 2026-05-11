@@ -1,0 +1,192 @@
+---
+# migration_rollback_phase4_converge.yml
+#
+# Molecule converge for the plaintext-rhel-rollback-phase4 scenario.
+#
+# Cluster state reached before rollback: PURE_DUAL_WRITE (Phase 4)
+#   - KRaft controllers running in dual-write mode (zookeeper.connect present)
+#   - Brokers fully in KRaft mode: process.roles=broker set,
+#     zookeeper.connect and inter.broker.protocol.version removed by migration
+#   - ZkMigrationState=1 via Jolokia (same as Phase 3 — differentiated by config)
+#
+# This is the state after ZKtoKraftMigration.yml migrate_to_dual_write +
+# the broker migration steps (lineinfile + restart), but BEFORE
+# "Take Controllers out of migration mode" (which would make state FINALIZED).
+#
+# Rollback action: 3 rolling broker restarts + controller stop + ZK cleanup.
+
+# ── Step 1: Transform inventory groups ────────────────────────────────────────
+- name: Transform inventory groups for migration
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Rename ZK cluster groups out of the way
+      lineinfile:
+        path: "{{ inventory_dir }}/ansible_inventory.yml"
+        regexp: "{{ item }}:"
+        line: "{{ item }}_zoo:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - zookeeper
+        - kafka_broker
+
+    - name: Activate KRaft cluster groups
+      lineinfile:
+        path: "{{ inventory_dir }}/ansible_inventory.yml"
+        regexp: "{{ item }}_migration:"
+        line: "{{ item }}:"
+      delegate_to: 127.0.0.1
+      run_once: true
+      loop:
+        - kafka_controller
+        - kafka_broker
+        - zookeeper
+
+    - name: Refresh inventory
+      meta: refresh_inventory
+
+# ── Step 2: Pre-migration checks ─────────────────────────────────────────────
+- name: Run migration pre-flight checks
+  import_playbook: ../playbooks/migration_precheck.yml
+  vars:
+    kraft_migration: true
+
+# ── Step 3: Provision KRaft controllers ──────────────────────────────────────
+- name: Provision KRaft controllers
+  import_playbook: ../playbooks/kafka_controller.yml
+  vars:
+    kraft_migration: true
+
+# ── Step 4: Validate Jolokia endpoint is reachable ───────────────────────────
+# Mirrors the untagged inline play in ZKtoKraftMigration.yml (lines 8-42).
+- name: Validate Jolokia endpoint access on controllers
+  hosts: kafka_controller
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - name: Test Jolokia ZkMigrationState endpoint access
+      uri:
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled | bool else 'http' }}://localhost:{{ kafka_controller_jolokia_port }}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+        validate_certs: false
+        return_content: true
+        status_code: 200
+        force_basic_auth: "{{ item.auth }}"
+        url_username: "{{ item.username if item.auth else omit }}"
+        url_password: "{{ item.password if item.auth else omit }}"
+      register: jolokia_auth_results
+      failed_when: false
+      retries: "{{ jolokia_endpoint_health_check_retries }}"
+      delay: "{{ jolokia_endpoint_health_check_delay }}"
+      loop:
+        - {name: "no_auth",   auth: false}
+        - {name: "basic_auth", auth: true, username: "{{ jolokia_user }}", password: "{{ jolokia_password }}"}
+
+    - name: Check if either auth method succeeded
+      set_fact:
+        jolokia_accessible: >-
+          {{ jolokia_auth_results.results
+             | map(attribute='status') | select('defined') | select('equalto', 200)
+             | list | length > 0 }}
+
+    - name: Fail if Jolokia endpoint is not reachable
+      fail:
+        msg: "ERROR: Unable to access Jolokia ZkMigrationState endpoint on controllers."
+      when: not jolokia_accessible | bool
+
+# ── Step 5: Migrate brokers to dual-write mode ───────────────────────────────
+- name: Migrate brokers to dual-write mode
+  import_playbook: ../playbooks/kafka_broker.yml
+  vars:
+    kraft_migration: true
+    deployment_strategy: serial
+
+# ── Step 6: Wait for ZkMigrationState=1 ──────────────────────────────────────
+- name: Wait for metadata migration to reach dual-write
+  hosts: kafka_controller
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - name: Wait for ZkMigrationState=1 (no auth)
+      uri:
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled | bool else 'http' }}://localhost:{{ kafka_controller_jolokia_port }}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+        validate_certs: false
+        return_content: true
+        status_code: 200
+      retries: "{{ metadata_migration_retries }}"
+      delay: 90
+      until: (jolokia_output.content | from_json).value.Value == 1
+      register: jolokia_output
+      when: jolokia_auth_mode == "none"
+
+    - name: Wait for ZkMigrationState=1 (basic auth)
+      uri:
+        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled | bool else 'http' }}://localhost:{{ kafka_controller_jolokia_port }}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+        validate_certs: false
+        return_content: true
+        force_basic_auth: true
+        url_username: "{{ jolokia_user }}"
+        url_password: "{{ jolokia_password }}"
+        status_code: 200
+      retries: "{{ metadata_migration_retries }}"
+      delay: 90
+      until: (jolokia_output.content | from_json).value.Value == 1
+      register: jolokia_output
+      when: jolokia_auth_mode == "basic"
+
+# ── Step 7: Advance brokers to KRaft mode (PURE_DUAL_WRITE) ──────────────────
+# Mirrors ZKtoKraftMigration.yml "Migrate Brokers to Kraft" + "Restart Kafka Broker"
+# but stops before "Take Controllers out of migration mode" to keep controllers
+# in dual-write (zookeeper.connect still present on controllers → not FINALIZED).
+- name: Migrate brokers to KRaft mode
+  hosts: kafka_broker
+  gather_facts: true
+  any_errors_fatal: true
+  tasks:
+    - name: Import variables role
+      import_role:
+        name: variables
+
+    - name: Remove ZooKeeper and inter.broker.protocol.version from broker config
+      lineinfile:
+        path: "{{ kafka_broker.config_file }}"
+        state: absent
+        regexp: "^{{ item }}*"
+      loop:
+        - zookeeper
+        - inter.broker.protocol.version
+
+    - name: Set process.roles=broker in broker config
+      lineinfile:
+        path: "{{ kafka_broker.config_file }}"
+        line: process.roles=broker
+
+- name: Restart brokers into KRaft mode (serial)
+  hosts: kafka_broker
+  gather_facts: true
+  serial: '1'
+  any_errors_fatal: true
+  tasks:
+    - name: Restart broker and wait
+      include_role:
+        name: kafka_broker
+        tasks_from: restart_and_wait.yml
+
+    - name: Run broker health check
+      include_role:
+        name: kafka_broker
+        tasks_from: health_check.yml
+
+# ── Step 8: Run Phase 4 rollback ──────────────────────────────────────────────
+- name: Run KRaft migration rollback
+  import_playbook: ../playbooks/kraft_migration_rollback.yml
+  vars:
+    kraft_migration: true
