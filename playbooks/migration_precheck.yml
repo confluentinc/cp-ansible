@@ -106,6 +106,180 @@
       when: current_confluent_version not in [confluent_package_version, confluent_full_package_version]
       tags: check_confluent_package_version
 
+- name: Inspect ZooKeeper Metadata Before Migration
+  hosts: kafka_broker[0]
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Get Topic Count
+      shell: |
+        {{ binary_base_path }}/bin/kafka-topics --bootstrap-server {{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}} \
+          --list --command-config {{kafka_broker.client_config_file}} | wc -l
+      environment:
+        KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+      register: topic_count
+      changed_when: false
+      check_mode: false
+      when: not ( rbac_enabled|bool or kafka_broker_client_secrets_protection_enabled|bool )
+
+    - name: Get Topic Count with Secrets Protection enabled
+      shell: |
+        {{ binary_base_path }}/bin/kafka-topics --bootstrap-server {{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}} \
+          --list --command-config {{kafka_broker.client_config_file}} | wc -l
+      environment:
+        CONFLUENT_SECURITY_MASTER_KEY: "{{ secrets_protection_masterkey }}"
+        KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+      register: topic_count_secrets_protection
+      changed_when: false
+      check_mode: false
+      when:
+        - kafka_broker_client_secrets_protection_enabled|bool
+        - rbac_enabled|bool or confluent_cli_version is version('3.0.0', '>=')
+
+    - name: Set Topic Count Fact
+      set_fact:
+        total_topics: "{{ topic_count.stdout if topic_count.stdout is defined else topic_count_secrets_protection.stdout }}"
+
+    - name: Get Total Partition Count
+      shell: |
+        {{ binary_base_path }}/bin/kafka-topics --bootstrap-server {{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}} \
+          --describe --command-config {{kafka_broker.client_config_file}} 2>/dev/null | grep -c "PartitionCount:" || echo "0"
+      environment:
+        KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+      register: partition_count
+      changed_when: false
+      check_mode: false
+      when: not ( rbac_enabled|bool or kafka_broker_client_secrets_protection_enabled|bool )
+
+    - name: Get Total Partition Count with Secrets Protection enabled
+      shell: |
+        {{ binary_base_path }}/bin/kafka-topics --bootstrap-server {{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}} \
+          --describe --command-config {{kafka_broker.client_config_file}} 2>/dev/null | grep -c "PartitionCount:" || echo "0"
+      environment:
+        CONFLUENT_SECURITY_MASTER_KEY: "{{ secrets_protection_masterkey }}"
+        KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+      register: partition_count_secrets_protection
+      changed_when: false
+      check_mode: false
+      when:
+        - kafka_broker_client_secrets_protection_enabled|bool
+        - rbac_enabled|bool or confluent_cli_version is version('3.0.0', '>=')
+
+    - name: Set Partition Count Fact
+      set_fact:
+        total_partitions: "{{ partition_count.stdout if partition_count.stdout is defined else partition_count_secrets_protection.stdout }}"
+
+    - name: Display Metadata Summary
+      debug:
+        msg: |
+          ZooKeeper Metadata Summary:
+          - Total Topics: {{ total_topics }}
+          - Total Partitions: {{ total_partitions }}
+
+          Migration Impact Assessment:
+          {% if total_topics|int > 10000 %}
+          ⚠️  WARNING: Large metadata detected ({{ total_topics }} topics).
+          - Migration may take extended time
+          - Ensure Kafka Controllers have adequate disk space (recommend 10GB+ free)
+          - Consider increasing metadata_migration_retries variable
+          {% elif total_topics|int > 5000 %}
+          ℹ️  NOTICE: Moderate metadata size ({{ total_topics }} topics).
+          - Migration should complete normally
+          - Monitor controller disk space during migration
+          {% else %}
+          ✓ Metadata size is within normal range for migration.
+          {% endif %}
+
+    - name: Warn if Very Large Metadata
+      pause:
+        prompt: |
+
+          ═══════════════════════════════════════════════════════════════
+          WARNING: Very Large Metadata Detected
+          ═══════════════════════════════════════════════════════════════
+
+          Total Topics: {{ total_topics }}
+          Total Partitions: {{ total_partitions }}
+
+          Recommendations for large metadata migrations:
+          1. Ensure Kafka Controllers have 20GB+ free disk space
+          2. Increase metadata_migration_retries to 20 (default is 10)
+          3. Plan for extended migration time (30+ minutes)
+          4. Monitor controller logs during migration
+          5. Have rollback plan ready
+
+          Press ENTER to continue with migration pre-checks, or Ctrl+C to abort...
+          ═══════════════════════════════════════════════════════════════
+      when: total_topics|int > 10000
+
+- name: Validate Cluster Health Before Migration
+  hosts: kafka_broker
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - import_role:
+        name: variables
+
+    # Reuse existing health check with stricter fail-fast behavior for migration pre-check
+    # This validates: Under-Replicated Partitions (URPs), MDS endpoint, Embedded REST Proxy
+    - name: Run Kafka Broker Health Checks (Fail-Fast Mode)
+      include_role:
+        name: kafka_broker
+        tasks_from: health_check.yml
+      vars:
+        # Override to fail immediately instead of retrying
+        kafka_broker_health_check_urp_retries: 0
+        kafka_broker_health_check_urp_delay: 0
+        kafka_broker_health_check_retry_delay: 0
+        mds_retries: 0
+
+    # Check for active partition reassignments - NOT covered by standard health check
+    # Active reassignments during migration can cause metadata conflicts
+    - name: Check for Active Partition Reassignments
+      shell: |
+        {{ binary_base_path }}/bin/kafka-reassign-partitions --bootstrap-server {{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}} \
+          --command-config {{kafka_broker.client_config_file}} --list 2>&1
+      environment:
+        KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+        CONFLUENT_SECURITY_MASTER_KEY: "{{ secrets_protection_masterkey if kafka_broker_client_secrets_protection_enabled|bool else '' }}"
+      register: reassignment_check
+      changed_when: false
+      check_mode: false
+      run_once: true
+
+    - name: Fail if Active Partition Reassignments Detected
+      fail:
+        msg: |
+          ═══════════════════════════════════════════════════════════════
+          CRITICAL: Active Partition Reassignments Detected
+          ═══════════════════════════════════════════════════════════════
+
+          Migration cannot proceed while partition reassignments are in progress.
+
+          Active reassignments:
+          {{ reassignment_check.stdout }}
+
+          What are partition reassignments?
+          - Data is being moved between Kafka brokers
+          - This can take hours or days to complete
+
+          What to do:
+          1. Wait for reassignments to complete:
+             kafka-reassign-partitions --bootstrap-server <host>:9092 --list
+
+          2. Or cancel them (if safe):
+             kafka-reassign-partitions --bootstrap-server <host>:9092 --cancel
+
+          3. Retry migration after reassignments finish
+          ═══════════════════════════════════════════════════════════════
+      when: >
+        reassignment_check.rc == 0 and
+        ('partitions to be reassigned' in reassignment_check.stdout|lower or
+         'Current partition reassignments' in reassignment_check.stdout)
+
 - name: Check Kraft Controller
   hosts: kafka_controller
   gather_facts: false
