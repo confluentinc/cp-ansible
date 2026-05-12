@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 """Ansible callback plugin to auto-collect support bundle on playbook failure."""
 
