@@ -127,4 +127,4 @@ class CallbackModule(CallbackBase):
                 cmd.append('-' + 'v' * verbosity)
 
         display.vvv("Executing: %s" % ' '.join(cmd))
-        subprocess.run(cmd, cwd=collection_root)
+        subprocess.run(cmd, cwd=collection_root, check=False)

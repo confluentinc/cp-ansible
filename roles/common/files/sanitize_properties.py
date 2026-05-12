@@ -191,11 +191,11 @@ class PropertySanitizer:
 
                 # Check if line contains any core sensitive keyword
                 should_sanitize = any(keyword.upper() in line_upper
-                                    for keyword in self.CORE_SENSITIVE_KEYWORDS)
+                                      for keyword in self.CORE_SENSITIVE_KEYWORDS)
 
                 # Also check exact sensitive matches
                 should_sanitize = should_sanitize or any(exact in line
-                                                        for exact in self.EXACT_SENSITIVE)
+                                                         for exact in self.EXACT_SENSITIVE)
 
                 if should_sanitize:
                     # Extract variable name and redact value
@@ -261,9 +261,9 @@ def main():
     )
     parser.add_argument('file', help='File to sanitize')
     parser.add_argument('--type', choices=['properties', 'override', 'inventory'],
-                       help='File type (auto-detected if not specified)')
+                        help='File type (auto-detected if not specified)')
     parser.add_argument('--dry-run', action='store_true',
-                       help='Print sanitized output without modifying file')
+                        help='Print sanitized output without modifying file')
 
     args = parser.parse_args()
 
