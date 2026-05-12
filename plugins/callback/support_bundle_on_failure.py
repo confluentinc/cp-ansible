@@ -13,7 +13,7 @@ DOCUMENTATION = '''
         - Triggers support_bundle.yml when any playbook fails
         - Skips support_bundle.yml itself to prevent recursion
         - Defaults to true (matches role default in confluent.platform.variables)
-        - Priority: inventory vars > role default (true)
+        - Variable precedence: extra vars (-e) > inventory vars > default (true)
     options:
       support_bundle_auto_collect_on_failure:
         description: Enable automatic support bundle collection on failure
@@ -43,33 +43,16 @@ class CallbackModule(CallbackBase):
         super(CallbackModule, self).__init__()
         self.playbook_name = None
         self.playbook_dir = None
-        self.auto_collect_enabled = None
-        self.variable_found_in_inventory = False
+        self.play = None
 
     def v2_playbook_on_start(self, playbook):
         self.playbook_name = os.path.basename(playbook._file_name)
         self.playbook_dir = os.path.dirname(os.path.abspath(playbook._file_name))
 
     def v2_playbook_on_play_start(self, play):
-        if self.variable_found_in_inventory or not play or not hasattr(play, '_variable_manager'):
-            return
-
-        try:
-            variable_manager = play.get_variable_manager()
-            inventory = variable_manager._inventory
-
-            # Check group-level variables only (not host-level overrides)
-            # Look in 'all' group variables which apply to entire deployment
-            all_group = inventory.groups.get('all')
-            if all_group:
-                group_vars = all_group.get_vars()
-                value = group_vars.get('support_bundle_auto_collect_on_failure')
-
-                if value is not None:
-                    self.variable_found_in_inventory = True
-                    self.auto_collect_enabled = value in [True, 'true', 'True', 'yes', '1']
-        except Exception:
-            pass
+        # Capture the first play to access variable manager
+        if self.play is None:
+            self.play = play
 
     def v2_playbook_on_stats(self, stats):
         # Skip support_bundle.yml itself to prevent recursion
@@ -86,8 +69,35 @@ class CallbackModule(CallbackBase):
         if not failed:
             return
 
-        # Use inventory value if found, otherwise default to true (role default)
-        auto_collect = self.auto_collect_enabled if self.variable_found_in_inventory else True
+        # Get variable value respecting Ansible's variable precedence
+        # Priority: extra vars (-e) > inventory vars > default (true)
+        auto_collect = True  # Default value
+
+        # Read from inventory 'all' group vars (deployment-wide setting)
+        # We check 'all' group specifically because this is a deployment-wide setting
+        # (callbacks run on control node, not per-host)
+        if self.play and hasattr(self.play, '_variable_manager'):
+            try:
+                variable_manager = self.play.get_variable_manager()
+                inventory = variable_manager._inventory
+                all_group = inventory.groups.get('all')
+                if all_group:
+                    group_vars = all_group.get_vars()
+                    if 'support_bundle_auto_collect_on_failure' in group_vars:
+                        value = group_vars['support_bundle_auto_collect_on_failure']
+                        auto_collect = value in [True, 'true', 'True', 'yes', '1', 1]
+            except Exception as e:
+                display.vvv(f"Failed to read variable from inventory: {e}")
+                pass
+
+        # Check for extra vars override (highest precedence)
+        if hasattr(context, 'CLIARGS') and context.CLIARGS:
+            extra_vars = context.CLIARGS.get('extra_vars', ())
+            for ev_str in (extra_vars if isinstance(extra_vars, tuple) else []):
+                if 'support_bundle_auto_collect_on_failure=' in ev_str:
+                    value_str = ev_str.split('=', 1)[1].lower()
+                    auto_collect = value_str not in ('false', 'no', '0', 'off')
+                    break
 
         if not auto_collect:
             display.display("\nTo collect diagnostics: ansible-playbook support_bundle.yml", color=C.COLOR_HIGHLIGHT)
