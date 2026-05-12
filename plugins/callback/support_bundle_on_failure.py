@@ -6,14 +6,14 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 DOCUMENTATION = '''
-    callback: support_bundle_on_failure
+    name: support_bundle_on_failure
     type: notification
     short_description: Automatically collect support bundle on playbook failure
     description:
         - Triggers support_bundle.yml when any playbook fails
         - Skips support_bundle.yml itself to prevent recursion
         - Defaults to true (matches role default in confluent.platform.variables)
-        - Variable precedence: extra vars (-e) > inventory vars > default (true)
+        - "Variable precedence: extra vars (-e) > inventory vars > default (true)"
     options:
       support_bundle_auto_collect_on_failure:
         description: Enable automatic support bundle collection on failure
