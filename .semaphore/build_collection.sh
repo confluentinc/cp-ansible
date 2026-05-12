@@ -7,6 +7,9 @@ cd $PATH_TO_CPA
 # prepend the desired default python version to .python-version file
 { echo "$PYTHON_VERSION"; cat .python-version 2>/dev/null || true; } > .python-version.tmp && mv .python-version.tmp .python-version
 
+# Allow pip to install packages in externally-managed environments (Ubuntu 24.04 PEP 668)
+export PIP_BREAK_SYSTEM_PACKAGES=1
+
 # Use the specific Python version for pip installations
 python$PYTHON_VERSION -m pip install wheel
 python$PYTHON_VERSION -m pip install pylint
