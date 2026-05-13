@@ -1,0 +1,130 @@
+---
+# Centralized Master Key Generation and Coordination
+# This task file ensures a single master key is used across all CP components
+# preventing divergence in both parallel and serial deployments.
+#
+# Two-level protection:
+#   1. Fact-based coordination: Prevents divergence within a single ansible-playbook run
+#   2. File-based idempotency: Prevents regeneration across separate runs
+#
+# Can be safely called from any playbook (all.yml or individual component playbooks)
+
+# ============================================================================
+# Validation Guards - Prevent Dangerous Configurations
+# ============================================================================
+
+- name: Validate force_regenerate_masterkey usage context
+  assert:
+    that:
+      - force_regenerate_masterkey|default(false)|bool == false or
+        ansible_play_hosts_all|default([])|length > 0
+    quiet: true
+    fail_msg: |
+      ERROR: Cannot determine play context for force_regenerate_masterkey validation.
+      This is unexpected - please report this issue.
+  when:
+    - force_regenerate_masterkey|default(false)|bool
+    - secrets_protection_enabled|bool
+    - regenerate_masterkey|bool
+
+- name: Warn about force_regenerate_masterkey with individual playbooks
+  debug:
+    msg: |
+      ╔════════════════════════════════════════════════════════════════════════╗
+      ║                              ⚠️  WARNING  ⚠️                            ║
+      ╟────────────────────────────────────────────────────────────────────────╢
+      ║  force_regenerate_masterkey: true is potentially DANGEROUS!            ║
+      ║                                                                        ║
+      ║  If you run INDIVIDUAL component playbooks separately:                ║
+      ║    ansible-playbook playbooks/kafka_broker.yml     → Key "abc123"     ║
+      ║    ansible-playbook playbooks/schema_registry.yml  → Key "xyz789" ❌  ║
+      ║    Each playbook will generate a DIFFERENT key = DIVERGENCE!          ║
+      ║                                                                        ║
+      ║  SAFE: Use with all.yml only                                          ║
+      ║    ansible-playbook all.yml  → All components get SAME key ✅         ║
+      ║                                                                        ║
+      ║  ALTERNATIVE: For controlled rotation without divergence risk:        ║
+      ║    1. Set force_regenerate_masterkey: false                           ║
+      ║    2. Delete: rm generated_ssl_files/masterkey                        ║
+      ║    3. Run: ansible-playbook all.yml  (or individual playbooks)        ║
+      ║                                                                        ║
+      ║  See: docs/FORCE_REGENERATE_BEHAVIOR.md for details                   ║
+      ╚════════════════════════════════════════════════════════════════════════╝
+  when:
+    - force_regenerate_masterkey|default(false)|bool
+    - secrets_protection_enabled|bool
+    - regenerate_masterkey|bool
+  run_once: true
+
+- name: Pause for force_regenerate_masterkey acknowledgment
+  pause:
+    prompt: |
+
+      Press ENTER to acknowledge the force_regenerate_masterkey warning and continue,
+      or Ctrl+C to abort and review your configuration.
+
+  when:
+    - force_regenerate_masterkey|default(false)|bool
+    - secrets_protection_enabled|bool
+    - regenerate_masterkey|bool
+    - masterkey_force_regenerate_acknowledged|default(false) == false
+  run_once: true
+
+- name: Mark force_regenerate_masterkey warning as acknowledged
+  set_fact:
+    masterkey_force_regenerate_acknowledged: true
+  when:
+    - force_regenerate_masterkey|default(false)|bool
+    - secrets_protection_enabled|bool
+    - regenerate_masterkey|bool
+
+# ============================================================================
+# Master Key Generation Logic
+# ============================================================================
+
+- name: Check if master key file already exists
+  stat:
+    path: generated_ssl_files/masterkey
+  delegate_to: localhost
+  run_once: true
+  register: masterkey_file_stat_local
+  when:
+    - secrets_protection_enabled|bool
+    - regenerate_masterkey|bool
+    - not secrets_protection_masterkey
+    - not force_regenerate_masterkey|default(false)  # Skip check if forcing regeneration
+
+- name: Generate Master Encryption Key
+  include_role:
+    name: common
+    tasks_from: masterkey.yml
+  run_once: true  # Executes ONCE globally at playbook level
+  when:
+    - secrets_protection_enabled|bool
+    - regenerate_masterkey|bool
+    - not secrets_protection_masterkey
+    - not masterkey_generated_at_all_level|default(false)  # Skip if all.yml already generated (fact check)
+    - force_regenerate_masterkey|default(false) or not masterkey_file_stat_local.stat.exists|default(false)  # Force or file doesn't exist (file check)
+
+- name: Mark master key as generated at playbook level
+  set_fact:
+    masterkey_generated_at_all_level: true
+  when:
+    - secrets_protection_enabled|bool
+    - (regenerate_masterkey|bool or secrets_protection_masterkey)
+
+# ============================================================================
+# Load Existing Master Key (if not generated in this run)
+# ============================================================================
+
+- name: Load master key from file if it exists and was not just generated
+  set_fact:
+    secrets_protection_masterkey: "{{ lookup('file', 'generated_ssl_files/masterkey') }}"
+  when:
+    - secrets_protection_enabled|bool
+    - regenerate_masterkey|bool
+    - not secrets_protection_masterkey
+    - masterkey_file_stat_local.stat.exists|default(false)
+    - masterkey_file_stat_local is defined
+    - not (force_regenerate_masterkey|default(false) or not masterkey_file_stat_local.stat.exists|default(false))
+  run_once: true

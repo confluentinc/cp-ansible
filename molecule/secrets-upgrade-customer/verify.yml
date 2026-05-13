@@ -1,0 +1,193 @@
+---
+# SEC-04 Verify: Upgrade + Customer-Provided Key
+#
+# CRITICAL VALIDATIONS:
+# 1. All hosts have the SAME master key
+# 2. Master key is the CUSTOMER'S key (preserved through upgrade)
+# 3. No auto-generation occurred
+# 4. Passwords encrypted
+# 5. Kafka brokers running
+
+- name: Verify - Customer Key Preserved During Upgrade
+  hosts: kafka_broker
+  gather_facts: false
+  vars:
+    expected_customer_key: "Y3VzdG9tZXIta2V5LXVwZ3JhZGUtYWJjMTIz"
+  tasks:
+    - name: Get master key from systemd override on each host
+      shell: systemctl cat confluent-kafka 2>/dev/null | grep CONFLUENT_SECURITY_MASTER_KEY | cut -d= -f2 | tr -d '"' || echo "NOT_FOUND"
+      register: master_key_output
+      changed_when: false
+      failed_when: false
+
+    - name: Display master key from each host
+      debug:
+        msg: "Host {{ inventory_hostname }}: {{ master_key_output.stdout[:40] if master_key_output.stdout|length > 40 else master_key_output.stdout }}..."
+
+    - name: Collect all master keys from all hosts
+      set_fact:
+        all_master_keys: "{{ groups['kafka_broker'] | map('extract', hostvars, 'master_key_output') | map(attribute='stdout') | list }}"
+      run_once: true
+
+    - name: Display test information
+      debug:
+        msg: |
+          ═══════════════════════════════════════════════════════════
+          SEC-04: Upgrade + Customer Key Test Results
+          ═══════════════════════════════════════════════════════════
+
+          Master keys found on hosts:
+          {% for host in groups['kafka_broker'] %}
+          - {{ host }}: {{ hostvars[host].master_key_output.stdout[:40] if hostvars[host].master_key_output.stdout|length > 40 else hostvars[host].master_key_output.stdout }}...
+          {% endfor %}
+
+          Expected customer key: {{ expected_customer_key[:40] }}...
+
+          Unique keys count: {{ all_master_keys | unique | length }}
+          Expected: 1 (single customer key preserved)
+          ═══════════════════════════════════════════════════════════
+      run_once: true
+
+    # CRITICAL TEST #1: Verify all hosts have the SAME master key
+    - name: "CRITICAL TEST #1: Verify all hosts have the same master key"
+      assert:
+        that:
+          - all_master_keys | unique | length == 1
+          - all_master_keys[0] | length > 0
+          - all_master_keys[0] != "NOT_FOUND"
+        fail_msg: |
+
+          ╔═══════════════════════════════════════════════════════════╗
+          ║                                                           ║
+          ║   ❌❌❌  CRITICAL FAILURE - DIVERGENCE DETECTED  ❌❌❌   ║
+          ║                                                           ║
+          ╚═══════════════════════════════════════════════════════════╝
+
+          Master keys are DIFFERENT across hosts!
+
+          Found {{ all_master_keys | unique | length }} unique keys:
+          {% for host in groups['kafka_broker'] %}
+          - {{ host }}: {{ hostvars[host].master_key_output.stdout }}
+          {% endfor %}
+
+          This should NEVER happen with customer-provided keys!
+          Customer keys should be consistent across all deployments.
+
+        success_msg: |
+          ✅ PASS: All hosts have the same master key
+          No divergence detected!
+      run_once: true
+
+    # CRITICAL TEST #2: Verify master key is CUSTOMER'S key (not regenerated)
+    - name: "CRITICAL TEST #2: Verify customer key preserved (not regenerated)"
+      assert:
+        that:
+          - all_master_keys[0] == expected_customer_key
+        fail_msg: |
+
+          ╔═══════════════════════════════════════════════════════════╗
+          ║                                                           ║
+          ║   ❌  FAILURE - Customer Key NOT Preserved  ❌            ║
+          ║                                                           ║
+          ╚═══════════════════════════════════════════════════════════╝
+
+          The master key is NOT the customer's key!
+
+          Expected (customer): {{ expected_customer_key[:40] }}...
+          Found:               {{ all_master_keys[0][:40] }}...
+
+          This indicates the customer's key was overwritten or ignored!
+
+          Possible causes:
+          1. Role-level fact clearing cleared customer key
+          2. Playbook generated new key despite customer key existing
+          3. Configuration error
+
+        success_msg: |
+          ✅ PASS: Customer key preserved through upgrade
+          Key matches customer-provided value
+      run_once: true
+
+    # TEST #3: Verify passwords are encrypted
+    - name: Verify passwords are encrypted in server.properties
+      shell: grep '${securepass:' /etc/kafka/server.properties | wc -l
+      register: encrypted_count
+      changed_when: false
+      failed_when: false
+
+    - name: Assert passwords are encrypted
+      assert:
+        that:
+          - encrypted_count.stdout | default('0') | int > 0
+        fail_msg: |
+          ❌ FAIL: No encrypted passwords found in server.properties
+        success_msg: |
+          ✅ PASS: Passwords are encrypted ({{ encrypted_count.stdout }} properties)
+      when: encrypted_count.stdout is defined
+
+    # TEST #4: Verify Kafka is running
+    - name: Check Kafka broker service status
+      shell: systemctl is-active confluent-kafka || echo "inactive"
+      register: kafka_status
+      changed_when: false
+      failed_when: false
+
+    - name: Assert Kafka is running
+      assert:
+        that:
+          - kafka_status.stdout == "active"
+        fail_msg: |
+          ❌ FAIL: Kafka broker is not running
+          Status: {{ kafka_status.stdout }}
+        success_msg: |
+          ✅ PASS: Kafka broker is running
+      when: kafka_status.stdout is defined
+
+    # TEST #5: Verify security.properties file exists
+    - name: Verify security.properties file on host
+      stat:
+        path: /var/ssl/private/kafka-broker-security.properties
+      register: security_file_stat
+
+    - name: Assert security.properties exists
+      assert:
+        that:
+          - security_file_stat.stat.exists
+        fail_msg: "❌ FAIL: security.properties not found"
+        success_msg: "✅ PASS: security.properties exists"
+
+# Final Summary Report
+- name: SEC-04 Test Summary
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Display final test results
+      debug:
+        msg: |
+
+          ╔═══════════════════════════════════════════════════════════╗
+          ║                                                           ║
+          ║     SEC-04: Upgrade + Customer-Provided Key              ║
+          ║     Customer Key Preservation Test                       ║
+          ║                                                           ║
+          ╚═══════════════════════════════════════════════════════════╝
+
+          ✅ CRITICAL TEST PASSED: No divergence detected
+          ✅ CRITICAL TEST PASSED: Customer key preserved
+          ✅ VALIDATION PASSED: Passwords encrypted
+          ✅ VALIDATION PASSED: Kafka brokers running
+          ✅ VALIDATION PASSED: Security files in place
+
+          ═══════════════════════════════════════════════════════════
+
+          CUSTOMER KEYS PRESERVED THROUGH UPGRADES!
+
+          Serial deployments (upgrades) correctly preserve the
+          customer's master key instead of overwriting it.
+
+          Fix validated:
+          - Customer key not cleared by role-level fact task ✅
+          - Playbook-level generation skipped (customer key exists) ✅
+          - All hosts use customer's key ✅
+
+          ═══════════════════════════════════════════════════════════

@@ -1,0 +1,131 @@
+---
+# SEC-03: Upgrade + Auto-Generated Key + FORCE REGENERATION (CRITICAL DIVERGENCE BUG TEST)
+#
+# This test validates that the master key divergence bug is FIXED, even with force regeneration.
+#
+# Configuration (dynamically set in converge.yml):
+#   - RUN 1: force_regenerate_masterkey: false (idempotent - generate once)
+#   - RUN 2: force_regenerate_masterkey: true (force regenerate - the dangerous case!)
+#
+# Without the fix:
+#   - Run 1 (parallel): All hosts get same key "abc123" ✅
+#   - Run 2 (serial + force_regenerate): Each host generates DIFFERENT key ❌ DIVERGENCE
+#
+# With the fix (fact-based coordination):
+#   - Run 1 (parallel): All hosts get same key "abc123" ✅
+#   - Run 2 (serial + force_regenerate): All hosts get SAME NEW key "xyz789" ✅ NO DIVERGENCE
+#
+# This is the STRONGEST test: Transition from idempotent to force regeneration in serial mode.
+
+dependency:
+  name: galaxy
+
+driver:
+  name: docker
+
+platforms:
+  - name: kafka-broker1.confluent
+    hostname: kafka-broker1.confluent
+    image: geerlingguy/docker-ubuntu1804-ansible:latest
+    dockerfile: ../Dockerfile-ubuntu.j2
+    privileged: true
+    command: /lib/systemd/systemd
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    groups:
+      - kafka_broker
+    networks:
+      - name: confluent
+
+  - name: kafka-broker2.confluent
+    hostname: kafka-broker2.confluent
+    image: geerlingguy/docker-ubuntu1804-ansible:latest
+    dockerfile: ../Dockerfile-ubuntu.j2
+    privileged: true
+    command: /lib/systemd/systemd
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    groups:
+      - kafka_broker
+    networks:
+      - name: confluent
+
+  - name: kafka-broker3.confluent
+    hostname: kafka-broker3.confluent
+    image: geerlingguy/docker-ubuntu1804-ansible:latest
+    dockerfile: ../Dockerfile-ubuntu.j2
+    privileged: true
+    command: /lib/systemd/systemd
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    groups:
+      - kafka_broker
+    networks:
+      - name: confluent
+
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      hash_behaviour: merge
+  inventory:
+    group_vars:
+      all:
+        scenario_name: secrets-upgrade-auto
+
+        installation_method: package
+        confluent_server_enabled: true
+
+        # CRITICAL: Secrets Protection Configuration for divergence test
+        secrets_protection_enabled: true
+        regenerate_masterkey: true
+        # force_regenerate_masterkey: Dynamically set in converge.yml based on run
+        #   - Run 1: false (idempotent - generate once)
+        #   - Run 2: true (force regenerate - the dangerous case)
+        secrets_protection_masterkey: ""  # Empty = auto-generate
+        masterkey_force_regenerate_acknowledged: true  # Skip interactive pause for automated testing
+
+        # SSL Configuration
+        ssl_enabled: false
+        ssl_mutual_auth_enabled: false
+
+        # SASL Configuration
+        sasl_protocol: none
+
+        # Kafka Configuration
+        kafka_broker_custom_properties:
+          num.partitions: 1
+          default.replication.factor: 1
+          min.insync.replicas: 1
+          offsets.topic.replication.factor: 1
+
+        kafka_broker_log_dirs:
+          - /var/lib/kafka
+  playbooks:
+    converge: converge.yml
+    verify: verify.yml
+
+verifier:
+  name: ansible
+
+scenario:
+  name: secrets-upgrade-auto
+  # CRITICAL TEST SEQUENCE (force_regenerate transitions from false → true):
+  # 1. First converge = fresh install (force_regenerate: false) → Generates key "abc123"
+  # 2. First verify = validate single key created across all hosts
+  # 3. Second converge = upgrade (force_regenerate: true!) → Generates NEW key "xyz789"
+  # 4. Second verify = validate NO divergence (all hosts have SAME new key via fact coordination)
+  test_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge  # Run 1: Fresh install (parallel)
+    - idempotence
+    - verify    # Verify Run 1: Single key created
+    - converge  # Run 2: Upgrade (serial) - CRITICAL TEST
+    - verify    # Verify Run 2: NO divergence
+    - cleanup
+    - destroy

@@ -1,0 +1,64 @@
+---
+# SEC-03 Converge: Upgrade + Auto-Generated Key + FORCE REGENERATION
+#
+# This playbook will be run TWICE with DIFFERENT configurations:
+#
+# RUN 1 (Fresh Install):
+#   - force_regenerate_masterkey: false (idempotent behavior)
+#   - Parallel deployment
+#   - Generates key "abc123" once
+#
+# RUN 2 (Upgrade):
+#   - force_regenerate_masterkey: true (force regeneration!)
+#   - Serial deployment
+#   - Generates NEW key "xyz789"
+#
+# The critical test: Even with force regeneration on Run 2, fact-based
+# coordination ensures all hosts get the SAME new key (no divergence).
+#
+# Without the fix, each host in serial mode would generate DIFFERENT keys.
+
+- name: Detect run type and set force_regenerate_masterkey
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check if Kafka service exists (indicates Run 2)
+      shell: systemctl list-unit-files | grep -q confluent-kafka && echo "exists" || echo "not_exists"
+      register: kafka_service_check
+      changed_when: false
+      failed_when: false
+
+    - name: Set force_regenerate_masterkey based on run type
+      set_fact:
+        force_regenerate_masterkey: "{{ 'true' if kafka_service_check.stdout == 'exists' else 'false' }}"
+
+    - name: Display run type and configuration
+      debug:
+        msg: |
+          ═══════════════════════════════════════════════════════════
+          Run Type Detection
+          ═══════════════════════════════════════════════════════════
+          Kafka service exists: {{ kafka_service_check.stdout }}
+          Run type: {{ 'RUN 2 (Upgrade)' if kafka_service_check.stdout == 'exists' else 'RUN 1 (Fresh Install)' }}
+          force_regenerate_masterkey: {{ force_regenerate_masterkey }}
+          ═══════════════════════════════════════════════════════════
+      run_once: true
+
+- name: Include variables role for all hosts
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Include variables role
+      include_role:
+        name: confluent.platform.variables
+
+- name: Include common role
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Include common role
+      include_role:
+        name: confluent.platform.common
+
+- name: Deploy Kafka Broker with Secrets Protection
+  import_playbook: ../../playbooks/kafka_broker.yml
