@@ -4,6 +4,16 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v7.4.15
+======
+Notable fixes
+-------------
+- For the list of security and vulnerability issues fixed in this release, see https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+
+Bug fixes
+-------------
+- Fixed kafka-storage format failures on KRaft clusters with secrets protection enabled — the masterkey is now passed via the CONFLUENT_SECURITY_MASTER_KEY env var (https://github.com/confluentinc/cp-ansible/pull/2477).
+
 v7.4.14
 ======
 Notable fixes
