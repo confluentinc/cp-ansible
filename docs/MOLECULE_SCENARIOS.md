@@ -208,8 +208,6 @@ TLS Enabled.
 
 Custom TLS certificates.
 
-USM Agent Authentication Configuration - BASIC + TLS AUTHENTICATION with custom certs.
-
 #### Scenario confluent-kafka-kerberos-customcerts-rhel verify test's the following:
 
 Validates GSSAPI Protocol for Kerberos is set.
@@ -245,8 +243,6 @@ Zookeeper, Broker and Kraft Controller co-located while Migration
 Kafka broker has custom listener at port 9093
 
 Kraft Controller is running at port 9094
-
-USM Agent Authentication Configuration - BASIC AUTHENTICATION
 
 #### Scenario cp-kafka-plain-rhel verify test's the following:
 
