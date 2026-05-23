@@ -1,0 +1,64 @@
+---
+### Two-pass converge for the auto-generated master key flow:
+###   1. First pass with regenerate_masterkey: true creates the key and encrypts properties.
+###   2. Capture the master key written to the broker's systemd override.conf.
+###   3. Second pass with regenerate_masterkey: false re-runs convergence and must
+###      reuse the same key (no silent regeneration, no encryption drift).
+
+- name: Initial converge with regenerate_masterkey true
+  import_playbook: confluent.platform.all
+
+- name: Capture master key written by the first pass
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Read broker systemd override.conf
+      slurp:
+        src: /etc/systemd/system/confluent-server.service.d/override.conf
+      register: override_first_pass
+
+    - name: Extract CONFLUENT_SECURITY_MASTER_KEY from override.conf
+      set_fact:
+        masterkey_first_pass: "{{ (override_first_pass.content | b64decode).split('\n')
+          | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
+          | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Assert master key is non-empty after first pass
+      assert:
+        that:
+          - masterkey_first_pass | default('') | length > 0
+        fail_msg: "First pass did not populate CONFLUENT_SECURITY_MASTER_KEY on the broker."
+
+    - name: Persist first-pass master key for cross-play comparison
+      add_host:
+        name: "{{ inventory_hostname }}"
+        masterkey_first_pass: "{{ masterkey_first_pass }}"
+
+- name: Re-converge with regenerate_masterkey false
+  import_playbook: confluent.platform.all
+  vars:
+    regenerate_masterkey: false
+
+- name: Verify master key persisted across the re-run
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Re-read broker systemd override.conf after second pass
+      slurp:
+        src: /etc/systemd/system/confluent-server.service.d/override.conf
+      register: override_second_pass
+
+    - name: Extract CONFLUENT_SECURITY_MASTER_KEY from override.conf (second pass)
+      set_fact:
+        masterkey_second_pass: "{{ (override_second_pass.content | b64decode).split('\n')
+          | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
+          | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Assert master key was not regenerated on the second pass
+      assert:
+        that:
+          - masterkey_first_pass == masterkey_second_pass
+        fail_msg: >-
+          Master key changed across runs (first={{ masterkey_first_pass }},
+          second={{ masterkey_second_pass }}). regenerate_masterkey: false
+          must preserve the existing key.

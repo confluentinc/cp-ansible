@@ -1,0 +1,50 @@
+---
+### Two-pass converge for the customer-provided master key flow:
+###   1. First pass (regenerate_masterkey: true) bootstraps a valid master key
+###      and security.properties so we have realistic artifacts to feed back in.
+###   2. Stage those artifacts at a distinct "customer_files" path on the
+###      controller so we can prove the explicit secrets_protection_security_file
+###      is honored (rather than the auto-detected default location).
+###   3. Second pass re-runs the platform playbook with explicit
+###      secrets_protection_masterkey, secrets_protection_security_file, and
+###      regenerate_masterkey: false to validate the customer-provided flow.
+
+- name: Bootstrap pass to generate realistic customer artifacts
+  import_playbook: confluent.platform.all
+
+- name: Stage bootstrapped artifacts at a customer-provided path
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Ensure customer_files directory exists on controller
+      file:
+        path: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/customer_files"
+        state: directory
+        mode: '755'
+
+    - name: Copy bootstrapped security.properties to customer_files
+      copy:
+        src: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/generated_ssl_files/security.properties"
+        dest: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/customer_files/customer-security.properties"
+        mode: '640'
+
+    - name: Read bootstrapped master key
+      slurp:
+        src: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/generated_ssl_files/masterkey"
+      register: bootstrapped_masterkey
+
+    - name: Expose customer master key + security file path to all hosts
+      add_host:
+        name: "{{ item }}"
+        groups: "{{ hostvars[item].group_names }}"
+        customer_masterkey: "{{ bootstrapped_masterkey.content | b64decode | trim }}"
+        customer_security_file: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/customer_files/customer-security.properties"
+      loop: "{{ groups['all'] }}"
+
+- name: Re-converge using customer-provided master key and security file
+  import_playbook: confluent.platform.all
+  vars:
+    regenerate_masterkey: false
+    secrets_protection_masterkey: "{{ hostvars[groups['kafka_broker'][0]].customer_masterkey }}"
+    secrets_protection_security_file: "{{ hostvars[groups['kafka_broker'][0]].customer_security_file }}"

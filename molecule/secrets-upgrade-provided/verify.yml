@@ -1,0 +1,50 @@
+---
+### Validates the customer-provided master key flow:
+### - security.properties from the customer-provided path is deployed on the broker.
+### - server.properties references the encrypted secret via ${securepass:...}.
+### - The master key on the broker matches the customer-provided value.
+
+- name: Verify - kafka_broker secrets protection (customer-provided)
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: security.properties deployed on broker
+      stat:
+        path: /var/ssl/private/kafka-broker-security.properties
+      register: secrets_file_stat
+
+    - assert:
+        that:
+          - secrets_file_stat.stat.exists
+        fail_msg: "security.properties missing on broker - customer-provided file was not copied (regression of ANSIENG-5857)."
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: ssl.keystore.password
+        expected_value: ${securepass:/var/ssl/private/kafka-broker-security.properties:server.properties/ssl.keystore.password}
+
+    - name: Read broker systemd override.conf
+      slurp:
+        src: /etc/systemd/system/confluent-server.service.d/override.conf
+      register: broker_override
+
+    - name: Extract CONFLUENT_SECURITY_MASTER_KEY from broker override.conf
+      set_fact:
+        broker_masterkey: "{{ (broker_override.content | b64decode).split('\n')
+          | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
+          | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Read customer-provided master key from controller
+      slurp:
+        src: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/generated_ssl_files/masterkey"
+      delegate_to: localhost
+      register: customer_masterkey_file
+
+    - name: Assert broker is using the customer-provided master key
+      assert:
+        that:
+          - broker_masterkey == (customer_masterkey_file.content | b64decode | trim)
+        fail_msg: "Broker master key does not match the customer-provided value."

@@ -1,0 +1,82 @@
+---
+### Customer-Provided Master Key Test.
+### Simulates the workflow where a customer generates the master key and
+### security.properties out-of-band and supplies them to cp-ansible via
+### `secrets_protection_masterkey` and `secrets_protection_security_file`
+### with `regenerate_masterkey: false`. The converge.yml stages bootstrap
+### artifacts at a custom path so we can prove the explicit path is honored
+### (regression coverage for ANSIENG-5857: the security.properties copy was
+### being skipped when regenerate_masterkey was false on a fresh host).
+
+driver:
+  name: docker
+platforms:
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    converge: converge.yml
+  inventory:
+    group_vars:
+      all:
+        scenario_name: secrets-upgrade-provided
+
+        ssl_enabled: true
+        # secrets protection on CLI v3 without RBAC (mirrors mtls-ubuntu pattern)
+        secrets_protection_enabled: true
+        confluent_cli_version: 3.2.1
+
+        # First pass bootstraps real artifacts; converge.yml then re-runs the
+        # platform playbook with these vars explicitly set to the captured
+        # customer-side values.
+        regenerate_masterkey: true
