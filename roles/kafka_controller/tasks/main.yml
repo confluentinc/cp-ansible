@@ -224,28 +224,16 @@
     - configuration
     - privileged
 
-- name: Validate CLI version for controller secrets protection
-  assert:
-    that:
-      - confluent_cli_version is version('3.0.0', '>=')
-    fail_msg: |
-      Controller secrets protection requires Confluent CLI v3.0.0 or higher.
-      Current version: {{ confluent_cli_version }}
-      CLI v2.x support has been removed. Please upgrade to CLI v3.0+.
-      See: https://docs.confluent.io/confluent-cli/current/
-  when: kafka_controller_secrets_protection_enabled|bool or kafka_controller_client_secrets_protection_enabled|bool
-
 # Controller secrets protection with CLI v3.0+
 # CLI v3.0+ removed MDS authentication requirement - controller handles own encryption
+# CLI version is asserted inside common/tasks/secrets_protection.yml; the
+# Empty-fact-on-regenerate task is also defined there. Only the caller-scoped
+# "Record" task lives here so the multi-include flow does not re-evaluate
+# the provided flag against a post-include fact.
 - name: Record whether secrets_protection_masterkey was supplied by the caller
   set_fact:
     secrets_protection_masterkey_provided: "{{ secrets_protection_masterkey | default('') | length > 0 }}"
   no_log: "{{ mask_secrets|bool }}"
-
-- name: Empty master key fact when regenerate_masterkey
-  set_fact:
-    secrets_protection_masterkey: ""
-  when: regenerate_masterkey|bool
 
 - name: Create Kafka Controller Config with Secrets Protection
   include_role:

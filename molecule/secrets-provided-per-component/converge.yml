@@ -36,10 +36,12 @@
   hosts: localhost
   gather_facts: false
   vars:
+    # kafka-connect intentionally NOT in this list - that group has
+    # kafka_connect_secrets_protection_enabled: false in molecule.yml
+    # (Story 11 coverage).
     customer_components:
       - kafka-broker
       - schema-registry
-      - kafka-connect
   tasks:
     - name: Ensure customer_files directory exists
       file:
@@ -79,14 +81,15 @@
   import_playbook: confluent.platform.all
 
 - name: Pass 1 - capture each component's master key after initial converge
-  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect
+  # kafka_connect is intentionally excluded - it runs with secrets protection
+  # disabled (Story 11) so it has no CONFLUENT_SECURITY_MASTER_KEY to capture.
+  hosts: kafka_controller:kafka_broker:schema_registry
   gather_facts: false
   vars:
     component_service_name:
       kafka_controller: confluent-kcontroller
       kafka_broker: confluent-server
       schema_registry: confluent-schema-registry
-      kafka_connect: confluent-kafka-connect
     primary_group: "{{ group_names | intersect(component_service_name.keys() | list) | first }}"
   tasks:
     - name: Read systemd override.conf for {{ primary_group }} (Pass 1)
@@ -114,10 +117,12 @@
   hosts: localhost
   gather_facts: false
   vars:
+    # kafka-connect intentionally NOT in this list - that group has
+    # kafka_connect_secrets_protection_enabled: false in molecule.yml
+    # (Story 11 coverage).
     customer_components:
       - kafka-broker
       - schema-registry
-      - kafka-connect
   tasks:
     - name: Regenerate Pass 2 master key + security.properties per component
       shell: |
@@ -148,13 +153,14 @@
         label: "{{ item.item }}"
 
 - name: Pass 2 - re-pin provided components' secrets_protection_masterkey to the rotated lookup value
-  hosts: kafka_broker:schema_registry:kafka_connect
+  # kafka_connect intentionally excluded - secrets protection is disabled
+  # for that group, so there is no fact to re-pin (Story 11).
+  hosts: kafka_broker:schema_registry
   gather_facts: false
   vars:
     fixture_basename:
       kafka_broker: kafka-broker
       schema_registry: schema-registry
-      kafka_connect: kafka-connect
     primary_group: "{{ group_names | intersect(fixture_basename.keys() | list) | first }}"
   tasks:
     - name: Override masterkey fact on {{ primary_group }} so the rotated group_var lookup is used
@@ -165,14 +171,15 @@
   import_playbook: confluent.platform.all
 
 - name: Pass 2 - capture each component's master key after rotation
-  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect
+  # kafka_connect is intentionally excluded - it runs with secrets protection
+  # disabled (Story 11) so it has no CONFLUENT_SECURITY_MASTER_KEY to capture.
+  hosts: kafka_controller:kafka_broker:schema_registry
   gather_facts: false
   vars:
     component_service_name:
       kafka_controller: confluent-kcontroller
       kafka_broker: confluent-server
       schema_registry: confluent-schema-registry
-      kafka_connect: confluent-kafka-connect
     primary_group: "{{ group_names | intersect(component_service_name.keys() | list) | first }}"
   tasks:
     - name: Read systemd override.conf for {{ primary_group }} (Pass 2)

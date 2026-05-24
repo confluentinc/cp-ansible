@@ -1,23 +1,28 @@
 ---
 ### Validates the per-component customer-provided master key flow:
-### - Each provided component (kafka_broker, schema_registry, kafka_connect)
-###   carries its OWN customer-supplied master key in its systemd override.conf.
+### - kafka_broker and schema_registry each carry their OWN customer-supplied
+###   master key in systemd override.conf.
 ### - The brokers' security.properties is deployed and server.properties uses
 ###   the ${securepass:...} reference.
-### - kafka_controller, which was intentionally left out of the customer-
-###   provided group_vars, holds a DIFFERENT master key (auto-regenerated).
-### - All four component keys are distinct - proof that per-component
+### - kafka_controller, intentionally left out of the customer-provided
+###   group_vars, holds a DIFFERENT master key (auto-regenerated).
+### - All three secrets-enabled keys are distinct - proof that per-component
 ###   group_vars overrides flowed through to each component independently.
+### - Story 11: kafka_connect has secrets protection DISABLED via
+###   kafka_connect_secrets_protection_enabled: false. It must run plaintext:
+###   no security.properties on disk, no ${securepass:...} references in its
+###   config, no master key in its override.conf.
 
-- name: Capture each component's master key for cross-component comparison
-  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect
+- name: Capture each secrets-enabled component's master key
+  # kafka_connect intentionally excluded - it runs with secrets protection
+  # disabled (Story 11) so it has no key to capture.
+  hosts: kafka_controller:kafka_broker:schema_registry
   gather_facts: false
   vars:
     component_service_name:
       kafka_controller: confluent-kcontroller
       kafka_broker: confluent-server
       schema_registry: confluent-schema-registry
-      kafka_connect: confluent-kafka-connect
     primary_group: "{{ group_names | intersect(component_service_name.keys() | list) | first }}"
   tasks:
     - name: Read systemd override.conf for {{ primary_group }}
@@ -68,15 +73,65 @@
           {{ groups['kafka_broker'][0] }} - the broker-group customer pair
           must apply uniformly across the broker group.
 
+- name: Verify - kafka_connect secrets protection is DISABLED (Story 11)
+  hosts: kafka_connect
+  gather_facts: false
+  tasks:
+    - name: kafka_connect-security.properties should NOT exist on disk
+      stat:
+        path: /var/ssl/private/kafka_connect-security.properties
+      register: kc_secfile_stat
+
+    - name: Assert kafka_connect runs without a security.properties file
+      assert:
+        that:
+          - not kc_secfile_stat.stat.exists
+        fail_msg: >-
+          kafka_connect-security.properties unexpectedly exists on
+          {{ inventory_hostname }}. With
+          kafka_connect_secrets_protection_enabled: false the role must NOT
+          deploy a secrets file.
+
+    - name: Read kafka_connect connect-distributed.properties
+      slurp:
+        src: /etc/kafka/connect-distributed.properties
+      register: kc_config
+
+    - name: Assert kafka_connect config carries NO ${securepass:...} references
+      assert:
+        that:
+          - "'${securepass:' not in (kc_config.content | b64decode)"
+        fail_msg: >-
+          kafka_connect connect-distributed.properties contains a
+          ${securepass:...} reference. With
+          kafka_connect_secrets_protection_enabled: false the role must not
+          encrypt any property.
+
+    - name: Read kafka_connect systemd override.conf (if any)
+      slurp:
+        src: /etc/systemd/system/confluent-kafka-connect.service.d/override.conf
+      register: kc_override
+      failed_when: false
+
+    - name: Assert kafka_connect override.conf does not carry a populated master key
+      assert:
+        that:
+          - kc_override.failed | default(false)
+            or 'CONFLUENT_SECURITY_MASTER_KEY=""' in (kc_override.content | b64decode)
+            or 'CONFLUENT_SECURITY_MASTER_KEY=' not in (kc_override.content | b64decode)
+        fail_msg: >-
+          kafka_connect override.conf carries a CONFLUENT_SECURITY_MASTER_KEY
+          value, but secrets protection is disabled for this group.
+
 - name: Verify - per-component master keys are all distinct
   hosts: localhost
   gather_facts: false
   vars:
+    # kafka_connect is excluded - it has no master key (Story 11).
     component_hosts:
       kafka_broker: "{{ groups['kafka_broker'][0] }}"
       kafka_controller: "{{ groups['kafka_controller'][0] }}"
       schema_registry: "{{ groups['schema_registry'][0] }}"
-      kafka_connect: "{{ groups['kafka_connect'][0] }}"
     component_keys: >-
       {{
         component_hosts | dict2items
@@ -91,7 +146,7 @@
           {{ component_hosts | dict2items | map(attribute='key') | list }} =>
           key-lengths {{ component_keys | map('length') | list }}
 
-    - name: Assert every component carries a distinct master key
+    - name: Assert every secrets-enabled component carries a distinct master key
       assert:
         that:
           - component_keys | length == component_keys | unique | length
@@ -114,4 +169,3 @@
       loop:
         - kafka_broker
         - schema_registry
-        - kafka_connect

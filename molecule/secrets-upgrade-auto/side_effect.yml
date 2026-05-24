@@ -1,0 +1,114 @@
+---
+### side_effect.yml piggy-backs on the cluster left running by converge.yml
+### to cover two extra contracts without spinning up a separate scenario:
+###
+### Story 10 - CLI v2.x rejection. roles/common/tasks/secrets_protection.yml
+###            asserts confluent_cli_version >= 3.0.0 at its very first task.
+###            We invoke that task list with confluent_cli_version: "2.9.0"
+###            inside a block/rescue and assert the failure message names the
+###            CLI v3 requirement. No converge happens; cost is one local
+###            Ansible task run.
+###
+### Story 3 - Idempotency on the encrypted re-run. After Pass 2 (the
+###           regenerate_masterkey: false re-converge) the broker's
+###           security.properties, server.properties, and override.conf
+###           should be stable. We snapshot SHA256 of each, run
+###           confluent.platform.all ONE more time with the same vars Pass 2
+###           used, re-snapshot, and assert each checksum is unchanged.
+###           This is the regression check for ANSIENG-5858 (the stat-guard
+###           that used to skip server.properties on subsequent runs).
+
+#######################################################################
+# Story 10 - CLI v2 rejection (no converge, runs on localhost only)
+#######################################################################
+
+- name: Story 10 - assert CLI v2 is rejected by common/secrets_protection.yml
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Run secrets_protection.yml with confluent_cli_version=2.9.0 - must fail at the assert
+      block:
+        - name: Include common/tasks/secrets_protection.yml with a deprecated CLI version
+          include_tasks: "{{ playbook_dir }}/../../roles/common/tasks/secrets_protection.yml"
+          vars:
+            confluent_cli_version: "2.9.0"
+            secrets_protection_enabled: true
+            mask_secrets: false
+
+        - name: Should not reach here - assert above must have fired
+          fail:
+            msg: >-
+              CLI v2.9.0 did NOT trigger the CLI-version assert in
+              roles/common/tasks/secrets_protection.yml. Either the assert
+              was deleted or its condition regressed.
+      rescue:
+        - name: Confirm the failure mentions the CLI v3.0.0 requirement
+          assert:
+            that:
+              - ansible_failed_result is defined
+              - (ansible_failed_result.msg | default('') | string)
+                  is search('Confluent CLI v3.0.0 or higher')
+            fail_msg: >-
+              The role failed, but the message did not match the expected
+              CLI v3 requirement text. ansible_failed_result was
+              {{ ansible_failed_result | default('<unset>') }}.
+
+#######################################################################
+# Story 3 - idempotency of the encrypted, regen=false steady state
+#######################################################################
+
+- name: Story 3 - snapshot post-converge secrets state before re-run
+  hosts: kafka_broker
+  gather_facts: false
+  vars:
+    snapshot_paths:
+      - /etc/kafka/server.properties
+      - /var/ssl/private/kafka-broker-security.properties
+      - /etc/systemd/system/confluent-server.service.d/override.conf
+  tasks:
+    - name: Compute SHA256 of each tracked file
+      stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+      loop: "{{ snapshot_paths }}"
+      register: pre_snapshots
+
+    - name: Persist pre-run checksums as a host fact
+      set_fact:
+        pre_run_checksums: "{{ dict(snapshot_paths | zip(pre_snapshots.results | map(attribute='stat.checksum') | list)) }}"
+
+- name: Story 3 - re-run the platform playbook with the same regen=false vars
+  import_playbook: confluent.platform.all
+  vars:
+    regenerate_masterkey: false
+
+- name: Story 3 - re-snapshot and assert no drift
+  hosts: kafka_broker
+  gather_facts: false
+  vars:
+    snapshot_paths:
+      - /etc/kafka/server.properties
+      - /var/ssl/private/kafka-broker-security.properties
+      - /etc/systemd/system/confluent-server.service.d/override.conf
+  tasks:
+    - name: Compute SHA256 of each tracked file post-re-run
+      stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+      loop: "{{ snapshot_paths }}"
+      register: post_snapshots
+
+    - name: Assert each tracked file is byte-identical across the re-run
+      assert:
+        that:
+          - item.stat.checksum == pre_run_checksums[item.item]
+        fail_msg: >-
+          {{ item.item }} changed on {{ inventory_hostname }} during an
+          idempotent re-run (regenerate_masterkey: false, same vars).
+          pre={{ pre_run_checksums[item.item] }}, post={{ item.stat.checksum }}.
+          This is exactly the ANSIENG-5858 / ANSIENG-5784 regression class -
+          subsequent runs must not rewrite server.properties, security.properties,
+          or override.conf.
+      loop: "{{ post_snapshots.results }}"
+      loop_control:
+        label: "{{ item.item }}"

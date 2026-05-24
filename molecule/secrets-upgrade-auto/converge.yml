@@ -1,11 +1,56 @@
 ---
-### Two-pass converge for the auto-generated master key flow:
-###   1. First pass with regenerate_masterkey: true creates the key and encrypts properties.
-###   2. Capture the master key written to the broker's systemd override.conf.
-###   3. Second pass with regenerate_masterkey: false re-runs convergence and must
-###      reuse the same key (no silent regeneration, no encryption drift).
+### Three-pass converge for the auto-generated master key flow:
+###   Pass 0 (Story 7): secrets_protection_enabled=false. Establish a plaintext
+###          baseline cluster. server.properties has no ${securepass:...}
+###          references; no security.properties file deployed.
+###   Pass 1 (original): secrets_protection_enabled=true (default in
+###          molecule.yml) with regenerate_masterkey=true. The role enables
+###          secrets protection on the running cluster - this is the
+###          plain -> encrypted upgrade.
+###   Pass 2 (original): regenerate_masterkey=false. The cluster must reuse
+###          the Pass 1 key (no silent regeneration, no encryption drift -
+###          ANSIENG-5784 + ANSIENG-5858 regression coverage).
+###
+### Story 3 (idempotency) and Story 10 (CLI v2 rejection) are checked by
+### side_effect.yml after this converge.
 
-- name: Initial converge with regenerate_masterkey true
+- name: Pass 0 - plaintext baseline with secrets protection DISABLED
+  import_playbook: confluent.platform.all
+  vars:
+    secrets_protection_enabled: false
+
+- name: Pass 0 verify - cluster is fully plaintext
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Read broker server.properties at the plaintext baseline
+      slurp:
+        src: /etc/kafka/server.properties
+      register: plain_server_props
+
+    - name: Assert no ${securepass:...} references at the plaintext baseline
+      assert:
+        that:
+          - "'${securepass:' not in (plain_server_props.content | b64decode)"
+        fail_msg: >-
+          Pass 0 was supposed to leave server.properties plaintext, but a
+          ${securepass:...} reference appeared. secrets_protection_enabled:
+          false did not propagate.
+
+    - name: kafka-broker-security.properties must NOT exist at plaintext baseline
+      stat:
+        path: /var/ssl/private/kafka-broker-security.properties
+      register: plain_secrets_stat
+
+    - assert:
+        that:
+          - not plain_secrets_stat.stat.exists
+        fail_msg: >-
+          security.properties exists on the broker even though
+          secrets_protection_enabled: false. The role must not deploy
+          a secrets file when the feature is off.
+
+- name: Pass 1 - enable secrets protection on the running cluster (plain -> encrypted)
   import_playbook: confluent.platform.all
 
 - name: Capture master key written by the first pass
