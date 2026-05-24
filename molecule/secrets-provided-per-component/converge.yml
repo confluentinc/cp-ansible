@@ -1,44 +1,12 @@
 ---
-### Per-component customer-provided master key flow with rotation:
-###
-###   Pass 1 - establish initial state
-###     1. Pre-step on localhost: for each provided CP component
-###        (kafka_broker, schema_registry, kafka_connect) generate an
-###        independent master key + security.properties pair inside a one-shot
-###        confluentinc/cp-server Docker container, writing each pair to its
-###        own files under customer_files/.
-###     2. import_playbook confluent.platform.all once.
-###        - Provided components consume their own customer pair
-###          (regenerate_masterkey: false from molecule.yml group_vars).
-###        - kafka_controller has regenerate_masterkey: true and
-###          auto-generates its own key.
-###     3. Capture each component's Pass 1 master key from its own
-###        override.conf and persist as a host fact.
-###
-###   Pass 2 - rotation upgrade
-###     4. Pre-step on localhost: regenerate the per-component customer
-###        fixtures, overwriting the Pass 1 files in place. Re-pin each
-###        provided group's secrets_protection_masterkey fact to the new
-###        lookup value (the Pass 1 set_fact would otherwise shadow the
-###        refreshed group_var via Ansible's set_fact > group_vars
-###        precedence). kafka_controller's regenerate_masterkey: true
-###        triggers an auto-regenerated rotation on the controller.
-###     5. import_playbook confluent.platform.all a second time.
-###     6. Capture Pass 2 master keys and assert each component's key
-###        actually rotated (pass1 != pass2). All four keys must remain
-###        distinct from each other.
-
-#######################################################################
-# Pass 1 - initial state
-#######################################################################
+### Pass 1 generates per-component customer fixtures via cp-server in Docker
+### and converges; Pass 2 regenerates the fixtures (rotation) and re-converges.
+### Each component's key must change between passes.
 
 - name: Pass 1 - generate initial per-component customer fixtures
   hosts: localhost
   gather_facts: false
   vars:
-    # kafka-connect intentionally NOT in this list - that group has
-    # kafka_connect_secrets_protection_enabled: false in molecule.yml
-    # (Story 11 coverage).
     customer_components:
       - kafka-broker
       - schema-registry
@@ -81,8 +49,6 @@
   import_playbook: confluent.platform.all
 
 - name: Pass 1 - capture each component's master key after initial converge
-  # kafka_connect is intentionally excluded - it runs with secrets protection
-  # disabled (Story 11) so it has no CONFLUENT_SECURITY_MASTER_KEY to capture.
   hosts: kafka_controller:kafka_broker:schema_registry
   gather_facts: false
   vars:
@@ -109,17 +75,10 @@
           - pass1_masterkey | default('') | length > 0
         fail_msg: "{{ inventory_hostname }} ({{ primary_group }}) has no CONFLUENT_SECURITY_MASTER_KEY after Pass 1."
 
-#######################################################################
-# Pass 2 - rotation upgrade
-#######################################################################
-
 - name: Pass 2 - regenerate per-component customer fixtures (rotation)
   hosts: localhost
   gather_facts: false
   vars:
-    # kafka-connect intentionally NOT in this list - that group has
-    # kafka_connect_secrets_protection_enabled: false in molecule.yml
-    # (Story 11 coverage).
     customer_components:
       - kafka-broker
       - schema-registry
@@ -153,8 +112,8 @@
         label: "{{ item.item }}"
 
 - name: Pass 2 - re-pin provided components' secrets_protection_masterkey to the rotated lookup value
-  # kafka_connect intentionally excluded - secrets protection is disabled
-  # for that group, so there is no fact to re-pin (Story 11).
+  # The Pass 1 set_fact would otherwise shadow the rotated group_var lookup
+  # (set_fact > group_vars in Ansible precedence).
   hosts: kafka_broker:schema_registry
   gather_facts: false
   vars:
@@ -168,12 +127,9 @@
         secrets_protection_masterkey: "{{ lookup('file', lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') + '/customer_files/' + fixture_basename[primary_group] + '-masterkey.txt') | trim }}"
 
 - name: Pass 2 - clear kafka_controller masterkey fact so regenerate_masterkey actually regenerates
-  # The chained molecule playbook would otherwise carry the Pass 1 fact across
-  # to Pass 2, and (without the PR-#2158 "Empty fact" task) masterkey.yml's
-  # `not secrets_protection_masterkey` guard would skip the regeneration even
-  # though regenerate_masterkey is true. In production this isn't an issue
-  # because each ansible-playbook invocation starts with empty facts; here we
-  # simulate that explicitly.
+  # The chained molecule playbook keeps Pass 1's fact alive into Pass 2;
+  # masterkey.yml's `not secrets_protection_masterkey` guard would then skip
+  # regeneration. Production starts each invocation with empty facts.
   hosts: kafka_controller
   gather_facts: false
   tasks:
@@ -185,8 +141,6 @@
   import_playbook: confluent.platform.all
 
 - name: Pass 2 - capture each component's master key after rotation
-  # kafka_connect is intentionally excluded - it runs with secrets protection
-  # disabled (Story 11) so it has no CONFLUENT_SECURITY_MASTER_KEY to capture.
   hosts: kafka_controller:kafka_broker:schema_registry
   gather_facts: false
   vars:
@@ -212,8 +166,4 @@
         that:
           - pass2_masterkey | default('') | length > 0
           - pass2_masterkey != pass1_masterkey
-        fail_msg: >-
-          {{ inventory_hostname }} ({{ primary_group }}) did NOT rotate its
-          master key: Pass 1 and Pass 2 keys are identical. Customer-provided
-          components must pick up the rotated fixture; kafka_controller must
-          regenerate via regenerate_masterkey: true.
+        fail_msg: "{{ inventory_hostname }} ({{ primary_group }}) did not rotate its master key."

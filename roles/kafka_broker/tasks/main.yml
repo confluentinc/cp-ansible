@@ -235,8 +235,6 @@
   tags:
     - configuration
 
-# Secrets protection requires Confluent CLI v3.0+ (CLI v2.x deprecated and removed).
-# CLI version is asserted inside common/tasks/secrets_protection.yml.
 - name: Create Service Override Directory
   file:
     path: "{{kafka_broker.systemd_override | dirname }}"
@@ -248,9 +246,6 @@
     - systemd
     - privileged
 
-# When secrets protection is enabled, this wrapper encrypts the broker (and
-# broker-client) configs and populates secrets_protection_masterkey on this
-# host, which Write Service Overrides below then templates into override.conf.
 - name: Encrypt broker secrets
   include_tasks: secrets_protection.yml
   when:
@@ -258,11 +253,9 @@
       or kafka_broker_client_secrets_protection_enabled|bool
     - confluent_cli_version is version('3.0.0', '>=')
 
-# override.conf is always written: it carries JVM/JMX/ulimit overrides even
-# when secrets protection is off. When secrets protection is on, the master
-# key set by the wrapper above is templated in here, so override.conf is
-# written exactly once per converge with the correct CONFLUENT_SECURITY_MASTER_KEY
-# value. This eliminates the pre-#2158 double-restart pattern.
+# Must run after Encrypt broker secrets so secrets_protection_masterkey is
+# templated into override.conf in the same pass. Always runs (override.conf
+# also carries JVM/JMX/ulimit settings used when secrets protection is off).
 - name: Write Service Overrides
   template:
     src: override.conf.j2
@@ -275,10 +268,6 @@
   tags:
     - systemd
     - privileged
-
-# Note: Controller secrets encryption removed from broker
-# Controllers now handle their own secrets protection with CLI v3.0+
-# No delegation needed - CLI v3.0+ removed MDS authentication requirement
 
 - name: Include Kraft Cluster Data
   include_tasks: get_meta_properties.yml

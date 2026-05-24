@@ -1,28 +1,9 @@
 ---
-### Two-pass converge for the customer-provided master key flow,
-### exercising wiki Scenario 4 (regenerate_masterkey: true alongside
-### supplied secrets_protection_masterkey + secrets_protection_security_file):
-###   1. First pass (regenerate_masterkey: true) bootstraps a valid master key
-###      and security.properties so we have realistic artifacts to feed back in.
-###   2. Capture the master key from a broker's systemd override.conf and pull
-###      its security.properties to a "customer_files" path on the controller
-###      so we can prove the explicit secrets_protection_security_file is
-###      honored (rather than the auto-detected default location).
-###   3. Override secrets_protection_masterkey / secrets_protection_security_file
-###      as facts on every host. Necessary because the bootstrap pass set these
-###      via set_fact, and play vars on a chained import_playbook would lose to
-###      that lingering fact (set_fact > play vars in Ansible precedence). In
-###      production this isn't an issue because the customer-provided run is a
-###      separate ansible-playbook invocation with no surviving facts.
-###   4. Second pass re-runs the platform playbook with regenerate_masterkey
-###      TRUE *and* customer-supplied values in place. Per wiki Scenario 4 the
-###      customer's master key MUST win: master-key generation is skipped,
-###      the customer's security.properties is copied, and the customer's
-###      master key is what ends up in override.conf. Asserted at the bottom.
-###      (Wiki Scenario 3 - regenerate_masterkey: false with customer values -
-###      is covered by secrets-provided-per-component's broker and
-###      schema_registry groups, so we deliberately use this scenario for the
-###      regen=true variant instead.)
+### Two passes: bootstrap valid customer artifacts (regenerate_masterkey: true,
+### then capture the generated key + security.properties), then re-converge
+### with those artifacts pinned as facts AND regenerate_masterkey: true. The
+### customer's value must win - regen=true alongside a supplied key is a
+### no-op, not a regeneration.
 
 - name: Bootstrap pass to generate realistic customer artifacts
   import_playbook: confluent.platform.all
@@ -88,12 +69,5 @@
         that:
           - post_masterkey == bootstrapped_masterkey
         fail_msg: >-
-          regenerate_masterkey: true with a customer-supplied
-          secrets_protection_masterkey was supposed to PRESERVE the customer's
-          value (Scenario 4), but the broker's override.conf now carries a
-          different key (post={{ post_masterkey }},
-          customer={{ bootstrapped_masterkey }}). This is the
-          "Empty master key fact when regenerate_masterkey" regression
-          introduced by PR #2158 - the task must not exist (or, equivalently,
-          must not fire) when secrets_protection_masterkey is supplied by the
-          caller.
+          Customer-supplied master key was overwritten on a regen=true re-converge.
+          post={{ post_masterkey }}, customer={{ bootstrapped_masterkey }}.

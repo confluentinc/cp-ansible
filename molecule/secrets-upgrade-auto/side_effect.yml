@@ -1,33 +1,15 @@
 ---
-### side_effect.yml piggy-backs on the cluster left running by converge.yml
-### to cover two extra contracts without spinning up a separate scenario:
-###
-### Story 10 - CLI v2.x rejection. roles/common/tasks/secrets_protection.yml
-###            asserts confluent_cli_version >= 3.0.0 at its very first task.
-###            We invoke that task list with confluent_cli_version: "2.9.0"
-###            inside a block/rescue and assert the failure message names the
-###            CLI v3 requirement. No converge happens; cost is one local
-###            Ansible task run.
-###
-### Story 3 - Idempotency on the encrypted re-run. After Pass 2 (the
-###           regenerate_masterkey: false re-converge) the broker's
-###           security.properties, server.properties, and override.conf
-###           should be stable. We snapshot SHA256 of each, run
-###           confluent.platform.all ONE more time with the same vars Pass 2
-###           used, re-snapshot, and assert each checksum is unchanged.
-###           This is the regression check for ANSIENG-5858 (the stat-guard
-###           that used to skip server.properties on subsequent runs).
+### Two follow-on contracts on the cluster left running by converge.yml:
+###   1. CLI v2.x is rejected by common/secrets_protection.yml's assert.
+###   2. server.properties and override.conf are byte-stable across an
+###      idempotent re-converge. security.properties is excluded - the
+###      confluent CLI uses a fresh AES IV per encrypt invocation.
 
-#######################################################################
-# Story 10 - CLI v2 rejection (no converge, runs on localhost only)
-#######################################################################
-
-- name: Story 10 - assert CLI v2 is rejected by common/secrets_protection.yml
+- name: Assert CLI v2 is rejected by common/secrets_protection.yml
   hosts: localhost
   gather_facts: false
   tasks:
-    - name: Run secrets_protection.yml with confluent_cli_version=2.9.0 - must fail at the assert
-      block:
+    - block:
         - name: Include common/tasks/secrets_protection.yml with a deprecated CLI version
           include_tasks: "{{ playbook_dir }}/../../roles/common/tasks/secrets_protection.yml"
           vars:
@@ -37,10 +19,7 @@
 
         - name: Should not reach here - assert above must have fired
           fail:
-            msg: >-
-              CLI v2.9.0 did NOT trigger the CLI-version assert in
-              roles/common/tasks/secrets_protection.yml. Either the assert
-              was deleted or its condition regressed.
+            msg: "CLI v2.9.0 did not trigger the CLI-version assert in common/secrets_protection.yml."
       rescue:
         - name: Confirm the failure mentions the CLI v3.0.0 requirement
           assert:
@@ -48,30 +27,12 @@
               - ansible_failed_result is defined
               - (ansible_failed_result.msg | default('') | string)
                   is search('Confluent CLI v3.0.0 or higher')
-            fail_msg: >-
-              The role failed, but the message did not match the expected
-              CLI v3 requirement text. ansible_failed_result was
-              {{ ansible_failed_result | default('<unset>') }}.
+            fail_msg: "CLI-version assert fired but the message did not name the v3 requirement."
 
-#######################################################################
-# Story 3 - idempotency of the encrypted, regen=false steady state
-#######################################################################
-
-- name: Story 3 - snapshot post-converge secrets state before re-run
+- name: Snapshot post-converge config state before re-run
   hosts: kafka_broker
   gather_facts: false
   vars:
-    # Only files where the post-#2158-fix contract is byte-stability:
-    #   - server.properties: templated by ansible; must be byte-stable across
-    #     idempotent re-runs (this is what the #2158 stat-guard regression
-    #     broke - the plaintext template was clobbering the ${securepass:...}
-    #     references on subsequent runs).
-    #   - override.conf: templated by ansible; must be byte-stable so we don't
-    #     trigger an unnecessary kafka restart on re-runs.
-    # security.properties is intentionally EXCLUDED: `confluent secret file
-    # encrypt` regenerates a fresh AES IV per invocation, so the file is never
-    # byte-identical even though the logical secrets it holds are unchanged
-    # (same master key, same plain passwords -> same decryptable values).
     snapshot_paths:
       - /etc/kafka/server.properties
       - /etc/systemd/system/confluent-server.service.d/override.conf
@@ -87,26 +48,15 @@
       set_fact:
         pre_run_checksums: "{{ dict(snapshot_paths | zip(pre_snapshots.results | map(attribute='stat.checksum') | list)) }}"
 
-- name: Story 3 - re-run the platform playbook with the same regen=false vars
+- name: Re-run the platform playbook with the same regen=false vars
   import_playbook: confluent.platform.all
   vars:
     regenerate_masterkey: false
 
-- name: Story 3 - re-snapshot and assert no drift
+- name: Re-snapshot and assert no drift
   hosts: kafka_broker
   gather_facts: false
   vars:
-    # Only files where the post-#2158-fix contract is byte-stability:
-    #   - server.properties: templated by ansible; must be byte-stable across
-    #     idempotent re-runs (this is what the #2158 stat-guard regression
-    #     broke - the plaintext template was clobbering the ${securepass:...}
-    #     references on subsequent runs).
-    #   - override.conf: templated by ansible; must be byte-stable so we don't
-    #     trigger an unnecessary kafka restart on re-runs.
-    # security.properties is intentionally EXCLUDED: `confluent secret file
-    # encrypt` regenerates a fresh AES IV per invocation, so the file is never
-    # byte-identical even though the logical secrets it holds are unchanged
-    # (same master key, same plain passwords -> same decryptable values).
     snapshot_paths:
       - /etc/kafka/server.properties
       - /etc/systemd/system/confluent-server.service.d/override.conf
@@ -123,18 +73,12 @@
         that:
           - item.stat.checksum == pre_run_checksums[item.item]
         fail_msg: >-
-          {{ item.item }} changed on {{ inventory_hostname }} during an
-          idempotent re-run (regenerate_masterkey: false, same vars).
+          {{ item.item }} changed on {{ inventory_hostname }} during an idempotent re-run.
           pre={{ pre_run_checksums[item.item] }}, post={{ item.stat.checksum }}.
-          This is the ANSIENG-5858 regression class - subsequent runs must
-          not rewrite server.properties or override.conf.
       loop: "{{ post_snapshots.results }}"
       loop_control:
         label: "{{ item.item }}"
 
-    # security.properties IS expected to be byte-different after every encrypt
-    # invocation (fresh AES IV). What we care about is that it still exists
-    # and still parses as a properties file with encrypted entries.
     - name: Stat security.properties after the re-run
       stat:
         path: /var/ssl/private/kafka-broker-security.properties
@@ -145,6 +89,4 @@
         that:
           - post_secrets_file.stat.exists
           - post_secrets_file.stat.size > 0
-        fail_msg: >-
-          security.properties disappeared or was emptied on
-          {{ inventory_hostname }} during the idempotent re-run.
+        fail_msg: "security.properties disappeared or was emptied on {{ inventory_hostname }}."

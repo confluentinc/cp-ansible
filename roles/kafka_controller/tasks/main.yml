@@ -224,9 +224,6 @@
     - configuration
     - privileged
 
-# Controller secrets protection with CLI v3.0+
-# CLI v3.0+ removed MDS authentication requirement - controller handles own encryption
-# CLI version is asserted inside common/tasks/secrets_protection.yml.
 - name: Create Service Override Directory
   file:
     path: "{{kafka_controller.systemd_override | dirname }}"
@@ -238,20 +235,15 @@
     - systemd
     - privileged
 
-# When secrets protection is enabled, this wrapper encrypts the controller
-# config and populates secrets_protection_masterkey on this host, which
-# Write Service Overrides below then templates into override.conf.
 - name: Encrypt controller secrets
   include_tasks: secrets_protection.yml
   when:
     - kafka_controller_secrets_protection_enabled|bool
     - confluent_cli_version is version('3.0.0', '>=')
 
-# override.conf is always written: it carries JVM/JMX/ulimit overrides even
-# when secrets protection is off. When secrets protection is on, the master
-# key set by the wrapper above is templated in here, so override.conf is
-# written exactly once per converge with the correct CONFLUENT_SECURITY_MASTER_KEY
-# value. This eliminates the pre-#2158 double-restart pattern.
+# Must run after Encrypt controller secrets so secrets_protection_masterkey
+# is templated into override.conf in the same pass. Always runs (override.conf
+# also carries JVM/JMX/ulimit settings used when secrets protection is off).
 - name: Write Service Overrides
   template:
     src: override.conf.j2
