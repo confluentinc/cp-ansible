@@ -5,10 +5,16 @@
   delegate_to: "{{ groups.kafka_controller[0] }}"
   register: uuid_broker
 
-# existing_masterkey is populated by common/tasks/secrets_protection.yml
-# (which runs earlier in the broker play and exposes
-# secrets_protection_masterkey under that name for downstream consumers).
-# No second slurp of override.conf is needed here.
+- name: Get existing master key from override.conf
+  include_role:
+    name: common
+    tasks_from: get_masterkey.yml
+  vars:
+    systemd_override_path: "{{ kafka_broker.systemd_override }}"
+  when: kafka_broker_secrets_protection_enabled|bool
+  tags:
+    - get_existing_masterkey_from_override_conf
+
 - name: Format Storage Directory
   command: "{{ binary_base_path }}/bin/kafka-storage format -t={{ clusterid }} -c {{ kafka_broker.config_file }} --ignore-formatted"
   environment: "{{ {'CONFLUENT_SECURITY_MASTER_KEY': existing_masterkey} if kafka_broker_secrets_protection_enabled|bool and existing_masterkey | default('') != '' else {} }}"

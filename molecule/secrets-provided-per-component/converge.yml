@@ -167,6 +167,20 @@
       set_fact:
         secrets_protection_masterkey: "{{ lookup('file', lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') + '/customer_files/' + fixture_basename[primary_group] + '-masterkey.txt') | trim }}"
 
+- name: Pass 2 - clear kafka_controller masterkey fact so regenerate_masterkey actually regenerates
+  # The chained molecule playbook would otherwise carry the Pass 1 fact across
+  # to Pass 2, and (without the PR-#2158 "Empty fact" task) masterkey.yml's
+  # `not secrets_protection_masterkey` guard would skip the regeneration even
+  # though regenerate_masterkey is true. In production this isn't an issue
+  # because each ansible-playbook invocation starts with empty facts; here we
+  # simulate that explicitly.
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - name: Reset secrets_protection_masterkey on the controller before the rotation pass
+      set_fact:
+        secrets_protection_masterkey: ""
+
 - name: Pass 2 - rotation converge
   import_playbook: confluent.platform.all
 
