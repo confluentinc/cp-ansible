@@ -2,9 +2,10 @@
 ### Two-pass converge for the customer-provided master key flow:
 ###   1. First pass (regenerate_masterkey: true) bootstraps a valid master key
 ###      and security.properties so we have realistic artifacts to feed back in.
-###   2. Stage those artifacts at a distinct "customer_files" path on the
-###      controller so we can prove the explicit secrets_protection_security_file
-###      is honored (rather than the auto-detected default location).
+###   2. Capture the master key from a broker's systemd override.conf and pull
+###      its security.properties to a "customer_files" path on the controller
+###      so we can prove the explicit secrets_protection_security_file is
+###      honored (rather than the auto-detected default location).
 ###   3. Second pass re-runs the platform playbook with explicit
 ###      secrets_protection_masterkey, secrets_protection_security_file, and
 ###      regenerate_masterkey: false to validate the customer-provided flow.
@@ -12,35 +13,41 @@
 - name: Bootstrap pass to generate realistic customer artifacts
   import_playbook: confluent.platform.all
 
-- name: Stage bootstrapped artifacts at a customer-provided path
-  hosts: localhost
-  connection: local
+- name: Capture bootstrapped master key from a broker
+  hosts: "{{ groups['kafka_broker'][0] }}"
   gather_facts: false
   tasks:
-    - name: Ensure customer_files directory exists on controller
-      file:
-        path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files"
-        state: directory
-        mode: '755'
-
-    - name: Copy bootstrapped security.properties to customer_files
-      copy:
-        src: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/security.properties"
-        dest: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/customer-security.properties"
-        mode: '640'
-
-    - name: Read bootstrapped master key
+    - name: Read broker systemd override.conf
       slurp:
-        src: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/masterkey"
-      register: bootstrapped_masterkey
+        src: /etc/systemd/system/confluent-server.service.d/override.conf
+      register: bootstrap_override
 
-    - name: Expose customer master key + security file path to all hosts
-      add_host:
-        name: "{{ item }}"
-        groups: "{{ hostvars[item].group_names }}"
-        customer_masterkey: "{{ bootstrapped_masterkey.content | b64decode | trim }}"
+    - name: Extract CONFLUENT_SECURITY_MASTER_KEY from override.conf
+      set_fact:
+        bootstrapped_masterkey: "{{ (bootstrap_override.content | b64decode).split('\n')
+          | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
+          | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Assert bootstrap pass produced a master key
+      assert:
+        that:
+          - bootstrapped_masterkey | default('') | length > 0
+        fail_msg: "Bootstrap pass did not populate CONFLUENT_SECURITY_MASTER_KEY in override.conf."
+
+    - name: Fetch bootstrapped security.properties to controller
+      fetch:
+        src: /var/ssl/private/kafka-broker-security.properties
+        dest: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/customer-security.properties"
+        flat: true
+
+- name: Expose customer artifacts to every host for the second pass
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Pin customer master key + security file path on each host
+      set_fact:
+        customer_masterkey: "{{ hostvars[groups['kafka_broker'][0]].bootstrapped_masterkey }}"
         customer_security_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/customer-security.properties"
-      loop: "{{ groups['all'] }}"
 
 - name: Re-converge using customer-provided master key and security file
   import_playbook: confluent.platform.all
