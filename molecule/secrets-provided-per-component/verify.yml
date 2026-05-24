@@ -1,0 +1,117 @@
+---
+### Validates the per-component customer-provided master key flow:
+### - Each provided component (kafka_broker, schema_registry, kafka_connect)
+###   carries its OWN customer-supplied master key in its systemd override.conf.
+### - The brokers' security.properties is deployed and server.properties uses
+###   the ${securepass:...} reference.
+### - kafka_controller, which was intentionally left out of the customer-
+###   provided group_vars, holds a DIFFERENT master key (auto-regenerated).
+### - All four component keys are distinct - proof that per-component
+###   group_vars overrides flowed through to each component independently.
+
+- name: Capture each component's master key for cross-component comparison
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect
+  gather_facts: false
+  vars:
+    component_service_name:
+      kafka_controller: confluent-kcontroller
+      kafka_broker: confluent-server
+      schema_registry: confluent-schema-registry
+      kafka_connect: confluent-kafka-connect
+    primary_group: "{{ group_names | intersect(component_service_name.keys() | list) | first }}"
+  tasks:
+    - name: Read systemd override.conf for {{ primary_group }}
+      slurp:
+        src: "/etc/systemd/system/{{ component_service_name[primary_group] }}.service.d/override.conf"
+      register: component_override
+
+    - name: Extract CONFLUENT_SECURITY_MASTER_KEY from override.conf
+      set_fact:
+        component_masterkey: "{{ (component_override.content | b64decode).split('\n')
+          | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
+          | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Assert master key is non-empty on {{ inventory_hostname }}
+      assert:
+        that:
+          - component_masterkey | default('') | length > 0
+        fail_msg: "{{ inventory_hostname }} ({{ primary_group }}) has no CONFLUENT_SECURITY_MASTER_KEY in override.conf."
+
+- name: Verify - kafka_broker secrets protection (customer-provided)
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: security.properties deployed on broker
+      stat:
+        path: /var/ssl/private/kafka-broker-security.properties
+      register: secrets_file_stat
+
+    - assert:
+        that:
+          - secrets_file_stat.stat.exists
+        fail_msg: "kafka-broker-security.properties missing on {{ inventory_hostname }} - customer-provided broker file was not copied."
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: ssl.keystore.password
+        expected_value: ${securepass:/var/ssl/private/kafka-broker-security.properties:server.properties/ssl.keystore.password}
+
+    - name: Assert all brokers share the same customer-provided master key
+      assert:
+        that:
+          - component_masterkey == hostvars[groups['kafka_broker'][0]].component_masterkey
+        fail_msg: >-
+          Broker {{ inventory_hostname }} has a different master key than
+          {{ groups['kafka_broker'][0] }} - the broker-group customer pair
+          must apply uniformly across the broker group.
+
+- name: Verify - per-component master keys are all distinct
+  hosts: localhost
+  gather_facts: false
+  vars:
+    component_hosts:
+      kafka_broker: "{{ groups['kafka_broker'][0] }}"
+      kafka_controller: "{{ groups['kafka_controller'][0] }}"
+      schema_registry: "{{ groups['schema_registry'][0] }}"
+      kafka_connect: "{{ groups['kafka_connect'][0] }}"
+    component_keys: >-
+      {{
+        component_hosts | dict2items
+          | map(attribute='value')
+          | map('extract', hostvars, 'component_masterkey')
+          | list
+      }}
+  tasks:
+    - name: Debug captured per-component keys (lengths only)
+      debug:
+        msg: >-
+          {{ component_hosts | dict2items | map(attribute='key') | list }} =>
+          key-lengths {{ component_keys | map('length') | list }}
+
+    - name: Assert every component carries a distinct master key
+      assert:
+        that:
+          - component_keys | length == component_keys | unique | length
+        fail_msg: >-
+          Two or more components share the same master key. Per-component
+          group_vars overrides must reach each component independently;
+          a duplicate indicates either a global override leaked or a
+          component fell back to auto-regeneration with a coincidentally
+          matching key.
+
+    - name: Assert kafka_controller key differs from every provided component's key
+      assert:
+        that:
+          - hostvars[component_hosts.kafka_controller].component_masterkey
+            != hostvars[component_hosts[item]].component_masterkey
+        fail_msg: >-
+          Controller key matches {{ item }}'s. The left-out controller must
+          auto-regenerate, producing a key distinct from every customer-
+          provided component.
+      loop:
+        - kafka_broker
+        - schema_registry
+        - kafka_connect

@@ -1,0 +1,133 @@
+---
+### Per-component customer-provided master key test.
+### Customer supplies an independent secrets_protection_masterkey +
+### secrets_protection_security_file PAIR per CP component group via
+### molecule.yml inventory group_vars. ONE component (kafka_controller) is
+### intentionally left out: it inherits the role default regenerate_masterkey:
+### true and auto-generates its own key, so the verify step can prove the
+### per-component override path is honored (every provided component carries
+### its OWN distinct key, and the controller has yet another distinct key) in
+### a single converge - no second run of confluent.platform.all is required.
+
+driver:
+  name: docker
+platforms:
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker2
+    hostname: kafka-broker2.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker3
+    hostname: kafka-broker3.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    converge: converge.yml
+  inventory:
+    group_vars:
+      all:
+        scenario_name: secrets-provided-per-component
+
+        ssl_enabled: true
+        secrets_protection_enabled: true
+        confluent_cli_version: 3.2.1
+        # The "all" group leaves regenerate_masterkey unset so it inherits the
+        # role default (true). Components without per-group overrides
+        # (e.g. kafka_controller below) auto-generate their own key.
+
+      # Each provided component points at ITS OWN customer pair. The
+      # converge.yml pre-step writes one independent {component}-masterkey.txt
+      # and {component}-security.properties per component under customer_files/.
+      kafka_broker:
+        regenerate_masterkey: false
+        secrets_protection_masterkey: "{{ lookup('file', lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') + '/customer_files/kafka-broker-masterkey.txt') | trim }}"
+        secrets_protection_security_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/kafka-broker-security.properties"
+
+      schema_registry:
+        regenerate_masterkey: false
+        secrets_protection_masterkey: "{{ lookup('file', lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') + '/customer_files/schema-registry-masterkey.txt') | trim }}"
+        secrets_protection_security_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/schema-registry-security.properties"
+
+      kafka_connect:
+        regenerate_masterkey: false
+        secrets_protection_masterkey: "{{ lookup('file', lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') + '/customer_files/kafka-connect-masterkey.txt') | trim }}"
+        secrets_protection_security_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/kafka-connect-security.properties"
+
+      # kafka_controller is the "left out" component: no customer-provided
+      # pair, but regenerate_masterkey is set explicitly to true so the
+      # controller (re)generates its own master key on every converge.
+      # In the rotation pass driven by converge.yml this causes the controller
+      # to rotate its key alongside the data-plane components that get new
+      # customer pairs.
+      kafka_controller:
+        regenerate_masterkey: true
