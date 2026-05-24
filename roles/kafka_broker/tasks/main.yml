@@ -236,6 +236,11 @@
     - configuration
 
 # Secrets protection requires Confluent CLI v3.0+ (CLI v2.x deprecated and removed)
+- name: Record whether secrets_protection_masterkey was supplied by the caller
+  set_fact:
+    secrets_protection_masterkey_provided: "{{ secrets_protection_masterkey | default('') | length > 0 }}"
+  no_log: "{{ mask_secrets|bool }}"
+
 - name: Empty master key fact when regenerate_masterkey
   set_fact:
     secrets_protection_masterkey: ""
@@ -255,11 +260,12 @@
     secrets_file_group: "{{ kafka_broker_group }}"
     ca_cert_path: "{{ kafka_broker_ca_cert_path if ssl_enabled|bool else '' }}"
     handler: "restart kafka"
+    component_systemd_override: "{{ kafka_broker.systemd_override }}"
   tags:
     - configuration
   when:
     - kafka_broker_secrets_protection_enabled|bool
-    - rbac_enabled|bool or confluent_cli_version is version('3.0.0', '>=')
+    - confluent_cli_version is version('3.0.0', '>=')
 
 - name: Create Kafka Broker Client Config with Secrets Protection
   include_role:
@@ -275,11 +281,12 @@
     secrets_file_group: "{{ kafka_broker_group }}"
     ca_cert_path: "{{ kafka_broker_ca_cert_path if ssl_enabled|bool else '' }}"
     handler: "restart kafka"
+    component_systemd_override: "{{ kafka_broker.systemd_override }}"
   tags:
     - configuration
   when:
     - kafka_broker_client_secrets_protection_enabled|bool
-    - rbac_enabled|bool or confluent_cli_version is version('3.0.0', '>=')
+    - confluent_cli_version is version('3.0.0', '>=')
 
 - name: Create Service Override Directory
   file:
