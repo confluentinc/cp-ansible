@@ -61,9 +61,19 @@
   hosts: kafka_broker
   gather_facts: false
   vars:
+    # Only files where the post-#2158-fix contract is byte-stability:
+    #   - server.properties: templated by ansible; must be byte-stable across
+    #     idempotent re-runs (this is what the #2158 stat-guard regression
+    #     broke - the plaintext template was clobbering the ${securepass:...}
+    #     references on subsequent runs).
+    #   - override.conf: templated by ansible; must be byte-stable so we don't
+    #     trigger an unnecessary kafka restart on re-runs.
+    # security.properties is intentionally EXCLUDED: `confluent secret file
+    # encrypt` regenerates a fresh AES IV per invocation, so the file is never
+    # byte-identical even though the logical secrets it holds are unchanged
+    # (same master key, same plain passwords -> same decryptable values).
     snapshot_paths:
       - /etc/kafka/server.properties
-      - /var/ssl/private/kafka-broker-security.properties
       - /etc/systemd/system/confluent-server.service.d/override.conf
   tasks:
     - name: Compute SHA256 of each tracked file
@@ -86,9 +96,19 @@
   hosts: kafka_broker
   gather_facts: false
   vars:
+    # Only files where the post-#2158-fix contract is byte-stability:
+    #   - server.properties: templated by ansible; must be byte-stable across
+    #     idempotent re-runs (this is what the #2158 stat-guard regression
+    #     broke - the plaintext template was clobbering the ${securepass:...}
+    #     references on subsequent runs).
+    #   - override.conf: templated by ansible; must be byte-stable so we don't
+    #     trigger an unnecessary kafka restart on re-runs.
+    # security.properties is intentionally EXCLUDED: `confluent secret file
+    # encrypt` regenerates a fresh AES IV per invocation, so the file is never
+    # byte-identical even though the logical secrets it holds are unchanged
+    # (same master key, same plain passwords -> same decryptable values).
     snapshot_paths:
       - /etc/kafka/server.properties
-      - /var/ssl/private/kafka-broker-security.properties
       - /etc/systemd/system/confluent-server.service.d/override.conf
   tasks:
     - name: Compute SHA256 of each tracked file post-re-run
@@ -106,9 +126,25 @@
           {{ item.item }} changed on {{ inventory_hostname }} during an
           idempotent re-run (regenerate_masterkey: false, same vars).
           pre={{ pre_run_checksums[item.item] }}, post={{ item.stat.checksum }}.
-          This is exactly the ANSIENG-5858 / ANSIENG-5784 regression class -
-          subsequent runs must not rewrite server.properties, security.properties,
-          or override.conf.
+          This is the ANSIENG-5858 regression class - subsequent runs must
+          not rewrite server.properties or override.conf.
       loop: "{{ post_snapshots.results }}"
       loop_control:
         label: "{{ item.item }}"
+
+    # security.properties IS expected to be byte-different after every encrypt
+    # invocation (fresh AES IV). What we care about is that it still exists
+    # and still parses as a properties file with encrypted entries.
+    - name: Stat security.properties after the re-run
+      stat:
+        path: /var/ssl/private/kafka-broker-security.properties
+      register: post_secrets_file
+
+    - name: Assert security.properties was not lost or zeroed on the re-run
+      assert:
+        that:
+          - post_secrets_file.stat.exists
+          - post_secrets_file.stat.size > 0
+        fail_msg: >-
+          security.properties disappeared or was emptied on
+          {{ inventory_hostname }} during the idempotent re-run.
