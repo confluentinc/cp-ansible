@@ -1,5 +1,7 @@
 ---
-### Two-pass converge for the customer-provided master key flow:
+### Two-pass converge for the customer-provided master key flow,
+### exercising wiki Scenario 4 (regenerate_masterkey: true alongside
+### supplied secrets_protection_masterkey + secrets_protection_security_file):
 ###   1. First pass (regenerate_masterkey: true) bootstraps a valid master key
 ###      and security.properties so we have realistic artifacts to feed back in.
 ###   2. Capture the master key from a broker's systemd override.conf and pull
@@ -13,8 +15,14 @@
 ###      production this isn't an issue because the customer-provided run is a
 ###      separate ansible-playbook invocation with no surviving facts.
 ###   4. Second pass re-runs the platform playbook with regenerate_masterkey
-###      false. With the facts pinned, both kafka_controller and kafka_broker
-###      plays encrypt their properties using the customer-provided values.
+###      TRUE *and* customer-supplied values in place. Per wiki Scenario 4 the
+###      customer's master key MUST win: master-key generation is skipped,
+###      the customer's security.properties is copied, and the customer's
+###      master key is what ends up in override.conf. Asserted at the bottom.
+###      (Wiki Scenario 3 - regenerate_masterkey: false with customer values -
+###      is covered by secrets-provided-per-component's broker and
+###      schema_registry groups, so we deliberately use this scenario for the
+###      regen=true variant instead.)
 
 - name: Bootstrap pass to generate realistic customer artifacts
   import_playbook: confluent.platform.all
@@ -55,7 +63,36 @@
         secrets_protection_masterkey: "{{ hostvars[groups['kafka_broker'][0]].bootstrapped_masterkey }}"
         secrets_protection_security_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/customer-security.properties"
 
-- name: Re-converge using customer-provided master key and security file
+- name: Re-converge with customer-provided values AND regenerate_masterkey true (wiki Scenario 4)
   import_playbook: confluent.platform.all
   vars:
-    regenerate_masterkey: false
+    regenerate_masterkey: true
+
+- name: Assert the customer-supplied master key survived the regen=true re-converge
+  hosts: "{{ groups['kafka_broker'][0] }}"
+  gather_facts: false
+  tasks:
+    - name: Re-read broker systemd override.conf after the regen=true pass
+      slurp:
+        src: /etc/systemd/system/confluent-server.service.d/override.conf
+      register: post_override
+
+    - name: Extract CONFLUENT_SECURITY_MASTER_KEY from override.conf (post-pass)
+      set_fact:
+        post_masterkey: "{{ (post_override.content | b64decode).split('\n')
+          | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
+          | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Assert customer-provided master key was preserved (Scenario 4 contract)
+      assert:
+        that:
+          - post_masterkey == bootstrapped_masterkey
+        fail_msg: >-
+          regenerate_masterkey: true with a customer-supplied
+          secrets_protection_masterkey was supposed to PRESERVE the customer's
+          value (wiki Scenario 4), but the broker's override.conf now carries
+          a different key (post={{ post_masterkey }},
+          customer={{ bootstrapped_masterkey }}). This is the
+          "Empty master key fact when regenerate_masterkey" regression -
+          the gate must skip when secrets_protection_masterkey_provided is
+          true.
