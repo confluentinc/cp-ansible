@@ -924,11 +924,28 @@ Default:  "{{ skip_restarts }}"
 
 ***
 
+### kraft_combined
+
+Boolean used to declare broker nodes as controller (combined mode). Do not use in production environment
+
+Default: false
+
 ### kafka_controller_quorum_voters
 
 Default controller quorum voters
 
-Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{controller_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+Default:  "
+  {%- if kraft_combined -%}
+    {%- for broker_hostname in groups.kafka_broker|default([]) %}
+      {%- if loop.index > 1%},{% endif -%}
+      {{ groups.kafka_broker.index(broker_hostname)|int + 1 }}@{{ broker_hostname }}:{{ kafka_broker_listeners['controller']['port'] }}
+    {%- endfor -%}
+  {%- else -%}
+    {%- for controller_hostname in groups.kafka_controller|default([]) -%}
+      {%- if loop.index > 1%},{% endif -%}
+      {{ groups.kafka_controller.index(controller_hostname)|int + 9991 }}@{{ controller_hostname }}:{{ kafka_controller_listeners['controller']['port'] }}
+    {%- endfor -%}
+  {%- endif -%}"
 
 ***
 
