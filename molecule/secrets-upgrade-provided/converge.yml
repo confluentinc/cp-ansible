@@ -6,9 +6,15 @@
 ###      its security.properties to a "customer_files" path on the controller
 ###      so we can prove the explicit secrets_protection_security_file is
 ###      honored (rather than the auto-detected default location).
-###   3. Second pass re-runs the platform playbook with explicit
-###      secrets_protection_masterkey, secrets_protection_security_file, and
-###      regenerate_masterkey: false to validate the customer-provided flow.
+###   3. Override secrets_protection_masterkey / secrets_protection_security_file
+###      as facts on every host. Necessary because the bootstrap pass set these
+###      via set_fact, and play vars on a chained import_playbook would lose to
+###      that lingering fact (set_fact > play vars in Ansible precedence). In
+###      production this isn't an issue because the customer-provided run is a
+###      separate ansible-playbook invocation with no surviving facts.
+###   4. Second pass re-runs the platform playbook with regenerate_masterkey
+###      false. With the facts pinned, both kafka_controller and kafka_broker
+###      plays encrypt their properties using the customer-provided values.
 
 - name: Bootstrap pass to generate realistic customer artifacts
   import_playbook: confluent.platform.all
@@ -40,18 +46,16 @@
         dest: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/customer-security.properties"
         flat: true
 
-- name: Expose customer artifacts to every host for the second pass
+- name: Override secrets-protection facts with customer-provided values
   hosts: all
   gather_facts: false
   tasks:
-    - name: Pin customer master key + security file path on each host
+    - name: Pin customer master key and security file on every host
       set_fact:
-        customer_masterkey: "{{ hostvars[groups['kafka_broker'][0]].bootstrapped_masterkey }}"
-        customer_security_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/customer-security.properties"
+        secrets_protection_masterkey: "{{ hostvars[groups['kafka_broker'][0]].bootstrapped_masterkey }}"
+        secrets_protection_security_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/customer-security.properties"
 
 - name: Re-converge using customer-provided master key and security file
   import_playbook: confluent.platform.all
   vars:
     regenerate_masterkey: false
-    secrets_protection_masterkey: "{{ hostvars[groups['kafka_broker'][0]].customer_masterkey }}"
-    secrets_protection_security_file: "{{ hostvars[groups['kafka_broker'][0]].customer_security_file }}"
