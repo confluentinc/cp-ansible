@@ -1,11 +1,13 @@
 ---
-### Pass 1 generates per-component customer fixtures via cp-server in Docker
-### and converges; Pass 2 regenerates the fixtures (rotation) and re-converges.
-### Each component's key must change between passes.
+### Pass 1 installs the confluent CLI on the controller via cp-ansible's
+### own confluent_cli.yml task list, then generates a master key +
+### security.properties pair per component. Pass 2 regenerates the
+### fixtures (rotation) and re-converges. Each component's key must
+### change between passes.
 
-- name: Pass 1 - generate initial per-component customer fixtures
+- name: Pass 1 - install confluent CLI on the ansible controller and generate fixtures
   hosts: localhost
-  gather_facts: false
+  gather_facts: true
   vars:
     customer_components:
       - kafka-broker
@@ -17,25 +19,27 @@
         state: directory
         mode: '755'
 
+    - name: Load cp-ansible variable defaults (confluent_cli_path etc.)
+      import_role:
+        name: variables
+
+    - name: Install confluent CLI on the controller via the cp-ansible role
+      include_role:
+        name: common
+        tasks_from: confluent_cli.yml
+      become: true
+
     - name: Generate Pass 1 master key + security.properties per component
-      # `chmod 0666` inside the container so the Ansible user on the host can
-      # read the file the container wrote as root via the bind-mount.
       shell: |
         set -euo pipefail
         rm -f {{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/{{ item }}-security.properties
-        docker run --rm \
-          -v {{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files:/output \
-          --entrypoint /bin/bash \
-          confluentinc/cp-server:7.5.0 -c '
-            set -euo pipefail
-            openssl rand -base64 24 > /tmp/passphrase.txt
-            mk=$(confluent secret master-key generate \
-              --local-secrets-file /output/{{ item }}-security.properties \
-              --passphrase @/tmp/passphrase.txt \
-              | awk "/Master Key/{print \$5}")
-            chmod 0644 /output/{{ item }}-security.properties
-            printf "%s\n" "$mk"
-          '
+        passphrase_file=$(mktemp)
+        trap 'rm -f "$passphrase_file"' EXIT
+        openssl rand -base64 24 > "$passphrase_file"
+        {{ confluent_cli_path }} secret master-key generate \
+          --local-secrets-file {{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/{{ item }}-security.properties \
+          --passphrase @"$passphrase_file" \
+          | awk '/Master Key/{print $5}'
       args:
         executable: /bin/bash
       loop: "{{ customer_components }}"
@@ -47,13 +51,12 @@
       loop: "{{ customer_components }}"
       register: pass1_fixture_stat
 
-    - name: Assert each Pass 1 fixture is present, readable, and non-empty
+    - name: Assert each Pass 1 fixture is present and non-empty
       assert:
         that:
           - item.stat.exists
-          - item.stat.readable | default(true)
           - item.stat.size > 0
-        fail_msg: "Pass 1 fixture for {{ item.item }} missing/unreadable/empty after docker keygen step."
+        fail_msg: "Pass 1 fixture for {{ item.item }} missing or empty after keygen."
       loop: "{{ pass1_fixture_stat.results }}"
       loop_control:
         label: "{{ item.item }}"
@@ -109,19 +112,13 @@
       shell: |
         set -euo pipefail
         rm -f {{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/{{ item }}-security.properties
-        docker run --rm \
-          -v {{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files:/output \
-          --entrypoint /bin/bash \
-          confluentinc/cp-server:7.5.0 -c '
-            set -euo pipefail
-            openssl rand -base64 24 > /tmp/passphrase.txt
-            mk=$(confluent secret master-key generate \
-              --local-secrets-file /output/{{ item }}-security.properties \
-              --passphrase @/tmp/passphrase.txt \
-              | awk "/Master Key/{print \$5}")
-            chmod 0644 /output/{{ item }}-security.properties
-            printf "%s\n" "$mk"
-          '
+        passphrase_file=$(mktemp)
+        trap 'rm -f "$passphrase_file"' EXIT
+        openssl rand -base64 24 > "$passphrase_file"
+        {{ confluent_cli_path }} secret master-key generate \
+          --local-secrets-file {{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/{{ item }}-security.properties \
+          --passphrase @"$passphrase_file" \
+          | awk '/Master Key/{print $5}'
       args:
         executable: /bin/bash
       loop: "{{ customer_components }}"
