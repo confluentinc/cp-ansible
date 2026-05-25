@@ -1,7 +1,9 @@
 ---
-### Three passes: plaintext baseline, enable with regenerate_masterkey: true,
-### re-converge with regenerate_masterkey: false (must reuse Pass 1's key).
-### Idempotency and CLI v2 rejection are covered by side_effect.yml.
+### Four passes: plaintext baseline, enable with regenerate_masterkey: true,
+### rotate via regenerate_masterkey: true a second time (new key), then
+### regenerate_masterkey: false (must reuse the rotated key, not the
+### original). Idempotency and CLI v2 rejection are covered by
+### side_effect.yml.
 
 - name: Pass 0 - plaintext baseline with secrets protection DISABLED
   import_playbook: confluent.platform.all
@@ -68,39 +70,84 @@
         name: "{{ inventory_hostname }}"
         masterkey_first_pass: "{{ masterkey_first_pass }}"
 
-- name: Clear secrets-protection fact so pass 2 mirrors a fresh ansible-playbook invocation
+# Without this clear, masterkey.yml's `not secrets_protection_masterkey` guard
+# would short-circuit on the chained import_playbook and Pass 1.5 wouldn't
+# actually rotate. Production starts each ansible-playbook invocation with no
+# surviving facts, so this just mirrors that.
+- name: Clear secrets-protection fact before the regenerate_masterkey rotation
   hosts: all
   gather_facts: false
   tasks:
-    - name: Reset secrets_protection_masterkey before the re-converge
+    - name: Reset secrets_protection_masterkey before Pass 1.5
       set_fact:
         secrets_protection_masterkey: ""
 
-- name: Re-converge with regenerate_masterkey false
+- name: Pass 1.5 - re-converge with regenerate_masterkey true (rotation)
+  import_playbook: confluent.platform.all
+  vars:
+    regenerate_masterkey: true
+
+- name: Capture rotated master key and assert it differs from the first-pass key
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Read broker systemd override.conf after rotation
+      slurp:
+        src: /etc/systemd/system/confluent-server.service.d/override.conf
+      register: override_rotated
+
+    - name: Extract rotated CONFLUENT_SECURITY_MASTER_KEY from override.conf
+      set_fact:
+        masterkey_rotated: "{{ (override_rotated.content | b64decode).split('\n')
+          | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
+          | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Assert the rotated key is present and differs from Pass 1's key
+      assert:
+        that:
+          - masterkey_rotated | default('') | length > 0
+          - masterkey_rotated != masterkey_first_pass
+        fail_msg: >-
+          regenerate_masterkey: true on a re-run did not rotate the master key.
+          first={{ masterkey_first_pass }}, rotated={{ masterkey_rotated }}.
+
+    - name: Persist rotated master key for cross-play comparison
+      add_host:
+        name: "{{ inventory_hostname }}"
+        masterkey_rotated: "{{ masterkey_rotated }}"
+
+- name: Clear secrets-protection fact before the regenerate_masterkey false pass
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Reset secrets_protection_masterkey before Pass 2
+      set_fact:
+        secrets_protection_masterkey: ""
+
+- name: Pass 2 - re-converge with regenerate_masterkey false
   import_playbook: confluent.platform.all
   vars:
     regenerate_masterkey: false
 
-- name: Verify master key persisted across the re-run
+- name: Verify master key persisted across the regenerate_masterkey false pass
   hosts: kafka_broker
   gather_facts: false
   tasks:
-    - name: Re-read broker systemd override.conf after second pass
+    - name: Re-read broker systemd override.conf after Pass 2
       slurp:
         src: /etc/systemd/system/confluent-server.service.d/override.conf
       register: override_second_pass
 
-    - name: Extract CONFLUENT_SECURITY_MASTER_KEY from override.conf (second pass)
+    - name: Extract CONFLUENT_SECURITY_MASTER_KEY from override.conf (Pass 2)
       set_fact:
         masterkey_second_pass: "{{ (override_second_pass.content | b64decode).split('\n')
           | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
           | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
 
-    - name: Assert master key was not regenerated on the second pass
+    - name: Assert Pass 2 preserved the rotated key (not the original)
       assert:
         that:
-          - masterkey_first_pass == masterkey_second_pass
+          - masterkey_second_pass == masterkey_rotated
         fail_msg: >-
-          Master key changed across runs (first={{ masterkey_first_pass }},
-          second={{ masterkey_second_pass }}). regenerate_masterkey: false
-          must preserve the existing key.
+          regenerate_masterkey: false changed the master key.
+          rotated={{ masterkey_rotated }}, post-pass2={{ masterkey_second_pass }}.
