@@ -14,16 +14,6 @@
     - ansible_os_family
     - ansible_fqdn
 
-- name: Stop Service and Remove Packages on Version Change
-  include_role:
-    name: common
-    tasks_from: remove_packages.yml
-  vars:
-    service_name: "{{ kafka_rest_service_name }}"
-  when: installation_method == "package"
-  tags:
-    - package
-    - cp_package
 
 - name: Validate Kafka REST Proxy Jolokia Access Control Configuration
   include_tasks: ../common/tasks/component_validations.yml
@@ -36,6 +26,17 @@
   tags:
     - validate
     - validate_jolokia
+
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ kafka_rest_service_name }}"
+  when: installation_method == "package"
+  tags:
+    - package
+    - cp_package
 
 - name: Install the Kafka Rest Packages
   yum:
@@ -313,6 +314,19 @@
   tags:
     - log
 
+
+
+- name: Copy Kafka REST Proxy Jolokia Access Control File
+  copy:
+    src: "{{ kafka_rest_jolokia_access_control_file_src_path }}"
+    dest: "{{ kafka_rest_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ kafka_rest_user }}"
+    group: "{{ kafka_rest_group }}"
+  when: kafka_rest_jolokia_enabled|bool and kafka_rest_jolokia_access_control_enabled|bool
+  tags:
+    - configuration
+
 - name: Create Kafka Rest Jolokia Config
   template:
     src: kafka_rest_jolokia.properties.j2
@@ -323,20 +337,6 @@
   when: kafka_rest_jolokia_enabled|bool
   notify: restart kafka-rest
   diff: "{{ not mask_sensitive_diff|bool }}"
-  tags:
-    - configuration
-
-- name: Copy Kafka REST Proxy Jolokia Access Control File
-  copy:
-    src: "{{ kafka_rest_jolokia_access_control_file_src_path }}"
-    dest: "{{ kafka_rest_jolokia_access_control_file_dest_path }}"
-    mode: '640'
-    owner: "{{ kafka_rest_user }}"
-    group: "{{ kafka_rest_group }}"
-  when:
-    - kafka_rest_jolokia_enabled|bool
-    - kafka_rest_jolokia_access_control_enabled|bool
-  notify: restart kafka-rest
   tags:
     - configuration
 

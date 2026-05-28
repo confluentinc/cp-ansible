@@ -1,6 +1,6 @@
 ---
 ### Installation of Confluent Platform on Ubuntu1804.
-### MTLS enabled
+### MTLS enabled.
 
 driver:
   name: docker
@@ -9,6 +9,7 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -22,6 +23,7 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -35,6 +37,7 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -48,6 +51,7 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -61,6 +65,7 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
+      - schema_registry_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -74,6 +79,7 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
+      - kafka_rest_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -87,6 +93,7 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
+      - kafka_connect_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -100,6 +107,7 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
+      - ksql_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -113,6 +121,7 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
+      - control_center_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -124,25 +133,41 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
+      # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
+        jolokia_enabled: true
         ssl_enabled: true
         ssl_mutual_auth_enabled: true
         secrets_protection_enabled: true # To test secrets protection on cli v3 without rbac
-        confluent_cli_version: 3.2.1
-
-        jolokia_enabled: true
-        jolokia_access_control_enabled: true
+        kafka_controller_jolokia_enabled: true
+        kafka_controller_jolokia_ssl_enabled: true
         kafka_broker_jolokia_enabled: true
         kafka_broker_jolokia_ssl_enabled: true
+        jolokia_access_control_enabled: true
+        kafka_controller_jolokia_access_control_custom_file_enabled: false
         kafka_broker_jolokia_access_control_custom_file_enabled: true
         kafka_broker_jolokia_access_control_file_src_path: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/molecule/mtls-ubuntu/jolokia_access_test.xml"
         schema_registry_jolokia_auth_mode: "basic"
         schema_registry_jolokia_user: "user1"
         schema_registry_jolokia_password: "pass"
-        schema_registry_jolokia_access_control_enabled: true
         kafka_connect_jolokia_enabled: true
         kafka_connect_jolokia_ssl_enabled: true
-        kafka_connect_jolokia_access_control_enabled: true
+        kafka_connect_jolokia_access_control_enabled: false

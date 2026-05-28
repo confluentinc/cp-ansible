@@ -1,5 +1,5 @@
 ---
-### Installs Confluent Platform Cluster on centos8.
+### Installs Confluent Platform Cluster on RHEL8.
 ### RBAC enabled.
 ### SCRAM enabled.
 ### TLS with custom certs enabled.
@@ -8,6 +8,7 @@
 ### Kafka Connect Custom arguments.
 ### SSO authentication using OIDC in Control center using Azure IdP
 ### FIPS enabled
+### Installs Two unique Kafka Connect Clusters with unique connectors.
 
 driver:
   name: docker
@@ -29,8 +30,8 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -42,7 +43,7 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}2${BUILD_NUMBER}.confluent${BUILD_NUMBER}
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
-    image: geerlingguy/docker-centos8-ansible
+    image: redhat/ubi8-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -55,7 +56,7 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}3${BUILD_NUMBER}.confluent${BUILD_NUMBER}
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
-    image: geerlingguy/docker-centos8-ansible
+    image: redhat/ubi8-minimal
     dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
@@ -68,8 +69,8 @@ platforms:
     hostname: kafka-broker1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -81,8 +82,8 @@ platforms:
     hostname: kafka-broker2${BUILD_NUMBER}.confluent${BUILD_NUMBER}
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -94,8 +95,8 @@ platforms:
     hostname: kafka-broker3${BUILD_NUMBER}.confluent${BUILD_NUMBER}
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -107,8 +108,8 @@ platforms:
     hostname: schema-registry1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
     groups:
       - schema_registry
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -120,8 +121,8 @@ platforms:
     hostname: kafka-rest1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
     groups:
       - kafka_rest
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -133,8 +134,23 @@ platforms:
     hostname: kafka-connect1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
     groups:
       - kafka_connect
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+      - cluster1
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent${BUILD_NUMBER}
+  - name: kafka-connect2${BUILD_NUMBER}
+    hostname: kafka-connect2${BUILD_NUMBER}.confluent${BUILD_NUMBER}
+    groups:
+      - kafka_connect
+      - cluster2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -146,8 +162,8 @@ platforms:
     hostname: ksql1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
     groups:
       - ksql
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -159,8 +175,8 @@ platforms:
     hostname: control-center1${BUILD_NUMBER}.confluent${BUILD_NUMBER}
     groups:
       - control_center
-    image: geerlingguy/docker-centos8-ansible
-    # dockerfile: ../Dockerfile-rhel-java17.j2
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -262,6 +278,33 @@ provisioner:
         kafka_connect_custom_rest_extension_classes:
           - io.confluent.connect.replicator.monitoring.ReplicatorMonitoringExtension
         kafka_connect_custom_java_args: "-Djavax.net.ssl.trustStore={{kafka_connect_truststore_path}} -Djavax.net.ssl.trustStorePassword={{kafka_connect_truststore_storepass}}"
+        kafka_connect_custom_properties:
+          plugin.path: "/usr/share/filestream-connectors,/usr/share/java/connect_plugins"
+
+      cluster1:
+        kafka_connect_group_id: connect-cluster1
+        kafka_connect_connector_white_list: "test_topic"
+        kafka_connect_connectors:
+          - name: sample-connector-1
+            config:
+              connector.class: "FileStreamSinkConnector"
+              tasks.max: "5"
+              file: "/etc/kafka/connect-distributed.properties"
+              topics: "test_topic"
+              key.converter: "org.apache.kafka.connect.json.JsonConverter"
+              value.converter: "org.apache.kafka.connect.json.JsonConverter"
+      cluster2:
+        kafka_connect_group_id: connect-cluster2
+        kafka_connect_connector_white_list: "test_topic"
+        kafka_connect_connectors:
+          - name: sample-connector-2
+            config:
+              connector.class: "FileStreamSinkConnector"
+              tasks.max: "1"
+              file: "/etc/kafka/connect-distributed.properties"
+              topics: "test_topic"
+              key.converter: "org.apache.kafka.connect.json.JsonConverter"
+              value.converter: "org.apache.kafka.connect.json.JsonConverter"
 
       ldap_server:
         ldaps_enabled: true

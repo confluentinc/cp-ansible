@@ -4,7 +4,7 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-v7.5.14
+7.6.11
 ======
 Notable fixes
 -------------
@@ -14,9 +14,8 @@ Bug fixes
 -------------
 - Fixed kafka-storage format failures on KRaft clusters with secrets protection enabled — the masterkey is now passed via the CONFLUENT_SECURITY_MASTER_KEY env var (https://github.com/confluentinc/cp-ansible/pull/2477).
 
-v7.5.13
+7.6.10
 ======
-
 Notable fixes
 -------------
 - For the list of security and vulnerability issues fixed in this release, see https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
@@ -25,7 +24,7 @@ Bug fixes
 -------------
 - Fixed an issue where pipefail caused failures when extracting distinguished names from keystores in mTLS setups.
 
-v7.5.12
+v7.6.9
 ======
 
 Notable fixes
@@ -45,17 +44,17 @@ Notable enhancements
 Bug fixes
 -------------
 - Fixes idempotency on config files when using secrets protection feature
+- Fixed Connector deployment failures for mtls enabled with provided keystore/trustore in rolling deployments
 - Fixed bug related to zookeeper chroot creation
 
-
-v7.5.11
+v7.6.8
 ======
 
 Notable fixes
 -------------
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.5.10
+v7.6.7
 ======
 
 Notable enhancements
@@ -66,7 +65,7 @@ Notable fixes
 -------------
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.5.9
+v7.6.6
 ======
 
 Notable enhancements
@@ -79,7 +78,7 @@ Notable fixes
 
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.5.8
+v7.6.5
 ======
 
 Notable enhancements
@@ -97,7 +96,7 @@ Notable fixes
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
 
-v7.5.7
+v7.6.4
 ======
 
 Notable enhancements
@@ -106,7 +105,7 @@ Notable enhancements
 - Improved error handling in connectors.
 - Fixed the ownership of data directory files in kraft controllers and brokers.
 
-v7.5.6
+v7.6.3
 ======
 
 Notable enhancements
@@ -119,21 +118,21 @@ Notable fixes
 
 - Critical security and vulnerability issues were fixed
 
-v7.5.5
+v7.6.2
 ======
 
 Notable fixes
 -------------
 
-- Ansible playbooks use archive debian10 repo since debian 10 reached EOL.
+- Ansible playbooks use archive debian10 repo since debian 10 reached EOL
+- IDP certificate for SSO in Control Center can be added to MDS truststore
 
-v7.5.4
+v7.6.1
 ======
 
 Notable enhancements
 -------------
 
-- Added support for configuring a custom port for the kraft controllers.
 - Updated default confluent cli version to 3.55.0
 
 Notable fixes
@@ -142,13 +141,24 @@ Notable fixes
 - Connect and Ksqldb clusters are correctly registered even for co-located components
 - Critical security and vulnerability issues were fixed
 
-v7.5.3
+
+
+v7.6.0
 ======
 
-Notable fixes
+New features
 -------------
 
-- Critical security and vulnerability issues were fixed.
+- In place upgrade from Zookeeper to Kraft is now supported
+- ARM64 architecture is now supported in production
+- Deploying connectors now supported on clusters with RBAC & mTLS
+
+Notable enhancements
+-------------
+
+- Rocky Linux 8 and Rocky Linux 9 Operating Systems are now supported
+- Discovery has been de-coupled from cp-ansible and is now a present in separate repo named cp-discovery
+- Custom port can now be used in Kraft Controller listener
 
 v7.5.2
 ======

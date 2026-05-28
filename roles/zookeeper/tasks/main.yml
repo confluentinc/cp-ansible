@@ -14,17 +14,6 @@
     - ansible_os_family
     - ansible_fqdn
 
-- name: Stop Service and Remove Packages on Version Change
-  include_role:
-    name: common
-    tasks_from: remove_packages.yml
-  vars:
-    service_name: "{{ zookeeper_service_name }}"
-  when: installation_method == "package"
-  tags:
-    - package
-    - cp_package
-
 - name: Validate Zookeeper Jolokia Access Control Configuration
   include_tasks: ../common/tasks/component_validations.yml
   vars:
@@ -36,6 +25,18 @@
   tags:
     - validate
     - validate_jolokia
+
+
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ zookeeper_service_name }}"
+  when: installation_method == "package"
+  tags:
+    - package
+    - cp_package
 
 # Install Packages
 - name: Install the Zookeeper Packages
@@ -297,6 +298,18 @@
   tags:
     - log
 
+
+- name: Copy Zookeeper Jolokia Access Control File
+  copy:
+    src: "{{ zookeeper_jolokia_access_control_file_src_path }}"
+    dest: "{{ zookeeper_jolokia_access_control_file_dest_path }}"
+    mode: '640'
+    owner: "{{ zookeeper_user }}"
+    group: "{{ zookeeper_group }}"
+  when: zookeeper_jolokia_enabled|bool and zookeeper_jolokia_access_control_enabled|bool
+  tags:
+    - configuration
+
 - name: Create Zookeeper Jolokia Config
   template:
     src: zookeeper_jolokia.properties.j2
@@ -307,20 +320,6 @@
   when: zookeeper_jolokia_enabled|bool
   notify: restart zookeeper
   diff: "{{ not mask_sensitive_diff|bool }}"
-  tags:
-    - configuration
-
-- name: Copy Zookeeper Jolokia Access Control File
-  copy:
-    src: "{{ zookeeper_jolokia_access_control_file_src_path }}"
-    dest: "{{ zookeeper_jolokia_access_control_file_dest_path }}"
-    mode: '640'
-    owner: "{{ zookeeper_user }}"
-    group: "{{ zookeeper_group }}"
-  when:
-    - zookeeper_jolokia_enabled|bool
-    - zookeeper_jolokia_access_control_enabled|bool
-  notify: restart zookeeper
   tags:
     - configuration
 

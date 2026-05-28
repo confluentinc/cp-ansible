@@ -14,17 +14,6 @@
     - ansible_os_family
     - ansible_fqdn
 
-- name: Stop Service and Remove Packages on Version Change
-  include_role:
-    name: common
-    tasks_from: remove_packages.yml
-  vars:
-    service_name: "{{ kafka_connect_replicator_service_name }}"
-  when: installation_method == "package"
-  tags:
-    - package
-    - cp_package
-
 - name: Validate Kafka Connect Replicator Jolokia Access Control Configuration
   include_tasks: ../common/tasks/component_validations.yml
   vars:
@@ -36,6 +25,18 @@
   tags:
     - validate
     - validate_jolokia
+
+
+- name: Stop Service and Remove Packages on Version Change
+  include_role:
+    name: common
+    tasks_from: remove_packages.yml
+  vars:
+    service_name: "{{ kafka_connect_replicator_service_name }}"
+  when: installation_method == "package"
+  tags:
+    - package
+    - cp_package
 
 - name: Install the Kafka Connect Replicator Packages
   yum:
@@ -304,17 +305,7 @@
   tags:
     - configuration
 
-- name: Create Kafka Connect Replicator Jolokia Config
-  template:
-    src: kafka-connect-replicator-jolokia.properties.j2
-    dest: "{{kafka_connect_replicator_jolokia_config}}"
-    mode: '640'
-    owner: "{{kafka_connect_replicator_user}}"
-    group: "{{kafka_connect_replicator_group}}"
-  when: kafka_connect_replicator_jolokia_enabled|bool
-  notify: Restart Kafka Connect Replicator
-  tags:
-    - configuration
+
 
 - name: Copy Kafka Connect Replicator Jolokia Access Control File
   copy:
@@ -323,9 +314,18 @@
     mode: '640'
     owner: "{{ kafka_connect_replicator_user }}"
     group: "{{ kafka_connect_replicator_group }}"
-  when:
-    - kafka_connect_replicator_jolokia_enabled|bool
-    - kafka_connect_replicator_jolokia_access_control_enabled|bool
+  when: kafka_connect_replicator_jolokia_enabled|bool and kafka_connect_replicator_jolokia_access_control_enabled|bool
+  tags:
+    - configuration
+
+- name: Create Kafka Connect Replicator Jolokia Config
+  template:
+    src: kafka-connect-replicator-jolokia.properties.j2
+    dest: "{{kafka_connect_replicator_jolokia_config}}"
+    mode: '640'
+    owner: "{{kafka_connect_replicator_user}}"
+    group: "{{kafka_connect_replicator_group}}"
+  when: kafka_connect_replicator_jolokia_enabled|bool
   notify: Restart Kafka Connect Replicator
   tags:
     - configuration

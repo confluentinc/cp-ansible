@@ -2,7 +2,7 @@
 # Custom filters used in this file are defined in plugins/filter/filters.py
 
 ### Version of Confluent Platform to install
-confluent_package_version: 7.5.14
+confluent_package_version: 7.6.11
 
 confluent_full_package_version: "{{ confluent_package_version + '-1' }}"
 confluent_package_redhat_suffix: "{{ '-' + confluent_full_package_version if confluent_full_package_version != '' else ''}}"
@@ -62,7 +62,7 @@ shell_executable: /bin/bash
 ### To copy from Ansible control host or download
 jolokia_url_remote: true
 
-### Boolean to enable Jolokia Agent installation and configuration on all components
+### Boolean to enable Jolokia Agent installation and configuration on all components.
 jolokia_enabled: false
 
 ### Full path to download the Jolokia Agent Jar
@@ -80,7 +80,8 @@ jolokia_user: admin
 ### Password for Jolokia Agent when using Basic Auth
 jolokia_password: password
 
-### Boolean to enable Jolokia access control across all components
+
+### Enable Jolokia access control to restrict JMX operations
 jolokia_access_control_enabled: false
 
 ### Boolean to use custom Jolokia access control file. Must be set to true or false when Jolokia access control is enabled.
@@ -91,15 +92,25 @@ jolokia_access_control_file_src_path: ""
 
 ### Component-specific custom file enabled flags (must be defined before src_path variables)
 zookeeper_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
+### custom file enabled flag for kafka controller
+kafka_controller_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
+### custom file enabled flag for kafka broker
 kafka_broker_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
+### custom file enabled flag for schema registry
 schema_registry_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
 kafka_rest_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
+### custom file enabled flag for kafka connect
 kafka_connect_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
+### custom file enabled flag for ksql
 ksql_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
+### custom file enabled flag for kafka connect replicator
 kafka_connect_replicator_jolokia_access_control_custom_file_enabled: "{{jolokia_access_control_custom_file_enabled}}"
 
 ### Path to Jolokia access control XML file for Zookeeper (on control node)
 zookeeper_jolokia_access_control_file_src_path: "{{ '' if zookeeper_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+
+### Path to Jolokia access control XML file for Kafka Controller (on control node)
+kafka_controller_jolokia_access_control_file_src_path: "{{ '' if kafka_controller_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
 
 ### Path to Jolokia access control XML file for Kafka Broker (on control node)
 kafka_broker_jolokia_access_control_file_src_path: "{{ '' if kafka_broker_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
@@ -117,9 +128,9 @@ kafka_connect_jolokia_access_control_file_src_path: "{{ '' if kafka_connect_jolo
 ksql_jolokia_access_control_file_src_path: "{{ '' if ksql_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
 
 ### Path to Jolokia access control XML file for Kafka Connect Replicator (on control node)
-kafka_connect_replicator_jolokia_access_control_file_src_path: "{{ '' if kafka_connect_replicator_jolokia_access_control_custom_file_enabled|bool else role_path + '/templates/jolokia_access_control_default.xml' }}"
+kafka_connect_replicator_jolokia_access_control_file_src_path: "{{ '' if kafka_connect_replicator_jolokia_access_control_custom_file_enabled|bool else 'jolokia_access_control_default.xml' }}"
 
-### To copy from Ansible control host or download
+### Boolean to specify if Prometheus JMX Exporter should be downloaded from remote URL or copied from control host
 jmxexporter_url_remote: true
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on all components
@@ -424,6 +435,10 @@ zookeeper_key_path: "{{ ssl_file_dir_final }}/zookeeper.key"
 zookeeper_export_certs: "{{ True if zookeeper_client_authentication_type == 'mtls' or zookeeper_quorum_authentication_type in ['mtls', 'digest_over_tls'] else False }}"
 zookeeper_keytab_path: /etc/security/keytabs/zookeeper.keytab
 
+### Boolean to enable Jolokia access control on zookeeper
+zookeeper_jolokia_access_control_enabled: "{{jolokia_access_control_enabled}}"
+
+
 ### Boolean to enable Jolokia Agent installation and configuration on zookeeper
 zookeeper_jolokia_enabled: "{{jolokia_enabled}}"
 
@@ -445,12 +460,6 @@ zookeeper_jolokia_user: "{{jolokia_user}}"
 ### Password for Zookeeper's Jolokia Agent when using Basic Auth
 zookeeper_jolokia_password: "{{jolokia_password}}"
 
-### Boolean to enable Jolokia access control on Zookeeper
-zookeeper_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
-
-### Path on target nodes where Zookeeper Jolokia access control XML file will be placed
-zookeeper_jolokia_access_control_file_dest_path: "{{ zookeeper.config_file | dirname }}/jolokia-access.xml"
-
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on zookeeper
 zookeeper_jmxexporter_enabled: "{{jmxexporter_enabled}}"
 
@@ -463,18 +472,17 @@ zookeeper_jmxexporter_config_source_path: zookeeper.yml
 ### Destination path for Zookeeper jmx config file
 zookeeper_jmxexporter_config_path: /opt/prometheus/zookeeper.yml
 
-zookeeper_health_check_command: >-
-  {{ binary_base_path }}/bin/kafka-run-class
-  {% if zookeeper_ssl_enabled|bool %}
-  -Dzookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
-  -Dzookeeper.ssl.trustStore.location={{zookeeper_truststore_path}}
-  -Dzookeeper.ssl.trustStore.password={{zookeeper_truststore_storepass}}
-  -Dzookeeper.ssl.keyStore.location={{zookeeper_keystore_path}}
-  -Dzookeeper.ssl.keyStore.password={{zookeeper_keystore_storepass}}
-  -Dzookeeper.client.secure=true
-  {% endif %}
-  org.apache.zookeeper.client.FourLetterWordMain {{zookeeper_health_check_host | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname) }} {{zookeeper_client_port}} srvr
-  {% if zookeeper_ssl_enabled|bool %}true{% endif %}
+zookeeper_health_check_command: "{{ binary_base_path }}/bin/kafka-run-class
+{% if zookeeper_ssl_enabled|bool %}
+-Dzookeeper.clientCnxnSocket=org.apache.zookeeper.ClientCnxnSocketNetty
+-Dzookeeper.ssl.trustStore.location={{zookeeper_truststore_path}}
+-Dzookeeper.ssl.trustStore.password={{zookeeper_truststore_storepass}}
+-Dzookeeper.ssl.keyStore.location={{zookeeper_keystore_path}}
+-Dzookeeper.ssl.keyStore.password={{zookeeper_keystore_storepass}}
+-Dzookeeper.client.secure=true
+{% endif %}
+org.apache.zookeeper.client.FourLetterWordMain {{zookeeper_health_check_host | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname) }} {{zookeeper_client_port}} srvr
+{% if zookeeper_ssl_enabled|bool %}true{% endif %}"
 
 zookeeper_current_node_hostname: "{{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}"
 
@@ -495,6 +503,18 @@ zookeeper_custom_properties: {}
 zookeeper_skip_restarts: "{{ skip_restarts }}"
 
 #### kafka Controller variables ####
+
+### Boolean to enable zookeeper to kraft migration
+kraft_migration: false
+
+### Parameter to increase the number of retries for Metadata Migration API request
+metadata_migration_retries: 10
+
+### Parameter to configure the number of retries for Jolokia endpoint access tests
+jolokia_endpoint_health_check_retries: 3
+
+### Parameter to configure the delay (in seconds) between Jolokia endpoint access test retries
+jolokia_endpoint_health_check_delay: 30
 
 ### Default controller quorum voters
 kafka_controller_quorum_voters: "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{controller_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
@@ -548,6 +568,7 @@ kafka_controller_packages:
   - confluent-rebalancer
   - confluent-security
 
+
 kafka_controller_truststore_path: "{{kafka_controller_bcfks_truststore_path if fips_enabled|bool else kafka_controller_pkcs12_truststore_path}}"
 kafka_controller_keystore_path: "{{kafka_controller_bcfks_keystore_path if fips_enabled|bool else kafka_controller_pkcs12_keystore_path}}"
 
@@ -566,8 +587,11 @@ kafka_controller_key_path: "{{ ssl_file_dir_final }}/kafka_controller.key"
 kafka_controller_export_certs: "{{ssl_mutual_auth_enabled}}"
 kafka_controller_keytab_path: /etc/security/keytabs/kafka_controller.keytab
 
-### Boolean to enable Jolokia Agent installation and configuration on kafka
-kafka_controller_jolokia_enabled: "{{jolokia_enabled}}"
+### Boolean to enable Jolokia access control on kafka controller
+kafka_controller_jolokia_access_control_enabled: "{{jolokia_access_control_enabled}}"
+
+### Boolean to enable Jolokia Agent installation and configuration on kafka. Jolokia is required in Kraft Controller during ZK to Kraft migration
+kafka_controller_jolokia_enabled: "{{jolokia_enabled or kraft_migration}}"
 
 ### Port to expose kafka jolokia metrics. Beware of port collisions if colocating components on same host
 kafka_controller_jolokia_port: 7770
@@ -605,7 +629,7 @@ kafka_controller_jmxexporter_config_source_path: kafka.yml.j2
 ### Destination path for Kafka controller jmx config file
 kafka_controller_jmxexporter_config_path: /opt/prometheus/kafka.yml
 
-### Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
+### Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 kafka_controller_copy_files: []
 
 ### Replication Factor for internal topics. Defaults to the minimum of the number of controllers and can be overridden via default replication factor (see default_internal_replication_factor).
@@ -722,6 +746,9 @@ kafka_broker_keytab_path: /etc/security/keytabs/kafka_broker.keytab
 kafka_broker_schema_validation_enabled: true
 
 ### Boolean to enable Jolokia Agent installation and configuration on kafka
+kafka_broker_jolokia_access_control_enabled: "{{jolokia_access_control_enabled}}"
+
+### Boolean to enable Jolokia Agent installation and configuration on kafka broker
 kafka_broker_jolokia_enabled: "{{jolokia_enabled}}"
 
 ### Port to expose kafka jolokia metrics. Beware of port collisions if colocating components on same host
@@ -741,12 +768,6 @@ kafka_broker_jolokia_user: "{{jolokia_user}}"
 
 ### Password for Kafka's Jolokia Agent when using Basic Auth
 kafka_broker_jolokia_password: "{{jolokia_password}}"
-
-### Boolean to enable Jolokia access control on Kafka Broker
-kafka_broker_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
-
-### Path on target nodes where Kafka Broker Jolokia access control XML file will be placed
-kafka_broker_jolokia_access_control_file_dest_path: "{{ kafka_broker.config_file | dirname }}/jolokia-access.xml"
 
 kafka_broker_erp_clusters_url: "{{mds_http_protocol}}://{{ mds_advertised_listener_hostname | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname, True) }}:{{mds_port}}/kafka/v3/clusters"
 
@@ -844,6 +865,9 @@ schema_registry_export_certs: "{{ True if schema_registry_authentication_type ==
 schema_registry_keytab_path: /etc/security/keytabs/schema_registry.keytab
 schema_registry_kafka_listener_name: internal
 
+### Boolean to enable Jolokia access control on schema registry
+schema_registry_jolokia_access_control_enabled: "{{jolokia_access_control_enabled}}"
+
 ### Boolean to enable Jolokia Agent installation and configuration on schema registry
 schema_registry_jolokia_enabled: "{{jolokia_enabled}}"
 
@@ -864,12 +888,6 @@ schema_registry_jolokia_user: "{{jolokia_user}}"
 
 ### Password for Schema Registry's Jolokia Agent when using Basic Auth
 schema_registry_jolokia_password: "{{jolokia_password}}"
-
-### Boolean to enable Jolokia access control on Schema Registry
-schema_registry_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
-
-### Path on target nodes where Schema Registry Jolokia access control XML file will be placed
-schema_registry_jolokia_access_control_file_dest_path: "{{ schema_registry.config_file | dirname }}/jolokia-access.xml"
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on schema registry
 schema_registry_jmxexporter_enabled: "{{jmxexporter_enabled}}"
@@ -947,6 +965,9 @@ kafka_rest_export_certs: "{{ True if kafka_rest_authentication_type == 'mtls' el
 kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
 kafka_rest_kafka_listener_name: internal
 
+### Boolean to enable Jolokia access control on kafka rest
+kafka_rest_jolokia_access_control_enabled: "{{jolokia_access_control_enabled}}"
+
 ### Boolean to enable Jolokia Agent installation and configuration on Rest Proxy
 kafka_rest_jolokia_enabled: "{{jolokia_enabled}}"
 
@@ -967,12 +988,6 @@ kafka_rest_jolokia_user: "{{jolokia_user}}"
 
 ### Password for Rest Proxy's Jolokia Agent when using Basic Auth
 kafka_rest_jolokia_password: "{{jolokia_password}}"
-
-### Boolean to enable Jolokia access control on Rest Proxy
-kafka_rest_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
-
-### Path on target nodes where Rest Proxy Jolokia access control XML file will be placed
-kafka_rest_jolokia_access_control_file_dest_path: "{{ kafka_rest.config_file | dirname }}/jolokia-access.xml"
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on Rest Proxy
 kafka_rest_jmxexporter_enabled: "{{jmxexporter_enabled}}"
@@ -1068,6 +1083,9 @@ kafka_connect_consumer_kafka_listener_name: "{{kafka_connect_kafka_listener_name
 ### Additional set of Connect extension classes.
 kafka_connect_custom_rest_extension_classes: []
 
+### Boolean to enable Jolokia access control on kafka connect
+kafka_connect_jolokia_access_control_enabled: "{{jolokia_access_control_enabled}}"
+
 ### Boolean to enable Jolokia Agent installation and configuration on Connect
 kafka_connect_jolokia_enabled: "{{jolokia_enabled}}"
 
@@ -1088,12 +1106,6 @@ kafka_connect_jolokia_user: "{{jolokia_user}}"
 
 ### Password for Connect's Jolokia Agent when using Basic Auth
 kafka_connect_jolokia_password: "{{jolokia_password}}"
-
-### Boolean to enable Jolokia access control on Kafka Connect
-kafka_connect_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
-
-### Path on target nodes where Kafka Connect Jolokia access control XML file will be placed
-kafka_connect_jolokia_access_control_file_dest_path: "{{ kafka_connect.config_file | dirname }}/jolokia-access.xml"
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on Connect
 kafka_connect_jmxexporter_enabled: "{{jmxexporter_enabled}}"
@@ -1144,6 +1156,9 @@ kafka_connect_monitoring_interceptors_enabled: "{{ monitoring_interceptors_enabl
 
 ### Use to register and identify your Kafka Connect cluster in the MDS.
 kafka_connect_cluster_name: ""
+
+### Set this variable with a comma separated list of Topics for Kafka Connect Connector to produce/consume from.  This is a mandatory variable when creating Connector in RBAC cluster.
+kafka_connect_connector_white_list: ""
 
 ### Boolean used for disabling of systemd service restarts when rootless install is executed
 kafka_connect_skip_restarts: "{{ skip_restarts }}"
@@ -1202,6 +1217,9 @@ ksql_keytab_path: /etc/security/keytabs/ksql.keytab
 ksql_kafka_listener_name: internal
 ksql_processing_log_kafka_listener_name: "{{kafka_broker_inter_broker_listener_name if rbac_enabled else ksql_kafka_listener_name}}"
 
+### Boolean to enable Jolokia access control on ksqlDB
+ksql_jolokia_access_control_enabled: "{{jolokia_access_control_enabled}}"
+
 ### Boolean to enable Jolokia Agent installation and configuration on ksqlDB
 ksql_jolokia_enabled: "{{jolokia_enabled}}"
 
@@ -1222,12 +1240,6 @@ ksql_jolokia_user: "{{jolokia_user}}"
 
 ### Password for ksqlDB's Jolokia Agent when using Basic Auth
 ksql_jolokia_password: "{{jolokia_password}}"
-
-### Boolean to enable Jolokia access control on ksqlDB
-ksql_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
-
-### Path on target nodes where ksqlDB Jolokia access control XML file will be placed
-ksql_jolokia_access_control_file_dest_path: "{{ ksql.config_file | dirname }}/jolokia-access.xml"
 
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on ksqlDB
 ksql_jmxexporter_enabled: "{{jmxexporter_enabled}}"
@@ -1555,6 +1567,9 @@ sso_groups_scope: none
 
 ### Configures whether offline_access scope would be requested in the authorization URI, Set this to false if offline tokens are not allowed for the user or client in IdP
 sso_refresh_token: true
+
+### SSL certificate (full path of file on control node) of IDP Domain for SSO in C3/cli. Optional, needed when IDP server has TLS enabled with custom certificate
+sso_idp_cert_path: ""
 
 ### Additional list of super user principals for RBAC clusters. In case when mTLS is enabled on brokers or controllers their certificate principals should be passed in this list.
 rbac_super_users: []
@@ -2027,6 +2042,9 @@ kafka_connect_replicator_sasl_plain_principal: "{{ sasl_plain_users_final.kafka_
 ### SASL PLAIN password for Kafka Connect Replicator to authenticate with.
 kafka_connect_replicator_sasl_plain_password: "{{ sasl_plain_users_final.kafka_connect_replicator.password }}"
 
+### Boolean to enable Jolokia access control on kafka connect replicator
+kafka_connect_replicator_jolokia_access_control_enabled: "{{jolokia_access_control_enabled}}"
+
 ### Boolean that defines if the Jolokia agent is enabled on Kafka Connect Replicator.
 kafka_connect_replicator_jolokia_enabled: "{{jolokia_enabled}}"
 
@@ -2038,12 +2056,6 @@ kafka_connect_replicator_jolokia_user: "{{jolokia_user}}"
 
 ### Password for Jolokia Agent when using Basic Auth.
 kafka_connect_replicator_jolokia_password: "{{jolokia_password}}"
-
-### Boolean to enable Jolokia access control on Kafka Connect Replicator
-kafka_connect_replicator_jolokia_access_control_enabled: "{{ jolokia_access_control_enabled }}"
-
-### Path on target nodes where Kafka Connect Replicator Jolokia access control XML file will be placed
-kafka_connect_replicator_jolokia_access_control_file_dest_path: "{{ kafka_connect_replicator.config_file | dirname }}/jolokia-access.xml"
 
 ### Port for Jolokia agent for Kafka Connect Replicator.
 kafka_connect_replicator_jolokia_port: 7777

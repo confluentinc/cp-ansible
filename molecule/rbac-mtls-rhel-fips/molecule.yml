@@ -1,5 +1,5 @@
 ---
-### Installs Confluent Platform Cluster on centos8.
+### Installs Confluent Platform Cluster on Oracle Linux 9.
 ### RBAC enabled.
 ### MTLS enabled.
 ### Secrets protection enabled
@@ -7,6 +7,10 @@
 ### Kafka Broker Customer Listener.
 ### RBAC Additional System Admin.
 ### Provided SSL Principal Mapping rule
+### Creates two unique Connectors in Connect cluster.
+### Zookeeper, Broker and Kraft Controller co-located while Migration
+### Kafka broker has custom listener at port 9093
+### Kraft Controller is running at port 9095
 
 driver:
   name: docker
@@ -24,25 +28,16 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: ${KRAFT_CONTROLLER:-zookeeper}1
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
-    groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-base.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    cgroupns_mode: host
-    privileged: true
-    networks:
-      - name: confluent
   - name: kafka-broker1
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-base.j2
+      - kafka_broker_migration
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -54,8 +49,12 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-base.j2
+      - kafka_broker_migration
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -67,8 +66,12 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-base.j2
+      - kafka_broker_migration
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -80,8 +83,9 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-base.j2
+      - schema_registry_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -93,8 +97,9 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-base.j2
+      - kafka_rest_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -106,8 +111,9 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-base.j2
+      - kafka_connect_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -119,8 +125,9 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-base.j2
+      - ksql_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -132,8 +139,9 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
-    image: geerlingguy/docker-centos8-ansible
-    dockerfile: ../Dockerfile-rhel-base.j2
+      - control_center_migration
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -144,6 +152,8 @@ platforms:
     networks:
       - name: confluent
 provisioner:
+  playbooks:
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
@@ -156,7 +166,7 @@ provisioner:
         ssl_enabled: true
         fips_enabled: true
         ssl_mutual_auth_enabled: true
-
+        kafka_controller_port: 9095
         secrets_protection_enabled: true
         rbac_enabled: true
 
@@ -188,6 +198,10 @@ provisioner:
         kafka_controller_custom_properties:
           ssl.principal.mapping.rules: "RULE:.*O=(.*?),OU=TEST.*$$/$$1/"  #since we are providing mapping.rules to broker and have mTLS between broker and controller
 
+        # To run the FileStream connector, you must add the filestream-connectors path in the plugin.path
+        kafka_connect_custom_properties:
+          plugin.path: "/usr/share/filestream-connectors,/usr/share/java/connect_plugins"
+
       kafka_broker:
         kafka_broker_cluster_name: Test-Broker
         # Testing old way of passing ldap configs
@@ -214,7 +228,24 @@ provisioner:
 
       kafka_connect:
         kafka_connect_cluster_name: Test-Connect
-
+        kafka_connect_connector_white_list: "test_topic1,test_topic2"
+        kafka_connect_connectors:
+          - name: sample-connector-1
+            config:
+              connector.class: "FileStreamSinkConnector"
+              tasks.max: "1"
+              file: "/etc/kafka/connect-distributed.properties"
+              topics: "test_topic1"
+              key.converter: "org.apache.kafka.connect.json.JsonConverter"
+              value.converter: "org.apache.kafka.connect.json.JsonConverter"
+          - name: sample-connector-2
+            config:
+              connector.class: "FileStreamSourceConnector"
+              tasks.max: "1"
+              file: "/etc/kafka/connect-distributed.properties"
+              topic: "test_topic2"
+              key.converter: "org.apache.kafka.connect.json.JsonConverter"
+              value.converter: "org.apache.kafka.connect.json.JsonConverter"
       ksql:
         ksql_cluster_name: Test-Ksql
 

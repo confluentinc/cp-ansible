@@ -6,6 +6,7 @@
 ### Validates truststore across all components.
 ### Validates OIDC authenticate api for SSO in Control Center
 ### Validates that FIPS is in use in OpenSSL.
+### Validates that both the Connectors are Running
 
 - name: Verify - kafka_broker
   hosts: kafka_broker
@@ -56,8 +57,8 @@
     - name: Assert cluster count expected
       assert:
         that:
-          - clusters.json|length == 4
-        fail_msg: "There should only be four clusters in {{clusters.json}}"
+          - clusters.json|length == 5
+        fail_msg: "There should only be five clusters in {{clusters.json}}"
         quiet: true
 
     - name: Get Clusters associated with user2
@@ -125,6 +126,66 @@
         file_path: /etc/kafka/connect-distributed.properties
         property: ssl.truststore.location
         expected_value: /var/ssl/private/kafka_connect.truststore.jks
+
+    - name: Get Connectors on connect cluster1
+      uri:
+        url: "https://kafka-connect1:8083/connectors"
+        status_code: 200
+        validate_certs: false
+        url_username: "kafka_connect"
+        url_password: "password"
+
+      register: connectors
+
+    - name: Assert Connector1 Created
+      assert:
+        that:
+          - connectors.json[0] == "sample-connector-1"
+        fail_msg: "Connector not created"
+        quiet: true
+
+    - name: Wait for Connector tasks to return Running
+      uri:
+        url: https://kafka-connect1:8083/connectors/sample-connector-1/status
+        status_code: 200
+        validate_certs: false
+        url_username: kafka_connect
+        url_password: password
+        force_basic_auth: true
+      register: connector_status_response
+      until: connector_status_response.json.tasks[0].state == 'RUNNING'
+      retries: 10
+      delay: 5
+
+    - name: Get Connectors on connect cluster2
+      uri:
+        url: "https://kafka-connect2:8083/connectors"
+        status_code: 200
+        validate_certs: false
+        url_username: "kafka_connect"
+        url_password: "password"
+
+      register: connectors
+
+    - name: Assert Connector2 Created
+      assert:
+        that:
+          - connectors.json[0] == "sample-connector-2"
+        fail_msg: "Connector not created"
+        quiet: true
+
+    - name: Wait for Connector tasks to return Running
+      uri:
+        url: https://kafka-connect2:8083/connectors/sample-connector-2/status
+        status_code: 200
+        validate_certs: false
+        url_username: kafka_connect
+        url_password: password
+        force_basic_auth: true
+      register: connector_status_response
+      until: connector_status_response.json.tasks[0].state == 'RUNNING'
+      retries: 10
+      delay: 5
 
 - name: Verify - ksql
   hosts: ksql

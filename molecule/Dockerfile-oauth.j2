@@ -1,0 +1,21 @@
+FROM registry.access.redhat.com/ubi9 AS ubi-micro-build
+RUN mkdir -p /mnt/rootfs
+RUN dnf install --installroot /mnt/rootfs python3 openssl --releasever 9 --setopt install_weak_deps=false --nodocs -y && \
+    dnf --installroot /mnt/rootfs clean all && \
+    rpm --root /mnt/rootfs -e --nodeps setup
+
+RUN openssl req -x509 -newkey rsa:4096 -keyout /mnt/rootfs/idp-key.pem -out /mnt/rootfs/idp-cert.pem -sha256 -days 3650 -nodes -subj "/C=XX/ST=KAR/L=BLR/O=Confluent/OU=CP/CN=oauth1"
+# the value of CN must be same as name in molecule.yml for https to work correctly
+
+# the key file doesnt have read permissions for group users by default but it is required
+RUN chmod 440 /mnt/rootfs/idp-key.pem
+RUN chmod 440 /mnt/rootfs/idp-cert.pem
+
+FROM {{ item.image }}
+COPY --from=ubi-micro-build /mnt/rootfs /
+LABEL maintainer="CP Ansible"
+ENV container docker
+
+
+VOLUME ["/sys/fs/cgroup"]
+CMD ["/usr/lib/systemd/systemd"]
