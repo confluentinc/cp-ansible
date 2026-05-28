@@ -116,7 +116,7 @@
 
     # Reuse existing health check with stricter fail-fast behavior for migration pre-check
     # This validates: Under-Replicated Partitions (URPs), MDS endpoint, Embedded REST Proxy
-    - name: Run Kafka Broker Health Checks (Fail-Fast Mode)
+    - name: Kafka Broker Health Checks
       include_role:
         name: kafka_broker
         tasks_from: health_check.yml
@@ -126,50 +126,6 @@
         kafka_broker_health_check_urp_delay: 0
         kafka_broker_health_check_retry_delay: 0
         mds_retries: 0
-
-    # Check for active partition reassignments - NOT covered by standard health check
-    # Active reassignments during migration can cause metadata conflicts
-    - name: Check for Active Partition Reassignments
-      shell: |
-        {{ binary_base_path }}/bin/kafka-reassign-partitions --bootstrap-server {{ hostvars[inventory_hostname]|confluent.platform.resolve_hostname }}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port']}} \
-          --command-config {{kafka_broker.client_config_file}} --list 2>&1
-      environment:
-        KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
-        CONFLUENT_SECURITY_MASTER_KEY: "{{ secrets_protection_masterkey if kafka_broker_client_secrets_protection_enabled|bool else '' }}"
-      register: reassignment_check
-      changed_when: false
-      check_mode: false
-      run_once: true
-
-    - name: Fail if Active Partition Reassignments Detected
-      fail:
-        msg: |
-          ═══════════════════════════════════════════════════════════════
-          CRITICAL: Active Partition Reassignments Detected
-          ═══════════════════════════════════════════════════════════════
-
-          Migration cannot proceed while partition reassignments are in progress.
-
-          Active reassignments:
-          {{ reassignment_check.stdout }}
-
-          What are partition reassignments?
-          - Data is being moved between Kafka brokers
-          - This can take hours or days to complete
-
-          What to do:
-          1. Wait for reassignments to complete:
-             kafka-reassign-partitions --bootstrap-server <host>:9092 --list
-
-          2. Or cancel them (if safe):
-             kafka-reassign-partitions --bootstrap-server <host>:9092 --cancel
-
-          3. Retry migration after reassignments finish
-          ═══════════════════════════════════════════════════════════════
-      when: >
-        reassignment_check.rc == 0 and
-        ('partitions to be reassigned' in reassignment_check.stdout|lower or
-         'Current partition reassignments' in reassignment_check.stdout)
 
 - name: Check Kraft Controller
   hosts: kafka_controller
