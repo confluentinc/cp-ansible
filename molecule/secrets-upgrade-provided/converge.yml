@@ -1,0 +1,73 @@
+---
+### Two passes: bootstrap valid customer artifacts (regenerate_masterkey: true,
+### then capture the generated key + security.properties), then re-converge
+### with those artifacts pinned as facts AND regenerate_masterkey: true. The
+### customer's value must win - regen=true alongside a supplied key is a
+### no-op, not a regeneration.
+
+- name: Bootstrap pass to generate realistic customer artifacts
+  import_playbook: confluent.platform.all
+
+- name: Capture bootstrapped master key from a broker
+  hosts: "{{ groups['kafka_broker'][0] }}"
+  gather_facts: false
+  tasks:
+    - name: Read broker systemd override.conf
+      slurp:
+        src: /etc/systemd/system/confluent-server.service.d/override.conf
+      register: bootstrap_override
+
+    - name: Extract CONFLUENT_SECURITY_MASTER_KEY from override.conf
+      set_fact:
+        bootstrapped_masterkey: "{{ (bootstrap_override.content | b64decode).split('\n')
+          | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
+          | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Assert bootstrap pass produced a master key
+      assert:
+        that:
+          - bootstrapped_masterkey | default('') | length > 0
+        fail_msg: "Bootstrap pass did not populate CONFLUENT_SECURITY_MASTER_KEY in override.conf."
+
+    - name: Fetch bootstrapped security.properties to controller
+      fetch:
+        src: /var/ssl/private/kafka-broker-security.properties
+        dest: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/customer-security.properties"
+        flat: true
+
+- name: Override secrets-protection facts with customer-provided values
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Pin customer master key and security file on every host
+      set_fact:
+        secrets_protection_masterkey: "{{ hostvars[groups['kafka_broker'][0]].bootstrapped_masterkey }}"
+        secrets_protection_security_file: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/customer-security.properties"
+
+- name: Re-converge with customer-provided values AND regenerate_masterkey true (wiki Scenario 4)
+  import_playbook: confluent.platform.all
+  vars:
+    regenerate_masterkey: true
+
+- name: Assert the customer-supplied master key survived the regen=true re-converge
+  hosts: "{{ groups['kafka_broker'][0] }}"
+  gather_facts: false
+  tasks:
+    - name: Re-read broker systemd override.conf after the regen=true pass
+      slurp:
+        src: /etc/systemd/system/confluent-server.service.d/override.conf
+      register: post_override
+
+    - name: Extract CONFLUENT_SECURITY_MASTER_KEY from override.conf (post-pass)
+      set_fact:
+        post_masterkey: "{{ (post_override.content | b64decode).split('\n')
+          | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
+          | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Assert customer-provided master key was preserved (Scenario 4 contract)
+      assert:
+        that:
+          - post_masterkey == bootstrapped_masterkey
+        fail_msg: >-
+          Customer-supplied master key was overwritten on a regen=true re-converge.
+          post={{ post_masterkey }}, customer={{ bootstrapped_masterkey }}.
