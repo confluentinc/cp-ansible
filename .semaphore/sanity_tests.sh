@@ -45,34 +45,38 @@ sudo apt install -y shellcheck
 # prepend the desired default python version to .python-version file
 { echo "$PYTHON_VERSION"; cat .python-version 2>/dev/null || true; } > .python-version.tmp && mv .python-version.tmp .python-version
 
-pip install wheel
-pip install pylint
-pip install "ansible==$ANSIBLE_VERSION"
-pip install yamllint
-pip install galaxy-importer
-pip install setuptools
+# Allow pip to install packages in externally-managed environments (Ubuntu 24.04 PEP 668)
+export PIP_BREAK_SYSTEM_PACKAGES=1
 
-python --version
+# Use the specific Python version for pip installations
+python$PYTHON_VERSION -m pip install wheel
+python$PYTHON_VERSION -m pip install pylint
+python$PYTHON_VERSION -m pip install "ansible==$ANSIBLE_VERSION"
+python$PYTHON_VERSION -m pip install yamllint
+python$PYTHON_VERSION -m pip install galaxy-importer
+python$PYTHON_VERSION -m pip install setuptools
+
+python$PYTHON_VERSION --version
 ansible --version
 
-export PYTHON_INTERPRETER=$(which python)
+export PYTHON_INTERPRETER=$(which python$PYTHON_VERSION)
 echo $PYTHON_INTERPRETER
 
 # Test1
 export GALAXY_IMPORTER_CONFIG="$PATH_TO_CPA/galaxy-importer/galaxy-importer.cfg"
-python -m galaxy_importer.main $ARTEFACT
+python$PYTHON_VERSION -m galaxy_importer.main $ARTEFACT
 
 # Test2
 ansible-test sanity
 
 # Test3 - Custom set_fact Secret Leak Check
 echo "Running custom set_fact secret leak sanity check..."
-python3 $PATH_TO_CPA/.semaphore/setfact_secret_check.py
+python$PYTHON_VERSION $PATH_TO_CPA/.semaphore/setfact_secret_check.py
 
 echo "set_fact secret leak sanity check completed."
 
 # Test4 - Custom URI Authorization Check
 echo "Running custom URI authorization sanity check..."
-python3 $PATH_TO_CPA/.semaphore/uri_auth_check.py
+python$PYTHON_VERSION $PATH_TO_CPA/.semaphore/uri_auth_check.py
 
 echo "URI authorization secret leak sanity check completed."
