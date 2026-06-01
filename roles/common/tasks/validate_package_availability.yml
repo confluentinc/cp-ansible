@@ -1,0 +1,53 @@
+---
+- name: Check Package Availability (RedHat)
+  shell: |
+    yum list available {{ item }}{{ confluent_package_redhat_suffix }} 2>/dev/null || yum list installed {{ item }}{{ confluent_package_redhat_suffix }} 2>/dev/null
+  register: package_availability_check_redhat
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop: "{{ validate_packages }}"
+  when:
+    - ansible_os_family == "RedHat"
+    - installation_method == "package"
+  tags:
+    - package
+    - cp_package
+
+- name: Check Package Availability (Debian)
+  shell: |
+    apt-cache policy {{ item }}{{ confluent_package_debian_suffix }} 2>/dev/null | grep -E 'Candidate:' | grep -v 'Candidate: (none)'
+  register: package_availability_check_debian
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop: "{{ validate_packages }}"
+  when:
+    - ansible_os_family == "Debian"
+    - installation_method == "package"
+  tags:
+    - package
+    - cp_package
+
+# Fail with an explicit list of the missing packages so support does not have to
+# parse raw yum/apt output to find out what is unavailable.
+- name: Fail if Any Package is Unavailable
+  fail:
+    msg: >-
+      Package(s) not available in any repo or installed:
+      {{ unavailable_packages | join(', ') }}. Aborting before removing old
+      packages. Check repo config and Confluent version ({{ confluent_package_version }}).
+  vars:
+    unavailable_packages: >-
+      {{ ((package_availability_check_redhat.results | default([]))
+          + (package_availability_check_debian.results | default([])))
+         | selectattr('rc', 'defined')
+         | selectattr('rc', 'ne', 0)
+         | map(attribute='item')
+         | list }}
+  when:
+    - installation_method == "package"
+    - unavailable_packages | length > 0
+  tags:
+    - package
+    - cp_package
