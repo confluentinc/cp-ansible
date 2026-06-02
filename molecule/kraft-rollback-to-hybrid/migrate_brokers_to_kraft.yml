@@ -1,0 +1,60 @@
+---
+# Molecule-only helper. Replays just the broker-migration plays from
+# playbooks/ZKtoKraftMigration.yml ("Migrate Brokers to Kraft" + "Restart Kafka
+# Broker", lines 86-138 of that file). Run against a HYBRID_DUAL_WRITE cluster,
+# these plays add process.roles=broker and restart the brokers, advancing them
+# to PURE_DUAL_WRITE *without* touching the controllers or finalizing the
+# migration. Kept here (not in the main playbooks) so production code is
+# unchanged. Keep in sync with ZKtoKraftMigration.yml if those plays change.
+
+- name: Migrate Brokers to Kraft
+  hosts: kafka_broker
+  gather_facts: true
+  any_errors_fatal: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Remove Zookeeper configs from Broker
+      lineinfile:
+        path: "{{ kafka_broker.config_file }}"
+        state: absent
+        regexp: "^{{ item }}*"
+      loop:
+        - zookeeper
+        - inter.broker.protocol.version
+
+    - name: Reconfigure ZK Brokers as KRaft brokers
+      lineinfile:
+        path: "{{ kafka_broker.config_file }}"
+        line: process.roles=broker
+
+    - name: Check if Cluster has RBAC enabled
+      lineinfile:
+        path: "{{ kafka_broker.config_file }}"
+        regexp: 'confluent.authorizer.access.rule.providers(.*)$'
+        state: absent
+      register: auth_present
+      when: rbac_enabled|bool
+
+    - name: Replace ZK_ACL with KRAFT_ACL
+      lineinfile:
+        path: "{{ kafka_broker.config_file }}"
+        line: confluent.authorizer.access.rule.providers=CONFLUENT,KRAFT_ACL
+      when:
+        - rbac_enabled|bool
+        - auth_present.found
+
+- name: Restart Kafka Broker
+  hosts: kafka_broker
+  gather_facts: true
+  serial: '1'
+  any_errors_fatal: true
+  tasks:
+    - include_role:
+        name: kafka_broker
+        tasks_from: restart_and_wait.yml
+    - include_role:
+        name: kafka_broker
+        tasks_from: health_check.yml
+      tags: health_check

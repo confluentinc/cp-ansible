@@ -1,0 +1,357 @@
+---
+# Unified KRaft → ZooKeeper rollback playbook
+#
+# Five plays, each gated by detected migration_state so that any play that
+# doesn't apply to the current state no-ops cleanly. Two CLI tags control
+# how far the rollback goes:
+#
+#   --tags rollback_to_hybrid
+#     Only meaningful from PURE_DUAL_WRITE. Reverts brokers from KRaft back
+#     to hybrid mode. KRaft controller stays active.
+#
+#   --tags rollback_to_premigration
+#     Full unwind to pure ZooKeeper. From PURE_DUAL_WRITE this runs all five
+#     plays; from HYBRID_DUAL_WRITE it skips the first; from PREMIGRATION
+#     only the controller-deprovision play runs.
+#
+# When state is PURE_DUAL_WRITE the operator MUST pass one of the two tags
+# explicitly (enforced by pre_rollback_checks.yml).
+#
+# Non-RBAC ACL clusters (using authorizer.class.name instead of RBAC providers)
+# need a two-run workflow:
+#   1. --tags rollback_to_hybrid  → moves cluster to HYBRID_DUAL_WRITE
+#   2. Edit inventory to restore the ZK authorizer class
+#   3. --tags rollback_to_premigration  → final broker restart picks up
+#                                          the inventory edit via template regen
+
+- name: Revert brokers to hybrid mode (template regen)
+  hosts: kafka_broker
+  gather_facts: true
+  serial: '1'
+  any_errors_fatal: true
+  tags:
+    - rollback_to_hybrid
+    - rollback_to_premigration
+  tasks:
+    - import_role:
+        name: variables
+
+    - block:
+        - name: Backup current broker configuration
+          copy:
+            src: "{{ kafka_broker.config_file }}"
+            dest: "{{ kafka_broker.config_file }}.before_hybrid_revert"
+            remote_src: true
+
+        - name: Extract broker ID (from node.id if present, otherwise broker.id)
+          shell: |
+            if grep -q "^node.id" "{{ kafka_broker.config_file }}"; then
+              grep "^node.id" "{{ kafka_broker.config_file }}" | cut -d'=' -f2 | tr -d ' '
+            else
+              grep "^broker.id" "{{ kafka_broker.config_file }}" | cut -d'=' -f2 | tr -d ' '
+            fi
+          register: broker_id_extracted
+          changed_when: false
+
+        - name: Set broker_id fact for template
+          set_fact:
+            broker_id: "{{ broker_id_extracted.stdout }}"
+
+        # RBAC: the bare template renders super.users as only "User:<mds>". The
+        # broker/controller cert principals (rbac_super_users) are normally
+        # injected by roles/kafka_broker/tasks/rbac.yml during deploy, which
+        # regenerate_config.yml does NOT run. Without them the broker's mTLS
+        # principal is not a super user, and on restart MDS is denied access to
+        # _confluent-metadata-auth (TopicAuthorizationException) and never starts.
+        # Rebuild super.users here so the regenerated config keeps it (matches
+        # how CFK regenerates the full kafka config on rollback).
+        - name: Rebuild RBAC super.users before regenerating config
+          set_fact:
+            kafka_broker_final_properties: "{{ kafka_broker_final_properties | combine({'super.users': (rbac_super_users + (kafka_broker_final_properties['super.users'] | default('')).split(';') + ['User:' + (mds_super_user | default('mds'))]) | difference(['']) | unique | join(';')}) }}"
+          when:
+            - rbac_enabled | bool
+            - rbac_super_users | length > 0
+
+        - name: Regenerate server.properties (variables role renders hybrid mode)
+          include_role:
+            name: kafka_broker
+            tasks_from: regenerate_config.yml
+
+        - name: Create Kafka Broker Config with Secrets Protection
+          include_role:
+            name: common
+            tasks_from: secrets_protection.yml
+          vars:
+            final_properties: "{{ kafka_broker_final_properties }}"
+            encrypt_passwords: "{{ kafka_broker_secrets_protection_encrypt_passwords }}"
+            encrypt_properties: "{{ kafka_broker_secrets_protection_encrypt_properties }}"
+            config_path: "{{ kafka_broker.config_file }}"
+            secrets_file: "{{ kafka_broker_secrets_protection_file }}"
+            secrets_file_owner: "{{ kafka_broker_user }}"
+            secrets_file_group: "{{ kafka_broker_group }}"
+            ca_cert_path: "{{ kafka_broker_ca_cert_path if ssl_enabled|bool else '' }}"
+            handler: "no-op"
+          when:
+            - kafka_broker_secrets_protection_enabled|bool
+            - rbac_enabled|bool or confluent_cli_version is version('3.0.0', '>=')
+
+        - name: Restart broker and wait
+          include_role:
+            name: kafka_broker
+            tasks_from: restart_and_wait.yml
+
+        - name: Run broker health check
+          include_role:
+            name: kafka_broker
+            tasks_from: health_check.yml
+
+        - debug:
+            msg: "Broker {{ inventory_hostname }} reverted to hybrid mode"
+      when: migration_state == "PURE_DUAL_WRITE"
+
+- name: Deprovision KRaft controllers
+  hosts: kafka_controller
+  gather_facts: true
+  any_errors_fatal: true
+  tags:
+    - rollback_to_premigration
+  tasks:
+    - import_role:
+        name: variables
+
+    - block:
+        - name: Backup controller configuration
+          copy:
+            src: "{{ kafka_controller.config_file }}"
+            dest: "{{ kafka_controller.config_file }}.before_controller_stop"
+            remote_src: true
+          failed_when: false
+
+        - name: Stop Kafka Controller service
+          systemd:
+            name: "{{ kafka_controller_service_name }}"
+            state: stopped
+
+        - name: Disable Kafka Controller service
+          systemd:
+            name: "{{ kafka_controller_service_name }}"
+            enabled: false
+
+        - name: Find __cluster_metadata directories on controller
+          find:
+            paths: "{{ kafka_controller_final_properties['log.dirs'] }}"
+            patterns: "__cluster_metadata*"
+            file_type: directory
+          register: controller_metadata_dirs
+
+        - name: Delete __cluster_metadata directories from controller
+          file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ controller_metadata_dirs.files }}"
+          when: controller_metadata_dirs.files | length > 0
+
+        - debug:
+            msg: "Controller {{ inventory_hostname }} stopped, disabled, metadata cleaned"
+      when: migration_state in ["PREMIGRATION", "HYBRID_DUAL_WRITE", "PURE_DUAL_WRITE"]
+
+- name: Clean ZooKeeper migration state
+  hosts: zookeeper[0]
+  gather_facts: true
+  any_errors_fatal: true
+  tags:
+    - rollback_to_premigration
+  tasks:
+    - import_role:
+        name: variables
+
+    - block:
+        # zookeeper-shell needs TLS client config when ZooKeeper runs with TLS
+        # (zookeeper_ssl_enabled, e.g. RBAC/mTLS clusters use port 2182). The
+        # TLS client config lives on the broker (kafka_broker config), so these
+        # run delegated to a broker and connect to the ZK node — mirroring
+        # roles/common/tasks/rbac_setup.yml. failed_when is tightened so a real
+        # connection error fails instead of being silently swallowed.
+        - name: Delete /controller znode (allows a broker to become ZK controller)
+          shell: >
+            echo "deleteall /controller" |
+            {{ zookeeper_cli_path }} {{ zk_endpoint }} {{ zk_tls_args }}
+          register: delete_controller
+          changed_when: "'Node does not exist' not in (delete_controller.stdout + delete_controller.stderr)"
+          failed_when:
+            - delete_controller.rc != 0
+            - "'Node does not exist' not in (delete_controller.stdout + delete_controller.stderr)"
+          delegate_to: "{{ groups['kafka_broker'][0] }}"
+
+        - name: Verify /migration state (per official docs)
+          shell: >
+            echo "get /migration" |
+            {{ zookeeper_cli_path }} {{ zk_endpoint }} {{ zk_tls_args }}
+          register: get_migration
+          changed_when: false
+          failed_when:
+            - get_migration.rc != 0
+            - "'Node does not exist' not in (get_migration.stdout + get_migration.stderr)"
+          delegate_to: "{{ groups['kafka_broker'][0] }}"
+
+        - name: Delete /migration znode
+          shell: >
+            echo "delete /migration" |
+            {{ zookeeper_cli_path }} {{ zk_endpoint }} {{ zk_tls_args }}
+          register: delete_migration
+          changed_when: "'Node does not exist' not in (delete_migration.stdout + delete_migration.stderr)"
+          failed_when:
+            - delete_migration.rc != 0
+            - "'Node does not exist' not in (delete_migration.stdout + delete_migration.stderr)"
+          delegate_to: "{{ groups['kafka_broker'][0] }}"
+
+        - debug:
+            msg: "ZooKeeper migration state cleaned"
+      vars:
+        zookeeper_cli_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
+        zk_endpoint: "{{ groups['zookeeper'][0] }}:{{ zookeeper_client_port }}"
+        zk_tls_args: "{% if zookeeper_ssl_enabled | bool %}-zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled | bool else kafka_broker.config_file }}{% endif %}"
+      when: migration_state in ["HYBRID_DUAL_WRITE", "PURE_DUAL_WRITE"]
+
+- name: Clean broker metadata logs
+  hosts: kafka_broker
+  gather_facts: true
+  any_errors_fatal: true
+  tags:
+    - rollback_to_premigration
+  tasks:
+    - import_role:
+        name: variables
+
+    - block:
+        - name: Find __cluster_metadata directories on broker
+          find:
+            paths: "{{ kafka_broker_final_properties['log.dirs'].split(',') }}"
+            patterns: "__cluster_metadata*"
+            file_type: directory
+          register: broker_metadata_dirs
+
+        - name: Delete __cluster_metadata directories on broker
+          file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ broker_metadata_dirs.files }}"
+          when: broker_metadata_dirs.files | length > 0
+
+        - debug:
+            msg: "Metadata logs cleaned on {{ inventory_hostname }}"
+      when: migration_state in ["HYBRID_DUAL_WRITE", "PURE_DUAL_WRITE"]
+
+# Template regen runs before lineinfile so any inventory edits the operator
+# made between rollback_to_hybrid and rollback_to_premigration are picked up.
+- name: Final broker rolling restart to pure ZK
+  hosts: kafka_broker
+  gather_facts: true
+  serial: '1'
+  any_errors_fatal: true
+  tags:
+    - rollback_to_premigration
+  tasks:
+    - import_role:
+        name: variables
+
+    - block:
+        - name: Backup broker configuration before final changes
+          copy:
+            src: "{{ kafka_broker.config_file }}"
+            dest: "{{ kafka_broker.config_file }}.before_pure_zk_revert"
+            remote_src: true
+
+        - name: Extract broker ID
+          shell: |
+            if grep -q "^node.id" "{{ kafka_broker.config_file }}"; then
+              grep "^node.id" "{{ kafka_broker.config_file }}" | cut -d'=' -f2 | tr -d ' '
+            else
+              grep "^broker.id" "{{ kafka_broker.config_file }}" | cut -d'=' -f2 | tr -d ' '
+            fi
+          register: broker_id_extracted
+          changed_when: false
+
+        - name: Set broker_id fact for template
+          set_fact:
+            broker_id: "{{ broker_id_extracted.stdout }}"
+
+        # RBAC: regenerate_config.yml renders super.users as only "User:<mds>",
+        # dropping the cert principals that roles/kafka_broker/tasks/rbac.yml
+        # injects during deploy. Without them the broker's mTLS principal is not
+        # a super user and MDS is denied access to _confluent-metadata-auth on
+        # restart. Rebuild super.users before regenerating (see the hybrid-revert
+        # play above for the full explanation).
+        - name: Rebuild RBAC super.users before regenerating config
+          set_fact:
+            kafka_broker_final_properties: "{{ kafka_broker_final_properties | combine({'super.users': (rbac_super_users + (kafka_broker_final_properties['super.users'] | default('')).split(';') + ['User:' + (mds_super_user | default('mds'))]) | difference(['']) | unique | join(';')}) }}"
+          when:
+            - rbac_enabled | bool
+            - rbac_super_users | length > 0
+
+        - name: Regenerate server.properties (picks up any operator inventory edits)
+          include_role:
+            name: kafka_broker
+            tasks_from: regenerate_config.yml
+
+        - name: Create Kafka Broker Config with Secrets Protection
+          include_role:
+            name: common
+            tasks_from: secrets_protection.yml
+          vars:
+            final_properties: "{{ kafka_broker_final_properties }}"
+            encrypt_passwords: "{{ kafka_broker_secrets_protection_encrypt_passwords }}"
+            encrypt_properties: "{{ kafka_broker_secrets_protection_encrypt_properties }}"
+            config_path: "{{ kafka_broker.config_file }}"
+            secrets_file: "{{ kafka_broker_secrets_protection_file }}"
+            secrets_file_owner: "{{ kafka_broker_user }}"
+            secrets_file_group: "{{ kafka_broker_group }}"
+            ca_cert_path: "{{ kafka_broker_ca_cert_path if ssl_enabled|bool else '' }}"
+            handler: "no-op"
+          when:
+            - kafka_broker_secrets_protection_enabled|bool
+            - rbac_enabled|bool or confluent_cli_version is version('3.0.0', '>=')
+
+        - name: Remove ALL KRaft and migration properties
+          lineinfile:
+            path: "{{ kafka_broker.config_file }}"
+            state: absent
+            regexp: "^{{ item }}.*"
+          loop:
+            - process.roles
+            - node.id
+            - controller.listener.names
+            - controller.quorum.voters
+            - controller.quorum.bootstrap.servers
+            - zookeeper.metadata.migration.enable
+            - confluent.cluster.link.metadata.topic.enable
+
+        # zookeeper.connect is rendered correctly by regenerate_config.yml above
+        # (variables role, vars/main.yml) using the confluent.platform.resolve_hostnames
+        # filter and the zookeeper_chroot variable. We deliberately do NOT rewrite it
+        # here: a hand-built string skipped the filter, mishandled the chroot, and
+        # could overwrite a correct value with an inconsistent one.
+
+        - name: Restore ZK_ACL for RBAC (if RBAC enabled)
+          lineinfile:
+            path: "{{ kafka_broker.config_file }}"
+            regexp: "^confluent.authorizer.access.rule.providers=.*"
+            line: "confluent.authorizer.access.rule.providers=CONFLUENT,ZK_ACL"
+          when: rbac_enabled | bool
+          # For non-RBAC ACL clusters using authorizer.class.name, restore it
+          # in inventory between --tags rollback_to_hybrid and --tags rollback_to_premigration
+          # runs. The template regeneration above picks up the inventory change.
+
+        - name: Restart broker and wait
+          include_role:
+            name: kafka_broker
+            tasks_from: restart_and_wait.yml
+
+        - name: Run broker health check
+          include_role:
+            name: kafka_broker
+            tasks_from: health_check.yml
+
+        - debug:
+            msg: "Broker {{ inventory_hostname }} rolled back to pure ZooKeeper"
+      when: migration_state in ["HYBRID_DUAL_WRITE", "PURE_DUAL_WRITE"]
