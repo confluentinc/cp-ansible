@@ -1,17 +1,17 @@
 ---
 # Scenario 2 — PURE_DUAL_WRITE → hybrid (the hard one).
 #
-# Orchestrates: (deploy already done in prepare) → forward to HYBRID_DUAL_WRITE
-# → push brokers to PURE_DUAL_WRITE (broker-migration plays only, no controller
-# changes / no finalize) → partial rollback to hybrid.
+# deploy (prepare) → forward to HYBRID_DUAL_WRITE → push brokers to
+# PURE_DUAL_WRITE → partial rollback to hybrid.
 #
-# The forward step and the final rollback invoke the real entry playbooks with
-# the real customer tags, against molecule's own generated inventory
-# (MOLECULE_INVENTORY_FILE). The intermediate PURE step uses a local replay of
-# the broker-migration plays because no single tag isolates them from the
-# controller-finalize plays. No changes to the main playbooks are required.
+# Steps that depend on --tags (forward migrate, rollback) run the real entry
+# playbooks as a tagged sub-run, because import_playbook applies tags additively
+# and cannot scope execution to a tag subset. The PURE step has no tag
+# dependency (it is a standalone replay of just the broker-migration plays), so
+# it is imported directly: in-process on molecule's own connection, with output
+# visible inline.
 
-- name: Forward to PURE_DUAL_WRITE, then partial rollback to hybrid
+- name: Promote controllers and migrate forward to HYBRID_DUAL_WRITE
   hosts: localhost
   gather_facts: false
   vars:
@@ -19,7 +19,7 @@
     molecule_inventory: "{{ lookup('env', 'MOLECULE_INVENTORY_FILE') }}"
   tasks:
     # Promote the migration-held controllers into the live kafka_controller
-    # group so the sub-runs below (which read the inventory file fresh) see them.
+    # group so the tagged sub-runs (which read the inventory file fresh) see them.
     - name: Promote kafka_controller_migration → kafka_controller
       lineinfile:
         path: "{{ molecule_inventory }}"
@@ -36,29 +36,84 @@
       args:
         chdir: "{{ repo_root }}"
       changed_when: true
+      register: forward_migrate
 
-    - name: Push brokers to PURE_DUAL_WRITE (broker-migration plays only)
-      command: >-
-        ansible-playbook
-        -i {{ molecule_inventory }}
-        {{ playbook_dir }}/migrate_brokers_to_kraft.yml
-        -e kraft_migration=true
-      args:
-        chdir: "{{ repo_root }}"
-      changed_when: true
-
-    - name: Partial rollback to hybrid (--tags rollback_to_hybrid)
-      command: >-
-        ansible-playbook
-        -i {{ molecule_inventory }}
-        {{ repo_root }}/playbooks/KRaftToZKRollback.yml
-        --tags rollback_to_hybrid
-        -e kraft_migration=true
-      args:
-        chdir: "{{ repo_root }}"
-      changed_when: true
-      register: rollback_run
-
-    - name: Show rollback output
+    - name: Show forward-migration output
       debug:
-        var: rollback_run.stdout_lines
+        var: forward_migrate.stdout_lines
+
+# Push brokers HYBRID_DUAL_WRITE → PURE_DUAL_WRITE. Replays only the
+# broker-migration plays (no controller finalize), so there is no tag
+# dependency and it can be imported directly.
+- import_playbook: migrate_brokers_to_kraft.yml
+  vars:
+    kraft_migration: true
+
+- name: Partial rollback to hybrid
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo_root: "{{ playbook_dir }}/../.."
+    molecule_inventory: "{{ lookup('env', 'MOLECULE_INVENTORY_FILE') }}"
+    controller_host: "{{ (groups['kafka_controller'] | default([]) + groups['kafka_controller_migration'] | default([])) | first }}"
+  tasks:
+    # Run the real rollback WITH its health checks (the post-rollback controller
+    # quorum probe included). If it fails, capture the controller's actual state
+    # before failing, so we can tell a real rollback bug from an unhealthy/down
+    # controller rather than guessing.
+    - block:
+        - name: Partial rollback to hybrid (--tags rollback_to_hybrid)
+          command: >-
+            ansible-playbook
+            -i {{ molecule_inventory }}
+            {{ repo_root }}/playbooks/KRaftToZKRollback.yml
+            --tags rollback_to_hybrid
+            -e kraft_migration=true
+          args:
+            chdir: "{{ repo_root }}"
+          changed_when: true
+          register: rollback_run
+
+        - name: Show rollback output
+          debug:
+            var: rollback_run.stdout_lines
+
+      rescue:
+        - name: Show rollback output (failed run)
+          debug:
+            var: rollback_run.stdout_lines | default(['<no stdout captured>'])
+
+        - name: Capture controller service status
+          shell: "systemctl status {{ kafka_controller_service_name | default('confluent-kcontroller') }} --no-pager -l || true"
+          delegate_to: "{{ controller_host }}"
+          changed_when: false
+          register: ctrl_status
+
+        - name: Capture controller listening sockets (expect :9093)
+          shell: "ss -ltnp || netstat -ltnp || true"
+          delegate_to: "{{ controller_host }}"
+          changed_when: false
+          register: ctrl_ports
+
+        - name: Capture recent controller logs
+          shell: "journalctl -u {{ kafka_controller_service_name | default('confluent-kcontroller') }} --no-pager -n 120 || true"
+          delegate_to: "{{ controller_host }}"
+          changed_when: false
+          register: ctrl_logs
+
+        - name: Dump controller diagnostics
+          debug:
+            msg: |
+              ===== controller systemctl status =====
+              {{ ctrl_status.stdout }}
+              ===== listening sockets (look for :9093) =====
+              {{ ctrl_ports.stdout }}
+              ===== last 120 controller log lines =====
+              {{ ctrl_logs.stdout }}
+
+        - name: Fail after capturing diagnostics
+          fail:
+            msg: >-
+              rollback_to_hybrid sub-run failed. Controller diagnostics captured
+              above (is confluent-kcontroller active? listening on :9093? any
+              errors/OOM in the log?).
