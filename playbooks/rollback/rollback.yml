@@ -151,35 +151,51 @@
         name: variables
 
     - block:
+        # zookeeper-shell needs TLS client config when ZooKeeper runs with TLS
+        # (zookeeper_ssl_enabled, e.g. RBAC/mTLS clusters use port 2182). The
+        # TLS client config lives on the broker (kafka_broker config), so these
+        # run delegated to a broker and connect to the ZK node — mirroring
+        # roles/common/tasks/rbac_setup.yml. failed_when is tightened so a real
+        # connection error fails instead of being silently swallowed.
         - name: Delete /controller znode (allows a broker to become ZK controller)
-          shell: |
-            echo "deleteall /controller" | {{ zookeeper_cli_path }} localhost:{{ zookeeper_client_port }}
+          shell: >
+            echo "deleteall /controller" |
+            {{ zookeeper_cli_path }} {{ zk_endpoint }} {{ zk_tls_args }}
           register: delete_controller
-          failed_when: false
-          changed_when: "'Node does not exist' not in delete_controller.stderr"
-          vars:
-            zookeeper_cli_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
+          changed_when: "'Node does not exist' not in (delete_controller.stdout + delete_controller.stderr)"
+          failed_when:
+            - delete_controller.rc != 0
+            - "'Node does not exist' not in (delete_controller.stdout + delete_controller.stderr)"
+          delegate_to: "{{ groups['kafka_broker'][0] }}"
 
         - name: Verify /migration state (per official docs)
-          shell: |
-            echo "get /migration" | {{ zookeeper_cli_path }} localhost:{{ zookeeper_client_port }}
+          shell: >
+            echo "get /migration" |
+            {{ zookeeper_cli_path }} {{ zk_endpoint }} {{ zk_tls_args }}
           register: get_migration
-          failed_when: false
           changed_when: false
-          vars:
-            zookeeper_cli_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
+          failed_when:
+            - get_migration.rc != 0
+            - "'Node does not exist' not in (get_migration.stdout + get_migration.stderr)"
+          delegate_to: "{{ groups['kafka_broker'][0] }}"
 
         - name: Delete /migration znode
-          shell: |
-            echo "delete /migration" | {{ zookeeper_cli_path }} localhost:{{ zookeeper_client_port }}
+          shell: >
+            echo "delete /migration" |
+            {{ zookeeper_cli_path }} {{ zk_endpoint }} {{ zk_tls_args }}
           register: delete_migration
-          failed_when: false
-          changed_when: "'Node does not exist' not in delete_migration.stderr"
-          vars:
-            zookeeper_cli_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
+          changed_when: "'Node does not exist' not in (delete_migration.stdout + delete_migration.stderr)"
+          failed_when:
+            - delete_migration.rc != 0
+            - "'Node does not exist' not in (delete_migration.stdout + delete_migration.stderr)"
+          delegate_to: "{{ groups['kafka_broker'][0] }}"
 
         - debug:
             msg: "ZooKeeper migration state cleaned"
+      vars:
+        zookeeper_cli_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
+        zk_endpoint: "{{ groups['zookeeper'][0] }}:{{ zookeeper_client_port }}"
+        zk_tls_args: "{% if zookeeper_ssl_enabled | bool %}-zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled | bool else kafka_broker.config_file }}{% endif %}"
       when: migration_state in ["HYBRID_DUAL_WRITE", "PURE_DUAL_WRITE"]
 
 - name: Clean broker metadata logs
