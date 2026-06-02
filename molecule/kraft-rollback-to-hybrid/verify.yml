@@ -1,0 +1,54 @@
+---
+### Verifies Scenario 2: partial rollback landed the cluster back in hybrid mode.
+### - Brokers: hybrid (migration flag present, no process.roles), ZK restored.
+### - Controllers: still active (only the brokers were reverted).
+
+- name: Verify - brokers reverted to hybrid mode
+  hosts: kafka_broker
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Read broker server.properties
+      slurp:
+        src: "{{ kafka_broker.config_file }}"
+      register: broker_cfg
+
+    - name: Assert broker is in hybrid (ZK + migration) mode, not pure KRaft
+      vars:
+        cfg: "{{ broker_cfg.content | b64decode }}"
+      assert:
+        that:
+          - cfg is search('(?m)^zookeeper.metadata.migration.enable=true')
+          - cfg is search('(?m)^zookeeper.connect=')
+          - cfg is not search('(?m)^process.roles')
+        fail_msg: >-
+          Broker {{ inventory_hostname }} is not in hybrid mode after a partial
+          rollback (expected migration flag + zookeeper.connect, no process.roles).
+        success_msg: "Broker {{ inventory_hostname }} is back in hybrid mode"
+
+# Match either group name: converge renames kafka_controller_migration →
+# kafka_controller in the inventory file, but molecule may regenerate the
+# inventory before verify. Targeting both avoids a no-hosts-matched false pass.
+- name: Verify - controllers remain active
+  hosts: kafka_controller:kafka_controller_migration
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Get controller service state
+      systemd:
+        name: "{{ kafka_controller_service_name }}"
+      register: ctrl_svc
+      failed_when: false
+
+    - name: Assert controller is still active
+      assert:
+        that:
+          - ctrl_svc.status.ActiveState == 'active'
+        fail_msg: >-
+          Controller {{ inventory_hostname }} was stopped during a partial
+          rollback to hybrid; it should stay active.
+        success_msg: "Controller {{ inventory_hostname }} is still active"
