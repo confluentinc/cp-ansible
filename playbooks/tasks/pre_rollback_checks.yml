@@ -1,0 +1,67 @@
+---
+- name: Verify kraft_migration flag is enabled
+  fail:
+    msg: "ERROR: kraft_migration flag is not enabled in inventory. Cannot perform rollback."
+  when: not (kraft_migration | default(false) | bool)
+
+- name: Check ZooKeeper group exists in inventory
+  fail:
+    msg: "ERROR: ZooKeeper hosts not found in inventory. Cannot rollback without ZooKeeper."
+  when: not (('zookeeper' in groups.keys() and groups['zookeeper'] | length > 0) | bool)
+
+- name: Check Kafka Controller group exists
+  fail:
+    msg: "ERROR: Kafka Controller hosts not found in inventory. No controllers to rollback."
+  when: not (('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) | bool)
+
+- name: Check ZooKeeper service status on all nodes
+  systemd:
+    name: "{{ zookeeper_service_name }}"
+  register: zk_status
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['zookeeper'] }}"
+
+- name: Verify all ZooKeeper services are running
+  fail:
+    msg: "ERROR: ZooKeeper service is not running on {{ item.item }}. Cannot perform rollback."
+  when: item.status.ActiveState != 'active'
+  loop: "{{ zk_status.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- debug:
+    msg: "All ZooKeeper nodes are healthy and accessible"
+
+- name: Run migration state detection
+  include_tasks: detect_migration_phase.yml
+
+- name: Require explicit rollback tag for PURE_DUAL_WRITE state
+  fail:
+    msg: |
+      ERROR: PURE_DUAL_WRITE state requires explicit tag selection.
+
+      Options:
+        --tags rollback_to_hybrid          → revert brokers to hybrid mode
+                                              (KRaft controller stays active)
+        --tags rollback_to_premigration   → full rollback to pure ZooKeeper
+
+      Re-run with one of the tags above.
+  when:
+    - migration_state == "PURE_DUAL_WRITE"
+    - "'rollback_to_hybrid' not in ansible_run_tags"
+    - "'rollback_to_premigration' not in ansible_run_tags"
+
+- name: Fail if rollback_to_hybrid specified for non-PURE_DUAL_WRITE state
+  fail:
+    msg: |
+      ERROR: --tags rollback_to_hybrid is only applicable for PURE_DUAL_WRITE state.
+      Current state: {{ migration_state }}
+
+      For {{ migration_state }}, use --tags rollback_to_premigration instead.
+  when:
+    - migration_state != "PURE_DUAL_WRITE"
+    - "'rollback_to_hybrid' in ansible_run_tags"
+    - "'rollback_to_premigration' not in ansible_run_tags"
+
+- debug:
+    msg: "✓ Pre-rollback checks passed. Ready to execute {{ migration_state }} rollback."

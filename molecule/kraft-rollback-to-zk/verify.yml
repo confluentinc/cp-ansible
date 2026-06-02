@@ -1,0 +1,91 @@
+---
+### Verifies Scenario 1: full rollback landed the cluster in pure ZooKeeper.
+### - Brokers: KRaft/migration properties gone, zookeeper.connect present.
+### - Controllers: service stopped, __cluster_metadata removed.
+### - ZooKeeper: /migration znode removed.
+
+- name: Verify - brokers are in pure ZooKeeper mode
+  hosts: kafka_broker
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Read broker server.properties
+      slurp:
+        src: "{{ kafka_broker.config_file }}"
+      register: broker_cfg
+
+    - name: Assert KRaft/migration properties removed and ZooKeeper restored
+      vars:
+        cfg: "{{ broker_cfg.content | b64decode }}"
+      assert:
+        that:
+          - cfg is not search('(?m)^process.roles')
+          - cfg is not search('(?m)^controller.quorum.voters')
+          - cfg is not search('(?m)^controller.listener.names')
+          - cfg is not search('(?m)^zookeeper.metadata.migration.enable')
+          - cfg is search('(?m)^zookeeper.connect=')
+        fail_msg: >-
+          Broker {{ inventory_hostname }} still carries KRaft/migration
+          properties after a full rollback.
+        success_msg: "Broker {{ inventory_hostname }} is in pure ZooKeeper mode"
+
+# Match either group name: converge renames kafka_controller_migration →
+# kafka_controller in the inventory file, but molecule may regenerate the
+# inventory before verify. Targeting both avoids a no-hosts-matched false pass.
+- name: Verify - controllers are deprovisioned
+  hosts: kafka_controller:kafka_controller_migration
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Get controller service state
+      systemd:
+        name: "{{ kafka_controller_service_name }}"
+      register: ctrl_svc
+      failed_when: false
+
+    - name: Assert controller is not active
+      assert:
+        that:
+          - ctrl_svc.status.ActiveState != 'active'
+        fail_msg: "Controller {{ inventory_hostname }} is still active after full rollback"
+        success_msg: "Controller {{ inventory_hostname }} is stopped"
+
+    - name: Look for leftover __cluster_metadata directories
+      find:
+        paths: /var/lib/controller/data
+        patterns: "__cluster_metadata*"
+        file_type: directory
+      register: ctrl_meta
+
+    - name: Assert __cluster_metadata removed from controller
+      assert:
+        that:
+          - ctrl_meta.files | length == 0
+        fail_msg: "Controller {{ inventory_hostname }} still has __cluster_metadata directories"
+
+- name: Verify - ZooKeeper migration state cleaned
+  hosts: zookeeper[0]
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Query /migration znode
+      shell: |
+        echo "get /migration" | {{ zk_cli }} localhost:{{ zookeeper_client_port }}
+      vars:
+        zk_cli: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
+      register: zk_migration
+      changed_when: false
+      failed_when: false
+
+    - name: Assert /migration znode no longer exists
+      assert:
+        that:
+          - zk_migration.rc != 0
+        fail_msg: "/migration znode still present after full rollback"
+        success_msg: "/migration znode removed"
