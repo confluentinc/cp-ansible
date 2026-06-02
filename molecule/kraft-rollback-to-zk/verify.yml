@@ -74,18 +74,28 @@
     - import_role:
         name: variables
 
-    - name: Query /migration znode
-      shell: |
-        echo "get /migration" | {{ zk_cli }} localhost:{{ zookeeper_client_port }}
+    # TLS-aware: under RBAC/mTLS ZooKeeper runs with TLS (port 2182), and the
+    # client config lives on the broker, so query via the broker like the
+    # rollback does. Assert on the actual "Node does not exist" output rather
+    # than rc — a failed/again-plaintext connection also exits non-zero and would
+    # otherwise false-pass as "znode removed".
+    - name: Query /migration znode (TLS-aware, via broker client config)
+      shell: >
+        echo "get /migration" |
+        {{ zk_cli }} {{ groups['zookeeper'][0] }}:{{ zookeeper_client_port }}
+        {% if zookeeper_ssl_enabled | bool %}-zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled | bool else kafka_broker.config_file }}{% endif %}
       vars:
         zk_cli: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
       register: zk_migration
       changed_when: false
       failed_when: false
+      delegate_to: "{{ groups['kafka_broker'][0] }}"
 
     - name: Assert /migration znode no longer exists
       assert:
         that:
-          - zk_migration.rc != 0
-        fail_msg: "/migration znode still present after full rollback"
+          - "'Node does not exist' in (zk_migration.stdout + zk_migration.stderr)"
+        fail_msg: >-
+          /migration znode still present (or ZooKeeper unreachable) after full
+          rollback. Output: {{ zk_migration.stdout }} {{ zk_migration.stderr }}
         success_msg: "/migration znode removed"

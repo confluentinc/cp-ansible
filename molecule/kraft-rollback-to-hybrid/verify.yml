@@ -53,28 +53,35 @@
           rollback to hybrid; it should stay active.
         success_msg: "Controller {{ inventory_hostname }} is still active"
 
-    # Confirm via JMX that the controller is still in dual-write (migration)
-    - name: Query controller ZkMigrationState via Jolokia
-      uri:
-        url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled | bool else 'http' }}://localhost:{{ kafka_controller_jolokia_port }}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
-        validate_certs: false
-        return_content: true
-        status_code: 200
-        force_basic_auth: "{{ jolokia_auth_mode == 'basic' }}"
-        url_username: "{{ jolokia_user if jolokia_auth_mode == 'basic' else omit }}"
-        url_password: "{{ jolokia_password if jolokia_auth_mode == 'basic' else omit }}"
-      register: zk_migration_state
-      retries: 5
-      delay: 6
-      until: zk_migration_state.status | default(0) == 200
+# Confirm the post-rollback state with the rollback feature's own detection
+# utility (JMX ZkMigrationState primary, broker-config fallback) — the same
+# signal a real re-run would see — rather than a hand-rolled MBean read.
+- name: Verify - migration utility detects HYBRID_DUAL_WRITE
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
 
-    - name: Assert controller is still in dual-write (migration) mode
+    # detect_migration_phase.yml delegates to groups['kafka_controller'][0], but
+    # molecule regenerates the inventory before verify so the converge-time
+    # rename is gone. Re-promote the controllers in-memory (connection hostvars
+    # are preserved since the host already exists in kafka_controller_migration).
+    - name: Re-activate kafka_controller group for detection
+      add_host:
+        name: "{{ item }}"
+        groups: kafka_controller
+      loop: "{{ groups['kafka_controller_migration'] | default([]) }}"
+      changed_when: false
+
+    - name: Detect migration state (migration utility)
+      include_tasks: ../../playbooks/tasks/detect_migration_phase.yml
+
+    - name: Assert cluster is in HYBRID_DUAL_WRITE after partial rollback
       assert:
         that:
-          - (zk_migration_state.content | from_json).value.Value | int == 1
+          - migration_state == "HYBRID_DUAL_WRITE"
         fail_msg: >-
-          Controller ZkMigrationState is
-          {{ (zk_migration_state.content | from_json).value.Value }}, expected 1
-          (dual-write). The controller left migration mode or finalized during a
-          partial rollback to hybrid.
-        success_msg: "Controller is in dual-write migration mode (ZkMigrationState=1)"
+          Migration utility detected '{{ migration_state }}', expected
+          HYBRID_DUAL_WRITE after a partial rollback to hybrid.
+        success_msg: "Migration utility detected HYBRID_DUAL_WRITE"
