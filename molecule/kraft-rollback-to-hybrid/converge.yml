@@ -55,65 +55,23 @@
   vars:
     repo_root: "{{ playbook_dir }}/../.."
     molecule_inventory: "{{ lookup('env', 'MOLECULE_INVENTORY_FILE') }}"
-    controller_host: "{{ (groups['kafka_controller'] | default([]) + groups['kafka_controller_migration'] | default([])) | first }}"
   tasks:
-    # Run the real rollback WITH its health checks (the post-rollback controller
-    # quorum probe included). If it fails, capture the controller's actual state
-    # before failing, so we can tell a real rollback bug from an unhealthy/down
-    # controller rather than guessing.
-    - block:
-        - name: Partial rollback to hybrid (--tags rollback_to_hybrid)
-          command: >-
-            ansible-playbook
-            -i {{ molecule_inventory }}
-            {{ repo_root }}/playbooks/KRaftToZKRollback.yml
-            --tags rollback_to_hybrid
-            -e kraft_migration=true
-          args:
-            chdir: "{{ repo_root }}"
-          changed_when: true
-          register: rollback_run
+    # Real rollback with its health checks. The post-rollback controller
+    # metadata-quorum probe is correctly skipped on community kafka by
+    # KRaftToZKRollback.yml's confluent_server_enabled guard, so nothing to skip
+    # here. verify.yml asserts the hybrid end state.
+    - name: Partial rollback to hybrid (--tags rollback_to_hybrid)
+      command: >-
+        ansible-playbook
+        -i {{ molecule_inventory }}
+        {{ repo_root }}/playbooks/KRaftToZKRollback.yml
+        --tags rollback_to_hybrid
+        -e kraft_migration=true
+      args:
+        chdir: "{{ repo_root }}"
+      changed_when: true
+      register: rollback_run
 
-        - name: Show rollback output
-          debug:
-            var: rollback_run.stdout_lines
-
-      rescue:
-        - name: Show rollback output (failed run)
-          debug:
-            var: rollback_run.stdout_lines | default(['<no stdout captured>'])
-
-        - name: Capture controller service status
-          shell: "systemctl status {{ kafka_controller_service_name | default('confluent-kcontroller') }} --no-pager -l || true"
-          delegate_to: "{{ controller_host }}"
-          changed_when: false
-          register: ctrl_status
-
-        - name: Capture controller listening sockets (expect :9093)
-          shell: "ss -ltnp || netstat -ltnp || true"
-          delegate_to: "{{ controller_host }}"
-          changed_when: false
-          register: ctrl_ports
-
-        - name: Capture recent controller logs
-          shell: "journalctl -u {{ kafka_controller_service_name | default('confluent-kcontroller') }} --no-pager -n 120 || true"
-          delegate_to: "{{ controller_host }}"
-          changed_when: false
-          register: ctrl_logs
-
-        - name: Dump controller diagnostics
-          debug:
-            msg: |
-              ===== controller systemctl status =====
-              {{ ctrl_status.stdout }}
-              ===== listening sockets (look for :9093) =====
-              {{ ctrl_ports.stdout }}
-              ===== last 120 controller log lines =====
-              {{ ctrl_logs.stdout }}
-
-        - name: Fail after capturing diagnostics
-          fail:
-            msg: >-
-              rollback_to_hybrid sub-run failed. Controller diagnostics captured
-              above (is confluent-kcontroller active? listening on :9093? any
-              errors/OOM in the log?).
+    - name: Show rollback output
+      debug:
+        var: rollback_run.stdout_lines
