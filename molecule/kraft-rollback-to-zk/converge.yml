@@ -2,31 +2,26 @@
 # Scenario 1 — HYBRID_DUAL_WRITE → premigration.
 #
 # Orchestrates: (deploy already done in prepare) → migrate forward to
-# HYBRID_DUAL_WRITE → roll back to pre-migration. Both the forward and the
-# rollback steps invoke the real entry playbooks with the real customer tags,
-# so there is zero divergence from production behaviour and no changes to the
-# main playbooks or Semaphore infra are required.
-
-- name: Activate KRaft controllers in the inventory
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    # Promote the migration-held controllers into the live kafka_controller
-    # group so the forward-migration / rollback sub-runs (which read the
-    # inventory file fresh) can see them.
-    - name: Promote kafka_controller_migration → kafka_controller
-      lineinfile:
-        path: "{{ inventory_dir }}/ansible_inventory.yml"
-        regexp: "kafka_controller_migration:"
-        line: "kafka_controller:"
+# HYBRID_DUAL_WRITE → roll back to pre-migration. Both steps invoke the real
+# entry playbooks with the real customer tags, against molecule's own generated
+# inventory (MOLECULE_INVENTORY_FILE), so there is zero divergence from
+# production behaviour and no changes to the main playbooks / Semaphore infra.
 
 - name: Migrate forward to HYBRID_DUAL_WRITE, then roll back to pre-migration
   hosts: localhost
   gather_facts: false
   vars:
     repo_root: "{{ playbook_dir }}/../.."
-    molecule_inventory: "{{ inventory_dir }}/ansible_inventory.yml"
+    molecule_inventory: "{{ lookup('env', 'MOLECULE_INVENTORY_FILE') }}"
   tasks:
+    # Promote the migration-held controllers into the live kafka_controller
+    # group so the sub-runs below (which read the inventory file fresh) see them.
+    - name: Promote kafka_controller_migration → kafka_controller
+      lineinfile:
+        path: "{{ molecule_inventory }}"
+        regexp: "kafka_controller_migration:"
+        line: "kafka_controller:"
+
     - name: Forward-migrate to HYBRID_DUAL_WRITE (--tags migrate_to_dual_write)
       command: >-
         ansible-playbook

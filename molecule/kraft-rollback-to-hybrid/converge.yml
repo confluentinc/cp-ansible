@@ -6,27 +6,26 @@
 # changes / no finalize) → partial rollback to hybrid.
 #
 # The forward step and the final rollback invoke the real entry playbooks with
-# the real customer tags. The intermediate PURE step uses a local replay of the
-# broker-migration plays because no single tag isolates them from the
+# the real customer tags, against molecule's own generated inventory
+# (MOLECULE_INVENTORY_FILE). The intermediate PURE step uses a local replay of
+# the broker-migration plays because no single tag isolates them from the
 # controller-finalize plays. No changes to the main playbooks are required.
-
-- name: Activate KRaft controllers in the inventory
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    - name: Promote kafka_controller_migration → kafka_controller
-      lineinfile:
-        path: "{{ inventory_dir }}/ansible_inventory.yml"
-        regexp: "kafka_controller_migration:"
-        line: "kafka_controller:"
 
 - name: Forward to PURE_DUAL_WRITE, then partial rollback to hybrid
   hosts: localhost
   gather_facts: false
   vars:
     repo_root: "{{ playbook_dir }}/../.."
-    molecule_inventory: "{{ inventory_dir }}/ansible_inventory.yml"
+    molecule_inventory: "{{ lookup('env', 'MOLECULE_INVENTORY_FILE') }}"
   tasks:
+    # Promote the migration-held controllers into the live kafka_controller
+    # group so the sub-runs below (which read the inventory file fresh) see them.
+    - name: Promote kafka_controller_migration → kafka_controller
+      lineinfile:
+        path: "{{ molecule_inventory }}"
+        regexp: "kafka_controller_migration:"
+        line: "kafka_controller:"
+
     - name: Forward-migrate to HYBRID_DUAL_WRITE (--tags migrate_to_dual_write)
       command: >-
         ansible-playbook
