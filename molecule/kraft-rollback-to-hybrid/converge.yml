@@ -1,0 +1,64 @@
+---
+# Scenario 2 — PURE_DUAL_WRITE → hybrid (the hard one).
+#
+# Orchestrates: (deploy already done in prepare) → forward to HYBRID_DUAL_WRITE
+# → push brokers to PURE_DUAL_WRITE (broker-migration plays only, no controller
+# changes / no finalize) → partial rollback to hybrid.
+#
+# The forward step and the final rollback invoke the real entry playbooks with
+# the real customer tags, against molecule's own generated inventory
+# (MOLECULE_INVENTORY_FILE). The intermediate PURE step uses a local replay of
+# the broker-migration plays because no single tag isolates them from the
+# controller-finalize plays. No changes to the main playbooks are required.
+
+- name: Forward to PURE_DUAL_WRITE, then partial rollback to hybrid
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo_root: "{{ playbook_dir }}/../.."
+    molecule_inventory: "{{ lookup('env', 'MOLECULE_INVENTORY_FILE') }}"
+  tasks:
+    # Promote the migration-held controllers into the live kafka_controller
+    # group so the sub-runs below (which read the inventory file fresh) see them.
+    - name: Promote kafka_controller_migration → kafka_controller
+      lineinfile:
+        path: "{{ molecule_inventory }}"
+        regexp: "kafka_controller_migration:"
+        line: "kafka_controller:"
+
+    - name: Forward-migrate to HYBRID_DUAL_WRITE (--tags migrate_to_dual_write)
+      command: >-
+        ansible-playbook
+        -i {{ molecule_inventory }}
+        {{ repo_root }}/playbooks/ZKtoKraftMigration.yml
+        --tags migrate_to_dual_write
+        -e kraft_migration=true
+      args:
+        chdir: "{{ repo_root }}"
+      changed_when: true
+
+    - name: Push brokers to PURE_DUAL_WRITE (broker-migration plays only)
+      command: >-
+        ansible-playbook
+        -i {{ molecule_inventory }}
+        {{ playbook_dir }}/migrate_brokers_to_kraft.yml
+        -e kraft_migration=true
+      args:
+        chdir: "{{ repo_root }}"
+      changed_when: true
+
+    - name: Partial rollback to hybrid (--tags rollback_to_hybrid)
+      command: >-
+        ansible-playbook
+        -i {{ molecule_inventory }}
+        {{ repo_root }}/playbooks/KRaftToZKRollback.yml
+        --tags rollback_to_hybrid
+        -e kraft_migration=true
+      args:
+        chdir: "{{ repo_root }}"
+      changed_when: true
+      register: rollback_run
+
+    - name: Show rollback output
+      debug:
+        var: rollback_run.stdout_lines
