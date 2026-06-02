@@ -1,0 +1,62 @@
+---
+### KRaft → ZooKeeper rollback e2e (ANSIENG-5796) — Scenario 2.
+### PURE_DUAL_WRITE → hybrid (partial rollback; controllers stay active).
+###
+### Dedicated hosts: one ZooKeeper, one Kafka broker, one KRaft controller
+### (1 controller / 1 broker / 1 zookeeper — the topology the feature was
+### manually validated on). prepare.yml deploys ZooKeeper + broker; the
+### controller is held in kafka_controller_migration and is NOT deployed until
+### converge.yml promotes it. SASL PLAIN, community edition.
+
+driver:
+  name: docker
+platforms:
+  - name: zookeeper1
+    hostname: zookeeper1.confluent
+    groups:
+      - zookeeper
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-controller1
+    hostname: kafka-controller1.confluent
+    groups:
+      - kafka_controller_migration
+    image: redhat/ubi8-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    prepare: ./prepare.yml
+    converge: ./converge.yml
+    verify: ./verify.yml
+  inventory:
+    group_vars:
+      all:
+        sasl_protocol: plain
+        confluent_server_enabled: false
