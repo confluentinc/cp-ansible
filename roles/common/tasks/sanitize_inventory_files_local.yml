@@ -1,0 +1,32 @@
+---
+# Sanitizes inventory files collected in the support bundle
+# Called from support_bundle.yml playbook after inventory files are copied
+# Uses script module - automatically finds sanitize_properties.py in roles/common/files/
+
+- name: Sanitize copied inventory files
+  script:
+    cmd: "{{ playbook_dir }}/../roles/common/files/sanitize_properties.py {{ item.dest }} --type inventory"
+    executable: "{{ ansible_python_interpreter }}"
+  loop: "{{ inventory_files_copied.results | default([]) | selectattr('changed', 'equalto', true) | list }}"
+  when: inventory_files_copied.results | default([]) | selectattr('changed', 'equalto', true) | list | length > 0
+  ignore_errors: true
+  register: sanitize_inventory_results
+
+- name: Sanitize generated inventory (if fallback was used)
+  script:
+    cmd: "{{ playbook_dir }}/../roles/common/files/sanitize_properties.py {{ hostvars['localhost']['bundle_path'] }}/ansible/inventory_1_raw.yml --type inventory"
+    executable: "{{ ansible_python_interpreter }}"
+  when: inventory_files_copied.results | default([]) | selectattr('changed', 'equalto', true) | list | length == 0
+  ignore_errors: true
+
+- name: Rename sanitized inventory files
+  shell: |
+    for file in {{ hostvars['localhost']['bundle_path'] }}/ansible/inventory_*_raw.yml; do
+      if [ -f "$file" ]; then
+        base=$(basename "$file" _raw.yml)
+        mv "$file" "{{ hostvars['localhost']['bundle_path'] }}/ansible/${base}_sanitized.yml"
+      fi
+    done
+  args:
+    executable: "{{ shell_executable }}"
+  ignore_errors: true
