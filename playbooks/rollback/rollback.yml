@@ -57,6 +57,21 @@
           set_fact:
             broker_id: "{{ broker_id_extracted.stdout }}"
 
+        # RBAC: the bare template renders super.users as only "User:<mds>". The
+        # broker/controller cert principals (rbac_super_users) are normally
+        # injected by roles/kafka_broker/tasks/rbac.yml during deploy, which
+        # regenerate_config.yml does NOT run. Without them the broker's mTLS
+        # principal is not a super user, and on restart MDS is denied access to
+        # _confluent-metadata-auth (TopicAuthorizationException) and never starts.
+        # Rebuild super.users here so the regenerated config keeps it (matches
+        # how CFK regenerates the full kafka config on rollback).
+        - name: Rebuild RBAC super.users before regenerating config
+          set_fact:
+            kafka_broker_final_properties: "{{ kafka_broker_final_properties | combine({'super.users': (rbac_super_users + (kafka_broker_final_properties['super.users'] | default('')).split(';') + ['User:' + (mds_super_user | default('mds'))]) | difference(['']) | unique | join(';')}) }}"
+          when:
+            - rbac_enabled | bool
+            - rbac_super_users | length > 0
+
         - name: Regenerate server.properties (variables role renders hybrid mode)
           include_role:
             name: kafka_broker
@@ -260,6 +275,19 @@
         - name: Set broker_id fact for template
           set_fact:
             broker_id: "{{ broker_id_extracted.stdout }}"
+
+        # RBAC: regenerate_config.yml renders super.users as only "User:<mds>",
+        # dropping the cert principals that roles/kafka_broker/tasks/rbac.yml
+        # injects during deploy. Without them the broker's mTLS principal is not
+        # a super user and MDS is denied access to _confluent-metadata-auth on
+        # restart. Rebuild super.users before regenerating (see the hybrid-revert
+        # play above for the full explanation).
+        - name: Rebuild RBAC super.users before regenerating config
+          set_fact:
+            kafka_broker_final_properties: "{{ kafka_broker_final_properties | combine({'super.users': (rbac_super_users + (kafka_broker_final_properties['super.users'] | default('')).split(';') + ['User:' + (mds_super_user | default('mds'))]) | difference(['']) | unique | join(';')}) }}"
+          when:
+            - rbac_enabled | bool
+            - rbac_super_users | length > 0
 
         - name: Regenerate server.properties (picks up any operator inventory edits)
           include_role:
