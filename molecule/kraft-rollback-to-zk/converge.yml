@@ -1,0 +1,55 @@
+---
+# Scenario 1 — HYBRID_DUAL_WRITE → premigration.
+#
+# Orchestrates: (deploy already done in prepare) → migrate forward to
+# HYBRID_DUAL_WRITE → roll back to pre-migration. Both steps invoke the real
+# entry playbooks with the real customer tags, against molecule's own generated
+# inventory (MOLECULE_INVENTORY_FILE), so there is zero divergence from
+# production behaviour and no changes to the main playbooks / Semaphore infra.
+
+- name: Migrate forward to HYBRID_DUAL_WRITE, then roll back to pre-migration
+  hosts: localhost
+  gather_facts: false
+  vars:
+    repo_root: "{{ playbook_dir }}/../.."
+    molecule_inventory: "{{ lookup('env', 'MOLECULE_INVENTORY_FILE') }}"
+  tasks:
+    # Promote the migration-held controllers into the live kafka_controller
+    # group so the sub-runs below (which read the inventory file fresh) see them.
+    - name: Promote kafka_controller_migration → kafka_controller
+      lineinfile:
+        path: "{{ molecule_inventory }}"
+        regexp: "kafka_controller_migration:"
+        line: "kafka_controller:"
+
+    - name: Forward-migrate to HYBRID_DUAL_WRITE (--tags migrate_to_dual_write)
+      command: >-
+        ansible-playbook
+        -i {{ molecule_inventory }}
+        {{ repo_root }}/playbooks/ZKtoKraftMigration.yml
+        --tags migrate_to_dual_write
+        -e kraft_migration=true
+      args:
+        chdir: "{{ repo_root }}"
+      changed_when: true
+      register: forward_migrate
+
+    - name: Roll back to pre-migration (--tags rollback_to_premigration)
+      command: >-
+        ansible-playbook
+        -i {{ molecule_inventory }}
+        {{ repo_root }}/playbooks/KRaftToZKRollback.yml
+        --tags rollback_to_premigration
+        -e kraft_migration=true
+      args:
+        chdir: "{{ repo_root }}"
+      changed_when: true
+      register: rollback_run
+
+    - name: Show forward-migration output
+      debug:
+        var: forward_migrate.stdout_lines
+
+    - name: Show rollback output
+      debug:
+        var: rollback_run.stdout_lines
