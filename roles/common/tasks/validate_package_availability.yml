@@ -1,7 +1,12 @@
 ---
+# Probe by BARE package name (no version suffix). apt-cache policy only accepts a
+# package name (pkg=version is apt-get syntax), and yum list with a version-pinned
+# spec is fragile against the repo's dist tag (e.g. -1.el7). The intent here is
+# simply "can this package be obtained from a repo or is it already installed"
+# before we remove the old packages, so the name is sufficient.
 - name: Check Package Availability (RedHat)
   shell: |
-    yum list available {{ item }}{{ confluent_package_redhat_suffix }} 2>/dev/null || yum list installed {{ item }}{{ confluent_package_redhat_suffix }} 2>/dev/null
+    yum list available {{ item }} 2>/dev/null || yum list installed {{ item }} 2>/dev/null
   register: package_availability_check_redhat
   changed_when: false
   failed_when: false
@@ -13,10 +18,11 @@
   tags:
     - package
     - cp_package
+    - validate_package_availability
 
 - name: Check Package Availability (Debian)
   shell: |
-    apt-cache policy {{ item }}{{ confluent_package_debian_suffix }} 2>/dev/null | grep -E 'Candidate:' | grep -v 'Candidate: (none)'
+    apt-cache policy {{ item }} 2>/dev/null | grep -E 'Candidate:' | grep -v 'Candidate: (none)'
   register: package_availability_check_debian
   changed_when: false
   failed_when: false
@@ -28,6 +34,7 @@
   tags:
     - package
     - cp_package
+    - validate_package_availability
 
 # Fail with an explicit list of the missing packages so support does not have to
 # parse raw yum/apt output to find out what is unavailable.
@@ -51,3 +58,4 @@
   tags:
     - package
     - cp_package
+    - validate_package_availability
