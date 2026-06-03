@@ -9,20 +9,6 @@
     migration_state: "UNKNOWN"
     zk_migration_state: -1
 
-- name: Gather facts on controller
-  setup:
-    gather_subset: ['!all', '!min', 'os_family']
-  delegate_to: "{{ groups['kafka_controller'][0] }}"
-  delegate_facts: true
-  when: groups['kafka_controller'] | length > 0
-
-- name: Gather facts on broker
-  setup:
-    gather_subset: ['!all', '!min', 'os_family']
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
-  delegate_facts: true
-  when: groups['kafka_broker'] | length > 0
-
 - name: Check if controllers are running
   shell: systemctl is-active {{ kafka_controller_service_name }}
   register: controller_status
@@ -58,8 +44,10 @@
     - jolokia_response.status | default(0) == 200
 
 # Any broker still on KRaft => PURE_DUAL_WRITE (JMX can't tell PURE from HYBRID).
+# The calling play gathers facts so kafka_broker.config_file (its dict references
+# ansible_os_family) resolves here.
 - name: Check process.roles on every broker
-  shell: grep -q "^process.roles" "{{ hostvars[item].broker_config_path | default(kafka_broker.config_file) }}"
+  shell: grep -q "^process.roles" "{{ kafka_broker.config_file }}"
   register: broker_process_roles_all
   delegate_to: "{{ item }}"
   loop: "{{ groups['kafka_broker'] | default([]) }}"
