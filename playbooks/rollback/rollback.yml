@@ -36,11 +36,19 @@
     - import_role:
         name: variables
 
+    # Revert only brokers still on KRaft; skip any already on hybrid (an
+    # interrupted rollback can leave a mix) so they are not restarted needlessly.
+    - name: Check whether this broker is still on KRaft
+      shell: grep -q "^process.roles" "{{ kafka_broker.config_file }}"
+      register: this_broker_on_kraft
+      failed_when: false
+      changed_when: false
+
     - block:
         - name: Backup current broker configuration
           copy:
             src: "{{ kafka_broker.config_file }}"
-            dest: "{{ kafka_broker.config_file }}.before_hybrid_revert"
+            dest: "{{ kafka_broker.config_file }}.before_hybrid_revert.{{ ansible_date_time.iso8601_basic_short }}"
             remote_src: true
 
         - name: Extract broker ID (from node.id if present, otherwise broker.id)
@@ -107,7 +115,16 @@
 
         - debug:
             msg: "Broker {{ inventory_hostname }} reverted to hybrid mode"
-      when: migration_state == "PURE_DUAL_WRITE"
+      when:
+        - migration_state == "PURE_DUAL_WRITE"
+        - this_broker_on_kraft.rc == 0
+
+    - name: Note brokers already in hybrid mode (revert skipped)
+      debug:
+        msg: "Broker {{ inventory_hostname }} is already in hybrid mode; revert skipped"
+      when:
+        - migration_state == "PURE_DUAL_WRITE"
+        - this_broker_on_kraft.rc != 0
 
 - name: Deprovision KRaft controllers
   hosts: kafka_controller
@@ -123,7 +140,7 @@
         - name: Backup controller configuration
           copy:
             src: "{{ kafka_controller.config_file }}"
-            dest: "{{ kafka_controller.config_file }}.before_controller_stop"
+            dest: "{{ kafka_controller.config_file }}.before_controller_stop.{{ ansible_date_time.iso8601_basic_short }}"
             remote_src: true
           failed_when: false
 
@@ -152,7 +169,11 @@
           when: controller_metadata_dirs.files | length > 0
 
         - debug:
-            msg: "Controller {{ inventory_hostname }} stopped, disabled, metadata cleaned"
+            msg: >-
+              Controller {{ inventory_hostname }} stopped, disabled, metadata cleaned.
+              IMPORTANT: remove this controller host from the inventory before
+              re-running all.yml, otherwise it will be redeployed as a
+              migration-mode KRaft controller against a rolled-back cluster.
       when: migration_state in ["PREMIGRATION", "HYBRID_DUAL_WRITE", "PURE_DUAL_WRITE"]
 
 - name: Clean ZooKeeper migration state
@@ -170,8 +191,9 @@
         # (zookeeper_ssl_enabled, e.g. RBAC/mTLS clusters use port 2182). The
         # TLS client config lives on the broker (kafka_broker config), so these
         # run delegated to a broker and connect to the ZK node — mirroring
-        # roles/common/tasks/rbac_setup.yml. failed_when is tightened so a real
-        # connection error fails instead of being silently swallowed.
+        # roles/common/tasks/rbac_setup.yml. failed_when fails only on a real
+        # error: a non-zero rc that is not the benign "Node does not exist"
+        # (expected when the znode is already gone on a re-run).
         - name: Delete /controller znode (allows a broker to become ZK controller)
           shell: >
             echo "deleteall /controller" |
@@ -261,7 +283,7 @@
         - name: Backup broker configuration before final changes
           copy:
             src: "{{ kafka_broker.config_file }}"
-            dest: "{{ kafka_broker.config_file }}.before_pure_zk_revert"
+            dest: "{{ kafka_broker.config_file }}.before_pure_zk_revert.{{ ansible_date_time.iso8601_basic_short }}"
             remote_src: true
 
         - name: Extract broker ID

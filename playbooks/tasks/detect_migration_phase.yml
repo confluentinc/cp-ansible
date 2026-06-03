@@ -1,11 +1,8 @@
 ---
-# Sets migration_state to PREMIGRATION | HYBRID_DUAL_WRITE | PURE_DUAL_WRITE | FINALIZED
-# using JMX (ZkMigrationState MBean) with broker-config fallback. Hard-fails on
-# UNKNOWN or FINALIZED.
-#
-# JMX enum: 0=None, 1=Migration, 2=PreMigration, 3=PostMigration
-# Terminal states (FINALIZED, PREMIGRATION) require JMX; dual-write states
-# accept config signals as backup.
+# Sets migration_state: PREMIGRATION | HYBRID_DUAL_WRITE | PURE_DUAL_WRITE | FINALIZED.
+# FINALIZED/HYBRID/PREMIGRATION come from the controller's JMX ZkMigrationState
+# (0=None, 1=Migration, 2=PreMigration, 3=PostMigration); PURE is read from broker
+# process.roles, since JMX can't tell PURE from HYBRID. Hard-fails on UNKNOWN/FINALIZED.
 
 - name: Initialize migration state detection variables
   set_fact:
@@ -60,37 +57,29 @@
   when:
     - jolokia_response.status | default(0) == 200
 
-- name: Compute broker server.properties path
+# Any broker still on KRaft => PURE_DUAL_WRITE (JMX can't tell PURE from HYBRID).
+- name: Check process.roles on every broker
+  shell: grep -q "^process.roles" "{{ hostvars[item].broker_config_path | default(kafka_broker.config_file) }}"
+  register: broker_process_roles_all
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['kafka_broker'] | default([]) }}"
+  failed_when: false
+  changed_when: false
+
+- name: Aggregate broker signal (any broker on KRaft => PURE)
   set_fact:
-    broker_config_path: "{% if hostvars[broker_host].installation_method | default(installation_method) == 'archive' %}{{ hostvars[broker_host].archive_destination_path | default(archive_destination_path) }}/confluent-{{ hostvars[broker_host].confluent_package_version | default(confluent_package_version) }}/etc/kafka/server.properties{% else %}/etc/kafka/server.properties{% endif %}"
-  vars:
-    broker_host: "{{ groups['kafka_broker'][0] }}"
-  when: groups['kafka_broker'] | length > 0
-
-- name: Check broker config for process.roles
-  shell: grep "^process.roles" "{{ broker_config_path }}" | cut -d'=' -f2 | tr -d ' '
-  register: broker_process_roles
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
-  failed_when: false
-  changed_when: false
-
-- name: Check broker config for migration flag
-  shell: grep -q "^zookeeper.metadata.migration.enable=true" "{{ broker_config_path }}"
-  register: broker_migration_flag
-  delegate_to: "{{ groups['kafka_broker'][0] }}"
-  failed_when: false
-  changed_when: false
+    any_broker_on_kraft: "{{ broker_process_roles_all.results | default([]) | selectattr('rc', 'defined') | selectattr('rc', 'equalto', 0) | list | length > 0 }}"
 
 - name: Determine migration phase from collected signals
   set_fact:
     migration_state: >-
       {%- set zks = zk_migration_state | int -%}
-      {#- Terminal states require JMX to confirm; dual-write states accept config signals as backup -#}
+      {#- process.roles distinguishes PURE from HYBRID (JMX can't); FINALIZED/HYBRID/PREMIGRATION come from JMX. -#}
       {%- if zks == 3 -%}
       FINALIZED
-      {%- elif broker_process_roles.stdout | default('') == 'broker' -%}
+      {%- elif any_broker_on_kraft | bool -%}
       PURE_DUAL_WRITE
-      {%- elif zks == 1 or broker_migration_flag.rc | default(1) == 0 -%}
+      {%- elif zks == 1 -%}
       HYBRID_DUAL_WRITE
       {%- elif zks in [0, 2] -%}
       PREMIGRATION
