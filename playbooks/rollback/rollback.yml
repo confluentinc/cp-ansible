@@ -175,7 +175,7 @@
         - name: Delete /controller znode (allows a broker to become ZK controller)
           shell: >
             echo "deleteall /controller" |
-            {{ zookeeper_cli_path }} {{ zk_endpoint }} {{ zk_tls_args }}
+            {{ zk_jaas_opts }} {{ zookeeper_cli_path }} {{ zk_endpoint }} {{ zk_tls_args }}
           register: delete_controller
           changed_when: "'Node does not exist' not in (delete_controller.stdout + delete_controller.stderr)"
           failed_when:
@@ -186,7 +186,7 @@
         - name: Verify /migration state (per official docs)
           shell: >
             echo "get /migration" |
-            {{ zookeeper_cli_path }} {{ zk_endpoint }} {{ zk_tls_args }}
+            {{ zk_jaas_opts }} {{ zookeeper_cli_path }} {{ zk_endpoint }} {{ zk_tls_args }}
           register: get_migration
           changed_when: false
           failed_when:
@@ -197,7 +197,7 @@
         - name: Delete /migration znode
           shell: >
             echo "delete /migration" |
-            {{ zookeeper_cli_path }} {{ zk_endpoint }} {{ zk_tls_args }}
+            {{ zk_jaas_opts }} {{ zookeeper_cli_path }} {{ zk_endpoint }} {{ zk_tls_args }}
           register: delete_migration
           changed_when: "'Node does not exist' not in (delete_migration.stdout + delete_migration.stderr)"
           failed_when:
@@ -211,6 +211,8 @@
         zookeeper_cli_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/zookeeper-shell{% else %}/usr/bin/zookeeper-shell{% endif %}"
         zk_endpoint: "{{ groups['zookeeper'][0] }}:{{ zookeeper_client_port }}"
         zk_tls_args: "{% if zookeeper_ssl_enabled | bool %}-zk-tls-config-file {{ kafka_broker.zookeeper_tls_client_config_file if kafka_broker_secrets_protection_enabled | bool else kafka_broker.config_file }}{% endif %}"
+        # When ZooKeeper requires SASL auth (kerberos/digest → zookeeper.set.acl=true),
+        zk_jaas_opts: "{% if kafka_broker_final_properties['zookeeper.set.acl'] | default('false') | lower == 'true' %}KAFKA_OPTS='-Djava.security.auth.login.config={{ kafka_broker.jaas_file }}'{% endif %}"
       when: migration_state in ["HYBRID_DUAL_WRITE", "PURE_DUAL_WRITE"]
 
 - name: Clean broker metadata logs
