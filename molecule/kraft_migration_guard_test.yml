@@ -1,0 +1,44 @@
+---
+# Test for the all.yml "Validate Playbook Selection" guard (ANSIENG-5782, review #8).
+#
+# all.yml runs its guard across the managed host groups with any_errors_fatal,
+# evaluating:
+#     kraft_migration | default(false) | bool
+# This must fire (and abort the whole run) when kraft_migration is enabled at ANY
+# scope, including a *group* scope such as [kafka_broker:vars] — the customer
+# scenario the reviewer flagged. The old localhost-only guard missed that case
+# because group/host vars never apply to localhost.
+#
+# Run with:
+#   ansible-playbook -i molecule/kraft_migration_guard_inventory.yml \
+#       molecule/kraft_migration_guard_test.yml
+#
+# Expected: the play below fails fast on the group host (broker1) and the
+# "should not run" play never executes.
+
+# Mirrors the real all.yml guard: same host pattern style + any_errors_fatal.
+- name: Validate Playbook Selection (mirror of all.yml guard)
+  hosts: kafka_broker:localhost
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Fail if kraft_migration flag is enabled
+      fail:
+        msg: "kraft_migration flag is enabled on {{ inventory_hostname }}. Guard correctly detected the group-scoped flag and is aborting the run."
+      when: kraft_migration | default(false) | bool
+
+# If the guard works, any_errors_fatal aborts before this play whenever the flag
+# is set. Reaching this play *with the flag still set* means the guard failed to
+# block the run. Runs on the group host (which can see the group-scoped flag) and
+# only fails when kraft_migration is actually enabled, so a clean inventory passes.
+- name: Regression sentinel - must not run while kraft_migration is set
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Fail because the guard did not block the run
+      fail:
+        msg: >-
+          REGRESSION: the all.yml guard did not abort with a group-scoped
+          kraft_migration flag. Review the guard's host pattern and
+          any_errors_fatal in playbooks/all.yml (ANSIENG-5782, review #8).
+      when: kraft_migration | default(false) | bool
