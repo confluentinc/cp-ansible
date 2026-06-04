@@ -1,0 +1,113 @@
+---
+# Sets migration_state: PREMIGRATION | HYBRID_DUAL_WRITE | PURE_DUAL_WRITE | FINALIZED.
+# FINALIZED/HYBRID/PREMIGRATION come from the controller's JMX ZkMigrationState
+# (0=None, 1=Migration, 2=PreMigration, 3=PostMigration); PURE is read from broker
+# process.roles, since JMX can't tell PURE from HYBRID. Hard-fails on UNKNOWN/FINALIZED.
+
+- name: Initialize migration state detection variables
+  set_fact:
+    migration_state: "UNKNOWN"
+    zk_migration_state: -1
+
+- name: Check if controllers are running
+  shell: systemctl is-active {{ kafka_controller_service_name }}
+  register: controller_status
+  delegate_to: "{{ groups['kafka_controller'][0] }}"
+  failed_when: false
+  changed_when: false
+  when: (groups['kafka_controller'] | length > 0)
+
+- name: Query Jolokia for ZkMigrationState
+  uri:
+    url: "{{ 'https' if kafka_controller_jolokia_ssl_enabled|bool else 'http' }}://localhost:{{ kafka_controller_jolokia_port }}/jolokia/read/kafka.controller:type=KafkaController,name=ZkMigrationState"
+    validate_certs: false
+    return_content: true
+    status_code: 200
+    timeout: 10
+    force_basic_auth: "{{ use_basic_auth }}"
+    url_username: "{{ jolokia_user if use_basic_auth else omit }}"
+    url_password: "{{ jolokia_password if use_basic_auth else omit }}"
+  register: jolokia_response
+  delegate_to: "{{ groups['kafka_controller'][0] }}"
+  failed_when: false
+  changed_when: false
+  when:
+    - groups['kafka_controller'] | length > 0
+    - controller_status.rc | default(1) == 0
+  vars:
+    use_basic_auth: "{{ jolokia_auth_mode == 'basic' }}"
+
+- name: Parse Jolokia response
+  set_fact:
+    zk_migration_state: "{{ (jolokia_response.content | from_json).value.Value }}"
+  when:
+    - jolokia_response.status | default(0) == 200
+
+# Any broker still on KRaft => PURE_DUAL_WRITE (JMX can't tell PURE from HYBRID).
+# The calling play gathers facts so kafka_broker.config_file (its dict references
+# ansible_os_family) resolves here.
+- name: Check process.roles on every broker
+  shell: grep -q "^process.roles" "{{ kafka_broker.config_file }}"
+  register: broker_process_roles_all
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['kafka_broker'] | default([]) }}"
+  failed_when: false
+  changed_when: false
+
+- name: Aggregate broker signal (any broker on KRaft => PURE)
+  set_fact:
+    any_broker_on_kraft: "{{ broker_process_roles_all.results | default([]) | selectattr('rc', 'defined') | selectattr('rc', 'equalto', 0) | list | length > 0 }}"
+
+- name: Determine migration phase from collected signals
+  set_fact:
+    migration_state: >-
+      {%- set zks = zk_migration_state | int -%}
+      {#- process.roles distinguishes PURE from HYBRID (JMX can't); FINALIZED/HYBRID/PREMIGRATION come from JMX. -#}
+      {%- if zks == 3 -%}
+      FINALIZED
+      {%- elif any_broker_on_kraft | bool -%}
+      PURE_DUAL_WRITE
+      {%- elif zks == 1 -%}
+      HYBRID_DUAL_WRITE
+      {%- elif zks in [0, 2] -%}
+      PREMIGRATION
+      {%- else -%}
+      UNKNOWN
+      {%- endif -%}
+
+- name: Fail if phase could not be determined
+  fail:
+    msg: "ERROR: Could not determine migration phase."
+  when: migration_state == "UNKNOWN"
+
+- name: Display detected migration state
+  debug:
+    msg: |
+      MIGRATION STATE: {{ migration_state }}
+
+      {% if migration_state == "PREMIGRATION" %}
+      PREMIGRATION State:
+        - KRaft controllers are running but migration not started
+        - Brokers still fully on ZooKeeper
+        - Rollback: Simple controller shutdown
+      {% elif migration_state == "HYBRID_DUAL_WRITE" %}
+      HYBRID_DUAL_WRITE State:
+        - KRaft controller is active, writing to both ZK and KRaft
+        - Some brokers still in ZooKeeper mode
+        - Rollback: Standard 4-step rollback procedure
+      {% elif migration_state == "PURE_DUAL_WRITE" %}
+      PURE_DUAL_WRITE State:
+        - All brokers migrated to KRaft mode
+        - Controllers still writing to both ZK and KRaft (dual-write)
+        - Rollback: Multi-restart rollback procedure
+      {% elif migration_state == "FINALIZED" %}
+      FINALIZED State:
+        - Migration complete, metadata only in KRaft
+        - Rollback NOT POSSIBLE
+      {% endif %}
+
+- name: Fail if rollback not possible
+  fail:
+    msg: |
+      ERROR: Rollback is NOT possible - migration already finalized (FINALIZED state).
+  when: migration_state == "FINALIZED"

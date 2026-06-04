@@ -1,0 +1,114 @@
+---
+# Revert from KRaft migration back to ZooKeeper. Tag and workflow details
+# live in rollback/rollback.yml. FINALIZED state is non-recoverable.
+# Docs: https://docs.confluent.io/platform/current/installation/migrate-zk-kraft.html#reverting-to-zk-mode
+
+- name: Pre-Rollback Checks and Validation
+  hosts: localhost
+  gather_facts: true  # detection resolves kafka_broker.config_file, which needs ansible_os_family
+  any_errors_fatal: true
+  tags:
+    - rollback_to_hybrid
+    - rollback_to_premigration
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Execute all pre-rollback checks
+      include_tasks: tasks/pre_rollback_checks.yml
+
+- name: Propagate Migration State to All Hosts
+  hosts: kafka_controller:kafka_broker:zookeeper
+  gather_facts: false
+  any_errors_fatal: true
+  tags:
+    - rollback_to_hybrid
+    - rollback_to_premigration
+  tasks:
+    - name: Set migration_state fact on all hosts
+      set_fact:
+        migration_state: "{{ hostvars['localhost']['migration_state'] }}"
+
+- import_playbook: rollback/rollback.yml
+
+- name: Post-Rollback ZooKeeper Health Check
+  hosts: zookeeper
+  gather_facts: true
+  tags:
+    - rollback_to_hybrid
+    - rollback_to_premigration
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Zookeeper Health Check
+      include_role:
+        name: zookeeper
+        tasks_from: health_check.yml
+      tags: health_check
+
+- name: Post-Rollback Broker Health Check
+  hosts: kafka_broker
+  gather_facts: true
+  tags:
+    - rollback_to_hybrid
+    - rollback_to_premigration
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Kafka Broker Health Check
+      include_role:
+        name: kafka_broker
+        tasks_from: health_check.yml
+      tags: health_check
+
+- name: Post-Rollback Controller Health Check
+  hosts: kafka_controller
+  gather_facts: true
+  tags:
+    - rollback_to_hybrid
+    - rollback_to_premigration
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Kafka Controller Health Check
+      include_role:
+        name: kafka_controller
+        tasks_from: health_check.yml
+      tags: health_check
+      when:
+        - "'rollback_to_hybrid' in ansible_run_tags"
+        - confluent_server_enabled | bool
+        - kafka_controller_health_checks_enabled | bool
+
+- name: Rollback Complete
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+  tags:
+    - rollback_to_hybrid
+    - rollback_to_premigration
+  vars:
+    ansible_become: false
+  tasks:
+    - name: Print rollback completion summary
+      debug:
+        msg: |
+          {% if 'rollback_to_premigration' in ansible_run_tags %}
+          ROLLBACK TO ZOOKEEPER COMPLETED SUCCESSFULLY
+          Cluster is now operating in pure ZooKeeper mode.
+
+          IMPORTANT: Remove the kafka_controller hosts and the kraft_migration
+          flag from your inventory before running all.yml again. Otherwise the
+          controllers will be redeployed as migration-mode KRaft controllers
+          against a cluster that has already rolled back to ZooKeeper.
+          {% else %}
+          PARTIAL ROLLBACK COMPLETED
+          Brokers reverted to hybrid mode; KRaft controllers remain active.
+          Cluster state: HYBRID_DUAL_WRITE.
+          To continue rollback to pure ZooKeeper: --tags rollback_to_premigration
+          To re-migrate forward to KRaft:        --tags migrate_to_kraft
+          {% endif %}
