@@ -280,6 +280,38 @@
     - configuration
     - privileged
 
+- name: Create Service Override Directory
+  file:
+    path: "{{kafka_controller.systemd_override | dirname }}"
+    owner: "{{kafka_controller_user}}"
+    group: "{{kafka_controller_group}}"
+    state: directory
+    mode: '750'
+  tags:
+    - systemd
+    - privileged
+
+- name: Encrypt controller secrets
+  include_tasks: secrets_protection.yml
+  when:
+    - kafka_controller_secrets_protection_enabled|bool
+
+# Must run after Encrypt controller secrets so secrets_protection_masterkey
+# is templated into override.conf in the same pass. Always runs (override.conf
+# also carries JVM/JMX/ulimit settings used when secrets protection is off).
+- name: Write Service Overrides
+  template:
+    src: override.conf.j2
+    dest: "{{ kafka_controller.systemd_override }}"
+    mode: '640'
+    owner: root
+    group: root
+  notify: restart Kafka Controller
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - systemd
+    - privileged
+
 - name: Include Kraft Cluster Data
   include_tasks: get_meta_properties.yml
 
@@ -452,30 +484,6 @@
     - configuration
     - privileged
 
-- name: Create Service Override Directory
-  file:
-    path: "{{kafka_controller.systemd_override | dirname }}"
-    owner: "{{kafka_controller_user}}"
-    group: "{{kafka_controller_group}}"
-    state: directory
-    mode: '750'
-  tags:
-    - systemd
-    - privileged
-
-- name: Write Service Overrides
-  template:
-    src: override.conf.j2
-    dest: "{{ kafka_controller.systemd_override }}"
-    mode: '640'
-    owner: root
-    group: root
-  notify: restart Kafka Controller
-  diff: "{{ not mask_sensitive_diff|bool }}"
-  tags:
-    - systemd
-    - privileged
-
 - name: Create sysctl directory on Debian distributions
   file:
     path: /usr/lib/sysctl.d
@@ -519,16 +527,6 @@
     KAFKA_OPTS: "{{ kafka_controller_service_environment_overrides.KAFKA_OPTS | default('') }}"
   vars:
     kafka_migration_check_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/kafka-migration-check{% else %}kafka-migration-check{% endif %}"
-
-# We need to start MDS here to proceed with secrets protection
-- meta: flush_handlers
-
-# secrets protection for controller works only when remote MDS is already up
-- name: Encrypt secrets
-  include_tasks: secrets_protection.yml
-  when:
-    - kafka_controller_secrets_protection_enabled|bool or kafka_controller_client_secrets_protection_enabled|bool
-    - ((rbac_enabled|bool and external_mds_enabled|bool) or confluent_cli_version is version('3.0.0', '>='))
 
 - meta: flush_handlers
 
