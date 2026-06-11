@@ -1,0 +1,51 @@
+---
+### Asserts every broker carries the same non-empty master key
+### and that secrets protection took effect.
+
+- name: Verify - kafka_broker secrets protection
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: security.properties deployed on broker
+      stat:
+        path: /var/ssl/private/kafka-broker-security.properties
+      register: secrets_file_stat
+
+    - assert:
+        that:
+          - secrets_file_stat.stat.exists
+        fail_msg: "security.properties missing on broker - regenerate_masterkey: false path did not deploy the file."
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: /etc/kafka/server.properties
+        property: ssl.keystore.password
+        expected_value: ${securepass:/var/ssl/private/kafka-broker-security.properties:server.properties/ssl.keystore.password}
+
+    - name: Read broker systemd override.conf
+      slurp:
+        src: /etc/systemd/system/confluent-server.service.d/override.conf
+      register: broker_override
+
+    - name: Extract CONFLUENT_SECURITY_MASTER_KEY from broker override.conf
+      set_fact:
+        broker_masterkey: "{{ (broker_override.content | b64decode).split('\n')
+          | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
+          | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Assert master key is present on broker
+      assert:
+        that:
+          - broker_masterkey | default('') | length > 0
+        fail_msg: "CONFLUENT_SECURITY_MASTER_KEY is missing from {{ inventory_hostname }}'s override.conf."
+
+    - name: Assert all brokers carry the same master key
+      assert:
+        that:
+          - broker_masterkey == hostvars[groups['kafka_broker'][0]].broker_masterkey
+        fail_msg: >-
+          Broker {{ inventory_hostname }} has a different master key than
+          {{ groups['kafka_broker'][0] }} - regenerate_masterkey: false must
+          deliver the same key to every broker.
