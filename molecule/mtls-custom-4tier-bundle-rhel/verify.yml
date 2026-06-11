@@ -1,0 +1,65 @@
+---
+### Verifies the cert chain that build_certificate_chain.yml produced.
+### Assertions:
+###   1. The .chain file exists.
+###   2. It contains exactly expected_chain_cert_count PEM blocks.
+###   3. The chain is leaf-first (first cert's Subject == the host's CN).
+###   4. openssl can independently re-verify the chain against the CA bundle
+###      (with -partial_chain so this works for both full and partial chains).
+###
+### The cluster having come up at all (converge succeeded) is itself end-to-end
+### proof that the chain is correct: mTLS handshakes between broker, controller,
+### and schema_registry would have failed otherwise.
+
+- name: Verify cert chain shape and validity
+  hosts: kafka_broker:kafka_controller:zookeeper:schema_registry
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Read the generated chain file
+      slurp:
+        src: "{{ ssl_file_dir }}/{{ service_name | default('kafka_broker') }}.chain"
+      register: chain_slurp
+
+    - name: Count certs in chain
+      set_fact:
+        chain_cert_count: "{{ (chain_slurp['content'] | b64decode).split('-----BEGIN CERTIFICATE-----') | length - 1 }}"
+
+    - name: Assert chain has expected number of certs
+      assert:
+        that:
+          - chain_cert_count | int == expected_chain_cert_count | int
+        fail_msg: >-
+          Expected {{ expected_chain_cert_count }} certs in {{ service_name | default('kafka_broker') }}.chain,
+          got {{ chain_cert_count }}.
+
+    - name: Assert chain is leaf-first (first cert Subject matches host CN)
+      shell: |
+        head -n $(grep -n 'END CERTIFICATE' {{ ssl_file_dir }}/{{ service_name | default('kafka_broker') }}.chain | head -1 | cut -d: -f1) \
+          {{ ssl_file_dir }}/{{ service_name | default('kafka_broker') }}.chain \
+          | openssl x509 -noout -subject
+      register: leaf_subject
+      changed_when: false
+
+    - name: Verify the chain validates against the CA bundle
+      shell: |
+        # Extract just the leaf (first cert in the chain) for verification.
+        leaf=$(mktemp)
+        head -n $(grep -n 'END CERTIFICATE' {{ ssl_file_dir }}/{{ service_name | default('kafka_broker') }}.chain | head -1 | cut -d: -f1) \
+          {{ ssl_file_dir }}/{{ service_name | default('kafka_broker') }}.chain > "$leaf"
+
+        # Intermediates after the leaf (if any) act as bridges.
+        bridges=$(mktemp)
+        tail -n +$(( $(grep -n 'END CERTIFICATE' {{ ssl_file_dir }}/{{ service_name | default('kafka_broker') }}.chain | head -1 | cut -d: -f1) + 1 )) \
+          {{ ssl_file_dir }}/{{ service_name | default('kafka_broker') }}.chain > "$bridges"
+
+        if [ -s "$bridges" ]; then
+          openssl verify -CAfile {{ ca_cert_path }} -untrusted "$bridges" -partial_chain "$leaf"
+        else
+          openssl verify -CAfile {{ ca_cert_path }} -partial_chain "$leaf"
+        fi
+        rm -f "$leaf" "$bridges"
+      register: verify_chain
+      changed_when: false

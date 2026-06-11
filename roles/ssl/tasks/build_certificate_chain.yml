@@ -1,94 +1,156 @@
 ---
 # Certificate Chain Building Tasks
-# ------------------------------
-# These tasks build a proper certificate chain by:
-# 1. Creating a temporary directory for processing
-# 2. Splitting a CA bundle into individual certificates
-# 3. Extracting certificates from the signed cert
-# 4. Building a validated certificate chain by finding which CA signed the cert
-# 5. Cleaning up temporary files
+# --------------------------------
+# Inputs:
+#   - ca_cert_path: PEM file containing one or more trusted CA certificates
+#     (root and/or intermediate, in any order).
+#   - cert_path: PEM file containing the signed server certificate.
+#     May be leaf-only or include any subset of intermediates and/or the root,
+#     in any order.
+#
+# Output:
+#   - {{ ssl_file_dir_final }}/{{ service_name }}.chain — properly ordered
+#     "leaf -> intermediate(s) -> root" chain. For partial chains where no
+#     self-signed root is available, the walk stops at the topmost cert that
+#     has a known parent in the trust pool.
+#
+# Algorithm:
+#   1. Split both ca_cert_path and cert_path into individual cert files.
+#   2. Identify the leaf in cert_path: the cert whose Subject is not the
+#      Issuer of any other cert in cert_path (handles arbitrary input order).
+#   3. Use the non-leaf certs from cert_path as -untrusted bridges and run a
+#      single `openssl verify -CAfile <bundle> -untrusted <bridges>
+#      -partial_chain <leaf>`. This validates the chain cryptographically and
+#      handles DoD-style partial chains via -partial_chain.
+#   4. Walk Issuer -> Subject across the union of all certs (cert_path +
+#      ca_cert_path), starting from the leaf, to emit the ordered chain.
+#      OpenSSL has already proven the chain is valid; the walk only sorts
+#      the certs into output order.
 
-# Creates a temporary directory that will be automatically deleted when the playbook ends
-# Example: Creates a directory like /tmp/ansible.individual_certs.XXXXXXXX/
 - name: Create temp directory for individual certificates
   tempfile:
     state: directory
-    suffix: individual_certs
+    suffix: cert_chain
   register: temp_dir
 
-# Splits a CA certificate bundle into individual certificate files
-# This is necessary because a CA bundle can contain multiple certificates
-#
-# Sample certificate bundle format:
-# -----BEGIN CERTIFICATE-----
-# MIIDSjCCAjKgAwIBAgIQRK+wgNajJ7qJMDmGLvhAazANBgkqhkiG9w0BAQUFADA/
-# MSQwIgYDVQQKExtEaWdpdGFsIFNpZ25hdHVyZSBUcnVzdCBDby4xFzAVBgNVBAMT
-# (more base64 encoded certificate data)
-# -----END CERTIFICATE-----
-# -----BEGIN CERTIFICATE-----
-# MIIE0zCCA7ugAwIBAgIQGNrRniZ96LtKIVjNzGs7SjANBgkqhkiG9w0BAQUFADCB
-# yjELMAkGA1UEBhMCVVMxFzAVBgNVBAoTDlZlcmlTaWduLCBJbmMuMR8wHQYDVQQL
-# (more base64 encoded certificate data)
-# -----END CERTIFICATE-----
-#
-# Example: If ca_cert_path contains 3 certificates like above, this creates:
-#   /tmp/ansible.individual_certs.XXXXXXXX/ca.1.pem
-#   /tmp/ansible.individual_certs.XXXXXXXX/ca.2.pem
-#   /tmp/ansible.individual_certs.XXXXXXXX/ca.3.pem
-- name: Split CA Cert Bundle into Individual Certificates
+- name: Build and Verify Certificate Chain
   shell: |
-    awk 'BEGIN {n=0} /BEGIN CERTIFICATE/{n++} {print > "{{ temp_dir.path }}/ca." n ".pem"}' {{ ca_cert_path }}
-  changed_when: false
+    set -euo pipefail
 
-# Extracts the last (end-entity) certificate from the signed certificate bundle
-# For multi-cert bundles, we need the last certificate to verify against the CA
-# Example: If cert_path contains a chain with 2 certificates, this creates:
-#   /tmp/ansible.individual_certs.XXXXXXXX/signed.last.pem
-# containing only the last certificate in the chain
-- name: Split Signed Cert Bundle - Extract Last Certificate
-  shell: |
-    awk '
-      # Store each certificate (including newlines) in a variable
-      /BEGIN CERTIFICATE/,/END CERTIFICATE/ {
-        cert = cert $0 "\n"
-      }
-      # When we reach the end of a certificate, store it as the last one and reset
-      /END CERTIFICATE/ {
-        last_cert = cert
-        cert = ""
-      }
-      # At the end, print only the last certificate we found
-      END {
-        print last_cert
-      }' {{ cert_path }} > "{{ temp_dir.path }}/signed.last.pem"
-  changed_when: false
+    TEMP_DIR='{{ temp_dir.path }}'
+    CA_CERT_PATH='{{ ca_cert_path }}'
+    CERT_PATH='{{ cert_path }}'
+    OUTPUT_CHAIN='{{ ssl_file_dir_final }}/{{ service_name }}.chain'
 
-# Verifies which CA certificate can validate the end-entity certificate
-# and builds a complete certificate chain by concatenating them
-# Example: If ca.2.pem successfully validates signed.last.pem, this creates:
-#   /path/to/ssl_dir/servicename.chain
-# containing the full certificate + CA certificate chain
-- name: Verify and Build Certificate Chain
-  shell: |
-    # Try each CA certificate to find one that can verify our certificate
-    for ca_file in {{ temp_dir.path }}/ca.*.pem; do
-      # Attempt to verify the certificate using this CA
-      if openssl verify -CAfile "$ca_file" "{{ temp_dir.path }}/signed.last.pem"; then
-        # When we find a match, create the chain by concatenating the cert and CA
-        cat {{ cert_path }} "$ca_file" > "{{ ssl_file_dir_final }}/{{ service_name }}.chain"
-        echo "Chain completed with: $ca_file"
-        exit 0  # Success, no need to check other CAs
+    # 1. Split both input files into individual cert files.
+    awk 'BEGIN{n=0} /BEGIN CERTIFICATE/{n++} {print > ("'"$TEMP_DIR"'/cert."n".pem")}' "$CERT_PATH"
+    awk 'BEGIN{n=0} /BEGIN CERTIFICATE/{n++} {print > ("'"$TEMP_DIR"'/ca."n".pem")}'   "$CA_CERT_PATH"
+
+    cert_files=( "$TEMP_DIR"/cert.*.pem )
+    ca_files=(   "$TEMP_DIR"/ca.*.pem )
+    if [ ! -e "${cert_files[0]}" ]; then
+      echo "ERROR: no certificates found in cert_path ($CERT_PATH)" >&2
+      exit 1
+    fi
+    if [ ! -e "${ca_files[0]}" ]; then
+      echo "ERROR: no certificates found in ca_cert_path ($CA_CERT_PATH)" >&2
+      exit 1
+    fi
+
+    subj_of() { openssl x509 -in "$1" -noout -subject -nameopt RFC2253 | sed 's/^subject=//'; }
+    iss_of()  { openssl x509 -in "$1" -noout -issuer  -nameopt RFC2253 | sed 's/^issuer=//';  }
+
+    # 2. Identify the leaf in cert_path:
+    #    the cert whose Subject is NOT the Issuer of any other cert in cert_path.
+    LEAF=""
+    for f in "${cert_files[@]}"; do
+      f_subj=$(subj_of "$f")
+      is_parent=false
+      for g in "${cert_files[@]}"; do
+        [ "$g" = "$f" ] && continue
+        if [ "$(iss_of "$g")" = "$f_subj" ]; then
+          is_parent=true
+          break
+        fi
+      done
+      if ! $is_parent; then
+        LEAF="$f"
+        break
       fi
     done
-    # If we get here, no CA could verify the certificate
-    echo "No valid CA found to complete the chain" >&2
-    exit 1  # Failure
-  register: chain_result
-  failed_when: chain_result.rc != 0
-  changed_when: chain_result.rc == 0
+    if [ -z "$LEAF" ]; then
+      echo "ERROR: could not identify leaf certificate in cert_path ($CERT_PATH)" >&2
+      exit 1
+    fi
 
-# Removes the temporary directory and all its contents
-# Example: Deletes /tmp/ansible.individual_certs.XXXXXXXX/ and all files inside
+    # 3. Collect non-leaf certs from cert_path as bridging intermediates.
+    BRIDGES="$TEMP_DIR/bridges.pem"
+    : > "$BRIDGES"
+    for f in "${cert_files[@]}"; do
+      [ "$f" = "$LEAF" ] && continue
+      cat "$f" >> "$BRIDGES"
+    done
+
+    # 4. Verify the chain. -partial_chain permits stopping at a trusted
+    #    intermediate (DoD/enterprise PKI without root in the bundle).
+    if [ -s "$BRIDGES" ]; then
+      openssl verify -CAfile "$CA_CERT_PATH" -untrusted "$BRIDGES" -partial_chain "$LEAF" >&2
+    else
+      openssl verify -CAfile "$CA_CERT_PATH" -partial_chain "$LEAF" >&2
+    fi
+
+    # 5. Walk Issuer -> Subject across all available certs to emit the chain
+    #    in leaf -> intermediate(s) -> root order. Dedupe by Subject to avoid
+    #    duplicating a cert that appears in both input files.
+    pool=( "${cert_files[@]}" "${ca_files[@]}" )
+
+    : > "$OUTPUT_CHAIN"
+    current="$LEAF"
+    seen=""
+    safety=0
+    while [ -n "$current" ]; do
+      safety=$((safety + 1))
+      if [ "$safety" -gt 32 ]; then
+        echo "ERROR: chain walk exceeded 32 hops, aborting (possible cycle)" >&2
+        exit 1
+      fi
+
+      c_subj=$(subj_of "$current")
+      c_iss=$(iss_of "$current")
+
+      # Dedupe by Subject (handles a cert appearing in both input files).
+      case "|$seen|" in
+        *"|$c_subj|"*) ;;
+        *)
+          cat "$current" >> "$OUTPUT_CHAIN"
+          seen="$seen|$c_subj"
+          ;;
+      esac
+
+      # Self-signed -> we've reached an anchor, stop.
+      if [ "$c_subj" = "$c_iss" ]; then
+        break
+      fi
+
+      # Find parent in the pool (Subject == current's Issuer).
+      parent=""
+      for f in "${pool[@]}"; do
+        [ "$f" = "$current" ] && continue
+        if [ "$(subj_of "$f")" = "$c_iss" ]; then
+          parent="$f"
+          break
+        fi
+      done
+
+      # No parent found -> partial chain, stop here.
+      [ -z "$parent" ] && break
+      current="$parent"
+    done
+
+    echo "Chain written to $OUTPUT_CHAIN" >&2
+  register: build_chain_result
+  changed_when: build_chain_result.rc == 0
+
 - name: Cleanup Temp Directory
   file:
     path: "{{ temp_dir.path }}"
