@@ -14,6 +14,16 @@
   changed_when: false
   run_once: true
 
+- name: Get existing master key from override.conf
+  include_role:
+    name: common
+    tasks_from: get_masterkey.yml
+  vars:
+    systemd_override_path: "{{ kafka_controller.systemd_override }}"
+  when: kafka_controller_secrets_protection_enabled|bool
+  tags:
+    - get_existing_masterkey_from_override_conf
+
 - name: Format Data Directory and Add Scram Credentials
   shell: |
     {{ binary_base_path }}/bin/kafka-storage format \
@@ -21,8 +31,10 @@
     {% if 'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms %}--add-scram 'SCRAM-SHA-512=[name={{ sasl_scram_users_final.admin.principal }},password={{ sasl_scram_users_final.admin.password }}]' {% endif %} \
     {% if 'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms %}--add-scram 'SCRAM-SHA-256=[name={{ sasl_scram256_users_final.admin.principal }},password={{ sasl_scram256_users_final.admin.password }}]' {% endif %} \
     --ignore-formatted
+  environment: "{{ {'CONFLUENT_SECURITY_MASTER_KEY': existing_masterkey} if kafka_controller_secrets_protection_enabled|bool and existing_masterkey | default('') != '' else {} }}"
   register: format_meta
   changed_when: format_meta.rc == 0
+  no_log: "{{mask_secrets|bool}}"
   vars:
     clusterid: "{{ uuid_key.stdout }}"
   when: formatted.rc == 1
