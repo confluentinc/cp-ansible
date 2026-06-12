@@ -1,0 +1,91 @@
+---
+### Two follow-on contracts on the cluster left running by converge.yml:
+###   1. CLI v2.x is rejected by common/config_validations.yml's assert.
+###   2. server.properties and override.conf are byte-stable across an
+###      idempotent re-converge. security.properties is excluded - the
+###      confluent CLI uses a fresh AES IV per encrypt invocation.
+
+- name: Assert CLI v2 is rejected by common/config_validations.yml
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - block:
+        - name: Include common/tasks/config_validations.yml with a deprecated CLI version
+          include_tasks: "{{ playbook_dir }}/../../roles/common/tasks/config_validations.yml"
+          vars:
+            confluent_cli_version: "2.9.0"
+            secrets_protection_enabled: true
+
+        - name: Should not reach here - assert above must have fired
+          fail:
+            msg: "CLI v2.9.0 did not trigger the CLI-version assert in common/config_validations.yml."
+      rescue:
+        - name: Confirm the failure mentions the CLI v3.0.0 requirement
+          assert:
+            that:
+              - ansible_failed_result is defined
+              - (ansible_failed_result.msg | default('') | string)
+                  is search('Confluent CLI v3.0.0 or higher')
+            fail_msg: "CLI-version assert fired but the message did not name the v3 requirement."
+
+- name: Snapshot post-converge config state before re-run
+  hosts: kafka_broker
+  gather_facts: false
+  vars:
+    snapshot_paths:
+      - /etc/kafka/server.properties
+      - /etc/systemd/system/confluent-server.service.d/override.conf
+  tasks:
+    - name: Compute SHA256 of each tracked file
+      stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+      loop: "{{ snapshot_paths }}"
+      register: pre_snapshots
+
+    - name: Persist pre-run checksums as a host fact
+      set_fact:
+        pre_run_checksums: "{{ dict(snapshot_paths | zip(pre_snapshots.results | map(attribute='stat.checksum') | list)) }}"
+
+- name: Re-run the platform playbook with the same regen=false vars
+  import_playbook: confluent.platform.all
+  vars:
+    regenerate_masterkey: false
+
+- name: Re-snapshot and assert no drift
+  hosts: kafka_broker
+  gather_facts: false
+  vars:
+    snapshot_paths:
+      - /etc/kafka/server.properties
+      - /etc/systemd/system/confluent-server.service.d/override.conf
+  tasks:
+    - name: Compute SHA256 of each tracked file post-re-run
+      stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+      loop: "{{ snapshot_paths }}"
+      register: post_snapshots
+
+    - name: Assert each tracked file is byte-identical across the re-run
+      assert:
+        that:
+          - item.stat.checksum == pre_run_checksums[item.item]
+        fail_msg: >-
+          {{ item.item }} changed on {{ inventory_hostname }} during an idempotent re-run.
+          pre={{ pre_run_checksums[item.item] }}, post={{ item.stat.checksum }}.
+      loop: "{{ post_snapshots.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Stat security.properties after the re-run
+      stat:
+        path: /var/ssl/private/kafka-broker-security.properties
+      register: post_secrets_file
+
+    - name: Assert security.properties was not lost or zeroed on the re-run
+      assert:
+        that:
+          - post_secrets_file.stat.exists
+          - post_secrets_file.stat.size > 0
+        fail_msg: "security.properties disappeared or was emptied on {{ inventory_hostname }}."
