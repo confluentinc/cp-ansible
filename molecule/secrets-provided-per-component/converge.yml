@@ -1,0 +1,198 @@
+---
+### Pass 1 installs the confluent CLI on the controller via cp-ansible's
+### own confluent_cli.yml task list, then generates a master key +
+### security.properties pair per component. Pass 2 regenerates the
+### fixtures (rotation) and re-converges. Each component's key must
+### change between passes.
+
+- name: Pass 1 - install confluent CLI on the ansible controller and generate fixtures
+  hosts: localhost
+  gather_facts: true
+  vars:
+    customer_components:
+      - kafka-broker
+      - schema-registry
+  tasks:
+    - name: Ensure customer_files directory exists
+      file:
+        path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files"
+        state: directory
+        mode: '755'
+
+    - name: Load cp-ansible variable defaults (confluent_cli_path etc.)
+      import_role:
+        name: variables
+
+    - name: Install confluent CLI on the controller via the cp-ansible role
+      block:
+        - include_role:
+            name: common
+            tasks_from: confluent_cli.yml
+      become: true
+
+    - name: Generate Pass 1 master key + security.properties per component
+      shell: |
+        set -euo pipefail
+        rm -f {{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/{{ item }}-security.properties
+        passphrase_file=$(mktemp)
+        trap 'rm -f "$passphrase_file"' EXIT
+        openssl rand -base64 24 > "$passphrase_file"
+        {{ confluent_cli_path }} secret master-key generate \
+          --local-secrets-file {{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/{{ item }}-security.properties \
+          --passphrase @"$passphrase_file" \
+          | awk '/Master Key/{print $5}'
+      args:
+        executable: /bin/bash
+      loop: "{{ customer_components }}"
+      register: pass1_keygen
+
+    - name: Stat Pass 1 fixture files
+      stat:
+        path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/{{ item }}-security.properties"
+      loop: "{{ customer_components }}"
+      register: pass1_fixture_stat
+
+    - name: Assert each Pass 1 fixture is present and non-empty
+      assert:
+        that:
+          - item.stat.exists
+          - item.stat.size > 0
+        fail_msg: "Pass 1 fixture for {{ item.item }} missing or empty after keygen."
+      loop: "{{ pass1_fixture_stat.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Save each component's Pass 1 master key to its fixture file
+      copy:
+        content: "{{ item.stdout | trim }}\n"
+        dest: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/{{ item.item }}-masterkey.txt"
+        mode: '0600'
+      loop: "{{ pass1_keygen.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+- name: Pass 1 - converge with initial per-component customer-provided values
+  import_playbook: confluent.platform.all
+
+- name: Pass 1 - capture each component's master key after initial converge
+  hosts: kafka_controller:kafka_broker:schema_registry
+  gather_facts: false
+  vars:
+    component_service_name:
+      kafka_controller: confluent-kcontroller
+      kafka_broker: confluent-server
+      schema_registry: confluent-schema-registry
+    primary_group: "{{ group_names | intersect(component_service_name.keys() | list) | first }}"
+  tasks:
+    - name: Read systemd override.conf for {{ primary_group }} (Pass 1)
+      slurp:
+        src: "/etc/systemd/system/{{ component_service_name[primary_group] }}.service.d/override.conf"
+      register: pass1_override
+
+    - name: Extract Pass 1 CONFLUENT_SECURITY_MASTER_KEY for {{ primary_group }}
+      set_fact:
+        pass1_masterkey: "{{ (pass1_override.content | b64decode).split('\n')
+          | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
+          | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Assert Pass 1 master key is non-empty on {{ inventory_hostname }}
+      assert:
+        that:
+          - pass1_masterkey | default('') | length > 0
+        fail_msg: "{{ inventory_hostname }} ({{ primary_group }}) has no CONFLUENT_SECURITY_MASTER_KEY after Pass 1."
+
+- name: Pass 2 - regenerate per-component customer fixtures (rotation)
+  hosts: localhost
+  gather_facts: false
+  vars:
+    customer_components:
+      - kafka-broker
+      - schema-registry
+  tasks:
+    # Each play resets role-defaults scope; re-import variables so
+    # confluent_cli_path is defined for the keygen shell below.
+    - name: Load cp-ansible variable defaults
+      import_role:
+        name: variables
+
+    - name: Regenerate Pass 2 master key + security.properties per component
+      shell: |
+        set -euo pipefail
+        rm -f {{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/{{ item }}-security.properties
+        passphrase_file=$(mktemp)
+        trap 'rm -f "$passphrase_file"' EXIT
+        openssl rand -base64 24 > "$passphrase_file"
+        {{ confluent_cli_path }} secret master-key generate \
+          --local-secrets-file {{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/{{ item }}-security.properties \
+          --passphrase @"$passphrase_file" \
+          | awk '/Master Key/{print $5}'
+      args:
+        executable: /bin/bash
+      loop: "{{ customer_components }}"
+      register: pass2_keygen
+
+    - name: Overwrite each component's master key fixture with the Pass 2 value
+      copy:
+        content: "{{ item.stdout | trim }}\n"
+        dest: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/customer_files/{{ item.item }}-masterkey.txt"
+        mode: '0600'
+      loop: "{{ pass2_keygen.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+- name: Pass 2 - re-pin provided components' secrets_protection_masterkey to the rotated lookup value
+  # The Pass 1 set_fact would otherwise shadow the rotated group_var lookup
+  # (set_fact > group_vars in Ansible precedence).
+  hosts: kafka_broker:schema_registry
+  gather_facts: false
+  vars:
+    fixture_basename:
+      kafka_broker: kafka-broker
+      schema_registry: schema-registry
+    primary_group: "{{ group_names | intersect(fixture_basename.keys() | list) | first }}"
+  tasks:
+    - name: Override masterkey fact on {{ primary_group }} so the rotated group_var lookup is used
+      set_fact:
+        secrets_protection_masterkey: "{{ lookup('file', lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') + '/customer_files/' + fixture_basename[primary_group] + '-masterkey.txt') | trim }}"
+
+- name: Pass 2 - clear kafka_controller masterkey fact so regenerate_masterkey actually regenerates
+  # The chained molecule playbook keeps Pass 1's fact alive into Pass 2;
+  # masterkey.yml's `not secrets_protection_masterkey` guard would then skip
+  # regeneration. Production starts each invocation with empty facts.
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - name: Reset secrets_protection_masterkey on the controller before the rotation pass
+      set_fact:
+        secrets_protection_masterkey: ""
+
+- name: Pass 2 - rotation converge
+  import_playbook: confluent.platform.all
+
+- name: Pass 2 - capture each component's master key after rotation
+  hosts: kafka_controller:kafka_broker:schema_registry
+  gather_facts: false
+  vars:
+    component_service_name:
+      kafka_controller: confluent-kcontroller
+      kafka_broker: confluent-server
+      schema_registry: confluent-schema-registry
+    primary_group: "{{ group_names | intersect(component_service_name.keys() | list) | first }}"
+  tasks:
+    - name: Read systemd override.conf for {{ primary_group }} (Pass 2)
+      slurp:
+        src: "/etc/systemd/system/{{ component_service_name[primary_group] }}.service.d/override.conf"
+      register: pass2_override
+
+    - name: Extract Pass 2 CONFLUENT_SECURITY_MASTER_KEY for {{ primary_group }}
+      set_fact:
+        pass2_masterkey: "{{ (pass2_override.content | b64decode).split('\n')
+          | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
+          | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+
+    - name: Assert master key rotated on {{ inventory_hostname }} ({{ primary_group }})
+      assert:
+        that:
+          - pass2_masterkey | default('') | length > 0
+          - pass2_masterkey != pass1_masterkey
+        fail_msg: "{{ inventory_hostname }} ({{ primary_group }}) did not rotate its master key."
