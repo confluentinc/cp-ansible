@@ -510,8 +510,11 @@
     - kraft_migration | bool
     - confluent_server_enabled | bool
     - kafka_controller_migration_preflight_enabled | bool
-  environment:
-    KAFKA_OPTS: "{{ kafka_controller_service_environment_overrides.KAFKA_OPTS | default('') }}"
+  # Secrets-protected server.properties needs the master key to decrypt encrypted
+  # configs when kafka-migration-check parses the controller config file.
+  environment: "{{ {'KAFKA_OPTS': kafka_controller_service_environment_overrides.KAFKA_OPTS | default('')}
+    | combine({'CONFLUENT_SECURITY_MASTER_KEY': existing_masterkey}
+    if kafka_controller_secrets_protection_enabled|bool and existing_masterkey | default('') != '' else {}) }}"
   vars:
     kafka_migration_check_path: "{% if installation_method == 'archive' %}{{ archive_destination_path }}/confluent-{{ confluent_package_version }}/bin/kafka-migration-check{% else %}kafka-migration-check{% endif %}"
 
