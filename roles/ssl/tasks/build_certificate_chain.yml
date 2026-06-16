@@ -42,9 +42,11 @@
     CERT_PATH='{{ cert_path }}'
     OUTPUT_CHAIN='{{ ssl_file_dir_final }}/{{ service_name }}.chain'
 
-    # 1. Split both input files into individual cert files.
-    awk 'BEGIN{n=0} /BEGIN CERTIFICATE/{n++} {print > ("'"$TEMP_DIR"'/cert."n".pem")}' "$CERT_PATH"
-    awk 'BEGIN{n=0} /BEGIN CERTIFICATE/{n++} {print > ("'"$TEMP_DIR"'/ca."n".pem")}'   "$CA_CERT_PATH"
+    # 1. Split both input files into individual cert files. The `n>0` gate
+    #    drops any leading lines (whitespace, comments, BOM) before the first
+    #    BEGIN CERTIFICATE marker so the glob does not pick up junk files.
+    awk 'BEGIN{n=0} /BEGIN CERTIFICATE/{n++} n>0 {print > ("'"$TEMP_DIR"'/cert."n".pem")}' "$CERT_PATH"
+    awk 'BEGIN{n=0} /BEGIN CERTIFICATE/{n++} n>0 {print > ("'"$TEMP_DIR"'/ca."n".pem")}'   "$CA_CERT_PATH"
 
     cert_files=( "$TEMP_DIR"/cert.*.pem )
     ca_files=(   "$TEMP_DIR"/ca.*.pem )
@@ -100,13 +102,16 @@
     fi
 
     # 5. Walk Issuer -> Subject across all available certs to emit the chain
-    #    in leaf -> intermediate(s) -> root order. Dedupe by Subject to avoid
-    #    duplicating a cert that appears in both input files.
+    #    in leaf -> intermediate(s) -> root order. Dedupe by Subject (one cert
+    #    per Subject DN) using a file as the seen-set: this is robust to
+    #    Subject DNs that happen to contain unusual characters which would
+    #    collide with an in-memory delimiter.
     pool=( "${cert_files[@]}" "${ca_files[@]}" )
 
+    SEEN="$TEMP_DIR/seen.txt"
+    : > "$SEEN"
     : > "$OUTPUT_CHAIN"
     current="$LEAF"
-    seen=""
     safety=0
     while [ -n "$current" ]; do
       safety=$((safety + 1))
@@ -118,21 +123,17 @@
       c_subj=$(subj_of "$current")
       c_iss=$(iss_of "$current")
 
-      # Dedupe by Subject (handles a cert appearing in both input files).
-      case "|$seen|" in
-        *"|$c_subj|"*) ;;
-        *)
-          cat "$current" >> "$OUTPUT_CHAIN"
-          seen="$seen|$c_subj"
-          ;;
-      esac
+      if ! grep -Fxq -- "$c_subj" "$SEEN"; then
+        cat "$current" >> "$OUTPUT_CHAIN"
+        printf '%s\n' "$c_subj" >> "$SEEN"
+      fi
 
-      # Self-signed -> we've reached an anchor, stop.
+      # Self-signed -> a trust anchor, stop walking.
       if [ "$c_subj" = "$c_iss" ]; then
         break
       fi
 
-      # Find parent in the pool (Subject == current's Issuer).
+      # Find parent in the pool (Subject == Issuer of current cert).
       parent=""
       for f in "${pool[@]}"; do
         [ "$f" = "$current" ] && continue
