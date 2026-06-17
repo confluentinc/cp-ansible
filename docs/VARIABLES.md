@@ -28,6 +28,86 @@ Default:  /tmp
 
 ***
 
+### support_bundle_output_path
+
+Output path for support bundles on Ansible controller
+
+Default:  "~/confluent-platform-support-bundles"
+
+***
+
+### support_bundle_cluster_name
+
+Cluster name to include in support bundle filename
+
+Default:  cp_cluster
+
+***
+
+### support_bundle_journalctl_lines
+
+Number of journalctl log lines to collect per service
+
+Default:  0
+
+***
+
+### support_bundle_base_path
+
+Base path on remote hosts for temporary diagnostic files during collection. Log and config files are fetched directly from their original locations.
+
+Default:  /tmp
+
+***
+
+### support_bundle_log_patterns
+
+File patterns to collect for logs, bounded defaults for reliability at scale
+
+Default: 
+
+***
+
+### support_bundle_log_max_count
+
+Maximum number of log files to collect per component, most recent first
+
+Default:  20
+
+***
+
+### support_bundle_sanitize_configs
+
+Whether to sanitize config files before collection. When true, passwords and sensitive values are redacted from config files.
+
+Default:  true
+
+***
+
+### support_bundle_skip_configs
+
+Whether to skip config file collection entirely. When true, only collect metadata about config files, not their contents.
+
+Default:  false
+
+***
+
+### support_bundle_auto_collect_on_failure
+
+Whether to automatically collect support bundle when playbooks fail. Default is false and must be explicitly enabled.
+
+Default:  true
+
+***
+
+### support_bundle_ansible_log_path
+
+Path to Ansible playbook execution log file on Ansible controller. When set, this log file will be included in the support bundle.
+
+Default:  ""
+
+***
+
 ### ansible_become_localhost
 
 Boolean to specify the become value for localhost, used when dealing with any file present on localhost/controller.
@@ -7340,9 +7420,9 @@ Default:  "{{ false if custom_java_path | length > 0 else true }}"
 
 ### redhat_java_package_name
 
-Java Package to install on RHEL/Centos hosts. Possible values java-17-openjdk or java-21-openjdk
+Java Package to install on RHEL/Centos hosts. Possible values java-17-openjdk, java-21-openjdk or java-25-openjdk
 
-Default:  java-21-openjdk
+Default:  java-25-openjdk
 
 ***
 
@@ -7356,17 +7436,17 @@ Default:  openjdk-17-jdk
 
 ### amazon_java_package_name
 
-Java Package to install on Amazon hosts. Possible values java-17-amazon-corretto or java-21-amazon-corretto
+Java Package to install on Amazon hosts. Possible values java-17-amazon-corretto, java-21-amazon-corretto or java-25-amazon-corretto
 
-Default:  java-21-amazon-corretto
+Default:  java-25-amazon-corretto
 
 ***
 
 ### ubuntu_java_package_name
 
-Java Package to install on Ubuntu hosts. Possible values openjdk-17-jdk, openjdk-21-jdk
+Java Package to install on Ubuntu hosts. Possible values openjdk-17-jdk, openjdk-21-jdk or openjdk-25-jdk
 
-Default:  openjdk-21-jdk
+Default:  openjdk-25-jdk
 
 ***
 
@@ -7648,6 +7728,14 @@ Default:
 
 ***
 
+### control_center_next_gen_health_check_delay
+
+Time in seconds to wait before starting Control Center Next Gen Health Checks.
+
+Default:  30
+
+***
+
 ### control_center_next_gen_health_check_retries
 
 Number of retries for Control Center Next Gen health checks
@@ -7739,6 +7827,14 @@ Default:
 Overrides to the Unit Section of Kafka Systemd File. This variable is a dictionary.
 
 Default: 
+
+***
+
+### kafka_broker_health_check_delay
+
+Time in seconds to wait before starting Kafka Health Checks.
+
+Default:  20
 
 ***
 
@@ -7970,6 +8066,14 @@ Default:
 
 ***
 
+### kafka_connect_health_check_delay
+
+Time in seconds to wait before starting Connect Health Checks.
+
+Default:  30
+
+***
+
 ### kafka_connect_health_check_retries
 
 Number of retries for Kafka Connect health checks
@@ -8077,6 +8181,14 @@ Default:
 Overrides to the Unit Section of Rest Proxy Systemd File. This variable is a dictionary.
 
 Default: 
+
+***
+
+### kafka_rest_health_check_delay
+
+Time in seconds to wait before starting Rest Proxy Health Checks.
+
+Default:  15
 
 ***
 
@@ -8190,6 +8302,14 @@ Default:
 
 ***
 
+### ksql_health_check_delay
+
+Time in seconds to wait before starting ksqlDB Health Checks.
+
+Default:  20
+
+***
+
 ### ksql_health_check_retries
 
 Number of retries for ksqlDB health checks
@@ -8292,6 +8412,14 @@ Default:
 
 ***
 
+### schema_registry_health_check_delay
+
+Time in seconds to wait before starting Schema Registry Health Checks.
+
+Default:  15
+
+***
+
 ### schema_registry_health_check_retries
 
 Number of retries for Schema Registry health checks
@@ -8367,6 +8495,14 @@ Default:
 Overrides to the Unit Section of Connect Systemd File. This variable is a dictionary.
 
 Default: 
+
+***
+
+### kafka_connect_replicator_health_check_delay
+
+Time in seconds to wait before starting Kafka Connect Replicator Health Checks.
+
+Default:  30
 
 ***
 
