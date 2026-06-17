@@ -1,0 +1,40 @@
+---
+### Shared task file for ANSIENG-5765 cert-chain Molecule scenarios.
+### Asserts that {{ chain_service_name }}.chain on the current host:
+###   - exists
+###   - contains exactly expected_chain_cert_count PEM blocks
+###   - is leaf-first (first cert's Subject CN matches the host's inventory name)
+
+- name: Read {{ chain_service_name }}.chain
+  slurp:
+    src: "/var/ssl/private/{{ chain_service_name }}.chain"
+  register: chain_slurp
+
+- name: Count certs in chain
+  set_fact:
+    chain_cert_count: "{{ (chain_slurp['content'] | b64decode).split('-----BEGIN CERTIFICATE-----') | length - 1 }}"
+
+- name: Assert chain has expected number of certs
+  assert:
+    that:
+      - chain_cert_count | int == expected_chain_cert_count | int
+    fail_msg: >-
+      Expected {{ expected_chain_cert_count }} certs in
+      /var/ssl/private/{{ chain_service_name }}.chain on {{ inventory_hostname }},
+      got {{ chain_cert_count }}.
+
+- name: Read first cert's Subject (should match the host's CN)
+  shell: |
+    set -o pipefail
+    awk '/BEGIN CERTIFICATE/,/END CERTIFICATE/' /var/ssl/private/{{ chain_service_name }}.chain \
+      | awk '/BEGIN CERTIFICATE/{n++} n==1' \
+      | openssl x509 -noout -subject
+  register: leaf_subject
+  changed_when: false
+
+- name: Assert leaf cert CN matches the host
+  assert:
+    that:
+      - "'CN = ' + inventory_hostname in leaf_subject.stdout or 'CN=' + inventory_hostname in leaf_subject.stdout"
+    fail_msg: >-
+      Leaf cert Subject "{{ leaf_subject.stdout }}" does not match inventory_hostname "{{ inventory_hostname }}".
