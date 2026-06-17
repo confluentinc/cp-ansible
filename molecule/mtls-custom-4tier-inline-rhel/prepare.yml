@@ -1,0 +1,51 @@
+---
+### prepare.yml shared shape across all four ANSIENG-5765 cert-chain scenarios.
+### Generates the case-specific cert layout via the scenario's create_certs.sh,
+### then syncs the output back to the molecule scenario directory so that
+### ssl_ca_cert_filepath / ssl_signed_cert_filepath / ssl_key_filepath can
+### lookup() into it.
+
+- name: Generate certs for the cert-chain scenario
+  hosts: kafka_broker[0]
+  gather_facts: true
+  tasks:
+    - name: Install OpenSSL and Rsync
+      package:
+        name:
+          - openssl
+          - rsync
+        state: present
+
+    - name: Create cert generation directory
+      file:
+        path: /var/ssl/private/generation
+        state: directory
+        mode: '755'
+
+    - name: Copy create_certs.sh to host
+      copy:
+        src: create_certs.sh
+        dest: /var/ssl/private/generation/create_certs.sh
+        mode: '755'
+
+    - name: Write hosts file for cert generation
+      copy:
+        content: "{{ groups['all'] | join('\n') }}\n"
+        dest: /var/ssl/private/generation/hosts
+        mode: '644'
+
+    - name: Run cert generation script
+      shell: ./create_certs.sh hosts
+      args:
+        chdir: /var/ssl/private/generation/
+
+    - name: Sync generated certs back to the molecule scenario directory
+      synchronize:
+        src: /var/ssl/private/generation/out/
+        dest: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files"
+        mode: pull
+
+    - name: Cleanup remote cert generation directory
+      file:
+        path: /var/ssl/private/generation
+        state: absent
