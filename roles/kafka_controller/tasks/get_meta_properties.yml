@@ -1,19 +1,4 @@
 ---
-- name: Check if Data Directories are Formatted
-  command: "{{ binary_base_path }}/bin/kafka-storage info -c {{ kafka_controller.config_file }}"
-  ignore_errors: true
-  failed_when: false
-  changed_when: false
-  register: formatted
-
-- name: Get ClusterId
-  command: "{{ binary_base_path }}/bin/kafka-storage random-uuid"
-  environment:
-    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
-  register: uuid_key
-  changed_when: false
-  run_once: true
-
 - name: Get existing master key from override.conf
   include_role:
     name: common
@@ -23,6 +8,23 @@
   when: kafka_controller_secrets_protection_enabled|bool
   tags:
     - get_existing_masterkey_from_override_conf
+
+- name: Check if Data Directories are Formatted
+  command: "{{ binary_base_path }}/bin/kafka-storage info -c {{ kafka_controller.config_file }}"
+  environment: "{{ {'CONFLUENT_SECURITY_MASTER_KEY': existing_masterkey} if kafka_controller_secrets_protection_enabled|bool and existing_masterkey | default('') != '' else {} }}"
+  ignore_errors: true
+  failed_when: false
+  changed_when: false
+  no_log: "{{mask_secrets|bool}}"
+  register: formatted
+
+- name: Get ClusterId
+  command: "{{ binary_base_path }}/bin/kafka-storage random-uuid"
+  environment:
+    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
+  register: uuid_key
+  changed_when: false
+  run_once: true
 
 - name: Format Data Directory and Add Scram Credentials
   shell: |
