@@ -17,7 +17,8 @@
     cmd: "{{ playbook_dir }}/../roles/common/files/sanitize_properties.py {{ hostvars['localhost']['bundle_path'] }}/ansible/inventory_1_raw.yml --type inventory"
     executable: "{{ ansible_python_interpreter }}"
   when: inventory_files_copied.results | default([]) | selectattr('changed', 'equalto', true) | list | length == 0
-  ignore_errors: true
+  # Collect-as-much-as-possible: never fail the bundle (see design)
+  ignore_errors: true  # noqa: ignore-errors
 
 - name: Rename sanitized inventory files
   shell: |
@@ -25,8 +26,12 @@
       if [ -f "$file" ]; then
         base=$(basename "$file" _raw.yml)
         mv "$file" "{{ hostvars['localhost']['bundle_path'] }}/ansible/${base}_sanitized.yml"
+        echo "renamed $file"
       fi
     done
   args:
     executable: "{{ shell_executable }}"
-  ignore_errors: true
+  register: rename_inventory_result
+  changed_when: "'renamed' in rename_inventory_result.stdout"
+  # Collect-as-much-as-possible: never fail the bundle (see design)
+  ignore_errors: true  # noqa: ignore-errors
