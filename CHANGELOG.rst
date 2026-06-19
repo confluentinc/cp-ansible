@@ -4,6 +4,24 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+v8.3.0
+======
+New features
+-------------
+- Support bundle generation for CP-Ansible playbook runs.
+
+Notable enhancements
+-------------
+- Introduced Confluent CLI v3.0.0 preflight assertion.
+- Support added for Java 25.
+
+Notable Fixes
+-------------
+- Removed redundant double restart for kafka broker and kafka controller.
+- Fixed the security.properties copy task so the file is correctly copied to the Ansible host.
+- Fixed kafka-storage format failures on KRaft clusters with secrets protection enabled - the master key is now passed to the format step via the CONFLUENT_SECURITY_MASTER_KEY environment variable.
+- Fixed custom certificate chain building for multi-tier and partial-chain PKIs - chains now assemble correctly for root + intermediate bundles and DoD-style partial chains.
+
 v8.2.0
 ======
 New features
