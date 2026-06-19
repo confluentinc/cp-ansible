@@ -2,30 +2,40 @@
 ### Asserts the customer-supplied master key reached every component
 ### (controller + all brokers) and that secrets protection took effect.
 
-- name: Capture controller master key for cross-component comparison
-  hosts: kafka_controller
+# The control plane is kafka_controller in KRaft mode and zookeeper in ZK mode;
+# capture the master key from whichever group this scenario was deployed with.
+- name: Capture control-plane master key for cross-component comparison
+  hosts: kafka_controller:zookeeper
   gather_facts: false
+  vars:
+    controlplane_service_name:
+      kafka_controller: confluent-kcontroller
+      zookeeper: confluent-zookeeper
+    primary_group: "{{ group_names | intersect(controlplane_service_name.keys() | list) | first }}"
   tasks:
-    - name: Read controller systemd override.conf
+    - name: Read control-plane systemd override.conf
       slurp:
-        src: /etc/systemd/system/confluent-kcontroller.service.d/override.conf
+        src: "/etc/systemd/system/{{ controlplane_service_name[primary_group] }}.service.d/override.conf"
       register: controller_override
 
-    - name: Extract CONFLUENT_SECURITY_MASTER_KEY from controller override.conf
+    - name: Extract CONFLUENT_SECURITY_MASTER_KEY from control-plane override.conf
       set_fact:
         controller_masterkey: "{{ (controller_override.content | b64decode).split('\n')
           | select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') | list | first
           | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
 
-    - name: Assert controller master key is non-empty
+    - name: Assert control-plane master key is non-empty
       assert:
         that:
           - controller_masterkey | default('') | length > 0
-        fail_msg: "Controller has no CONFLUENT_SECURITY_MASTER_KEY in override.conf."
+        fail_msg: "Control-plane host has no CONFLUENT_SECURITY_MASTER_KEY in override.conf."
 
 - name: Verify - kafka_broker secrets protection (customer-provided)
   hosts: kafka_broker
   gather_facts: false
+  vars:
+    # kafka_controller in KRaft mode, zookeeper in ZK mode
+    controlplane_host: "{{ (groups['kafka_controller'] | default([]) or groups['zookeeper'] | default([]))[0] }}"
   tasks:
     - name: security.properties deployed on broker
       stat:
@@ -72,12 +82,12 @@
           secrets_protection_masterkey provided must deliver the same key to
           every broker.
 
-    - name: Assert broker master key matches controller's (customer-provided value reached every component)
+    - name: Assert broker master key matches the control plane's (customer-provided value reached every component)
       assert:
         that:
-          - broker_masterkey == hostvars[groups['kafka_controller'][0]].controller_masterkey
+          - broker_masterkey == hostvars[controlplane_host].controller_masterkey
         fail_msg: >-
-          Broker {{ inventory_hostname }} master key differs from the controller's.
-          The customer-provided secrets_protection_masterkey must be applied
-          uniformly across controller and brokers; per-component regeneration
-          is a regression.
+          Broker {{ inventory_hostname }} master key differs from the control plane's
+          ({{ controlplane_host }}). The customer-provided secrets_protection_masterkey
+          must be applied uniformly across the control plane and brokers;
+          per-component regeneration is a regression.

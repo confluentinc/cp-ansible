@@ -3,11 +3,13 @@
 ### key, and that kafka_connect (per-component opt-out) runs plaintext.
 
 - name: Capture each secrets-enabled component's master key
-  hosts: kafka_controller:kafka_broker:schema_registry
+  hosts: kafka_controller:zookeeper:kafka_broker:schema_registry
   gather_facts: false
   vars:
+    # control plane is kafka_controller in KRaft mode, zookeeper in ZK mode
     component_service_name:
       kafka_controller: confluent-kcontroller
+      zookeeper: confluent-zookeeper
       kafka_broker: confluent-server
       schema_registry: confluent-schema-registry
     primary_group: "{{ group_names | intersect(component_service_name.keys() | list) | first }}"
@@ -101,9 +103,11 @@
   hosts: localhost
   gather_facts: false
   vars:
+    # control plane is kafka_controller in KRaft mode, zookeeper in ZK mode
+    controlplane_host: "{{ (groups['kafka_controller'] | default([]) or groups['zookeeper'] | default([]))[0] }}"
     component_hosts:
       kafka_broker: "{{ groups['kafka_broker'][0] }}"
-      kafka_controller: "{{ groups['kafka_controller'][0] }}"
+      controlplane: "{{ controlplane_host }}"
       schema_registry: "{{ groups['schema_registry'][0] }}"
     component_keys: >-
       {{
@@ -125,12 +129,12 @@
           - component_keys | length == component_keys | unique | length
         fail_msg: "Two or more components share the same master key."
 
-    - name: Assert kafka_controller key differs from every provided component's key
+    - name: Assert control-plane key differs from every provided component's key
       assert:
         that:
-          - hostvars[component_hosts.kafka_controller].component_masterkey
+          - hostvars[component_hosts.controlplane].component_masterkey
             != hostvars[component_hosts[item]].component_masterkey
-        fail_msg: "Controller key matches {{ item }}'s."
+        fail_msg: "Control-plane key matches {{ item }}'s."
       loop:
         - kafka_broker
         - schema_registry
