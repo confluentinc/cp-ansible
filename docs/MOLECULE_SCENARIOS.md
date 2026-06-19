@@ -634,6 +634,44 @@ Validates that FIPS is in use in OpenSSL.
 
 ***
 
+### molecule/mtls-java21-ubuntu
+
+#### Scenario mtls-java21-ubuntu test's the following:
+
+Installation of Confluent Platform on Ubuntu2404.
+
+MTLS enabled.
+
+Java 21.
+
+#### Scenario mtls-java21-ubuntu verify test's the following:
+
+Validates that protocol is set to SSl across all components.
+
+***
+
+### molecule/mtls-java25-rhel-fips
+
+#### Scenario mtls-java25-rhel-fips test's the following:
+
+Installation of Confluent Platform on Alma Linux 9.
+
+MTLS enabled.
+
+Java 25.
+
+FIPS enabled
+
+#### Scenario mtls-java25-rhel-fips verify test's the following:
+
+Validates that Java 25 is in use.
+
+Validates that FIPS security is enabled on the Brokers.
+
+Validates that FIPS is in use in OpenSSL.
+
+***
+
 ### molecule/mtls-ubuntu
 
 #### Scenario mtls-ubuntu test's the following:
@@ -851,6 +889,52 @@ Validates that Service Description has been overridden.
 Validates that SASL Plaintext protocol is set across components.
 
 Validates that Connectors are present on Kafka Connect.
+
+***
+
+### molecule/oauth-rbac-kafka-connect-replicator-kerberos-mtls-custom-al2023-java25
+
+#### Scenario oauth-rbac-kafka-connect-replicator-kerberos-mtls-custom-al2023-java25 test's the following:
+
+Installation of Confluent Platform on Amazon Linux 2023 with RBAC and Confluent Replicator.
+
+RBAC enabled.
+
+RBAC additional system admin user.
+
+TLS custom certificates.
+
+Java 25.
+
+Kafka Broker Customer listener.
+
+Kafka clusters are using names for cluster registry.
+
+Kerberos enabled on cluster1 (MDS), no TLS.
+
+MTLS enabled on cluster2.
+
+External MDS enabled on cluster2.
+
+Kafka Connect Replicator with OAUTH for Authorization to Cluster1 (MDS).
+
+Kafka Connect Replicator Consumes with kerberos from Cluster1 (MDS).
+
+Kafka Connect Replicator Produces to Cluster2 using MTLS.
+
+Kafka Connect Replicator uses default values for Monitoring Interceptors.
+
+#### Scenario oauth-rbac-kafka-connect-replicator-kerberos-mtls-custom-al2023-java25 verify test's the following:
+
+Validates that the Console Consumer can consume data from cluster2, proving that data has been replicated from cluster1 (MDS).
+
+Validates that Replicator is using MTLS with RBAC to Produce data to Cluster2.
+
+Validates that Replicator is using Kerberos with RBAC to Consume from Cluster1 (MDS).
+
+Validates that client ID's are set correctly on Replicator.
+
+Validates that Replicator logging path is valid.
 
 ***
 
@@ -1102,7 +1186,7 @@ Validates that each component has a unique auth user.
 
 Validates that Rest Proxy has correct auth property.
 
-Validates that Java 21 is in Use
+Validates that Java 25 is in Use
 
 ***
 
@@ -1597,6 +1681,80 @@ SCRAM enabled.
 #### Scenario scram-rhel verify test's the following:
 
 Validates that SCRAM is enabled on all components except kafka controller.
+
+***
+
+### molecule/secrets-provided-per-component
+
+#### Scenario secrets-provided-per-component test's the following:
+
+Each CP component group gets its own customer-provided master key +
+
+security.properties pair via inventory group_vars (kafka_broker,
+
+schema_registry). kafka_connect has secrets protection disabled to cover
+
+the per-component opt-out. kafka_controller has no customer pair and
+
+regenerates its own key. Verify asserts every component has a distinct key.
+
+#### Scenario secrets-provided-per-component verify test's the following:
+
+Asserts each secrets-enabled component carries its own distinct master
+
+key, and that kafka_connect (per-component opt-out) runs plaintext.
+
+***
+
+### molecule/secrets-upgrade-auto
+
+#### Scenario secrets-upgrade-auto test's the following:
+
+Auto-Generated Master Key Test.
+
+First converge runs with regenerate_masterkey: true to auto-generate a master key.
+
+Second converge runs with regenerate_masterkey: false to confirm the key persists
+
+and that encrypted properties remain valid (regression coverage for ANSIENG-5857
+
+/ ANSIENG-5784: security.properties was not deployed on subsequent runs when
+
+regenerate_masterkey was false, and properties drifted on serial re-runs).
+
+#### Scenario secrets-upgrade-auto verify test's the following:
+
+Asserts every broker carries the same non-empty master key
+
+and that secrets protection took effect.
+
+***
+
+### molecule/secrets-upgrade-provided
+
+#### Scenario secrets-upgrade-provided test's the following:
+
+Customer-Provided Master Key Test.
+
+Simulates the workflow where a customer generates the master key and
+
+security.properties out-of-band and supplies them to cp-ansible via
+
+`secrets_protection_masterkey` and `secrets_protection_security_file`
+
+with `regenerate_masterkey: false`. The converge.yml stages bootstrap
+
+artifacts at a custom path so we can prove the explicit path is honored
+
+(regression coverage for ANSIENG-5857: the security.properties copy was
+
+being skipped when regenerate_masterkey was false on a fresh host).
+
+#### Scenario secrets-upgrade-provided verify test's the following:
+
+Asserts the customer-supplied master key reached every component
+
+(controller + all brokers) and that secrets protection took effect.
 
 ***
 
