@@ -19,6 +19,8 @@ Notable Fixes
 -------------
 - Removed redundant double restart for kafka broker and kafka controller.
 - Fixed the security.properties copy task so the file is correctly copied to the Ansible host.
+- Fixed kafka-storage format failures on KRaft clusters with secrets protection enabled - the master key is now passed to the format step via the CONFLUENT_SECURITY_MASTER_KEY environment variable.
+- Fixed custom certificate chain building for multi-tier and partial-chain PKIs - chains now assemble correctly for root + intermediate bundles and DoD-style partial chains.
 
 v8.2.0
 ======
