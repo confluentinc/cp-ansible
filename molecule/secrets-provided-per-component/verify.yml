@@ -2,6 +2,9 @@
 ### Asserts each secrets-enabled component carries its own distinct master
 ### key, and that kafka_connect (per-component opt-out) runs plaintext.
 
+# ZooKeeper is intentionally absent: it gets no CONFLUENT_SECURITY_MASTER_KEY,
+# so the only secrets-enabled components are kafka_controller (KRaft only),
+# kafka_broker and schema_registry.
 - name: Capture each secrets-enabled component's master key
   hosts: kafka_controller:kafka_broker:schema_registry
   gather_facts: false
@@ -101,10 +104,15 @@
   hosts: localhost
   gather_facts: false
   vars:
-    component_hosts:
-      kafka_broker: "{{ groups['kafka_broker'][0] }}"
-      kafka_controller: "{{ groups['kafka_controller'][0] }}"
-      schema_registry: "{{ groups['schema_registry'][0] }}"
+    # kafka_controller exists (and carries a master key) only in KRaft mode;
+    # in ZK mode the only keyed components are kafka_broker and schema_registry.
+    component_hosts: >-
+      {{
+        {'kafka_broker': groups['kafka_broker'][0],
+         'schema_registry': groups['schema_registry'][0]}
+        | combine({'kafka_controller': groups['kafka_controller'][0]}
+                  if (groups['kafka_controller'] | default([]) | length > 0) else {})
+      }}
     component_keys: >-
       {{
         component_hosts | dict2items
@@ -125,6 +133,7 @@
           - component_keys | length == component_keys | unique | length
         fail_msg: "Two or more components share the same master key."
 
+    # KRaft only: no kafka_controller (hence no controller key) in ZK mode.
     - name: Assert kafka_controller key differs from every provided component's key
       assert:
         that:
@@ -134,3 +143,4 @@
       loop:
         - kafka_broker
         - schema_registry
+      when: groups['kafka_controller'] | default([]) | length > 0
