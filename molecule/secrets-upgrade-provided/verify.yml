@@ -2,6 +2,10 @@
 ### Asserts the customer-supplied master key reached every component
 ### (controller + all brokers) and that secrets protection took effect.
 
+# KRaft only: the kafka_controller carries CONFLUENT_SECURITY_MASTER_KEY in its
+# systemd override. In ZK mode this group is empty and the play no-ops -
+# ZooKeeper deliberately gets no master key, so there is no controller key to
+# compare against (see the guarded assertion in the broker play below).
 - name: Capture controller master key for cross-component comparison
   hosts: kafka_controller
   gather_facts: false
@@ -72,6 +76,8 @@
           secrets_protection_masterkey provided must deliver the same key to
           every broker.
 
+    # KRaft only: ZooKeeper carries no master key, so there is nothing to
+    # compare against in ZK mode (skipped when the kafka_controller group is empty).
     - name: Assert broker master key matches controller's (customer-provided value reached every component)
       assert:
         that:
@@ -81,3 +87,4 @@
           The customer-provided secrets_protection_masterkey must be applied
           uniformly across controller and brokers; per-component regeneration
           is a regression.
+      when: groups['kafka_controller'] | default([]) | length > 0
