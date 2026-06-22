@@ -50,7 +50,7 @@ sem-version python $PYTHON_VERSION
 
 pip install wheel
 pip install pylint
-pip install "ansible==$ANSIBLE_VERSION"
+pip install "ansible==$ANSIBLE_VERSION.*"
 pip install yamllint
 pip install galaxy-importer
 pip install setuptools
