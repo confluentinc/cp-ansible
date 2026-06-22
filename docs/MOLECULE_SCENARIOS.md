@@ -340,6 +340,68 @@ Validates that Connector is running
 
 ***
 
+### molecule/kraft-rollback-to-hybrid
+
+#### Scenario kraft-rollback-to-hybrid test's the following:
+
+KRaft → ZooKeeper rollback e2e (ANSIENG-5796) — Scenario 2.
+
+PURE_DUAL_WRITE → hybrid (partial rollback; controllers stay active).
+
+
+
+RBAC + mTLS (mirrors rbac-mtls-rhel8), trimmed to the rollback component
+
+set: one OpenLDAP, one ZooKeeper, one broker (also hosts MDS), one KRaft
+
+controller held in kafka_controller_migration until converge promotes it.
+
+NOTE: ssl_enabled puts ZooKeeper on TLS (port 2182) — the rollback's ZK
+
+cleanup is TLS-aware for this reason.
+
+#### Scenario kraft-rollback-to-hybrid verify test's the following:
+
+Verifies Scenario 2: partial rollback landed the cluster back in hybrid mode.
+
+- Brokers: hybrid (migration flag present, no process.roles), ZK restored.
+
+- Controllers: still active (only the brokers were reverted).
+
+***
+
+### molecule/kraft-rollback-to-zk
+
+#### Scenario kraft-rollback-to-zk test's the following:
+
+KRaft → ZooKeeper rollback e2e (ANSIENG-5796) — Scenario 1.
+
+HYBRID_DUAL_WRITE → premigration (full rollback to pure ZooKeeper).
+
+
+
+RBAC + mTLS (mirrors rbac-mtls-rhel8), trimmed to the rollback component
+
+set: one OpenLDAP, one ZooKeeper, one broker (also hosts MDS), one KRaft
+
+controller held in kafka_controller_migration until converge promotes it.
+
+NOTE: ssl_enabled puts ZooKeeper on TLS (port 2182) — the rollback's ZK
+
+cleanup is TLS-aware for this reason.
+
+#### Scenario kraft-rollback-to-zk verify test's the following:
+
+Verifies Scenario 1: full rollback landed the cluster in pure ZooKeeper.
+
+- Brokers: KRaft/migration properties gone, zookeeper.connect present.
+
+- Controllers: service stopped, __cluster_metadata removed.
+
+- ZooKeeper: /migration znode removed.
+
+***
+
 ### molecule/ksql-scale-up
 
 #### Scenario ksql-scale-up test's the following:
@@ -531,6 +593,164 @@ RBAC over mTLS enabled.
 File based login to C3 using overrides.
 
 #### Scenario mini-setup-partial-mtls2 verify test's the following:
+
+***
+
+### molecule/mtls-custom-2tier-rhel
+
+#### Scenario mtls-custom-2tier-rhel test's the following:
+
+ANSIENG-5765 case 1: 2-tier PKI.
+
+CA bundle = Root only. Cert file = leaf only.
+
+Expected chain: leaf -> root (2 certs).
+
+#### Scenario mtls-custom-2tier-rhel verify test's the following:
+
+Verifies the cert chain that build_certificate_chain.yml produced.
+
+
+
+The cluster having come up at all (converge succeeded) is itself end-to-end
+
+proof that the chain is correct: mTLS handshakes between broker, controller,
+
+and schema_registry would have failed otherwise. These checks add an extra
+
+assertion that the chain file has the expected number of certs in
+
+leaf-first order for this scenario's input layout.
+
+***
+
+### molecule/mtls-custom-4tier-bundle-rhel
+
+#### Scenario mtls-custom-4tier-bundle-rhel test's the following:
+
+ANSIENG-5765 case 7: 4-tier PKI, all CAs in the bundle.
+
+CA bundle = Root + Int1 + Int2. Cert file = leaf only (no inline intermediates).
+
+This is the hardest enterprise PKI layout: was broken in the per-CA-loop
+
+implementation; the fix gives openssl the whole bundle in one verify call.
+
+Expected chain: leaf -> int2 -> int1 -> root (4 certs).
+
+#### Scenario mtls-custom-4tier-bundle-rhel verify test's the following:
+
+Verifies the cert chain that build_certificate_chain.yml produced.
+
+
+
+The cluster having come up at all (converge succeeded) is itself end-to-end
+
+proof that the chain is correct: mTLS handshakes between broker, controller,
+
+and schema_registry would have failed otherwise. These checks add an extra
+
+assertion that the chain file has the expected number of certs in
+
+leaf-first order for this scenario's input layout.
+
+***
+
+### molecule/mtls-custom-4tier-bundle-ubuntu
+
+#### Scenario mtls-custom-4tier-bundle-ubuntu test's the following:
+
+ANSIENG-5765 case 7 on Debian.
+
+Same cert layout as mtls-custom-4tier-bundle-rhel (Root + Int1 + Int2 in the
+
+bundle, leaf-only cert file) but exercises the chain task on a Debian host
+
+to confirm the shell logic is OS-agnostic.
+
+#### Scenario mtls-custom-4tier-bundle-ubuntu verify test's the following:
+
+Verifies the cert chain that build_certificate_chain.yml produced.
+
+
+
+The cluster having come up at all (converge succeeded) is itself end-to-end
+
+proof that the chain is correct: mTLS handshakes between broker, controller,
+
+and schema_registry would have failed otherwise. These checks add an extra
+
+assertion that the chain file has the expected number of certs in
+
+leaf-first order for this scenario's input layout.
+
+***
+
+### molecule/mtls-custom-4tier-inline-rhel
+
+#### Scenario mtls-custom-4tier-inline-rhel test's the following:
+
+ANSIENG-5765 case 9: 4-tier PKI, full chain inlined in the cert file.
+
+CA bundle = Root only. Cert file = leaf + Int2 + Int1 (the user pasted the
+
+whole chain into one file). The fix detects the leaf via topology rather
+
+than by "last cert" and walks the issuer/subject relationships to emit the
+
+correct order.
+
+Expected chain: leaf -> int2 -> int1 -> root (4 certs).
+
+#### Scenario mtls-custom-4tier-inline-rhel verify test's the following:
+
+Verifies the cert chain that build_certificate_chain.yml produced.
+
+
+
+The cluster having come up at all (converge succeeded) is itself end-to-end
+
+proof that the chain is correct: mTLS handshakes between broker, controller,
+
+and schema_registry would have failed otherwise. These checks add an extra
+
+assertion that the chain file has the expected number of certs in
+
+leaf-first order for this scenario's input layout.
+
+***
+
+### molecule/mtls-custom-partial-rhel
+
+#### Scenario mtls-custom-partial-rhel test's the following:
+
+ANSIENG-5765 case 10: 4-tier PKI, partial chain (no root in the bundle).
+
+CA bundle = Int1 + Int2 only (root deliberately omitted, mirroring DoD-style
+
+partial chains). Cert file = leaf only.
+
+The fix's `-partial_chain` flag is the key piece: openssl is allowed to
+
+stop at a trusted intermediate instead of insisting on a self-signed root.
+
+Expected chain: leaf -> int2 -> int1 (3 certs; walk stops at top intermediate).
+
+#### Scenario mtls-custom-partial-rhel verify test's the following:
+
+Verifies the cert chain that build_certificate_chain.yml produced.
+
+
+
+The cluster having come up at all (converge succeeded) is itself end-to-end
+
+proof that the chain is correct: mTLS handshakes between broker, controller,
+
+and schema_registry would have failed otherwise. These checks add an extra
+
+assertion that the chain file has the expected number of certs in
+
+leaf-first order for this scenario's input layout.
 
 ***
 
@@ -1553,6 +1773,80 @@ SCRAM enabled.
 #### Scenario scram-rhel verify test's the following:
 
 Validates that SCRAM is enabled on all components except kafka controller.
+
+***
+
+### molecule/secrets-provided-per-component
+
+#### Scenario secrets-provided-per-component test's the following:
+
+Each CP component group gets its own customer-provided master key +
+
+security.properties pair via inventory group_vars (kafka_broker,
+
+schema_registry). kafka_connect has secrets protection disabled to cover
+
+the per-component opt-out. kafka_controller has no customer pair and
+
+regenerates its own key. Verify asserts every component has a distinct key.
+
+#### Scenario secrets-provided-per-component verify test's the following:
+
+Asserts each secrets-enabled component carries its own distinct master
+
+key, and that kafka_connect (per-component opt-out) runs plaintext.
+
+***
+
+### molecule/secrets-upgrade-auto
+
+#### Scenario secrets-upgrade-auto test's the following:
+
+Auto-Generated Master Key Test.
+
+First converge runs with regenerate_masterkey: true to auto-generate a master key.
+
+Second converge runs with regenerate_masterkey: false to confirm the key persists
+
+and that encrypted properties remain valid (regression coverage for ANSIENG-5857
+
+/ ANSIENG-5784: security.properties was not deployed on subsequent runs when
+
+regenerate_masterkey was false, and properties drifted on serial re-runs).
+
+#### Scenario secrets-upgrade-auto verify test's the following:
+
+Asserts every broker carries the same non-empty master key
+
+and that secrets protection took effect.
+
+***
+
+### molecule/secrets-upgrade-provided
+
+#### Scenario secrets-upgrade-provided test's the following:
+
+Customer-Provided Master Key Test.
+
+Simulates the workflow where a customer generates the master key and
+
+security.properties out-of-band and supplies them to cp-ansible via
+
+`secrets_protection_masterkey` and `secrets_protection_security_file`
+
+with `regenerate_masterkey: false`. The converge.yml stages bootstrap
+
+artifacts at a custom path so we can prove the explicit path is honored
+
+(regression coverage for ANSIENG-5857: the security.properties copy was
+
+being skipped when regenerate_masterkey was false on a fresh host).
+
+#### Scenario secrets-upgrade-provided verify test's the following:
+
+Asserts the customer-supplied master key reached every component
+
+(controller + all brokers) and that secrets protection took effect.
 
 ***
 
