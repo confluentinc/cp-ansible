@@ -4,6 +4,28 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+7.8.9
+======
+New features
+-------------
+- Added KRaft → ZooKeeper migration rollback.
+- Added a migration preflight utility: the kafka-migration-check preflight-check now runs on the KRaft controller during ZK → KRaft migration to validate readiness before proceeding.
+
+Notable enhancements
+-------------
+- Added validation of CP package availability before installation, failing early if the requested package version is unavailable (https://github.com/confluentinc/cp-ansible/pull/2493).
+- all.yml playbook now fails fast when the kraft_migration flag is enabled, directing users to the dedicated ZKtoKraftMigration playbook.
+- The ZK → KRaft migration now validates cluster health before starting the migration.
+- After the KRaft controller comes up, the migration now asserts that the cluster ZkMigrationState is in the Pre-Migration state before proceeding.
+
+Notable fixes
+-------------
+- For the list of security and vulnerability issues fixed in this release, see https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+- Removed redundant double restart for kafka broker and kafka controller.
+- Fixed the security.properties copy task so the file is correctly copied to the Ansible host.
+- Fixed kafka-storage format failures on KRaft clusters with secrets protection enabled - the master key is now passed to the format step via the CONFLUENT_SECURITY_MASTER_KEY environment variable.
+- Fixed custom certificate chain building for multi-tier and partial-chain PKIs - chains now assemble correctly for root + intermediate bundles and DoD-style partial chains.
+
 7.8.8
 ======
 Notable fixes
