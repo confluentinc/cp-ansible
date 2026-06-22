@@ -6,6 +6,14 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 v7.5.15
 ======
+New features
+-------------
+- Support bundle generation for CP-Ansible playbook runs.
+
+Notable enhancements
+-------------
+- Introduced Confluent CLI v3.0.0 preflight assertion.
+
 Notable fixes
 -------------
 - For the list of security and vulnerability issues fixed in this release, see https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
