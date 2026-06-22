@@ -10,6 +10,7 @@ New features
 -------------
 - Added KRaft → ZooKeeper migration rollback.
 - Added a migration preflight utility: the kafka-migration-check preflight-check now runs on the KRaft controller during ZK → KRaft migration to validate readiness before proceeding.
+- Support bundle generation for CP-Ansible playbook runs.
 
 Notable enhancements
 -------------
@@ -17,6 +18,7 @@ Notable enhancements
 - all.yml playbook now fails fast when the kraft_migration flag is enabled, directing users to the dedicated ZKtoKraftMigration playbook.
 - The ZK → KRaft migration now validates cluster health before starting the migration.
 - After the KRaft controller comes up, the migration now asserts that the cluster ZkMigrationState is in the Pre-Migration state before proceeding.
+- Introduced Confluent CLI v3.0.0 preflight assertion.
 
 Notable fixes
 -------------
