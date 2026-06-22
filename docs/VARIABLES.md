@@ -28,6 +28,86 @@ Default:  /tmp
 
 ***
 
+### support_bundle_output_path
+
+Output path for support bundles on Ansible controller
+
+Default:  "~/confluent-platform-support-bundles"
+
+***
+
+### support_bundle_cluster_name
+
+Cluster name to include in support bundle filename
+
+Default:  cp_cluster
+
+***
+
+### support_bundle_journalctl_lines
+
+Number of journalctl log lines to collect per service
+
+Default:  0
+
+***
+
+### support_bundle_base_path
+
+Base path on remote hosts for temporary diagnostic files during collection. Log and config files are fetched directly from their original locations.
+
+Default:  /tmp
+
+***
+
+### support_bundle_log_patterns
+
+File patterns to collect for logs, bounded defaults for reliability at scale
+
+Default: 
+
+***
+
+### support_bundle_log_max_count
+
+Maximum number of log files to collect per component, most recent first
+
+Default:  20
+
+***
+
+### support_bundle_sanitize_configs
+
+Whether to sanitize config files before collection. When true, passwords and sensitive values are redacted from config files.
+
+Default:  true
+
+***
+
+### support_bundle_skip_configs
+
+Whether to skip config file collection entirely. When true, only collect metadata about config files, not their contents.
+
+Default:  false
+
+***
+
+### support_bundle_auto_collect_on_failure
+
+Whether to automatically collect support bundle when playbooks fail. Default is false and must be explicitly enabled.
+
+Default:  true
+
+***
+
+### support_bundle_ansible_log_path
+
+Path to Ansible playbook execution log file on Ansible controller. When set, this log file will be included in the support bundle.
+
+Default:  ""
+
+***
+
 ### ansible_become_localhost
 
 Boolean to specify the become value for localhost, used when dealing with any file present on localhost/controller.
@@ -6960,7 +7040,7 @@ Default:  ""
 
 Version of Confluent USM Agent to install
 
-Default:  1.0.0
+Default:  1.2.0
 
 ***
 
