@@ -10,7 +10,7 @@
         name: confluent.test
         tasks_from: check_subproperty.yml
       vars:
-        file_path: /etc/controller/server.properties
+        file_path: /opt/confluent/etc/controller/server.properties
         property: sasl.enabled.mechanisms
         expected_values:
           - SCRAM-SHA-512
@@ -20,7 +20,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/controller/server.properties
+        file_path: /opt/confluent/etc/controller/server.properties
         property: sasl.mechanism.controller.protocol
         expected_value: GSSAPI
 
@@ -28,6 +28,9 @@
   hosts: kafka_broker
   gather_facts: false
   tasks:
+    - import_role:
+        name: variables
+
     - set_fact:
         kraft_mode: "{{ ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) }}"
 
@@ -35,7 +38,7 @@
         name: confluent.test
         tasks_from: check_subproperty.yml
       vars:
-        file_path: /etc/kafka/server.properties
+        file_path: /opt/confluent/etc/kafka/server.properties
         property: listener.name.internal.sasl.enabled.mechanisms
         expected_values:
           - SCRAM-SHA-512
@@ -45,7 +48,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka/server.properties
+        file_path: /opt/confluent/etc/kafka/server.properties
         property: sasl.mechanism.controller.protocol
         expected_value: GSSAPI
       when: kraft_mode|bool
@@ -54,7 +57,7 @@
         name: confluent.test
         tasks_from: check_subproperty.yml
       vars:
-        file_path: /etc/kafka/server.properties
+        file_path: /opt/confluent/etc/kafka/server.properties
         property: sasl.enabled.mechanisms
         expected_values:
           - SCRAM-SHA-512
@@ -66,7 +69,7 @@
         name: confluent.test
         tasks_from: check_subproperty.yml
       vars:
-        file_path: /etc/kafka/server.properties
+        file_path: /opt/confluent/etc/kafka/server.properties
         property: sasl.enabled.mechanisms
         expected_values:
           - SCRAM-SHA-512
@@ -78,7 +81,7 @@
         name: confluent.test
         tasks_from: check_subproperty.yml
       vars:
-        file_path: /etc/kafka/server.properties
+        file_path: /opt/confluent/etc/kafka/server.properties
         property: listener.name.controller.sasl.enabled.mechanisms
         expected_values:
           - SCRAM-SHA-512
@@ -90,14 +93,14 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka/server.properties
+        file_path: /opt/confluent/etc/kafka/server.properties
         property: listener.name.controller.sasl.enabled.mechanisms
         expected_value: GSSAPI
       when: kraft_mode|bool
 
     - name: Create client_scram.properties file with SCRAM configuration
       copy:
-        dest: /etc/kafka/client_scram.properties
+        dest: /opt/confluent/etc/kafka/client_scram.properties
         content: |
           sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="admin" password="admin-secret";
           sasl.mechanism=SCRAM-SHA-256
@@ -107,8 +110,8 @@
         mode: '0644'
 
     - name: Create Kafka topic
-      shell: kafka-topics --create --topic test-topic \
-        --bootstrap-server kafka-broker1:9092 --command-config /etc/kafka/client_scram.properties \
+      shell: {{ binary_base_path }}/bin/kafka-topics --create --topic test-topic \
+        --bootstrap-server kafka-broker1:9092 --command-config /opt/confluent/etc/kafka/client_scram.properties \
         --replication-factor 1 --partitions 6
       run_once: true
       register: output
@@ -118,14 +121,14 @@
 
     - name: Create Topic Data
       shell: |
-        seq 10 | kafka-console-producer --topic test-topic \
-        --bootstrap-server kafka-broker1:9092 --producer.config /etc/kafka/client_scram.properties
+        seq 10 | {{ binary_base_path }}/bin/kafka-console-producer --topic test-topic \
+        --bootstrap-server kafka-broker1:9092 --producer.config /opt/confluent/etc/kafka/client_scram.properties
       run_once: true
 
     - name: Read Topic Data
-      shell: kafka-console-consumer --topic test-topic \
+      shell: {{ binary_base_path }}/bin/kafka-console-consumer --topic test-topic \
         --bootstrap-server kafka-broker1:9092 --timeout-ms 10000 \
-        --from-beginning --consumer.config /etc/kafka/client_scram.properties
+        --from-beginning --consumer.config /opt/confluent/etc/kafka/client_scram.properties
       run_once: true
       register: consumer_output
       failed_when:
@@ -142,7 +145,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/schema-registry/schema-registry.properties
+        file_path: /opt/confluent/etc/schema-registry/schema-registry.properties
         property: kafkastore.security.protocol
         expected_value: SASL_PLAINTEXT
 
@@ -154,7 +157,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka-rest/kafka-rest.properties
+        file_path: /opt/confluent/etc/kafka-rest/kafka-rest.properties
         property: client.security.protocol
         expected_value: SASL_PLAINTEXT
 
@@ -166,7 +169,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka/connect-distributed.properties
+        file_path: /opt/confluent/etc/kafka/connect-distributed.properties
         property: security.protocol
         expected_value: SASL_PLAINTEXT
 
@@ -178,7 +181,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/ksqldb/ksql-server.properties
+        file_path: /opt/confluent/etc/ksqldb/ksql-server.properties
         property: security.protocol
         expected_value: SASL_PLAINTEXT
 
@@ -190,7 +193,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
+        file_path: /opt/confluent/etc/confluent-control-center/control-center-production.properties
         property: confluent.controlcenter.streams.security.protocol
         expected_value: SASL_PLAINTEXT
 
@@ -202,7 +205,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
+        file_path: /opt/confluent/etc/confluent-control-center/control-center-production.properties
         property: confluent.controlcenter.streams.security.protocol
         expected_value: SASL_PLAINTEXT
 

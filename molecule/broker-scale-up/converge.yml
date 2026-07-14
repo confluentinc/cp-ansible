@@ -3,6 +3,9 @@
   hosts: kafka-broker3
   gather_facts: false
   tasks:
+    - import_role:
+        name: variables
+
     - set_fact:
         kraft_mode: "{{ ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) }}"
 
@@ -29,7 +32,7 @@
 
     - name: Run zookeeper shell to get broker ID's
       shell: >
-          /usr/bin/zookeeper-shell zookeeper1:2182  -zk-tls-config-file  /etc/kafka/zookeeper-tls-client.properties ls /brokers/ids
+          {{ binary_base_path }}/bin/zookeeper-shell zookeeper1:2182  -zk-tls-config-file  /opt/confluent/etc/kafka/zookeeper-tls-client.properties ls /brokers/ids
       register: zk_output
       when: not kraft_mode|bool
 
@@ -42,7 +45,7 @@
 
     - name: Get number of brokers in quorum
       shell: >
-          kafka-metadata-quorum --command-config /etc/kafka/client.properties --bootstrap-server kafka-broker1:9091 describe --status | grep -oP '(?<=CurrentObservers:).*' | jq length
+          {{ binary_base_path }}/bin/kafka-metadata-quorum --command-config /opt/confluent/etc/kafka/client.properties --bootstrap-server kafka-broker1:9091 describe --status | grep -oP '(?<=CurrentObservers:).*' | jq length
       register: broker_cnt
       when: kraft_mode|bool
 
@@ -65,7 +68,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
+        file_path: /opt/confluent/etc/confluent-control-center/control-center-production.properties
         property: bootstrap.servers
         expected_value: kafka-broker1:9092,kafka-broker2:9092,kafka-broker3:9092
 
@@ -73,7 +76,7 @@
       shell: grep "^{{ property }}" {{ file_path }}
       register: bootstrap_servers
       vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
+        file_path: /opt/confluent/etc/confluent-control-center/control-center-production.properties
         property: bootstrap.servers
 
     - name: Check broker4 should not be available in bootstrap Server urls
