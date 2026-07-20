@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Starts {{ rootless_component_name }} without systemd, carrying the same JVM env
+# (KAFKA_OPTS/HEAP/LOG4J/JAVA_HOME/CONFLUENT_SECURITY_MASTER_KEY/...) as the systemd unit.
+set -euo pipefail
+
+BASE="$(cd "$(dirname "$0")" && pwd)"
+ENV_FILE="${BASE}/{{ rootless_component_name }}.env"
+PID_FILE="${BASE}/{{ rootless_component_name }}.pid"
+OUT_FILE="${BASE}/{{ rootless_component_name }}.out"
+
+# shellcheck source=/dev/null
+[ -f "${ENV_FILE}" ] && . "${ENV_FILE}"
+
+if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
+  echo "{{ rootless_component_name }} already running (pid $(cat "${PID_FILE}"))"
+  exit 0
+fi
+
+nohup {{ rootless_service_exec }} > "${OUT_FILE}" 2>&1 &
+echo $! > "${PID_FILE}"
+echo "Started {{ rootless_component_name }} (pid $(cat "${PID_FILE}")); logs: ${OUT_FILE}"
