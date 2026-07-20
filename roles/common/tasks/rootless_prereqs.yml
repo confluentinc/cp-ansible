@@ -1,0 +1,29 @@
+---
+# Prerequisite bootstrap for non-root (rootless) deployments. Included from
+# common/main.yml only when deployment_path is set. None of these steps need root.
+#
+# Note on control-node prereqs (not handled here): RBAC deployments additionally
+# require the `bcrypt` Python library on the *control* node (used locally to hash
+# MDS credentials). Install it there with `pip install --user bcrypt`.
+
+- name: "Rootless: verify Python version on target"
+  assert:
+    that:
+      - "ansible_python_version is version('3.10', '>=')"
+    fail_msg: >-
+      Non-root (rootless) installs require Python >= 3.10 on the target host.
+      Selected python version: {{ ansible_python_version }}.
+  tags:
+    - validate
+    - validate_python_version
+
+- name: "Rootless: check whether PyYAML is available on the target interpreter"
+  command: "{{ ansible_python_interpreter | default('/usr/bin/python3') }} -c 'import yaml'"
+  register: rootless_pyyaml_check
+  changed_when: false
+  failed_when: false
+
+- name: "Rootless: install PyYAML into the user site (no root, pip --user)"
+  command: "{{ ansible_python_interpreter | default('/usr/bin/python3') }} -m pip install --user PyYAML"
+  when: rootless_pyyaml_check.rc != 0
+  changed_when: true
