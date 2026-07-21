@@ -1,0 +1,22 @@
+---
+# Prerequisite bootstrap for non-root (rootless) deployments. Included from
+# common/main.yml only when deployment_path is set. None of these steps need root.
+#
+# The target Python floor is already enforced by common/main.yml (>= 3.6); we do
+# not raise it further here because RHEL 9 ships Python 3.9 and Ubuntu 20.04 ships
+# 3.8 as the system interpreter, and both are valid rootless targets.
+#
+# Note on control-node prereqs (not handled here): RBAC deployments additionally
+# require the `bcrypt` Python library on the *control* node (used locally to hash
+# MDS credentials). Install it there with `pip install --user bcrypt`.
+
+- name: "Rootless: check whether PyYAML is available on the target interpreter"
+  command: "{{ ansible_python_interpreter | default('/usr/bin/python3') }} -c 'import yaml'"
+  register: rootless_pyyaml_check
+  changed_when: false
+  failed_when: false
+
+- name: "Rootless: install PyYAML into the user site (no root, pip --user)"
+  command: "{{ ansible_python_interpreter | default('/usr/bin/python3') }} -m pip install --user PyYAML"
+  when: rootless_pyyaml_check.rc != 0
+  changed_when: true

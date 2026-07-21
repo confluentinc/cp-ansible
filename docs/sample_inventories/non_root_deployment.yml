@@ -3,61 +3,46 @@
 ##
 ## Sample inventory file for installing Confluent Platform without root access
 ## https://docs.confluent.io/ansible/current/ansible-install.html#install-confluent-platform-without-root-access
-## Customise default config paths and set to the ones which are in user's control to avoid permission errors
+##
+## With deployment_user / deployment_group / deployment_path set below, cp-ansible
+## automatically derives every user, group, log dir, data dir, SSL dir, CLI path,
+## JMX-exporter jar path and the archive install path under deployment_path.
+## You no longer need to override each of them individually.
 
 all:
   vars:
-    # Configure based on environment
+    # The only three knobs required for a non-root deployment.
+    # All service accounts run as this user/group ...
     deployment_user: cp-user
     deployment_group: cp-user
+    # ... and every artifact (binaries, config, logs, data, certs) lands under this base path,
+    # which must be writable by deployment_user.
     deployment_path: /cp-data
 
-    ### For non-root
-    archive_destination_path: "{{ deployment_path }}/confluent"
-    jmxexporter_jar_path: "{{ deployment_path }}/jmx_exporter/jmx_prometheus_javaagent.jar"
-    confluent_cli_base_path: "{{ deployment_path }}/confluent-cli"
-    confluent_cli_path: "{{ confluent_cli_base_path }}/confluent"
+    # Non-root uses the archive install method (the package method needs root for the yum/apt repo + RPM/DEB install).
+    installation_method: archive
 
-    ssl_file_dir: "{{ deployment_path }}/certs"
-
-    zookeeper_jmxexporter_config_path: "{{ deployment_path }}/jmx_exporter/zookeeper.yml"
-    kafka_broker_jmxexporter_config_path: "{{ deployment_path }}/jmx_exporter/kafka.yml"
-    schema_registry_jmxexporter_config_path: "{{ deployment_path }}/jmx_exporter/schema_registry.yml"
-    kafka_rest_jmxexporter_config_path: "{{ deployment_path }}/jmx_exporter/kafka_rest.yml"
-    kafka_connect_jmxexporter_config_path: "{{ deployment_path }}/jmx_exporter/kafka_connect.yml"
-    ksql_jmxexporter_config_path: "{{ deployment_path }}/jmx_exporter/ksql.yml"
-
-    zookeeper_user: "{{ deployment_user }}"
-    zookeeper_group: "{{ deployment_group }}"
-    kafka_broker_user: "{{ deployment_user }}"
-    kafka_broker_group: "{{ deployment_group }}"
-    schema_registry_user: "{{ deployment_user }}"
-    schema_registry_group: "{{ deployment_group }}"
-    kafka_rest_user: "{{ deployment_user }}"
-    kafka_rest_group: "{{ deployment_group }}"
-    kafka_connect_user: "{{ deployment_user }}"
-    kafka_connect_group: "{{ deployment_group }}"
-    ksql_user: "{{ deployment_user }}"
-    ksql_group: "{{ deployment_group }}"
-    control_center_user: "{{ deployment_user }}"
-    control_center_group: "{{ deployment_group }}"
-
-    zookeeper_log_dir: "{{ deployment_path }}/log/kafka"
-    kafka_broker_log_dir: "{{ deployment_path }}/log/kafka"
-    schema_registry_log_dir: "{{ deployment_path }}/log/confluent"
-    kafka_rest_log_dir: "{{ deployment_path }}/log/confluent/kafka-rest"
-    kafka_connect_log_dir: "{{ deployment_path }}/log/kafka"
-    ksql_log_dir: "{{ deployment_path }}/log/confluent/ksql"
-    control_center_log_dir: "{{ deployment_path }}/log/confluent/control-center"
-
-    control_center_rocksdb_path: "{{ deployment_path }}/controlcenter/rocksdb"
-    ksql_rocksdb_path: "{{ deployment_path }}/ksql/rocksdb"
-
-    # Skip Restarts
+    # Rootless runs are not systemd-managed, so skip the systemd-driven restart handlers.
     zookeeper_skip_restarts: true
+    kafka_controller_skip_restarts: true
     kafka_broker_skip_restarts: true
     schema_registry_skip_restarts: true
     kafka_rest_skip_restarts: true
     kafka_connect_skip_restarts: true
     ksql_skip_restarts: true
     control_center_skip_restarts: true
+
+    ## --- Optional overrides -------------------------------------------------
+    ## Everything below is derived automatically from deployment_path. Uncomment
+    ## only to point an individual path somewhere other than under deployment_path.
+    #
+    # archive_destination_path: "{{ deployment_path }}/confluent"
+    # confluent_cli_base_path: "{{ deployment_path }}/confluent-cli"
+    # ssl_file_dir: "{{ deployment_path }}/ssl"
+    # jmxexporter_jar_path: "{{ deployment_path }}/jmx_exporter/jmx_prometheus_javaagent.jar"
+    # kafka_connect_confluent_hub_plugins_dest: "{{ deployment_path }}/connect-plugins"
+    # kafka_connect_plugins_dest: "{{ deployment_path }}/connect-plugins"
+    #
+    ## If using a user-supplied JDK tarball (no root to create the /usr/bin/java symlink),
+    ## point custom_java_path at its home; it is wired into JAVA_HOME for every component.
+    # custom_java_path: "{{ deployment_path }}/jdk"

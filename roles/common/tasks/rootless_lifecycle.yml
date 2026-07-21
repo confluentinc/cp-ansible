@@ -1,0 +1,34 @@
+---
+# Generates a sourced environment file plus start/stop wrapper scripts so a component
+# can be run without systemd (rootless / non-root deployments). Included from each
+# component role via include_role/tasks_from with these vars set:
+#   rootless_component_name                 - e.g. kafka_broker (used for file names + messages)
+#   rootless_service_environment_overrides  - the component's *_service_environment_overrides dict
+#   rootless_service_exec                   - the ExecStart command (server_start_file + config_file)
+#
+# All tasks are user-writable (no root) and tagged `filesystem`. Only runs when
+# rootless_lifecycle_enabled is true, so existing systemd deployments are unaffected.
+
+- name: "Create rootless lifecycle directory for {{ rootless_component_name }}"
+  file:
+    path: "{{ rootless_lifecycle_bin_dir }}"
+    state: directory
+    mode: '0755'
+  tags: [filesystem]
+
+- name: "Generate {{ rootless_component_name }} rootless environment file"
+  template:
+    src: rootless_component.env.j2
+    dest: "{{ rootless_lifecycle_bin_dir }}/{{ rootless_component_name }}.env"
+    mode: '0640'
+  tags: [filesystem]
+
+- name: "Generate {{ rootless_component_name }} rootless start/stop scripts"
+  template:
+    src: "rootless_{{ item }}.sh.j2"
+    dest: "{{ rootless_lifecycle_bin_dir }}/{{ rootless_component_name }}-{{ item }}.sh"
+    mode: '0750'
+  loop:
+    - start
+    - stop
+  tags: [filesystem]
