@@ -79,6 +79,33 @@ class TestFindViolations:
         docs = [[{"name": "cfg", "template": {}, "tags": "configuration"}]]
         assert find_violations_in_docs(docs, "roles/x/tasks/main.yml") == []
 
+    def test_rootless_named_task_with_privileged_flagged(self):
+        # A rootless-purpose task (must run in non-root installs) must not be skipped.
+        docs = [
+            [
+                {
+                    "name": "Generate Kafka Broker rootless lifecycle scripts",
+                    "include_role": {"name": "common"},
+                    "tags": ["filesystem", "privileged"],
+                }
+            ]
+        ]
+        violations = find_violations_in_docs(docs, "roles/x/tasks/main.yml")
+        assert len(violations) == 1
+        assert violations[0]["conflicting_tags"] == ["privileged"]
+
+    def test_rootless_named_task_filesystem_only_ok(self):
+        docs = [
+            [
+                {
+                    "name": "Generate Kafka Broker rootless lifecycle scripts",
+                    "include_role": {"name": "common"},
+                    "tags": ["filesystem"],
+                }
+            ]
+        ]
+        assert find_violations_in_docs(docs, "roles/x/tasks/main.yml") == []
+
 
 class TestScanTreeAgainstRepo:
     def test_repo_tree_is_clean(self):

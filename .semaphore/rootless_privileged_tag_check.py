@@ -50,13 +50,18 @@ def _walk(tasks, inherited, filepath, violations):
                 if key in task:
                     _walk(task[key], effective, filepath, violations)
             continue
-        if CONFIG_TAG in effective:
+        name = task.get("name", "<unnamed>")
+        # A task must run in a non-root install if it generates config (`configuration`
+        # tag) or is itself a rootless-purpose task (name mentions "rootless", e.g. the
+        # generated lifecycle scripts). Such a task must not carry a rootless-skipped tag.
+        must_run_rootless = CONFIG_TAG in effective or "rootless" in str(name).lower()
+        if must_run_rootless:
             conflicting = effective & ROOTLESS_SKIP_TAGS
             if conflicting:
                 violations.append(
                     {
                         "file": filepath,
-                        "task": task.get("name", "<unnamed>"),
+                        "task": name,
                         "conflicting_tags": sorted(conflicting),
                     }
                 )
