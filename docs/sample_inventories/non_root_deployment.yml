@@ -11,8 +11,16 @@
 
 all:
   vars:
-    # The only three knobs required for a non-root deployment.
-    # All service accounts run as this user/group ...
+    # Connection for the DEPLOY phase: connect as the unprivileged deploy user, no privilege escalation.
+    # (The one-time bootstrap in step 1 below overrides this with `-e ansible_user=ec2-user` and become.)
+    ansible_user: cp-user
+    ansible_become: false
+
+    # Master switch: turns on the rootless systemd --user lifecycle (generates + starts
+    # cp-<component>.service units for the deploy user) and asserts installation_method: archive.
+    rootless_enabled: true
+
+    # The three path/identity knobs. All service accounts run as this user/group ...
     deployment_user: cp-user
     deployment_group: cp-user
     # ... and every artifact (binaries, config, logs, data, certs) lands under this base path,
@@ -22,7 +30,7 @@ all:
     # Non-root uses the archive install method (the package method needs root for the yum/apt repo + RPM/DEB install).
     installation_method: archive
 
-    # Rootless runs are not systemd-managed, so skip the systemd-driven restart handlers.
+    # Rootless runs are systemd --user managed (not system systemd), so skip the system restart handlers.
     zookeeper_skip_restarts: true
     kafka_controller_skip_restarts: true
     kafka_broker_skip_restarts: true
@@ -31,6 +39,17 @@ all:
     kafka_connect_skip_restarts: true
     ksql_skip_restarts: true
     control_center_skip_restarts: true
+
+    ## --- How to run -------------------------------------------------------------------
+    ## 1. ONE-TIME admin/root prep (run once by a sudo user, e.g. ec2-user):
+    ##      ansible-playbook -i <this-inventory> confluent.platform.rootless_bootstrap -e ansible_user=ec2-user
+    ##    (creates deployment_user + authorized_keys + deployment_path, enables systemd linger;
+    ##     add -e rootless_install_packages=true to also install a JDK + openssl/rsync/unzip.)
+    ##    Sites with no sudo do these steps out-of-band and skip this playbook.
+    ##
+    ## 2. Rootless deploy as deployment_user (no root). Root steps are skipped via tags:
+    ##      ansible-playbook -i <this-inventory> confluent.platform.all \
+    ##        --skip-tags privileged,package,systemd,sysctl,health_check,logrotate
 
     ## --- Optional overrides -------------------------------------------------
     ## Everything below is derived automatically from deployment_path. Uncomment

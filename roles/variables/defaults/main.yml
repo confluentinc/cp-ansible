@@ -257,11 +257,20 @@ deployment_path: ""
 deployment_user: ""
 deployment_group: ""
 
-### Non-root (rootless) lifecycle: when true, cp-ansible additionally generates a sourced
-### environment file plus start/stop wrapper scripts per component, so components can be
-### run without systemd while still carrying the same JVM env (KAFKA_OPTS/HEAP/LOG4J/JAVA_HOME/etc.)
-### that the systemd override.conf would have provided. Default false = no change.
-rootless_lifecycle_enabled: false
+### Master switch for non-root (rootless) deployments. When true, cp-ansible skips every
+### root-requiring step (privileged/package/systemd/sysctl/health_check/logrotate tasks are
+### gated off in addition to still carrying their tags) and runs the systemd --user lifecycle,
+### so a plain `ansible-playbook confluent.platform.all` works WITHOUT any `--skip-tags`.
+### Requires installation_method: archive and deployment_path/user/group set. Default false = no change.
+### (The tags remain, so the older `--skip-tags privileged,package,systemd,sysctl,health_check,logrotate`
+### invocation still works and is equivalent.)
+rootless_enabled: false
+
+### Non-root (rootless) lifecycle: when true, cp-ansible generates a systemd --user unit plus a
+### sourced EnvironmentFile per component, so components run without system-level systemd while
+### still carrying the same JVM env (KAFKA_OPTS/HEAP/LOG4J/JAVA_HOME/etc.) the systemd override.conf
+### would have provided. Defaults to rootless_enabled; can be set independently. Default false = no change.
+rootless_lifecycle_enabled: "{{ rootless_enabled }}"
 
 ### Directory the rootless lifecycle env-file + start/stop scripts are written to.
 rootless_lifecycle_bin_dir: "{{ (deployment_path ~ '/rootless-bin') if deployment_path | length > 0 else (archive_destination_path ~ '/rootless-bin') }}"
