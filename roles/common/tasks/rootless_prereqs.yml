@@ -11,12 +11,28 @@
 # MDS credentials). Install it there with `pip install --user bcrypt`.
 
 - name: "Rootless: check whether PyYAML is available on the target interpreter"
-  command: "{{ ansible_python_interpreter | default('/usr/bin/python3') }} -c 'import yaml'"
+  command: "{{ rootless_python | default(ansible_python_interpreter | default('/usr/bin/python3')) }} -c 'import yaml'"
   register: rootless_pyyaml_check
   changed_when: false
   failed_when: false
 
+- name: "Rootless: check whether pip is available on the target interpreter"
+  command: "{{ rootless_python | default(ansible_python_interpreter | default('/usr/bin/python3')) }} -m pip --version"
+  register: rootless_pip_check
+  changed_when: false
+  failed_when: false
+  when: rootless_pyyaml_check.rc != 0
+
+# On a minimal host pip may be absent (e.g. RHEL UBI has no pip by default). Bootstrap it into
+# the user site with the stdlib ensurepip module - no root, no OS package needed.
+- name: "Rootless: bootstrap pip into the user site (ensurepip, no root)"
+  command: "{{ rootless_python | default(ansible_python_interpreter | default('/usr/bin/python3')) }} -m ensurepip --user"
+  when:
+    - rootless_pyyaml_check.rc != 0
+    - rootless_pip_check.rc | default(1) != 0
+  changed_when: true
+
 - name: "Rootless: install PyYAML into the user site (no root, pip --user)"
-  command: "{{ ansible_python_interpreter | default('/usr/bin/python3') }} -m pip install --user PyYAML"
+  command: "{{ rootless_python | default(ansible_python_interpreter | default('/usr/bin/python3')) }} -m pip install --user PyYAML"
   when: rootless_pyyaml_check.rc != 0
   changed_when: true
