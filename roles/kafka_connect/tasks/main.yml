@@ -388,7 +388,18 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - systemd
-    - privileged
+
+- name: Generate Kafka Connect rootless lifecycle scripts
+  include_role:
+    name: common
+    tasks_from: rootless_lifecycle.yml
+  vars:
+    rootless_component_name: kafka_connect
+    rootless_service_environment_overrides: "{{ kafka_connect_service_environment_overrides }}"
+    rootless_service_exec: "{{ kafka_connect_service_overrides.ExecStart }}"
+  when: rootless_lifecycle_enabled | bool
+  tags:
+    - filesystem
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -405,6 +416,15 @@
     state: started
   tags:
     - systemd
+
+- name: Start Kafka Connect (rootless, non-systemd)
+  include_role:
+    name: common
+    tasks_from: rootless_start_service.yml
+  vars:
+    rootless_component_name: kafka_connect
+    rootless_component_port: "{{ kafka_connect_rest_port }}"
+  when: rootless_lifecycle_enabled | bool
 
 - name: Health Check
   include_tasks: health_check.yml

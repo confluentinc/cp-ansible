@@ -1,0 +1,108 @@
+---
+# One-time PRIVILEGED bootstrap for a non-root (rootless) Confluent Platform deploy.
+#
+# Run this ONCE by an admin/sudo user (e.g. ec2-user) BEFORE the rootless deploy:
+#   ansible-playbook -i <inventory> confluent.platform.rootless_bootstrap -e ansible_user=ec2-user
+#
+# It performs ONLY the steps that genuinely require root, then hands the host to the
+# unprivileged deploy user. Everything else (archive install, config, systemd --user units,
+# start, PyYAML) is done rootlessly by the main deploy as the deploy user.
+#
+# Required inventory vars: deployment_user, deployment_path (deployment_group defaults to deployment_user).
+# Optional:
+#   rootless_enable_linger (default true)   - loginctl enable-linger, so systemd --user services
+#                                             run without an active login and survive reboot.
+#   rootless_install_packages (default false) - install JDK + openssl/rsync/unzip. Leave false if you
+#                                             supply a JDK via custom_java_path and openssl/rsync are present.
+#   rootless_bootstrap_authorized_keys_src   - authorized_keys to copy to the deploy user
+#                                             (default: the connecting admin's, so the same key works).
+
+- name: Rootless bootstrap (privileged, one-time)
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    deployment_group: "{{ deployment_user }}"
+    rootless_enable_linger: true
+    rootless_install_packages: false
+    rootless_bootstrap_authorized_keys_src: "/home/{{ ansible_user }}/.ssh/authorized_keys"
+  tasks:
+    - name: Assert required rootless bootstrap vars
+      assert:
+        that:
+          - deployment_user | default('') | length > 0
+          - deployment_path | default('') | length > 0
+        fail_msg: "Set deployment_user and deployment_path (the rootless deploy vars) in your inventory."
+
+    - name: Create deploy group
+      group:
+        name: "{{ deployment_group }}"
+
+    - name: Create deploy user
+      user:
+        name: "{{ deployment_user }}"
+        group: "{{ deployment_group }}"
+        shell: /bin/bash
+        create_home: true
+
+    - name: Ensure deploy user's .ssh directory
+      file:
+        path: "/home/{{ deployment_user }}/.ssh"
+        state: directory
+        owner: "{{ deployment_user }}"
+        group: "{{ deployment_group }}"
+        mode: '0700'
+
+    - name: Check source authorized_keys exists
+      stat:
+        path: "{{ rootless_bootstrap_authorized_keys_src }}"
+      register: rootless_ak_src
+
+    - name: Authorize the deploy user's SSH key
+      copy:
+        src: "{{ rootless_bootstrap_authorized_keys_src }}"
+        remote_src: true
+        dest: "/home/{{ deployment_user }}/.ssh/authorized_keys"
+        owner: "{{ deployment_user }}"
+        group: "{{ deployment_group }}"
+        mode: '0600'
+      when: rootless_ak_src.stat.exists
+
+    - name: Create deployment base directory
+      file:
+        path: "{{ deployment_path }}"
+        state: directory
+        owner: "{{ deployment_user }}"
+        group: "{{ deployment_group }}"
+        mode: '0755'
+
+    - name: Enable systemd linger for the deploy user
+      # Lets the per-user systemd manager run without an active login and survive reboot, so the
+      # generated systemd --user units (cp-<component>.service) start reliably during the deploy.
+      command: "loginctl enable-linger {{ deployment_user }}"
+      args:
+        creates: "/var/lib/systemd/linger/{{ deployment_user }}"
+      when: rootless_enable_linger | bool
+
+    # python3-pip + python3-pyyaml: the target interpreter needs PyYAML (the update_log4j2 module
+    # imports yaml) and pip; a minimal host (e.g. RHEL UBI) ships neither, and the rootless deploy
+    # runs unprivileged so it cannot install them itself. Provide them here as the one-time admin step.
+    - name: Install OS packages (JDK + cert tools + python pip/yaml) - RedHat
+      yum:
+        name: [java-17-openjdk-headless, openssl, rsync, unzip, python3-pip, python3-pyyaml]
+        state: present
+      when: rootless_install_packages | bool and ansible_os_family == "RedHat"
+
+    - name: Install OS packages (JDK + cert tools + python pip/yaml) - Debian/Ubuntu
+      apt:
+        name: [openjdk-17-jre-headless, openssl, rsync, unzip, python3-pip, python3-yaml]
+        state: present
+        update_cache: true
+      when: rootless_install_packages | bool and ansible_os_family == "Debian"
+
+    - name: Rootless bootstrap summary
+      debug:
+        msg:
+          - "Rootless bootstrap complete: user '{{ deployment_user }}' ready at '{{ deployment_path }}'."
+          - "Linger: {{ rootless_enable_linger | bool }}; OS packages installed: {{ rootless_install_packages | bool }}."
+          - "Next: run the rootless deploy as {{ deployment_user }} (playbooks/rootless_deploy.sh -i <inventory>)."
