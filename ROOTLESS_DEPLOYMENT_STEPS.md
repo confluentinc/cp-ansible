@@ -60,9 +60,15 @@ no ~60 per-component overrides.
 ```bash
 ansible-playbook -i <inventory> confluent.platform.rootless_bootstrap -e ansible_user=ec2-user
 # add -e rootless_install_packages=true to also install a JDK + openssl/rsync/unzip
+#   (+ python3-pip/pyyaml; on Debian/Ubuntu also dbus-user-session — see below)
 ```
 Creates `deployment_user` (+ authorized_keys so the same SSH key works), `deployment_path`, and runs
 `loginctl enable-linger`. Idempotent.
+
+**Debian/Ubuntu:** the deploy user's `systemd --user` manager (`user@<uid>`) needs a per-user D-Bus,
+provided by the **`dbus-user-session`** package. The bootstrap installs it (with
+`rootless_install_packages=true`); without it `systemctl --user` fails with "Failed to connect to bus".
+RHEL ships this with systemd — nothing extra needed.
 
 **Control node (once):** Ansible ≥ 2.16; `pip install --user bcrypt` (only for RBAC — hashes MDS creds locally).
 
@@ -71,6 +77,7 @@ If you have no sudo at all, do the equivalent by hand out-of-band:
 sudo useradd -m -g <group> <user>; install authorized_keys; mkdir deployment_path (chown user)
 sudo loginctl enable-linger <user>
 # JDK: either `sudo dnf install java-17-openjdk-headless`, or unpack a JDK tarball and set custom_java_path
+# Debian/Ubuntu only: sudo apt-get install -y dbus-user-session   (per-user D-Bus for systemd --user)
 ```
 
 ## 3. Rootless deploy (as the deploy user, no root)
