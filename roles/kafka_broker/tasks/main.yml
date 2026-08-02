@@ -299,7 +299,18 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - systemd
-    - privileged
+
+- name: Generate Kafka Broker rootless lifecycle scripts
+  include_role:
+    name: common
+    tasks_from: rootless_lifecycle.yml
+  vars:
+    rootless_component_name: kafka_broker
+    rootless_service_environment_overrides: "{{ kafka_broker_service_environment_overrides }}"
+    rootless_service_exec: "{{ kafka_broker_service_overrides.ExecStart }}"
+  when: rootless_lifecycle_enabled | bool
+  tags:
+    - filesystem
 
 - name: Include Kraft Cluster Data
   include_tasks: get_meta_properties.yml
@@ -565,6 +576,46 @@
     state: started
   tags:
     - systemd
+
+# Non-RBAC: a simple systemd --user start + wait for the client listener is enough.
+- name: Start Kafka Broker (rootless, systemd --user)
+  include_role:
+    name: common
+    tasks_from: rootless_start_service.yml
+  vars:
+    rootless_component_name: kafka_broker
+    rootless_component_port: "{{ kafka_broker_listeners['internal']['port'] }}"
+  when: rootless_lifecycle_enabled | bool and not rbac_enabled | bool
+
+# RBAC cold bootstrap is a mutual dependency: the controller's authorizer init only completes
+# once the broker is up, and the broker fatally exits with AuthorizerNotReady until the
+# authorizer is ready. systemd's per-unit Restart alone does NOT converge this - the controller
+# sits in "waiting for authorizer futures" (up to confluent.authorizer.init.timeout.ms) and
+# never restarts, so a crash-looping broker bounces against a stuck controller forever. Break it
+# the way the root/systemd deploy effectively does: restart BOTH units together (a fresh
+# concurrent bootstrap) and wait for MDS, retrying the pair until MDS is up. Still pure
+# systemd --user - just co-restarting the two units, no nohup, no bespoke process supervisor.
+- name: Enable Kafka Broker systemd --user unit (rootless RBAC)
+  command: systemctl --user enable cp-kafka_broker.service
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+  changed_when: false
+  when: rootless_lifecycle_enabled | bool and rbac_enabled | bool
+
+- name: Converge controller+broker RBAC bootstrap by co-restarting both units (rootless)
+  shell: |
+    export XDG_RUNTIME_DIR=/run/user/{{ ansible_user_uid }}
+    mds_up(){ ss -ltnH 2>/dev/null | awk '{print $4}' | grep -qE ":{{ mds_port }}$"; }
+    mds_up && exit 0
+    systemctl --user restart cp-kafka_controller.service cp-kafka_broker.service
+    for _ in $(seq 1 24); do mds_up && exit 0; sleep 5; done
+    exit 1
+  register: rootless_rbac_converge
+  until: rootless_rbac_converge.rc == 0
+  retries: "{{ rootless_rbac_bootstrap_attempts | default(10) }}"
+  delay: 5
+  changed_when: false
+  when: rootless_lifecycle_enabled | bool and rbac_enabled | bool
 
 - name: Wait for Broker health checks to complete
   include_tasks: health_check.yml

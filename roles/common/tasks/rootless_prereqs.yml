@@ -1,0 +1,79 @@
+---
+# Prerequisite bootstrap for non-root (rootless) deployments. Included from
+# common/main.yml only when deployment_path is set. These steps do not need root: they target the
+# interpreter Ansible already discovered and install PyYAML into the user site. If the host is so
+# minimal that it has no usable pip/ensurepip at all, PyYAML cannot be installed without root - the
+# final assert then directs the operator to the one-time admin bootstrap (rootless_bootstrap.yml).
+#
+# The target Python floor is already enforced by common/main.yml (>= 3.6); we do
+# not raise it further here because RHEL 9 ships Python 3.9 and Ubuntu 20.04 ships
+# 3.8 as the system interpreter, and both are valid rootless targets.
+#
+# Note on control-node prereqs (not handled here): RBAC deployments additionally
+# require the `bcrypt` Python library on the *control* node (used locally to hash
+# MDS credentials). Install it there with `pip install --user bcrypt`.
+
+# Use the interpreter Ansible actually discovered for this host, not a hardcoded path. On many hosts
+# the usable python3 is NOT at /usr/bin/python3 (e.g. RHEL 8 minimal ships /usr/libexec/platform-python,
+# some hosts only have /usr/bin/python3.9, or a venv). `discovered_interpreter_python` is exactly the
+# interpreter Ansible is already using to run modules here, so targeting it is always correct.
+- name: "Rootless: resolve the target Python interpreter"
+  set_fact:
+    rootless_target_python: "{{ rootless_python | default(discovered_interpreter_python | default(ansible_python_interpreter | default('/usr/bin/python3', true), true), true) }}"
+
+- name: "Rootless: check whether PyYAML is available on the target interpreter"
+  command: "{{ rootless_target_python }} -c 'import yaml'"
+  register: rootless_pyyaml_check
+  changed_when: false
+  failed_when: false
+
+- name: "Rootless: check whether pip is available on the target interpreter"
+  command: "{{ rootless_target_python }} -m pip --version"
+  register: rootless_pip_check
+  changed_when: false
+  failed_when: false
+  when: rootless_pyyaml_check.rc != 0
+
+# On a minimal host pip may be absent (e.g. RHEL UBI has no pip by default). Try to bootstrap it into
+# the user site with the stdlib ensurepip module - no root, no OS package needed. Best-effort: a
+# stripped interpreter (e.g. platform-python) may lack ensurepip entirely, which the final assert
+# below turns into a clear, actionable error.
+- name: "Rootless: bootstrap pip into the user site (ensurepip, no root)"
+  command: "{{ rootless_target_python }} -m ensurepip --user"
+  register: rootless_ensurepip
+  failed_when: false
+  when:
+    - rootless_pyyaml_check.rc != 0
+    - rootless_pip_check.rc | default(1) != 0
+  changed_when: true
+
+- name: "Rootless: install PyYAML into the user site (no root, pip --user)"
+  command: "{{ rootless_target_python }} -m pip install --user PyYAML"
+  register: rootless_pyyaml_install
+  failed_when: false
+  when: rootless_pyyaml_check.rc != 0
+  changed_when: true
+
+- name: "Rootless: re-check PyYAML after the user-site bootstrap"
+  command: "{{ rootless_target_python }} -c 'import yaml'"
+  register: rootless_pyyaml_recheck
+  changed_when: false
+  failed_when: false
+  when: rootless_pyyaml_check.rc != 0
+
+# If PyYAML is still missing, it cannot be installed without root (no usable pip/ensurepip on this
+# host). Fail with an actionable message instead of a cryptic interpreter error - the one-time
+# privileged admin bootstrap is required on truly minimal hosts.
+- name: "Rootless: require PyYAML (fall back to the one-time admin bootstrap if unavailable)"
+  assert:
+    that:
+      - (rootless_pyyaml_check.rc == 0) or (rootless_pyyaml_recheck.rc | default(1) == 0)
+    fail_msg: >-
+      PyYAML is not available on the target interpreter ({{ rootless_target_python }}) and could not
+      be bootstrapped without root (this host has no usable pip/ensurepip). Installing system Python
+      packages needs privilege, so run the one-time admin bootstrap first, then re-run the rootless
+      deploy:
+        ansible-playbook -i <inventory> confluent.platform.rootless_bootstrap -e rootless_install_packages=true
+      (installs python3-pip + python3-pyyaml). Alternatively point `rootless_python` at an interpreter
+      that already has PyYAML.
+    success_msg: "PyYAML is available on {{ rootless_target_python }}."
