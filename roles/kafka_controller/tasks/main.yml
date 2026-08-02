@@ -222,7 +222,6 @@
     group: "{{kafka_controller_group}}"
   tags:
     - filesystem
-    - privileged
 
 
 - name: Create Kafka Controller Config
@@ -236,7 +235,6 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
-    - privileged
 
 - name: Create Kafka Controller Client Config
   template:
@@ -248,7 +246,6 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
-    - privileged
 
 - name: Create Service Override Directory
   file:
@@ -280,7 +277,18 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - systemd
-    - privileged
+
+- name: Generate Kafka Controller rootless lifecycle scripts
+  include_role:
+    name: common
+    tasks_from: rootless_lifecycle.yml
+  vars:
+    rootless_component_name: kafka_controller
+    rootless_service_environment_overrides: "{{ kafka_controller_service_environment_overrides }}"
+    rootless_service_exec: "{{ kafka_controller_service_overrides.ExecStart }}"
+  when: rootless_lifecycle_enabled | bool
+  tags:
+    - filesystem
 
 - name: Include Kraft Cluster Data
   include_tasks: get_meta_properties.yml
@@ -295,7 +303,6 @@
   tags:
     - filesystem
     - log
-    - privileged
 
 - name: Set Permissions on Data Dirs
   file:
@@ -306,7 +313,6 @@
     mode: '750'
   tags:
     - filesystem
-    - privileged
 
 - name: Check Green/Brownfield setup
   set_fact:
@@ -348,7 +354,6 @@
   tags:
     - filesystem
     - log
-    - privileged
 
 - name: Create logredactor rule file directory
   file:
@@ -358,7 +363,6 @@
   when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
-    - privileged
 
 - name: Copy logredactor rule file from control node to component node
   copy:
@@ -368,7 +372,6 @@
   when: (kafka_controller_custom_log4j|bool) and (logredactor_enabled|bool) and (logredactor_rule_url == '')
   tags:
     - log
-    - privileged
 
 - name: Configure logredactor
   include_role:
@@ -416,7 +419,6 @@
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
-    - privileged
 
 - name: Validate Kafka Controller Jolokia Access Control Policy File Exists
   stat:
@@ -440,7 +442,6 @@
   notify: restart Kafka Controller
   tags:
     - configuration
-    - privileged
 
 - name: Deploy JMX Exporter Config File
   template:
@@ -452,7 +453,6 @@
   when: kafka_controller_jmxexporter_enabled|bool
   tags:
     - configuration
-    - privileged
 
 - name: Create sysctl directory on Debian distributions
   file:
@@ -491,6 +491,19 @@
     state: started
   tags:
     - systemd
+
+# Non-root (rootless) start via a systemd --user unit. Enabled for both RBAC and non-RBAC:
+# the unit's Restart=on-failure lets the controller<->broker RBAC authorizer bootstrap
+# converge on its own (a transiently-crashing component is restarted until it sticks),
+# reproducing the resilience the root/systemd install has - no bespoke supervisor needed.
+- name: Start Kafka Controller (rootless, systemd --user)
+  include_role:
+    name: common
+    tasks_from: rootless_start_service.yml
+  vars:
+    rootless_component_name: kafka_controller
+    rootless_component_port: "{{ kafka_controller_port }}"
+  when: rootless_lifecycle_enabled | bool
 
 - name: Wait for Controller health checks to complete
   include_tasks: health_check.yml

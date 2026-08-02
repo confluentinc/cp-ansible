@@ -1,4 +1,10 @@
 ---
+# Create the plugin.path dirs AND the dirs confluent-hub installs into
+# (kafka_connect_plugins_dest / kafka_connect_confluent_hub_plugins_dest). These are usually already
+# in plugin.path, but they can diverge - e.g. under a rootless deploy the dest is redirected to
+# deployment_path/connect-plugins (an unprivileged user cannot write to /usr/share/java), while a
+# scenario may hardcode plugin.path to /usr/share/java. Without this, `confluent-hub install
+# --component-dir <dest>` fails with "not a path to an existing file/directory".
 - name: Ensure Plugin Dirs
   file:
     path: "{{item}}"
@@ -7,7 +13,7 @@
     owner: "{{kafka_connect_user}}"
     mode: '755'
   when: item != '/usr/share/java'
-  with_items: "{{ kafka_connect_final_properties['plugin.path'].split(',') }}"
+  with_items: "{{ (kafka_connect_final_properties['plugin.path'].split(',') + [kafka_connect_plugins_dest, kafka_connect_confluent_hub_plugins_dest]) | unique }}"
 
 - set_fact:
     kafka_connect_local_plugin_files: "{{ kafka_connect_local_plugin_files | default([]) + [{ 'source_path': item, 'destination_path': item }] }}"
