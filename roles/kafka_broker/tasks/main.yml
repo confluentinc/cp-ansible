@@ -592,9 +592,12 @@
 # authorizer is ready. systemd's per-unit Restart alone does NOT converge this - the controller
 # sits in "waiting for authorizer futures" (up to confluent.authorizer.init.timeout.ms) and
 # never restarts, so a crash-looping broker bounces against a stuck controller forever. Break it
-# the way the root/systemd deploy effectively does: restart BOTH units together (a fresh
-# concurrent bootstrap) and wait for MDS, retrying the pair until MDS is up. Still pure
-# systemd --user - just co-restarting the two units, no nohup, no bespoke process supervisor.
+# the way the root/systemd deploy effectively does: restart the controller and broker units for a
+# fresh concurrent bootstrap and wait for MDS. This must work for both topologies:
+#   - controller co-located with the broker (single node): restart BOTH local units together;
+#   - controllers on separate hosts: restart those controllers (delegated) plus the local broker.
+# The old code restarted "cp-kafka_controller.service cp-kafka_broker.service" unconditionally on the
+# broker host, which fails "Unit cp-kafka_controller.service not found" on a broker-only host.
 - name: Enable Kafka Broker systemd --user unit (rootless RBAC)
   command: systemctl --user enable cp-kafka_broker.service
   environment:
@@ -602,12 +605,31 @@
   changed_when: false
   when: rootless_lifecycle_enabled | bool and rbac_enabled | bool
 
-- name: Converge controller+broker RBAC bootstrap by co-restarting both units (rootless)
+# Separate (non-co-located) controllers: restart them for a concurrent bootstrap with the brokers.
+# Co-located controllers are handled by the broker task below (restarted together on the same host).
+- name: Converge RBAC bootstrap (rootless) - restart standalone controllers
+  command: systemctl --user restart cp-kafka_controller.service
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ hostvars[item].ansible_user_uid | default(ansible_user_uid) }}"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['kafka_controller'] | default([]) | difference(groups['kafka_broker'] | default([])) }}"
+  run_once: true
+  changed_when: false
+  when:
+    - rootless_lifecycle_enabled | bool
+    - rbac_enabled | bool
+
+- name: Converge controller+broker RBAC bootstrap - co-restart local units + wait for MDS (rootless)
   shell: |
     export XDG_RUNTIME_DIR=/run/user/{{ ansible_user_uid }}
     mds_up(){ ss -ltnH 2>/dev/null | awk '{print $4}' | grep -qE ":{{ mds_port }}$"; }
     mds_up && exit 0
-    systemctl --user restart cp-kafka_controller.service cp-kafka_broker.service
+    # Restart the RBAC units that exist on THIS host: controller + broker when co-located (a fresh
+    # concurrent bootstrap), or just the broker on a broker-only host (standalone controllers are
+    # restarted above). Avoids "Unit cp-kafka_controller.service not found" on broker-only hosts.
+    units="cp-kafka_broker.service"
+    systemctl --user cat cp-kafka_controller.service >/dev/null 2>&1 && units="cp-kafka_controller.service $units"
+    systemctl --user restart $units
     for _ in $(seq 1 24); do mds_up && exit 0; sleep 5; done
     exit 1
   register: rootless_rbac_converge
