@@ -13,6 +13,19 @@
   vars:
     repo_root: "{{ playbook_dir }}/../.."
     molecule_inventory: "{{ lookup('env', 'MOLECULE_INVENTORY_FILE') }}"
+    # The nested ansible-playbook sub-runs below start fresh and do NOT inherit
+    # the extra-vars / skip-tags this converge run was invoked with. The on-demand
+    # (Semaphore) pipeline passes confluent_package_version etc. as extra-vars and,
+    # for nightly migration builds, --skip-tags check_confluent_package_version.
+    # Rebuild those from this run's own vars/tags and forward them, otherwise the
+    # sub-runs fall back to role defaults and the version gate fails.
+    _forward_var_names:
+      - confluent_package_version
+      - confluent_full_package_version
+      - confluent_common_repository_baseurl
+      - confluent_package_redhat_suffix
+      - confluent_package_debian_suffix
+    migration_forward_args: "{% for k in _forward_var_names %}{% set v = lookup('vars', k, default='') %}{% if v != '' %}-e {{ k }}='{{ v }}' {% endif %}{% endfor %}{% if ansible_skip_tags | default([]) %}--skip-tags {{ (ansible_skip_tags | default([])) | join(',') }}{% endif %}"
   tasks:
     # Promote the migration-held controllers into the live kafka_controller
     # group so the sub-runs below (which read the inventory file fresh) see them.
@@ -29,6 +42,7 @@
         {{ repo_root }}/playbooks/ZKtoKraftMigration.yml
         --tags migrate_to_dual_write
         -e kraft_migration=true
+        {{ migration_forward_args }}
       args:
         chdir: "{{ repo_root }}"
       changed_when: true
@@ -41,6 +55,7 @@
         {{ repo_root }}/playbooks/KRaftToZKRollback.yml
         --tags rollback_to_premigration
         -e kraft_migration=true
+        {{ migration_forward_args }}
       args:
         chdir: "{{ repo_root }}"
       changed_when: true

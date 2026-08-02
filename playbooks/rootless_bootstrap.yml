@@ -1,0 +1,153 @@
+---
+# One-time PRIVILEGED bootstrap for a non-root (rootless) Confluent Platform deploy.
+#
+# Run this ONCE by an admin/sudo user (e.g. ec2-user) BEFORE the rootless deploy:
+#   ansible-playbook -i <inventory> confluent.platform.rootless_bootstrap -e ansible_user=ec2-user
+#
+# It performs ONLY the steps that genuinely require root, then hands the host to the
+# unprivileged deploy user. Everything else (archive install, config, systemd --user units,
+# start, PyYAML) is done rootlessly by the main deploy as the deploy user.
+#
+# Required inventory vars: deployment_user, deployment_path (deployment_group defaults to deployment_user).
+# Optional:
+#   rootless_enable_linger (default true)   - loginctl enable-linger, so systemd --user services
+#                                             run without an active login and survive reboot.
+#   rootless_install_packages (default false) - install cert tools + python (openssl/rsync/unzip/
+#                                             python3-pip/python3-pyyaml, + dbus-user-session on Debian).
+#                                             Works on minimal RHEL images (microdnf) too. Does NOT install
+#                                             a JDK - provide Java via custom_java_path (a tarball JDK) or a
+#                                             pre-installed OS JDK (java-17 is not packaged on CentOS 7 /
+#                                             Debian 9-10 / Ubuntu 18.04; the collection already handles
+#                                             this via install_java / custom_java_path).
+#   rootless_bootstrap_authorized_keys_src   - authorized_keys to copy to the deploy user
+#                                             (default: the connecting admin's, so the same key works).
+
+- name: Rootless bootstrap (privileged, one-time)
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    deployment_group: "{{ deployment_user }}"
+    rootless_enable_linger: true
+    rootless_install_packages: false
+    rootless_bootstrap_authorized_keys_src: "/home/{{ ansible_user }}/.ssh/authorized_keys"
+    # Cert tools + python (+ user D-Bus on Debian) installed when rootless_install_packages=true.
+    # NOTE: no JDK here on purpose - java-17 is not packaged uniformly across the supported matrix
+    # (CentOS 7 tops at java-11; Debian 9/10 and Ubuntu 18.04 base don't package openjdk-17). The
+    # collection already provisions Java via install_java / custom_java_path
+    # (roles/common/tasks/custom_java_install.yml), so for rootless supply Java via custom_java_path
+    # (a tarball JDK) or a pre-installed OS JDK.
+    rootless_redhat_packages: [openssl, rsync, unzip, python3-pip, python3-pyyaml]
+    rootless_debian_packages: [openssl, rsync, unzip, python3-pip, python3-yaml, dbus-user-session]
+  tasks:
+    - name: Assert required rootless bootstrap vars
+      assert:
+        that:
+          - deployment_user | default('') | length > 0
+          - deployment_path | default('') | length > 0
+        fail_msg: "Set deployment_user and deployment_path (the rootless deploy vars) in your inventory."
+
+    - name: Create deploy group
+      group:
+        name: "{{ deployment_group }}"
+
+    - name: Create deploy user
+      user:
+        name: "{{ deployment_user }}"
+        group: "{{ deployment_group }}"
+        shell: /bin/bash
+        create_home: true
+
+    - name: Ensure deploy user's .ssh directory
+      file:
+        path: "/home/{{ deployment_user }}/.ssh"
+        state: directory
+        owner: "{{ deployment_user }}"
+        group: "{{ deployment_group }}"
+        mode: '0700'
+
+    - name: Check source authorized_keys exists
+      stat:
+        path: "{{ rootless_bootstrap_authorized_keys_src }}"
+      register: rootless_ak_src
+
+    - name: Authorize the deploy user's SSH key
+      copy:
+        src: "{{ rootless_bootstrap_authorized_keys_src }}"
+        remote_src: true
+        dest: "/home/{{ deployment_user }}/.ssh/authorized_keys"
+        owner: "{{ deployment_user }}"
+        group: "{{ deployment_group }}"
+        mode: '0600'
+      when: rootless_ak_src.stat.exists
+
+    - name: Create deployment base directory
+      file:
+        path: "{{ deployment_path }}"
+        state: directory
+        owner: "{{ deployment_user }}"
+        group: "{{ deployment_group }}"
+        mode: '0755'
+
+    - name: Enable systemd linger for the deploy user
+      # Lets the per-user systemd manager run without an active login and survive reboot, so the
+      # generated systemd --user units (cp-<component>.service) start reliably during the deploy.
+      command: "loginctl enable-linger {{ deployment_user }}"
+      args:
+        creates: "/var/lib/systemd/linger/{{ deployment_user }}"
+      when: rootless_enable_linger | bool
+
+    # python3-pip + python3-pyyaml: the target interpreter needs PyYAML (the update_log4j2 module
+    # imports yaml) and pip; a minimal host (e.g. RHEL UBI) ships neither, and the rootless deploy
+    # runs unprivileged so it cannot install them itself. Provide them here as the one-time admin step.
+    # RHEL ships the per-user D-Bus bits with systemd, so the deploy user's `systemd --user` manager
+    # (user@<uid>) starts as-is once linger is enabled.
+    #
+    # RedHat package manager: the ansible yum/dnf module needs a dnf/yum backend (python3-dnf). Minimal
+    # images (ubi8-minimal / ubi9-minimal / rocky*-minimal) ship only `microdnf`, so the module fails
+    # ("Could not import the dnf python module"). Detect a full dnf/yum and use the module; otherwise
+    # install via `microdnf` directly.
+    - name: Check for a full dnf/yum backend (vs microdnf-only minimal image) - RedHat
+      stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/bin/dnf
+        - /usr/bin/yum
+      register: rootless_dnf_bins
+      when: rootless_install_packages | bool and ansible_os_family == "RedHat"
+
+    - name: Install OS packages (cert tools + python pip/yaml) via dnf/yum - RedHat (full)
+      yum:
+        name: "{{ rootless_redhat_packages }}"
+        state: present
+      when:
+        - rootless_install_packages | bool
+        - ansible_os_family == "RedHat"
+        - rootless_dnf_bins.results | default([]) | selectattr('stat.exists') | list | length > 0
+
+    - name: Install OS packages (cert tools + python pip/yaml) via microdnf - RedHat (minimal image)
+      command: "microdnf install -y {{ rootless_redhat_packages | join(' ') }}"
+      register: rootless_microdnf
+      changed_when: "'Nothing to do' not in (rootless_microdnf.stdout | default(''))"
+      when:
+        - rootless_install_packages | bool
+        - ansible_os_family == "RedHat"
+        - rootless_dnf_bins.results | default([]) | selectattr('stat.exists') | list | length == 0
+
+    # dbus-user-session: on Debian/Ubuntu the deploy user's `systemd --user` manager (user@<uid>) needs
+    # a per-user D-Bus session, which this package provides. Without it `systemctl --user` fails with
+    # "Failed to connect to bus" / user@<uid> "Result: protocol", so the rootless systemd --user
+    # lifecycle cannot start. It requires root to install, hence it belongs in this one-time admin step.
+    - name: Install OS packages (cert tools + python pip/yaml + user D-Bus) - Debian/Ubuntu
+      apt:
+        name: "{{ rootless_debian_packages }}"
+        state: present
+        update_cache: true
+      when: rootless_install_packages | bool and ansible_os_family == "Debian"
+
+    - name: Rootless bootstrap summary
+      debug:
+        msg:
+          - "Rootless bootstrap complete: user '{{ deployment_user }}' ready at '{{ deployment_path }}'."
+          - "Linger: {{ rootless_enable_linger | bool }}; OS packages installed: {{ rootless_install_packages | bool }}."
+          - "Next: run the rootless deploy as {{ deployment_user }} (playbooks/rootless_deploy.sh -i <inventory>)."
