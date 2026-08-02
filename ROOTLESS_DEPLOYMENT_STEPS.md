@@ -59,11 +59,17 @@ no ~60 per-component overrides.
 
 ```bash
 ansible-playbook -i <inventory> confluent.platform.rootless_bootstrap -e ansible_user=ec2-user
-# add -e rootless_install_packages=true to also install a JDK + openssl/rsync/unzip
-#   (+ python3-pip/pyyaml; on Debian/Ubuntu also dbus-user-session — see below)
+# add -e rootless_install_packages=true to install cert tools + python + Java
+#   (openssl/rsync/unzip/python3-pip/python3-pyyaml; on Debian/Ubuntu also dbus-user-session — see below)
 ```
 Creates `deployment_user` (+ authorized_keys so the same SSH key works), `deployment_path`, and runs
 `loginctl enable-linger`. Idempotent.
+
+**Java:** the bootstrap honors the collection's normal Java model — it installs Java only when
+`install_java` is true (i.e. `custom_java_path` is not set), using `{redhat,ubuntu,debian}_java_package_name`
+(default the full **java-17** JDK — CP 7.6 also supports Java 11; override e.g. to `java-11-openjdk`). To
+bring your own JDK (any version/distribution — OpenJDK/Zulu/Temurin/Oracle), set **`custom_java_path`** and
+the bootstrap skips the Java install (it's wired into `JAVA_HOME` for every component by the deploy).
 
 **Debian/Ubuntu:** the deploy user's `systemd --user` manager (`user@<uid>`) needs a per-user D-Bus,
 provided by the **`dbus-user-session`** package. The bootstrap installs it (with
@@ -76,7 +82,10 @@ If you have no sudo at all, do the equivalent by hand out-of-band:
 ```bash
 sudo useradd -m -g <group> <user>; install authorized_keys; mkdir deployment_path (chown user)
 sudo loginctl enable-linger <user>
-# JDK: either `sudo dnf install java-17-openjdk-headless`, or unpack a JDK tarball and set custom_java_path
+# Java: install a supported JDK (CP 7.6 = Java 17 or 11; full JDK, not JRE) e.g.
+#   `sudo dnf install java-17-openjdk` / `sudo apt-get install openjdk-17-jdk`, OR unpack any JDK tarball
+#   (OpenJDK/Zulu/Temurin/Oracle) and set custom_java_path
+# cert tools + python: dnf/apt install openssl rsync unzip python3-pip python3-pyyaml(RHEL)/python3-yaml(Deb)
 # Debian/Ubuntu only: sudo apt-get install -y dbus-user-session   (per-user D-Bus for systemd --user)
 ```
 
