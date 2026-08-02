@@ -12,13 +12,8 @@
 # Optional:
 #   rootless_enable_linger (default true)   - loginctl enable-linger, so systemd --user services
 #                                             run without an active login and survive reboot.
-#   rootless_install_packages (default false) - install cert tools + python (openssl/rsync/unzip/
-#                                             python3-pip/python3-pyyaml, + dbus-user-session on Debian).
-#                                             Works on minimal RHEL images (microdnf) too. Does NOT install
-#                                             a JDK - provide Java via custom_java_path (a tarball JDK) or a
-#                                             pre-installed OS JDK (java-17 is not packaged on CentOS 7 /
-#                                             Debian 9-10 / Ubuntu 18.04; the collection already handles
-#                                             this via install_java / custom_java_path).
+#   rootless_install_packages (default false) - install JDK + openssl/rsync/unzip. Leave false if you
+#                                             supply a JDK via custom_java_path and openssl/rsync are present.
 #   rootless_bootstrap_authorized_keys_src   - authorized_keys to copy to the deploy user
 #                                             (default: the connecting admin's, so the same key works).
 
@@ -31,14 +26,6 @@
     rootless_enable_linger: true
     rootless_install_packages: false
     rootless_bootstrap_authorized_keys_src: "/home/{{ ansible_user }}/.ssh/authorized_keys"
-    # Cert tools + python (+ user D-Bus on Debian) installed when rootless_install_packages=true.
-    # NOTE: no JDK here on purpose - java-17 is not packaged uniformly across the supported matrix
-    # (CentOS 7 tops at java-11; Debian 9/10 and Ubuntu 18.04 base don't package openjdk-17). The
-    # collection already provisions Java via install_java / custom_java_path
-    # (roles/common/tasks/custom_java_install.yml), so for rootless supply Java via custom_java_path
-    # (a tarball JDK) or a pre-installed OS JDK.
-    rootless_redhat_packages: [openssl, rsync, unzip, python3-pip, python3-pyyaml]
-    rootless_debian_packages: [openssl, rsync, unzip, python3-pip, python3-yaml, dbus-user-session]
   tasks:
     - name: Assert required rootless bootstrap vars
       assert:
@@ -102,45 +89,19 @@
     # runs unprivileged so it cannot install them itself. Provide them here as the one-time admin step.
     # RHEL ships the per-user D-Bus bits with systemd, so the deploy user's `systemd --user` manager
     # (user@<uid>) starts as-is once linger is enabled.
-    #
-    # RedHat package manager: the ansible yum/dnf module needs a dnf/yum backend (python3-dnf). Minimal
-    # images (ubi8-minimal / ubi9-minimal / rocky*-minimal) ship only `microdnf`, so the module fails
-    # ("Could not import the dnf python module"). Detect a full dnf/yum and use the module; otherwise
-    # install via `microdnf` directly.
-    - name: Check for a full dnf/yum backend (vs microdnf-only minimal image) - RedHat
-      stat:
-        path: "{{ item }}"
-      loop:
-        - /usr/bin/dnf
-        - /usr/bin/yum
-      register: rootless_dnf_bins
-      when: rootless_install_packages | bool and ansible_os_family == "RedHat"
-
-    - name: Install OS packages (cert tools + python pip/yaml) via dnf/yum - RedHat (full)
+    - name: Install OS packages (JDK + cert tools + python pip/yaml) - RedHat
       yum:
-        name: "{{ rootless_redhat_packages }}"
+        name: [java-17-openjdk-headless, openssl, rsync, unzip, python3-pip, python3-pyyaml]
         state: present
-      when:
-        - rootless_install_packages | bool
-        - ansible_os_family == "RedHat"
-        - rootless_dnf_bins.results | default([]) | selectattr('stat.exists') | list | length > 0
-
-    - name: Install OS packages (cert tools + python pip/yaml) via microdnf - RedHat (minimal image)
-      command: "microdnf install -y {{ rootless_redhat_packages | join(' ') }}"
-      register: rootless_microdnf
-      changed_when: "'Nothing to do' not in (rootless_microdnf.stdout | default(''))"
-      when:
-        - rootless_install_packages | bool
-        - ansible_os_family == "RedHat"
-        - rootless_dnf_bins.results | default([]) | selectattr('stat.exists') | list | length == 0
+      when: rootless_install_packages | bool and ansible_os_family == "RedHat"
 
     # dbus-user-session: on Debian/Ubuntu the deploy user's `systemd --user` manager (user@<uid>) needs
     # a per-user D-Bus session, which this package provides. Without it `systemctl --user` fails with
     # "Failed to connect to bus" / user@<uid> "Result: protocol", so the rootless systemd --user
     # lifecycle cannot start. It requires root to install, hence it belongs in this one-time admin step.
-    - name: Install OS packages (cert tools + python pip/yaml + user D-Bus) - Debian/Ubuntu
+    - name: Install OS packages (JDK + cert tools + python pip/yaml + user D-Bus) - Debian/Ubuntu
       apt:
-        name: "{{ rootless_debian_packages }}"
+        name: [openjdk-17-jre-headless, openssl, rsync, unzip, python3-pip, python3-yaml, dbus-user-session]
         state: present
         update_cache: true
       when: rootless_install_packages | bool and ansible_os_family == "Debian"

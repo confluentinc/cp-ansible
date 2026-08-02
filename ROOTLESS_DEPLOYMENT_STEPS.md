@@ -59,18 +59,11 @@ no ~60 per-component overrides.
 
 ```bash
 ansible-playbook -i <inventory> confluent.platform.rootless_bootstrap -e ansible_user=ec2-user
-# add -e rootless_install_packages=true to install cert tools + python
-#   (openssl/rsync/unzip/python3-pip/python3-pyyaml; on Debian/Ubuntu also dbus-user-session — see below).
-#   It does NOT install a JDK — provide Java via custom_java_path or a pre-installed OS JDK (see below).
+# add -e rootless_install_packages=true to also install a JDK + openssl/rsync/unzip
+#   (+ python3-pip/pyyaml; on Debian/Ubuntu also dbus-user-session — see below)
 ```
 Creates `deployment_user` (+ authorized_keys so the same SSH key works), `deployment_path`, and runs
-`loginctl enable-linger`. Idempotent. Works on minimal RHEL images too (uses `microdnf` when `dnf`/`yum`
-is absent).
-
-**Java:** the bootstrap does **not** install a JDK — `java-17` is not packaged on CentOS 7 / Debian 9-10 /
-Ubuntu 18.04, and the collection already provisions Java via `install_java` / `custom_java_path`. Supply a
-JDK by setting **`custom_java_path`** to an unpacked JDK 17 (wired into `JAVA_HOME` for every component), or
-pre-install one on the host (e.g. `dnf install java-17-openjdk-headless` where it's available).
+`loginctl enable-linger`. Idempotent.
 
 **Debian/Ubuntu:** the deploy user's `systemd --user` manager (`user@<uid>`) needs a per-user D-Bus,
 provided by the **`dbus-user-session`** package. The bootstrap installs it (with
@@ -83,11 +76,8 @@ If you have no sudo at all, do the equivalent by hand out-of-band:
 ```bash
 sudo useradd -m -g <group> <user>; install authorized_keys; mkdir deployment_path (chown user)
 sudo loginctl enable-linger <user>
-# cert tools + python: `sudo dnf install openssl rsync unzip python3-pip python3-pyyaml`
-#   (minimal RHEL / UBI images: use `sudo microdnf install ...` — no dnf/yum there)
-# Java: unpack a JDK 17 tarball and set custom_java_path, or `sudo dnf install java-17-openjdk-headless`
-#   where it's available (not on CentOS 7 / Debian 9-10 / Ubuntu 18.04 base)
-# Debian/Ubuntu only: sudo apt-get install -y python3-pip python3-yaml dbus-user-session
+# JDK: either `sudo dnf install java-17-openjdk-headless`, or unpack a JDK tarball and set custom_java_path
+# Debian/Ubuntu only: sudo apt-get install -y dbus-user-session   (per-user D-Bus for systemd --user)
 ```
 
 ## 3. Rootless deploy (as the deploy user, no root)
