@@ -1,12 +1,14 @@
 """
 Rootless privileged-tag sanity check.
 
-Non-root (rootless) installs run the playbooks with, among others,
-`--skip-tags privileged,package,systemd,sysctl`. For that to yield a working
-install, the tasks that *generate component configuration* (tagged
-`configuration`) must NOT also carry any of those rootless-skipped tags -
-otherwise `--skip-tags privileged` silently drops config generation and the
-deploy fails (this was the ANSIENG-5897 regression).
+Non-root (rootless) installs skip the root-requiring tasks (those tagged
+`privileged,package,systemd,sysctl,...`): with `rootless_enabled: true` each such
+task self-skips via `when: not (rootless_enabled | bool)`, and `--skip-tags
+privileged,package,systemd,sysctl` remains an equivalent fallback. For either
+mechanism to yield a working install, the tasks that *generate component
+configuration* (tagged `configuration`) must NOT also carry any of those
+rootless-skipped tags - otherwise config generation is silently dropped in a
+non-root run and the deploy fails (this was the ANSIENG-5897 regression).
 
 This check scans roles/*/tasks/*.yml and fails the build if any task whose
 effective tags include `configuration` also carries a rootless-skipped tag.

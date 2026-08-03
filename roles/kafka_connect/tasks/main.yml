@@ -33,7 +33,9 @@
     tasks_from: validate_package_availability.yml
   vars:
     validate_packages: "{{ kafka_connect_packages }}"
-  when: installation_method == "package"
+  when:
+    - installation_method == "package"
+    - not (rootless_enabled | bool)
   tags:
     - package
     - cp_package
@@ -46,7 +48,9 @@
     tasks_from: remove_packages.yml
   vars:
     service_name: "{{ kafka_connect_service_name }}"
-  when: installation_method == "package"
+  when:
+    - installation_method == "package"
+    - not (rootless_enabled | bool)
   tags:
     - package
     - cp_package
@@ -62,6 +66,7 @@
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
+    - not (rootless_enabled | bool)
   ignore_errors: "{{ ansible_check_mode }}"
   tags:
     - package
@@ -78,6 +83,7 @@
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
+    - not (rootless_enabled | bool)
   ignore_errors: "{{ ansible_check_mode }}"
   tags:
     - package
@@ -87,6 +93,7 @@
 - name: Create Kafka Connect Group
   group:
     name: "{{kafka_connect_group}}"
+  when: not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -104,7 +111,9 @@
     system: true
     shell: "{{user_login_shell}}"
     group: "{{kafka_connect_group}}"
-  when: (getent_passwd|default({}))[kafka_connect_user] is not defined
+  when:
+    - (getent_passwd|default({}))[kafka_connect_user] is not defined
+    - not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -117,7 +126,9 @@
     dest: "{{kafka_connect.systemd_file}}"
     mode: '644'
     force: true
-  when: installation_method == "archive"
+  when:
+    - installation_method == "archive"
+    - not (rootless_enabled | bool)
   tags:
     - systemd
     - privileged
@@ -130,7 +141,9 @@
     dest: "{{kafka_connect.systemd_file}}"
     mode: '644'
     force: true
-  when: installation_method != "archive" and kafka_connect_default_service_name != kafka_connect_service_name
+  when:
+    - installation_method != "archive" and kafka_connect_default_service_name != kafka_connect_service_name
+    - not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -373,6 +386,7 @@
     group: "{{kafka_connect_group}}"
     state: directory
     mode: '750'
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
     - privileged
@@ -386,6 +400,7 @@
     group: root
   notify: restart connect distributed
   diff: "{{ not mask_sensitive_diff|bool }}"
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
 
@@ -414,6 +429,7 @@
     name: "{{kafka_connect_service_name}}"
     enabled: true
     state: started
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
 
@@ -431,6 +447,7 @@
   when:
     - kafka_connect_health_checks_enabled|bool
     - not ansible_check_mode
+    - not (rootless_enabled | bool)
   tags: health_check
 
 # Set a host fact with the direct cluster parent group

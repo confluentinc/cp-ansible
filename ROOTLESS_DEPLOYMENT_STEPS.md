@@ -29,9 +29,10 @@ Two phases:
    `systemd --user` units (`cp-<component>.service`, `Restart=on-failure`), and — for RBAC — drives
    the controller↔broker MDS bootstrap to convergence. No manual service start.
 
-Root-requiring steps are skipped via tags (`privileged,package,systemd,sysctl,health_check,logrotate`).
-The `rootless_enabled: true` inventory flag turns on the `systemd --user` lifecycle and asserts
-`installation_method: archive`.
+The `rootless_enabled: true` inventory flag turns on the `systemd --user` lifecycle, asserts
+`installation_method: archive`, and **automatically skips the root-requiring steps** (the tasks tagged
+`privileged,package,systemd,sysctl,health_check,logrotate`) — so no `--skip-tags` is needed on the
+command line. (Those tags still exist, so `--skip-tags …` also works as an equivalent fallback.)
 
 ---
 
@@ -92,10 +93,10 @@ sudo loginctl enable-linger <user>
 ## 3. Rootless deploy (as the deploy user, no root)
 
 ```bash
-ansible-playbook -i <inventory> confluent.platform.all \
-  --skip-tags privileged,package,systemd,sysctl,health_check,logrotate
+ansible-playbook -i <inventory> confluent.platform.all
 ```
-The playbook generates the units and starts them (`systemctl --user enable --now cp-<component>`),
+With `rootless_enabled: true` set in the inventory, the root-requiring tasks skip themselves — no
+`--skip-tags` required. The playbook generates the units and starts them (`systemctl --user enable --now cp-<component>`),
 in dependency order (controller → broker → SR → Connect → ksqlDB → REST → C3). For RBAC it
 co-restarts controller+broker until MDS `:8090` is live, then creates role bindings — hands-off.
 

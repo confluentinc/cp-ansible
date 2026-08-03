@@ -62,7 +62,9 @@
     tasks_from: validate_package_availability.yml
   vars:
     validate_packages: "{{ kafka_broker_packages }}"
-  when: installation_method == "package"
+  when:
+    - installation_method == "package"
+    - not (rootless_enabled | bool)
   tags:
     - package
     - cp_package
@@ -75,7 +77,9 @@
     tasks_from: remove_packages.yml
   vars:
     service_name: "{{ kafka_broker_service_name }}"
-  when: installation_method == "package"
+  when:
+    - installation_method == "package"
+    - not (rootless_enabled | bool)
   tags:
     - package
     - cp_package
@@ -91,6 +95,7 @@
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
+    - not (rootless_enabled | bool)
   ignore_errors: "{{ ansible_check_mode }}"
   tags:
     - package
@@ -107,6 +112,7 @@
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
+    - not (rootless_enabled | bool)
   ignore_errors: "{{ ansible_check_mode }}"
   tags:
     - package
@@ -116,6 +122,7 @@
 - name: Kafka Broker group
   group:
     name: "{{kafka_broker_group}}"
+  when: not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -133,7 +140,9 @@
     system: true
     shell: "{{user_login_shell}}"
     group: "{{kafka_broker_group}}"
-  when: (getent_passwd|default({}))[kafka_broker_user] is not defined
+  when:
+    - (getent_passwd|default({}))[kafka_broker_user] is not defined
+    - not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -146,7 +155,9 @@
     dest: "{{kafka_broker.systemd_file}}"
     mode: '644'
     force: true
-  when: installation_method == "archive"
+  when:
+    - installation_method == "archive"
+    - not (rootless_enabled | bool)
   tags:
     - systemd
     - privileged
@@ -231,6 +242,7 @@
     group: "{{kafka_broker_group}}"
     state: directory
     mode: '750'
+  when: not (rootless_enabled | bool)
   tags:
     - privileged
     - filesystem
@@ -275,6 +287,7 @@
     group: "{{kafka_broker_group}}"
     state: directory
     mode: '750'
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
     - privileged
@@ -297,6 +310,7 @@
     group: root
   notify: restart kafka
   diff: "{{ not mask_sensitive_diff|bool }}"
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
 
@@ -544,7 +558,9 @@
     path: /usr/lib/sysctl.d
     state: directory
     mode: '755'
-  when: ansible_distribution == "Debian"
+  when:
+    - ansible_distribution == "Debian"
+    - not (rootless_enabled | bool)
   tags:
     - sysctl
     - privileged
@@ -557,6 +573,7 @@
     sysctl_file: "{{ kafka_broker_sysctl_file }}"
     reload: true
   with_dict: "{{ kafka_broker_sysctl }}"
+  when: not (rootless_enabled | bool)
   tags:
     - sysctl
     - privileged
@@ -574,6 +591,7 @@
     name: "{{kafka_broker_service_name}}"
     enabled: true
     state: started
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
 
@@ -644,6 +662,7 @@
   when:
     - kafka_broker_health_checks_enabled|bool
     - not ansible_check_mode
+    - not (rootless_enabled | bool)
   tags: health_check
 
 - name: Register Cluster
