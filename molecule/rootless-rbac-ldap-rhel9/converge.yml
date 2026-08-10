@@ -1,36 +1,31 @@
 ---
-### Bootstrap the rootless deploy user + linger (root), set up LDAP on ldap1 (root),
-### then run confluent.platform.all as the unprivileged deployment_user.
+### Bootstrap the rootless deploy user + linger (root) via the shared
+### playbooks/rootless_bootstrap.yml, set up LDAP on ldap1 (root), then run
+### confluent.platform.all as the unprivileged deployment_user.
+###
+### import_playbook takes no inline vars, and rootless_bootstrap.yml expects
+### the caller to pass -e ansible_user=<admin>. These two shim plays flip
+### ansible_user via set_fact (which outranks group_vars) around the import.
 
-- name: Rootless bootstrap (privileged, one-time)
+- name: Cache ansible_user=root so the imported bootstrap playbook connects as root
   hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
-  gather_facts: true
+  gather_facts: false
   vars:
     ansible_user: root
   tasks:
-    - name: Create deploy group
-      group:
-        name: "{{ deployment_group }}"
+    - set_fact:
+        ansible_user: root
 
-    - name: Create deploy user
-      user:
-        name: "{{ deployment_user }}"
-        group: "{{ deployment_group }}"
-        shell: /bin/bash
-        create_home: true
+- import_playbook: confluent.platform.rootless_bootstrap
 
-    - name: Create deployment base directory
-      file:
-        path: "{{ deployment_path }}"
-        state: directory
-        owner: "{{ deployment_user }}"
-        group: "{{ deployment_group }}"
-        mode: "0755"
-
-    - name: Enable systemd linger for the deploy user
-      command: "loginctl enable-linger {{ deployment_user }}"
-      args:
-        creates: "/var/lib/systemd/linger/{{ deployment_user }}"
+- name: Cache ansible_user=deployment_user so the unprivileged deploy connects as that user
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  gather_facts: false
+  vars:
+    ansible_user: root
+  tasks:
+    - set_fact:
+        ansible_user: "{{ deployment_user }}"
 
 - name: Stand up a plain openldap-servers directory on ldap1
   hosts: ldap_server
