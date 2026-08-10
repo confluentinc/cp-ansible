@@ -113,6 +113,31 @@
         property: security.protocol
         expected_value: SASL_PLAINTEXT
 
+- name: Verify - kafka_connect plugin + connector deployed (rootless)
+  hosts: kafka_connect
+  gather_facts: false
+  tasks:
+    - name: Get Connectors on connect cluster1
+      uri:
+        url: "https://localhost:8083/connectors"
+        validate_certs: false
+      register: connectors
+
+    - name: Assert Connector Created
+      assert:
+        that:
+          - connectors.json[0] == "sample-connector-1"
+        fail_msg: "Connector not created"
+
+    - name: Wait for Connector tasks to return Running
+      uri:
+        url: "https://localhost:8083/connectors/sample-connector-1/status"
+        validate_certs: false
+      register: connector_status_response
+      until: connector_status_response.json.tasks[0].state == 'RUNNING'
+      retries: 10
+      delay: 5
+
 - name: Verify - SASL_SCRAM configured on control_center
   hosts: control_center
   gather_facts: false
