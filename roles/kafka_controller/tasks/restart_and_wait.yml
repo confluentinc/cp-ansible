@@ -8,6 +8,20 @@
   tags:
     - systemd
 
+- name: "Check if the rootless systemd --user unit exists"
+  stat:
+    path: "{{ ansible_env.HOME }}/.config/systemd/user/cp-kafka_controller.service"
+  register: kafka_controller_rootless_unit
+  when: rootless_enabled | bool
+
+# Skip if the unit doesn't exist yet; rootless_start_service.yml does the first start later.
+- name: "Restart Kafka (rootless, systemd --user)"
+  command: systemctl --user restart cp-kafka_controller.service
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+  when: rootless_enabled | bool and kafka_controller_rootless_unit.stat.exists
+  changed_when: true
+
 - name: Startup Delay
   wait_for:
     timeout: "{{ kafka_controller_health_check_delay }}"

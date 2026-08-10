@@ -1,18 +1,15 @@
 ---
 # Enables + starts one component's systemd --user unit and waits for its readiness port.
-# The non-systemd(system) equivalent of the skipped "Started" task, so a rootless run comes
-# up hands-off in dependency order. Restart=on-failure on the unit lets a component that
-# transiently exits during the KRaft/RBAC bootstrap recover on its own. Included from each
-# component role with:
-#   rootless_component_name  - e.g. kafka_broker (unit = cp-<name>.service)
-#   rootless_component_port  - the port to wait on for readiness
+# Vars: rootless_component_name (unit = cp-<name>.service), rootless_component_port.
 
 - name: "Enable + start cp-{{ rootless_component_name }} (rootless systemd --user)"
-  command: "systemctl --user enable --now cp-{{ rootless_component_name }}.service"
+  ansible.builtin.systemd_service:
+    name: "cp-{{ rootless_component_name }}.service"
+    scope: user
+    enabled: true
+    state: started
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
-  register: rootless_unit_start
-  changed_when: "'Created symlink' in rootless_unit_start.stderr or 'Created symlink' in rootless_unit_start.stdout"
 
 - name: "Wait for {{ rootless_component_name }} to be listening on port {{ rootless_component_port }}"
   wait_for:

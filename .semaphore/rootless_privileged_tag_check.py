@@ -1,18 +1,13 @@
 """
 Rootless privileged-tag sanity check.
 
-Non-root (rootless) installs skip the root-requiring tasks (those tagged
-`privileged,package,systemd,sysctl,...`): with `rootless_enabled: true` each such
-task self-skips via `when: not (rootless_enabled | bool)`, and `--skip-tags
-privileged,package,systemd,sysctl` remains an equivalent fallback. For either
-mechanism to yield a working install, the tasks that *generate component
-configuration* (tagged `configuration`) must NOT also carry any of those
-rootless-skipped tags - otherwise config generation is silently dropped in a
-non-root run and the deploy fails (this was the ANSIENG-5897 regression).
+Rootless installs (rootless_enabled: true) skip tasks tagged privileged/package/
+systemd/sysctl. A `configuration`-tagged task must never also carry one of those
+tags, or config generation silently drops in a non-root run (the ANSIENG-5897
+regression).
 
-This check scans roles/*/tasks/*.yml and fails the build if any task whose
-effective tags include `configuration` also carries a rootless-skipped tag.
-Block-level tags are inherited by their child tasks.
+Scans roles/*/tasks/*.yml for that conflict. Block-level tags are inherited by
+their children.
 """
 
 import glob
@@ -21,8 +16,7 @@ import sys
 
 import yaml
 
-# Tags skipped by the documented rootless invocation that, if combined with a
-# `configuration` task, would drop config generation in a non-root run.
+# Tags that, combined with `configuration`, would drop config in a non-root run.
 ROOTLESS_SKIP_TAGS = {"privileged", "package", "systemd", "sysctl"}
 CONFIG_TAG = "configuration"
 
@@ -53,9 +47,7 @@ def _walk(tasks, inherited, filepath, violations):
                     _walk(task[key], effective, filepath, violations)
             continue
         name = task.get("name", "<unnamed>")
-        # A task must run in a non-root install if it generates config (`configuration`
-        # tag) or is itself a rootless-purpose task (name mentions "rootless", e.g. the
-        # generated lifecycle scripts). Such a task must not carry a rootless-skipped tag.
+        # Must run rootless if it's config-generating or itself rootless-purpose (by name).
         must_run_rootless = CONFIG_TAG in effective or "rootless" in str(name).lower()
         if must_run_rootless:
             conflicting = effective & ROOTLESS_SKIP_TAGS
