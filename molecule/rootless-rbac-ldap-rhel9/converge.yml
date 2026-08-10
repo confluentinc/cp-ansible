@@ -1,0 +1,160 @@
+---
+### Bootstrap the rootless deploy user + linger (root), set up LDAP on ldap1 (root),
+### then run confluent.platform.all as the unprivileged deployment_user.
+
+- name: Rootless bootstrap (privileged, one-time)
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  gather_facts: true
+  vars:
+    ansible_user: root
+  tasks:
+    - name: Create deploy group
+      group:
+        name: "{{ deployment_group }}"
+
+    - name: Create deploy user
+      user:
+        name: "{{ deployment_user }}"
+        group: "{{ deployment_group }}"
+        shell: /bin/bash
+        create_home: true
+
+    - name: Create deployment base directory
+      file:
+        path: "{{ deployment_path }}"
+        state: directory
+        owner: "{{ deployment_user }}"
+        group: "{{ deployment_group }}"
+        mode: "0755"
+
+    - name: Enable systemd linger for the deploy user
+      command: "loginctl enable-linger {{ deployment_user }}"
+      args:
+        creates: "/var/lib/systemd/linger/{{ deployment_user }}"
+
+- name: Stand up a plain openldap-servers directory on ldap1
+  hosts: ldap_server
+  gather_facts: false
+  vars:
+    ansible_user: root
+  tasks:
+    - name: Install openldap-servers + openldap-clients
+      yum:
+        name:
+          - dnf-plugins-core
+          - openldap-servers
+          - openldap-clients
+        state: present
+
+    - name: Enable PowerTools (has openldap-servers, dropped from RHEL9 base repos)
+      command: yum config-manager --set-enabled powertools
+      changed_when: true
+
+    - name: Re-run install now that PowerTools is enabled
+      yum:
+        name:
+          - openldap-servers
+          - openldap-clients
+        state: present
+
+    - name: Enable + start slapd
+      systemd:
+        name: slapd
+        enabled: true
+        state: started
+
+    - name: Hash the directory manager password
+      command: slappasswd -s ldappassword
+      register: ldap_root_pw_hash
+      changed_when: false
+
+    - name: Set suffix + rootDN + rootPW on the default mdb database
+      shell: |
+        ldapmodify -Y EXTERNAL -H ldapi:/// <<'EOF'
+        dn: olcDatabase={2}mdb,cn=config
+        changetype: modify
+        replace: olcSuffix
+        olcSuffix: dc=example,dc=com
+        -
+        replace: olcRootDN
+        olcRootDN: cn=Manager,dc=example,dc=com
+        -
+        replace: olcRootPW
+        olcRootPW: {{ ldap_root_pw_hash.stdout }}
+        EOF
+      changed_when: true
+
+    - name: Load the cosine schema (dcObject/account/simpleSecurityObject; only core loads by default)
+      command: ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/openldap/schema/cosine.ldif
+      register: ldap_cosine_load
+      failed_when: ldap_cosine_load.rc != 0 and 'Already exists' not in ldap_cosine_load.stderr
+      changed_when: ldap_cosine_load.rc == 0
+
+    - name: Load the base DN, ou=rbac, and the RBAC test users
+      shell: |
+        ldapadd -x -H ldapi:/// -D "cn=Manager,dc=example,dc=com" -w ldappassword <<'EOF'
+        dn: dc=example,dc=com
+        objectClass: top
+        objectClass: dcObject
+        objectClass: organization
+        o: Example
+        dc: example
+
+        dn: ou=rbac,dc=example,dc=com
+        objectClass: top
+        objectClass: organizationalUnit
+        ou: rbac
+
+        dn: cn=Administrators,ou=rbac,dc=example,dc=com
+        objectClass: top
+        objectClass: groupOfNames
+        cn: Administrators
+        member: uid=mds,ou=rbac,dc=example,dc=com
+
+        dn: uid=mds,ou=rbac,dc=example,dc=com
+        objectClass: top
+        objectClass: account
+        objectClass: simpleSecurityObject
+        uid: mds
+        userPassword: password
+
+        dn: uid=schema-registry1,ou=rbac,dc=example,dc=com
+        objectClass: top
+        objectClass: account
+        objectClass: simpleSecurityObject
+        uid: schema-registry1
+        userPassword: password
+
+        dn: uid=kafka-connect1,ou=rbac,dc=example,dc=com
+        objectClass: top
+        objectClass: account
+        objectClass: simpleSecurityObject
+        uid: kafka-connect1
+        userPassword: password
+
+        dn: uid=kafka-rest1,ou=rbac,dc=example,dc=com
+        objectClass: top
+        objectClass: account
+        objectClass: simpleSecurityObject
+        uid: kafka-rest1
+        userPassword: password
+
+        dn: uid=ksql1,ou=rbac,dc=example,dc=com
+        objectClass: top
+        objectClass: account
+        objectClass: simpleSecurityObject
+        uid: ksql1
+        userPassword: password
+
+        dn: uid=control-center1,ou=rbac,dc=example,dc=com
+        objectClass: top
+        objectClass: account
+        objectClass: simpleSecurityObject
+        uid: control-center1
+        userPassword: password
+        EOF
+      register: ldap_data_load
+      failed_when: ldap_data_load.rc != 0 and 'Already exists' not in ldap_data_load.stderr
+      changed_when: ldap_data_load.rc == 0
+
+- import_playbook: ../collections_converge.yml

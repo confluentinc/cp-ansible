@@ -1,26 +1,14 @@
 ---
-# One-time PRIVILEGED bootstrap for a non-root (rootless) Confluent Platform deploy.
-#
-# Run this ONCE by an admin/sudo user (e.g. ec2-user) BEFORE the rootless deploy:
+# One-time PRIVILEGED bootstrap for a rootless deploy. Run once by an admin/sudo user:
 #   ansible-playbook -i <inventory> confluent.platform.rootless_bootstrap -e ansible_user=ec2-user
 #
-# It performs ONLY the steps that genuinely require root, then hands the host to the
-# unprivileged deploy user. Everything else (archive install, config, systemd --user units,
-# start, PyYAML) is done rootlessly by the main deploy as the deploy user.
+# Does only what needs root; everything else (archive install, config, systemd --user
+# units, start, PyYAML) runs unprivileged in the main deploy.
 #
-# Required inventory vars: deployment_user, deployment_path (deployment_group defaults to deployment_user).
-# Optional:
-#   rootless_enable_linger (default true)   - loginctl enable-linger, so systemd --user services
-#                                             run without an active login and survive reboot.
-#   rootless_install_packages (default false) - install cert tools + python (openssl/rsync/unzip/
-#                                             python3-pip/python3-pyyaml, + dbus-user-session on Debian) and
-#                                             Java. Java honors the collection's model: it is installed only
-#                                             when install_java is true (i.e. custom_java_path is NOT set),
-#                                             using {redhat,ubuntu,debian}_java_package_name (default the
-#                                             full java-17 JDK, override e.g. to java-11-openjdk). Set
-#                                             custom_java_path to bring your own JDK (any version/distro).
-#   rootless_bootstrap_authorized_keys_src   - authorized_keys to copy to the deploy user
-#                                             (default: the connecting admin's, so the same key works).
+# Required: deployment_user, deployment_path (deployment_group defaults to deployment_user).
+# Optional: rootless_enable_linger (default true); rootless_install_packages (default false -
+# installs openssl/rsync/unzip/pip/pyyaml + Java, honoring install_java/custom_java_path);
+# rootless_bootstrap_authorized_keys_src (default: the connecting admin's key).
 
 - name: Rootless bootstrap (privileged, one-time)
   hosts: all
@@ -82,44 +70,43 @@
         mode: '0755'
 
     - name: Enable systemd linger for the deploy user
-      # Lets the per-user systemd manager run without an active login and survive reboot, so the
-      # generated systemd --user units (cp-<component>.service) start reliably during the deploy.
+      # So systemd --user units survive without an active login/reboot.
       command: "loginctl enable-linger {{ deployment_user }}"
       args:
         creates: "/var/lib/systemd/linger/{{ deployment_user }}"
       when: rootless_enable_linger | bool
 
-    # python3-pip + python3-pyyaml: the target interpreter needs PyYAML (the update_log4j2 module
-    # imports yaml) and pip; a minimal host (e.g. RHEL UBI) ships neither, and the rootless deploy
-    # runs unprivileged so it cannot install them itself. Provide them here as the one-time admin step.
-    # RHEL ships the per-user D-Bus bits with systemd, so the deploy user's `systemd --user` manager
-    # (user@<uid>) starts as-is once linger is enabled.
+    # PyYAML/pip for update_log4j2 - a minimal host may ship neither, and rootless can't
+    # install them itself. RHEL's per-user D-Bus starts on its own once linger is enabled.
     - name: Install cert tools + python (openssl/rsync/unzip/pip/PyYAML) - RedHat
       yum:
-        name: [openssl, rsync, unzip, python3-pip, python3-pyyaml]
+        name:
+          - openssl
+          - rsync
+          - unzip
+          - python3-pip
+          - python3-pyyaml
         state: present
       when: rootless_install_packages | bool and ansible_os_family == "RedHat"
 
-    # dbus-user-session: on Debian/Ubuntu the deploy user's `systemd --user` manager (user@<uid>) needs
-    # a per-user D-Bus session, which this package provides. Without it `systemctl --user` fails with
-    # "Failed to connect to bus" / user@<uid> "Result: protocol", so the rootless systemd --user
-    # lifecycle cannot start. It requires root to install, hence it belongs in this one-time admin step.
+    # dbus-user-session: Debian/Ubuntu's systemd --user manager needs it, or systemctl --user
+    # fails with "Failed to connect to bus". Requires root, hence installed here.
     - name: Install cert tools + python (+ user D-Bus) - Debian/Ubuntu
       apt:
-        name: [openssl, rsync, unzip, python3-pip, python3-yaml, dbus-user-session]
+        name:
+          - openssl
+          - rsync
+          - unzip
+          - python3-pip
+          - python3-yaml
+          - dbus-user-session
         state: present
         update_cache: true
       when: rootless_install_packages | bool and ansible_os_family == "Debian"
 
-    # Java: the deploy installs Java in a privileged/package-tagged task that is skipped under rootless,
-    # so a rootless host needs Java provided some other way. Install it here, but honor the collection's
-    # existing, customer-configurable Java model instead of forcing a version:
-    #   - install_java (roles/common/defaults) is false when custom_java_path is set, so a customer who
-    #     brings their own JDK (any version/distro: Zulu/Temurin/Oracle/OpenJDK) is not overridden here.
-    #   - the package name comes from {redhat,ubuntu,debian}_java_package_name (default the FULL java-17
-    #     JDK, which Confluent recommends over a JRE), overridable to e.g. java-11-openjdk.
-    # These vars live in the common role's defaults; this standalone play defaults them to the same values
-    # so an operator's inventory/-e override still wins.
+    # The privileged/package-tagged Java install is skipped under rootless, so install it here
+    # instead, honoring the existing model: install_java is false when custom_java_path is set
+    # (bring-your-own JDK), package name from {redhat,ubuntu,debian}_java_package_name.
     - name: Install Java (respects install_java + redhat_java_package_name) - RedHat
       yum:
         name: "{{ redhat_java_package_name | default('java-17-openjdk') }}"
