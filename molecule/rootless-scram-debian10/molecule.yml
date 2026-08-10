@@ -1,0 +1,137 @@
+---
+### Rootless install on Debian10, SASL_SCRAM + SSL. Validates systemd --user
+### (loginctl linger) + rootless_bootstrap.yml's apt/dbus-user-session branch
+### on Debian, and SCRAM (untested on Debian/Ubuntu elsewhere in this suite).
+
+driver:
+  name: docker
+platforms:
+  - name: kafka-controller1
+    hostname: kafka-controller1.confluent
+    groups:
+      - kafka_controller
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    converge: converge.yml
+    verify: verify.yml
+  inventory:
+    group_vars:
+      all:
+        rootless_enabled: true
+        deployment_user: cp-user
+        deployment_group: cp-user
+        deployment_path: /home/cp-user/cp-data
+        installation_method: archive
+        custom_java_path: /opt/jdk17
+
+        # Debian/Ubuntu's systemd --user manager needs dbus-user-session, which the archive
+        # Dockerfile doesn't bake in - exercise rootless_bootstrap.yml's apt branch for it.
+        rootless_install_packages: true
+
+        ssl_enabled: true
+        sasl_protocol: scram
+
+      # Rootless components connect as the deploy user.
+      kafka_controller:
+        ansible_user: "{{ deployment_user }}"
+      kafka_broker:
+        ansible_user: "{{ deployment_user }}"
+      schema_registry:
+        ansible_user: "{{ deployment_user }}"
+      kafka_connect:
+        ansible_user: "{{ deployment_user }}"
+      kafka_rest:
+        ansible_user: "{{ deployment_user }}"
+      ksql:
+        ansible_user: "{{ deployment_user }}"
+      control_center:
+        ansible_user: "{{ deployment_user }}"
+verifier:
+  name: ansible

@@ -610,21 +610,25 @@
 # converges this. Co-restart controller+broker together (delegated when on separate hosts) and
 # wait for MDS, mirroring what the root/systemd deploy does.
 - name: Enable Kafka Broker systemd --user unit (rootless RBAC)
-  command: systemctl --user enable cp-kafka_broker.service
+  ansible.builtin.systemd_service:
+    name: cp-kafka_broker.service
+    scope: user
+    enabled: true
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
-  changed_when: false
   when: rootless_lifecycle_enabled | bool and rbac_enabled | bool
 
 # Non-co-located controllers only; co-located ones restart together with the broker below.
 - name: Converge RBAC bootstrap (rootless) - restart standalone controllers
-  command: systemctl --user restart cp-kafka_controller.service
+  ansible.builtin.systemd_service:
+    name: cp-kafka_controller.service
+    scope: user
+    state: restarted
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ hostvars[item].ansible_user_uid | default(ansible_user_uid) }}"
   delegate_to: "{{ item }}"
   loop: "{{ groups['kafka_controller'] | default([]) | difference(groups['kafka_broker'] | default([])) }}"
   run_once: true
-  changed_when: false
   when:
     - rootless_lifecycle_enabled | bool
     - rbac_enabled | bool
