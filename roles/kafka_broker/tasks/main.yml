@@ -62,7 +62,9 @@
     tasks_from: validate_package_availability.yml
   vars:
     validate_packages: "{{ kafka_broker_packages }}"
-  when: installation_method == "package"
+  when:
+    - installation_method == "package"
+    - not (rootless_enabled | bool)
   tags:
     - package
     - cp_package
@@ -75,7 +77,9 @@
     tasks_from: remove_packages.yml
   vars:
     service_name: "{{ kafka_broker_service_name }}"
-  when: installation_method == "package"
+  when:
+    - installation_method == "package"
+    - not (rootless_enabled | bool)
   tags:
     - package
     - cp_package
@@ -91,6 +95,7 @@
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
+    - not (rootless_enabled | bool)
   ignore_errors: "{{ ansible_check_mode }}"
   tags:
     - package
@@ -107,6 +112,7 @@
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
+    - not (rootless_enabled | bool)
   ignore_errors: "{{ ansible_check_mode }}"
   tags:
     - package
@@ -116,6 +122,7 @@
 - name: Kafka Broker group
   group:
     name: "{{kafka_broker_group}}"
+  when: not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -133,7 +140,9 @@
     system: true
     shell: "{{user_login_shell}}"
     group: "{{kafka_broker_group}}"
-  when: (getent_passwd|default({}))[kafka_broker_user] is not defined
+  when:
+    - (getent_passwd|default({}))[kafka_broker_user] is not defined
+    - not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -146,7 +155,9 @@
     dest: "{{kafka_broker.systemd_file}}"
     mode: '644'
     force: true
-  when: installation_method == "archive"
+  when:
+    - installation_method == "archive"
+    - not (rootless_enabled | bool)
   tags:
     - systemd
     - privileged
@@ -231,6 +242,7 @@
     group: "{{kafka_broker_group}}"
     state: directory
     mode: '750'
+  when: not (rootless_enabled | bool)
   tags:
     - privileged
     - filesystem
@@ -275,6 +287,7 @@
     group: "{{kafka_broker_group}}"
     state: directory
     mode: '750'
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
     - privileged
@@ -297,9 +310,21 @@
     group: root
   notify: restart kafka
   diff: "{{ not mask_sensitive_diff|bool }}"
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
-    - privileged
+
+- name: Generate Kafka Broker rootless lifecycle scripts
+  include_role:
+    name: common
+    tasks_from: rootless_lifecycle.yml
+  vars:
+    rootless_component_name: kafka_broker
+    rootless_service_environment_overrides: "{{ kafka_broker_service_environment_overrides }}"
+    rootless_service_exec: "{{ kafka_broker_service_overrides.ExecStart }}"
+  when: rootless_lifecycle_enabled | bool
+  tags:
+    - filesystem
 
 - name: Include Kraft Cluster Data
   include_tasks: get_meta_properties.yml
@@ -533,7 +558,9 @@
     path: /usr/lib/sysctl.d
     state: directory
     mode: '755'
-  when: ansible_distribution == "Debian"
+  when:
+    - ansible_distribution == "Debian"
+    - not (rootless_enabled | bool)
   tags:
     - sysctl
     - privileged
@@ -546,6 +573,7 @@
     sysctl_file: "{{ kafka_broker_sysctl_file }}"
     reload: true
   with_dict: "{{ kafka_broker_sysctl }}"
+  when: not (rootless_enabled | bool)
   tags:
     - sysctl
     - privileged
@@ -563,14 +591,71 @@
     name: "{{kafka_broker_service_name}}"
     enabled: true
     state: started
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
+
+# Non-RBAC: a simple systemd --user start + wait for the client listener is enough.
+- name: Start Kafka Broker (rootless, systemd --user)
+  include_role:
+    name: common
+    tasks_from: rootless_start_service.yml
+  vars:
+    rootless_component_name: kafka_broker
+    rootless_component_port: "{{ kafka_broker_listeners['internal']['port'] }}"
+  when: rootless_lifecycle_enabled | bool and not rbac_enabled | bool
+
+# RBAC cold bootstrap is circular: controller authorizer init waits on the broker, and the
+# broker exits AuthorizerNotReady until the authorizer is ready - per-unit Restart alone never
+# converges this. Co-restart controller+broker together (delegated when on separate hosts) and
+# wait for MDS, mirroring what the root/systemd deploy does.
+- name: Enable Kafka Broker systemd --user unit (rootless RBAC)
+  command: systemctl --user enable cp-kafka_broker.service
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+  changed_when: false
+  when: rootless_lifecycle_enabled | bool and rbac_enabled | bool
+
+# Non-co-located controllers only; co-located ones restart together with the broker below.
+- name: Converge RBAC bootstrap (rootless) - restart standalone controllers
+  command: systemctl --user restart cp-kafka_controller.service
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ hostvars[item].ansible_user_uid | default(ansible_user_uid) }}"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['kafka_controller'] | default([]) | difference(groups['kafka_broker'] | default([])) }}"
+  run_once: true
+  changed_when: false
+  when:
+    - rootless_lifecycle_enabled | bool
+    - rbac_enabled | bool
+
+- name: Converge controller+broker RBAC bootstrap - co-restart local units + wait for MDS (rootless)
+  shell:
+    executable: /bin/bash
+    cmd: |
+      export XDG_RUNTIME_DIR=/run/user/{{ ansible_user_uid }}
+      # Bash builtin, not ss/iproute - iproute may be absent and ss would misreport "down".
+      mds_up(){ (exec 3<>/dev/tcp/127.0.0.1/{{ mds_port }}) 2>/dev/null; }
+      mds_up && exit 0
+      # Restart only units present on this host; avoids "Unit not found" on a broker-only host.
+      units="cp-kafka_broker.service"
+      systemctl --user cat cp-kafka_controller.service >/dev/null 2>&1 && units="cp-kafka_controller.service $units"
+      systemctl --user restart $units
+      for _ in $(seq 1 24); do mds_up && exit 0; sleep 5; done
+      exit 1
+  register: rootless_rbac_converge
+  until: rootless_rbac_converge.rc == 0
+  retries: "{{ rootless_rbac_bootstrap_attempts | default(10) }}"
+  delay: 5
+  changed_when: false
+  when: rootless_lifecycle_enabled | bool and rbac_enabled | bool
 
 - name: Wait for Broker health checks to complete
   include_tasks: health_check.yml
   when:
     - kafka_broker_health_checks_enabled|bool
     - not ansible_check_mode
+    - not (rootless_enabled | bool)
   tags: health_check
 
 - name: Register Cluster
