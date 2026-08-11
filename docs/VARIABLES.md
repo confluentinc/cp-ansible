@@ -8,7 +8,7 @@ Below are the supported variables for the role variables
 
 Version of Confluent Platform to install
 
-Default:  8.3.0
+Default:  8.3.1
 
 ***
 
@@ -7048,7 +7048,7 @@ Default:  ""
 
 Version of Confluent USM Agent to install
 
-Default:  1.0.0
+Default:  1.2.0
 
 ***
 
