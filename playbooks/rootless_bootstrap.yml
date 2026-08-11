@@ -5,7 +5,10 @@
 # Does only what needs root; everything else (archive install, config, systemd --user
 # units, start, PyYAML) runs unprivileged in the main deploy.
 #
-# Required: deployment_user, deployment_path (deployment_group defaults to deployment_user).
+# Required per-host: deployment_user, deployment_path (deployment_group defaults to
+# deployment_user). Runs against hosts:all so a mixed inventory works - a host with neither
+# set (e.g. an existing LDAP/Kerberos server sharing the inventory but not a deploy target)
+# is skipped informationally rather than failed, so it's never excluded from later plays.
 # Optional: rootless_enable_linger (default true); rootless_install_packages (default false -
 # installs openssl/rsync/unzip/pip/pyyaml + Java, honoring install_java/custom_java_path);
 # rootless_bootstrap_authorized_keys_src (default: the connecting admin's key).
@@ -16,142 +19,158 @@
 - name: Rootless bootstrap (privileged, one-time)
   hosts: all
   become: true
-  gather_facts: true
+  # Not gathered here (see the block below) - the implicit play-level gather_facts runs before
+  # any task when: can guard it, and inherits become: true. A host with no sudo (e.g. an
+  # unmanaged, non-Linux-shell service container sharing the inventory) would fail hard on
+  # that alone, before ever reaching the deployment_user/deployment_path check.
+  gather_facts: false
   vars:
     deployment_group: "{{ deployment_user }}"
     rootless_enable_linger: true
     rootless_install_packages: false
-    rootless_bootstrap_authorized_keys_src: "/home/{{ ansible_user }}/.ssh/authorized_keys"
+    # default('') so hosts:all tolerates a host with no ansible_user set (e.g. an unmanaged
+    # LDAP/OAuth server sharing the inventory but outside the rootless deploy group) - the
+    # resulting path just won't exist, and both uses below are already stat.exists-guarded.
+    rootless_bootstrap_authorized_keys_src: "/home/{{ ansible_user | default('') }}/.ssh/authorized_keys"
   tasks:
-    - name: Assert required rootless bootstrap vars
-      assert:
-        that:
-          - deployment_user | default('') | length > 0
-          - deployment_path | default('') | length > 0
-        fail_msg: "Set deployment_user and deployment_path (the rootless deploy vars) in your inventory."
-
-    - name: Create deploy group
-      group:
-        name: "{{ deployment_group }}"
-
-    - name: Create deploy user
-      user:
-        name: "{{ deployment_user }}"
-        group: "{{ deployment_group }}"
-        shell: /bin/bash
-        create_home: true
-
-    - name: Ensure deploy user's .ssh directory
-      file:
-        path: "/home/{{ deployment_user }}/.ssh"
-        state: directory
-        owner: "{{ deployment_user }}"
-        group: "{{ deployment_group }}"
-        mode: '0700'
-
-    - name: Check source authorized_keys exists
-      stat:
-        path: "{{ rootless_bootstrap_authorized_keys_src }}"
-      register: rootless_ak_src
-
-    - name: Authorize the deploy user's SSH key
-      copy:
-        src: "{{ rootless_bootstrap_authorized_keys_src }}"
-        remote_src: true
-        dest: "/home/{{ deployment_user }}/.ssh/authorized_keys"
-        owner: "{{ deployment_user }}"
-        group: "{{ deployment_group }}"
-        mode: '0600'
-      when: rootless_ak_src.stat.exists
-
-    - name: Create deployment base directory
-      file:
-        path: "{{ deployment_path }}"
-        state: directory
-        owner: "{{ deployment_user }}"
-        group: "{{ deployment_group }}"
-        mode: '0755'
-
-    - name: Enable systemd linger for the deploy user
-      # So systemd --user units survive without an active login/reboot.
-      command: "loginctl enable-linger {{ deployment_user }}"
-      args:
-        creates: "/var/lib/systemd/linger/{{ deployment_user }}"
-      when: rootless_enable_linger | bool
-
-    # PyYAML/pip for update_log4j2 - a minimal host may ship neither, and rootless can't
-    # install them itself. RHEL's per-user D-Bus starts on its own once linger is enabled.
-    - name: Install cert tools + python (openssl/rsync/unzip/pip/PyYAML) - RedHat
-      yum:
-        name:
-          - openssl
-          - rsync
-          - unzip
-          - python3-pip
-          - python3-pyyaml
-        state: present
-      when: rootless_install_packages | bool and ansible_os_family == "RedHat"
-
-    # dbus-user-session: Debian/Ubuntu's systemd --user manager needs it, or systemctl --user
-    # fails with "Failed to connect to bus". Requires root, hence installed here.
-    - name: Install cert tools + python (+ user D-Bus) - Debian/Ubuntu
-      apt:
-        name:
-          - openssl
-          - rsync
-          - unzip
-          - python3-pip
-          - python3-yaml
-          - dbus-user-session
-        state: present
-        update_cache: true
-      when: rootless_install_packages | bool and ansible_os_family == "Debian"
-
-    # The privileged/package-tagged Java install is skipped under rootless, so install it here
-    # instead, honoring the existing model: install_java is false when custom_java_path is set
-    # (bring-your-own JDK), package name from {redhat,ubuntu,debian}_java_package_name.
-    - name: Install Java (respects install_java + redhat_java_package_name) - RedHat
-      yum:
-        name: "{{ redhat_java_package_name | default('java-17-openjdk') }}"
-        state: present
-      when:
-        - rootless_install_packages | bool
-        - ansible_os_family == "RedHat"
-        - install_java | default((custom_java_path | default('') | length) == 0) | bool
-
-    - name: Install Java (respects install_java + {ubuntu,debian}_java_package_name) - Debian/Ubuntu
-      apt:
-        name: "{{ (ubuntu_java_package_name if ansible_distribution == 'Ubuntu' else debian_java_package_name) | default('openjdk-17-jdk') }}"
-        state: present
-        update_cache: true
-      when:
-        - rootless_install_packages | bool
-        - ansible_os_family == "Debian"
-        - install_java | default((custom_java_path | default('') | length) == 0) | bool
-
-    # custom_java_install.yml's own alternatives tasks are skipped under rootless_enabled
-    # (privileged, write to /usr/bin). Without them, java/keytool are never on PATH anywhere -
-    # not for the deploy itself (keytool-based keystore/truststore tasks, Get Java Version) nor
-    # for an operator who SSHes in later. Do the exact same symlink here instead, once, as root.
-    - name: Java Update Alternatives (custom_java_path, rootless)
-      alternatives:
-        name: java
-        link: /usr/bin/java
-        path: "{{ custom_java_path }}/bin/java"
-        priority: 1
-      when: custom_java_path | default('') | length > 0
-
-    - name: Keytool Update Alternatives (custom_java_path, rootless)
-      alternatives:
-        name: keytool
-        link: /usr/bin/keytool
-        path: "{{ custom_java_path }}/bin/keytool"
-        priority: 1
-      when: custom_java_path | default('') | length > 0
-
-    - name: Rootless bootstrap summary
+    # hosts:all is meant for a mixed inventory - e.g. an existing LDAP/Kerberos server sharing
+    # the same inventory as the rootless CP deploy but never intended as a target. Skip those
+    # hosts entirely (informationally) rather than asserting, so they're never marked failed -
+    # a failed host here would be excluded from every later playbook/play in the same run,
+    # including the actual LDAP/OAuth setup a molecule scenario or real deploy may still need.
+    - name: Skip rootless bootstrap on this host - deployment_user/deployment_path not set
       debug:
-        msg:
-          - "Rootless bootstrap complete: user '{{ deployment_user }}' ready at '{{ deployment_path }}'."
-          - "Linger: {{ rootless_enable_linger | bool }}; OS packages installed: {{ rootless_install_packages | bool }}."
-          - "Next: run the rootless deploy as {{ deployment_user }} (playbooks/rootless_deploy.sh -i <inventory>)."
+        msg: "deployment_user/deployment_path not set for {{ inventory_hostname }}; assuming it's not a rootless deploy target and skipping bootstrap here."
+      when: deployment_user | default('') | length == 0 or deployment_path | default('') | length == 0
+
+    - name: Rootless bootstrap tasks
+      when: deployment_user | default('') | length > 0 and deployment_path | default('') | length > 0
+      block:
+        - name: Gather facts
+          setup:
+
+        - name: Create deploy group
+          group:
+            name: "{{ deployment_group }}"
+
+        - name: Create deploy user
+          user:
+            name: "{{ deployment_user }}"
+            group: "{{ deployment_group }}"
+            shell: /bin/bash
+            create_home: true
+
+        - name: Ensure deploy user's .ssh directory
+          file:
+            path: "/home/{{ deployment_user }}/.ssh"
+            state: directory
+            owner: "{{ deployment_user }}"
+            group: "{{ deployment_group }}"
+            mode: '0700'
+
+        - name: Check source authorized_keys exists
+          stat:
+            path: "{{ rootless_bootstrap_authorized_keys_src }}"
+          register: rootless_ak_src
+
+        - name: Authorize the deploy user's SSH key
+          copy:
+            src: "{{ rootless_bootstrap_authorized_keys_src }}"
+            remote_src: true
+            dest: "/home/{{ deployment_user }}/.ssh/authorized_keys"
+            owner: "{{ deployment_user }}"
+            group: "{{ deployment_group }}"
+            mode: '0600'
+          when: rootless_ak_src.stat.exists
+
+        - name: Create deployment base directory
+          file:
+            path: "{{ deployment_path }}"
+            state: directory
+            owner: "{{ deployment_user }}"
+            group: "{{ deployment_group }}"
+            mode: '0755'
+
+        - name: Enable systemd linger for the deploy user
+          # So systemd --user units survive without an active login/reboot.
+          command: "loginctl enable-linger {{ deployment_user }}"
+          args:
+            creates: "/var/lib/systemd/linger/{{ deployment_user }}"
+          when: rootless_enable_linger | bool
+
+        # PyYAML/pip for update_log4j2 - a minimal host may ship neither, and rootless can't
+        # install them itself. RHEL's per-user D-Bus starts on its own once linger is enabled.
+        - name: Install cert tools + python (openssl/rsync/unzip/pip/PyYAML) - RedHat
+          yum:
+            name:
+              - openssl
+              - rsync
+              - unzip
+              - python3-pip
+              - python3-pyyaml
+            state: present
+          when: rootless_install_packages | bool and ansible_os_family == "RedHat"
+
+        # dbus-user-session: Debian/Ubuntu's systemd --user manager needs it, or systemctl --user
+        # fails with "Failed to connect to bus". Requires root, hence installed here.
+        - name: Install cert tools + python (+ user D-Bus) - Debian/Ubuntu
+          apt:
+            name:
+              - openssl
+              - rsync
+              - unzip
+              - python3-pip
+              - python3-yaml
+              - dbus-user-session
+            state: present
+            update_cache: true
+          when: rootless_install_packages | bool and ansible_os_family == "Debian"
+
+        # The privileged/package-tagged Java install is skipped under rootless, so install it here
+        # instead, honoring the existing model: install_java is false when custom_java_path is set
+        # (bring-your-own JDK), package name from {redhat,ubuntu,debian}_java_package_name.
+        - name: Install Java (respects install_java + redhat_java_package_name) - RedHat
+          yum:
+            name: "{{ redhat_java_package_name | default('java-17-openjdk') }}"
+            state: present
+          when:
+            - rootless_install_packages | bool
+            - ansible_os_family == "RedHat"
+            - install_java | default((custom_java_path | default('') | length) == 0) | bool
+
+        - name: Install Java (respects install_java + {ubuntu,debian}_java_package_name) - Debian/Ubuntu
+          apt:
+            name: "{{ (ubuntu_java_package_name if ansible_distribution == 'Ubuntu' else debian_java_package_name) | default('openjdk-17-jdk') }}"
+            state: present
+            update_cache: true
+          when:
+            - rootless_install_packages | bool
+            - ansible_os_family == "Debian"
+            - install_java | default((custom_java_path | default('') | length) == 0) | bool
+
+        # custom_java_install.yml's own alternatives tasks are skipped under rootless_enabled
+        # (privileged, write to /usr/bin). Without them, java/keytool are never on PATH anywhere -
+        # not for the deploy itself (keytool-based keystore/truststore tasks, Get Java Version) nor
+        # for an operator who SSHes in later. Do the exact same symlink here instead, once, as root.
+        - name: Java Update Alternatives (custom_java_path, rootless)
+          alternatives:
+            name: java
+            link: /usr/bin/java
+            path: "{{ custom_java_path }}/bin/java"
+            priority: 1
+          when: custom_java_path | default('') | length > 0
+
+        - name: Keytool Update Alternatives (custom_java_path, rootless)
+          alternatives:
+            name: keytool
+            link: /usr/bin/keytool
+            path: "{{ custom_java_path }}/bin/keytool"
+            priority: 1
+          when: custom_java_path | default('') | length > 0
+
+        - name: Rootless bootstrap summary
+          debug:
+            msg:
+              - "Rootless bootstrap complete: user '{{ deployment_user }}' ready at '{{ deployment_path }}'."
+              - "Linger: {{ rootless_enable_linger | bool }}; OS packages installed: {{ rootless_install_packages | bool }}."
+              - "Next: run the rootless deploy as {{ deployment_user }} (playbooks/rootless_deploy.sh -i <inventory>)."
