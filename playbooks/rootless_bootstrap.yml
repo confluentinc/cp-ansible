@@ -9,6 +9,9 @@
 # Optional: rootless_enable_linger (default true); rootless_install_packages (default false -
 # installs openssl/rsync/unzip/pip/pyyaml + Java, honoring install_java/custom_java_path);
 # rootless_bootstrap_authorized_keys_src (default: the connecting admin's key).
+# When custom_java_path is set, this also symlinks java/keytool onto /usr/bin (same as the
+# root install's alternatives step) so they resolve on PATH for the deploy and for anyone
+# who SSHes in later - unconditional on rootless_install_packages, always applied.
 
 - name: Rootless bootstrap (privileged, one-time)
   hosts: all
@@ -125,6 +128,26 @@
         - rootless_install_packages | bool
         - ansible_os_family == "Debian"
         - install_java | default((custom_java_path | default('') | length) == 0) | bool
+
+    # custom_java_install.yml's own alternatives tasks are skipped under rootless_enabled
+    # (privileged, write to /usr/bin). Without them, java/keytool are never on PATH anywhere -
+    # not for the deploy itself (keytool-based keystore/truststore tasks, Get Java Version) nor
+    # for an operator who SSHes in later. Do the exact same symlink here instead, once, as root.
+    - name: Java Update Alternatives (custom_java_path, rootless)
+      alternatives:
+        name: java
+        link: /usr/bin/java
+        path: "{{ custom_java_path }}/bin/java"
+        priority: 1
+      when: custom_java_path | default('') | length > 0
+
+    - name: Keytool Update Alternatives (custom_java_path, rootless)
+      alternatives:
+        name: keytool
+        link: /usr/bin/keytool
+        path: "{{ custom_java_path }}/bin/keytool"
+        priority: 1
+      when: custom_java_path | default('') | length > 0
 
     - name: Rootless bootstrap summary
       debug:
