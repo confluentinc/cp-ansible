@@ -144,16 +144,6 @@ provisioner:
   inventory:
     group_vars:
       all:
-        rootless_enabled: true
-        deployment_user: cp-user
-        deployment_group: cp-user
-        deployment_path: /home/cp-user/cp-data
-        installation_method: archive
-
-        # Ubuntu's systemd --user manager needs dbus-user-session, which the archive
-        # Dockerfile doesn't bake in - exercise rootless_bootstrap.yml's apt branch for it.
-        rootless_install_packages: true
-
         ssl_enabled: true
         ssl_mutual_auth_enabled: true
         ssl_client_authentication: required
@@ -192,14 +182,26 @@ provisioner:
         kafka_broker_custom_properties: *ldap_base_properties
         kafka_controller_custom_properties: *ldap_base_properties
 
-      kafka_controller:
+      # Rootless vars scoped to the CP component groups only (not group_vars/all) - ldap1/oauth1
+      # are unmanaged hosts sharing this inventory, not rootless deploy targets. Scoping these
+      # here keeps them out of playbooks/rootless_bootstrap.yml's hosts:all bootstrap treatment
+      # entirely, the same way ansible_user already is.
+      kafka_controller: &rootless_component_vars
         ansible_user: "{{ deployment_user }}"
+        rootless_enabled: true
+        deployment_user: cp-user
+        deployment_group: cp-user
+        deployment_path: /home/cp-user/cp-data
+        installation_method: archive
+        # Ubuntu's systemd --user manager needs dbus-user-session, which the archive
+        # Dockerfile doesn't bake in - exercise rootless_bootstrap.yml's apt branch for it.
+        rootless_install_packages: true
 
       # OAuth/OIDC SSO for Control Center, layered on top of the LDAP-backed MDS above.
       # sso_* config is read from roles/kafka_broker/tasks/main.yml (the only consumer in
       # this collection - it imports the IDP cert into the broker's MDS truststore for C3 SSO).
       kafka_broker:
-        ansible_user: "{{ deployment_user }}"
+        <<: *rootless_component_vars
         sso_mode: oidc
         keycloak_oauth_server_port: 8443
         keycloak_http_protocol: https
@@ -246,16 +248,10 @@ provisioner:
             uid: 9994
             guid: 94
 
-      # Rootless components connect as the deploy user; ldap1/oauth1 stay root (not part of the deploy).
-      schema_registry:
-        ansible_user: "{{ deployment_user }}"
-      kafka_connect:
-        ansible_user: "{{ deployment_user }}"
-      kafka_rest:
-        ansible_user: "{{ deployment_user }}"
-      ksql:
-        ansible_user: "{{ deployment_user }}"
-      control_center:
-        ansible_user: "{{ deployment_user }}"
+      schema_registry: *rootless_component_vars
+      kafka_connect: *rootless_component_vars
+      kafka_rest: *rootless_component_vars
+      ksql: *rootless_component_vars
+      control_center: *rootless_component_vars
 verifier:
   name: ansible
