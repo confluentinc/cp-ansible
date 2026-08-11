@@ -128,13 +128,15 @@ Validates that TLS is configured properly.
 
 #### Scenario broker-scale-up test's the following:
 
+Tests scale-up of the Kafka broker cluster.
+
+Brings up a 3-broker cluster in the create/prepare phase, then adds 2 more
+
+brokers (broker4, broker5) in the converge phase and verifies they join.
+
 Installation of Confluent Platform on RHEL8.
 
 MTLS enabled.
-
-Installs Three unique Kafka Connect Clusters with unique connectors.
-
-Installs two unique KSQL Clusters.
 
 #### Scenario broker-scale-up verify test's the following:
 
