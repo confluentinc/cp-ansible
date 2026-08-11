@@ -1,6 +1,6 @@
 ---
 ### Checks services run as the deploy user via systemd --user, nothing landed
-### under /opt, and SASL_SCRAM is actually configured on each component.
+### under /opt, and SASL_PLAIN (+ SSL) is actually configured on each component.
 
 - name: Verify - rootless lifecycle on all CP components
   hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
@@ -53,7 +53,19 @@
         fail_msg: "Rootless install wrote to /opt: {{ opt_contents.files | map(attribute='path') | list }}"
         quiet: true
 
-- name: Verify - SASL_SCRAM configured on kafka_broker
+- name: Verify - SASL_PLAIN configured on kafka_controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: "{{ deployment_path }}/confluent/etc/controller/server.properties"
+        property: listener.name.controller.sasl.enabled.mechanisms
+        expected_value: PLAIN
+
+- name: Verify - SASL_PLAIN configured on kafka_broker
   hosts: kafka_broker
   gather_facts: false
   tasks:
@@ -63,9 +75,9 @@
       vars:
         file_path: "{{ deployment_path }}/confluent/etc/kafka/server.properties"
         property: listener.name.internal.sasl.enabled.mechanisms
-        expected_value: SCRAM-SHA-512
+        expected_value: PLAIN
 
-- name: Verify - SASL_SCRAM configured on schema_registry
+- name: Verify - SASL_PLAIN configured on schema_registry
   hosts: schema_registry
   gather_facts: false
   tasks:
@@ -75,9 +87,9 @@
       vars:
         file_path: "{{ deployment_path }}/confluent/etc/schema-registry/schema-registry.properties"
         property: kafkastore.security.protocol
-        expected_value: SASL_PLAINTEXT
+        expected_value: SASL_SSL
 
-- name: Verify - SASL_SCRAM configured on kafka_rest
+- name: Verify - SASL_PLAIN configured on kafka_rest
   hosts: kafka_rest
   gather_facts: false
   tasks:
@@ -87,9 +99,9 @@
       vars:
         file_path: "{{ deployment_path }}/confluent/etc/kafka-rest/kafka-rest.properties"
         property: client.security.protocol
-        expected_value: SASL_PLAINTEXT
+        expected_value: SASL_SSL
 
-- name: Verify - SASL_SCRAM configured on kafka_connect
+- name: Verify - SASL_PLAIN configured on kafka_connect
   hosts: kafka_connect
   gather_facts: false
   tasks:
@@ -99,9 +111,9 @@
       vars:
         file_path: "{{ deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
         property: security.protocol
-        expected_value: SASL_PLAINTEXT
+        expected_value: SASL_SSL
 
-- name: Verify - SASL_SCRAM configured on ksql
+- name: Verify - SASL_PLAIN configured on ksql
   hosts: ksql
   gather_facts: false
   tasks:
@@ -111,7 +123,7 @@
       vars:
         file_path: "{{ deployment_path }}/confluent/etc/ksqldb/ksql-server.properties"
         property: security.protocol
-        expected_value: SASL_PLAINTEXT
+        expected_value: SASL_SSL
 
 - name: Verify - kafka_connect plugin + connector deployed (rootless)
   hosts: kafka_connect
@@ -138,7 +150,7 @@
       retries: 10
       delay: 5
 
-- name: Verify - SASL_SCRAM configured on control_center
+- name: Verify - SASL_PLAIN configured on control_center
   hosts: control_center
   gather_facts: false
   tasks:
@@ -148,4 +160,4 @@
       vars:
         file_path: "{{ deployment_path }}/confluent/etc/confluent-control-center/control-center-production.properties"
         property: confluent.controlcenter.streams.security.protocol
-        expected_value: SASL_PLAINTEXT
+        expected_value: SASL_SSL
