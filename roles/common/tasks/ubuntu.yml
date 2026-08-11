@@ -7,6 +7,7 @@
   until: install_apt_transport_result is success  or ansible_check_mode
   retries: 5
   delay: 90
+  when: not (rootless_enabled | bool)
   tags: package
 
 - name: Install gnupg for gpg-keys
@@ -16,6 +17,7 @@
   until: install_gnupg_result is success  or ansible_check_mode
   retries: 5
   delay: 90
+  when: not (rootless_enabled | bool)
   tags: package
 
 - name: Add Confluent Apt Key
@@ -78,6 +80,7 @@
     state: absent
   when:
     - repository_configuration == 'custom'
+    - installation_method == "package"
 
 - name: Ensure Confluent Clients Apt Repo does not Exists when repository_configuration is Custom
   apt_repository:
@@ -85,6 +88,7 @@
     state: absent
   when:
     - repository_configuration == 'custom'
+    - installation_method == "package"
 
 - name: Add Custom Apt Repo
   copy:
@@ -106,6 +110,9 @@
     path: /usr/share/man/man1
     state: directory
     mode: '755'
+  when: not (rootless_enabled | bool)
+  tags:
+    - privileged
 
 - name: Custom Java Install
   include_tasks: custom_java_install.yml
@@ -122,6 +129,9 @@
   when:
     - repository_configuration == 'confluent'
     - install_java|bool
+    - not (rootless_enabled | bool)
+  tags:
+    - package
 
 - name: Install Java
   apt:
@@ -130,16 +140,22 @@
   until: java_install_result is success  or ansible_check_mode
   retries: 10
   delay: 5
-  when: install_java|bool
+  when:
+    - install_java|bool
+    - not (rootless_enabled | bool)
   tags: package
 
 - name: Install OpenSSL
   apt:
     name: openssl
+  when: not (rootless_enabled | bool)
   tags: package
 
 - name: Get Java Version
-  command: java -version
+  # custom_java_path isn't on PATH (the alternatives symlink that would put it
+  # there is a privileged, rootless-skipped task) - resolve java directly from
+  # it when set, same as the JVM start scripts' own JAVA_HOME.
+  command: "{{ (custom_java_path ~ '/bin/java') if custom_java_path | default('') | length > 0 else 'java' }} -version"
   register: version_output
   check_mode: false
   changed_when: false
@@ -154,15 +170,18 @@
       - python3-pip
     state: present
   become: true
+  when: not (rootless_enabled | bool)
   tags: package
 
 - name: Upgrade pip
   ansible.builtin.pip:
     name: pip
     extra_args: --upgrade
+  when: not (rootless_enabled | bool)
   tags: package
 
 - name: Install pip packages
   ansible.builtin.pip:
     name: "{{pip_packages}}"
+  when: not (rootless_enabled | bool)
   tags: package

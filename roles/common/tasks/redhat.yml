@@ -61,7 +61,9 @@
   until: java_install_result is success  or ansible_check_mode
   retries: 10
   delay: 5
-  when: install_java|bool
+  when:
+    - install_java|bool
+    - not (rootless_enabled | bool)
   tags: package
 
 - name: Install OpenSSL and Unzip
@@ -69,10 +71,14 @@
     name:
       - openssl
       - unzip
+  when: not (rootless_enabled | bool)
   tags: package
 
 - name: Get Java Version
-  command: java -version
+  # custom_java_path isn't on PATH (the alternatives symlink that would put it
+  # there is a privileged, rootless-skipped task) - resolve java directly from
+  # it when set, same as the JVM start scripts' own JAVA_HOME.
+  command: "{{ (custom_java_path ~ '/bin/java') if custom_java_path | default('') | length > 0 else 'java' }} -version"
   register: version_output
   check_mode: false
   changed_when: false
@@ -87,17 +93,20 @@
       - python3-pip
     state: present
   become: true
+  when: not (rootless_enabled | bool)
   tags: package
 
 - name: Upgrade pip
   ansible.builtin.pip:
     name: pip
     extra_args: --upgrade
+  when: not (rootless_enabled | bool)
   tags: package
 
 - name: Install pip packages
   ansible.builtin.pip:
     name: "{{pip_packages}}"
+  when: not (rootless_enabled | bool)
   tags: package
 
 - name: Enable FIPS on rhel 8+
