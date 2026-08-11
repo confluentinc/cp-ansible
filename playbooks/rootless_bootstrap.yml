@@ -19,7 +19,11 @@
 - name: Rootless bootstrap (privileged, one-time)
   hosts: all
   become: true
-  gather_facts: true
+  # Not gathered here (see the block below) - the implicit play-level gather_facts runs before
+  # any task when: can guard it, and inherits become: true. A host with no sudo (e.g. an
+  # unmanaged, non-Linux-shell service container sharing the inventory) would fail hard on
+  # that alone, before ever reaching the deployment_user/deployment_path check.
+  gather_facts: false
   vars:
     deployment_group: "{{ deployment_user }}"
     rootless_enable_linger: true
@@ -42,6 +46,9 @@
     - name: Rootless bootstrap tasks
       when: deployment_user | default('') | length > 0 and deployment_path | default('') | length > 0
       block:
+        - name: Gather facts
+          setup:
+
         - name: Create deploy group
           group:
             name: "{{ deployment_group }}"
