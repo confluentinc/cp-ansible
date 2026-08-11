@@ -134,13 +134,15 @@ Validates that TLS is configured properly.
 
 #### Scenario broker-scale-up test's the following:
 
+Tests scale-up of the Kafka broker cluster.
+
+Brings up a 3-broker cluster in the create/prepare phase, then adds 2 more
+
+brokers (broker4, broker5) in the converge phase and verifies they join.
+
 Installation of Confluent Platform on RHEL8.
 
 MTLS enabled.
-
-Installs Three unique Kafka Connect Clusters with unique connectors.
-
-Installs two unique KSQL Clusters.
 
 USM Agent Authentication Configuration - MTLS AUTHENTICATION with self signed certs.
 
@@ -525,6 +527,164 @@ RBAC over mTLS enabled.
 File based login to C3 using overrides.
 
 #### Scenario mini-setup-partial-mtls2 verify test's the following:
+
+***
+
+### molecule/mtls-custom-2tier-rhel
+
+#### Scenario mtls-custom-2tier-rhel test's the following:
+
+ANSIENG-5765 case 1: 2-tier PKI.
+
+CA bundle = Root only. Cert file = leaf only.
+
+Expected chain: leaf -> root (2 certs).
+
+#### Scenario mtls-custom-2tier-rhel verify test's the following:
+
+Verifies the cert chain that build_certificate_chain.yml produced.
+
+
+
+The cluster having come up at all (converge succeeded) is itself end-to-end
+
+proof that the chain is correct: mTLS handshakes between broker, controller,
+
+and schema_registry would have failed otherwise. These checks add an extra
+
+assertion that the chain file has the expected number of certs in
+
+leaf-first order for this scenario's input layout.
+
+***
+
+### molecule/mtls-custom-4tier-bundle-rhel
+
+#### Scenario mtls-custom-4tier-bundle-rhel test's the following:
+
+ANSIENG-5765 case 7: 4-tier PKI, all CAs in the bundle.
+
+CA bundle = Root + Int1 + Int2. Cert file = leaf only (no inline intermediates).
+
+This is the hardest enterprise PKI layout: was broken in the per-CA-loop
+
+implementation; the fix gives openssl the whole bundle in one verify call.
+
+Expected chain: leaf -> int2 -> int1 -> root (4 certs).
+
+#### Scenario mtls-custom-4tier-bundle-rhel verify test's the following:
+
+Verifies the cert chain that build_certificate_chain.yml produced.
+
+
+
+The cluster having come up at all (converge succeeded) is itself end-to-end
+
+proof that the chain is correct: mTLS handshakes between broker, controller,
+
+and schema_registry would have failed otherwise. These checks add an extra
+
+assertion that the chain file has the expected number of certs in
+
+leaf-first order for this scenario's input layout.
+
+***
+
+### molecule/mtls-custom-4tier-bundle-ubuntu
+
+#### Scenario mtls-custom-4tier-bundle-ubuntu test's the following:
+
+ANSIENG-5765 case 7 on Debian.
+
+Same cert layout as mtls-custom-4tier-bundle-rhel (Root + Int1 + Int2 in the
+
+bundle, leaf-only cert file) but exercises the chain task on a Debian host
+
+to confirm the shell logic is OS-agnostic.
+
+#### Scenario mtls-custom-4tier-bundle-ubuntu verify test's the following:
+
+Verifies the cert chain that build_certificate_chain.yml produced.
+
+
+
+The cluster having come up at all (converge succeeded) is itself end-to-end
+
+proof that the chain is correct: mTLS handshakes between broker, controller,
+
+and schema_registry would have failed otherwise. These checks add an extra
+
+assertion that the chain file has the expected number of certs in
+
+leaf-first order for this scenario's input layout.
+
+***
+
+### molecule/mtls-custom-4tier-inline-rhel
+
+#### Scenario mtls-custom-4tier-inline-rhel test's the following:
+
+ANSIENG-5765 case 9: 4-tier PKI, full chain inlined in the cert file.
+
+CA bundle = Root only. Cert file = leaf + Int2 + Int1 (the user pasted the
+
+whole chain into one file). The fix detects the leaf via topology rather
+
+than by "last cert" and walks the issuer/subject relationships to emit the
+
+correct order.
+
+Expected chain: leaf -> int2 -> int1 -> root (4 certs).
+
+#### Scenario mtls-custom-4tier-inline-rhel verify test's the following:
+
+Verifies the cert chain that build_certificate_chain.yml produced.
+
+
+
+The cluster having come up at all (converge succeeded) is itself end-to-end
+
+proof that the chain is correct: mTLS handshakes between broker, controller,
+
+and schema_registry would have failed otherwise. These checks add an extra
+
+assertion that the chain file has the expected number of certs in
+
+leaf-first order for this scenario's input layout.
+
+***
+
+### molecule/mtls-custom-partial-rhel
+
+#### Scenario mtls-custom-partial-rhel test's the following:
+
+ANSIENG-5765 case 10: 4-tier PKI, partial chain (no root in the bundle).
+
+CA bundle = Int1 + Int2 only (root deliberately omitted, mirroring DoD-style
+
+partial chains). Cert file = leaf only.
+
+The fix's `-partial_chain` flag is the key piece: openssl is allowed to
+
+stop at a trusted intermediate instead of insisting on a self-signed root.
+
+Expected chain: leaf -> int2 -> int1 (3 certs; walk stops at top intermediate).
+
+#### Scenario mtls-custom-partial-rhel verify test's the following:
+
+Verifies the cert chain that build_certificate_chain.yml produced.
+
+
+
+The cluster having come up at all (converge succeeded) is itself end-to-end
+
+proof that the chain is correct: mTLS handshakes between broker, controller,
+
+and schema_registry would have failed otherwise. These checks add an extra
+
+assertion that the chain file has the expected number of certs in
+
+leaf-first order for this scenario's input layout.
 
 ***
 
