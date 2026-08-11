@@ -1,0 +1,211 @@
+---
+### Rootless install on RHEL9, mTLS + RBAC via LDAP. Validates systemd --user
+### (loginctl linger) works unprivileged and RBAC resolves against a real LDAP
+### server. ldap1 uses native openldap-servers on CentOS8 (RHEL9 dropped that
+### package); configured inline in converge.yml since confluent.test.ldap isn't
+### part of this collection.
+
+driver:
+  name: docker
+platforms:
+  - name: ldap1
+    hostname: ldap1.confluent
+    groups:
+      - ldap_server
+    image: centos:centos8
+    dockerfile: ../Dockerfile-centos8-base.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-controller1
+    hostname: kafka-controller1.confluent
+    groups:
+      - kafka_controller
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center
+    image: redhat/ubi9-minimal
+    dockerfile: ../Dockerfile-rhel-java17.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    converge: converge.yml
+    verify: verify.yml
+  inventory:
+    group_vars:
+      all:
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
+        ssl_client_authentication: required
+        sasl_protocol: none
+        rbac_enabled: true
+
+        mds_super_user: mds
+        mds_super_user_password: password
+        schema_registry_ldap_user: schema-registry1
+        schema_registry_ldap_password: password
+        kafka_connect_ldap_user: kafka-connect1
+        kafka_connect_ldap_password: password
+        kafka_rest_ldap_user: kafka-rest1
+        kafka_rest_ldap_password: password
+        ksql_ldap_user: ksql1
+        ksql_ldap_password: password
+        control_center_ldap_user: control-center1
+        control_center_ldap_password: password
+
+        ldap_base_properties: &ldap_base_properties
+          confluent.authorizer.init.timeout.ms: 1800000
+          ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+          ldap.com.sun.jndi.ldap.read.timeout: 3000
+          ldap.java.naming.provider.url: ldap://ldap1:389
+          ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
+          ldap.java.naming.security.credentials: password
+          ldap.java.naming.security.authentication: simple
+          ldap.user.search.base: OU=rbac,DC=example,DC=com
+          ldap.group.search.base: OU=rbac,DC=example,DC=com
+          ldap.user.name.attribute: uid
+          ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.group.name.attribute: cn
+          ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.user.object.class: account
+
+        kafka_broker_custom_properties: *ldap_base_properties
+        kafka_controller_custom_properties: *ldap_base_properties
+
+      # Same DN/schema convention as the other RBAC/LDAP scenarios (ou=rbac,dc=example,dc=com).
+      ldap_server:
+        ldaps_enabled: false
+        ldap_admin_password: ldappassword
+        ldap_rbac_group: rbac
+        ldap_dc: example
+        ldap_dc_extension: com
+        ldap_users:
+          - username: "{{ mds_super_user }}"
+            password: "{{ mds_super_user_password }}"
+            uid: 9999
+            guid: 99
+          - username: "{{ schema_registry_ldap_user }}"
+            password: "{{ schema_registry_ldap_password }}"
+            uid: 9998
+            guid: 98
+          - username: "{{ kafka_connect_ldap_user }}"
+            password: "{{ kafka_connect_ldap_password }}"
+            uid: 9997
+            guid: 97
+          - username: "{{ kafka_rest_ldap_user }}"
+            password: "{{ kafka_rest_ldap_password }}"
+            uid: 9996
+            guid: 96
+          - username: "{{ ksql_ldap_user }}"
+            password: "{{ ksql_ldap_password }}"
+            uid: 9995
+            guid: 95
+          - username: "{{ control_center_ldap_user }}"
+            password: "{{ control_center_ldap_password }}"
+            uid: 9994
+            guid: 94
+
+      # Rootless vars scoped to the CP component groups only (not group_vars/all) - ldap1 is an
+      # unmanaged host sharing this inventory, not a rootless deploy target. Scoping these here
+      # keeps ldap1 out of playbooks/rootless_bootstrap.yml's hosts:all bootstrap treatment
+      # entirely, the same way ansible_user already is.
+      kafka_controller: &rootless_component_vars
+        ansible_user: "{{ deployment_user }}"
+        rootless_enabled: true
+        deployment_user: cp-user
+        deployment_group: cp-user
+        deployment_path: /home/cp-user/cp-data
+        installation_method: archive
+      kafka_broker: *rootless_component_vars
+      schema_registry: *rootless_component_vars
+      kafka_connect: *rootless_component_vars
+      kafka_rest: *rootless_component_vars
+      ksql: *rootless_component_vars
+      control_center: *rootless_component_vars
+verifier:
+  name: ansible
