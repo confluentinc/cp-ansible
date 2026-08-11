@@ -4,6 +4,20 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+8.2.3
+======
+New features
+-------------
+- N/A
+
+Notable enhancements
+-------------
+- This release adds protection against Common Vulnerabilites and Exposures found in Confluent Platform. More info: https://docs.confluent.io/platform/8.2/release-notes/index.html#cp-release-8-2-3
+
+Notable Fixes
+-------------
+- N/A
+
 v8.2.2
 ======
 New features
