@@ -83,6 +83,19 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+  - name: kafka-connect-replicator1
+    hostname: kafka-connect-replicator1.confluent
+    groups:
+      - kafka_connect_replicator
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
   - name: ksql1
     hostname: ksql1.confluent
     groups:
@@ -166,5 +179,14 @@ provisioner:
         ansible_user: "{{ deployment_user }}"
       control_center:
         ansible_user: "{{ deployment_user }}"
+      kafka_connect_replicator:
+        ansible_user: "{{ deployment_user }}"
+        # Defaults to localhost:9092, which only works when co-located with the broker on
+        # the same host - each component here is its own container, so point explicitly
+        # at kafka-broker1's real address (self-replication: source and destination are the
+        # same cluster, which is fine for exercising the rootless lifecycle/restart/ownership
+        # mechanics - not testing replication correctness itself).
+        kafka_connect_replicator_consumer_bootstrap_servers: "kafka-broker1.confluent:9092"
+        kafka_connect_replicator_producer_bootstrap_servers: "kafka-broker1.confluent:9092"
 verifier:
   name: ansible

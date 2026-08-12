@@ -3,7 +3,7 @@
 ### under /opt, and SASL_PLAIN (+ SSL) is actually configured on each component.
 
 - name: Verify - rootless lifecycle on all CP components
-  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center:kafka_connect_replicator
   gather_facts: true
   vars:
     rootless_unit_map:
@@ -14,6 +14,7 @@
       kafka_rest: cp-kafka_rest.service
       ksql: cp-ksql.service
       control_center: cp-control_center.service
+      kafka_connect_replicator: cp-kafka_connect_replicator.service
   tasks:
     - name: Determine this host's rootless unit name and component name
       set_fact:
@@ -29,7 +30,10 @@
       failed_when: unit_active.stdout != "active"
 
     - name: Check the process is owned by the deploy user, not root
-      shell: "ps -eo user,cmd | grep -E 'kafka.Kafka|SchemaRegistryMain|ConnectDistributed|KafkaRestMain|KsqlServerMain|ControlCenter' | grep -v grep | awk '{print $1}' | sort -u"
+      # Replicator's own class name isn't matched here, but its ExecStart args (--consumer.config
+      # .../kafka-connect-replicator-consumer.properties etc.) always contain "replicator", so that
+      # catches it too without needing the exact Main class.
+      shell: "ps -eo user,cmd | grep -E 'kafka.Kafka|SchemaRegistryMain|ConnectDistributed|KafkaRestMain|KsqlServerMain|ControlCenter|replicator' | grep -v grep | awk '{print $1}' | sort -u"
       register: process_owners
       changed_when: false
 
@@ -237,6 +241,19 @@
         validate_certs: false
       register: connector_status_response
       until: connector_status_response.json.tasks[0].state == 'RUNNING'
+      retries: 10
+      delay: 5
+
+- name: Verify - Kafka Connect Replicator REST API is up (rootless)
+  hosts: kafka_connect_replicator
+  gather_facts: false
+  tasks:
+    - name: Get Connectors on the replicator's own REST endpoint
+      uri:
+        url: "https://localhost:8083/connectors"
+        validate_certs: false
+      register: replicator_connectors
+      until: replicator_connectors.status == 200
       retries: 10
       delay: 5
 
