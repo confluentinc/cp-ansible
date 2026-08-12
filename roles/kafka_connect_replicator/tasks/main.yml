@@ -416,6 +416,31 @@
   tags:
     - systemd
 
+- name: Generate Kafka Connect Replicator rootless lifecycle scripts
+  include_role:
+    name: common
+    tasks_from: rootless_lifecycle.yml
+  vars:
+    rootless_component_name: kafka_connect_replicator
+    rootless_service_environment_overrides: "{{ kafka_connect_replicator_service_environment_overrides }}"
+    # Replicator has no ExecStart in its _service_overrides (unlike the other rootless
+    # components) - its start command is hardcoded in kafka-connect-replicator.service.j2
+    # instead, so mirror that exact command here.
+    rootless_service_exec: >-
+      {{ binary_base_path }}/bin/replicator
+      --consumer.config {{ kafka_connect_replicator.consumer_config_file }}
+      --producer.config {{ kafka_connect_replicator.producer_config_file }}
+      --cluster.id {{ kafka_connect_replicator_cluster_id }}
+      --replication.config {{ kafka_connect_replicator.replication_config_file }}
+      --consumer.monitoring.config {{ kafka_connect_replicator.interceptors_config_file }}
+      --producer.monitoring.config {{ kafka_connect_replicator.interceptors_config_file }}
+    rootless_service_overrides: "{{ kafka_connect_replicator_service_overrides }}"
+    rootless_service_unit_overrides: "{{ kafka_connect_replicator_service_unit_overrides }}"
+    rootless_restart_handler: Restart Kafka Connect Replicator
+  when: rootless_lifecycle_enabled | bool
+  tags:
+    - filesystem
+
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
   notify: Restart Kafka Connect Replicator
@@ -432,6 +457,15 @@
   when: not (rootless_enabled | bool)
   tags:
     - systemd
+
+- name: Start Kafka Connect Replicator (rootless, systemd --user)
+  include_role:
+    name: common
+    tasks_from: rootless_start_service.yml
+  vars:
+    rootless_component_name: kafka_connect_replicator
+    rootless_component_port: "{{ kafka_connect_replicator_port }}"
+  when: rootless_lifecycle_enabled | bool
 
 - name: Run Kafka Connect Replicator Health Check
   include_tasks: health_check.yml
