@@ -15,9 +15,10 @@
       ksql: cp-ksql.service
       control_center: cp-control_center.service
   tasks:
-    - name: Determine this host's rootless unit name
+    - name: Determine this host's rootless unit name and component name
       set_fact:
         rootless_unit: "{{ rootless_unit_map[group_names | intersect(rootless_unit_map.keys()) | first] }}"
+        rootless_component: "{{ group_names | intersect(rootless_unit_map.keys()) | first }}"
 
     - name: Check the systemd --user unit is active
       command: "systemctl --user is-active {{ rootless_unit }}"
@@ -40,6 +41,56 @@
         fail_msg: "Expected all component processes to run as {{ deployment_user }}, found: {{ process_owners.stdout_lines }}"
         quiet: true
 
+    - name: Find everything under deployment_path
+      find:
+        paths: "{{ deployment_path }}"
+        recurse: true
+        file_type: any
+      register: deployment_path_contents
+
+    - name: Assert everything under deployment_path is owned by the deploy user, not root
+      # A privileged test container can docker-exec as root regardless of what the deploy
+      # itself did - this, not the container's own privilege level, is what actually proves
+      # nothing in the deploy path used root: a root-owned file here means some task silently
+      # became root.
+      vars:
+        non_deploy_user_files: "{{ deployment_path_contents.files | rejectattr('pw_name', 'equalto', deployment_user) | map(attribute='path') | list }}"
+      assert:
+        that:
+          - non_deploy_user_files | length == 0
+        fail_msg: "Found files under deployment_path not owned by {{ deployment_user }}: {{ non_deploy_user_files }}"
+        quiet: true
+
+    - name: Read the generated systemd --user unit file
+      slurp:
+        src: "{{ ansible_env.HOME }}/.config/systemd/user/{{ rootless_unit }}"
+      register: unit_file_slurp
+
+    - name: Assert the unit's ExecStart/EnvironmentFile point under deployment_path, not a hardcoded root path
+      vars:
+        unit_content: "{{ unit_file_slurp.content | b64decode }}"
+      assert:
+        that:
+          - deployment_path in unit_content
+          - ("EnvironmentFile=" ~ deployment_path) in unit_content
+        fail_msg: "cp-{{ rootless_component }} unit file doesn't reference deployment_path as expected:\n{{ unit_content }}"
+        quiet: true
+
+    - name: Read the generated systemd EnvironmentFile
+      slurp:
+        src: "{{ deployment_path }}/rootless-bin/{{ rootless_component }}.env"
+      register: env_file_slurp
+
+    - name: Assert the EnvironmentFile actually rendered content, not empty or unrendered Jinja
+      vars:
+        env_content: "{{ env_file_slurp.content | b64decode }}"
+      assert:
+        that:
+          - env_content | trim | length > 0
+          - "'{{' not in env_content"
+        fail_msg: "{{ rootless_component }}.env is empty or has unrendered template syntax:\n{{ env_content }}"
+        quiet: true
+
     - name: Check nothing was written under /opt
       find:
         paths: /opt
@@ -51,6 +102,38 @@
         that:
           - opt_contents.matched == 0
         fail_msg: "Rootless install wrote to /opt: {{ opt_contents.files | map(attribute='path') | list }}"
+        quiet: true
+
+- name: Verify - restart-propagation regression (side_effect.yml changed kafka_broker's config)
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Read the pre-side-effect timestamp
+      slurp:
+        src: /tmp/molecule_side_effect_before_ts
+      register: before_ts_slurp
+
+    - name: Get ActiveEnterTimestamp now
+      command: systemctl --user show cp-kafka_broker.service -p ActiveEnterTimestamp --value
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+      register: after_ts
+      changed_when: false
+
+    - name: Confirm the generated unit actually carries the injected override
+      command: "grep -c StartLimitIntervalSec {{ ansible_env.HOME }}/.config/systemd/user/cp-kafka_broker.service"
+      register: override_grep
+      changed_when: false
+      failed_when: override_grep.stdout | trim == "0"
+
+    - name: Assert the unit restarted when its service_unit_overrides changed
+      assert:
+        that:
+          - after_ts.stdout != (before_ts_slurp.content | b64decode)
+        fail_msg: >-
+          cp-kafka_broker.service did not restart after its service_unit_overrides changed
+          (before={{ before_ts_slurp.content | b64decode }}, after={{ after_ts.stdout }}) -
+          the notify-on-change chain in rootless_lifecycle.yml regressed.
         quiet: true
 
 - name: Verify - MDS + RBAC/LDAP auth end to end
