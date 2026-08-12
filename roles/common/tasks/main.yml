@@ -63,6 +63,67 @@
   include_tasks: rootless_prereqs.yml
   when: rootless_enabled | bool
 
+# Catches two real footguns early with a clear message, instead of a confusing permission-denied
+# failure deep in the deploy: deployment_path itself not actually writable (e.g. rootless_bootstrap
+# was never run), and an old inventory's explicit override of a deployment_path-derived variable
+# (e.g. ssl_file_dir) pointing at a root-owned path that survived turning rootless_enabled on.
+# ssl_file_dir may not exist yet on a cold deploy (the ssl role creates it later) - ensure it
+# exists first so the write-test below isn't a false positive on a merely-missing directory.
+- name: "Ensure {{ item }} exists (rootless writability check)"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  register: rootless_writability_mkdir
+  loop:
+    - "{{ deployment_path }}"
+    - "{{ ssl_file_dir_final }}"
+  loop_control:
+    label: "{{ item }}"
+  ignore_errors: true
+  changed_when: false
+  when: rootless_enabled | bool
+
+- name: "Check {{ item }} is writable (rootless)"
+  ansible.builtin.file:
+    path: "{{ item }}/.rootless_writability_check"
+    state: touch
+    mode: '0644'
+  register: rootless_writability_check
+  loop:
+    - "{{ deployment_path }}"
+    - "{{ ssl_file_dir_final }}"
+  loop_control:
+    label: "{{ item }}"
+  ignore_errors: true
+  changed_when: false
+  when: rootless_enabled | bool
+
+- name: Remove rootless writability check files
+  ansible.builtin.file:
+    path: "{{ item.item }}/.rootless_writability_check"
+    state: absent
+  loop: "{{ rootless_writability_check.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - rootless_enabled | bool
+    - not (item.failed | default(false))
+  changed_when: false
+
+- name: Assert deployment_path and ssl_file_dir are writable (rootless)
+  assert:
+    that: not (item.failed | default(false))
+    fail_msg: >-
+      '{{ item.item }}' is not writable by the connecting user. Under rootless_enabled, every
+      deployment_path-derived path (including ssl_file_dir) must be writable by deployment_user -
+      run confluent.platform.rootless_bootstrap first, or if you've explicitly overridden this
+      variable from an old inventory, point it under deployment_path instead.
+  loop: "{{ rootless_writability_check.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: rootless_enabled | bool
+
 - name: Red Hat Repo Setup and Java Installation
   include_tasks: redhat.yml
   when: ansible_os_family == "RedHat"
