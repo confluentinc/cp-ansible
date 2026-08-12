@@ -50,13 +50,19 @@
           # only when genuinely unset. default('') on the keys src so hosts:all tolerates a
           # host with no ansible_user set (e.g. an unmanaged LDAP/OAuth server sharing the
           # inventory but outside the rootless deploy group) - the resulting path just won't
-          # exist, and both uses below are already stat.exists-guarded.
+          # exist, and both uses below are already stat.exists-guarded. That stat guard is
+          # also why root needs its own branch here: root's home is /root, not /home/root -
+          # get this wrong and the copy below silently skips (stat.exists is false), bootstrap
+          # still reports success, and the failure only surfaces later as a confusing
+          # "Permission denied (publickey)" in the deploy phase with nothing linking it back.
           set_fact:
             deployment_group: "{{ deployment_group | default(deployment_user) }}"
             rootless_enable_linger: "{{ rootless_enable_linger | default(true) }}"
             rootless_install_packages: "{{ rootless_install_packages | default(false) }}"
             rootless_bootstrap_authorized_keys_src: >-
-              {{ rootless_bootstrap_authorized_keys_src | default('/home/' + (ansible_user | default('')) + '/.ssh/authorized_keys') }}
+              {{ rootless_bootstrap_authorized_keys_src | default(
+                 (('/root' if (ansible_user | default('')) == 'root' else '/home/' + (ansible_user | default(''))))
+                 + '/.ssh/authorized_keys') }}
 
         - name: Create deploy group
           group:
