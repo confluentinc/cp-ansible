@@ -71,6 +71,32 @@
       delay: 5
       until: mds_check.status == 200
 
+- name: Verify - kafka_broker/kafka_controller authenticate via Kerberos/GSSAPI
+  hosts: kafka_broker:kafka_controller
+  gather_facts: false
+  vars:
+    server_log_path: "{{ deployment_path }}/log/{{ 'kafka' if 'kafka_broker' in group_names else 'controller' }}/server.log"
+  tasks:
+    - name: krb5.conf landed under deployment_path, not /etc
+      stat:
+        path: "{{ deployment_path }}/krb5.conf"
+      register: krb5_conf_stat
+      failed_when: not krb5_conf_stat.stat.exists
+
+    - name: Keytab landed under deployment_path, not /etc/security/keytabs
+      stat:
+        path: "{{ deployment_path }}/security/keytabs/{{ 'kafka_broker' if 'kafka_broker' in group_names else 'kafka_controller' }}.keytab"
+      register: keytab_stat
+      failed_when: not keytab_stat.stat.exists
+
+    - name: Wait for a successful GSSAPI authentication in the server log
+      shell: "grep -c 'Successfully authenticated client' {{ server_log_path }} || true"
+      register: gssapi_auth_count
+      changed_when: false
+      until: gssapi_auth_count.stdout | trim | int > 0
+      retries: 20
+      delay: 10
+
 - name: Verify - Schema Registry authenticates via its LDAP identity
   hosts: schema_registry
   gather_facts: false
