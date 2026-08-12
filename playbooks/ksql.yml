@@ -10,12 +10,24 @@
 
     - name: Populate service facts
       service_facts:
+      when: not (rootless_lifecycle_enabled | bool)
+
+    - name: Query rootless service state (systemd --user, read-only)
+      include_role:
+        name: common
+        tasks_from: rootless_service_state.yml
+      vars:
+        rootless_component_name: ksql
+      when: rootless_lifecycle_enabled | bool
 
     - name: Determine Installation Pattern - Parallel or Serial
       set_fact:
         install_pattern: "{{ 'parallel' if service_state != 'running' or ksql_deployment_strategy == 'parallel' else 'serial' }}"
       vars:
-        service_state: "{{ ansible_facts.services[ksql_service_name + '.service'].state | default('unknown') }}"
+        service_state: >-
+          {{ rootless_service_state | default('unknown')
+             if rootless_lifecycle_enabled | bool
+             else (ansible_facts.services[ksql_service_name + '.service'].state | default('unknown')) }}
 
     - name: Group Hosts by Installation Pattern
       group_by:

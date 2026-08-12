@@ -595,7 +595,8 @@
   tags:
     - systemd
 
-# Non-RBAC: a simple systemd --user start + wait for the client listener is enough.
+# Same start path for RBAC and non-RBAC, mirroring root: start once and let
+# Restart=on-failure recover a transient AuthorizerNotReady during RBAC cold bootstrap.
 - name: Start Kafka Broker (rootless, systemd --user)
   include_role:
     name: common
@@ -603,63 +604,13 @@
   vars:
     rootless_component_name: kafka_broker
     rootless_component_port: "{{ kafka_broker_listeners['internal']['port'] }}"
-  when: rootless_lifecycle_enabled | bool and not rbac_enabled | bool
-
-# RBAC cold bootstrap is circular: controller authorizer init waits on the broker, and the
-# broker exits AuthorizerNotReady until the authorizer is ready - per-unit Restart alone never
-# converges this. Co-restart controller+broker together (delegated when on separate hosts) and
-# wait for MDS, mirroring what the root/systemd deploy does.
-- name: Enable Kafka Broker systemd --user unit (rootless RBAC)
-  ansible.builtin.systemd_service:
-    name: cp-kafka_broker.service
-    scope: user
-    enabled: true
-  environment:
-    XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
-  when: rootless_lifecycle_enabled | bool and rbac_enabled | bool
-
-# Non-co-located controllers only; co-located ones restart together with the broker below.
-- name: Converge RBAC bootstrap (rootless) - restart standalone controllers
-  ansible.builtin.systemd_service:
-    name: cp-kafka_controller.service
-    scope: user
-    state: restarted
-  environment:
-    XDG_RUNTIME_DIR: "/run/user/{{ hostvars[item].ansible_user_uid | default(ansible_user_uid) }}"
-  delegate_to: "{{ item }}"
-  loop: "{{ groups['kafka_controller'] | default([]) | difference(groups['kafka_broker'] | default([])) }}"
-  run_once: true
-  when:
-    - rootless_lifecycle_enabled | bool
-    - rbac_enabled | bool
-
-- name: Converge controller+broker RBAC bootstrap - co-restart local units + wait for MDS (rootless)
-  shell:
-    executable: /bin/bash
-    cmd: |
-      export XDG_RUNTIME_DIR=/run/user/{{ ansible_user_uid }}
-      # Bash builtin, not ss/iproute - iproute may be absent and ss would misreport "down".
-      mds_up(){ (exec 3<>/dev/tcp/127.0.0.1/{{ mds_port }}) 2>/dev/null; }
-      mds_up && exit 0
-      # Restart only units present on this host; avoids "Unit not found" on a broker-only host.
-      units="cp-kafka_broker.service"
-      systemctl --user cat cp-kafka_controller.service >/dev/null 2>&1 && units="cp-kafka_controller.service $units"
-      systemctl --user restart $units
-      for _ in $(seq 1 24); do mds_up && exit 0; sleep 5; done
-      exit 1
-  register: rootless_rbac_converge
-  until: rootless_rbac_converge.rc == 0
-  retries: "{{ rootless_rbac_bootstrap_attempts | default(10) }}"
-  delay: 5
-  changed_when: false
-  when: rootless_lifecycle_enabled | bool and rbac_enabled | bool
+  when: rootless_lifecycle_enabled | bool
 
 - name: Wait for Broker health checks to complete
   include_tasks: health_check.yml
   when:
     - kafka_broker_health_checks_enabled|bool
     - not ansible_check_mode
-    - not (rootless_enabled | bool)
   tags: health_check
 
 - name: Register Cluster
