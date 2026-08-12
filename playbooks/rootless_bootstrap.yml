@@ -24,14 +24,6 @@
   # unmanaged, non-Linux-shell service container sharing the inventory) would fail hard on
   # that alone, before ever reaching the deployment_user/deployment_path check.
   gather_facts: false
-  vars:
-    deployment_group: "{{ deployment_user }}"
-    rootless_enable_linger: true
-    rootless_install_packages: false
-    # default('') so hosts:all tolerates a host with no ansible_user set (e.g. an unmanaged
-    # LDAP/OAuth server sharing the inventory but outside the rootless deploy group) - the
-    # resulting path just won't exist, and both uses below are already stat.exists-guarded.
-    rootless_bootstrap_authorized_keys_src: "/home/{{ ansible_user | default('') }}/.ssh/authorized_keys"
   tasks:
     # hosts:all is meant for a mixed inventory - e.g. an existing LDAP/Kerberos server sharing
     # the same inventory as the rootless CP deploy but never intended as a target. Skip those
@@ -48,6 +40,23 @@
       block:
         - name: Gather facts
           setup:
+
+        - name: Compute rootless bootstrap defaults
+          # Play-level `vars:` outranks every inventory-sourced variable (group_vars,
+          # host_vars) in Ansible's precedence order, so setting these as play vars would
+          # silently ignore any inventory attempt to override them - only -e on the CLI
+          # would actually win. Computing them here via set_fact + default() instead lets an
+          # inventory-provided value (if any) flow through, falling back to these defaults
+          # only when genuinely unset. default('') on the keys src so hosts:all tolerates a
+          # host with no ansible_user set (e.g. an unmanaged LDAP/OAuth server sharing the
+          # inventory but outside the rootless deploy group) - the resulting path just won't
+          # exist, and both uses below are already stat.exists-guarded.
+          set_fact:
+            deployment_group: "{{ deployment_group | default(deployment_user) }}"
+            rootless_enable_linger: "{{ rootless_enable_linger | default(true) }}"
+            rootless_install_packages: "{{ rootless_install_packages | default(false) }}"
+            rootless_bootstrap_authorized_keys_src: >-
+              {{ rootless_bootstrap_authorized_keys_src | default('/home/' + (ansible_user | default('')) + '/.ssh/authorized_keys') }}
 
         - name: Create deploy group
           group:
@@ -91,15 +100,11 @@
             group: "{{ deployment_group }}"
             mode: '0755'
 
-        - name: Enable systemd linger for the deploy user
-          # So systemd --user units survive without an active login/reboot.
-          command: "loginctl enable-linger {{ deployment_user }}"
-          args:
-            creates: "/var/lib/systemd/linger/{{ deployment_user }}"
-          when: rootless_enable_linger | bool
-
         # PyYAML/pip for update_log4j2 - a minimal host may ship neither, and rootless can't
-        # install them itself. RHEL's per-user D-Bus starts on its own once linger is enabled.
+        # install them itself. Must run before "Enable systemd linger" below: on Debian/Ubuntu,
+        # loginctl needs dbus-user-session (installed here) to even reach the bus - RHEL ships
+        # base D-Bus already, so ordering only matters for the Debian branch, but package
+        # installs never depend on linger so it's safe to always install first regardless of OS.
         - name: Install cert tools + python (openssl/rsync/unzip/pip/PyYAML) - RedHat
           yum:
             name:
@@ -112,7 +117,8 @@
           when: rootless_install_packages | bool and ansible_os_family == "RedHat"
 
         # dbus-user-session: Debian/Ubuntu's systemd --user manager needs it, or systemctl --user
-        # fails with "Failed to connect to bus". Requires root, hence installed here.
+        # (and loginctl enable-linger, right below) fails with "Failed to connect to bus" /
+        # "Failed to create bus connection". Requires root, hence installed here.
         - name: Install cert tools + python (+ user D-Bus) - Debian/Ubuntu
           apt:
             name:
@@ -125,6 +131,13 @@
             state: present
             update_cache: true
           when: rootless_install_packages | bool and ansible_os_family == "Debian"
+
+        - name: Enable systemd linger for the deploy user
+          # So systemd --user units survive without an active login/reboot.
+          command: "loginctl enable-linger {{ deployment_user }}"
+          args:
+            creates: "/var/lib/systemd/linger/{{ deployment_user }}"
+          when: rootless_enable_linger | bool
 
         # The privileged/package-tagged Java install is skipped under rootless, so install it here
         # instead, honoring the existing model: install_java is false when custom_java_path is set
