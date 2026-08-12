@@ -33,7 +33,9 @@
     tasks_from: validate_package_availability.yml
   vars:
     validate_packages: "{{ ksql_packages }}"
-  when: installation_method == "package"
+  when:
+    - installation_method == "package"
+    - not (rootless_enabled | bool)
   tags:
     - package
     - cp_package
@@ -46,7 +48,9 @@
     tasks_from: remove_packages.yml
   vars:
     service_name: "{{ ksql_service_name }}"
-  when: installation_method == "package"
+  when:
+    - installation_method == "package"
+    - not (rootless_enabled | bool)
   tags:
     - package
     - cp_package
@@ -62,6 +66,7 @@
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
+    - not (rootless_enabled | bool)
   ignore_errors: "{{ ansible_check_mode }}"
   tags:
     - package
@@ -78,6 +83,7 @@
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
+    - not (rootless_enabled | bool)
   ignore_errors: "{{ ansible_check_mode }}"
   tags:
     - package
@@ -87,6 +93,7 @@
 - name: Create Ksql Group
   group:
     name: "{{ksql_group}}"
+  when: not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -104,7 +111,9 @@
     system: true
     shell: "{{user_login_shell}}"
     group: "{{ksql_group}}"
-  when: (getent_passwd|default({}))[ksql_user] is not defined
+  when:
+    - (getent_passwd|default({}))[ksql_user] is not defined
+    - not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -127,7 +136,9 @@
     dest: "{{ksql.systemd_file}}"
     mode: '644'
     force: true
-  when: installation_method == "archive"
+  when:
+    - installation_method == "archive"
+    - not (rootless_enabled | bool)
   tags:
     - systemd
 
@@ -390,6 +401,7 @@
     group: "{{ksql_group}}"
     state: directory
     mode: '750'
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
     - privileged
@@ -403,9 +415,21 @@
     group: root
   notify: restart ksql
   diff: "{{ not mask_sensitive_diff|bool }}"
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
-    - privileged
+
+- name: Generate ksqlDB rootless lifecycle scripts
+  include_role:
+    name: common
+    tasks_from: rootless_lifecycle.yml
+  vars:
+    rootless_component_name: ksql
+    rootless_service_environment_overrides: "{{ ksql_service_environment_overrides }}"
+    rootless_service_exec: "{{ ksql_service_overrides.ExecStart }}"
+  when: rootless_lifecycle_enabled | bool
+  tags:
+    - filesystem
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -420,8 +444,18 @@
     name: "{{ksql_service_name}}"
     enabled: true
     state: started
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
+
+- name: Start ksqlDB (rootless, non-systemd)
+  include_role:
+    name: common
+    tasks_from: rootless_start_service.yml
+  vars:
+    rootless_component_name: ksql
+    rootless_component_port: "{{ ksql_listener_port }}"
+  when: rootless_lifecycle_enabled | bool
 
 - name: Health Check
   include_tasks: health_check.yml
