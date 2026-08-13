@@ -8,6 +8,11 @@ confluent_repo_version: "{{ confluent_package_version | regex_replace('^([0-9])\
 # Confirm no trailing / on the ssl file directory path
 ssl_file_dir_final: "{{ ssl_file_dir |regex_replace('\\/$', '') }}"
 
+# Confirm no trailing / on deployment_path - used (instead of the raw deployment_path) by every
+# deployment_path-derived path below and in defaults/main.yml, so a trailing slash in the
+# inventory (e.g. deployment_path: /cp-data/) can't produce double-slash paths.
+deployment_path_final: "{{ deployment_path | regex_replace('\\/$', '') }}"
+
 ### The base path for the binary files. When in Archive File deployment mode this results in binary files being based in, for example `/opt/confluent/confluent-5.5.1/bin`, otherwise they are based in `/usr/bin`.
 base_path: "{{ ((config_base_path,('confluent-',archive_version) | join) | path_join) if installation_method == 'archive' else '/' }}"
 
@@ -37,7 +42,7 @@ zookeeper_service_name: confluent-zookeeper
 zookeeper_main_package: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
 zookeeper_default_user: "{{ deployment_user if deployment_user | length > 0 else 'cp-kafka' }}"
 zookeeper_default_group: "{{ deployment_group if deployment_group | length > 0 else 'confluent' }}"
-zookeeper_default_log_dir: "{{ (deployment_path ~ '/log/kafka') if deployment_path | length > 0 else '/var/log/kafka' }}"
+zookeeper_default_log_dir: "{{ (deployment_path_final ~ '/log/kafka') if deployment_path | length > 0 else '/var/log/kafka' }}"
 zookeeper:
   server_start_file: "{{ binary_base_path }}/bin/zookeeper-server-start"
   config_file: "{{ (config_base_path, zookeeper_config_prefix_path, 'zookeeper.properties') | path_join }}"
@@ -55,7 +60,7 @@ zookeeper_properties:
       syncLimit: 2
       autopurge.snapRetainCount: 10
       autopurge.purgeInterval: 1
-      dataDir: "{{ (deployment_path ~ '/data/zookeeper') if deployment_path | length > 0 else '/var/lib/zookeeper' }}"
+      dataDir: "{{ (deployment_path_final ~ '/data/zookeeper') if deployment_path | length > 0 else '/var/lib/zookeeper' }}"
       admin.enableServer: "false"
   non_secure:
     enabled: "{{ not zookeeper_ssl_enabled }}"
@@ -113,7 +118,7 @@ kafka_controller_service_name: "confluent-kcontroller"
 kafka_controller_main_package: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
 kafka_controller_default_group: "{{ deployment_group if deployment_group | length > 0 else 'confluent' }}"
 kafka_controller_default_user: "{{ deployment_user if deployment_user | length > 0 else 'cp-kafka' }}"
-kafka_controller_default_log_dir: "{{ (deployment_path ~ '/log/controller') if deployment_path | length > 0 else '/var/log/controller' }}"
+kafka_controller_default_log_dir: "{{ (deployment_path_final ~ '/log/controller') if deployment_path | length > 0 else '/var/log/controller' }}"
 kafka_controller:
   server_start_file: "{{ binary_base_path }}/bin/kafka-server-start"
   config_file: "{{ (config_base_path, kafka_controller_config_prefix_path, 'server.properties') | path_join }}"
@@ -149,7 +154,7 @@ kafka_controller_properties:
       confluent.security.event.logger.exporter.kafka.topic.replicas: "{{audit_logs_destination_bootstrap_servers.split(',')|length if audit_logs_destination_enabled and rbac_enabled else kafka_controller_default_internal_replication_factor}}"
       confluent.support.metrics.enable: "true"
       confluent.support.customer.id: anonymous
-      log.dirs: "{{ (deployment_path ~ '/data/controller/data') if deployment_path | length > 0 else '/var/lib/controller/data' }}"
+      log.dirs: "{{ (deployment_path_final ~ '/data/controller/data') if deployment_path | length > 0 else '/var/lib/controller/data' }}"
       kafka.rest.enable: "{{kafka_controller_rest_proxy_enabled|string|lower}}"
       process.roles: controller
       controller.quorum.voters: "{{ kafka_controller_quorum_voters }}"
@@ -335,7 +340,7 @@ kafka_broker_service_name: "{{ 'confluent-server' if confluent_server_enabled|bo
 kafka_broker_main_package: "{{ 'confluent-server' if confluent_server_enabled|bool else 'confluent-kafka'}}"
 kafka_broker_default_user: "{{ deployment_user if deployment_user | length > 0 else 'cp-kafka' }}"
 kafka_broker_default_group: "{{ deployment_group if deployment_group | length > 0 else 'confluent' }}"
-kafka_broker_default_log_dir: "{{ (deployment_path ~ '/log/kafka') if deployment_path | length > 0 else '/var/log/kafka' }}"
+kafka_broker_default_log_dir: "{{ (deployment_path_final ~ '/log/kafka') if deployment_path | length > 0 else '/var/log/kafka' }}"
 kafka_broker:
   server_start_file: "{{ binary_base_path }}/bin/kafka-server-start"
   config_file: "{{ (config_base_path, kafka_broker_config_prefix_path, 'server.properties') | path_join }}"
@@ -377,7 +382,7 @@ kafka_broker_properties:
       confluent.security.event.logger.exporter.kafka.topic.replicas: "{{audit_logs_destination_bootstrap_servers.split(',')|length if audit_logs_destination_enabled and rbac_enabled else kafka_broker_default_internal_replication_factor}}"
       confluent.support.metrics.enable: "true"
       confluent.support.customer.id: anonymous
-      log.dirs: "{{ (deployment_path ~ '/data/kafka/data') if deployment_path | length > 0 else '/var/lib/kafka/data' }}"
+      log.dirs: "{{ (deployment_path_final ~ '/data/kafka/data') if deployment_path | length > 0 else '/var/lib/kafka/data' }}"
       kafka.rest.enable: "{{kafka_broker_rest_proxy_enabled|string|lower}}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
       confluent.cluster.link.metadata.topic.replication.factor: "{{kafka_broker_default_internal_replication_factor}}"
@@ -720,7 +725,7 @@ kafka_broker_client_properties: "{{ kafka_broker_default_client_properties | com
 schema_registry_service_name: confluent-schema-registry
 schema_registry_default_user: "{{ deployment_user if deployment_user | length > 0 else 'cp-schema-registry' }}"
 schema_registry_default_group: "{{ deployment_group if deployment_group | length > 0 else 'confluent' }}"
-schema_registry_default_log_dir: "{{ (deployment_path ~ '/log/confluent/schema-registry') if deployment_path | length > 0 else '/var/log/confluent/schema-registry' }}"
+schema_registry_default_log_dir: "{{ (deployment_path_final ~ '/log/confluent/schema-registry') if deployment_path | length > 0 else '/var/log/confluent/schema-registry' }}"
 schema_registry:
   server_start_file: "{{ binary_base_path }}/bin/schema-registry-start"
   systemd_file: "{{systemd_base_dir}}/{{schema_registry_service_name}}.service"
@@ -835,7 +840,7 @@ kafka_connect_default_service_name: confluent-kafka-connect
 kafka_connect_default_config_filename: connect-distributed.properties
 kafka_connect_default_user: "{{ deployment_user if deployment_user | length > 0 else 'cp-kafka-connect' }}"
 kafka_connect_default_group: "{{ deployment_group if deployment_group | length > 0 else 'confluent' }}"
-kafka_connect_default_log_dir: "{{ (deployment_path ~ '/log/kafka') if deployment_path | length > 0 else '/var/log/kafka' }}"
+kafka_connect_default_log_dir: "{{ (deployment_path_final ~ '/log/kafka') if deployment_path | length > 0 else '/var/log/kafka' }}"
 
 kafka_connect:
   server_start_file: "{{ binary_base_path }}/bin/connect-distributed"
@@ -1046,7 +1051,7 @@ ksql_service_name: "{{(confluent_package_version is version('5.5.0', '>=')) | te
 ksql_main_package: "{{(confluent_package_version is version('5.5.0', '>=')) | ternary('confluent-ksqldb' , 'confluent-ksql')}}"
 ksql_default_user: "{{ deployment_user if deployment_user | length > 0 else 'cp-ksql' }}"
 ksql_default_group: "{{ deployment_group if deployment_group | length > 0 else 'confluent' }}"
-ksql_default_log_dir: "{{ (deployment_path ~ '/log/confluent/ksql') if deployment_path | length > 0 else '/var/log/confluent/ksql' }}"
+ksql_default_log_dir: "{{ (deployment_path_final ~ '/log/confluent/ksql') if deployment_path | length > 0 else '/var/log/confluent/ksql' }}"
 ksql:
   server_start_file: "{{ binary_base_path }}/bin/ksql-server-start"
   config_file: "{{ (config_base_path, ksql_config_prefix_path, 'ksql-server.properties') | path_join }}"
@@ -1068,7 +1073,7 @@ ksql_properties:
       ksql.service.id: "{{ ksql_service_id }}"
       ksql.internal.topic.replicas: "{{ ksql_default_internal_replication_factor }}"
       ksql.streams.replication.factor: "{{ ksql_default_internal_replication_factor }}"
-      ksql.streams.state.dir: "{{ (deployment_path ~ '/data/kafka-streams') if deployment_path | length > 0 else '/var/lib/kafka-streams' }}"
+      ksql.streams.state.dir: "{{ (deployment_path_final ~ '/data/kafka-streams') if deployment_path | length > 0 else '/var/lib/kafka-streams' }}"
       ksql.streams.num.standby.replicas: 1
       ksql.streams.producer.delivery.timeout.ms: 2147483647
       ksql.streams.producer.max.block.ms: 9223372036854775807
@@ -1218,7 +1223,7 @@ ksql_final_properties: "{{ ksql_combined_properties | combine(ksql_custom_proper
 kafka_rest_service_name: confluent-kafka-rest
 kafka_rest_default_user: "{{ deployment_user if deployment_user | length > 0 else 'cp-kafka-rest' }}"
 kafka_rest_default_group: "{{ deployment_group if deployment_group | length > 0 else 'confluent' }}"
-kafka_rest_default_log_dir: "{{ (deployment_path ~ '/log/confluent/kafka-rest') if deployment_path | length > 0 else '/var/log/confluent/kafka-rest' }}"
+kafka_rest_default_log_dir: "{{ (deployment_path_final ~ '/log/confluent/kafka-rest') if deployment_path | length > 0 else '/var/log/confluent/kafka-rest' }}"
 kafka_rest:
   server_start_file: "{{ binary_base_path }}/bin/kafka-rest-start"
   config_file: "{{ (config_base_path, kafka_rest_config_prefix_path, 'kafka-rest.properties') | path_join }}"
@@ -1363,7 +1368,7 @@ kafka_rest_final_properties: "{{ kafka_rest_combined_properties | combine(kafka_
 control_center_service_name: confluent-control-center
 control_center_default_user: "{{ deployment_user if deployment_user | length > 0 else 'cp-control-center' }}"
 control_center_default_group: "{{ deployment_group if deployment_group | length > 0 else 'confluent' }}"
-control_center_default_log_dir: "{{ (deployment_path ~ '/log/confluent/control-center') if deployment_path | length > 0 else '/var/log/confluent/control-center' }}"
+control_center_default_log_dir: "{{ (deployment_path_final ~ '/log/confluent/control-center') if deployment_path | length > 0 else '/var/log/confluent/control-center' }}"
 control_center:
   server_start_file: "{{ binary_base_path }}/bin/control-center-start"
   config_file: "{{ (config_base_path, control_center_config_prefix_path, 'control-center-production.properties') | path_join }}"
@@ -1382,7 +1387,7 @@ control_center_properties:
     enabled: true
     properties:
       confluent.controlcenter.streams.num.stream.threads: 12
-      confluent.controlcenter.data.dir: "{{ (deployment_path ~ '/data/confluent/control-center') if deployment_path | length > 0 else '/var/lib/confluent/control-center' }}"
+      confluent.controlcenter.data.dir: "{{ (deployment_path_final ~ '/data/confluent/control-center') if deployment_path | length > 0 else '/var/lib/confluent/control-center' }}"
       confluent.controlcenter.internal.topics.replication: "{{control_center_default_internal_replication_factor}}"
       confluent.metrics.topic.replication: "{{control_center_default_internal_replication_factor}}"
       confluent.monitoring.interceptor.topic.replication: "{{control_center_default_internal_replication_factor}}"
