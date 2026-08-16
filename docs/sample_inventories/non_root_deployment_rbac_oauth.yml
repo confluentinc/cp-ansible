@@ -1,0 +1,110 @@
+---
+### NON-ROOT CP installation - RBAC over LDAP + OAuth/OIDC SSO for Control Center
+##
+## Sample inventory for a rootless install where Control Center's own login uses SSO via an
+## external OAuth/OIDC provider (e.g. Keycloak, Okta, Azure AD), layered on top of the same
+## LDAP-backed RBAC authorization as non_root_deployment_rbac_ldap.yml - read that one first,
+## everything in it still applies. This file only adds the sso_* block.
+##
+## OAuth/OIDC here replaces nothing about how MDS authorizes access (still LDAP-backed) - it
+## only changes how a human logs into the Control Center UI. sso_client_id/sso_client_password
+## must be a confidential client registered on your IdP with service accounts enabled.
+
+all:
+  vars:
+    ansible_user: cp-user
+    ansible_become: false
+
+    rootless_enabled: true
+    deployment_user: cp-user
+    deployment_group: cp-user
+    deployment_path: /cp-data
+    installation_method: archive
+
+    ## --- How to run: same two-phase flow as non_root_deployment.yml ---------------------
+    ## 1. ansible-playbook -i <this-inventory> confluent.platform.rootless_bootstrap -e ansible_user=<admin>
+    ## 2. ansible-playbook -i <this-inventory> confluent.platform.all
+
+    ssl_enabled: true
+    ssl_mutual_auth_enabled: true
+
+    ## --- RBAC over LDAP: identical to non_root_deployment_rbac_ldap.yml -----------------
+    rbac_enabled: true
+    mds_super_user: mds
+    mds_super_user_password: "<fill in - LDAP bind password for the mds account>"
+
+    ldap_base_properties: &ldap_base_properties
+      confluent.authorizer.init.timeout.ms: 1800000
+      ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+      ldap.com.sun.jndi.ldap.read.timeout: 3000
+      ldap.java.naming.provider.url: "ldap://<your-ldap-host>:389"
+      ldap.java.naming.security.principal: "uid=mds,OU=rbac,DC=<your-dc>,DC=<your-dc-extension>"
+      ldap.java.naming.security.credentials: "{{ mds_super_user_password }}"
+      ldap.java.naming.security.authentication: simple
+      ldap.user.search.base: "OU=rbac,DC=<your-dc>,DC=<your-dc-extension>"
+      ldap.group.search.base: "OU=rbac,DC=<your-dc>,DC=<your-dc-extension>"
+      ldap.user.name.attribute: uid
+      ldap.user.memberof.attribute.pattern: "CN=(.*),OU=rbac,DC=<your-dc>,DC=<your-dc-extension>"
+      ldap.group.name.attribute: cn
+      ldap.group.member.attribute.pattern: "CN=(.*),OU=rbac,DC=<your-dc>,DC=<your-dc-extension>"
+      ldap.user.object.class: account
+
+    kafka_broker_custom_properties: *ldap_base_properties
+    kafka_controller_custom_properties: *ldap_base_properties
+
+    schema_registry_ldap_user: schema-registry1
+    schema_registry_ldap_password: "<fill in>"
+    kafka_connect_ldap_user: kafka-connect1
+    kafka_connect_ldap_password: "<fill in>"
+    kafka_rest_ldap_user: kafka-rest1
+    kafka_rest_ldap_password: "<fill in>"
+    ksql_ldap_user: ksql1
+    ksql_ldap_password: "<fill in>"
+    control_center_ldap_user: control-center1
+    control_center_ldap_password: "<fill in>"
+
+    ## --- OAuth/OIDC SSO for Control Center, layered on top of the LDAP-backed MDS above ---
+    ## sso_* is read by roles/kafka_broker/tasks/main.yml (the MDS/broker side of the OIDC
+    ## integration) - set these from your IdP's OIDC discovery document
+    ## (<issuer>/.well-known/openid-configuration) and the confidential client you register there.
+    sso_mode: oidc
+    sso_groups_claim: groups
+    sso_sub_claim: sub
+    sso_issuer_url: "https://<your-idp-host>/realms/<your-realm>"
+    sso_jwks_uri: "https://<your-idp-host>/realms/<your-realm>/protocol/openid-connect/certs"
+    sso_authorize_uri: "https://<your-idp-host>/realms/<your-realm>/protocol/openid-connect/auth"
+    sso_token_uri: "https://<your-idp-host>/realms/<your-realm>/protocol/openid-connect/token"
+    sso_client_id: control_center
+    sso_client_password: "<fill in - the client secret from your IdP>"
+    # Only needed if your IdP's HTTPS listener uses a certificate your hosts don't already
+    # trust (e.g. self-signed/internal CA). Path is on the Ansible control node.
+    # sso_idp_cert_path: /path/to/idp-ca-or-leaf-cert.pem
+
+kafka_controller:
+  hosts:
+    <your-controller-hostname>:
+      ansible_user: "{{ deployment_user }}"
+kafka_broker:
+  hosts:
+    <your-broker-hostname>:
+      ansible_user: "{{ deployment_user }}"
+schema_registry:
+  hosts:
+    <your-schema-registry-hostname>:
+      ansible_user: "{{ deployment_user }}"
+kafka_connect:
+  hosts:
+    <your-kafka-connect-hostname>:
+      ansible_user: "{{ deployment_user }}"
+kafka_rest:
+  hosts:
+    <your-kafka-rest-hostname>:
+      ansible_user: "{{ deployment_user }}"
+ksql:
+  hosts:
+    <your-ksql-hostname>:
+      ansible_user: "{{ deployment_user }}"
+control_center:
+  hosts:
+    <your-control-center-hostname>:
+      ansible_user: "{{ deployment_user }}"

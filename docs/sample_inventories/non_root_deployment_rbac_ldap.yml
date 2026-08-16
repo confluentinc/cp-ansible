@@ -1,0 +1,100 @@
+---
+### NON-ROOT CP installation - RBAC over LDAP + mTLS
+##
+## Sample inventory for a rootless install with RBAC authorization backed by an external
+## LDAP server. Builds on non_root_deployment.yml (read that one first) - only the RBAC/LDAP/
+## mTLS-specific additions are new here.
+##
+## What you need before running this: a reachable LDAP server with an "ou=rbac" tree
+## (uid-based users, objectClass account), and its bind DN/password for the mds service
+## account. Fill in ldap_base_properties, mds_super_user*, and each component's
+## <component>_ldap_user/<component>_ldap_password below to match your real LDAP directory.
+
+all:
+  vars:
+    ansible_user: cp-user
+    ansible_become: false
+
+    rootless_enabled: true
+    deployment_user: cp-user
+    deployment_group: cp-user
+    deployment_path: /cp-data
+    installation_method: archive
+
+    ## --- How to run: same two-phase flow as non_root_deployment.yml ---------------------
+    ## 1. ansible-playbook -i <this-inventory> confluent.platform.rootless_bootstrap -e ansible_user=<admin>
+    ## 2. ansible-playbook -i <this-inventory> confluent.platform.all
+
+    ## --- mTLS: cp-ansible generates a self-signed CA + certs per component ---------------
+    ssl_enabled: true
+    ssl_mutual_auth_enabled: true
+
+    ## --- RBAC over LDAP --------------------------------------------------------------------
+    rbac_enabled: true
+
+    # The MDS super user account, as provisioned in your LDAP directory (uid + password).
+    mds_super_user: mds
+    mds_super_user_password: "<fill in - LDAP bind password for the mds account>"
+
+    # LDAP connection + schema mapping MDS uses to resolve users/groups. Adjust the DNs,
+    # search bases, and attribute names to match your actual LDAP directory's schema -
+    # this example assumes a flat "ou=rbac,dc=<domain>" tree with uid-keyed POSIX accounts.
+    ldap_base_properties: &ldap_base_properties
+      confluent.authorizer.init.timeout.ms: 1800000
+      ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+      ldap.com.sun.jndi.ldap.read.timeout: 3000
+      ldap.java.naming.provider.url: "ldap://<your-ldap-host>:389"
+      ldap.java.naming.security.principal: "uid=mds,OU=rbac,DC=<your-dc>,DC=<your-dc-extension>"
+      ldap.java.naming.security.credentials: "{{ mds_super_user_password }}"
+      ldap.java.naming.security.authentication: simple
+      ldap.user.search.base: "OU=rbac,DC=<your-dc>,DC=<your-dc-extension>"
+      ldap.group.search.base: "OU=rbac,DC=<your-dc>,DC=<your-dc-extension>"
+      ldap.user.name.attribute: uid
+      ldap.user.memberof.attribute.pattern: "CN=(.*),OU=rbac,DC=<your-dc>,DC=<your-dc-extension>"
+      ldap.group.name.attribute: cn
+      ldap.group.member.attribute.pattern: "CN=(.*),OU=rbac,DC=<your-dc>,DC=<your-dc-extension>"
+      ldap.user.object.class: account
+
+    kafka_broker_custom_properties: *ldap_base_properties
+    kafka_controller_custom_properties: *ldap_base_properties
+
+    # Each component authenticates to MDS as its own LDAP-provisioned account.
+    schema_registry_ldap_user: schema-registry1
+    schema_registry_ldap_password: "<fill in>"
+    kafka_connect_ldap_user: kafka-connect1
+    kafka_connect_ldap_password: "<fill in>"
+    kafka_rest_ldap_user: kafka-rest1
+    kafka_rest_ldap_password: "<fill in>"
+    ksql_ldap_user: ksql1
+    ksql_ldap_password: "<fill in>"
+    control_center_ldap_user: control-center1
+    control_center_ldap_password: "<fill in>"
+
+kafka_controller:
+  hosts:
+    <your-controller-hostname>:
+      ansible_user: "{{ deployment_user }}"
+kafka_broker:
+  hosts:
+    <your-broker-hostname>:
+      ansible_user: "{{ deployment_user }}"
+schema_registry:
+  hosts:
+    <your-schema-registry-hostname>:
+      ansible_user: "{{ deployment_user }}"
+kafka_connect:
+  hosts:
+    <your-kafka-connect-hostname>:
+      ansible_user: "{{ deployment_user }}"
+kafka_rest:
+  hosts:
+    <your-kafka-rest-hostname>:
+      ansible_user: "{{ deployment_user }}"
+ksql:
+  hosts:
+    <your-ksql-hostname>:
+      ansible_user: "{{ deployment_user }}"
+control_center:
+  hosts:
+    <your-control-center-hostname>:
+      ansible_user: "{{ deployment_user }}"
