@@ -110,6 +110,33 @@ journalctl --user -u cp-kafka_broker           # logs
 # produce/consume; RBAC: curl -sk -u mds:password https://<host>:8090/security/1.0/authenticate → 200
 ```
 
+## 5. Proving it's actually rootless
+
+Creating `deployment_user` (step 2) doesn't by itself prove the *deploy* (step 3) never escalates —
+that admin account still has sudo. Confirm the deploy user genuinely can't escalate, and that
+nothing did, with checks like these:
+
+**Before the run** — the deploy user has no path to root:
+```bash
+sudo -u <deployment_user> sudo -n true; echo $?   # non-zero = no passwordless sudo
+```
+If you're provisioning `deployment_user` yourself (the no-sudo path in step 2), give it its own
+account with **no** entry in `wheel`/`sudo`/any sudoers file — don't just reuse a cloud image's
+default admin account (e.g. `ec2-user`), which usually has passwordless sudo and so proves
+nothing about rootlessness.
+
+**After the run** — nothing escalated:
+```bash
+find <deployment_path> -not -user <deployment_user>   # no root-owned files - empty output
+ps -eo user,cmd | awk '$1 == "root"' | grep -i 'kafka\|confluent'  # no root-owned CP process
+systemctl list-units 'cp-*' --no-legend                # system-scope - empty, none exist
+systemctl --user list-units 'cp-*' --no-legend         # user-scope - the real running units
+```
+A task that's missing its `when: not (rootless_enabled|bool)` guard on `become: true` fails loudly
+here (`sudo: a password is required`) instead of silently succeeding, precisely because the deploy
+user has nothing to escalate to - so a clean run through these checks is a real proof of
+rootlessness, not just an absence of errors.
+
 ---
 
 ## Per-config notes
