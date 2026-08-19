@@ -8,6 +8,22 @@
   tags:
     - systemd
 
+- name: "Check if the rootless systemd --user unit exists"
+  stat:
+    path: "{{ ansible_env.HOME }}/.config/systemd/user/cp-kafka_connect_replicator.service"
+  register: kafka_connect_replicator_rootless_unit
+  when: rootless_enabled | bool
+
+# Skip if the unit doesn't exist yet; rootless_start_service.yml does the first start later.
+- name: "Restart Kafka Connect Replicator (rootless, systemd --user)"
+  ansible.builtin.systemd_service:
+    name: cp-kafka_connect_replicator.service
+    scope: user
+    state: restarted
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+  when: rootless_enabled | bool and kafka_connect_replicator_rootless_unit.stat.exists
+
 - name: Startup Delay
   wait_for:
     timeout: "{{ kafka_connect_replicator_health_check_delay }}"

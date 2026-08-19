@@ -1,9 +1,21 @@
 ---
-### Rootless install on RHEL9, mTLS + RBAC via LDAP. Validates systemd --user
-### (loginctl linger) works unprivileged and RBAC resolves against a real LDAP
-### server. ldap1 uses native openldap-servers on CentOS8 (RHEL9 dropped that
-### package); configured inline in converge.yml since confluent.test.ldap isn't
-### part of this collection.
+### Rootless install on RHEL9, Kerberos/GSSAPI + RBAC via LDAP. Validates systemd
+### --user (loginctl linger) works unprivileged, keytab/krb5.conf placement works
+### under deployment_path, and RBAC resolves against a real LDAP server. ldap1 and
+### kerberos1 use native openldap-servers/krb5-server on CentOS8 (RHEL9 dropped
+### openldap-servers); configured inline in converge.yml since confluent.test.ldap
+### isn't part of this collection. Kerberos/GSSAPI replaces mTLS as the client
+### listener's peer-auth mechanism (the two aren't combined in any other scenario
+### either) - RBAC/LDAP authorization is unchanged.
+###
+### Known container limitations (not fixable here, called out for reviewers):
+### - privileged: true + cgroupns_mode: host is required for systemd --user to run inside
+###   Docker at all - it does NOT mean the deploy itself used root. That's verified instead
+###   by asserting every file under deployment_path is owned by deployment_user (verify.yml)
+###   and by the extensive live-EC2 (non-containerized) verification recorded in
+###   ROOTLESS_DEPLOYMENT_STEPS.md.
+### - loginctl enable-linger surviving an actual host reboot is a design promise that isn't
+###   exercisable in a container (no real reboot) - also only verified live on EC2.
 
 driver:
   name: docker
@@ -12,6 +24,19 @@ platforms:
     hostname: ldap1.confluent
     groups:
       - ldap_server
+    image: centos:centos8
+    dockerfile: ../Dockerfile-centos8-base.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kerberos1
+    hostname: kerberos1.confluent
+    groups:
+      - kerberos_server
     image: centos:centos8
     dockerfile: ../Dockerfile-centos8-base.j2
     command: ""
@@ -115,15 +140,26 @@ platforms:
 provisioner:
   playbooks:
     converge: converge.yml
+    side_effect: side_effect.yml
     verify: verify.yml
   inventory:
     group_vars:
       all:
         ssl_enabled: true
-        ssl_mutual_auth_enabled: true
-        ssl_client_authentication: required
-        sasl_protocol: none
+        ssl_mutual_auth_enabled: false
+        sasl_protocol: kerberos
         rbac_enabled: true
+
+        kerberos_kafka_broker_primary: kafka
+        kerberos:
+          realm: realm.example.com
+          kdc_hostname: kerberos1
+          admin_hostname: kerberos1
+
+        kafka_broker_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        kafka_broker_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_broker-{{inventory_hostname}}.keytab"
+        kafka_controller_kerberos_principal: "{{kerberos_kafka_broker_primary}}/{{inventory_hostname}}.confluent@{{kerberos.realm | upper}}"
+        kafka_controller_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/kafka_controller-{{inventory_hostname}}.keytab"
 
         mds_super_user: mds
         mds_super_user_password: password
@@ -190,9 +226,18 @@ provisioner:
             uid: 9994
             guid: 94
 
-      # Rootless vars scoped to the CP component groups only (not group_vars/all) - ldap1 is an
-      # unmanaged host sharing this inventory, not a rootless deploy target. Scoping these here
-      # keeps ldap1 out of playbooks/rootless_bootstrap.yml's hosts:all bootstrap treatment
+      kerberos_server:
+        realm_name: "{{ kerberos.realm | upper }}"
+        keytab_output_directory: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs"
+        kerberos_principals:
+          - principal: "{{kerberos_kafka_broker_primary}}/kafka-broker1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: kafka_broker-kafka-broker1.keytab
+          - principal: "{{kerberos_kafka_broker_primary}}/kafka-controller1.confluent@{{kerberos.realm | upper}}"
+            keytab_path: kafka_controller-kafka-controller1.keytab
+
+      # Rootless vars scoped to the CP component groups only (not group_vars/all) - ldap1/kerberos1
+      # are unmanaged hosts sharing this inventory, not rootless deploy targets. Scoping these here
+      # keeps them out of playbooks/rootless_bootstrap.yml's hosts:all bootstrap treatment
       # entirely, the same way ansible_user already is.
       kafka_controller: &rootless_component_vars
         ansible_user: "{{ deployment_user }}"
