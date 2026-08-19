@@ -74,9 +74,27 @@
       delay: "{{ control_center_next_gen_health_check_retry_delay }}"
       when: not rbac_enabled | bool
 
+    # Alerts are off in BYOP, so the alert-management endpoints are not registered (return 404).
+    # This is the runtime counterpart to the alerts.enable=false config check above.
+    - name: C3 alert-management endpoint is not served when alerts are off
+      ansible.builtin.uri:
+        url: "{{ c3_base }}/2.0/alerts/triggers"
+        url_username: "{{ c3_user }}"
+        url_password: "{{ c3_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: 404
+      register: byop_alerts_disabled
+      until: byop_alerts_disabled.status == 404
+      retries: "{{ control_center_next_gen_health_check_retries }}"
+      delay: "{{ control_center_next_gen_health_check_retry_delay }}"
+      when: not rbac_enabled | bool
+
+    # /2.0/health/status returns {"bootstrapClusterId": "...", "clusterStatus": {"<id>": "ONLINE"}}.
+    # A cluster only reports ONLINE once C3 has read its metrics, so this is the read proof.
     - name: C3 cluster status is ONLINE (proves C3 read metrics from the external Prometheus)
       ansible.builtin.uri:
-        url: "{{ c3_base }}/2.0/health/status"     # CONFIRM path on first run
+        url: "{{ c3_base }}/2.0/health/status"
         url_username: "{{ c3_user }}"
         url_password: "{{ c3_pass }}"
         force_basic_auth: true
@@ -85,7 +103,8 @@
       register: byop_status
       until:
         - byop_status.status == 200
-        - "'ONLINE' in (byop_status.content | string)"
+        - (byop_status.json.bootstrapClusterId | default('') | string | length) > 0
+        - "'ONLINE' in (byop_status.json.clusterStatus.values() | list)"
       retries: "{{ control_center_next_gen_health_check_retries }}"
       delay: "{{ control_center_next_gen_health_check_retry_delay }}"
       when: not rbac_enabled | bool
