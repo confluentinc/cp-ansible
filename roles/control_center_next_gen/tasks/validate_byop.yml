@@ -1,0 +1,44 @@
+---
+# BYOP pre-flight validation.
+# Imported near the top of main.yml, gated on control_center_next_gen_external_prometheus_enabled.
+# Fails fast with a clear message on a misconfigured external-Prometheus setup.
+# Enforces the supported contract: an endpoint, TLS on every connection, and exactly one auth mode.
+#
+# Note: control_center_next_gen_dependency_prometheus_host has a computed default (the C3 host),
+# so the TLS and auth checks below are the strong signal that a real external endpoint was set.
+
+- name: BYOP - external Prometheus endpoint must be set
+  ansible.builtin.assert:
+    that:
+      - control_center_next_gen_dependency_prometheus_host is defined
+      - (control_center_next_gen_dependency_prometheus_host | default('') | trim | length) > 0
+    fail_msg: >-
+      control_center_next_gen_external_prometheus_enabled is true but the external Prometheus
+      endpoint is not set. Set control_center_next_gen_dependency_prometheus_host and
+      control_center_next_gen_dependency_prometheus_port to your external Prometheus.
+    success_msg: "BYOP: external Prometheus endpoint is set."
+    quiet: true
+
+- name: BYOP - external Prometheus must use TLS
+  ansible.builtin.assert:
+    that:
+      - control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+    fail_msg: >-
+      control_center_next_gen_external_prometheus_enabled is true but TLS is not enabled. Set
+      control_center_next_gen_dependency_prometheus_ssl_enabled to true. Every connection to the
+      external Prometheus must use TLS.
+    success_msg: "BYOP: external Prometheus TLS is enabled."
+    quiet: true
+
+- name: BYOP - external Prometheus requires exactly one auth mode
+  ansible.builtin.assert:
+    that:
+      - (control_center_next_gen_dependency_prometheus_basic_auth_enabled | bool)
+        != (control_center_next_gen_dependency_prometheus_mtls_enabled | bool)
+    fail_msg: >-
+      Choose exactly one auth mode for the external Prometheus. Set either
+      control_center_next_gen_dependency_prometheus_basic_auth_enabled (Basic auth over TLS) or
+      control_center_next_gen_dependency_prometheus_mtls_enabled (mutual TLS) to true, not both
+      and not neither.
+    success_msg: "BYOP: external Prometheus auth mode is valid."
+    quiet: true
