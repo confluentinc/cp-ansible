@@ -8,6 +8,12 @@ HOST="${1:-byop-prometheus.confluent}"
 DIR="$(cd "$(dirname "$0")" && pwd)/certs"
 mkdir -p "$DIR"
 
+# Idempotent: if the full set is already present, reuse it (safe to call from pipeline setup).
+if [[ -f "$DIR/ca.crt" && -f "$DIR/server.crt" && -f "$DIR/client.crt" ]]; then
+  echo "Certs already present in $DIR - skipping generation."
+  exit 0
+fi
+
 # CA
 openssl req -x509 -newkey rsa:2048 -nodes -keyout "$DIR/ca.key" -out "$DIR/ca.crt" \
   -days 3650 -subj "/CN=byop-mock-prometheus-ca"

@@ -21,6 +21,19 @@ customer's external Prometheus must be for BYOP:
 
 ## Build
 
+One command (certs + image, idempotent):
+
+```bash
+docker/byop-mock-prometheus/build.sh          # or: build.sh <san-host>
+```
+
+**Pipeline:** call `docker/byop-mock-prometheus/build.sh` in the on-demand molecule pipeline's
+setup, right where it builds/pulls `usmagent-mock-ccloud:latest`. Both mock images are
+`pre_build_image: true`, so molecule expects them to already exist before a scenario runs - this
+script is what makes the BYOP one automatic for everyone, not just whoever remembers the manual steps.
+
+Manual equivalent (what `build.sh` runs):
+
 ```bash
 cd docker/byop-mock-prometheus
 ./generate-certs.sh byop-prometheus.confluent          # SAN = the host C3 dials in the molecule scenario
@@ -28,8 +41,6 @@ cd docker/byop-mock-prometheus
 #   htpasswd -nBC 10 "" | tr -d ':\n'   -> paste into web-config-basic.yml for user 'c3'
 docker build -t byop-mock-prometheus:latest .
 ```
-
-The molecule pipeline builds/pulls this image the same way it does `usmagent-mock-ccloud:latest`.
 
 ## How the molecule scenario uses it
 
