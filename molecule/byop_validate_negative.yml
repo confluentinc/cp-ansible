@@ -1,0 +1,47 @@
+---
+# BYOP negative validation: confirm validate_byop.yml rejects bad external-Prometheus configs.
+# Runs on localhost (no cluster needed). Run standalone:
+#   ansible-playbook molecule/byop_validate_negative.yml
+# or import from a scenario's verify.yml: - import_playbook: ../byop_validate_negative.yml
+- name: BYOP validation - bad configs are rejected
+  hosts: localhost
+  gather_facts: false
+  vars:
+    control_center_next_gen_external_prometheus_enabled: true
+    control_center_next_gen_dependency_prometheus_host: prom.example
+  tasks:
+    - name: External Prometheus with no TLS is rejected
+      block:
+        - name: Run validation with TLS off
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_byop.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: false
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+        - name: Should not reach here - the TLS assert must fire
+          ansible.builtin.fail:
+            msg: "validate_byop did not reject a non-TLS external Prometheus."
+      rescue:
+        - name: Confirm the failure names the TLS requirement
+          ansible.builtin.assert:
+            that:
+              - (ansible_failed_result.msg | default('') | string) is search('TLS')
+            fail_msg: "The assert fired but not for the TLS requirement."
+
+    - name: External Prometheus with both auth modes is rejected
+      block:
+        - name: Run validation with both basic and mTLS on
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_byop.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: true
+        - name: Should not reach here - the auth-mode assert must fire
+          ansible.builtin.fail:
+            msg: "validate_byop did not reject both auth modes."
+      rescue:
+        - name: Confirm the failure names the auth-mode conflict
+          ansible.builtin.assert:
+            that:
+              - (ansible_failed_result.msg | default('') | string) is search('one auth mode')
+            fail_msg: "The assert fired but not for the auth-mode conflict."
