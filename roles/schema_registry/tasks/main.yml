@@ -33,7 +33,9 @@
     tasks_from: validate_package_availability.yml
   vars:
     validate_packages: "{{ schema_registry_packages }}"
-  when: installation_method == "package"
+  when:
+    - installation_method == "package"
+    - not (rootless_enabled | bool)
   tags:
     - package
     - cp_package
@@ -46,7 +48,9 @@
     tasks_from: remove_packages.yml
   vars:
     service_name: "{{ schema_registry_service_name }}"
-  when: installation_method == "package"
+  when:
+    - installation_method == "package"
+    - not (rootless_enabled | bool)
   tags:
     - package
     - cp_package
@@ -64,6 +68,7 @@
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
+    - not (rootless_enabled | bool)
   ignore_errors: "{{ ansible_check_mode }}"
   tags:
     - package
@@ -80,6 +85,7 @@
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
+    - not (rootless_enabled | bool)
   ignore_errors: "{{ ansible_check_mode }}"
   tags:
     - package
@@ -89,6 +95,7 @@
 - name: Schema Registry Group
   group:
     name: "{{schema_registry_group}}"
+  when: not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -106,7 +113,9 @@
     system: true
     shell: "{{user_login_shell}}"
     group: "{{schema_registry_group}}"
-  when: (getent_passwd|default({}))[schema_registry_user] is not defined
+  when:
+    - (getent_passwd|default({}))[schema_registry_user] is not defined
+    - not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -119,7 +128,9 @@
     dest: "{{schema_registry.systemd_file}}"
     mode: '644'
     force: true
-  when: installation_method == "archive"
+  when:
+    - installation_method == "archive"
+    - not (rootless_enabled | bool)
   tags:
     - systemd
 
@@ -352,6 +363,7 @@
     group: "{{schema_registry_group}}"
     state: directory
     mode: '750'
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
     - privileged
@@ -365,9 +377,24 @@
     group: root
   notify: restart schema-registry
   diff: "{{ not mask_sensitive_diff|bool }}"
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
-    - privileged
+
+- name: Generate Schema Registry rootless lifecycle scripts
+  include_role:
+    name: common
+    tasks_from: rootless_lifecycle.yml
+  vars:
+    rootless_component_name: schema_registry
+    rootless_service_environment_overrides: "{{ schema_registry_service_environment_overrides }}"
+    rootless_service_exec: "{{ schema_registry_service_overrides.ExecStart }}"
+    rootless_service_overrides: "{{ schema_registry_service_overrides }}"
+    rootless_service_unit_overrides: "{{ schema_registry_service_unit_overrides }}"
+    rootless_restart_handler: restart schema-registry
+  when: rootless_lifecycle_enabled | bool
+  tags:
+    - filesystem
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -382,8 +409,18 @@
     name: "{{schema_registry_service_name}}"
     enabled: true
     state: started
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
+
+- name: Start Schema Registry (rootless, non-systemd)
+  include_role:
+    name: common
+    tasks_from: rootless_start_service.yml
+  vars:
+    rootless_component_name: schema_registry
+    rootless_component_port: "{{ schema_registry_listener_port }}"
+  when: rootless_lifecycle_enabled | bool
 
 - name: Health Check
   include_tasks: health_check.yml

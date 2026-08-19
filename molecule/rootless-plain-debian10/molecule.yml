@@ -1,0 +1,196 @@
+---
+### Rootless install on Debian10, SASL_PLAIN + SSL. Validates systemd --user
+### (loginctl linger) + rootless_bootstrap.yml's apt/dbus-user-session branch
+### on Debian. (Originally SASL_SCRAM, but SCRAM isn't supported in KRaft mode
+### before CP 7.8 - this branch is 7.6.x, and kraft.py excludes any scenario
+### with "scram" in its name for exactly that reason. Zookeeper mode would
+### dodge that but has zero rootless support of its own - out of scope here.)
+###
+### Known container limitations (not fixable here, called out for reviewers):
+### - privileged: true + cgroupns_mode: host is required for systemd --user to run inside
+###   Docker at all - it does NOT mean the deploy itself used root. That's verified instead
+###   by asserting every file under deployment_path is owned by deployment_user (verify.yml)
+###   and by the extensive live-EC2 (non-containerized) verification recorded in
+###   ROOTLESS_DEPLOYMENT_STEPS.md.
+### - loginctl enable-linger surviving an actual host reboot is a design promise that isn't
+###   exercisable in a container (no real reboot) - also only verified live on EC2.
+
+driver:
+  name: docker
+platforms:
+  - name: kafka-controller1
+    hostname: kafka-controller1.confluent
+    groups:
+      - kafka_controller
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: schema-registry1
+    hostname: schema-registry1.confluent
+    groups:
+      - schema_registry
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-rest1
+    hostname: kafka-rest1.confluent
+    groups:
+      - kafka_rest
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect-replicator1
+    hostname: kafka-connect-replicator1.confluent
+    groups:
+      - kafka_connect_replicator
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ksql1
+    hostname: ksql1.confluent
+    groups:
+      - ksql
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center1
+    hostname: control-center1.confluent
+    groups:
+      - control_center
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    converge: converge.yml
+    side_effect: side_effect.yml
+    verify: verify.yml
+  inventory:
+    group_vars:
+      all:
+        rootless_enabled: true
+        # Deliberately mutually distinct, and deployment_path deliberately doesn't embed
+        # deployment_user as a path component - the other two rootless scenarios use
+        # deployment_user == deployment_group and deployment_path == /home/<deployment_user>/...,
+        # which never exercises any of the three as an independent value (e.g. code that
+        # accidentally hardcodes /home/{{ deployment_user }}/... instead of deployment_path,
+        # or assumes the group name matches the user name, would pass unnoticed there).
+        deployment_user: cpsvc
+        deployment_group: cp-platform
+        deployment_path: /data/confluent-rootless
+        installation_method: archive
+        custom_java_path: /opt/jdk17
+
+        # Debian/Ubuntu's systemd --user manager needs dbus-user-session, which the archive
+        # Dockerfile doesn't bake in - exercise rootless_bootstrap.yml's apt branch for it.
+        rootless_install_packages: true
+
+        ssl_enabled: true
+        sasl_protocol: plain
+
+        kafka_connect_confluent_hub_plugins:
+          - jcustenborder/kafka-connect-spooldir:2.0.43
+
+        kafka_connect_custom_properties:
+          plugin.path: "{{ binary_base_path }}/share/java/connect_plugins,{{ binary_base_path }}/share/filestream-connectors,{{ kafka_connect_confluent_hub_plugins_dest }}"
+
+        kafka_connect_connectors:
+          - name: sample-connector-1
+            config:
+              connector.class: "FileStreamSourceConnector"
+              tasks.max: "1"
+              file: "{{ deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
+              topic: "test_topic"
+
+      # Rootless components connect as the deploy user.
+      kafka_controller:
+        ansible_user: "{{ deployment_user }}"
+      kafka_broker:
+        ansible_user: "{{ deployment_user }}"
+      schema_registry:
+        ansible_user: "{{ deployment_user }}"
+      kafka_connect:
+        ansible_user: "{{ deployment_user }}"
+      kafka_rest:
+        ansible_user: "{{ deployment_user }}"
+      ksql:
+        ansible_user: "{{ deployment_user }}"
+      control_center:
+        ansible_user: "{{ deployment_user }}"
+      kafka_connect_replicator:
+        ansible_user: "{{ deployment_user }}"
+        # Defaults to localhost:9092, which only works when co-located with the broker on
+        # the same host - each component here is its own container, so point explicitly
+        # at kafka-broker1's real address (self-replication: source and destination are the
+        # same cluster, which is fine for exercising the rootless lifecycle/restart/ownership
+        # mechanics - not testing replication correctness itself).
+        kafka_connect_replicator_consumer_bootstrap_servers: "kafka-broker1.confluent:9092"
+        kafka_connect_replicator_producer_bootstrap_servers: "kafka-broker1.confluent:9092"
+        # kafka_connect_replicator_{keystore,truststore}_storepass default to "" - every other
+        # kafka_connect_replicator molecule scenario sets these explicitly, so do the same here.
+        kafka_connect_replicator_truststore_storepass: confluenttruststorepass
+        kafka_connect_replicator_keystore_storepass: confluentkeystorestorepass
+verifier:
+  name: ansible

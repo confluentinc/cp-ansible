@@ -66,7 +66,7 @@ jolokia_url_remote: true
 jolokia_enabled: false
 
 ### Full path to download the Jolokia Agent Jar
-jolokia_jar_path: /opt/jolokia/jolokia.jar
+jolokia_jar_path: "{{ (deployment_path_final ~ '/jolokia/jolokia.jar') if deployment_path | length > 0 else '/opt/jolokia/jolokia.jar' }}"
 
 ### Boolean to force update of Jolokia Agent Jar (must be set to true if jolokia_jar_path already exists)
 jolokia_jar_url_force: false
@@ -137,7 +137,7 @@ jmxexporter_url_remote: true
 jmxexporter_enabled: false
 
 ### Full path to download the Prometheus Exporter Agent Jar
-jmxexporter_jar_path: /opt/prometheus/jmx_prometheus_javaagent.jar
+jmxexporter_jar_path: "{{ (deployment_path_final ~ '/jmx_exporter/jmx_prometheus_javaagent.jar') if deployment_path | length > 0 else '/opt/prometheus/jmx_prometheus_javaagent.jar' }}"
 
 ### Boolean to force update of Prometheus Exporter Agent Jar (must be set to true if jmxexporter_jar_path already exists)
 jmxexporter_jar_url_force: false
@@ -167,7 +167,7 @@ logredactor_policy_refresh_interval: 0
 kerberos_configure: true
 
 ### Custom path for the location of kerberos client configuration file, works with any value of kerberos_configure
-kerberos_client_config_file_dest: /etc/krb5.conf
+kerberos_client_config_file_dest: "{{ (deployment_path_final ~ '/krb5.conf') if deployment_path | length > 0 else '/etc/krb5.conf' }}"
 
 # Deprecated variable now that primary can be pulled from kafka_broker_kerberos_principal
 kerberos_kafka_broker_primary: "{{ (hostvars[ groups['kafka_broker'][0] | default('kafka') ] | default({})) ['kafka_broker_kerberos_principal'] | default('kafka/host@EXAMPLE>COM') | regex_replace('/.*') }}"
@@ -249,8 +249,22 @@ monitoring_interceptors_enabled: "{{ 'control_center' in groups }}"
 ### The method of installation. Valid values are "package" or "archive". If "archive" is selected then services will not be installed via the use of yum or apt, but will instead be installed via expanding the target .tar.gz file from the Confluent archive into the path defined by `archive_destination_path`. Configuration files are also kept in this directory structure instead of `/etc`. SystemD service units are copied from the ardhive for each target service and overrides are created pointing at the new paths. The "package" installation method is the default behavior that utilizes yum/apt.
 installation_method: "package"
 
+### Rootless base path/user/group - install paths, users/groups, and data/log dirs derive from these. Empty deployment_path/deployment_user = no change.
+deployment_path: ""
+deployment_user: ""
+deployment_group: "confluent"
+
+### Master switch for rootless deploys - skips root-requiring steps and runs the systemd --user lifecycle instead. Default false = no change.
+rootless_enabled: false
+
+### Generates a systemd --user unit per component instead of system-level systemd. Defaults to rootless_enabled; can be set independently.
+rootless_lifecycle_enabled: "{{ rootless_enabled }}"
+
+### Directory the rootless lifecycle env-file + start/stop scripts are written to.
+rootless_lifecycle_bin_dir: "{{ (deployment_path_final ~ '/rootless-bin') if deployment_path | length > 0 else (archive_destination_path ~ '/rootless-bin') }}"
+
 ### The path the downloaded archive is expanded into. Using the default with a `confluent_package_version` of *5.5.1* results in the following installation path `/opt/confluent/confluent-5.5.1/` that contains directories such as `bin` and `share`, but may be overridden usinf the `binary_base_path` property.
-archive_destination_path: "/opt/confluent"
+archive_destination_path: "{{ (deployment_path_final ~ '/confluent') if deployment_path | length > 0 else '/opt/confluent' }}"
 
 archive_version: "{{confluent_package_version}}"
 
@@ -273,10 +287,10 @@ config_prefix: "/etc"
 confluent_cli_download_enabled: "{{ secrets_protection_enabled }}"
 
 ### The path the Confluent CLI archive is expanded into.
-confluent_cli_base_path: /opt/confluent-cli
+confluent_cli_base_path: "{{ (deployment_path_final ~ '/confluent-cli') if deployment_path | length > 0 else '/opt/confluent-cli' }}"
 
 ### Full path on hosts for Confluent CLI symlink to executable
-confluent_cli_path: "/usr/local/bin/confluent"
+confluent_cli_path: "{{ (confluent_cli_base_path ~ '/confluent') if deployment_path | length > 0 else '/usr/local/bin/confluent' }}"
 
 ### Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 confluent_cli_version: 3.65.0
@@ -304,7 +318,7 @@ ssl_self_signed_ca_key_filepath: generated_ssl_files/snakeoil-ca-1.key
 ssl_self_signed_ca_password: capassword123
 
 ### Directory on hosts to store all ssl files.
-ssl_file_dir: /var/ssl/private/
+ssl_file_dir: "{{ (deployment_path_final ~ '/ssl') if deployment_path | length > 0 else '/var/ssl/private/' }}"
 
 ### Boolean to have reruns of all.yml regenerate the certificate authority used for self signed certs.
 regenerate_ca: false
@@ -433,7 +447,7 @@ zookeeper_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 zookeeper_cert_path: "{{ ssl_file_dir_final }}/zookeeper.crt"
 zookeeper_key_path: "{{ ssl_file_dir_final }}/zookeeper.key"
 zookeeper_export_certs: "{{ True if zookeeper_client_authentication_type == 'mtls' or zookeeper_quorum_authentication_type in ['mtls', 'digest_over_tls'] else False }}"
-zookeeper_keytab_path: /etc/security/keytabs/zookeeper.keytab
+zookeeper_keytab_path: "{{ (deployment_path_final ~ '/security/keytabs/zookeeper.keytab') if deployment_path | length > 0 else '/etc/security/keytabs/zookeeper.keytab' }}"
 
 ### Boolean to enable Jolokia access control on zookeeper
 zookeeper_jolokia_access_control_enabled: "{{jolokia_access_control_enabled}}"
@@ -470,7 +484,7 @@ zookeeper_jmxexporter_port: 8079
 zookeeper_jmxexporter_config_source_path: zookeeper.yml
 
 ### Destination path for Zookeeper jmx config file
-zookeeper_jmxexporter_config_path: /opt/prometheus/zookeeper.yml
+zookeeper_jmxexporter_config_path: "{{ (deployment_path_final ~ '/jmx_exporter/zookeeper.yml') if deployment_path | length > 0 else '/opt/prometheus/zookeeper.yml' }}"
 
 zookeeper_health_check_command: "{{ binary_base_path }}/bin/kafka-run-class
 {% if zookeeper_ssl_enabled|bool %}
@@ -585,7 +599,7 @@ kafka_controller_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 kafka_controller_cert_path: "{{ ssl_file_dir_final }}/kafka_controller.crt"
 kafka_controller_key_path: "{{ ssl_file_dir_final }}/kafka_controller.key"
 kafka_controller_export_certs: "{{ssl_mutual_auth_enabled}}"
-kafka_controller_keytab_path: /etc/security/keytabs/kafka_controller.keytab
+kafka_controller_keytab_path: "{{ (deployment_path_final ~ '/security/keytabs/kafka_controller.keytab') if deployment_path | length > 0 else '/etc/security/keytabs/kafka_controller.keytab' }}"
 
 ### Boolean to enable Jolokia access control on kafka controller
 kafka_controller_jolokia_access_control_enabled: "{{jolokia_access_control_enabled}}"
@@ -627,7 +641,7 @@ kafka_controller_jmxexporter_port: 8079
 kafka_controller_jmxexporter_config_source_path: kafka.yml.j2
 
 ### Destination path for Kafka controller jmx config file
-kafka_controller_jmxexporter_config_path: /opt/prometheus/kafka.yml
+kafka_controller_jmxexporter_config_path: "{{ (deployment_path_final ~ '/jmx_exporter/kafka_controller.yml') if deployment_path | length > 0 else '/opt/prometheus/kafka.yml' }}"
 
 ### Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '0750') and file_mode (default: '0640') to set directory and file permissions.
 kafka_controller_copy_files: []
@@ -740,7 +754,7 @@ kafka_broker_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 kafka_broker_cert_path: "{{ ssl_file_dir_final }}/kafka_broker.crt"
 kafka_broker_key_path: "{{ ssl_file_dir_final }}/kafka_broker.key"
 kafka_broker_export_certs: "{{ssl_mutual_auth_enabled}}"
-kafka_broker_keytab_path: /etc/security/keytabs/kafka_broker.keytab
+kafka_broker_keytab_path: "{{ (deployment_path_final ~ '/security/keytabs/kafka_broker.keytab') if deployment_path | length > 0 else '/etc/security/keytabs/kafka_broker.keytab' }}"
 
 ### Boolean to configure Schema Validation on Kafka
 kafka_broker_schema_validation_enabled: true
@@ -781,7 +795,7 @@ kafka_broker_jmxexporter_port: 8080
 kafka_broker_jmxexporter_config_source_path: kafka.yml.j2
 
 ### Destination path for Kafka Broker jmx config file
-kafka_broker_jmxexporter_config_path: /opt/prometheus/kafka.yml
+kafka_broker_jmxexporter_config_path: "{{ (deployment_path_final ~ '/jmx_exporter/kafka.yml') if deployment_path | length > 0 else '/opt/prometheus/kafka.yml' }}"
 
 ### Use to copy files from control node to kafka hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
 kafka_broker_copy_files: []
@@ -862,7 +876,7 @@ schema_registry_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 schema_registry_cert_path: "{{ ssl_file_dir_final }}/schema_registry.crt"
 schema_registry_key_path: "{{ ssl_file_dir_final }}/schema_registry.key"
 schema_registry_export_certs: "{{ True if schema_registry_authentication_type == 'mtls' else False }}"
-schema_registry_keytab_path: /etc/security/keytabs/schema_registry.keytab
+schema_registry_keytab_path: "{{ (deployment_path_final ~ '/security/keytabs/schema_registry.keytab') if deployment_path | length > 0 else '/etc/security/keytabs/schema_registry.keytab' }}"
 schema_registry_kafka_listener_name: internal
 
 ### Boolean to enable Jolokia access control on schema registry
@@ -896,7 +910,7 @@ schema_registry_jmxexporter_enabled: "{{jmxexporter_enabled}}"
 schema_registry_jmxexporter_config_source_path: schema_registry.yml
 
 ### Destination path for Schema Registry jmx config file
-schema_registry_jmxexporter_config_path: /opt/prometheus/schema_registry.yml
+schema_registry_jmxexporter_config_path: "{{ (deployment_path_final ~ '/jmx_exporter/schema_registry.yml') if deployment_path | length > 0 else '/opt/prometheus/schema_registry.yml' }}"
 
 ### Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
 schema_registry_jmxexporter_port: 8078
@@ -962,7 +976,7 @@ kafka_rest_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 kafka_rest_cert_path: "{{ ssl_file_dir_final }}/kafka_rest.crt"
 kafka_rest_key_path: "{{ ssl_file_dir_final }}/kafka_rest.key"
 kafka_rest_export_certs: "{{ True if kafka_rest_authentication_type == 'mtls' else False }}"
-kafka_rest_keytab_path: /etc/security/keytabs/kafka_rest.keytab
+kafka_rest_keytab_path: "{{ (deployment_path_final ~ '/security/keytabs/kafka_rest.keytab') if deployment_path | length > 0 else '/etc/security/keytabs/kafka_rest.keytab' }}"
 kafka_rest_kafka_listener_name: internal
 
 ### Boolean to enable Jolokia access control on kafka rest
@@ -996,7 +1010,7 @@ kafka_rest_jmxexporter_enabled: "{{jmxexporter_enabled}}"
 kafka_rest_jmxexporter_config_source_path: kafka_rest.yml
 
 ### Destination path for Rest Proxy jmx config file
-kafka_rest_jmxexporter_config_path: /opt/prometheus/kafka_rest.yml
+kafka_rest_jmxexporter_config_path: "{{ (deployment_path_final ~ '/jmx_exporter/kafka_rest.yml') if deployment_path | length > 0 else '/opt/prometheus/kafka_rest.yml' }}"
 
 ### Port to expose prometheus metrics. Beware of port collisions if colocating components on same host
 kafka_rest_jmxexporter_port: 8075
@@ -1071,7 +1085,7 @@ kafka_connect_ca_cert_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_n
 kafka_connect_cert_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.crt' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.crt'}}"
 kafka_connect_key_path: "{{ ssl_file_dir_final }}/{{ kafka_connect_service_name + '.key' if kafka_connect_service_name != kafka_connect_default_service_name else 'kafka_connect.key'}}"
 kafka_connect_export_certs: "{{ True if kafka_connect_authentication_type == 'mtls' else False }}"
-kafka_connect_keytab_path: /etc/security/keytabs/kafka_connect.keytab
+kafka_connect_keytab_path: "{{ (deployment_path_final ~ '/security/keytabs/kafka_connect.keytab') if deployment_path | length > 0 else '/etc/security/keytabs/kafka_connect.keytab' }}"
 kafka_connect_kafka_listener_name: internal
 
 ### Allows you to select a custom kafka listener for Kafka Connect producers
@@ -1114,7 +1128,7 @@ kafka_connect_jmxexporter_enabled: "{{jmxexporter_enabled}}"
 kafka_connect_jmxexporter_config_source_path: kafka_connect.yml
 
 ### Destination path for Connect jmx config file
-kafka_connect_jmxexporter_config_path: /opt/prometheus/kafka_connect.yml
+kafka_connect_jmxexporter_config_path: "{{ (deployment_path_final ~ '/jmx_exporter/kafka_connect.yml') if deployment_path | length > 0 else '/opt/prometheus/kafka_connect.yml' }}"
 
 ### Port to expose connect prometheus metrics. Beware of port collisions if colocating components on same host
 kafka_connect_jmxexporter_port: 8077
@@ -1143,10 +1157,10 @@ kafka_connect_plugins_path:
 
 
 kafka_connect_confluent_hub_plugins: []
-kafka_connect_confluent_hub_plugins_dest: /usr/share/java/connect_plugins
+kafka_connect_confluent_hub_plugins_dest: "{{ (deployment_path_final ~ '/connect-plugins') if deployment_path | length > 0 else '/usr/share/java/connect_plugins' }}"
 kafka_connect_plugins: []
 kafka_connect_plugins_remote: []
-kafka_connect_plugins_dest: /usr/share/java/connect_plugins
+kafka_connect_plugins_dest: "{{ (deployment_path_final ~ '/connect-plugins') if deployment_path | length > 0 else '/usr/share/java/connect_plugins' }}"
 
 ### Use to set custom Connect properties. This variable is a dictionary. Put values true/false in quotation marks to perserve case. NOTE- kafka_connect.properties is deprecated.
 kafka_connect_custom_properties: {}
@@ -1213,7 +1227,7 @@ ksql_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 ksql_cert_path: "{{ ssl_file_dir_final }}/ksql.crt"
 ksql_key_path: "{{ ssl_file_dir_final }}/ksql.key"
 ksql_export_certs: "{{ True if ksql_authentication_type == 'mtls' else False }}"
-ksql_keytab_path: /etc/security/keytabs/ksql.keytab
+ksql_keytab_path: "{{ (deployment_path_final ~ '/security/keytabs/ksql.keytab') if deployment_path | length > 0 else '/etc/security/keytabs/ksql.keytab' }}"
 ksql_kafka_listener_name: internal
 ksql_processing_log_kafka_listener_name: "{{kafka_broker_inter_broker_listener_name if rbac_enabled else ksql_kafka_listener_name}}"
 
@@ -1248,7 +1262,7 @@ ksql_jmxexporter_enabled: "{{jmxexporter_enabled}}"
 ksql_jmxexporter_config_source_path: ksql.yml
 
 ### Destination path for ksqlDB jmx config file
-ksql_jmxexporter_config_path: /opt/prometheus/ksql.yml
+ksql_jmxexporter_config_path: "{{ (deployment_path_final ~ '/jmx_exporter/ksql.yml') if deployment_path | length > 0 else '/opt/prometheus/ksql.yml' }}"
 
 ### Port to expose ksqlDB prometheus metrics. Beware of port collisions if colocating components on same host
 ksql_jmxexporter_port: 8076
@@ -1329,7 +1343,7 @@ control_center_ca_cert_path: "{{ ssl_file_dir_final }}/ca.crt"
 control_center_cert_path: "{{ ssl_file_dir_final }}/control_center.crt"
 control_center_key_path: "{{ ssl_file_dir_final }}/control_center.key"
 control_center_export_certs: "{{ssl_mutual_auth_enabled}}"
-control_center_keytab_path: /etc/security/keytabs/control_center.keytab
+control_center_keytab_path: "{{ (deployment_path_final ~ '/security/keytabs/control_center.keytab') if deployment_path | length > 0 else '/etc/security/keytabs/control_center.keytab' }}"
 control_center_kafka_listener_name: internal
 
 ### Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
@@ -2063,10 +2077,10 @@ kafka_connect_replicator_jolokia_port: 7777
 kafka_connect_replicator_jolokia_config: "{{ (config_base_path, kafka_connect_replicator_config_prefix_path, 'confluent-replicator-jolokia.properties') | path_join }}"
 
 ### Full path to download the Jolokia Agent Jar.
-kafka_connect_replicator_jolokia_jar_path: /opt/jolokia/jolokia.jar
+kafka_connect_replicator_jolokia_jar_path: "{{ (deployment_path_final ~ '/jolokia/jolokia.jar') if deployment_path | length > 0 else '/opt/jolokia/jolokia.jar' }}"
 
 ### Set this variable to customize the directory that Kafka Connect Replicator writes log files to.
-kafka_connect_replicator_log_dir: /var/log/confluent/kafka-connect-replicator
+kafka_connect_replicator_log_dir: "{{ (deployment_path_final ~ '/log/kafka-connect-replicator') if deployment_path | length > 0 else '/var/log/confluent/kafka-connect-replicator' }}"
 
 ### Set this variable to customize the default log name that Kafka Connect Replicator writes logs to.
 kafka_connect_replicator_log_name: kafka-connect-replicator.log
@@ -2131,8 +2145,8 @@ kafka_connect_replicator_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_r
 kafka_connect_replicator_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.crt"
 kafka_connect_replicator_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator.key"
 kafka_connect_replicator_export_certs: kafka_connect_replicator_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
-kafka_connect_replicator_keytab_path: /etc/security/keytabs/kafka_connect_replicator.keytab
-kafka_connect_replicator_kerberos_keytab_path: /etc/security/keytabs/kafka_connect_replicator.keytab
+kafka_connect_replicator_keytab_path: "{{ (deployment_path_final ~ '/security/keytabs/kafka_connect_replicator.keytab') if deployment_path | length > 0 else '/etc/security/keytabs/kafka_connect_replicator.keytab' }}"
+kafka_connect_replicator_kerberos_keytab_path: "{{ kafka_connect_replicator_keytab_path }}"
 kafka_connect_replicator_listener_name: kafka_connect_replicator_listener
 kafka_connect_replicator_group_id: replicator
 
@@ -2161,7 +2175,7 @@ kafka_connect_replicator_kafka_cluster_name: ""
 kafka_connect_replicator_erp_pem_file: ""
 
 ### Set this variable to override the default location of the public pem file for connecting to the ERP when RBAC is enabled.
-kafka_connect_replicator_rbac_enabled_public_pem_path: /var/ssl/private/kafka_connect_replicator/public.pem
+kafka_connect_replicator_rbac_enabled_public_pem_path: "{{ (deployment_path_final ~ '/kafka_connect_replicator/public.pem') if deployment_path | length > 0 else '/var/ssl/private/kafka_connect_replicator/public.pem' }}"
 
 ### Variable to define bootstrap servers for Kafka Connect Replicator Consumer.  Mandatory for Kafka Connect Replicator setup.
 kafka_connect_replicator_consumer_bootstrap_servers: localhost:9092
@@ -2221,8 +2235,8 @@ kafka_connect_replicator_consumer_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_
 kafka_connect_replicator_consumer_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.crt"
 kafka_connect_replicator_consumer_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_consumer.key"
 kafka_connect_replicator_consumer_export_certs: kafka_connect_replicator_consumer_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
-kafka_connect_replicator_consumer_keytab_path: /etc/security/keytabs/kafka_connect_replicator_consumer.keytab
-kafka_connect_replicator_consumer_kerberos_keytab_path: /etc/security/keytabs/kafka_connect_replicator_consumer.keytab
+kafka_connect_replicator_consumer_keytab_path: "{{ (deployment_path_final ~ '/security/keytabs/kafka_connect_replicator_consumer.keytab') if deployment_path | length > 0 else '/etc/security/keytabs/kafka_connect_replicator_consumer.keytab' }}"
+kafka_connect_replicator_consumer_kerberos_keytab_path: "{{ kafka_connect_replicator_consumer_keytab_path }}"
 
 ### Listener Dictionary that describes Kafka Connect Replicator Consumer Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 kafka_connect_replicator_consumer_listener:
@@ -2249,7 +2263,7 @@ kafka_connect_replicator_consumer_kafka_cluster_name: ""
 kafka_connect_replicator_consumer_erp_pem_file: ""
 
 ### Set this variable to override the default location of the public pem file for connecting to the ERP when RBAC is enabled.
-kafka_connect_replicator_consumer_rbac_enabled_public_pem_path: /var/ssl/private/kafka_connect_replicator_consumer/public.pem
+kafka_connect_replicator_consumer_rbac_enabled_public_pem_path: "{{ (deployment_path_final ~ '/kafka_connect_replicator_consumer/public.pem') if deployment_path | length > 0 else '/var/ssl/private/kafka_connect_replicator_consumer/public.pem' }}"
 
 ### Variable to define bootstrap servers for Kafka Connect Replicator Producer.  Mandatory for Kafka Connect Replicator setup.
 kafka_connect_replicator_producer_bootstrap_servers: localhost:9092
@@ -2309,8 +2323,8 @@ kafka_connect_replicator_producer_ca_cert_path: "{{ ssl_file_dir_final }}/kafka_
 kafka_connect_replicator_producer_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.crt"
 kafka_connect_replicator_producer_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_producer.key"
 kafka_connect_replicator_producer_export_certs: kafka_connect_replicator_producer_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
-kafka_connect_replicator_producer_keytab_path: /etc/security/keytabs/kafka_connect_replicator_producer.keytab
-kafka_connect_replicator_producer_kerberos_keytab_path: /etc/security/keytabs/kafka_connect_replicator_producer.keytab
+kafka_connect_replicator_producer_keytab_path: "{{ (deployment_path_final ~ '/security/keytabs/kafka_connect_replicator_producer.keytab') if deployment_path | length > 0 else '/etc/security/keytabs/kafka_connect_replicator_producer.keytab' }}"
+kafka_connect_replicator_producer_kerberos_keytab_path: "{{ kafka_connect_replicator_producer_keytab_path }}"
 
 ### Listener Dictionary that describes Kafka Connect Replicator Producer Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 kafka_connect_replicator_producer_listener:
@@ -2400,7 +2414,7 @@ kafka_connect_replicator_monitoring_interceptor_ca_cert_path: "{{ ssl_file_dir_f
 kafka_connect_replicator_monitoring_interceptor_cert_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.crt"
 kafka_connect_replicator_monitoring_interceptor_key_path: "{{ ssl_file_dir_final }}/kafka_connect_replicator_monitoring_interceptor.key"
 kafka_connect_replicator_monitoring_interceptor_export_certs: kafka_connect_replicator_monitoring_interceptor_listener ['ssl_mutual_auth_enabled'] | default(ssl_mutual_auth_enabled) | bool
-kafka_connect_replicator_monitoring_interceptor_keytab_path: /etc/security/keytabs/kafka_connect_replicator_monitoring_interceptor.keytab
+kafka_connect_replicator_monitoring_interceptor_keytab_path: "{{ (deployment_path_final ~ '/security/keytabs/kafka_connect_replicator_monitoring_interceptor.keytab') if deployment_path | length > 0 else '/etc/security/keytabs/kafka_connect_replicator_monitoring_interceptor.keytab' }}"
 
 ### Listener Dictionary that describes Kafka Connect Replicator Monitoring Interceptor Listener. It contains the keys: ssl_enabled, ssl_mutual_auth_enabled, sasl_protocol
 kafka_connect_replicator_monitoring_interceptor_listener:
