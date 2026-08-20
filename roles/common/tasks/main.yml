@@ -50,11 +50,11 @@
   assert:
     that:
       - installation_method == "archive"
-      - deployment_path | length > 0
+      - rootless_deployment_path | length > 0
       - deployment_user | length > 0
       - deployment_group | length > 0
     fail_msg: >-
-      rootless_enabled requires installation_method: archive, deployment_path,
+      rootless_enabled requires installation_method: archive, rootless_deployment_path,
       deployment_user, and deployment_group all set (the package method needs root;
       artifacts must live under a user-writable path; deployment_group must be set
       explicitly because rootless_bootstrap's own fallback for it - deployment_user -
@@ -70,8 +70,8 @@
   when: rootless_enabled | bool
 
 # Catches two real footguns early with a clear message, instead of a confusing permission-denied
-# failure deep in the deploy: deployment_path itself not actually writable (e.g. rootless_bootstrap
-# was never run), and an old inventory's explicit override of a deployment_path-derived variable
+# failure deep in the deploy: rootless_deployment_path itself not actually writable (e.g. rootless_bootstrap
+# was never run), and an old inventory's explicit override of a rootless_deployment_path-derived variable
 # (e.g. ssl_file_dir) pointing at a root-owned path that survived turning rootless_enabled on.
 # ssl_file_dir may not exist yet on a cold deploy (the ssl role creates it later) - ensure it
 # exists first so the write-test below isn't a false positive on a merely-missing directory.
@@ -82,7 +82,7 @@
     mode: '0755'
   register: rootless_writability_mkdir
   loop:
-    - "{{ deployment_path_final }}"
+    - "{{ rootless_deployment_path_final }}"
     - "{{ ssl_file_dir_final }}"
   loop_control:
     label: "{{ item }}"
@@ -97,7 +97,7 @@
     mode: '0644'
   register: rootless_writability_check
   loop:
-    - "{{ deployment_path_final }}"
+    - "{{ rootless_deployment_path_final }}"
     - "{{ ssl_file_dir_final }}"
   loop_control:
     label: "{{ item }}"
@@ -117,14 +117,14 @@
     - not (item.failed | default(false))
   changed_when: false
 
-- name: Assert deployment_path and ssl_file_dir are writable (rootless)
+- name: Assert rootless_deployment_path and ssl_file_dir are writable (rootless)
   assert:
     that: not (item.failed | default(false))
     fail_msg: >-
       '{{ item.item }}' is not writable by the connecting user. Under rootless_enabled, every
-      deployment_path-derived path (including ssl_file_dir) must be writable by deployment_user -
+      rootless_deployment_path-derived path (including ssl_file_dir) must be writable by deployment_user -
       run confluent.platform.rootless_bootstrap first, or if you've explicitly overridden this
-      variable from an old inventory, point it under deployment_path instead.
+      variable from an old inventory, point it under rootless_deployment_path instead.
   loop: "{{ rootless_writability_check.results | default([]) }}"
   loop_control:
     label: "{{ item.item }}"

@@ -45,24 +45,24 @@
         fail_msg: "Expected all component processes to run as {{ deployment_user }}, found: {{ process_owners.stdout_lines }}"
         quiet: true
 
-    - name: Find everything under deployment_path
+    - name: Find everything under rootless_deployment_path
       find:
-        paths: "{{ deployment_path }}"
+        paths: "{{ rootless_deployment_path }}"
         recurse: true
         file_type: any
-      register: deployment_path_contents
+      register: rootless_deployment_path_contents
 
-    - name: Assert everything under deployment_path is owned by the deploy user, not root
+    - name: Assert everything under rootless_deployment_path is owned by the deploy user, not root
       # A privileged test container can docker-exec as root regardless of what the deploy
       # itself did - this, not the container's own privilege level, is what actually proves
       # nothing in the deploy path used root: a root-owned file here means some task silently
       # became root.
       vars:
-        non_deploy_user_files: "{{ deployment_path_contents.files | rejectattr('pw_name', 'equalto', deployment_user) | map(attribute='path') | list }}"
+        non_deploy_user_files: "{{ rootless_deployment_path_contents.files | rejectattr('pw_name', 'equalto', deployment_user) | map(attribute='path') | list }}"
       assert:
         that:
           - non_deploy_user_files | length == 0
-        fail_msg: "Found files under deployment_path not owned by {{ deployment_user }}: {{ non_deploy_user_files }}"
+        fail_msg: "Found files under rootless_deployment_path not owned by {{ deployment_user }}: {{ non_deploy_user_files }}"
         quiet: true
 
     - name: Read the generated systemd --user unit file
@@ -70,19 +70,19 @@
         src: "{{ ansible_env.HOME }}/.config/systemd/user/{{ rootless_unit }}"
       register: unit_file_slurp
 
-    - name: Assert the unit's ExecStart/EnvironmentFile point under deployment_path, not a hardcoded root path
+    - name: Assert the unit's ExecStart/EnvironmentFile point under rootless_deployment_path, not a hardcoded root path
       vars:
         unit_content: "{{ unit_file_slurp.content | b64decode }}"
       assert:
         that:
-          - deployment_path in unit_content
-          - ("EnvironmentFile=" ~ deployment_path) in unit_content
-        fail_msg: "cp-{{ rootless_component }} unit file doesn't reference deployment_path as expected:\n{{ unit_content }}"
+          - rootless_deployment_path in unit_content
+          - ("EnvironmentFile=" ~ rootless_deployment_path) in unit_content
+        fail_msg: "cp-{{ rootless_component }} unit file doesn't reference rootless_deployment_path as expected:\n{{ unit_content }}"
         quiet: true
 
     - name: Read the generated systemd EnvironmentFile
       slurp:
-        src: "{{ deployment_path }}/rootless-bin/{{ rootless_component }}.env"
+        src: "{{ rootless_deployment_path }}/rootless-bin/{{ rootless_component }}.env"
       register: env_file_slurp
 
     - name: Assert the EnvironmentFile actually rendered content, not empty or unrendered Jinja
@@ -155,7 +155,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ deployment_path }}/confluent/etc/controller/server.properties"
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/controller/server.properties"
         property: listener.name.controller.sasl.enabled.mechanisms
         expected_value: PLAIN
 
@@ -167,7 +167,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ deployment_path }}/confluent/etc/kafka/server.properties"
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
         property: listener.name.internal.sasl.enabled.mechanisms
         expected_value: PLAIN
 
@@ -179,7 +179,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ deployment_path }}/confluent/etc/schema-registry/schema-registry.properties"
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/schema-registry/schema-registry.properties"
         property: kafkastore.security.protocol
         expected_value: SASL_SSL
 
@@ -191,7 +191,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ deployment_path }}/confluent/etc/kafka-rest/kafka-rest.properties"
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka-rest/kafka-rest.properties"
         property: client.security.protocol
         expected_value: SASL_SSL
 
@@ -203,7 +203,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
         property: security.protocol
         expected_value: SASL_SSL
 
@@ -215,7 +215,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ deployment_path }}/confluent/etc/ksqldb/ksql-server.properties"
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/ksqldb/ksql-server.properties"
         property: security.protocol
         expected_value: SASL_SSL
 
@@ -265,6 +265,6 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ deployment_path }}/confluent/etc/confluent-control-center/control-center-production.properties"
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/confluent-control-center/control-center-production.properties"
         property: confluent.controlcenter.streams.security.protocol
         expected_value: SASL_SSL

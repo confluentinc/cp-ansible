@@ -41,24 +41,24 @@
         fail_msg: "Expected all component processes to run as {{ deployment_user }}, found: {{ process_owners.stdout_lines }}"
         quiet: true
 
-    - name: Find everything under deployment_path
+    - name: Find everything under rootless_deployment_path
       find:
-        paths: "{{ deployment_path }}"
+        paths: "{{ rootless_deployment_path }}"
         recurse: true
         file_type: any
-      register: deployment_path_contents
+      register: rootless_deployment_path_contents
 
-    - name: Assert everything under deployment_path is owned by the deploy user, not root
+    - name: Assert everything under rootless_deployment_path is owned by the deploy user, not root
       # A privileged test container can docker-exec as root regardless of what the deploy
       # itself did - this, not the container's own privilege level, is what actually proves
       # nothing in the deploy path used root: a root-owned file here means some task silently
       # became root.
       vars:
-        non_deploy_user_files: "{{ deployment_path_contents.files | rejectattr('pw_name', 'equalto', deployment_user) | map(attribute='path') | list }}"
+        non_deploy_user_files: "{{ rootless_deployment_path_contents.files | rejectattr('pw_name', 'equalto', deployment_user) | map(attribute='path') | list }}"
       assert:
         that:
           - non_deploy_user_files | length == 0
-        fail_msg: "Found files under deployment_path not owned by {{ deployment_user }}: {{ non_deploy_user_files }}"
+        fail_msg: "Found files under rootless_deployment_path not owned by {{ deployment_user }}: {{ non_deploy_user_files }}"
         quiet: true
 
     - name: Read the generated systemd --user unit file
@@ -66,19 +66,19 @@
         src: "{{ ansible_env.HOME }}/.config/systemd/user/{{ rootless_unit }}"
       register: unit_file_slurp
 
-    - name: Assert the unit's ExecStart/EnvironmentFile point under deployment_path, not a hardcoded root path
+    - name: Assert the unit's ExecStart/EnvironmentFile point under rootless_deployment_path, not a hardcoded root path
       vars:
         unit_content: "{{ unit_file_slurp.content | b64decode }}"
       assert:
         that:
-          - deployment_path in unit_content
-          - ("EnvironmentFile=" ~ deployment_path) in unit_content
-        fail_msg: "cp-{{ rootless_component }} unit file doesn't reference deployment_path as expected:\n{{ unit_content }}"
+          - rootless_deployment_path in unit_content
+          - ("EnvironmentFile=" ~ rootless_deployment_path) in unit_content
+        fail_msg: "cp-{{ rootless_component }} unit file doesn't reference rootless_deployment_path as expected:\n{{ unit_content }}"
         quiet: true
 
     - name: Read the generated systemd EnvironmentFile
       slurp:
-        src: "{{ deployment_path }}/rootless-bin/{{ rootless_component }}.env"
+        src: "{{ rootless_deployment_path }}/rootless-bin/{{ rootless_component }}.env"
       register: env_file_slurp
 
     - name: Assert the EnvironmentFile actually rendered content, not empty or unrendered Jinja
@@ -161,17 +161,17 @@
   hosts: kafka_broker:kafka_controller
   gather_facts: false
   vars:
-    server_log_path: "{{ deployment_path }}/log/{{ 'kafka' if 'kafka_broker' in group_names else 'controller' }}/server.log"
+    server_log_path: "{{ rootless_deployment_path }}/log/{{ 'kafka' if 'kafka_broker' in group_names else 'controller' }}/server.log"
   tasks:
-    - name: krb5.conf landed under deployment_path, not /etc
+    - name: krb5.conf landed under rootless_deployment_path, not /etc
       stat:
-        path: "{{ deployment_path }}/krb5.conf"
+        path: "{{ rootless_deployment_path }}/krb5.conf"
       register: krb5_conf_stat
       failed_when: not krb5_conf_stat.stat.exists
 
-    - name: Keytab landed under deployment_path, not /etc/security/keytabs
+    - name: Keytab landed under rootless_deployment_path, not /etc/security/keytabs
       stat:
-        path: "{{ deployment_path }}/security/keytabs/{{ 'kafka_broker' if 'kafka_broker' in group_names else 'kafka_controller' }}.keytab"
+        path: "{{ rootless_deployment_path }}/security/keytabs/{{ 'kafka_broker' if 'kafka_broker' in group_names else 'kafka_controller' }}.keytab"
       register: keytab_stat
       failed_when: not keytab_stat.stat.exists
 
@@ -193,8 +193,8 @@
         method: GET
         validate_certs: false
         # mTLS is on for every connection, not just basic auth.
-        client_cert: "{{ deployment_path }}/ssl/schema_registry.crt"
-        client_key: "{{ deployment_path }}/ssl/schema_registry.key"
+        client_cert: "{{ rootless_deployment_path }}/ssl/schema_registry.crt"
+        client_key: "{{ rootless_deployment_path }}/ssl/schema_registry.key"
         url_username: "{{ schema_registry_ldap_user }}"
         url_password: "{{ schema_registry_ldap_password }}"
         force_basic_auth: true
@@ -213,8 +213,8 @@
         url: "https://localhost:8083/connectors"
         method: GET
         validate_certs: false
-        client_cert: "{{ deployment_path }}/ssl/kafka_connect.crt"
-        client_key: "{{ deployment_path }}/ssl/kafka_connect.key"
+        client_cert: "{{ rootless_deployment_path }}/ssl/kafka_connect.crt"
+        client_key: "{{ rootless_deployment_path }}/ssl/kafka_connect.key"
         url_username: "{{ kafka_connect_ldap_user }}"
         url_password: "{{ kafka_connect_ldap_password }}"
         force_basic_auth: true
@@ -233,8 +233,8 @@
         url: "https://localhost:8082/topics"
         method: GET
         validate_certs: false
-        client_cert: "{{ deployment_path }}/ssl/kafka_rest.crt"
-        client_key: "{{ deployment_path }}/ssl/kafka_rest.key"
+        client_cert: "{{ rootless_deployment_path }}/ssl/kafka_rest.crt"
+        client_key: "{{ rootless_deployment_path }}/ssl/kafka_rest.key"
         url_username: "{{ kafka_rest_ldap_user }}"
         url_password: "{{ kafka_rest_ldap_password }}"
         force_basic_auth: true
@@ -253,8 +253,8 @@
         url: "https://localhost:8088/info"
         method: GET
         validate_certs: false
-        client_cert: "{{ deployment_path }}/ssl/ksql.crt"
-        client_key: "{{ deployment_path }}/ssl/ksql.key"
+        client_cert: "{{ rootless_deployment_path }}/ssl/ksql.crt"
+        client_key: "{{ rootless_deployment_path }}/ssl/ksql.key"
         url_username: "{{ ksql_ldap_user }}"
         url_password: "{{ ksql_ldap_password }}"
         force_basic_auth: true
@@ -273,8 +273,8 @@
         url: "https://localhost:9021/"
         method: GET
         validate_certs: false
-        client_cert: "{{ deployment_path }}/ssl/control_center.crt"
-        client_key: "{{ deployment_path }}/ssl/control_center.key"
+        client_cert: "{{ rootless_deployment_path }}/ssl/control_center.crt"
+        client_key: "{{ rootless_deployment_path }}/ssl/control_center.key"
         status_code: 200
       register: c3_check
       retries: 10

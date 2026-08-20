@@ -5,7 +5,7 @@
 # Does only what needs root; everything else (archive install, config, systemd --user
 # units, start, PyYAML) runs unprivileged in the main deploy.
 #
-# Required per-host: deployment_user, deployment_path (deployment_group defaults to
+# Required per-host: deployment_user, rootless_deployment_path (deployment_group defaults to
 # deployment_user). Runs against hosts:all so a mixed inventory works - a host with neither
 # set (e.g. an existing LDAP/Kerberos server sharing the inventory but not a deploy target)
 # is skipped informationally rather than failed, so it's never excluded from later plays.
@@ -22,7 +22,7 @@
   # Not gathered here (see the block below) - the implicit play-level gather_facts runs before
   # any task when: can guard it, and inherits become: true. A host with no sudo (e.g. an
   # unmanaged, non-Linux-shell service container sharing the inventory) would fail hard on
-  # that alone, before ever reaching the deployment_user/deployment_path check.
+  # that alone, before ever reaching the deployment_user/rootless_deployment_path check.
   gather_facts: false
   tasks:
     # hosts:all is meant for a mixed inventory - e.g. an existing LDAP/Kerberos server sharing
@@ -30,13 +30,13 @@
     # hosts entirely (informationally) rather than asserting, so they're never marked failed -
     # a failed host here would be excluded from every later playbook/play in the same run,
     # including the actual LDAP/OAuth setup a molecule scenario or real deploy may still need.
-    - name: Skip rootless bootstrap on this host - deployment_user/deployment_path not set
+    - name: Skip rootless bootstrap on this host - deployment_user/rootless_deployment_path not set
       debug:
-        msg: "deployment_user/deployment_path not set for {{ inventory_hostname }}; assuming it's not a rootless deploy target and skipping bootstrap here."
-      when: deployment_user | default('') | length == 0 or deployment_path | default('') | length == 0
+        msg: "deployment_user/rootless_deployment_path not set for {{ inventory_hostname }}; assuming it's not a rootless deploy target and skipping bootstrap here."
+      when: deployment_user | default('') | length == 0 or rootless_deployment_path | default('') | length == 0
 
     - name: Rootless bootstrap tasks
-      when: deployment_user | default('') | length > 0 and deployment_path | default('') | length > 0
+      when: deployment_user | default('') | length > 0 and rootless_deployment_path | default('') | length > 0
       block:
         - name: Gather facts
           setup:
@@ -56,7 +56,7 @@
           # still reports success, and the failure only surfaces later as a confusing
           # "Permission denied (publickey)" in the deploy phase with nothing linking it back.
           set_fact:
-            deployment_path: "{{ deployment_path | regex_replace('/+$', '') }}"
+            rootless_deployment_path: "{{ rootless_deployment_path | regex_replace('/+$', '') }}"
             deployment_group: "{{ deployment_group | default(deployment_user) }}"
             rootless_enable_linger: "{{ rootless_enable_linger | default(true) }}"
             rootless_install_packages: "{{ rootless_install_packages | default(false) }}"
@@ -101,7 +101,7 @@
 
         - name: Create deployment base directory
           file:
-            path: "{{ deployment_path }}"
+            path: "{{ rootless_deployment_path }}"
             state: directory
             owner: "{{ deployment_user }}"
             group: "{{ deployment_group }}"
@@ -191,6 +191,6 @@
         - name: Rootless bootstrap summary
           debug:
             msg:
-              - "Rootless bootstrap complete: user '{{ deployment_user }}' ready at '{{ deployment_path }}'."
+              - "Rootless bootstrap complete: user '{{ deployment_user }}' ready at '{{ rootless_deployment_path }}'."
               - "Linger: {{ rootless_enable_linger | bool }}; OS packages installed: {{ rootless_install_packages | bool }}."
               - "Next: run the rootless deploy as {{ deployment_user }}: ansible-playbook -i <inventory> confluent.platform.all"
