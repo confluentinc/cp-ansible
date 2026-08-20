@@ -1,0 +1,30 @@
+---
+### Bootstrap the rootless deploy user + linger (root) via the shared
+### playbooks/rootless_bootstrap.yml, then run confluent.platform.all as
+### deployment_user.
+###
+### import_playbook takes no inline vars, and rootless_bootstrap.yml expects
+### the caller to pass -e ansible_user=<admin>. These two shim plays flip
+### ansible_user via set_fact (which outranks group_vars) around the import.
+
+- name: Cache ansible_user=root so the imported bootstrap playbook connects as root
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_rest:kafka_connect:ksql
+  gather_facts: false
+  vars:
+    ansible_user: root
+  tasks:
+    - set_fact:
+        ansible_user: root
+
+- import_playbook: confluent.platform.rootless_bootstrap
+
+- name: Cache ansible_user=deployment_user so the unprivileged deploy connects as that user
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_rest:kafka_connect:ksql
+  gather_facts: false
+  vars:
+    ansible_user: root
+  tasks:
+    - set_fact:
+        ansible_user: "{{ deployment_user }}"
+
+- import_playbook: ../collections_converge.yml

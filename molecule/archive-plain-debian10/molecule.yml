@@ -1,16 +1,37 @@
 ---
-### Archive installation of Confluent Platform on Debian 10.
-### SASL Protocol Plain.
-### SSL Enabled.
+### Rootless archive installation of Confluent Platform on Debian 10.
+### SASL Protocol Plain. SSL Enabled.
 ### Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
-### Custom log dirs for all components.
+### Custom log dirs for all components (pointed under rootless_deployment_path).
+###
+### Converted from the former (root) archive-plain-debian10 scenario to also cover rootless -
+### KRaft-only (no ZK toggle, no migration groups): ZK has zero rootless support of its own, so a
+### scenario that's rootless can't also support ZK/migration testing. See
+### PR_2602_REVIEW_TRACKING.md for the rationale (avoid a separate, always-growing set of
+### dedicated rootless-only scenarios; convert existing coverage in place instead).
+###
+### TODO: this scenario's original ZK toggle (${KRAFT_CONTROLLER:-zookeeper}) and migration-group
+### coverage were dropped here, not preserved elsewhere - once rootless_enabled supports Zookeeper
+### (it doesn't today; see the "Fail fast - rootless does not support Zookeeper" assert in
+### roles/common/tasks/config_validations.yml), restore the toggle here so this scenario can cover
+### both modes again instead of being permanently KRaft-only.
+###
+### Known container limitations (not fixable here, called out for reviewers):
+### - privileged: true + cgroupns_mode: host is required for systemd --user to run inside
+###   Docker at all - it does NOT mean the deploy itself used root. That's verified instead
+###   by asserting every file under rootless_deployment_path is owned by deployment_user (verify.yml)
+###   and by the extensive live-EC2 (non-containerized) verification recorded in
+###   ROOTLESS_DEPLOYMENT_STEPS.md.
+### - loginctl enable-linger surviving an actual host reboot is a design promise that isn't
+###   exercisable in a container (no real reboot) - also only verified live on EC2.
 
+driver:
+  name: docker
 platforms:
-  - name: ${KRAFT_CONTROLLER:-zookeeper}1
-    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
+  - name: kafka-controller1
+    hostname: kafka-controller1.confluent
     groups:
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+      - kafka_controller
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -24,7 +45,6 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -38,7 +58,6 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-      - schema_registry_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -52,7 +71,6 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
-      - kafka_rest_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -66,7 +84,6 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
-      - kafka_connect_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -80,7 +97,6 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-      - ksql_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -94,7 +110,6 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
-      - control_center_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -106,37 +121,41 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
-    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  - name: controller1-mig
-    hostname: controller1-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: geerlingguy/docker-debian10-ansible
-    dockerfile: ../Dockerfile-debian10-archive.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    cgroupns_mode: host
-    privileged: true
-    networks:
-      - name: confluent
 provisioner:
   playbooks:
-    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
+    converge: converge.yml
+    verify: verify.yml
   inventory:
     group_vars:
       all:
+        # Every host here is a rootless CP component (no LDAP/Kerberos/OAuth helper hosts in
+        # this scenario), so the connection override is safe to set once for everyone.
+        ansible_user: "{{ deployment_user }}"
+        rootless_enabled: true
+        deployment_user: cp-user
+        deployment_group: cp-user
+        rootless_deployment_path: /home/cp-user/cp-data
+        installation_method: "archive"
+        custom_java_path: /opt/jdk17 # Use custom Java 17
+
+        # Debian's systemd --user manager needs dbus-user-session, which the archive
+        # Dockerfile doesn't bake in - exercise rootless_bootstrap.yml's apt branch for it.
+        rootless_install_packages: true
+
         sasl_protocol: plain
         ssl_enabled: true
-        installation_method: "archive"
         kafka_connect_confluent_hub_plugins:
           - jcustenborder/kafka-connect-spooldir:2.0.43
 
-        ${CONTROLLER_HOSTGROUP:-zookeeper}_log_dir: /${CONTROLLER_HOSTGROUP:-zookeeper}/logs
-        kafka_broker_log_dir: /kafka/logs/
-        schema_registry_log_dir: /sr/logs
-        kafka_rest_log_dir: /rp/logs
-        kafka_connect_log_dir: /connect/logs
-        ksql_log_dir: /ksql/logs/
-        control_center_log_dir: /c3/logs
-        custom_java_path: /opt/jdk17 # Use custom Java 17
+        # Custom log dirs for all components - kept as an explicit override (this scenario's
+        # whole point), just pointed under rootless_deployment_path instead of root-level
+        # paths so the unprivileged deploy user can actually write to them.
+        kafka_controller_log_dir: "{{ rootless_deployment_path }}/controller/logs"
+        kafka_broker_log_dir: "{{ rootless_deployment_path }}/kafka/logs"
+        schema_registry_log_dir: "{{ rootless_deployment_path }}/sr/logs"
+        kafka_rest_log_dir: "{{ rootless_deployment_path }}/rp/logs"
+        kafka_connect_log_dir: "{{ rootless_deployment_path }}/connect/logs"
+        ksql_log_dir: "{{ rootless_deployment_path }}/ksql/logs"
+        control_center_log_dir: "{{ rootless_deployment_path }}/c3/logs"
+verifier:
+  name: ansible

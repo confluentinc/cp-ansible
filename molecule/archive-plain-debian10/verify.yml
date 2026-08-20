@@ -2,9 +2,12 @@
 ### Validates that SASL SSL protocol is set across all components.
 ### Validates that custom log4j configuration is in place.
 ### Validates that Java 17 is in Use
+### Validates the rootless systemd --user lifecycle: nothing ran as root, nothing landed
+### under /opt beyond the pre-baked JDK, and the generated unit/env files point under
+### rootless_deployment_path.
 
 - name: Verify Java
-  hosts: all,!kafka_controller_migration  #Workaround to skip the task in migration test, need to remove in CP 8.0
+  hosts: all
   gather_facts: false
   tasks:
     - name: Get Java Version
@@ -28,14 +31,14 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/controller/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/controller/server.properties"
         property: controller.quorum.voters
         expected_value: "{{ kafka_controller_quorum_voters }}"
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/controller/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/controller/server.properties"
         property: listener.name.controller.sasl.enabled.mechanisms
         expected_value: PLAIN
 
@@ -47,7 +50,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/kafka/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
         property: listener.name.internal.sasl.enabled.mechanisms
         expected_value: PLAIN
 
@@ -59,7 +62,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/schema-registry/schema-registry.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/schema-registry/schema-registry.properties"
         property: kafkastore.security.protocol
         expected_value: SASL_SSL
 
@@ -71,7 +74,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/kafka-rest/kafka-rest.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka-rest/kafka-rest.properties"
         property: client.security.protocol
         expected_value: SASL_SSL
 
@@ -83,7 +86,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/kafka/connect-distributed.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
         property: security.protocol
         expected_value: SASL_SSL
 
@@ -95,7 +98,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/ksqldb/ksql-server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/ksqldb/ksql-server.properties"
         property: security.protocol
         expected_value: SASL_SSL
 
@@ -107,14 +110,122 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/confluent-control-center/control-center-production.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/confluent-control-center/control-center-production.properties"
         property: confluent.controlcenter.streams.security.protocol
         expected_value: SASL_SSL
 
 - name: Verify log4j Configuration
-  hosts: all,!kafka_controller_migration  #Workaround to skip the task in migration test, need to remove in CP 8.0
+  hosts: all
   gather_facts: false
   tasks:
     - import_role:
         name: confluent.test
         tasks_from: check_log4j.yml
+
+- name: Verify - rootless lifecycle on all CP components
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  gather_facts: true
+  vars:
+    rootless_unit_map:
+      kafka_controller: cp-kafka_controller.service
+      kafka_broker: cp-kafka_broker.service
+      schema_registry: cp-schema_registry.service
+      kafka_connect: cp-kafka_connect.service
+      kafka_rest: cp-kafka_rest.service
+      ksql: cp-ksql.service
+      control_center: cp-control_center.service
+  tasks:
+    - name: Determine this host's rootless unit name and component name
+      set_fact:
+        rootless_unit: "{{ rootless_unit_map[group_names | intersect(rootless_unit_map.keys()) | first] }}"
+        rootless_component: "{{ group_names | intersect(rootless_unit_map.keys()) | first }}"
+
+    - name: Check the systemd --user unit is active
+      command: "systemctl --user is-active {{ rootless_unit }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+      register: unit_active
+      changed_when: false
+      failed_when: unit_active.stdout != "active"
+
+    - name: Check the process is owned by the deploy user, not root
+      shell: "ps -eo user,cmd | grep -E 'kafka.Kafka|SchemaRegistryMain|ConnectDistributed|KafkaRestMain|KsqlServerMain|ControlCenter' | grep -v grep | awk '{print $1}' | sort -u"
+      register: process_owners
+      changed_when: false
+
+    - name: Assert no process runs as root
+      assert:
+        that:
+          - "'root' not in process_owners.stdout_lines"
+          - process_owners.stdout_lines | length > 0
+        fail_msg: "Expected all component processes to run as {{ deployment_user }}, found: {{ process_owners.stdout_lines }}"
+        quiet: true
+
+    - name: Find everything under rootless_deployment_path
+      find:
+        paths: "{{ rootless_deployment_path }}"
+        recurse: true
+        file_type: any
+      register: rootless_deployment_path_contents
+
+    - name: Assert everything under rootless_deployment_path is owned by the deploy user, not root
+      # A privileged test container can docker-exec as root regardless of what the deploy
+      # itself did - this, not the container's own privilege level, is what actually proves
+      # nothing in the deploy path used root: a root-owned file here means some task silently
+      # became root.
+      vars:
+        non_deploy_user_files: "{{ rootless_deployment_path_contents.files | rejectattr('pw_name', 'equalto', deployment_user) | map(attribute='path') | list }}"
+      assert:
+        that:
+          - non_deploy_user_files | length == 0
+        fail_msg: "Found files under rootless_deployment_path not owned by {{ deployment_user }}: {{ non_deploy_user_files }}"
+        quiet: true
+
+    - name: Read the generated systemd --user unit file
+      slurp:
+        src: "{{ ansible_env.HOME }}/.config/systemd/user/{{ rootless_unit }}"
+      register: unit_file_slurp
+
+    - name: Assert the unit's ExecStart/EnvironmentFile point under rootless_deployment_path, not a hardcoded root path
+      vars:
+        unit_content: "{{ unit_file_slurp.content | b64decode }}"
+      assert:
+        that:
+          - rootless_deployment_path in unit_content
+          - ("EnvironmentFile=" ~ rootless_deployment_path) in unit_content
+        fail_msg: "cp-{{ rootless_component }} unit file doesn't reference rootless_deployment_path as expected:\n{{ unit_content }}"
+        quiet: true
+
+    - name: Check nothing was written under /opt
+      find:
+        paths: /opt
+        recurse: true
+      register: opt_contents
+
+    - name: Assert nothing besides the pre-baked custom_java_path JDK exists under /opt
+      # Dockerfile-debian10-archive.j2 tars a JDK into custom_java_path (/opt/jdk17) at image
+      # build time, before Ansible ever runs - that's not the rootless install writing to /opt.
+      vars:
+        unexpected_opt_files: "{{ opt_contents.files | rejectattr('path', 'match', '^' + custom_java_path + '/') | map(attribute='path') | list }}"
+      assert:
+        that:
+          - unexpected_opt_files | length == 0
+        fail_msg: "Rootless install wrote to /opt outside custom_java_path: {{ unexpected_opt_files }}"
+        quiet: true
+
+- name: Verify - kafka_connect plugin deployed (rootless)
+  hosts: kafka_connect
+  gather_facts: false
+  tasks:
+    - name: List installed connect plugins under kafka_connect_confluent_hub_plugins_dest
+      command: "ls {{ kafka_connect_confluent_hub_plugins_dest }}"
+      register: hub_components
+      changed_when: false
+
+    - name: Assert the confluent-hub plugin was installed under rootless_deployment_path, not root
+      assert:
+        that:
+          - kafka_connect_confluent_hub_plugins_dest is search(rootless_deployment_path)
+          - "'jcustenborder-kafka-connect-spooldir' in hub_components.stdout"
+        fail_msg: "Expected jcustenborder-kafka-connect-spooldir under {{ kafka_connect_confluent_hub_plugins_dest }}, found: {{ hub_components.stdout }}"
+        quiet: true
