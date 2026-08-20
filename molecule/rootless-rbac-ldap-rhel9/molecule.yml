@@ -145,6 +145,13 @@ provisioner:
   inventory:
     group_vars:
       all:
+        ansible_user: "{{ deployment_user }}"
+        rootless_enabled: true
+        deployment_user: cp-user
+        deployment_group: cp-user
+        rootless_deployment_path: /home/cp-user/cp-data
+        installation_method: archive
+
         ssl_enabled: true
         ssl_mutual_auth_enabled: false
         sasl_protocol: kerberos
@@ -193,8 +200,15 @@ provisioner:
         kafka_broker_custom_properties: *ldap_base_properties
         kafka_controller_custom_properties: *ldap_base_properties
 
+      # ldap1/kerberos1 are unmanaged helper hosts sharing this inventory, not rootless deploy
+      # targets - explicitly opt them out of the `all`-level rootless vars above (both the
+      # connection override and playbooks/rootless_bootstrap.yml's hosts:all sweep, which
+      # skips a host when deployment_user/rootless_deployment_path are empty).
       # Same DN/schema convention as the other RBAC/LDAP scenarios (ou=rbac,dc=example,dc=com).
       ldap_server:
+        ansible_user: root
+        deployment_user: ""
+        rootless_deployment_path: ""
         ldaps_enabled: false
         ldap_admin_password: ldappassword
         ldap_rbac_group: rbac
@@ -227,6 +241,9 @@ provisioner:
             guid: 94
 
       kerberos_server:
+        ansible_user: root
+        deployment_user: ""
+        rootless_deployment_path: ""
         realm_name: "{{ kerberos.realm | upper }}"
         keytab_output_directory: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs"
         kerberos_principals:
@@ -234,23 +251,5 @@ provisioner:
             keytab_path: kafka_broker-kafka-broker1.keytab
           - principal: "{{kerberos_kafka_broker_primary}}/kafka-controller1.confluent@{{kerberos.realm | upper}}"
             keytab_path: kafka_controller-kafka-controller1.keytab
-
-      # Rootless vars scoped to the CP component groups only (not group_vars/all) - ldap1/kerberos1
-      # are unmanaged hosts sharing this inventory, not rootless deploy targets. Scoping these here
-      # keeps them out of playbooks/rootless_bootstrap.yml's hosts:all bootstrap treatment
-      # entirely, the same way ansible_user already is.
-      kafka_controller: &rootless_component_vars
-        ansible_user: "{{ deployment_user }}"
-        rootless_enabled: true
-        deployment_user: cp-user
-        deployment_group: cp-user
-        rootless_deployment_path: /home/cp-user/cp-data
-        installation_method: archive
-      kafka_broker: *rootless_component_vars
-      schema_registry: *rootless_component_vars
-      kafka_connect: *rootless_component_vars
-      kafka_rest: *rootless_component_vars
-      ksql: *rootless_component_vars
-      control_center: *rootless_component_vars
 verifier:
   name: ansible
