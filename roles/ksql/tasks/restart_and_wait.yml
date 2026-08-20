@@ -1,28 +1,22 @@
 ---
-- name: Restart KSQL
-  systemd:
-    daemon_reload: true
-    name: "{{ksql_service_name}}"
-    state: restarted
-  when: not (rootless_enabled | bool)
-  tags:
-    - systemd
-
 - name: "Check if the rootless systemd --user unit exists"
   stat:
     path: "{{ ansible_env.HOME }}/.config/systemd/user/cp-ksql.service"
   register: ksql_rootless_unit
   when: rootless_enabled | bool
 
-# Skip if the unit doesn't exist yet; rootless_start_service.yml does the first start later.
-- name: "Restart KSQL (rootless, systemd --user)"
+# Rootless: skip if the unit doesn't exist yet - rootless_start_service.yml does the first start
+# later. Deliberately untagged (unlike root's `systemd` tag) so a rootless restart can never be
+# silently skipped via the legacy `--skip-tags systemd` fallback - it isn't a privileged operation.
+- name: Restart KSQL
   ansible.builtin.systemd_service:
-    name: cp-ksql.service
-    scope: user
+    name: "{{ 'cp-ksql.service' if (rootless_enabled | bool) else ksql_service_name }}"
+    scope: "{{ 'user' if (rootless_enabled | bool) else 'system' }}"
+    daemon_reload: "{{ not (rootless_enabled | bool) }}"
     state: restarted
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
-  when: rootless_enabled | bool and ksql_rootless_unit.stat.exists
+  when: not (rootless_enabled | bool) or (rootless_enabled | bool and ksql_rootless_unit.stat.exists)
 
 - name: Startup Delay
   wait_for:

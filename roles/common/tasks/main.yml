@@ -130,6 +130,32 @@
     label: "{{ item.item }}"
   when: rootless_enabled | bool
 
+- name: Check for non-interactive sudo escalation (rootless)
+  ansible.builtin.command: sudo -n true
+  register: rootless_sudo_probe
+  failed_when: false
+  changed_when: false
+  when: rootless_enabled | bool
+  tags:
+    - validate
+    - notest
+
+# Passwordless sudo doesn't break a rootless deploy (it's never invoked), but its presence means
+# this host isn't actually privilege-isolated from root, contradicting the point of rootless_enabled -
+# warn rather than fail, since removing/restricting it is outside cp-ansible's control.
+- name: Warn if deploy user has non-interactive sudo (rootless)
+  ansible.builtin.debug:
+    msg: >-
+      '{{ ansible_user }}' has passwordless sudo access to root on this host. rootless_enabled
+      never uses it, but its availability means this deployment is not actually privilege-isolated -
+      restrict or remove it if that guarantee matters here.
+  when:
+    - rootless_enabled | bool
+    - rootless_sudo_probe.rc == 0
+  tags:
+    - validate
+    - notest
+
 - name: Red Hat Repo Setup and Java Installation
   include_tasks: redhat.yml
   when: ansible_os_family == "RedHat"

@@ -1,28 +1,22 @@
 ---
-- name: Restart Control Center
-  systemd:
-    daemon_reload: true
-    name: "{{control_center_service_name}}"
-    state: restarted
-  when: not (rootless_enabled | bool)
-  tags:
-    - systemd
-
 - name: "Check if the rootless systemd --user unit exists"
   stat:
     path: "{{ ansible_env.HOME }}/.config/systemd/user/cp-control_center.service"
   register: control_center_rootless_unit
   when: rootless_enabled | bool
 
-# Skip if the unit doesn't exist yet; rootless_start_service.yml does the first start later.
-- name: "Restart Control Center (rootless, systemd --user)"
+# Rootless: skip if the unit doesn't exist yet - rootless_start_service.yml does the first start
+# later. Deliberately untagged (unlike root's `systemd` tag) so a rootless restart can never be
+# silently skipped via the legacy `--skip-tags systemd` fallback - it isn't a privileged operation.
+- name: Restart Control Center
   ansible.builtin.systemd_service:
-    name: cp-control_center.service
-    scope: user
+    name: "{{ 'cp-control_center.service' if (rootless_enabled | bool) else control_center_service_name }}"
+    scope: "{{ 'user' if (rootless_enabled | bool) else 'system' }}"
+    daemon_reload: "{{ not (rootless_enabled | bool) }}"
     state: restarted
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
-  when: rootless_enabled | bool and control_center_rootless_unit.stat.exists
+  when: not (rootless_enabled | bool) or (rootless_enabled | bool and control_center_rootless_unit.stat.exists)
 
 - name: Startup Delay
   wait_for:
