@@ -382,13 +382,12 @@
         recurse: true
       register: opt_contents
 
-    - name: Assert nothing besides the pre-baked custom_java_path JDK exists under /opt
-      # Dockerfile-rhel-java8.j2 tars a JDK into custom_java_path (/opt/jdk17) at image build
-      # time, before Ansible ever runs - that's not the rootless install writing to /opt.
-      vars:
-        unexpected_opt_files: "{{ opt_contents.files | rejectattr('path', 'match', '^' + custom_java_path + '/') | map(attribute='path') | list }}"
+    - name: Assert nothing exists under /opt
+      # Unlike the debian10/debian9 archive Dockerfiles, Dockerfile-rhel-java8.j2 installs
+      # Java via yum (standard RPM location), not a tarball under /opt - so /opt should be
+      # completely empty here, not "empty except a pre-baked JDK".
       assert:
         that:
-          - unexpected_opt_files | length == 0
-        fail_msg: "Rootless install wrote to /opt outside custom_java_path: {{ unexpected_opt_files }}"
+          - opt_contents.files | length == 0
+        fail_msg: "Rootless install wrote to /opt, expected nothing there: {{ opt_contents.files | map(attribute='path') | list }}"
         quiet: true
