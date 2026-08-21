@@ -5,19 +5,6 @@
 ### MTLS enabled.
 ### Kafka Broker Customer Listener.
 ### RBAC Additional System Admin.
-###
-### Converted to also cover rootless in place - KRaft-only (no ZK toggle, no migration
-### groups): ZK has zero rootless support of its own, so a scenario that's rootless can't
-### also support ZK/migration testing. See PR_2602_REVIEW_TRACKING.md for the rationale
-### (avoid a separate, always-growing set of dedicated rootless-only scenarios; convert
-### existing coverage in place instead). Secrets protection is intentionally NOT covered here
-### (or by any rootless scenario) - rootless has no persisted-master-key recovery path yet.
-###
-### TODO: this scenario's original ZK toggle (${KRAFT_CONTROLLER:-zookeeper}) and migration-group
-### coverage were dropped here, not preserved elsewhere - once rootless_enabled supports Zookeeper
-### (it doesn't today; see the "Fail fast - rootless does not support Zookeeper" assert in
-### roles/common/tasks/config_validations.yml), restore the toggle here so this scenario can cover
-### both modes again instead of being permanently KRaft-only.
 
 driver:
   name: docker
@@ -35,10 +22,11 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: kafka-controller1
-    hostname: kafka-controller1.confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - kafka_controller
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -52,6 +40,7 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -65,6 +54,7 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -78,6 +68,7 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -91,6 +82,7 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
+      - schema_registry_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -104,6 +96,7 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
+      - kafka_rest_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -117,6 +110,7 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
+      - kafka_connect_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -130,6 +124,7 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
+      - ksql_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -143,6 +138,7 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
+      - control_center_migration
     image: geerlingguy/docker-ubuntu1804-ansible
     dockerfile: ../Dockerfile-ubuntu.j2
     command: ""
@@ -154,29 +150,57 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
+    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller2-mig
+    hostname: controller2-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller3-mig
+    hostname: controller3-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: geerlingguy/docker-ubuntu1804-ansible
+    dockerfile: ../Dockerfile-ubuntu.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
-    converge: converge.yml
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
         scenario_name: rbac-mtls-provided-ubuntu
 
-        rootless_enabled: true
-        deployment_user: cp-user
-        deployment_group: cp-user
-        rootless_deployment_path: /home/cp-user/cp-data
-        installation_method: archive
-        rootless_install_packages: true
-        ansible_user: "{{ deployment_user }}"
-        # Dockerfile-ubuntu.j2 installs Java via `apt-get install openjdk-17-jdk` directly (real
-        # package, registered on PATH via update-alternatives already), not a standalone tarball
-        # under /opt - install_java: false so rootless_bootstrap.yml doesn't try to apt-install
-        # openjdk-17-jdk on top of what the image already has.
-        install_java: false
-
         rbac_super_users:
           - User:CN=kafka_broker,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
+          - User:CN=kafka_controller_migration,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
           - User:CN=kafka_controller,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
 
         ssl_enabled: true
@@ -222,13 +246,16 @@ provisioner:
         rbac_component_additional_system_admins:
           - User:user1
 
+      zookeeper:
+        zookeeper_export_certs: true
+
       kafka_broker:
         ldap_config: |
           ldap.java.naming.factory.initial=com.sun.jndi.ldap.LdapCtxFactory
           ldap.com.sun.jndi.ldap.read.timeout=3000
           ldap.java.naming.provider.url=ldaps://ldap1:636
           ldap.java.naming.security.protocol=SSL
-          ldap.ssl.truststore.location={{ rootless_deployment_path }}/ssl/kafka_broker.truststore.jks
+          ldap.ssl.truststore.location=/var/ssl/private/kafka_broker.truststore.jks
           ldap.ssl.truststore.password=truststorepass
           ldap.java.naming.security.principal=uid=mds,OU=rbac,DC=example,DC=com
           ldap.java.naming.security.credentials=password
@@ -242,9 +269,6 @@ provisioner:
           ldap.user.object.class=account
 
       ldap_server:
-        ansible_user: root
-        deployment_user: ""
-        rootless_deployment_path: ""
         ldaps_enabled: true
         ldaps_custom_certs: true
         ssl_custom_certs: true
