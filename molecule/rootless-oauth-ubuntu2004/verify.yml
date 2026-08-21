@@ -1,0 +1,260 @@
+---
+### Checks services run as the deploy user via systemd --user, nothing landed
+### under /opt, and RBAC auth against LDAP succeeds end to end. No OAuth
+### token-flow assertion - rbac-mds-scram-custom-rhel (the only other OAuth
+### consumer in this suite) doesn't assert one either; OAuth correctness here
+### is "the deploy succeeds with sso_* config applied and Control Center
+### comes up," matching that precedent.
+
+- name: Verify - rootless lifecycle on all CP components
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  gather_facts: true
+  vars:
+    rootless_unit_map:
+      kafka_controller: cp-kafka_controller.service
+      kafka_broker: cp-kafka_broker.service
+      schema_registry: cp-schema_registry.service
+      kafka_connect: cp-kafka_connect.service
+      kafka_rest: cp-kafka_rest.service
+      ksql: cp-ksql.service
+      control_center: cp-control_center.service
+  tasks:
+    - name: Determine this host's rootless unit name and component name
+      set_fact:
+        rootless_unit: "{{ rootless_unit_map[group_names | intersect(rootless_unit_map.keys()) | first] }}"
+        rootless_component: "{{ group_names | intersect(rootless_unit_map.keys()) | first }}"
+
+    - name: Check the systemd --user unit is active
+      command: "systemctl --user is-active {{ rootless_unit }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+      register: unit_active
+      changed_when: false
+      failed_when: unit_active.stdout != "active"
+
+    - name: Check the process is owned by the deploy user, not root
+      shell: "ps -eo user,cmd | grep -E 'kafka.Kafka|SchemaRegistryMain|ConnectDistributed|KafkaRestMain|KsqlServerMain|ControlCenter' | grep -v grep | awk '{print $1}' | sort -u"
+      register: process_owners
+      changed_when: false
+
+    - name: Assert no process runs as root
+      assert:
+        that:
+          - "'root' not in process_owners.stdout_lines"
+          - process_owners.stdout_lines | length > 0
+        fail_msg: "Expected all component processes to run as {{ deployment_user }}, found: {{ process_owners.stdout_lines }}"
+        quiet: true
+
+    - name: Find everything under rootless_deployment_path
+      find:
+        paths: "{{ rootless_deployment_path }}"
+        recurse: true
+        file_type: any
+      register: rootless_deployment_path_contents
+
+    - name: Assert everything under rootless_deployment_path is owned by the deploy user, not root
+      # A privileged test container can docker-exec as root regardless of what the deploy
+      # itself did - this, not the container's own privilege level, is what actually proves
+      # nothing in the deploy path used root: a root-owned file here means some task silently
+      # became root.
+      vars:
+        non_deploy_user_files: "{{ rootless_deployment_path_contents.files | rejectattr('pw_name', 'equalto', deployment_user) | map(attribute='path') | list }}"
+      assert:
+        that:
+          - non_deploy_user_files | length == 0
+        fail_msg: "Found files under rootless_deployment_path not owned by {{ deployment_user }}: {{ non_deploy_user_files }}"
+        quiet: true
+
+    - name: Read the generated systemd --user unit file
+      slurp:
+        src: "{{ ansible_env.HOME }}/.config/systemd/user/{{ rootless_unit }}"
+      register: unit_file_slurp
+
+    - name: Assert the unit's ExecStart/EnvironmentFile point under rootless_deployment_path, not a hardcoded root path
+      vars:
+        unit_content: "{{ unit_file_slurp.content | b64decode }}"
+      assert:
+        that:
+          - rootless_deployment_path in unit_content
+          - ("EnvironmentFile=" ~ rootless_deployment_path) in unit_content
+        fail_msg: "cp-{{ rootless_component }} unit file doesn't reference rootless_deployment_path as expected:\n{{ unit_content }}"
+        quiet: true
+
+    - name: Read the generated systemd EnvironmentFile
+      slurp:
+        src: "{{ rootless_deployment_path }}/rootless-bin/{{ rootless_component }}.env"
+      register: env_file_slurp
+
+    - name: Assert the EnvironmentFile actually rendered content, not empty or unrendered Jinja
+      vars:
+        env_content: "{{ env_file_slurp.content | b64decode }}"
+        # Built via multiplication, not a literal '{{', so ansible's own templating of this
+        # assert's `that:` strings doesn't try to parse it as the start of an expression.
+        unrendered_jinja_marker: "{{ '{' * 2 }}"
+      assert:
+        that:
+          - env_content | trim | length > 0
+          - unrendered_jinja_marker not in env_content
+        fail_msg: "{{ rootless_component }}.env is empty or has unrendered template syntax:\n{{ env_content }}"
+        quiet: true
+
+    - name: Check nothing was written under /opt
+      find:
+        paths: /opt
+        recurse: true
+      register: opt_contents
+
+    - name: Assert /opt is empty
+      assert:
+        that:
+          - opt_contents.matched == 0
+        fail_msg: "Rootless install wrote to /opt: {{ opt_contents.files | map(attribute='path') | list }}"
+        quiet: true
+
+- name: Verify - restart-propagation regression (side_effect.yml changed kafka_broker's config)
+  hosts: kafka_broker
+  gather_facts: true
+  tasks:
+    - name: Read the pre-side-effect timestamp
+      slurp:
+        src: /tmp/molecule_side_effect_before_ts
+      register: before_ts_slurp
+
+    - name: Get ActiveEnterTimestamp now
+      command: systemctl --user show cp-kafka_broker.service -p ActiveEnterTimestamp --value
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+      register: after_ts
+      changed_when: false
+
+    - name: Confirm the generated unit actually carries the injected override
+      command: "grep -c StartLimitIntervalSec {{ ansible_env.HOME }}/.config/systemd/user/cp-kafka_broker.service"
+      register: override_grep
+      changed_when: false
+      failed_when: override_grep.stdout | trim == "0"
+
+    - name: Assert the unit restarted when its service_unit_overrides changed
+      assert:
+        that:
+          - after_ts.stdout != (before_ts_slurp.content | b64decode)
+        fail_msg: >-
+          cp-kafka_broker.service did not restart after its service_unit_overrides changed
+          (before={{ before_ts_slurp.content | b64decode }}, after={{ after_ts.stdout }}) -
+          the notify-on-change chain in rootless_lifecycle.yml regressed.
+        quiet: true
+
+- name: Verify - MDS + RBAC/LDAP auth end to end
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: MDS accepts the LDAP-backed super user login
+      uri:
+        url: "https://localhost:8090/kafka/v3/clusters"
+        method: GET
+        validate_certs: false
+        url_username: "{{ mds_super_user }}"
+        url_password: "{{ mds_super_user_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: mds_check
+      retries: 10
+      delay: 5
+      until: mds_check.status == 200
+
+- name: Verify - Schema Registry authenticates via its LDAP identity
+  hosts: schema_registry
+  gather_facts: false
+  tasks:
+    - name: Schema Registry responds and accepts the LDAP-backed component login
+      uri:
+        url: "https://localhost:8081/subjects"
+        method: GET
+        validate_certs: false
+        # mTLS is on for every connection, not just basic auth.
+        client_cert: "{{ rootless_deployment_path }}/ssl/schema_registry.crt"
+        client_key: "{{ rootless_deployment_path }}/ssl/schema_registry.key"
+        url_username: "{{ schema_registry_ldap_user }}"
+        url_password: "{{ schema_registry_ldap_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: sr_check
+      retries: 10
+      delay: 5
+      until: sr_check.status == 200
+
+- name: Verify - Kafka Connect authenticates via its LDAP identity
+  hosts: kafka_connect
+  gather_facts: false
+  tasks:
+    - name: Kafka Connect responds and accepts the LDAP-backed component login
+      uri:
+        url: "https://localhost:8083/connectors"
+        method: GET
+        validate_certs: false
+        client_cert: "{{ rootless_deployment_path }}/ssl/kafka_connect.crt"
+        client_key: "{{ rootless_deployment_path }}/ssl/kafka_connect.key"
+        url_username: "{{ kafka_connect_ldap_user }}"
+        url_password: "{{ kafka_connect_ldap_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: connect_check
+      retries: 10
+      delay: 5
+      until: connect_check.status == 200
+
+- name: Verify - Kafka REST authenticates via its LDAP identity
+  hosts: kafka_rest
+  gather_facts: false
+  tasks:
+    - name: Kafka REST responds and accepts the LDAP-backed component login
+      uri:
+        url: "https://localhost:8082/topics"
+        method: GET
+        validate_certs: false
+        client_cert: "{{ rootless_deployment_path }}/ssl/kafka_rest.crt"
+        client_key: "{{ rootless_deployment_path }}/ssl/kafka_rest.key"
+        url_username: "{{ kafka_rest_ldap_user }}"
+        url_password: "{{ kafka_rest_ldap_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: rest_check
+      retries: 10
+      delay: 5
+      until: rest_check.status == 200
+
+- name: Verify - ksqlDB authenticates via its LDAP identity
+  hosts: ksql
+  gather_facts: false
+  tasks:
+    - name: ksqlDB responds and accepts the LDAP-backed component login
+      uri:
+        url: "https://localhost:8088/info"
+        method: GET
+        validate_certs: false
+        client_cert: "{{ rootless_deployment_path }}/ssl/ksql.crt"
+        client_key: "{{ rootless_deployment_path }}/ssl/ksql.key"
+        url_username: "{{ ksql_ldap_user }}"
+        url_password: "{{ ksql_ldap_password }}"
+        force_basic_auth: true
+        status_code: 200
+      register: ksql_check
+      retries: 10
+      delay: 5
+      until: ksql_check.status == 200
+
+- name: Verify - Control Center is reachable over mTLS with OAuth SSO configured
+  hosts: control_center
+  gather_facts: false
+  tasks:
+    - name: Control Center responds
+      uri:
+        url: "https://localhost:9021/"
+        method: GET
+        validate_certs: false
+        client_cert: "{{ rootless_deployment_path }}/ssl/control_center.crt"
+        client_key: "{{ rootless_deployment_path }}/ssl/control_center.key"
+        status_code: 200
+      register: c3_check
+      retries: 10
+      delay: 5
+      until: c3_check.status == 200
