@@ -2,6 +2,7 @@
 ### Validates that each component has a unique auth user.
 ### Validates that Rest Proxy has correct auth property.
 ### Validates that Java 25 is in Use
+### Validates that Control Center Next Gen's jaas.conf uses the Jetty login module matching the installed Control Center Next Gen version.
 
 - name: Verify Java
   hosts: all,!ccloud-mock-service
@@ -131,7 +132,7 @@
 
 - name: Verify - control_center_next_gen
   hosts: control_center_next_gen
-  gather_facts: false
+  gather_facts: true
   tasks:
     - import_role:
         name: confluent.test
@@ -140,6 +141,71 @@
         file_path: /etc/confluent-control-center/control-center-production.properties
         property: confluent.controlcenter.rest.authentication.roles
         expected_value: admin,client,Restricted
+
+    - import_role:
+        name: variables
+
+    - name: Load Control Center Next Gen jaas.conf
+      slurp:
+        src: "{{control_center_next_gen.jaas_file}}"
+      register: c3_jaas_slurped
+
+    - name: Assert jaas.conf points at the Control Center Next Gen password file
+      vars:
+        c3_jaas_content: "{{ c3_jaas_slurped.content | b64decode }}"
+        c3_expected_password_file_line: 'file="{{control_center_next_gen.password_file}}"'
+      assert:
+        that:
+          - c3_expected_password_file_line in c3_jaas_content
+        fail_msg: "jaas.conf: {{c3_jaas_content}} should reference {{control_center_next_gen.password_file}}"
+        quiet: true
+
+    - name: Assert jaas.conf uses the Jetty 12 login module, as Control Center Next Gen is 2.2.0 or later
+      vars:
+        c3_jaas_content: "{{ c3_jaas_slurped.content | b64decode }}"
+      assert:
+        that:
+          - "'org.eclipse.jetty.security.jaas.spi.PropertyFileLoginModule required' in c3_jaas_content"
+          - "'org.eclipse.jetty.jaas.spi.PropertyFileLoginModule' not in c3_jaas_content"
+        fail_msg: "jaas.conf: {{c3_jaas_content}} should use org.eclipse.jetty.security.jaas.spi.PropertyFileLoginModule for Control Center Next Gen {{confluent_control_center_next_gen_package_version}}"
+        quiet: true
+      when: confluent_control_center_next_gen_package_version is version('2.2.0', '>=')
+
+    - name: Assert jaas.conf uses the pre Jetty 12 login module, as Control Center Next Gen is older than 2.2.0
+      vars:
+        c3_jaas_content: "{{ c3_jaas_slurped.content | b64decode }}"
+      assert:
+        that:
+          - "'org.eclipse.jetty.jaas.spi.PropertyFileLoginModule required' in c3_jaas_content"
+        fail_msg: "jaas.conf: {{c3_jaas_content}} should use org.eclipse.jetty.jaas.spi.PropertyFileLoginModule for Control Center Next Gen {{confluent_control_center_next_gen_package_version}}"
+        quiet: true
+      when: confluent_control_center_next_gen_package_version is version('2.2.0', '<')
+
+    - name: Assert the login module is selected from the Control Center Next Gen version
+      vars:
+        confluent_control_center_next_gen_package_version: "{{item.version}}"
+        rendered_jaas: "{{ lookup('template', playbook_dir + '/../../roles/control_center_next_gen/templates/jaas.conf.j2') }}"
+      assert:
+        that:
+          - item.expected_module + ' required' in rendered_jaas
+          - item.unexpected_module not in rendered_jaas
+        fail_msg: "jaas.conf rendered for Control Center Next Gen {{item.version}}: {{rendered_jaas}} should use {{item.expected_module}}"
+        quiet: true
+      loop:
+        - version: 2.0.0
+          expected_module: org.eclipse.jetty.jaas.spi.PropertyFileLoginModule
+          unexpected_module: org.eclipse.jetty.security.jaas.spi.PropertyFileLoginModule
+        - version: 2.1.0
+          expected_module: org.eclipse.jetty.jaas.spi.PropertyFileLoginModule
+          unexpected_module: org.eclipse.jetty.security.jaas.spi.PropertyFileLoginModule
+        - version: 2.2.0
+          expected_module: org.eclipse.jetty.security.jaas.spi.PropertyFileLoginModule
+          unexpected_module: org.eclipse.jetty.jaas.spi.PropertyFileLoginModule
+        - version: 2.5.0
+          expected_module: org.eclipse.jetty.security.jaas.spi.PropertyFileLoginModule
+          unexpected_module: org.eclipse.jetty.jaas.spi.PropertyFileLoginModule
+      loop_control:
+        label: "Control Center Next Gen {{item.version}}"
 
 - name: Verify - USM Agent Functionality
   import_playbook: ../verify_usm_agent.yml

@@ -2420,6 +2420,14 @@ Default:  none
 
 ***
 
+### control_center_next_gen_jaas_login_module
+
+Jetty JAAS login module written to Control Center Next Gen's jaas.conf when control_center_next_gen_authentication_type is basic. Control Center Next Gen 2.2.0 and later bundle Jetty 12, which moved the login module from org.eclipse.jetty.jaas.spi to org.eclipse.jetty.security.jaas.spi. Override this variable when installing a version whose Jetty packaging is not covered by the default expression, for example an archive install where confluent_control_center_next_gen_archive_version differs from confluent_control_center_next_gen_package_version.
+
+Default:  "{{ 'org.eclipse.jetty.security.jaas.spi.PropertyFileLoginModule' if confluent_control_center_next_gen_package_version is version('2.2.0', '>=') else 'org.eclipse.jetty.jaas.spi.PropertyFileLoginModule' }}"
+
+***
+
 ### control_center_next_gen_log_dir
 
 Set this variable to customize the directory that Control Center writes log files to. Default location is /var/log/confluent/control-center. NOTE- control_center_next_gen.appender_log_path is deprecated.
