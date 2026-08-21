@@ -1,0 +1,41 @@
+---
+# Read-only counterpart to service_facts for a rootless systemd --user unit -
+# service_facts never queries --user scope, so it always reports 'unknown'
+# for these. Used by each "<Component> Status Finding" play to pick serial
+# vs. parallel re-provisioning.
+#
+# Var:  rootless_component_name (queries cp-<name>.service)
+# Sets: rootless_service_state -> 'running' | 'stopped' | 'unknown'
+#
+# state/enabled/masked/daemon_reload are omitted below, so this only runs
+# `systemctl --user show` - never mutates the unit.
+
+- name: "Gather ansible_user_uid if not already cached (needed for XDG_RUNTIME_DIR)"
+  ansible.builtin.setup:
+    gather_subset:
+      - '!all'
+      - '!any'
+      - user
+  when: ansible_user_uid is not defined
+
+- name: "Query cp-{{ rootless_component_name }}.service state (systemd --user, read-only)"
+  ansible.builtin.systemd_service:
+    name: "cp-{{ rootless_component_name }}.service"
+    scope: user
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+  register: rootless_service_query
+  changed_when: false
+  failed_when: false
+
+- name: "Normalize rootless service state to match service_facts' state values"
+  set_fact:
+    rootless_service_state: >-
+      {%- set query_status = rootless_service_query.status | default({}) -%}
+      {%- if query_status.get('SubState', '') == 'running' -%}
+      running
+      {%- elif query_status -%}
+      stopped
+      {%- else -%}
+      unknown
+      {%- endif -%}
