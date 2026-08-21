@@ -152,7 +152,7 @@ Default:  false
 
 Full path to download the Jolokia Agent Jar
 
-Default:  /opt/jolokia/jolokia.jar
+Default:  "{{ (rootless_deployment_path_final ~ '/jolokia/jolokia.jar') if rootless_deployment_path | length > 0 else '/opt/jolokia/jolokia.jar' }}"
 
 ***
 
@@ -352,7 +352,7 @@ Default:  false
 
 Full path to download the Prometheus Exporter Agent Jar
 
-Default:  /opt/prometheus/jmx_prometheus_javaagent.jar
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/jmx_prometheus_javaagent.jar') if rootless_deployment_path | length > 0 else '/opt/prometheus/jmx_prometheus_javaagent.jar' }}"
 
 ***
 
@@ -432,7 +432,7 @@ Default:  true
 
 Custom path for the location of kerberos client configuration file, works with any value of kerberos_configure
 
-Default:  /etc/krb5.conf
+Default:  "{{ (rootless_deployment_path_final ~ '/krb5.conf') if rootless_deployment_path | length > 0 else '/etc/krb5.conf' }}"
 
 ***
 
@@ -612,11 +612,43 @@ Default:  "package"
 
 ***
 
+### rootless_deployment_path
+
+Rootless base path/user/group - install paths, users/groups, and data/log dirs derive from these. Empty rootless_deployment_path/deployment_user = no change.
+
+Default:  ""
+
+***
+
+### rootless_enabled
+
+Master switch for rootless deploys - skips root-requiring steps and runs the systemd --user lifecycle instead. Default false = no change.
+
+Default:  false
+
+***
+
+### rootless_lifecycle_enabled
+
+Generates a systemd --user unit per component instead of system-level systemd. Defaults to rootless_enabled; can be set independently.
+
+Default:  "{{ rootless_enabled }}"
+
+***
+
+### rootless_lifecycle_bin_dir
+
+Directory the rootless lifecycle env-file + start/stop scripts are written to.
+
+Default:  "{{ (rootless_deployment_path_final ~ '/rootless-bin') if rootless_deployment_path | length > 0 else (archive_destination_path ~ '/rootless-bin') }}"
+
+***
+
 ### archive_destination_path
 
 The path the downloaded archive is expanded into. Using the default with a `confluent_package_version` of *5.5.1* results in the following installation path `/opt/confluent/confluent-5.5.1/` that contains directories such as `bin` and `share`, but may be overridden usinf the `binary_base_path` property.
 
-Default:  "/opt/confluent"
+Default:  "{{ (rootless_deployment_path_final ~ '/confluent') if rootless_deployment_path | length > 0 else '/opt/confluent' }}"
 
 ***
 
@@ -672,7 +704,7 @@ Default:  "{{ secrets_protection_enabled }}"
 
 The path the Confluent CLI archive is expanded into.
 
-Default:  /opt/confluent-cli
+Default:  "{{ (rootless_deployment_path_final ~ '/confluent-cli') if rootless_deployment_path | length > 0 else '/opt/confluent-cli' }}"
 
 ***
 
@@ -680,7 +712,7 @@ Default:  /opt/confluent-cli
 
 Full path on hosts for Confluent CLI symlink to executable
 
-Default:  "/usr/local/bin/confluent"
+Default:  "{{ (confluent_cli_base_path ~ '/confluent') if rootless_deployment_path | length > 0 else '/usr/local/bin/confluent' }}"
 
 ***
 
@@ -744,7 +776,7 @@ Default:  "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_c
 
 Directory on hosts to store all ssl files.
 
-Default:  /var/ssl/private/
+Default:  "{{ (rootless_deployment_path_final ~ '/ssl') if rootless_deployment_path | length > 0 else '/var/ssl/private/' }}"
 
 ***
 
@@ -1120,7 +1152,7 @@ Default:  zookeeper.yml
 
 Destination path for Zookeeper jmx config file
 
-Default:  /opt/prometheus/zookeeper.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/zookeeper.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/zookeeper.yml' }}"
 
 ***
 
@@ -1360,7 +1392,7 @@ Default:  kafka.yml.j2
 
 Destination path for Kafka controller jmx config file
 
-Default:  /opt/prometheus/kafka.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/kafka_controller.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/kafka.yml' }}"
 
 ***
 
@@ -1592,7 +1624,7 @@ Default:  kafka.yml.j2
 
 Destination path for Kafka Broker jmx config file
 
-Default:  /opt/prometheus/kafka.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/kafka.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/kafka.yml' }}"
 
 ***
 
@@ -1824,7 +1856,7 @@ Default:  schema_registry.yml
 
 Destination path for Schema Registry jmx config file
 
-Default:  /opt/prometheus/schema_registry.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/schema_registry.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/schema_registry.yml' }}"
 
 ***
 
@@ -2016,7 +2048,7 @@ Default:  kafka_rest.yml
 
 Destination path for Rest Proxy jmx config file
 
-Default:  /opt/prometheus/kafka_rest.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/kafka_rest.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/kafka_rest.yml' }}"
 
 ***
 
@@ -2248,7 +2280,7 @@ Default:  kafka_connect.yml
 
 Destination path for Connect jmx config file
 
-Default:  /opt/prometheus/kafka_connect.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/kafka_connect.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/kafka_connect.yml' }}"
 
 ***
 
@@ -2488,7 +2520,7 @@ Default:  ksql.yml
 
 Destination path for ksqlDB jmx config file
 
-Default:  /opt/prometheus/ksql.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/ksql.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/ksql.yml' }}"
 
 ***
 
@@ -4040,7 +4072,7 @@ Default:  7777
 
 Full path to download the Jolokia Agent Jar.
 
-Default:  /opt/jolokia/jolokia.jar
+Default:  "{{ (rootless_deployment_path_final ~ '/jolokia/jolokia.jar') if rootless_deployment_path | length > 0 else '/opt/jolokia/jolokia.jar' }}"
 
 ***
 
@@ -4048,7 +4080,7 @@ Default:  /opt/jolokia/jolokia.jar
 
 Set this variable to customize the directory that Kafka Connect Replicator writes log files to.
 
-Default:  /var/log/confluent/kafka-connect-replicator
+Default:  "{{ (rootless_deployment_path_final ~ '/log/kafka-connect-replicator') if rootless_deployment_path | length > 0 else '/var/log/confluent/kafka-connect-replicator' }}"
 
 ***
 
@@ -4216,7 +4248,7 @@ Default:  ""
 
 Set this variable to override the default location of the public pem file for connecting to the ERP when RBAC is enabled.
 
-Default:  /var/ssl/private/kafka_connect_replicator/public.pem
+Default:  "{{ (rootless_deployment_path_final ~ '/kafka_connect_replicator/public.pem') if rootless_deployment_path | length > 0 else '/var/ssl/private/kafka_connect_replicator/public.pem' }}"
 
 ***
 
@@ -4416,7 +4448,7 @@ Default:  ""
 
 Set this variable to override the default location of the public pem file for connecting to the ERP when RBAC is enabled.
 
-Default:  /var/ssl/private/kafka_connect_replicator_consumer/public.pem
+Default:  "{{ (rootless_deployment_path_final ~ '/kafka_connect_replicator_consumer/public.pem') if rootless_deployment_path | length > 0 else '/var/ssl/private/kafka_connect_replicator_consumer/public.pem' }}"
 
 ***
 
