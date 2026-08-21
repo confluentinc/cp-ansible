@@ -4,12 +4,9 @@
 ### Validates truststore is present across components.
 ### Validates that Java 17 is in Use
 ### Validates LDAP authentication
-### Validates the rootless systemd --user lifecycle: nothing ran as root, nothing landed
-### under /opt beyond the pre-baked JDK, and the generated unit/env files point under
-### rootless_deployment_path.
 
 - name: Verify Java
-  hosts: all,!ldap_server
+  hosts: all,!ldap_server,!kafka_controller_migration  #Workaround to skip the task in migration test, need to remove in CP 8.0
   gather_facts: false
   tasks:
     - name: Get Java Version
@@ -31,9 +28,9 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/controller/server.properties"
+        file_path: /etc/controller/server.properties
         property: ssl.truststore.location
-        expected_value: "{{ rootless_deployment_path }}/ssl/kafka_controller.truststore.jks"
+        expected_value: /var/ssl/private/kafka_controller.truststore.jks
 
 - name: Verify - kafka_broker
   hosts: kafka_broker
@@ -43,7 +40,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
+        file_path: /etc/kafka/server.properties
         property: metric.reporters
         expected_value: io.confluent.metrics.reporter.ConfluentMetricsReporter
 
@@ -51,9 +48,9 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
+        file_path: /etc/kafka/server.properties
         property: ldap.java.naming.security.credentials
-        expected_value: "${securepass:{{ rootless_deployment_path }}/ssl/kafka-broker-security.properties:server.properties/ldap.java.naming.security.credentials}"
+        expected_value: ${securepass:/var/ssl/private/kafka-broker-security.properties:server.properties/ldap.java.naming.security.credentials}
 
 - name: Verify - schema_registry
   hosts: schema_registry
@@ -63,17 +60,17 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/schema-registry/schema-registry.properties"
+        file_path: /etc/schema-registry/schema-registry.properties
         property: ssl.truststore.location
-        expected_value: "{{ rootless_deployment_path }}/ssl/schema_registry.truststore.jks"
+        expected_value: /var/ssl/private/schema_registry.truststore.jks
 
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/schema-registry/schema-registry.properties"
+        file_path: /etc/schema-registry/schema-registry.properties
         property: confluent.metadata.basic.auth.user.info
-        expected_value: "${securepass:{{ rootless_deployment_path }}/ssl/schema-registry-security.properties:schema-registry.properties/confluent.metadata.basic.auth.user.info}"
+        expected_value: ${securepass:/var/ssl/private/schema-registry-security.properties:schema-registry.properties/confluent.metadata.basic.auth.user.info}
 
 - name: Verify - kafka_rest
   hosts: kafka_rest
@@ -83,15 +80,15 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka-rest/kafka-rest.properties"
+        file_path: /etc/kafka-rest/kafka-rest.properties
         property: ssl.truststore.location
-        expected_value: "{{ rootless_deployment_path }}/ssl/kafka_rest.truststore.jks"
+        expected_value: /var/ssl/private/kafka_rest.truststore.jks
 
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka-rest/kafka-rest.properties"
+        file_path: /etc/kafka-rest/kafka-rest.properties
         property: producer.interceptor.classes
         expected_value: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
 
@@ -99,9 +96,9 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka-rest/kafka-rest.properties"
+        file_path: /etc/kafka-rest/kafka-rest.properties
         property: confluent.metadata.basic.auth.user.info
-        expected_value: "${securepass:{{ rootless_deployment_path }}/ssl/kafka-rest-security.properties:kafka-rest.properties/confluent.metadata.basic.auth.user.info}"
+        expected_value: ${securepass:/var/ssl/private/kafka-rest-security.properties:kafka-rest.properties/confluent.metadata.basic.auth.user.info}
 
 - name: Verify - kafka_connect
   hosts: kafka_connect
@@ -111,15 +108,15 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
+        file_path: /etc/kafka/connect-distributed.properties
         property: ssl.truststore.location
-        expected_value: "{{ rootless_deployment_path }}/ssl/kafka_connect.truststore.jks"
+        expected_value: /var/ssl/private/kafka_connect.truststore.jks
 
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
+        file_path: /etc/kafka/connect-distributed.properties
         property: producer.interceptor.classes
         expected_value: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
 
@@ -127,9 +124,9 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
+        file_path: /etc/kafka/connect-distributed.properties
         property: confluent.metadata.basic.auth.user.info
-        expected_value: "${securepass:{{ rootless_deployment_path }}/ssl/kafka-connect-security.properties:connect-distributed.properties/confluent.metadata.basic.auth.user.info}"
+        expected_value: ${securepass:/var/ssl/private/kafka-connect-security.properties:connect-distributed.properties/confluent.metadata.basic.auth.user.info}
 
     - name: Get Connectors on connect cluster1
       uri:
@@ -189,15 +186,15 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/ksqldb/ksql-server.properties"
+        file_path: /etc/ksqldb/ksql-server.properties
         property: ssl.truststore.location
-        expected_value: "{{ rootless_deployment_path }}/ssl/ksql.truststore.jks"
+        expected_value: /var/ssl/private/ksql.truststore.jks
 
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/ksqldb/ksql-server.properties"
+        file_path: /etc/ksqldb/ksql-server.properties
         property: producer.interceptor.classes
         expected_value: io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor
 
@@ -205,9 +202,21 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/ksqldb/ksql-server.properties"
+        file_path: /etc/ksqldb/ksql-server.properties
         property: ksql.schema.registry.basic.auth.user.info
-        expected_value: "${securepass:{{ rootless_deployment_path }}/ssl/ksql-security.properties:ksql-server.properties/ksql.schema.registry.basic.auth.user.info}"
+        expected_value: ${securepass:/var/ssl/private/ksql-security.properties:ksql-server.properties/ksql.schema.registry.basic.auth.user.info}
+
+- name: Verify - Client Packages
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: common
+    - shell: grep -Fq "deb {{confluent_clients_repository_baseurl}}/clients/deb/" /etc/apt/sources.list
+      register: linecheck
+      check_mode: false
+      changed_when: false
+      failed_when: linecheck.rc != 0
 
 - name: Verify - Callback handler class
   hosts: kafka_broker
@@ -217,7 +226,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
+        file_path: /etc/kafka/server.properties
         property: listener.name.client.plain.sasl.server.callback.handler.class
         expected_value: io.confluent.security.auth.provider.ldap.LdapAuthenticateCallbackHandler
 
@@ -244,107 +253,15 @@
           sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="testusr" password="test-password";
           sasl.mechanism=PLAIN
           security.protocol=SASL_SSL
-          ssl.truststore.location={{ rootless_deployment_path }}/ssl/kafka_broker.truststore.jks
+          ssl.truststore.location=/var/ssl/private/kafka_broker.truststore.jks
           ssl.truststore.password=truststorepass
 
 - name: Verify - Run kafka topics command against kafka.properties
   hosts: kafka_broker
   gather_facts: false
   tasks:
-    # Archive installs (root or rootless) don't put kafka-topics on generic PATH the way a
-    # package install does - invoke it via its full path under rootless_deployment_path.
-    - shell: "{{ rootless_deployment_path }}/confluent/bin/kafka-topics --list --bootstrap-server kafka-broker1:9093 --command-config /tmp/kafka.properties"
+    - shell: kafka-topics --list --bootstrap-server kafka-broker1:9093 --command-config /tmp/kafka.properties
       register: topic_result
       check_mode: false
       changed_when: false
       failed_when: topic_result.rc != 0
-
-- name: Verify - rootless lifecycle on all CP components
-  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql
-  gather_facts: true
-  vars:
-    rootless_unit_map:
-      kafka_controller: cp-kafka_controller.service
-      kafka_broker: cp-kafka_broker.service
-      schema_registry: cp-schema_registry.service
-      kafka_connect: cp-kafka_connect.service
-      kafka_rest: cp-kafka_rest.service
-      ksql: cp-ksql.service
-  tasks:
-    - name: Determine this host's rootless unit name and component name
-      set_fact:
-        rootless_unit: "{{ rootless_unit_map[group_names | intersect(rootless_unit_map.keys()) | first] }}"
-        rootless_component: "{{ group_names | intersect(rootless_unit_map.keys()) | first }}"
-
-    - name: Check the systemd --user unit is active
-      command: "systemctl --user is-active {{ rootless_unit }}"
-      environment:
-        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
-      register: unit_active
-      changed_when: false
-      failed_when: unit_active.stdout != "active"
-
-    - name: Check the process is owned by the deploy user, not root
-      shell: "ps -eo user,cmd | grep -E 'kafka.Kafka|SchemaRegistryMain|ConnectDistributed|KafkaRestMain|KsqlServerMain' | grep -v grep | awk '{print $1}' | sort -u"
-      register: process_owners
-      changed_when: false
-
-    - name: Assert no process runs as root
-      assert:
-        that:
-          - "'root' not in process_owners.stdout_lines"
-          - process_owners.stdout_lines | length > 0
-        fail_msg: "Expected all component processes to run as {{ deployment_user }}, found: {{ process_owners.stdout_lines }}"
-        quiet: true
-
-    - name: Find everything under rootless_deployment_path
-      find:
-        paths: "{{ rootless_deployment_path }}"
-        recurse: true
-        file_type: any
-      register: rootless_deployment_path_contents
-
-    - name: Assert everything under rootless_deployment_path is owned by the deploy user, not root
-      # A privileged test container can docker-exec as root regardless of what the deploy
-      # itself did - this, not the container's own privilege level, is what actually proves
-      # nothing in the deploy path used root: a root-owned file here means some task silently
-      # became root.
-      vars:
-        non_deploy_user_files: "{{ rootless_deployment_path_contents.files | rejectattr('pw_name', 'equalto', deployment_user) | map(attribute='path') | list }}"
-      assert:
-        that:
-          - non_deploy_user_files | length == 0
-        fail_msg: "Found files under rootless_deployment_path not owned by {{ deployment_user }}: {{ non_deploy_user_files }}"
-        quiet: true
-
-    - name: Read the generated systemd --user unit file
-      slurp:
-        src: "{{ ansible_env.HOME }}/.config/systemd/user/{{ rootless_unit }}"
-      register: unit_file_slurp
-
-    - name: Assert the unit's ExecStart/EnvironmentFile point under rootless_deployment_path, not a hardcoded root path
-      vars:
-        unit_content: "{{ unit_file_slurp.content | b64decode }}"
-      assert:
-        that:
-          - rootless_deployment_path in unit_content
-          - ("EnvironmentFile=" ~ rootless_deployment_path) in unit_content
-        fail_msg: "cp-{{ rootless_component }} unit file doesn't reference rootless_deployment_path as expected:\n{{ unit_content }}"
-        quiet: true
-
-    - name: Check nothing was written under /opt
-      find:
-        paths: /opt
-        recurse: true
-      register: opt_contents
-
-    - name: Assert nothing besides the pre-baked custom_java_path JDK exists under /opt
-      # Dockerfile-debian.j2 tars a JDK into custom_java_path (/opt/jdk17) at image build
-      # time, before Ansible ever runs - that's not the rootless install writing to /opt.
-      vars:
-        unexpected_opt_files: "{{ opt_contents.files | rejectattr('path', 'match', '^' + custom_java_path + '/') | map(attribute='path') | list }}"
-      assert:
-        that:
-          - unexpected_opt_files | length == 0
-        fail_msg: "Rootless install wrote to /opt outside custom_java_path: {{ unexpected_opt_files }}"
-        quiet: true

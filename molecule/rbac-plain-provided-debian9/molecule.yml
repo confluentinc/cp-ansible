@@ -1,31 +1,13 @@
 ---
-### Rootless install of Confluent Platform Cluster on Debian9.
-### RBAC enabled. SASL PLAIN enabled. TLS with custom certs enabled.
-### Kafka Broker Custom Listener. Secrets protection enabled.
+### Installs Confluent Platform Cluster on Debian9.
+### RBAC enabled.
+### SASL PLAIN enabled.
+### TLS with custom certs enabled.
+### Kafka Broker Customer Listener.
+### Secrets protection enabled.
 ### Control Center disabled, metrics reporters enabled.
-### LdapAuthenticateCallbackHandler for AuthN.
-### Creates two unique Connectors in Connect cluster.
-###
-### Converted from the former (root) rbac-plain-provided-debian9 scenario to also cover
-### rootless - KRaft-only (no ZK toggle, no migration groups): ZK has zero rootless support
-### of its own, so a scenario that's rootless can't also support ZK/migration testing. See
-### PR_2602_REVIEW_TRACKING.md for the rationale (avoid a separate, always-growing set of
-### dedicated rootless-only scenarios; convert existing coverage in place instead).
-###
-### TODO: this scenario's original ZK toggle (${KRAFT_CONTROLLER:-zookeeper}) and migration-group
-### coverage were dropped here, not preserved elsewhere - once rootless_enabled supports Zookeeper
-### (it doesn't today; see the "Fail fast - rootless does not support Zookeeper" assert in
-### roles/common/tasks/config_validations.yml), restore the toggle here so this scenario can cover
-### both modes again instead of being permanently KRaft-only.
-###
-### Known container limitations (not fixable here, called out for reviewers):
-### - privileged: true + cgroupns_mode: host is required for systemd --user to run inside
-###   Docker at all - it does NOT mean the deploy itself used root. That's verified instead
-###   by asserting every file under rootless_deployment_path is owned by deployment_user (verify.yml)
-###   and by the extensive live-EC2 (non-containerized) verification recorded in
-###   ROOTLESS_DEPLOYMENT_STEPS.md.
-### - loginctl enable-linger surviving an actual host reboot is a design promise that isn't
-###   exercisable in a container (no real reboot) - also only verified live on EC2.
+### LdapAuthenticateCallbackHandler for AuthN
+### Creates two unique Connectors in Connect cluster
 
 driver:
   name: docker
@@ -43,10 +25,39 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  - name: kafka-controller1
-    hostname: kafka-controller1.confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}1
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
-      - kafka_controller
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: geerlingguy/docker-debian9-ansible
+    dockerfile: ../Dockerfile-debian.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}2
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}2.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
+    image: geerlingguy/docker-debian9-ansible
+    dockerfile: ../Dockerfile-debian.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ${KRAFT_CONTROLLER:-zookeeper}3
+    hostname: ${KRAFT_CONTROLLER:-zookeeper}3.confluent
+    groups:
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
     command: ""
@@ -60,6 +71,7 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
     command: ""
@@ -73,6 +85,7 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
     command: ""
@@ -86,6 +99,7 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
     command: ""
@@ -99,6 +113,7 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
+      - schema_registry_migration
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
     command: ""
@@ -112,6 +127,7 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
+      - kafka_rest_migration
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
     command: ""
@@ -125,6 +141,7 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
+      - kafka_connect_migration
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
     command: ""
@@ -138,6 +155,7 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
+      - ksql_migration
     image: geerlingguy/docker-debian9-ansible
     dockerfile: ../Dockerfile-debian.j2
     command: ""
@@ -163,27 +181,27 @@ platforms:
   #     - "9021:9021"
   #   networks:
   #     - name: confluent
+  # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: geerlingguy/docker-debian9-ansible
+    dockerfile: ../Dockerfile-debian.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
-    converge: converge.yml
-    verify: verify.yml
+    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
   inventory:
     group_vars:
       all:
         scenario_name: rbac-plain-provided-debian9
-
-        # Every CP-component host here connects as the deploy user; ldap_server is the one
-        # exception, overridden back below (it's an unmanaged helper host, not a rootless
-        # deploy target).
-        ansible_user: "{{ deployment_user }}"
-        rootless_enabled: true
-        deployment_user: cp-user
-        deployment_group: cp-user
-        rootless_deployment_path: /home/cp-user/cp-data
-        installation_method: archive
-        # Debian's systemd --user manager needs dbus-user-session, which the archive
-        # Dockerfile doesn't bake in - exercise rootless_bootstrap.yml's apt branch for it.
-        rootless_install_packages: true
 
         sasl_protocol: plain
 
@@ -207,11 +225,9 @@ provisioner:
             ssl_enabed: true
             sasl_protocol: plain
 
-        # To run the FileStream connector, you must add the filestream-connectors path in the
-        # plugin.path - binary_base_path-relative (not a hardcoded root path) so this resolves
-        # correctly under the rootless archive install too.
+        # To run the FileStream connector, you must add the filestream-connectors path in the plugin.path
         kafka_connect_custom_properties:
-          plugin.path: "{{ binary_base_path }}/share/filestream-connectors,{{ binary_base_path }}/share/java/connect_plugins"
+          plugin.path: "/usr/share/filestream-connectors,/usr/share/java/connect_plugins"
 
         kafka_connect_connector_white_list: "test_topic1,test_topic2"
         kafka_connect_connectors:
@@ -219,7 +235,7 @@ provisioner:
             config:
               connector.class: "FileStreamSourceConnector"
               tasks.max: "5"
-              file: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
+              file: "/etc/kafka/connect-distributed.properties"
               topic: "test_topic1"
               key.converter: "org.apache.kafka.connect.json.JsonConverter"
               value.converter: "org.apache.kafka.connect.json.JsonConverter"
@@ -227,7 +243,7 @@ provisioner:
             config:
               connector.class: "FileStreamSinkConnector"
               tasks.max: "1"
-              file: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
+              file: "/etc/kafka/connect-distributed.properties"
               topics: "test_topic2"
               key.converter: "org.apache.kafka.connect.json.JsonConverter"
               value.converter: "org.apache.kafka.connect.json.JsonConverter"
@@ -283,15 +299,7 @@ provisioner:
         kafka_rest_secrets_protection_encrypt_properties: [confluent.metadata.basic.auth.user.info]
         kafka_connect_secrets_protection_encrypt_properties: [confluent.metadata.basic.auth.user.info]
 
-      # ldap1 is an unmanaged helper host sharing this inventory, not a rootless deploy target -
-      # explicitly opt it out of the `all`-level rootless vars above (both the connection
-      # override and playbooks/rootless_bootstrap.yml's hosts:all sweep, which skips a host
-      # when deployment_user/rootless_deployment_path are empty).
       ldap_server:
-        ansible_user: root
-        deployment_user: ""
-        rootless_deployment_path: ""
-
         ldaps_enabled: false
 
         ldap_admin_password: ldppassword
@@ -329,5 +337,3 @@ provisioner:
             password: user1p
             uid: 9992
             guid: 92
-verifier:
-  name: ansible
