@@ -25,7 +25,7 @@ Two phases:
    JDK + openssl/rsync/unzip. Sites with no sudo do these steps out-of-band and skip this playbook.
 
 2. **Rootless deploy** (as the unprivileged deploy user, `ansible_become: false`): downloads +
-   unpacks the CP archive under `deployment_path`, generates config, generates and starts
+   unpacks the CP archive under `rootless_deployment_path`, generates config, generates and starts
    `systemd --user` units (`cp-<component>.service`, `Restart=on-failure`), and — for RBAC — drives
    the controller↔broker MDS bootstrap to convergence. No manual service start.
 
@@ -47,7 +47,7 @@ all:
     rootless_enabled: true
     deployment_user: cp-user
     deployment_group: cp-user
-    deployment_path: /home/cp-user/cp-data
+    rootless_deployment_path: /home/cp-user/cp-data
     installation_method: archive
     <component>_skip_restarts: true      # for each component
     # security (optional): ssl_enabled/self_signed/ssl_mutual_auth_enabled (mTLS);
@@ -63,7 +63,7 @@ ansible-playbook -i <inventory> confluent.platform.rootless_bootstrap -e ansible
 # add -e rootless_install_packages=true to install cert tools + python + Java
 #   (openssl/rsync/unzip/python3-pip/python3-pyyaml; on Debian/Ubuntu also dbus-user-session — see below)
 ```
-Creates `deployment_user` (+ authorized_keys so the same SSH key works), `deployment_path`, and runs
+Creates `deployment_user` (+ authorized_keys so the same SSH key works), `rootless_deployment_path`, and runs
 `loginctl enable-linger`. Idempotent.
 
 **Java:** the bootstrap honors the collection's normal Java model — it installs Java only when
@@ -81,7 +81,7 @@ RHEL ships this with systemd — nothing extra needed.
 
 If you have no sudo at all, do the equivalent by hand out-of-band:
 ```bash
-sudo useradd -m -g <group> <user>; install authorized_keys; mkdir deployment_path (chown user)
+sudo useradd -m -g <group> <user>; install authorized_keys; mkdir rootless_deployment_path (chown user)
 sudo loginctl enable-linger <user>
 # Java: install a supported JDK (CP 7.6 = Java 17 or 11; full JDK, not JRE) e.g.
 #   `sudo dnf install java-17-openjdk` / `sudo apt-get install openjdk-17-jdk`, OR unpack any JDK tarball
@@ -127,7 +127,7 @@ nothing about rootlessness.
 
 **After the run** — nothing escalated:
 ```bash
-find <deployment_path> -not -user <deployment_user>   # no root-owned files - empty output
+find <rootless_deployment_path> -not -user <deployment_user>   # no root-owned files - empty output
 ps -eo user,cmd | awk '$1 == "root"' | grep -i 'kafka\|confluent'  # no root-owned CP process
 systemctl list-units 'cp-*' --no-legend                # system-scope - empty, none exist
 systemctl --user list-units 'cp-*' --no-legend         # user-scope - the real running units
@@ -142,7 +142,7 @@ rootlessness, not just an absence of errors.
 ## Per-config notes
 
 - **mTLS**: set `ssl_enabled`/`self_signed`/`ssl_mutual_auth_enabled`/`ssl_client_authentication`. Self-signed
-  CA is generated on the control node; keystores land under `{{ deployment_path }}/ssl`. openssl/rsync must
+  CA is generated on the control node; keystores land under `{{ rootless_deployment_path }}/ssl`. openssl/rsync must
   be present (bootstrap `rootless_install_packages=true`, or pre-installed).
 - **RBAC over LDAP**: stand up the LDAP backend (e.g. 389-DS: suffix `dc=example,dc=com`, `ou=rbac`, bind
   `cn=mds`, component principals, and the `mds` read/search ACI on `ou=rbac`). The controller↔broker MDS
@@ -150,7 +150,7 @@ rootlessness, not just an absence of errors.
 - **FIPS**: not fully rootless — OS FIPS mode (`update-crypto-policies --set FIPS`) is a root, out-of-band step.
 
 ## JVM env with systemd --user
-The generated `cp-<component>.service` uses `EnvironmentFile=<deployment_path>/rootless-bin/<component>.env`,
+The generated `cp-<component>.service` uses `EnvironmentFile=<rootless_deployment_path>/rootless-bin/<component>.env`,
 which carries the same `KAFKA_OPTS`/`KAFKA_HEAP_OPTS`/`KAFKA_LOG4J_OPTS`/`JAVA_HOME` the systemd
 `override.conf` would have — so nothing is dropped on start (no manual `export` needed).
 

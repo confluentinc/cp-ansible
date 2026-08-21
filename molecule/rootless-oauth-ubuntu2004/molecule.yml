@@ -9,7 +9,7 @@
 ### Known container limitations (not fixable here, called out for reviewers):
 ### - privileged: true + cgroupns_mode: host is required for systemd --user to run inside
 ###   Docker at all - it does NOT mean the deploy itself used root. That's verified instead
-###   by asserting every file under deployment_path is owned by deployment_user (verify.yml)
+###   by asserting every file under rootless_deployment_path is owned by deployment_user (verify.yml)
 ###   and by the extensive live-EC2 (non-containerized) verification recorded in
 ###   ROOTLESS_DEPLOYMENT_STEPS.md.
 ### - loginctl enable-linger surviving an actual host reboot is a design promise that isn't
@@ -154,6 +154,16 @@ provisioner:
   inventory:
     group_vars:
       all:
+        ansible_user: "{{ deployment_user }}"
+        rootless_enabled: true
+        deployment_user: cp-user
+        deployment_group: cp-user
+        rootless_deployment_path: /home/cp-user/cp-data
+        installation_method: archive
+        # Ubuntu's systemd --user manager needs dbus-user-session, which the archive
+        # Dockerfile doesn't bake in - exercise rootless_bootstrap.yml's apt branch for it.
+        rootless_install_packages: true
+
         ssl_enabled: true
         ssl_mutual_auth_enabled: true
         ssl_client_authentication: required
@@ -192,26 +202,19 @@ provisioner:
         kafka_broker_custom_properties: *ldap_base_properties
         kafka_controller_custom_properties: *ldap_base_properties
 
-      # Rootless vars scoped to the CP component groups only (not group_vars/all) - ldap1/oauth1
-      # are unmanaged hosts sharing this inventory, not rootless deploy targets. Scoping these
-      # here keeps them out of playbooks/rootless_bootstrap.yml's hosts:all bootstrap treatment
-      # entirely, the same way ansible_user already is.
-      kafka_controller: &rootless_component_vars
-        ansible_user: "{{ deployment_user }}"
-        rootless_enabled: true
-        deployment_user: cp-user
-        deployment_group: cp-user
-        deployment_path: /home/cp-user/cp-data
-        installation_method: archive
-        # Ubuntu's systemd --user manager needs dbus-user-session, which the archive
-        # Dockerfile doesn't bake in - exercise rootless_bootstrap.yml's apt branch for it.
-        rootless_install_packages: true
+      # ldap1/oauth1 are unmanaged helper hosts sharing this inventory, not rootless deploy
+      # targets - explicitly opt them out of the `all`-level rootless vars above (both the
+      # connection override and playbooks/rootless_bootstrap.yml's hosts:all bootstrap sweep,
+      # which skips a host when deployment_user/rootless_deployment_path are empty).
+      oauth_server:
+        ansible_user: root
+        deployment_user: ""
+        rootless_deployment_path: ""
 
       # OAuth/OIDC SSO for Control Center, layered on top of the LDAP-backed MDS above.
       # sso_* config is read from roles/kafka_broker/tasks/main.yml (the only consumer in
       # this collection - it imports the IDP cert into the broker's MDS truststore for C3 SSO).
       kafka_broker:
-        <<: *rootless_component_vars
         sso_mode: oidc
         keycloak_oauth_server_port: 8443
         keycloak_http_protocol: https
@@ -226,7 +229,14 @@ provisioner:
         sso_idp_cert_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/ssocertfile.pem"
 
       # Same DN/schema convention as rootless-rbac-ldap-rhel9 (ou=rbac,dc=example,dc=com).
+      # ldap1 is an unmanaged helper host, not a rootless deploy target - explicitly opt it
+      # out of the `all`-level rootless vars above (both the connection override and
+      # playbooks/rootless_bootstrap.yml's hosts:all sweep, which skips a host when
+      # deployment_user/rootless_deployment_path are empty).
       ldap_server:
+        ansible_user: root
+        deployment_user: ""
+        rootless_deployment_path: ""
         ldaps_enabled: false
         ldap_admin_password: ldappassword
         ldap_rbac_group: rbac
@@ -258,10 +268,5 @@ provisioner:
             uid: 9994
             guid: 94
 
-      schema_registry: *rootless_component_vars
-      kafka_connect: *rootless_component_vars
-      kafka_rest: *rootless_component_vars
-      ksql: *rootless_component_vars
-      control_center: *rootless_component_vars
 verifier:
   name: ansible

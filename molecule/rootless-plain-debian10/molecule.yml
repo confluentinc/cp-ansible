@@ -9,7 +9,7 @@
 ### Known container limitations (not fixable here, called out for reviewers):
 ### - privileged: true + cgroupns_mode: host is required for systemd --user to run inside
 ###   Docker at all - it does NOT mean the deploy itself used root. That's verified instead
-###   by asserting every file under deployment_path is owned by deployment_user (verify.yml)
+###   by asserting every file under rootless_deployment_path is owned by deployment_user (verify.yml)
 ###   and by the extensive live-EC2 (non-containerized) verification recorded in
 ###   ROOTLESS_DEPLOYMENT_STEPS.md.
 ### - loginctl enable-linger surviving an actual host reboot is a design promise that isn't
@@ -131,21 +131,25 @@ provisioner:
     group_vars:
       all:
         rootless_enabled: true
-        # Deliberately mutually distinct, and deployment_path deliberately doesn't embed
+        # Deliberately mutually distinct, and rootless_deployment_path deliberately doesn't embed
         # deployment_user as a path component - the other two rootless scenarios use
-        # deployment_user == deployment_group and deployment_path == /home/<deployment_user>/...,
+        # deployment_user == deployment_group and rootless_deployment_path == /home/<deployment_user>/...,
         # which never exercises any of the three as an independent value (e.g. code that
-        # accidentally hardcodes /home/{{ deployment_user }}/... instead of deployment_path,
+        # accidentally hardcodes /home/{{ deployment_user }}/... instead of rootless_deployment_path,
         # or assumes the group name matches the user name, would pass unnoticed there).
         deployment_user: cpsvc
         deployment_group: cp-platform
-        deployment_path: /data/confluent-rootless
+        rootless_deployment_path: /data/confluent-rootless
         installation_method: archive
         custom_java_path: /opt/jdk17
 
         # Debian/Ubuntu's systemd --user manager needs dbus-user-session, which the archive
         # Dockerfile doesn't bake in - exercise rootless_bootstrap.yml's apt branch for it.
         rootless_install_packages: true
+
+        # Every host here is a rootless CP component (no LDAP/Kerberos/OAuth helper hosts in
+        # this scenario), so the connection override is safe to set once for everyone.
+        ansible_user: "{{ deployment_user }}"
 
         ssl_enabled: true
         sasl_protocol: plain
@@ -161,26 +165,10 @@ provisioner:
             config:
               connector.class: "FileStreamSourceConnector"
               tasks.max: "1"
-              file: "{{ deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
+              file: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
               topic: "test_topic"
 
-      # Rootless components connect as the deploy user.
-      kafka_controller:
-        ansible_user: "{{ deployment_user }}"
-      kafka_broker:
-        ansible_user: "{{ deployment_user }}"
-      schema_registry:
-        ansible_user: "{{ deployment_user }}"
-      kafka_connect:
-        ansible_user: "{{ deployment_user }}"
-      kafka_rest:
-        ansible_user: "{{ deployment_user }}"
-      ksql:
-        ansible_user: "{{ deployment_user }}"
-      control_center:
-        ansible_user: "{{ deployment_user }}"
       kafka_connect_replicator:
-        ansible_user: "{{ deployment_user }}"
         # Defaults to localhost:9092, which only works when co-located with the broker on
         # the same host - each component here is its own container, so point explicitly
         # at kafka-broker1's real address (self-replication: source and destination are the
