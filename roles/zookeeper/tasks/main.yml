@@ -88,6 +88,7 @@
 - name: Create Zookeeper Group
   group:
     name: "{{zookeeper_group}}"
+  when: not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -105,7 +106,9 @@
     system: true
     shell: "{{user_login_shell}}"
     group: "{{zookeeper_group}}"
-  when: (getent_passwd|default({}))[zookeeper_user] is not defined
+  when:
+    - (getent_passwd|default({}))[zookeeper_user] is not defined
+    - not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -118,7 +121,9 @@
     dest: "{{zookeeper.systemd_file}}"
     mode: '644'
     force: true
-  when: installation_method == "archive"
+  when:
+    - installation_method == "archive"
+    - not (rootless_enabled | bool)
   tags:
     - systemd
 
@@ -200,8 +205,11 @@
     owner: "{{zookeeper_user}}"
     group: "{{zookeeper_group}}"
     recurse: true
-  when: zookeeper_final_properties.dataLogDir is defined
+  when:
+    - zookeeper_final_properties.dataLogDir is defined
+    - not (rootless_enabled | bool)
   tags:
+    - privileged
     - filesystem
 
 - name: Create Zookeeper myid File
@@ -367,6 +375,7 @@
     group: "{{zookeeper_group}}"
     state: directory
     mode: '750'
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
     - privileged
@@ -380,9 +389,25 @@
     group: root
   notify: restart zookeeper
   diff: "{{ not mask_sensitive_diff|bool }}"
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
     - privileged
+
+- name: Generate Zookeeper rootless lifecycle scripts
+  include_role:
+    name: common
+    tasks_from: rootless_lifecycle.yml
+  vars:
+    rootless_component_name: zookeeper
+    rootless_service_environment_overrides: "{{ zookeeper_service_environment_overrides }}"
+    rootless_service_exec: "{{ zookeeper_service_overrides.ExecStart }}"
+    rootless_service_overrides: "{{ zookeeper_service_overrides }}"
+    rootless_service_unit_overrides: "{{ zookeeper_service_unit_overrides }}"
+    rootless_restart_handler: restart zookeeper
+  when: rootless_lifecycle_enabled | bool
+  tags:
+    - filesystem
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -397,8 +422,18 @@
     name: "{{zookeeper_service_name}}"
     enabled: true
     state: started
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
+
+- name: Start Zookeeper (rootless, systemd --user)
+  include_role:
+    name: common
+    tasks_from: rootless_start_service.yml
+  vars:
+    rootless_component_name: zookeeper
+    rootless_component_port: "{{ zookeeper_client_port }}"
+  when: rootless_lifecycle_enabled | bool
 
 - name: Zookeeper Health Check
   include_tasks: health_check.yml
