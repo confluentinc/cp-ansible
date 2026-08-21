@@ -139,6 +139,18 @@
             update_cache: true
           when: rootless_install_packages | bool and ansible_os_family == "Debian"
 
+        # Installing dbus-user-session doesn't guarantee the system dbus daemon is actually
+        # running - observed on a stretch (Debian 9) base image where dbus.service is a static
+        # unit still "inactive (dead)" at this point in boot, causing the loginctl task below to
+        # fail with "Failed to create bus connection: No such file or directory". Debian 10+
+        # images observed so far start it automatically, but starting it explicitly here removes
+        # the dependency on that being true for every base image.
+        - name: Ensure system D-Bus is running - Debian/Ubuntu
+          systemd:
+            name: dbus
+            state: started
+          when: rootless_install_packages | bool and ansible_os_family == "Debian"
+
         - name: Enable systemd linger for the deploy user
           # So systemd --user units survive without an active login/reboot.
           command: "loginctl enable-linger {{ deployment_user }}"
