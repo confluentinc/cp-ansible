@@ -286,12 +286,15 @@
     # would present a cluster-CA cert the external Prometheus rejects. Empty cert_path (bundled or
     # Basic auth) keeps the default self-signed behavior.
     ssl_custom_certs: "{{ true if (control_center_next_gen_dependency_prometheus_cert_path | default('') | length > 1) else false }}"
-    # custom_certs.yml reads the SOURCE cert files from these; the provided certs are already on the
-    # host (distributed by the deployer / molecule prepare), so use remote_src.
-    ssl_custom_certs_remote_src: true
-    ssl_ca_cert_filepath: "{{control_center_next_gen_dependency_prometheus_ca_cert_path}}"
-    ssl_signed_cert_filepath: "{{control_center_next_gen_dependency_prometheus_cert_path}}"
-    ssl_key_filepath: "{{control_center_next_gen_dependency_prometheus_key_path}}"
+    # custom_certs.yml copies the SOURCE cert files (ssl_*_filepath) to the on-host cert paths
+    # (ca_cert_path/cert_path/key_path). The source MUST be different from the destination: the ssl
+    # role deletes the destination cert files before copying, so pointing the source at the same path
+    # would delete it first. Point at the provided-cert source location (on the Ansible controller by
+    # default, matching how a customer supplies certs; remote_src is configurable for host-staged certs).
+    ssl_custom_certs_remote_src: "{{ control_center_next_gen_dependency_prometheus_provided_certs_remote_src | default(false) | bool }}"
+    ssl_ca_cert_filepath: "{{ control_center_next_gen_dependency_prometheus_provided_ca_cert_path | default(control_center_next_gen_dependency_prometheus_ca_cert_path) }}"
+    ssl_signed_cert_filepath: "{{ control_center_next_gen_dependency_prometheus_provided_cert_path | default(control_center_next_gen_dependency_prometheus_cert_path) }}"
+    ssl_key_filepath: "{{ control_center_next_gen_dependency_prometheus_provided_key_path | default(control_center_next_gen_dependency_prometheus_key_path) }}"
   # Needed whenever C3 talks to Prometheus over TLS, bundled OR external (BYOP): this builds the
   # truststore C3 uses to trust the Prometheus endpoint, and the client keystore for mTLS.
   when:
