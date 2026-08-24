@@ -15,16 +15,24 @@
   hosts: control_center_next_gen
   gather_facts: false
   vars:
-    c3_base: "{{ control_center_next_gen_http_protocol }}://localhost:{{ control_center_next_gen_port }}"
-    c3_user: "{{ control_center_next_gen_health_check_user }}"
-    c3_pass: "{{ control_center_next_gen_health_check_password }}"
-    prom_query: "{{ control_center_next_gen_dependency_prometheus_url }}/api/v1"
+    # This standalone verify play does not load the C3 role defaults, so role-derived vars
+    # (http_protocol, the prometheus url, health-check user/retries) are not in scope. Build them
+    # from the scenario-provided base vars, with safe defaults.
+    c3_base: "{{ control_center_next_gen_http_protocol | default('http') }}://localhost:{{ control_center_next_gen_port | default(9021) }}"
+    c3_user: "{{ control_center_next_gen_health_check_user | default('') }}"
+    c3_pass: "{{ control_center_next_gen_health_check_password | default('') }}"
+    # Construct the external Prometheus URL from the scenario host/port/ssl (matches what the role
+    # renders into confluent.controlcenter.prometheus.url for a plain hostname).
+    prom_scheme: "{{ 'https' if control_center_next_gen_dependency_prometheus_ssl_enabled | default(false) | bool else 'http' }}"
+    prometheus_url: "{{ prom_scheme }}://{{ control_center_next_gen_dependency_prometheus_host }}:{{ control_center_next_gen_dependency_prometheus_port }}"
+    prom_query: "{{ prometheus_url }}/api/v1"
     prom_user: "{{ control_center_next_gen_dependency_prometheus_basic_users.admin.principal | default('') }}"
     prom_pass: "{{ control_center_next_gen_dependency_prometheus_basic_users.admin.password | default('') }}"
-    prom_ca: "{{ control_center_next_gen_dependency_prometheus_ca_cert_path }}"
-    # The C3 role var dict (control_center_next_gen.config_file) is not in this verify play's scope,
-    # so reference the rendered production properties path directly. This is the package-install path
-    # (config_base_path '/' + control-center-next-gen config prefix), which the ubuntu scenarios use.
+    prom_ca: "{{ control_center_next_gen_dependency_prometheus_ca_cert_path | default('') }}"
+    hc_retries: "{{ control_center_next_gen_health_check_retries | default(30) }}"
+    hc_delay: "{{ control_center_next_gen_health_check_retry_delay | default(10) }}"
+    # The C3 role var dict (control_center_next_gen.config_file) is not in scope either; reference the
+    # rendered production properties path directly (package-install path used by the ubuntu scenarios).
     c3_config_file: /etc/confluent-control-center/control-center-production.properties
   tasks:
 
@@ -53,7 +61,7 @@
       vars:
         file_path: "{{ c3_config_file }}"
         property: confluent.controlcenter.prometheus.url
-        expected_value: "{{ control_center_next_gen_dependency_prometheus_url }}"
+        expected_value: "{{ prometheus_url }}"
 
     - name: C3 config - alerts are disabled
       import_role:
@@ -76,9 +84,9 @@
       until:
         - byop_flags.status == 200
         - byop_flags.json['confluent.controlcenter.prometheus.enable'] | default(false)
-      retries: "{{ control_center_next_gen_health_check_retries }}"
-      delay: "{{ control_center_next_gen_health_check_retry_delay }}"
-      when: not rbac_enabled | bool
+      retries: "{{ hc_retries }}"
+      delay: "{{ hc_delay }}"
+      when: not rbac_enabled | default(false) | bool
 
     # Alerts are off in BYOP, so the alert-management endpoints are not registered (return 404).
     # This is the runtime counterpart to the alerts.enable=false config check above.
@@ -92,9 +100,9 @@
         status_code: 404
       register: byop_alerts_disabled
       until: byop_alerts_disabled.status == 404
-      retries: "{{ control_center_next_gen_health_check_retries }}"
-      delay: "{{ control_center_next_gen_health_check_retry_delay }}"
-      when: not rbac_enabled | bool
+      retries: "{{ hc_retries }}"
+      delay: "{{ hc_delay }}"
+      when: not rbac_enabled | default(false) | bool
 
     # /2.0/health/status returns {"bootstrapClusterId": "...", "clusterStatus": {"<id>": "ONLINE"}}.
     # A cluster only reports ONLINE once C3 has read its metrics, so this is the read proof.
@@ -111,9 +119,9 @@
         - byop_status.status == 200
         - (byop_status.json.bootstrapClusterId | default('') | string | length) > 0
         - "'ONLINE' in (byop_status.json.clusterStatus.values() | list)"
-      retries: "{{ control_center_next_gen_health_check_retries }}"
-      delay: "{{ control_center_next_gen_health_check_retry_delay }}"
-      when: not rbac_enabled | bool
+      retries: "{{ hc_retries }}"
+      delay: "{{ hc_delay }}"
+      when: not rbac_enabled | default(false) | bool
 
     # --- 4. the external Prometheus has the rules and is receiving the push ---
     - name: External Prometheus has C3's recording rules loaded
@@ -139,8 +147,8 @@
         return_content: true
       register: byop_broker_series
       until: (byop_broker_series.json.data.result | default([]) | length) > 0
-      retries: "{{ control_center_next_gen_health_check_retries }}"
-      delay: "{{ control_center_next_gen_health_check_retry_delay }}"
+      retries: "{{ hc_retries }}"
+      delay: "{{ hc_delay }}"
 
     - name: Controllers are pushing to the external Prometheus (Brokers Total source)
       ansible.builtin.uri:
@@ -153,5 +161,5 @@
         return_content: true
       register: byop_controller_series
       until: (byop_controller_series.json.data.result | default([]) | length) > 0
-      retries: "{{ control_center_next_gen_health_check_retries }}"
-      delay: "{{ control_center_next_gen_health_check_retry_delay }}"
+      retries: "{{ hc_retries }}"
+      delay: "{{ hc_delay }}"
