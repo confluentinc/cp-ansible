@@ -35,6 +35,7 @@
     prom_user: "{{ control_center_next_gen_dependency_prometheus_basic_users.admin.principal | default('') }}"
     prom_pass: "{{ control_center_next_gen_dependency_prometheus_basic_users.admin.password | default('') }}"
     prom_ca: "{{ control_center_next_gen_dependency_prometheus_ca_cert_path | default('') }}"
+    prom_mtls: "{{ control_center_next_gen_dependency_prometheus_mtls_enabled | default(false) | bool }}"
     hc_retries: "{{ control_center_next_gen_health_check_retries | default(30) }}"
     hc_delay: "{{ control_center_next_gen_health_check_retry_delay | default(10) }}"
     # The C3 role var dict (control_center_next_gen.config_file) is not in scope either; reference the
@@ -110,7 +111,9 @@
       delay: "{{ hc_delay }}"
       when: not rbac_enabled | default(false) | bool
 
-    # /2.0/health/status returns {"bootstrapClusterId": "...", "clusterStatus": {"<id>": "ONLINE"}}.
+    # /2.0/health/status returns:
+    #   {"bootstrapClusterId": "...", "clusterStatus": {"<id>": {"metric": "CLUSTER_STATUS",
+    #    "value": "ONLINE", "timestamp": ...}}}
     # A cluster only reports ONLINE once C3 has read its metrics, so this is the read proof.
     - name: C3 cluster status is ONLINE (proves C3 read metrics from the external Prometheus)
       ansible.builtin.uri:
@@ -124,7 +127,7 @@
       until:
         - byop_status.status == 200
         - (byop_status.json.bootstrapClusterId | default('') | string | length) > 0
-        - "'ONLINE' in (byop_status.json.clusterStatus.values() | list)"
+        - "'ONLINE' in (byop_status.json.clusterStatus.values() | map(attribute='value') | list)"
       retries: "{{ hc_retries }}"
       delay: "{{ hc_delay }}"
       when: not rbac_enabled | default(false) | bool
@@ -137,6 +140,8 @@
         url_password: "{{ prom_pass }}"
         force_basic_auth: "{{ (prom_user | length) > 0 }}"
         ca_path: "{{ prom_ca }}"
+        client_cert: "{{ control_center_next_gen_dependency_prometheus_cert_path if prom_mtls else omit }}"
+        client_key: "{{ control_center_next_gen_dependency_prometheus_key_path if prom_mtls else omit }}"
         validate_certs: false
         return_content: true
       register: byop_rules
@@ -149,6 +154,8 @@
         url_password: "{{ prom_pass }}"
         force_basic_auth: "{{ (prom_user | length) > 0 }}"
         ca_path: "{{ prom_ca }}"
+        client_cert: "{{ control_center_next_gen_dependency_prometheus_cert_path if prom_mtls else omit }}"
+        client_key: "{{ control_center_next_gen_dependency_prometheus_key_path if prom_mtls else omit }}"
         validate_certs: false
         return_content: true
       register: byop_broker_series
@@ -163,6 +170,8 @@
         url_password: "{{ prom_pass }}"
         force_basic_auth: "{{ (prom_user | length) > 0 }}"
         ca_path: "{{ prom_ca }}"
+        client_cert: "{{ control_center_next_gen_dependency_prometheus_cert_path if prom_mtls else omit }}"
+        client_key: "{{ control_center_next_gen_dependency_prometheus_key_path if prom_mtls else omit }}"
         validate_certs: false
         return_content: true
       register: byop_controller_series
