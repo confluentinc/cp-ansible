@@ -22,6 +22,7 @@
     cluster_ca: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
     mock_container: byop-prometheus
     bundle_path: /tmp/byop_mock_client_ca_bundle.crt
+    webcfg_local: /tmp/byop_mock_web_config_mtls.yml
   tasks:
     - name: Build the combined client CA bundle (mock CA + cluster CA)
       ansible.builtin.shell: "cat '{{ byop_certs_dir }}/ca.crt' '{{ cluster_ca }}' > '{{ bundle_path }}'"
@@ -29,5 +30,11 @@
     - name: Install the combined bundle as the mock client CA
       ansible.builtin.command: "docker cp '{{ bundle_path }}' {{ mock_container }}:/etc/prometheus/certs/ca.crt"
 
-    - name: Restart the mock so it reloads the client CA bundle
-      ansible.builtin.command: "docker restart {{ mock_container }}"
+    # Trigger the exporter-toolkit to hot-reload its web TLS config (which re-reads client_ca_file)
+    # by rewriting the web config file, bumping its mtime. This avoids a container restart, which
+    # would change the mock's IP and break name resolution for it from the other hosts at verify time.
+    - name: Read the mock web config out
+      ansible.builtin.command: "docker cp {{ mock_container }}:/etc/prometheus/web-config-mtls.yml {{ webcfg_local }}"
+
+    - name: Rewrite the mock web config in to hot-reload the client CA (no restart, IP stays stable)
+      ansible.builtin.command: "docker cp {{ webcfg_local }} {{ mock_container }}:/etc/prometheus/web-config-mtls.yml"
