@@ -1,0 +1,51 @@
+---
+### EXPERIMENTAL / OPTIONAL (A6) - worth trying, may need adjustment on a real molecule run.
+### On the cluster left by converge (OLD CP + bundle): 1) upgrade CP to the current version with the
+### bundle still on, 2) flip every node to the external Prometheus + re-run, 3) cleanup the bundle.
+### Ends on the external state so verify.yml (bundle absent, external) holds.
+###
+### UNPROVEN HERE: the in-place CP old->new upgrade via set_fact confluent_package_version + re-run.
+### If the upgrade needs the dedicated upgrade entrypoint instead of confluent.platform.all, swap the
+### re-run play below for that path.
+
+# --- 1. upgrade CP to the current version, bundle stays on ---
+- name: Upgrade - move CP to the current package version
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Clear the pinned old version so the role installs the current default
+      ansible.builtin.set_fact:
+        confluent_package_version: "{{ omit }}"
+
+- name: Re-run the platform playbook to upgrade CP (bundle still on)
+  import_playbook: confluent.platform.all
+
+- name: Sanity - the bundled Prometheus survived the upgrade
+  hosts: control_center_next_gen
+  gather_facts: false
+  become: true
+  tasks:
+    - name: List installed service units
+      ansible.builtin.command: systemctl list-unit-files --type=service --no-legend
+      register: upgrade_units
+      changed_when: false
+    - name: Assert the bundled Prometheus is still present after the upgrade
+      ansible.builtin.assert:
+        that:
+          - "'prometheus.service' in upgrade_units.stdout"
+        fail_msg: "The CP upgrade dropped the bundled Prometheus unexpectedly."
+
+# --- 2. migrate to the external Prometheus and re-run ---
+- name: Migrate - turn external Prometheus on
+  hosts: control_center_next_gen:kafka_broker:kafka_controller
+  gather_facts: false
+  tasks:
+    - name: Override the toggle for this and subsequent plays
+      ansible.builtin.set_fact:
+        control_center_next_gen_external_prometheus_enabled: true
+
+- name: Re-run the platform playbook with external Prometheus on
+  import_playbook: confluent.platform.all
+
+# --- 3. remove the now-orphaned bundle ---
+- import_playbook: ../byop_cleanup_bundled.yml
