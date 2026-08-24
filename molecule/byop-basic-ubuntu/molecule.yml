@@ -1,8 +1,8 @@
 ---
-### Installation of Confluent Platform on Alma Linux 9.
-### MTLS enabled.
-### Java 21.
-### FIPS enabled
+### BYOP: greenfield, external Prometheus over TLS with Basic auth (no mTLS).
+### Focused cluster (controller + broker + C3 + mock Prometheus) - proves C3 reads the external
+### Prometheus over TLS+Basic auth, the nodes push to it, and no bundled monitoring runs. This is
+### the simplest BYOP core path (no client-cert trust chain), used to isolate Basic auth from mTLS.
 
 driver:
   name: docker
@@ -11,8 +11,8 @@ platforms:
     hostname: controller1.confluent
     groups:
       - kafka_controller
-    image: almalinux:9-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java25-lean.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -24,60 +24,8 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-    image: almalinux:9-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    cgroupns_mode: host
-    privileged: true
-    networks:
-      - name: confluent
-  - name: schema-registry1
-    hostname: schema-registry1.confluent
-    groups:
-      - schema_registry
-    image: almalinux:9-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    cgroupns_mode: host
-    privileged: true
-    networks:
-      - name: confluent
-  - name: kafka-rest1
-    hostname: kafka-rest1.confluent
-    groups:
-      - kafka_rest
-    image: almalinux:9-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    cgroupns_mode: host
-    privileged: true
-    networks:
-      - name: confluent
-  - name: kafka-connect1
-    hostname: kafka-connect1.confluent
-    groups:
-      - kafka_connect
-    image: almalinux:9-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    cgroupns_mode: host
-    privileged: true
-    networks:
-      - name: confluent
-  - name: ksql1
-    hostname: ksql1.confluent
-    groups:
-      - ksql
-    image: almalinux:9-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java25-lean.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -89,18 +37,18 @@ platforms:
     hostname: control-center-next-gen.confluent
     groups:
       - control_center_next_gen
-    image: almalinux:9-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java25-lean.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     cgroupns_mode: host
     privileged: true
     published_ports:
-      - "9021:9021"
+      - "9022:9022"
     networks:
       - name: confluent
-  # BYOP: prebuilt mock external Prometheus (cp-ansible-tools/docker/byop-mock-prometheus), Basic auth over TLS.
+  # BYOP: prebuilt mock external Prometheus, Basic auth over TLS (web-config-basic.yml).
   - name: byop-prometheus
     hostname: byop-prometheus.confluent
     groups:
@@ -115,22 +63,26 @@ provisioner:
     converge: ../collections_converge.yml
   inventory:
     host_vars:
-      # BYOP mock has no Python; treat it as an unmanaged appliance (no connect, no facts).
       byop-prometheus:
         ansible_connection: local
         gather_facts: false
+      kafka-broker1:
+        node_id: 300
     group_vars:
       all:
-
-        ssl_enabled: true
-        ssl_mutual_auth_enabled: true
-
-        # BYOP: read from the external mock Prometheus over TLS + basic auth.
+        control_center_next_gen_port: 9022
+        # BYOP: read from the external mock Prometheus over TLS + Basic auth (no mTLS).
         control_center_next_gen_external_prometheus_enabled: true
         control_center_next_gen_dependency_prometheus_host: byop-prometheus.confluent
         control_center_next_gen_dependency_prometheus_port: 9090
         control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_mtls_enabled: false
         control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+        # Password must match the bcrypt in the mock's web-config-basic.yml.
+        control_center_next_gen_dependency_prometheus_basic_users:
+          admin:
+            principal: c3
+            password: c3-prometheus-secret
         control_center_next_gen_dependency_prometheus_ca_cert_path: /var/ssl/private/byop_prometheus_ca.crt
         # BYOP: controller-side source of the mock CA, imported into broker/controller truststores
         # so the telemetry exporter trusts the external Prometheus over TLS.
@@ -138,12 +90,6 @@ provisioner:
         # BYOP: controller-side source of the mock CA, imported into broker/controller truststores
         # so the telemetry exporter trusts the external Prometheus over TLS.
         control_center_next_gen_dependency_prometheus_provided_ca_cert_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/ca.crt"
-        control_center_next_gen_dependency_prometheus_basic_users:
-          admin:
-            principal: c3
-            password: c3-prometheus-secret
-
-        redhat_java_package_name: java-21-openjdk
-
-        fips_enabled: true
-        fips_mode: "fips-140-3"
+        ssl_enabled: true
+        kafka_broker_custom_properties:
+          log.dirs: /var/lib/kafka/data1
