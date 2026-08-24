@@ -1,0 +1,154 @@
+---
+# Reusable BYOP verify checks. Each external (BYOP) scenario's verify.yml imports this:
+#   - import_playbook: ../byop_verify.yml
+#
+# Runs on the Control Center Next Gen host and checks:
+#   - the bundled Prometheus/Alertmanager are NOT installed
+#   - C3's rendered config points at the external Prometheus and has alerts off
+#   - C3 is serving (cluster ONLINE) reading from the external Prometheus
+#   - the external Prometheus has C3's recording rules loaded and is receiving the node push
+#
+# DRAFT: the config-file path and a couple of endpoint paths are best-guesses and must be
+# confirmed on the first local molecule run (marked with CONFIRM below).
+
+- name: Verify BYOP - Control Center Next Gen
+  hosts: control_center_next_gen
+  gather_facts: false
+  vars:
+    c3_base: "{{ control_center_next_gen_http_protocol }}://localhost:{{ control_center_next_gen_port }}"
+    c3_user: "{{ control_center_next_gen_health_check_user }}"
+    c3_pass: "{{ control_center_next_gen_health_check_password }}"
+    prom_query: "{{ control_center_next_gen_dependency_prometheus_url }}/api/v1"
+    prom_user: "{{ control_center_next_gen_dependency_prometheus_basic_users.admin.principal | default('') }}"
+    prom_pass: "{{ control_center_next_gen_dependency_prometheus_basic_users.admin.password | default('') }}"
+    prom_ca: "{{ control_center_next_gen_dependency_prometheus_ca_cert_path }}"
+    # The C3 role var dict (control_center_next_gen.config_file) is not in this verify play's scope,
+    # so reference the rendered production properties path directly. This is the package-install path
+    # (config_base_path '/' + control-center-next-gen config prefix), which the ubuntu scenarios use.
+    c3_config_file: /etc/confluent-control-center/control-center-production.properties
+  tasks:
+
+    # --- 1. the bundle is gone ---
+    - name: List installed service units
+      ansible.builtin.command: systemctl list-unit-files --type=service --no-legend
+      register: byop_units
+      changed_when: false
+
+    - name: Assert no bundled Prometheus or Alertmanager service is installed
+      ansible.builtin.assert:
+        that:
+          - "'prometheus.service' not in byop_units.stdout"
+          - "'alertmanager.service' not in byop_units.stdout"
+        fail_msg: "A bundled Prometheus or Alertmanager service is still present in BYOP mode."
+        success_msg: "BYOP: no bundled Prometheus/Alertmanager services."
+
+    # --- 2. C3 config points external, alerts off ---
+    - name: C3 config - prometheus.url is the external endpoint
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: "{{ c3_config_file }}"
+        property: confluent.controlcenter.prometheus.url
+        expected_value: "{{ control_center_next_gen_dependency_prometheus_url }}"
+
+    - name: C3 config - alerts are disabled
+      import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: "{{ c3_config_file }}"
+        property: confluent.controlcenter.alerts.enable
+        expected_value: "False"
+
+    # --- 3. C3 is serving from the external Prometheus ---
+    # RBAC scenarios need a JWT bearer token for these endpoints; skip under RBAC for now and
+    # finalize the token flow on a run. The config, bundle-absent, and Prometheus checks still run.
+    - name: C3 feature flags report prometheus enabled
+      ansible.builtin.uri:
+        url: "{{ c3_base }}/2.0/feature/flags"
+        validate_certs: false
+        return_content: true
+      register: byop_flags
+      until:
+        - byop_flags.status == 200
+        - byop_flags.json['confluent.controlcenter.prometheus.enable'] | default(false)
+      retries: "{{ control_center_next_gen_health_check_retries }}"
+      delay: "{{ control_center_next_gen_health_check_retry_delay }}"
+      when: not rbac_enabled | bool
+
+    # Alerts are off in BYOP, so the alert-management endpoints are not registered (return 404).
+    # This is the runtime counterpart to the alerts.enable=false config check above.
+    - name: C3 alert-management endpoint is not served when alerts are off
+      ansible.builtin.uri:
+        url: "{{ c3_base }}/2.0/alerts/triggers"
+        url_username: "{{ c3_user }}"
+        url_password: "{{ c3_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        status_code: 404
+      register: byop_alerts_disabled
+      until: byop_alerts_disabled.status == 404
+      retries: "{{ control_center_next_gen_health_check_retries }}"
+      delay: "{{ control_center_next_gen_health_check_retry_delay }}"
+      when: not rbac_enabled | bool
+
+    # /2.0/health/status returns {"bootstrapClusterId": "...", "clusterStatus": {"<id>": "ONLINE"}}.
+    # A cluster only reports ONLINE once C3 has read its metrics, so this is the read proof.
+    - name: C3 cluster status is ONLINE (proves C3 read metrics from the external Prometheus)
+      ansible.builtin.uri:
+        url: "{{ c3_base }}/2.0/health/status"
+        url_username: "{{ c3_user }}"
+        url_password: "{{ c3_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        return_content: true
+      register: byop_status
+      until:
+        - byop_status.status == 200
+        - (byop_status.json.bootstrapClusterId | default('') | string | length) > 0
+        - "'ONLINE' in (byop_status.json.clusterStatus.values() | list)"
+      retries: "{{ control_center_next_gen_health_check_retries }}"
+      delay: "{{ control_center_next_gen_health_check_retry_delay }}"
+      when: not rbac_enabled | bool
+
+    # --- 4. the external Prometheus has the rules and is receiving the push ---
+    - name: External Prometheus has C3's recording rules loaded
+      ansible.builtin.uri:
+        url: "{{ prom_query }}/rules"
+        url_username: "{{ prom_user }}"
+        url_password: "{{ prom_pass }}"
+        force_basic_auth: "{{ (prom_user | length) > 0 }}"
+        ca_path: "{{ prom_ca }}"
+        validate_certs: false
+        return_content: true
+      register: byop_rules
+      failed_when: "'code:io_confluent_kafka_server_log_size_by_broker:total' not in (byop_rules.content | string)"
+
+    - name: Brokers are pushing to the external Prometheus
+      ansible.builtin.uri:
+        url: "{{ prom_query }}/query?query=io_confluent_kafka_server_server_broker_state"
+        url_username: "{{ prom_user }}"
+        url_password: "{{ prom_pass }}"
+        force_basic_auth: "{{ (prom_user | length) > 0 }}"
+        ca_path: "{{ prom_ca }}"
+        validate_certs: false
+        return_content: true
+      register: byop_broker_series
+      until: (byop_broker_series.json.data.result | default([]) | length) > 0
+      retries: "{{ control_center_next_gen_health_check_retries }}"
+      delay: "{{ control_center_next_gen_health_check_retry_delay }}"
+
+    - name: Controllers are pushing to the external Prometheus (Brokers Total source)
+      ansible.builtin.uri:
+        url: "{{ prom_query }}/query?query=io_confluent_kafka_server_controller_active_broker_count"
+        url_username: "{{ prom_user }}"
+        url_password: "{{ prom_pass }}"
+        force_basic_auth: "{{ (prom_user | length) > 0 }}"
+        ca_path: "{{ prom_ca }}"
+        validate_certs: false
+        return_content: true
+      register: byop_controller_series
+      until: (byop_controller_series.json.data.result | default([]) | length) > 0
+      retries: "{{ control_center_next_gen_health_check_retries }}"
+      delay: "{{ control_center_next_gen_health_check_retry_delay }}"
