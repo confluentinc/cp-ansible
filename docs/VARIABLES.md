@@ -4,6 +4,14 @@ Below are the supported variables for the role variables
 
 ***
 
+### confluent_package_version
+
+Version of Confluent Platform to install
+
+Default:  ""
+
+***
+
 ### fetch_logs_path
 
 Path on component to store logs collected during fetch_logs playbook
