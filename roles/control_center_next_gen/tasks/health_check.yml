@@ -23,13 +23,17 @@
   until: prometheus_health_check.status == 200
   retries: "{{ control_center_next_gen_health_check_retries }}"
   delay: "{{ control_center_next_gen_health_check_retry_delay }}"
-  no_log: "{{ mask_secrets|bool }}"
+  # TEMPORARY DEBUG (SETU-3482): no_log disabled to surface the exact mTLS handshake error in the
+  # BYOP mtls scenario. REVERT to `no_log: "{{ mask_secrets|bool }}"` once diagnosed.
+  no_log: false
   ignore_errors: true
 
 - name: Set basic_auth variable conditionally for Alertmanager Health Check
   set_fact:
     basic_auth_value: "{{ (control_center_next_gen_dependency_alertmanager_health_check_user + ':' + control_center_next_gen_dependency_alertmanager_health_check_password) | b64encode }}"
-  when: control_center_next_gen_dependency_alertmanager_basic_auth_enabled | bool
+  when:
+    - control_center_next_gen_dependency_alertmanager_basic_auth_enabled | bool
+    - not control_center_next_gen_external_prometheus_enabled | bool
 
 
 - name: Wait for AlertManager Health Check
@@ -51,6 +55,8 @@
   delay: "{{ control_center_next_gen_health_check_retry_delay }}"
   no_log: "{{ mask_secrets|bool }}"
   ignore_errors: true
+  # BYOP: no bundled Alertmanager when reading from an external Prometheus.
+  when: not control_center_next_gen_external_prometheus_enabled | bool
 
 - name: Wait for webpage (Control-Center-Next-Gen) to serve content
   uri:
@@ -88,7 +94,9 @@
   register: logrotate_package_check
   changed_when: false
   failed_when: logrotate_package_check.rc != 0
-  when: control_center_next_gen_logrotate_enabled|bool
+  when:
+    - control_center_next_gen_logrotate_enabled|bool
+    - not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - logrotate_validation
     - validation
@@ -100,7 +108,9 @@
   loop:
     - /etc/logrotate.d/control-center-next-gen-prometheus
     - /etc/logrotate.d/control-center-next-gen-alertmanager
-  when: control_center_next_gen_logrotate_enabled|bool
+  when:
+    - control_center_next_gen_logrotate_enabled|bool
+    - not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - logrotate_validation
     - validation
@@ -113,6 +123,7 @@
   failed_when: logrotate_config_validation.rc != 0
   when:
     - control_center_next_gen_logrotate_enabled|bool
+    - not control_center_next_gen_external_prometheus_enabled | bool
     - item.stat.exists
   tags:
     - logrotate_validation
@@ -125,7 +136,9 @@
   loop:
     - /usr/local/bin/logrotate-control-center-next-gen-prometheus.sh
     - /usr/local/bin/logrotate-control-center-next-gen-alertmanager.sh
-  when: control_center_next_gen_logrotate_enabled|bool
+  when:
+    - control_center_next_gen_logrotate_enabled|bool
+    - not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - logrotate_validation
     - validation
@@ -138,6 +151,7 @@
   failed_when: logrotate_wrapper_execution.rc != 0
   when:
     - control_center_next_gen_logrotate_enabled|bool
+    - not control_center_next_gen_external_prometheus_enabled | bool
     - item.stat.exists
     - item.stat.executable
   tags:
@@ -153,7 +167,9 @@
   loop:
     - "Control Center Next Gen Prometheus Log Rotation"
     - "Control Center Next Gen Alertmanager Log Rotation"
-  when: control_center_next_gen_logrotate_enabled|bool
+  when:
+    - control_center_next_gen_logrotate_enabled|bool
+    - not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - logrotate_validation
     - validation
@@ -167,7 +183,9 @@
     - "{{ control_center_next_gen_dep_prometheus.log_path }}/prometheus_application.log"
     - "{{ control_center_next_gen_dep_alertmanager.log_path }}/alertmanager_access.log"
     - "{{ control_center_next_gen_dep_alertmanager.log_path }}/alertmanager_application.log"
-  when: control_center_next_gen_logrotate_enabled|bool
+  when:
+    - control_center_next_gen_logrotate_enabled|bool
+    - not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - logrotate_validation
     - validation
@@ -179,7 +197,9 @@
   loop:
     - /var/lib/logrotate/status-control-center-next-gen-prometheus
     - /var/lib/logrotate/status-control-center-next-gen-alertmanager
-  when: control_center_next_gen_logrotate_enabled|bool
+  when:
+    - control_center_next_gen_logrotate_enabled|bool
+    - not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - logrotate_validation
     - validation
@@ -191,7 +211,9 @@
   loop:
     - "{{ control_center_next_gen_dep_prometheus.systemd_override | dirname }}/logging.conf"
     - "{{ control_center_next_gen_dep_alertmanager.systemd_override | dirname }}/logging.conf"
-  when: control_center_next_gen_logrotate_enabled|bool
+  when:
+    - control_center_next_gen_logrotate_enabled|bool
+    - not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - logrotate_validation
     - validation
@@ -207,7 +229,9 @@
       - Log Files: {{ log_files_ownership.results | selectattr('stat.exists') | list | length }}/4 files exist
       - Status Files: {{ logrotate_status_files.results | selectattr('stat.exists') | list | length }}/2 files exist
       - Systemd Config: {{ systemd_logging_config.results | selectattr('stat.exists') | list | length }}/2 configs exist
-  when: control_center_next_gen_logrotate_enabled|bool
+  when:
+    - control_center_next_gen_logrotate_enabled|bool
+    - not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - logrotate_validation
     - validation
