@@ -1,0 +1,33 @@
+---
+# Decide a component's package layout by probing the bucket, never guessing: newer lines publish under
+# a version-isolated <major.minor>/ subdir (e.g. rpm/2.7/), legacy lines stay flat (rpm/).
+# 200 -> versioned (segment "/<major.minor>"); 404 -> flat (""); anything else -> fail hard.
+# Inputs: versioned_probe_component (label), versioned_probe_url (dir to probe),
+# versioned_probe_minor (<major.minor>), versioned_probe_segment_var (segment fact to set).
+- name: "Probe {{ versioned_probe_component }} version-isolated location"
+  ansible.builtin.uri:
+    url: "{{ versioned_probe_url }}"
+    method: GET
+    status_code:
+      - 200
+      - 404
+    timeout: 20
+  register: confluent_versioned_layout_probe
+  failed_when: false
+  check_mode: false
+  retries: 3
+  delay: 5
+  until: confluent_versioned_layout_probe.status is defined and (confluent_versioned_layout_probe.status | int) in [200, 404]
+
+# Fail on anything but a clean 200 (versioned) or 404 (flat) - never fall back to a default layout.
+- name: "Fail if {{ versioned_probe_component }} layout probe is inconclusive"
+  ansible.builtin.fail:
+    msg: >-
+      Probe of {{ versioned_probe_url }} returned
+      '{{ confluent_versioned_layout_probe.status | default("no response") }}';
+      refusing to guess version-isolated vs flat layout.
+  when: confluent_versioned_layout_probe.status | default(0) not in [200, 404]
+
+- name: "Set {{ versioned_probe_component }} version-isolated path segment"
+  ansible.builtin.set_fact:
+    "{{ versioned_probe_segment_var }}": "{{ ('/' + versioned_probe_minor) if confluent_versioned_layout_probe.status == 200 else '' }}"
