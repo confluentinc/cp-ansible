@@ -1,0 +1,98 @@
+---
+# BYOP: run a custom Control Center Next Gen build and restart it.
+#
+# Why this exists: the stock C3 package crashes on boot in BYOP mode because C3 requires local
+# alert files. A build that carries the external-prometheus + alerts-off change boots without them.
+# Use this to validate BYOP end to end against that build, without rebuilding the whole CP stack.
+#
+# Provide exactly ONE of these (a path on the controller):
+#   byop_custom_c3_deb      A .deb whose control-center version matches the installed one. Installed
+#                           over the stock package.
+#   byop_custom_c3_tarball  A confluent-control-center-next-gen-<ver>.tar.gz, a complete runtime
+#                           (for example a version-matched nightly with your rebuilt control-center
+#                           jar dropped in). Deployed as a systemd ExecStart override so the whole
+#                           runtime comes from the tarball, with no jar mixing against the stock
+#                           install. This is the clean path when the source version and the
+#                           installed version differ.
+#
+# Run after converge and before verify, using the scenario inventory, for example:
+#   ansible-playbook -i <molecule-inventory> molecule/byop_install_custom_c3.yml \
+#     -e byop_custom_c3_tarball=/path/to/confluent-control-center-next-gen-2.6.x.tar.gz
+#
+# When the change ships in the default package, this step is unnecessary and a plain converge boots
+# C3 directly.
+- name: BYOP - run a custom Control Center Next Gen build
+  hosts: control_center_next_gen
+  gather_facts: false
+  become: true
+  vars:
+    byop_c3_config_file: /etc/confluent-control-center/control-center-production.properties
+    byop_c3_tarball_dest: /opt/confluent-control-center-next-gen-byop
+    byop_c3_dropin_dir: /etc/systemd/system/confluent-control-center.service.d
+  tasks:
+    - name: Require exactly one of a deb or a tarball
+      ansible.builtin.fail:
+        msg: >-
+          Set exactly one of byop_custom_c3_deb or byop_custom_c3_tarball to a build on the
+          controller.
+      when: >-
+        ((byop_custom_c3_deb | default('') | trim | length) > 0)
+        == ((byop_custom_c3_tarball | default('') | trim | length) > 0)
+
+    # Option 1: a version-matched .deb, installed over the stock package.
+    - name: Install a custom C3 package (deb)
+      when: (byop_custom_c3_deb | default('') | trim | length) > 0
+      block:
+        - name: Copy the custom C3 package onto the host
+          ansible.builtin.copy:
+            src: "{{ byop_custom_c3_deb }}"
+            dest: /tmp/custom-control-center-next-gen.deb
+            mode: "0644"
+        - name: Install the custom C3 package over the stock one
+          ansible.builtin.apt:
+            deb: /tmp/custom-control-center-next-gen.deb
+            allow_downgrade: true
+
+    # Option 2: a complete tarball runtime, deployed via a systemd ExecStart override so all jars
+    # come from the tarball (avoids mixing a newer control-center jar with the stock shared libs).
+    - name: Deploy a custom C3 tarball runtime
+      when: (byop_custom_c3_tarball | default('') | trim | length) > 0
+      block:
+        - name: Ensure the tarball target directory exists
+          ansible.builtin.file:
+            path: "{{ byop_c3_tarball_dest }}"
+            state: directory
+            mode: "0755"
+        - name: Extract the tarball (strip the top-level version directory)
+          ansible.builtin.unarchive:
+            src: "{{ byop_custom_c3_tarball }}"
+            dest: "{{ byop_c3_tarball_dest }}"
+            extra_opts:
+              - --strip-components=1
+        - name: Ensure the systemd drop-in directory exists
+          ansible.builtin.file:
+            path: "{{ byop_c3_dropin_dir }}"
+            state: directory
+            mode: "0755"
+        - name: Point the service at the tarball runtime, keeping the BYOP config
+          ansible.builtin.copy:
+            dest: "{{ byop_c3_dropin_dir }}/byop-override.conf"
+            mode: "0644"
+            content: |
+              [Service]
+              ExecStart=
+              ExecStart={{ byop_c3_tarball_dest }}/bin/control-center-start {{ byop_c3_config_file }}
+        - name: Reload systemd so the override takes effect
+          ansible.builtin.systemd:
+            daemon_reload: true
+
+    - name: Restart Control Center so the new build takes effect
+      ansible.builtin.systemd:
+        name: confluent-control-center
+        state: restarted
+
+    - name: Wait for Control Center to listen on its port (proves it booted)
+      ansible.builtin.wait_for:
+        host: localhost
+        port: "{{ control_center_next_gen_port | default(9021) }}"
+        timeout: 300

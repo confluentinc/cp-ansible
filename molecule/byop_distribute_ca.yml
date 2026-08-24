@@ -1,0 +1,25 @@
+---
+# BYOP: give the hosts that connect to the external mock Prometheus its CA so they trust its
+# TLS cert. Imported by each external scenario's prepare.yml:
+#   - import_playbook: ../byop_distribute_ca.yml
+# The mock image + certs are built in cp-ansible-tools (docker/byop-mock-prometheus/build.sh) and the
+# CA is staged to BYOP_CERTS_DIR (default /tmp/byop-mock-prometheus/certs). Reading from there keeps
+# the distributed CA identical to the CA baked into the mock image. For a local run, either set
+# BYOP_CERTS_DIR or run build.sh so the default path is populated.
+- name: Distribute the mock Prometheus CA (BYOP)
+  hosts: control_center_next_gen:kafka_broker:kafka_controller
+  gather_facts: false
+  become: true
+  vars:
+    byop_certs_dir: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}"
+  tasks:
+    - name: Ensure the ssl dir exists
+      ansible.builtin.file:
+        path: /var/ssl/private
+        state: directory
+        mode: "0755"
+    - name: Copy the mock Prometheus CA
+      ansible.builtin.copy:
+        src: "{{ byop_certs_dir }}/ca.crt"
+        dest: /var/ssl/private/byop_prometheus_ca.crt
+        mode: "0644"
