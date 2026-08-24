@@ -1,15 +1,9 @@
 ---
-# Independent components (C3 Next Gen, USM Agent) publish rpm/deb/archive under a version-isolated
-# <major.minor>/ subdir on newer lines (e.g. rpm/2.7/); legacy lines stay flat (rpm/). Probe the
-# versioned dir and DECIDE here (do not rely on any default): HTTP 200 -> use it (segment =
-# "/<major.minor>"); 404 -> flat (segment = ""); anything else, or no response -> fail hard. The
-# layout is decided by the bucket, never guessed (mirrors the muckrake / ironbank-tools probe).
-#
-# Inputs (passed via include vars):
-#   versioned_probe_component   : label used only in task messages, e.g. "C3 Next Gen rpm"
-#   versioned_probe_url         : the versioned dir URL to probe
-#   versioned_probe_minor       : the <major.minor> to place in the segment
-#   versioned_probe_segment_var : name of the per-component segment fact to set
+# Decide a component's package layout by probing the bucket, never guessing: newer lines publish under
+# a version-isolated <major.minor>/ subdir (e.g. rpm/2.7/), legacy lines stay flat (rpm/).
+# 200 -> versioned (segment "/<major.minor>"); 404 -> flat (""); anything else -> fail hard.
+# Inputs: versioned_probe_component (label), versioned_probe_url (dir to probe),
+# versioned_probe_minor (<major.minor>), versioned_probe_segment_var (segment fact to set).
 - name: "Probe {{ versioned_probe_component }} version-isolated location"
   ansible.builtin.uri:
     url: "{{ versioned_probe_url }}"
@@ -25,8 +19,7 @@
   delay: 5
   until: confluent_versioned_layout_probe.status is defined and (confluent_versioned_layout_probe.status | int) in [200, 404]
 
-# Fail hard on anything that is not a clean 200 (versioned) or 404 (flat) - a 5xx, a 403, a redirect,
-# or no response at all. We never fall back to a default layout on an inconclusive probe.
+# Fail on anything but a clean 200 (versioned) or 404 (flat) - never fall back to a default layout.
 - name: "Fail if {{ versioned_probe_component }} layout probe is inconclusive"
   ansible.builtin.fail:
     msg: >-
