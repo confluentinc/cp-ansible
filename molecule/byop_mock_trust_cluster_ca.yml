@@ -1,0 +1,33 @@
+---
+# BYOP mTLS only: make the mock external Prometheus trust the CP cluster CA.
+#
+# Under mTLS the mock requires every client to present a certificate signed by its client_ca_file
+# (baked as the mock's own CA). Two different clients connect to it:
+#   - Control Center, which presents the mock-CA client cert (byop_distribute_client_cert.yml), and
+#   - the Kafka brokers/controllers, whose telemetry exporter pushes metrics using the node's own
+#     cluster-CA-signed client cert.
+# So the mock's client CA must trust BOTH CAs. This play rebuilds the mock's client CA file as a
+# bundle of the mock CA and the per-run cluster CA, then restarts the mock to pick it up. It runs in
+# prepare (after certificates.yml has generated the cluster CA and before converge), so no pushed
+# metrics are lost by the restart.
+#
+# Imported by each mTLS external scenario's prepare.yml, after the distribute playbooks:
+#   - import_playbook: ../byop_mock_trust_cluster_ca.yml
+- name: BYOP mTLS - trust the CP cluster CA in the mock Prometheus
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    byop_certs_dir: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}"
+    cluster_ca: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+    mock_container: byop-prometheus
+    bundle_path: /tmp/byop_mock_client_ca_bundle.crt
+  tasks:
+    - name: Build the combined client CA bundle (mock CA + cluster CA)
+      ansible.builtin.shell: "cat '{{ byop_certs_dir }}/ca.crt' '{{ cluster_ca }}' > '{{ bundle_path }}'"
+
+    - name: Install the combined bundle as the mock client CA
+      ansible.builtin.command: "docker cp '{{ bundle_path }}' {{ mock_container }}:/etc/prometheus/certs/ca.crt"
+
+    - name: Restart the mock so it reloads the client CA bundle
+      ansible.builtin.command: "docker restart {{ mock_container }}"
