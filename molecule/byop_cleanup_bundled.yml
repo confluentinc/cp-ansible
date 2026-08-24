@@ -1,0 +1,35 @@
+---
+# BYOP brownfield: automate the documented manual cleanup. Flipping external_prometheus_enabled
+# to true only stops a *fresh* install of the bundle - the already-running bundled Prometheus and
+# Alertmanager services keep running until stopped, disabled, and their files removed. This mirrors
+# the manual cleanup a brownfield customer runs after the evaluation period.
+- name: BYOP brownfield - remove the bundled Prometheus and Alertmanager
+  hosts: control_center_next_gen
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Stop and disable the bundled monitoring services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop:
+        - prometheus.service
+        - alertmanager.service
+      failed_when: false
+
+    - name: Remove the bundled monitoring unit files, config, and data
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/lib/systemd/system/prometheus.service
+        - /usr/lib/systemd/system/alertmanager.service
+        - /etc/prometheus
+        - /var/lib/prometheus
+        - /etc/alertmanager
+        - /var/lib/alertmanager
+
+    - name: Reload systemd after removing the units
+      ansible.builtin.systemd:
+        daemon_reload: true

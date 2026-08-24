@@ -4,6 +4,12 @@
   when: not common_role_completed|bool
   tags: common
 
+- name: Validate BYOP configuration before installing
+  ansible.builtin.import_tasks: validate_byop.yml
+  when: control_center_next_gen_external_prometheus_enabled | bool
+  tags:
+    - configuration
+
 - name: Gather OS Facts
   setup:
     # Only gathers items in list, filters out the rest
@@ -151,6 +157,7 @@
       src: "{{control_center_next_gen_dependency_alertmanager_generated_src_config_file}}"
       dest: "{{control_center_next_gen_dep_alertmanager.config_file}}"
       always_copy: false
+  when: not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - configuration
 
@@ -161,12 +168,15 @@
     mode: '640'
     owner: "{{control_center_next_gen_user}}"
     group: "{{control_center_next_gen_group}}"
+  when: not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - configuration
 
 - name:  Merge Control Center Next Gen Dependency Prometheus overlay with `prometheus-generated.yml` configuration
   include_tasks: prometheus_config_overlay.yml
-  when: control_center_next_gen_dependency_prometheus_custom_overlay_path is defined
+  when:
+    - control_center_next_gen_dependency_prometheus_custom_overlay_path is defined
+    - not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - configuration
 
@@ -182,6 +192,7 @@
       dest: "{{control_center_next_gen_dep_prometheus.web_config_file}}"
     - template: "alertmanager_web_config.yml.j2"
       dest: "{{control_center_next_gen_dep_alertmanager.web_config_file}}"
+  when: not control_center_next_gen_external_prometheus_enabled | bool
   notify: restart control center next gen
   tags:
     - configuration
@@ -198,6 +209,7 @@
     - "{{control_center_next_gen_dep_prometheus.web_config_file}}"
     - "{{control_center_next_gen_dep_alertmanager.config_file}}"
     - "{{control_center_next_gen_dep_alertmanager.web_config_file}}"
+  when: not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - filesystem
 
@@ -210,13 +222,16 @@
     dest: "{{item.service_file_dest}}"
     mode: '640'
     force: true
-  loop:
-    - service_file_source: "{{confluent_control_center_next_gen_binary_base_path}}/lib/systemd/system/{{control_center_next_gen_dep_prometheus.systemd_file|basename}}"
-      service_file_dest: "{{control_center_next_gen_dep_prometheus.systemd_file}}"
-    - service_file_source: "{{confluent_control_center_next_gen_binary_base_path}}/lib/systemd/system/{{control_center_next_gen_dep_alertmanager.systemd_file|basename}}"
-      service_file_dest: "{{control_center_next_gen_dep_alertmanager.systemd_file}}"
-    - service_file_source: "{{confluent_control_center_next_gen_binary_base_path}}/lib/systemd/system/{{control_center_next_gen.systemd_file|basename}}"
-      service_file_dest: "{{control_center_next_gen.systemd_file}}"
+  vars:
+    c3_service_files:
+      - service_file_source: "{{confluent_control_center_next_gen_binary_base_path}}/lib/systemd/system/{{control_center_next_gen.systemd_file|basename}}"
+        service_file_dest: "{{control_center_next_gen.systemd_file}}"
+    bundled_dependency_service_files:
+      - service_file_source: "{{confluent_control_center_next_gen_binary_base_path}}/lib/systemd/system/{{control_center_next_gen_dep_prometheus.systemd_file|basename}}"
+        service_file_dest: "{{control_center_next_gen_dep_prometheus.systemd_file}}"
+      - service_file_source: "{{confluent_control_center_next_gen_binary_base_path}}/lib/systemd/system/{{control_center_next_gen_dep_alertmanager.systemd_file|basename}}"
+        service_file_dest: "{{control_center_next_gen_dep_alertmanager.systemd_file}}"
+  loop: "{{ c3_service_files + (bundled_dependency_service_files if not control_center_next_gen_external_prometheus_enabled | bool else []) }}"
   when: installation_method == "archive"
   tags:
     - systemd
@@ -266,7 +281,10 @@
     cert_path: "{{control_center_next_gen_dependency_prometheus_cert_path}}"
     key_path: "{{control_center_next_gen_dependency_prometheus_key_path}}"
     export_certs: "true"
-  when: control_center_next_gen_dependency_prometheus_ssl_enabled|bool
+  # Needed whenever C3 talks to Prometheus over TLS, bundled OR external (BYOP): this builds the
+  # truststore C3 uses to trust the Prometheus endpoint, and the client keystore for mTLS.
+  when:
+    - control_center_next_gen_dependency_prometheus_ssl_enabled|bool
 
 - name:  Create Control Center Next Gen Dependency Alertmanager Keystore and Truststore
   include_role:
@@ -285,7 +303,9 @@
     cert_path: "{{control_center_next_gen_dependency_alertmanager_cert_path}}"
     key_path: "{{control_center_next_gen_dependency_alertmanager_key_path}}"
     export_certs: "true"
-  when: control_center_next_gen_dependency_alertmanager_ssl_enabled|bool
+  when:
+    - control_center_next_gen_dependency_alertmanager_ssl_enabled|bool
+    - not control_center_next_gen_external_prometheus_enabled | bool
 
 - name: Configure Kerberos
   include_role:
@@ -568,10 +588,7 @@
     owner: "{{control_center_next_gen_user}}"
     group: "{{control_center_next_gen_group}}"
     mode: '750'
-  loop:
-    - "{{control_center_next_gen.systemd_override | dirname}}"
-    - "{{control_center_next_gen_dep_alertmanager.systemd_override | dirname}}"
-    - "{{control_center_next_gen_dep_prometheus.systemd_override | dirname}}"
+  loop: "{{ [control_center_next_gen.systemd_override | dirname] + ([control_center_next_gen_dep_alertmanager.systemd_override | dirname, control_center_next_gen_dep_prometheus.systemd_override | dirname] if not control_center_next_gen_external_prometheus_enabled | bool else []) }}"
   tags:
     - systemd
     - privileged
@@ -583,13 +600,16 @@
     mode: '640'
     owner: root
     group: root
-  loop:
-    - override_file_template: "alertmanager_override.conf.j2"
-      override_file_dst: "{{control_center_next_gen_dep_alertmanager.systemd_override}}"
-    - override_file_template: "prometheus_override.conf.j2"
-      override_file_dst: "{{control_center_next_gen_dep_prometheus.systemd_override}}"
-    - override_file_template: "override.conf.j2"
-      override_file_dst: "{{control_center_next_gen.systemd_override}}"
+  vars:
+    c3_service_overrides:
+      - override_file_template: "override.conf.j2"
+        override_file_dst: "{{control_center_next_gen.systemd_override}}"
+    bundled_dependency_service_overrides:
+      - override_file_template: "alertmanager_override.conf.j2"
+        override_file_dst: "{{control_center_next_gen_dep_alertmanager.systemd_override}}"
+      - override_file_template: "prometheus_override.conf.j2"
+        override_file_dst: "{{control_center_next_gen_dep_prometheus.systemd_override}}"
+  loop: "{{ c3_service_overrides + (bundled_dependency_service_overrides if not control_center_next_gen_external_prometheus_enabled | bool else []) }}"
   notify: restart control center next gen
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
@@ -609,10 +629,7 @@
     name: "{{item}}"
     enabled: true
     state: started
-  loop:
-    - "{{control_center_next_gen_dep_alertmanager_service_name}}"
-    - "{{control_center_next_gen_dep_prometheus_service_name}}"
-    - "{{control_center_next_gen_service_name}}"
+  loop: "{{ [control_center_next_gen_service_name] + ([control_center_next_gen_dep_alertmanager_service_name, control_center_next_gen_dep_prometheus_service_name] if not control_center_next_gen_external_prometheus_enabled | bool else []) }}"
   tags:
     - systemd
 
