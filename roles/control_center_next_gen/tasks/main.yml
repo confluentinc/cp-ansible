@@ -281,11 +281,13 @@
     cert_path: "{{control_center_next_gen_dependency_prometheus_cert_path}}"
     key_path: "{{control_center_next_gen_dependency_prometheus_key_path}}"
     export_certs: "true"
-    # When a client cert/key is provided (BYOP mTLS), build the keystore from THAT cert (signed by a
+    # When a client cert/key is PROVIDED (BYOP mTLS), build the keystore from THAT cert (signed by a
     # CA the external Prometheus trusts) instead of self-signing with the cluster CA - otherwise C3
-    # would present a cluster-CA cert the external Prometheus rejects. Empty cert_path (bundled or
-    # Basic auth) keeps the default self-signed behavior.
-    ssl_custom_certs: "{{ true if (control_center_next_gen_dependency_prometheus_cert_path | default('') | length > 1) else false }}"
+    # would present a cluster-CA cert the external Prometheus rejects. For bundled or Basic-auth-over-TLS
+    # there is no provided client cert, so keep the default self-signed behavior (the truststore still
+    # trusts the endpoint via ca_cert_path). Gate on the PROVIDED cert path, not the on-host cert_path,
+    # which has a non-empty default and would otherwise force custom certs for Basic auth too.
+    ssl_custom_certs: "{{ true if (control_center_next_gen_dependency_prometheus_provided_cert_path | default('') | length > 1) else false }}"
     # custom_certs.yml copies the SOURCE cert files (ssl_*_filepath) to the on-host cert paths
     # (ca_cert_path/cert_path/key_path). The source MUST be different from the destination: the ssl
     # role deletes the destination cert files before copying, so pointing the source at the same path
@@ -299,6 +301,30 @@
   # truststore C3 uses to trust the Prometheus endpoint, and the client keystore for mTLS.
   when:
     - control_center_next_gen_dependency_prometheus_ssl_enabled|bool
+
+# BYOP Basic-auth over TLS: with no provided client cert the ssl role self-signs C3's Prometheus
+# client keystore/truststore with a generated CA, so the truststore does not trust the external
+# Prometheus endpoint. Import the external Prometheus CA into that truststore so C3 trusts the
+# endpoint's server certificate on read. For mTLS this is already handled by the provided-cert path
+# above (custom certs import the provided CA into the truststore).
+- name: Import external Prometheus CA to Control Center Prometheus Truststore (BYOP)
+  include_role:
+    name: common
+    tasks_from: idp_certs.yml
+  vars:
+    idp_cert_path: "{{ control_center_next_gen_dependency_prometheus_provided_ca_cert_path | default(control_center_next_gen_dependency_prometheus_ca_cert_path) }}"
+    idp_cert_dest: /tmp/byop_prometheus_ca.pem
+    alias: "byop_prometheus_ca"
+    truststore_storepass: "{{ control_center_next_gen_dependency_prometheus_truststore_storepass }}"
+    truststore_path: "{{ control_center_next_gen_dependency_prometheus_truststore_path }}"
+    bcfks_truststore_path: "{{ control_center_next_gen_dependency_prometheus_bcfks_truststore_path | default(control_center_next_gen_dependency_prometheus_truststore_path) }}"
+    create_bouncy_castle_keystore: "{{ fips_enabled }}"
+    restart_handler_name: "restart control center next gen"
+  when:
+    - control_center_next_gen_external_prometheus_enabled | bool
+    - control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+    - not control_center_next_gen_dependency_prometheus_mtls_enabled | bool
+    - (control_center_next_gen_dependency_prometheus_provided_ca_cert_path | default('') | length) > 0
 
 - name:  Create Control Center Next Gen Dependency Alertmanager Keystore and Truststore
   include_role:
