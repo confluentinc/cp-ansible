@@ -1,0 +1,51 @@
+---
+# BYOP - Teardown Bundled Monitoring (customer-facing, brownfield)
+#
+# For customers migrating an existing Control Center Next Gen deployment from the bundled Prometheus
+# and Alertmanager to their own external Prometheus (BYOP).
+#
+# Enabling control_center_next_gen_external_prometheus_enabled only stops FRESH installs of the
+# bundled monitoring - it does NOT stop or remove an already-running bundled Prometheus/Alertmanager.
+# This is intentional (safe and reversible): after you flip the toggle and re-run the platform
+# playbook, verify that C3 reads your external Prometheus, and only THEN run this playbook to remove
+# the now-orphaned bundle.
+#
+# This is a deliberate, manual step. It stops and disables the bundled services and removes their
+# unit files, config, and data. Run it against your control_center_next_gen hosts:
+#   ansible-playbook -i <inventory> confluent.platform.byop_teardown_bundled_monitoring
+#
+# WARNING: the last step deletes /var/lib/prometheus and /var/lib/alertmanager (the bundled
+# monitoring data). Take a backup first if you need to retain any of it.
+
+- name: BYOP - remove the bundled Prometheus and Alertmanager
+  hosts: control_center_next_gen
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Stop and disable the bundled monitoring services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop:
+        - prometheus.service
+        - alertmanager.service
+      failed_when: false
+
+    - name: Remove the bundled monitoring unit files, config, and data
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/lib/systemd/system/prometheus.service
+        - /usr/lib/systemd/system/alertmanager.service
+        - /etc/systemd/system/prometheus.service.d
+        - /etc/systemd/system/alertmanager.service.d
+        - /etc/prometheus
+        - /var/lib/prometheus
+        - /etc/alertmanager
+        - /var/lib/alertmanager
+
+    - name: Reload systemd after removing the units
+      ansible.builtin.systemd:
+        daemon_reload: true

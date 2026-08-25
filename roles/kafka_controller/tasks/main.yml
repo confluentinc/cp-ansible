@@ -195,6 +195,28 @@
     - oauth_enabled|bool or schema_registry_oauth_enabled|bool or kafka_rest_oauth_enabled|bool or kafka_connect_oauth_enabled|bool or kafka_connect_replicator_oauth_enabled|bool
     - oauth_idp_cert_path != ""
 
+# BYOP: when reading from an external Prometheus over TLS, the node's telemetry exporter pushes
+# metrics to that endpoint using this node's own truststore. Import the external Prometheus CA so
+# the exporter trusts the external endpoint's server certificate (and, under mTLS, completes the
+# handshake). Requires a restart to take effect.
+- name: Import external Prometheus CA to Truststore (BYOP)
+  include_role:
+    name: common
+    tasks_from: idp_certs.yml
+  vars:
+    idp_cert_path: "{{ control_center_next_gen_dependency_prometheus_provided_ca_cert_path | default(control_center_next_gen_dependency_prometheus_ca_cert_path) }}"
+    idp_cert_dest: /tmp/byop_prometheus_ca.pem
+    alias: "byop_prometheus_ca"
+    truststore_storepass: "{{kafka_controller_truststore_storepass}}"
+    truststore_path: "{{kafka_controller_pkcs12_truststore_path}}"
+    bcfks_truststore_path: "{{kafka_controller_bcfks_truststore_path}}"
+    create_bouncy_castle_keystore: "{{fips_enabled}}"
+    restart_handler_name: "restart Kafka Controller"
+  when:
+    - control_center_next_gen_external_prometheus_enabled | bool
+    - control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+    - (control_center_next_gen_dependency_prometheus_provided_ca_cert_path | default('') | length) > 0
+
 - name: Configure Kerberos
   include_role:
     name: kerberos
