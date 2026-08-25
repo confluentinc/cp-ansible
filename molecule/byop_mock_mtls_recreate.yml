@@ -73,12 +73,12 @@
   gather_facts: false
   become: true
   tasks:
-    # The mock is no longer a molecule platform, so it is absent from the hosts' molecule-managed
-    # /etc/hosts. Add it explicitly (belt-and-suspenders alongside the docker network alias) so the
-    # nodes' telemetry exporter and C3 can resolve byop-prometheus.confluent.
-    - name: Add the mock Prometheus to /etc/hosts
-      ansible.builtin.lineinfile:
-        path: /etc/hosts
-        line: "{{ hostvars['localhost'].byop_mock_ip.stdout | trim }} byop-prometheus.confluent"
-        regexp: " byop-prometheus\\.confluent$"
-        state: present
+    # The docker network alias (byop-prometheus.confluent) already resolves via the confluent network's
+    # embedded DNS; this /etc/hosts entry is a fallback. Inside a container /etc/hosts is a bind-mounted
+    # file, so an atomic-rename writer (lineinfile/copy) fails with "Device or resource busy". Append in
+    # place with a grep guard so it works on the bind mount and re-runs do not duplicate the entry.
+    - name: Add the mock Prometheus to /etc/hosts (append; bind-mount safe)
+      ansible.builtin.shell: >-
+        grep -q ' byop-prometheus.confluent$' /etc/hosts ||
+        echo '{{ hostvars["localhost"].byop_mock_ip.stdout | trim }} byop-prometheus.confluent' >> /etc/hosts
+      changed_when: false
