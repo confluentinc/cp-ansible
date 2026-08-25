@@ -38,10 +38,25 @@
     prom_mtls: "{{ control_center_next_gen_dependency_prometheus_mtls_enabled | default(false) | bool }}"
     hc_retries: "{{ control_center_next_gen_health_check_retries | default(30) }}"
     hc_delay: "{{ control_center_next_gen_health_check_retry_delay | default(10) }}"
-    # The C3 role var dict (control_center_next_gen.config_file) is not in scope either; reference the
-    # rendered production properties path directly (package-install path used by the ubuntu scenarios).
-    c3_config_file: /etc/confluent-control-center/control-center-production.properties
+    # The C3 role var dict (control_center_next_gen.config_file) is not in scope here. The properties
+    # file lives under /etc for package/rpm installs and under the confluent home for archive installs,
+    # so discover it below instead of hard-coding one path.
+    c3_config_file_default: /etc/confluent-control-center/control-center-production.properties
   tasks:
+
+    # --- 0. locate the rendered C3 properties file (package/rpm under /etc, archive under the home) ---
+    - name: Find the Control Center production properties file
+      ansible.builtin.shell: >-
+        ls /etc/confluent-control-center/control-center-production.properties
+        /opt/confluent/confluent-*/etc/confluent-control-center/control-center-production.properties
+        2>/dev/null | head -1
+      register: byop_c3_cfg
+      changed_when: false
+      failed_when: false
+
+    - name: Set the C3 config file path
+      ansible.builtin.set_fact:
+        c3_config_file: "{{ byop_c3_cfg.stdout | trim if (byop_c3_cfg.stdout | default('') | trim | length) > 0 else c3_config_file_default }}"
 
     # --- 1. the bundled Prometheus/Alertmanager are not running ---
     # The C3 Next Gen package ships the prometheus.service / alertmanager.service unit files even in
