@@ -1,0 +1,36 @@
+---
+# BYOP mTLS only: the mock Prometheus requires the client to present a cert signed by its CA
+# (web-config-mtls.yml -> client_auth_type: RequireAndVerifyClientCert). generate-certs.sh (now in
+# cp-ansible-tools/docker/byop-mock-prometheus) produces client.crt/client.key (CN=c3-client) signed
+# by that CA and stages them to BYOP_CERTS_DIR (default /tmp/byop-mock-prometheus/certs). Distribute
+# them to C3 and point control_center_next_gen_dependency_prometheus_cert_path / _key_path at them
+# (set in the scenario group_vars) so the ssl role builds C3's Prometheus client keystore from this
+# cert instead of a cluster-CA-signed one the mock would reject.
+#
+# NOTE (needs a molecule run to confirm): the exact interaction with the ssl role's keystore build
+# is the part to validate on the first `molecule test` - if the ssl role regenerates instead of
+# using the provided cert, set the provided-cert path vars accordingly.
+- name: Distribute the mock Prometheus client cert to C3 (BYOP mTLS)
+  hosts: control_center_next_gen
+  gather_facts: false
+  become: true
+  vars:
+    certs_dir: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}"
+  tasks:
+    - name: Ensure the ssl dir exists
+      ansible.builtin.file:
+        path: /var/ssl/private
+        state: directory
+        mode: "0755"
+
+    - name: Copy the client cert C3 presents to the mock Prometheus
+      ansible.builtin.copy:
+        src: "{{ certs_dir }}/client.crt"
+        dest: /var/ssl/private/byop_prometheus_client.crt
+        mode: "0644"
+
+    - name: Copy the client key C3 presents to the mock Prometheus
+      ansible.builtin.copy:
+        src: "{{ certs_dir }}/client.key"
+        dest: /var/ssl/private/byop_prometheus_client.key
+        mode: "0600"
