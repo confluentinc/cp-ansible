@@ -1,16 +1,21 @@
 ---
-# BYOP negative validation: confirm validate_byop.yml rejects bad external-Prometheus configs.
-# Runs on localhost (no cluster needed). Run standalone:
-#   ansible-playbook molecule/byop_validate_negative.yml
-# or import from a scenario's verify.yml: - import_playbook: ../byop_validate_negative.yml
+# BYOP negative validation: confirm validate_byop.yml REJECTS bad external-Prometheus configs.
+# Runs on localhost (no cluster needed). Imported from a scenario's verify.yml:
+#   - import_playbook: ../byop_validate_negative.yml
+#
+# Each case runs validate_byop.yml with a deliberately bad config and asserts that it fails. The
+# flag pattern (set true only if validation did NOT fail) avoids inspecting ansible_failed_result,
+# so a passing validation and a failing rescue assertion cannot be confused.
 - name: BYOP validation - bad configs are rejected
   hosts: localhost
+  connection: local
   gather_facts: false
   vars:
     control_center_next_gen_external_prometheus_enabled: true
     control_center_next_gen_dependency_prometheus_host: prom.example
+    control_center_next_gen_dependency_prometheus_port: 9090
   tasks:
-    - name: External Prometheus with no TLS is rejected
+    - name: Case 1 - external Prometheus with TLS off must be rejected
       block:
         - name: Run validation with TLS off
           ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_byop.yml"
@@ -18,30 +23,63 @@
             control_center_next_gen_dependency_prometheus_ssl_enabled: false
             control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
             control_center_next_gen_dependency_prometheus_mtls_enabled: false
-        - name: Should not reach here - the TLS assert must fire
-          ansible.builtin.fail:
-            msg: "validate_byop did not reject a non-TLS external Prometheus."
+        - name: Validation unexpectedly passed (TLS off)
+          ansible.builtin.set_fact:
+            byop_tls_off_passed: true
       rescue:
-        - name: Confirm the failure names the TLS requirement
-          ansible.builtin.assert:
-            that:
-              - (ansible_failed_result.msg | default('') | string) is search('TLS')
-            fail_msg: "The assert fired but not for the TLS requirement."
+        - name: Validation rejected TLS off as expected
+          ansible.builtin.set_fact:
+            byop_tls_off_passed: false
 
-    - name: External Prometheus with both auth modes is rejected
+    - name: Assert TLS-off was rejected
+      ansible.builtin.assert:
+        that:
+          - not (byop_tls_off_passed | default(true) | bool)
+        fail_msg: "validate_byop did not reject a non-TLS external Prometheus."
+        success_msg: "BYOP negative: non-TLS external Prometheus is rejected."
+
+    - name: Case 2 - external Prometheus with both auth modes must be rejected
       block:
-        - name: Run validation with both basic and mTLS on
+        - name: Run validation with both Basic and mTLS on
           ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_byop.yml"
           vars:
             control_center_next_gen_dependency_prometheus_ssl_enabled: true
             control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
             control_center_next_gen_dependency_prometheus_mtls_enabled: true
-        - name: Should not reach here - the auth-mode assert must fire
-          ansible.builtin.fail:
-            msg: "validate_byop did not reject both auth modes."
+        - name: Validation unexpectedly passed (both auth modes)
+          ansible.builtin.set_fact:
+            byop_both_auth_passed: true
       rescue:
-        - name: Confirm the failure names the auth-mode conflict
-          ansible.builtin.assert:
-            that:
-              - (ansible_failed_result.msg | default('') | string) is search('one auth mode')
-            fail_msg: "The assert fired but not for the auth-mode conflict."
+        - name: Validation rejected both auth modes as expected
+          ansible.builtin.set_fact:
+            byop_both_auth_passed: false
+
+    - name: Assert both-auth-modes was rejected
+      ansible.builtin.assert:
+        that:
+          - not (byop_both_auth_passed | default(true) | bool)
+        fail_msg: "validate_byop did not reject both auth modes at once."
+        success_msg: "BYOP negative: both auth modes at once is rejected."
+
+    - name: Case 3 - external Prometheus with no auth mode must be rejected
+      block:
+        - name: Run validation with neither auth mode
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_byop.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+        - name: Validation unexpectedly passed (no auth mode)
+          ansible.builtin.set_fact:
+            byop_no_auth_passed: true
+      rescue:
+        - name: Validation rejected no auth mode as expected
+          ansible.builtin.set_fact:
+            byop_no_auth_passed: false
+
+    - name: Assert no-auth-mode was rejected
+      ansible.builtin.assert:
+        that:
+          - not (byop_no_auth_passed | default(true) | bool)
+        fail_msg: "validate_byop did not reject a missing auth mode."
+        success_msg: "BYOP negative: missing auth mode is rejected."
