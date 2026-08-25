@@ -1,0 +1,99 @@
+---
+### BYOP (A3): greenfield, external Prometheus over mTLS.
+### Focused cluster (controller + broker + C3 + mock Prometheus) - enough to prove C3 reads the
+### external Prometheus over mTLS, the nodes push to it, and no bundled monitoring is installed.
+### NEEDS A MOLECULE RUN TO CONFIRM: the mTLS client-cert trust chain (C3's client cert, signed by
+### the mock CA, accepted by the mock's client_ca) is the part that only a live run validates.
+
+driver:
+  name: docker
+platforms:
+  - name: controller1
+    hostname: controller1.confluent
+    groups:
+      - kafka_controller
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java25-lean.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java25-lean.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center-next-gen
+    hostname: control-center-next-gen.confluent
+    groups:
+      - control_center_next_gen
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java25-lean.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    published_ports:
+      - "9022:9022"
+    networks:
+      - name: confluent
+  # BYOP: prebuilt mock external Prometheus, mTLS (web-config-mtls.yml requires a client cert).
+  - name: byop-prometheus
+    hostname: byop-prometheus.confluent
+    groups:
+      - byop_prometheus
+    image: byop-mock-prometheus:latest
+    pre_build_image: true
+    command: "--config.file=/etc/prometheus/prometheus.yml --web.config.file=/etc/prometheus/web-config-mtls.yml --web.enable-otlp-receiver --storage.tsdb.path=/prometheus"
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    converge: ../collections_converge.yml
+  inventory:
+    host_vars:
+      byop-prometheus:
+        ansible_connection: local
+        gather_facts: false
+      kafka-broker1:
+        node_id: 300
+    group_vars:
+      all:
+        control_center_next_gen_port: 9022
+        # BYOP: read from the external mock Prometheus over mTLS (no basic auth).
+        control_center_next_gen_external_prometheus_enabled: true
+        # Assert node push under mTLS (mock is made to trust the cluster CA in prepare).
+        byop_assert_mtls_push: true
+        control_center_next_gen_dependency_prometheus_host: byop-prometheus.confluent
+        control_center_next_gen_dependency_prometheus_port: 9090
+        control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_mtls_enabled: true
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+        control_center_next_gen_dependency_prometheus_ca_cert_path: /var/ssl/private/byop_prometheus_ca.crt
+        # Client cert C3 presents to the mock Prometheus (distributed in prepare.yml, signed by the
+        # mock CA so the mock's RequireAndVerifyClientCert accepts it).
+        control_center_next_gen_dependency_prometheus_cert_path: /var/ssl/private/byop_prometheus_client.crt
+        control_center_next_gen_dependency_prometheus_key_path: /var/ssl/private/byop_prometheus_client.key
+        # Source for building C3's Prometheus client keystore: the mock CA/client cert staged on the
+        # controller (BYOP_CERTS_DIR). The ssl role copies these to the *_cert_path above; they must
+        # be a different location than the destination (the ssl role deletes the destination first).
+        control_center_next_gen_dependency_prometheus_provided_certs_remote_src: false
+        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/ca.crt"
+        control_center_next_gen_dependency_prometheus_provided_cert_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/client.crt"
+        control_center_next_gen_dependency_prometheus_provided_key_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/client.key"
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
+        kafka_broker_custom_properties:
+          log.dirs: /var/lib/kafka/data1
