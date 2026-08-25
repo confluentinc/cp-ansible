@@ -165,6 +165,9 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+# BYOP mTLS node-push: the mock external Prometheus is NOT a molecule platform here. It is started in
+# prepare (byop_mock_mtls_recreate.yml) AFTER certificates.yml, so its client CA can trust the per-run
+# cluster CA and accept the nodes' cluster-CA-signed telemetry push (see that playbook for why).
 provisioner:
   playbooks:
     converge: ../collections_converge.yml
@@ -172,9 +175,26 @@ provisioner:
     group_vars:
       all:
         control_center_next_gen_port: 9022
+        # BYOP: read from the external mock Prometheus over mTLS.
+        control_center_next_gen_external_prometheus_enabled: true
+        control_center_next_gen_dependency_prometheus_host: byop-prometheus.confluent
+        control_center_next_gen_dependency_prometheus_port: 9090
         control_center_next_gen_dependency_prometheus_ssl_enabled: true
         control_center_next_gen_dependency_prometheus_mtls_enabled: true
         control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+        # The mock's client CA trusts the cluster CA (byop_mock_mtls_recreate.yml), so assert the
+        # nodes' mTLS telemetry push actually lands in the external Prometheus.
+        byop_assert_mtls_push: true
+        control_center_next_gen_dependency_prometheus_ca_cert_path: /var/ssl/private/byop_prometheus_ca.crt
+        control_center_next_gen_dependency_prometheus_cert_path: /var/ssl/private/byop_prometheus_client.crt
+        control_center_next_gen_dependency_prometheus_key_path: /var/ssl/private/byop_prometheus_client.key
+        # Source for C3's Prometheus client keystore: mock CA/client cert staged on the controller
+        # (BYOP_CERTS_DIR); the ssl role copies these to the *_cert_path above (must differ - the ssl
+        # role deletes the destination first).
+        control_center_next_gen_dependency_prometheus_provided_certs_remote_src: false
+        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/ca.crt"
+        control_center_next_gen_dependency_prometheus_provided_cert_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/client.crt"
+        control_center_next_gen_dependency_prometheus_provided_key_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/client.key"
         control_center_next_gen_dependency_alertmanager_ssl_enabled: false
         control_center_next_gen_dependency_alertmanager_mtls_enabled: false
         control_center_next_gen_dependency_alertmanager_basic_auth_enabled: false
