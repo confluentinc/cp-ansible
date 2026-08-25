@@ -1,0 +1,62 @@
+---
+## Sample inventory for BYOP (Bring Your Own Prometheus) with Control Center Next Gen.
+## C3 reads metrics from a customer-managed external Prometheus instead of the bundled one.
+##
+## Prerequisites on the external Prometheus (customer-managed, NOT configured by this playbook):
+##   - Prometheus 3.0 or newer
+##   - the OTLP receiver enabled (--web.enable-otlp-receiver)
+##   - otlp.promote_resource_attributes set for the Confluent broker/cluster labels
+##   - a small storage.tsdb.out_of_order_time_window
+##   - C3's recording rules loaded (recording_rules-generated.yml)
+##   - a server certificate whose SAN covers the address C3 and the nodes dial
+
+all:
+  vars:
+    ansible_connection: ssh
+    ansible_user: ec2-user
+    ansible_become: true
+    ansible_ssh_private_key_file: /home/ec2-user/key.pem
+    ansible_python_interpreter: /usr/bin/python3
+
+    ssl_enabled: true
+
+    ## --- BYOP: read metrics from an external Prometheus ---
+    control_center_next_gen_external_prometheus_enabled: true
+
+    control_center_next_gen_dependency_prometheus_host: prometheus.customer.internal
+    control_center_next_gen_dependency_prometheus_port: 9090
+    control_center_next_gen_dependency_prometheus_ssl_enabled: true
+
+    ## CA that signed the external Prometheus server certificate. Place this file on the ANSIBLE
+    ## CONTROL NODE; cp-ansible imports it into Control Center's and the brokers'/controllers'
+    ## truststores so they trust the external Prometheus (server cert) on read and push.
+    control_center_next_gen_dependency_prometheus_provided_ca_cert_path: /path/on/control-node/prometheus-ca.crt
+
+    ## Choose exactly one auth mode: Basic auth over TLS, or mutual TLS.
+
+    ## Option A - Basic auth over TLS
+    control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+    control_center_next_gen_dependency_prometheus_basic_users:
+      admin:
+        principal: c3
+        password: <external-prometheus-password>
+
+    ## Option B - mutual TLS (comment out Option A above and use this instead). The client cert/key
+    ## must be signed by a CA the external Prometheus trusts; place both on the ANSIBLE CONTROL NODE.
+    # control_center_next_gen_dependency_prometheus_mtls_enabled: true
+    # control_center_next_gen_dependency_prometheus_provided_cert_path: /path/on/control-node/prometheus-client.crt
+    # control_center_next_gen_dependency_prometheus_provided_key_path: /path/on/control-node/prometheus-client.key
+
+kafka_controller:
+  hosts:
+    controller1.confluent:
+
+kafka_broker:
+  hosts:
+    broker1.confluent:
+    broker2.confluent:
+    broker3.confluent:
+
+control_center_next_gen:
+  hosts:
+    control-center.confluent:

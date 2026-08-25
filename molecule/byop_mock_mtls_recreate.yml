@@ -1,0 +1,84 @@
+---
+# BYOP mTLS node-push: start the mock external Prometheus so its client CA trusts BOTH the mock's own
+# CA (the cert C3 presents) AND the per-run cluster CA (the cert the nodes' telemetry exporter
+# presents, which is cluster-CA-signed). This mirrors a real customer whose external Prometheus is
+# configured to trust the Confluent cluster CA for mTLS client authentication.
+#
+# Why the mock is not a molecule platform in these scenarios: molecule creates platforms at `create`
+# time, before certificates.yml has generated the cluster CA, so the cluster CA cannot be part of the
+# mock's client CA at that point. Instead this play runs in prepare (AFTER certificates.yml), builds
+# the combined client CA bundle, and starts the mock fresh with it - correct from boot, no fragile
+# runtime reload of a running container.
+#
+# Imported by an mTLS external scenario's prepare.yml, AFTER certificates.yml and the distribute
+# playbooks (which stage the mock CA/client cert onto the cluster hosts):
+#   - import_playbook: ../byop_mock_mtls_recreate.yml
+- name: BYOP mTLS - start the mock Prometheus trusting the mock CA and the cluster CA
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    byop_certs_dir: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}"
+    ssl_gen_dir: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files"
+    mock_image: byop-mock-prometheus:latest
+    mock_name: byop-prometheus
+    mock_fqdn: byop-prometheus.confluent
+    mock_network: confluent
+    bundle_path: /tmp/byop_mock_client_ca_bundle.crt
+    # The mock server cert (server.crt) and C3's client cert stay baked in the image; only the client
+    # CA (ca.crt) is overridden with the bundle below, so the mock now accepts BOTH client CAs.
+    mock_command: >-
+      --config.file=/etc/prometheus/prometheus.yml
+      --web.config.file=/etc/prometheus/web-config-mtls.yml
+      --web.enable-otlp-receiver
+      --storage.tsdb.path=/prometheus
+  tasks:
+    - name: Build the combined client CA bundle (mock CA + cluster CA)
+      # awk '1' normalises each file to end with a newline, so the two PEM blocks never merge onto one
+      # line (which would make the concatenated bundle unparseable and break the mock's TLS).
+      ansible.builtin.shell: "awk '1' '{{ byop_certs_dir }}/ca.crt' '{{ ssl_gen_dir }}/ca.crt' > '{{ bundle_path }}'"
+
+    - name: Make the bundle world-readable (the mock runs as nobody/65534)
+      ansible.builtin.file:
+        path: "{{ bundle_path }}"
+        mode: "0644"
+
+    - name: Remove any existing mock container (idempotent re-runs)
+      ansible.builtin.command: "docker rm -f {{ mock_name }}"
+      register: rm_mock
+      changed_when: rm_mock.rc == 0
+      failed_when: false
+
+    - name: Start the mock Prometheus with the combined client CA mounted (mTLS trusts the cluster CA from boot)
+      ansible.builtin.command: >-
+        docker run -d
+        --name {{ mock_name }}
+        --hostname {{ mock_fqdn }}
+        --network {{ mock_network }}
+        --network-alias {{ mock_fqdn }}
+        -v {{ bundle_path }}:/etc/prometheus/certs/ca.crt:ro
+        {{ mock_image }}
+        {{ mock_command }}
+
+    - name: Get the mock container IP
+      # Use shell (not command) so the single-quoted Go template with spaces is passed to docker as one
+      # argument. The range over Networks returns the IP on whatever single network the mock is on, so
+      # it does not hard-code the network name.
+      ansible.builtin.shell: "docker inspect -f '{% raw %}{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}{% endraw %}' {{ mock_name }}"
+      register: byop_mock_ip
+      changed_when: false
+
+- name: BYOP mTLS - ensure the mock FQDN resolves from the cluster hosts
+  hosts: control_center_next_gen:kafka_broker:kafka_controller
+  gather_facts: false
+  become: true
+  tasks:
+    # The mock is no longer a molecule platform, so it is absent from the hosts' molecule-managed
+    # /etc/hosts. Add it explicitly (belt-and-suspenders alongside the docker network alias) so the
+    # nodes' telemetry exporter and C3 can resolve byop-prometheus.confluent.
+    - name: Add the mock Prometheus to /etc/hosts
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: "{{ hostvars['localhost'].byop_mock_ip.stdout | trim }} byop-prometheus.confluent"
+        regexp: " byop-prometheus\\.confluent$"
+        state: present
