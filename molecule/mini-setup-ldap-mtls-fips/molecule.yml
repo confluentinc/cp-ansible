@@ -165,24 +165,13 @@ platforms:
     privileged: true
     networks:
       - name: confluent
-  # BYOP: prebuilt mock external Prometheus (mTLS: web-config-mtls.yml requires a client cert).
-  - name: byop-prometheus
-    hostname: byop-prometheus.confluent
-    groups:
-      - byop_prometheus
-    image: byop-mock-prometheus:latest
-    pre_build_image: true
-    command: "--config.file=/etc/prometheus/prometheus.yml --web.config.file=/etc/prometheus/web-config-mtls.yml --web.enable-otlp-receiver --storage.tsdb.path=/prometheus"
-    networks:
-      - name: confluent
+# BYOP mTLS node-push: the mock external Prometheus is NOT a molecule platform here. It is started in
+# prepare (byop_mock_mtls_recreate.yml) AFTER certificates.yml, so its client CA can trust the per-run
+# cluster CA and accept the nodes' cluster-CA-signed telemetry push (see that playbook for why).
 provisioner:
   playbooks:
     converge: ../collections_converge.yml
   inventory:
-    host_vars:
-      byop-prometheus:
-        ansible_connection: local
-        gather_facts: false
     group_vars:
       all:
         control_center_next_gen_port: 9022
@@ -193,6 +182,9 @@ provisioner:
         control_center_next_gen_dependency_prometheus_ssl_enabled: true
         control_center_next_gen_dependency_prometheus_mtls_enabled: true
         control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+        # The mock's client CA trusts the cluster CA (byop_mock_mtls_recreate.yml), so assert the
+        # nodes' mTLS telemetry push actually lands in the external Prometheus.
+        byop_assert_mtls_push: true
         control_center_next_gen_dependency_prometheus_ca_cert_path: /var/ssl/private/byop_prometheus_ca.crt
         control_center_next_gen_dependency_prometheus_cert_path: /var/ssl/private/byop_prometheus_client.crt
         control_center_next_gen_dependency_prometheus_key_path: /var/ssl/private/byop_prometheus_client.key
