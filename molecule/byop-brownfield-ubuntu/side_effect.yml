@@ -1,0 +1,43 @@
+---
+### Brownfield migration on the cluster left running by converge (which installed the BUNDLE):
+### 1) sanity - the bundle is present, 2) flip every node to the external Prometheus and re-run,
+### 3) run the documented cleanup of the old bundle. side_effect ENDS on the external state so the
+### verify.yml checks (bundle absent, C3 reads external, alerts off) hold.
+###
+### The bundle -> external -> bundle round-trip (doc A4) ends on BUNDLED, which conflicts with this
+### scenario's external verify - so it belongs in its own scenario and is intentionally not folded
+### in here. See molecule/byop_cleanup_bundled.yml + this file as the building blocks for it.
+###
+### NEEDS A MOLECULE RUN TO CONFIRM: the set_fact override of external_prometheus_enabled must win
+### over the molecule group_vars on the re-run (set_fact > inventory group_vars in Ansible
+### precedence, but confirm on the first run).
+
+- name: Sanity - the bundled Prometheus is running after the initial converge
+  hosts: control_center_next_gen
+  gather_facts: false
+  become: true
+  tasks:
+    - name: List installed service units
+      ansible.builtin.command: systemctl list-unit-files --type=service --no-legend
+      register: brownfield_units_before
+      changed_when: false
+    - name: Assert the bundled Prometheus is present before migration
+      ansible.builtin.assert:
+        that:
+          - "'prometheus.service' in brownfield_units_before.stdout"
+        fail_msg: "Expected the bundled Prometheus after the initial (bundled) converge."
+
+# --- 2. flip every node to the external Prometheus and re-run the platform playbook ---
+- name: Migrate - turn external Prometheus on
+  hosts: control_center_next_gen:kafka_broker:kafka_controller
+  gather_facts: false
+  tasks:
+    - name: Override the toggle for this and subsequent plays
+      ansible.builtin.set_fact:
+        control_center_next_gen_external_prometheus_enabled: true
+
+- name: Re-run the platform playbook with external Prometheus on
+  import_playbook: confluent.platform.all
+
+# --- 3. remove the now-orphaned bundle (the documented manual cleanup) ---
+- import_playbook: ../byop_cleanup_bundled.yml
