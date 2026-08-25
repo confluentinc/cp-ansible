@@ -19,15 +19,22 @@
   gather_facts: false
   vars:
     byop_certs_dir: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}"
-    cluster_ca: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
+    ssl_gen_dir: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files"
     mock_container: byop-prometheus
     bundle_path: /tmp/byop_mock_client_ca_bundle.crt
     webcfg_local: /tmp/byop_mock_web_config_mtls.yml
   tasks:
+    # The generated cluster CA filename differs by scenario (ca.crt for certificates.yml scenarios,
+    # snakeoil-ca-1.crt for the ssl-role self-signed scenarios), so discover it.
+    - name: Locate the generated cluster CA
+      ansible.builtin.shell: "ls '{{ ssl_gen_dir }}/ca.crt' '{{ ssl_gen_dir }}/snakeoil-ca-1.crt' 2>/dev/null | head -1"
+      register: byop_cluster_ca
+      changed_when: false
+
     - name: Build the combined client CA bundle (mock CA + cluster CA)
       # awk '1' normalises each file to end with a newline, so the two PEM blocks never merge onto one
       # line (which would make the concatenated CA bundle unparseable and break the mock's TLS).
-      ansible.builtin.shell: "awk '1' '{{ byop_certs_dir }}/ca.crt' '{{ cluster_ca }}' > '{{ bundle_path }}'"
+      ansible.builtin.shell: "awk '1' '{{ byop_certs_dir }}/ca.crt' '{{ byop_cluster_ca.stdout | trim }}' > '{{ bundle_path }}'"
 
     - name: Install the combined bundle as the mock client CA
       ansible.builtin.command: "docker cp '{{ bundle_path }}' {{ mock_container }}:/etc/prometheus/certs/ca.crt"
