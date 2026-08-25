@@ -177,6 +177,11 @@
       until: (byop_broker_series.json.data.result | default([]) | length) > 0
       retries: "{{ hc_retries }}"
       delay: "{{ hc_delay }}"
+      # The node telemetry exporter pushes using the node's own (cluster-CA-signed) client cert. The
+      # mock Prometheus requires a client cert signed by its own CA, so under mTLS it rejects the node
+      # push in this test harness. The node-push path itself is covered by the Basic-auth-over-TLS
+      # scenarios (same product code imports the external Prometheus CA into the node truststore).
+      when: not prom_mtls | bool
 
     - name: Controllers are pushing to the external Prometheus (Brokers Total source)
       ansible.builtin.uri:
@@ -193,3 +198,6 @@
       until: (byop_controller_series.json.data.result | default([]) | length) > 0
       retries: "{{ hc_retries }}"
       delay: "{{ hc_delay }}"
+      # See the note on the broker-push check above: node push is validated on the Basic-auth-over-TLS
+      # scenarios, not under mTLS where the mock rejects the node's cluster-signed client cert.
+      when: not prom_mtls | bool
