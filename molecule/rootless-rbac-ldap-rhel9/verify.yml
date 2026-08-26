@@ -3,11 +3,12 @@
 ### under /opt, and RBAC auth against LDAP succeeds end to end.
 
 - name: Verify - rootless lifecycle on all CP components
-  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  hosts: kafka_controller:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
   gather_facts: true
   vars:
     rootless_unit_map:
       kafka_controller: cp-kafka_controller.service
+      zookeeper: cp-zookeeper.service
       kafka_broker: cp-kafka_broker.service
       schema_registry: cp-schema_registry.service
       kafka_connect: cp-kafka_connect.service
@@ -29,7 +30,7 @@
       failed_when: unit_active.stdout != "active"
 
     - name: Check the process is owned by the deploy user, not root
-      shell: "ps -eo user,cmd | grep -E 'kafka.Kafka|SchemaRegistryMain|ConnectDistributed|KafkaRestMain|KsqlServerMain|ControlCenter' | grep -v grep | awk '{print $1}' | sort -u"
+      shell: "ps -eo user,cmd | grep -E 'kafka.Kafka|QuorumPeerMain|SchemaRegistryMain|ConnectDistributed|KafkaRestMain|KsqlServerMain|ControlCenter' | grep -v grep | awk '{print $1}' | sort -u"
       register: process_owners
       changed_when: false
 
@@ -106,6 +107,18 @@
           - opt_contents.matched == 0
         fail_msg: "Rootless install wrote to /opt: {{ opt_contents.files | map(attribute='path') | list }}"
         quiet: true
+
+- name: Verify - zookeeper dataDir under rootless_deployment_path
+  hosts: zookeeper
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/zookeeper.properties"
+        property: dataDir
+        expected_value: "{{ rootless_deployment_path }}/data/zookeeper"
 
 - name: Verify - restart-propagation regression (side_effect.yml changed kafka_broker's config)
   hosts: kafka_broker

@@ -3,11 +3,12 @@
 ### under /opt, and SASL_PLAIN (+ SSL) is actually configured on each component.
 
 - name: Verify - rootless lifecycle on all CP components
-  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center:kafka_connect_replicator
+  hosts: kafka_controller:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center:kafka_connect_replicator
   gather_facts: true
   vars:
     rootless_unit_map:
       kafka_controller: cp-kafka_controller.service
+      zookeeper: cp-zookeeper.service
       kafka_broker: cp-kafka_broker.service
       schema_registry: cp-schema_registry.service
       kafka_connect: cp-kafka_connect.service
@@ -33,7 +34,7 @@
       # Replicator's own class name isn't matched here, but its ExecStart args (--consumer.config
       # .../kafka-connect-replicator-consumer.properties etc.) always contain "replicator", so that
       # catches it too without needing the exact Main class.
-      shell: "ps -eo user,cmd | grep -E 'kafka.Kafka|SchemaRegistryMain|ConnectDistributed|KafkaRestMain|KsqlServerMain|ControlCenter|replicator' | grep -v grep | awk '{print $1}' | sort -u"
+      shell: "ps -eo user,cmd | grep -E 'kafka.Kafka|QuorumPeerMain|SchemaRegistryMain|ConnectDistributed|KafkaRestMain|KsqlServerMain|ControlCenter|replicator' | grep -v grep | awk '{print $1}' | sort -u"
       register: process_owners
       changed_when: false
 
@@ -146,6 +147,18 @@
           (before={{ before_ts_slurp.content | b64decode }}, after={{ after_ts.stdout }}) -
           the notify-on-change chain in rootless_lifecycle.yml regressed.
         quiet: true
+
+- name: Verify - zookeeper dataDir under rootless_deployment_path
+  hosts: zookeeper
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/zookeeper.properties"
+        property: dataDir
+        expected_value: "{{ rootless_deployment_path }}/data/zookeeper"
 
 - name: Verify - SASL_PLAIN configured on kafka_controller
   hosts: kafka_controller
