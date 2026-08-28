@@ -6724,6 +6724,14 @@ Default:  "{{pause_rolling_deployment}}"
 
 ***
 
+### control_center_next_gen_external_prometheus_enabled
+
+Boolean. BYOP (Bring Your Own Prometheus): when true, the bundled Prometheus and Alertmanager for Control Center Next Gen are not installed, and C3 reads from an external Prometheus configured via the control_center_next_gen_dependency_prometheus_* variables.
+
+Default:  false
+
+***
+
 ### control_center_next_gen_dependency_prometheus_health_check_user
 
 user for the user used to do healthcheck on Control Center Next Gen (prometheus)
