@@ -137,6 +137,12 @@ here (`sudo: a password is required`) instead of silently succeeding, precisely 
 user has nothing to escalate to - so a clean run through these checks is a real proof of
 rootlessness, not just an absence of errors.
 
+The "before the run" sudo-escalation check above is also asserted (not just documented) in the
+3 dedicated `rootless-*` molecule scenarios' `verify.yml` - `privileged: true`/`cgroupns_mode: host`
+(needed for `systemd --user` to work inside Docker at all) is a container-runtime requirement, not
+proof the deploy avoided root, so those scenarios independently assert the deploy user has no
+passwordless-sudo path, the same way this section does for a real host.
+
 ---
 
 ## Per-config notes
