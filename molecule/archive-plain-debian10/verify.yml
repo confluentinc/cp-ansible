@@ -159,10 +159,23 @@
   hosts: kafka_broker
   gather_facts: true
   tasks:
+    # This whole play is only meaningful when `molecule side_effect` actually ran between
+    # converge and verify - the standard MOLECULE_RUN=converge+verify CI/on-demand mode (see
+    # cp-ansible-tools/on-demand/ansible/all.yml) runs only `molecule converge` then
+    # `molecule verify`, never `molecule side_effect`, so the marker file this checks for won't
+    # exist there. Guarding on its presence keeps that (trusted, everyday) mode green while still
+    # asserting the real regression whenever side_effect.yml does run (full `molecule test`
+    # lifecycle, or an explicit `molecule side_effect` invocation).
+    - name: Check whether side_effect.yml ran (marker file present)
+      stat:
+        path: /tmp/molecule_side_effect_before_ts
+      register: side_effect_marker
+
     - name: Read the pre-side-effect timestamp
       slurp:
         src: /tmp/molecule_side_effect_before_ts
       register: before_ts_slurp
+      when: side_effect_marker.stat.exists
 
     - name: Get ActiveEnterTimestamp now
       command: systemctl --user show cp-kafka_broker.service -p ActiveEnterTimestamp --value
@@ -170,12 +183,14 @@
         XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
       register: after_ts
       changed_when: false
+      when: side_effect_marker.stat.exists
 
     - name: Confirm the generated unit actually carries the injected override
       command: "grep -c StartLimitIntervalSec {{ ansible_env.HOME }}/.config/systemd/user/cp-kafka_broker.service"
       register: override_grep
       changed_when: false
       failed_when: override_grep.stdout | trim == "0"
+      when: side_effect_marker.stat.exists
 
     - name: Assert the unit restarted when its service_unit_overrides changed
       assert:
@@ -186,6 +201,7 @@
           (before={{ before_ts_slurp.content | b64decode }}, after={{ after_ts.stdout }}) -
           the notify-on-change chain in rootless_lifecycle.yml regressed.
         quiet: true
+      when: side_effect_marker.stat.exists
 
 - name: Verify - zookeeper dataDir under rootless_deployment_path
   hosts: zookeeper
