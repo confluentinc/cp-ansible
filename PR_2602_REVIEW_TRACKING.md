@@ -304,6 +304,9 @@ until this doc. Broken out point by point:
     (`${KRAFT_CONTROLLER:-zookeeper}`) and `_migration` groups, since ZK had zero rootless
     support at the time. ANSIENG-5923 added rootless ZooKeeper support, closing that gap - the
     ZK toggle has now been restored in all 3 scenarios, so each covers both ZK (default) and
-    KRaft (`--env-file molecule/kraft.yml`) again. `_migration`/ZK<->KRaft migration-group
-    coverage remains dropped under rootless - that's a distinct, still out-of-scope concern
-    (migration testing was never exercised against `rootless_enabled` and stays that way).
+    KRaft (`--env-file molecule/kraft.yml`) again. The `_migration` groups/`controller-mig` hosts
+    and `${MIGRATION_CONVERGE}` toggle were also restored (each scenario's `converge.yml` now
+    runs the rootless bootstrap shim first, then imports whichever playbook
+    `${MIGRATION_CONVERGE}` resolves to) - so no scenario capability was lost overall. Note the
+    `MIGRATION=true` path itself has not been live-verified in combination with
+    `rootless_enabled` - only its continued presence (not a new regression) is guaranteed.

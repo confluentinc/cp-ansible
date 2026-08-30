@@ -2,6 +2,21 @@
 - name: Provision Kerberos Server
   import_playbook: ../kerberos.yml
 
+### confluent.platform.all here connects using whatever ansible_user the inventory currently
+### resolves to - which is deployment_user (cp-user) globally in this scenario's group_vars, and
+### that account doesn't exist yet (rootless_bootstrap.yml, which creates it, only runs later, in
+### converge.yml). This only matters when MIGRATION=true (the task is a no-op otherwise), so the
+### shim is likewise gated on that same condition.
+- name: Cache ansible_user=root so a MIGRATION=true prepare run connects as root before the deploy user exists
+  hosts: kafka_controller:kafka_controller_migration:zookeeper:zookeeper_migration:kafka_broker:kafka_broker_migration:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  gather_facts: false
+  vars:
+    ansible_user: root
+  tasks:
+    - set_fact:
+        ansible_user: root
+  when: lookup('env', 'MIGRATION')|default('false') == 'true'
+
 - name: Install Zookeeper Cluster
   import_playbook: confluent.platform.all
   when: lookup('env', 'MIGRATION')|default('false') == 'true'

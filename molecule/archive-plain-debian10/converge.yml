@@ -6,9 +6,16 @@
 ### import_playbook takes no inline vars, and rootless_bootstrap.yml expects
 ### the caller to pass -e ansible_user=<admin>. These two shim plays flip
 ### ansible_user via set_fact (which outranks group_vars) around the import.
+###
+### The final import_playbook mirrors this scenario's original
+### ${MIGRATION_CONVERGE:-../collections_converge.yml} toggle (now resolved here instead of in
+### molecule.yml's provisioner.playbooks.converge, since that now always points at this file so
+### the rootless bootstrap runs first regardless of which converge flow follows). Includes the
+### _migration groups and controller1-mig in the shim host lists so a MIGRATION=true run also
+### gets the deploy user bootstrapped on cluster 2's hosts.
 
 - name: Cache ansible_user=root so the imported bootstrap playbook connects as root
-  hosts: kafka_controller:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  hosts: kafka_controller:kafka_controller_migration:zookeeper:zookeeper_migration:kafka_broker:kafka_broker_migration:schema_registry:schema_registry_migration:kafka_connect:kafka_connect_migration:kafka_rest:kafka_rest_migration:ksql:ksql_migration:control_center:control_center_migration
   gather_facts: false
   vars:
     ansible_user: root
@@ -19,7 +26,7 @@
 - import_playbook: confluent.platform.rootless_bootstrap
 
 - name: Cache ansible_user=deployment_user so the unprivileged deploy connects as that user
-  hosts: kafka_controller:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  hosts: kafka_controller:kafka_controller_migration:zookeeper:zookeeper_migration:kafka_broker:kafka_broker_migration:schema_registry:schema_registry_migration:kafka_connect:kafka_connect_migration:kafka_rest:kafka_rest_migration:ksql:ksql_migration:control_center:control_center_migration
   gather_facts: false
   vars:
     ansible_user: root
@@ -27,4 +34,4 @@
     - set_fact:
         ansible_user: "{{ deployment_user }}"
 
-- import_playbook: ../collections_converge.yml
+- import_playbook: "{{ lookup('env', 'MIGRATION_CONVERGE') | default('../collections_converge.yml', true) }}"

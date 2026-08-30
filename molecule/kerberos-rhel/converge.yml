@@ -10,9 +10,16 @@
 ### kerberos_server is excluded - it's the KDC helper host (provisioned by
 ### ../kerberos.yml in prepare.yml, before this file even runs), not a CP
 ### component, and is opted out of rootless entirely in molecule.yml.
+###
+### The final import_playbook mirrors this scenario's original
+### ${MIGRATION_CONVERGE:-../collections_converge.yml} toggle (now resolved here instead of in
+### molecule.yml's provisioner.playbooks.converge, since that now always points at this file so
+### the rootless bootstrap runs first regardless of which converge flow follows). Includes
+### kafka_broker_migration and controller1-mig in the shim host lists so a MIGRATION=true run
+### also gets the deploy user bootstrapped on cluster 2's hosts.
 
 - name: Cache ansible_user=root so the imported bootstrap playbook connects as root
-  hosts: kafka_controller:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  hosts: kafka_controller:kafka_controller_migration:zookeeper:zookeeper_migration:kafka_broker:kafka_broker_migration:schema_registry:kafka_connect:kafka_rest:ksql:control_center
   gather_facts: false
   vars:
     ansible_user: root
@@ -23,7 +30,7 @@
 - import_playbook: confluent.platform.rootless_bootstrap
 
 - name: Cache ansible_user=deployment_user so the unprivileged deploy connects as that user
-  hosts: kafka_controller:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  hosts: kafka_controller:kafka_controller_migration:zookeeper:zookeeper_migration:kafka_broker:kafka_broker_migration:schema_registry:kafka_connect:kafka_rest:ksql:control_center
   gather_facts: false
   vars:
     ansible_user: root
@@ -31,4 +38,4 @@
     - set_fact:
         ansible_user: "{{ deployment_user }}"
 
-- import_playbook: ../collections_converge.yml
+- import_playbook: "{{ lookup('env', 'MIGRATION_CONVERGE') | default('../collections_converge.yml', true) }}"

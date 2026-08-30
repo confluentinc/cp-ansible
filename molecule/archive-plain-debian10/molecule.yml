@@ -9,11 +9,12 @@
 ### `molecule --env-file molecule/kraft.yml converge -s archive-plain-debian10` - same toggle
 ### every other scenario in this repo uses (see docs/HOW_TO_TEST.md).
 ###
-### Also covers rootless in place (rootless_enabled: true below) - dropped the original
-### ZK<->KRaft migration-group coverage (_migration groups, ${MIGRATION_CONVERGE} toggle) to do
-### so: migration testing under rootless is a separate, out-of-scope concern (a distinct converge
-### flow neither exercised nor verified against rootless_enabled), orthogonal to just running
-### ZK-or-KRaft single-mode, which the toggle above still fully covers.
+### Also covers rootless in place (rootless_enabled: true below) - the original ZK<->KRaft
+### migration-group coverage (_migration groups, ${MIGRATION_CONVERGE} toggle, controller1-mig
+### host) is kept intact. converge.yml runs the rootless bootstrap shim first, then imports
+### whichever playbook ${MIGRATION_CONVERGE} resolves to (default ../collections_converge.yml).
+### Note: the MIGRATION=true path itself has not been live-verified against rootless_enabled -
+### only the toggle's continued presence (not a new regression) is guaranteed here.
 ###
 ### Known container limitations (not fixable here, called out for reviewers):
 ### - privileged: true + cgroupns_mode: host is required for systemd --user to run inside
@@ -31,6 +32,7 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
+      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -44,6 +46,7 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
+      - kafka_broker_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -57,6 +60,7 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
+      - schema_registry_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -70,6 +74,7 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
+      - kafka_rest_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -83,6 +88,7 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
+      - kafka_connect_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -96,6 +102,7 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
+      - ksql_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -109,6 +116,7 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
+      - control_center_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -118,6 +126,20 @@ platforms:
     privileged: true
     published_ports:
       - "9021:9021"
+    networks:
+      - name: confluent
+    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
+  - name: controller1-mig
+    hostname: controller1-mig.confluent
+    groups:
+      - kafka_controller_migration
+    image: geerlingguy/docker-debian10-ansible
+    dockerfile: ../Dockerfile-debian10-archive.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
     networks:
       - name: confluent
 provisioner:
