@@ -4,13 +4,33 @@
 ### SSL Enabled.
 ### Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
 ### Custom log dirs for all components.
+###
+### Runs Zookeeper by default (${KRAFT_CONTROLLER:-zookeeper} unset), KRaft via
+### `molecule --env-file molecule/kraft.yml converge -s archive-plain-debian10` - same toggle
+### every other scenario in this repo uses (see docs/HOW_TO_TEST.md).
+###
+### Also covers rootless in place (rootless_enabled: true below) - dropped the original
+### ZK<->KRaft migration-group coverage (_migration groups, ${MIGRATION_CONVERGE} toggle) to do
+### so: migration testing under rootless is a separate, out-of-scope concern (a distinct converge
+### flow neither exercised nor verified against rootless_enabled), orthogonal to just running
+### ZK-or-KRaft single-mode, which the toggle above still fully covers.
+###
+### Known container limitations (not fixable here, called out for reviewers):
+### - privileged: true + cgroupns_mode: host is required for systemd --user to run inside
+###   Docker at all - it does NOT mean the deploy itself used root. That's verified instead by:
+###   (1) asserting the deploy user has zero passwordless-sudo escalation path, so a task missing
+###   its rootless_enabled guard fails loudly instead of silently succeeding as root (verify.yml);
+###   (2) asserting every file under rootless_deployment_path is owned by deployment_user
+###   (verify.yml); and (3) the extensive live-EC2 (non-containerized) verification recorded in
+###   ROOTLESS_DEPLOYMENT_STEPS.md.
+### - loginctl enable-linger surviving an actual host reboot is a design promise that isn't
+###   exercisable in a container (no real reboot) - also only verified live on EC2.
 
 platforms:
   - name: ${KRAFT_CONTROLLER:-zookeeper}1
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -24,7 +44,6 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -38,7 +57,6 @@ platforms:
     hostname: schema-registry1.confluent
     groups:
       - schema_registry
-      - schema_registry_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -52,7 +70,6 @@ platforms:
     hostname: kafka-rest1.confluent
     groups:
       - kafka_rest
-      - kafka_rest_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -66,7 +83,6 @@ platforms:
     hostname: kafka-connect1.confluent
     groups:
       - kafka_connect
-      - kafka_connect_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -80,7 +96,6 @@ platforms:
     hostname: ksql1.confluent
     groups:
       - ksql
-      - ksql_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -94,7 +109,6 @@ platforms:
     hostname: control-center1.confluent
     groups:
       - control_center
-      - control_center_migration
     image: geerlingguy/docker-debian10-ansible
     dockerfile: ../Dockerfile-debian10-archive.j2
     command: ""
@@ -106,23 +120,10 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
-    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  - name: controller1-mig
-    hostname: controller1-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: geerlingguy/docker-debian10-ansible
-    dockerfile: ../Dockerfile-debian10-archive.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    cgroupns_mode: host
-    privileged: true
-    networks:
-      - name: confluent
 provisioner:
   playbooks:
-    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
+    converge: converge.yml
+    side_effect: side_effect.yml
   inventory:
     group_vars:
       all:
@@ -132,11 +133,21 @@ provisioner:
         kafka_connect_confluent_hub_plugins:
           - jcustenborder/kafka-connect-spooldir:2.0.43
 
-        ${CONTROLLER_HOSTGROUP:-zookeeper}_log_dir: /${CONTROLLER_HOSTGROUP:-zookeeper}/logs
-        kafka_broker_log_dir: /kafka/logs/
-        schema_registry_log_dir: /sr/logs
-        kafka_rest_log_dir: /rp/logs
-        kafka_connect_log_dir: /connect/logs
-        ksql_log_dir: /ksql/logs/
-        control_center_log_dir: /c3/logs
-        custom_java_path: /opt/jdk17 # Use custom Java 17
+        rootless_enabled: true
+        deployment_user: cp-user
+        deployment_group: cp-user
+        rootless_deployment_path: /home/cp-user/cp-data
+        rootless_install_packages: true
+        ansible_user: "{{ deployment_user }}"
+
+        # Dockerfile-debian10-archive.j2 tars a JDK into custom_java_path (/opt/jdk17) at image
+        # build time - install_java defaults to false automatically once custom_java_path is set.
+        custom_java_path: /opt/jdk17
+
+        ${CONTROLLER_HOSTGROUP:-zookeeper}_log_dir: "{{ rootless_deployment_path }}/logs/${CONTROLLER_HOSTGROUP:-zookeeper}"
+        kafka_broker_log_dir: "{{ rootless_deployment_path }}/logs/kafka"
+        schema_registry_log_dir: "{{ rootless_deployment_path }}/logs/sr"
+        kafka_rest_log_dir: "{{ rootless_deployment_path }}/logs/rp"
+        kafka_connect_log_dir: "{{ rootless_deployment_path }}/logs/connect"
+        ksql_log_dir: "{{ rootless_deployment_path }}/logs/ksql"
+        control_center_log_dir: "{{ rootless_deployment_path }}/logs/c3"

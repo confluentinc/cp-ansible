@@ -2,6 +2,138 @@
 ### Validates that keystores are present on all components.
 ### Validates that LDAPS is working.
 ### Validates that TLS CN is being registered as super user.
+### Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy user has no
+### passwordless-sudo escalation path, nothing landed under /opt beyond the pre-baked JDK, and
+### the generated unit/env files point under rootless_deployment_path.
+
+- name: Verify - rootless lifecycle on all CP components
+  hosts: kafka_controller:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  gather_facts: true
+  vars:
+    rootless_unit_map:
+      kafka_controller: cp-kafka_controller.service
+      zookeeper: cp-zookeeper.service
+      kafka_broker: cp-kafka_broker.service
+      schema_registry: cp-schema_registry.service
+      kafka_connect: cp-kafka_connect.service
+      kafka_rest: cp-kafka_rest.service
+      ksql: cp-ksql.service
+      control_center: cp-control_center.service
+  tasks:
+    - name: Determine this host's rootless unit name and component name
+      set_fact:
+        rootless_unit: "{{ rootless_unit_map[group_names | intersect(rootless_unit_map.keys()) | first] }}"
+        rootless_component: "{{ group_names | intersect(rootless_unit_map.keys()) | first }}"
+
+    - name: Check the systemd --user unit is active
+      command: "systemctl --user is-active {{ rootless_unit }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+      register: unit_active
+      changed_when: false
+      failed_when: unit_active.stdout != "active"
+
+    - name: Check the process is owned by the deploy user, not root
+      shell: "ps -eo user,cmd | grep -E 'kafka.Kafka|QuorumPeerMain|SchemaRegistryMain|ConnectDistributed|KafkaRestMain|KsqlServerMain|ControlCenter' | grep -v grep | awk '{print $1}' | sort -u"
+      register: process_owners
+      changed_when: false
+
+    - name: Assert no process runs as root
+      assert:
+        that:
+          - "'root' not in process_owners.stdout_lines"
+          - process_owners.stdout_lines | length > 0
+        fail_msg: "Expected all component processes to run as {{ deployment_user }}, found: {{ process_owners.stdout_lines }}"
+        quiet: true
+
+    # Deliberately re-checked here rather than trusting roles/common/tasks/main.yml's own probe
+    # of the same thing: that task is tagged `notest` (molecule hardcodes --skip-tags
+    # molecule-notest,notest on every invocation, so it never runs under molecule at all) and its
+    # result doesn't survive across converge -> verify anyway (separate ansible-playbook
+    # processes). Without this, privileged: true + cgroupns_mode: host (needed for systemd --user
+    # to work in Docker) could mask a missing rootless_enabled guard silently succeeding as root -
+    # this is what makes that impossible, matching ROOTLESS_DEPLOYMENT_STEPS.md's real-EC2 "before
+    # the run" proof.
+    - name: Check for non-interactive sudo escalation (rootless)
+      command: sudo -n true
+      register: rootless_sudo_probe
+      changed_when: false
+      failed_when: rootless_sudo_probe.rc == 0
+
+    - name: Assert the deploy user has no passwordless-sudo escalation path
+      assert:
+        that:
+          - rootless_sudo_probe.rc != 0
+        fail_msg: >-
+          '{{ ansible_user }}' has passwordless sudo access to root on this host - this makes the
+          rootless proof meaningless (a task missing its rootless_enabled guard would silently
+          succeed as root instead of failing loudly). Investigate why this account can escalate.
+        quiet: true
+
+    - name: Find everything under rootless_deployment_path
+      find:
+        paths: "{{ rootless_deployment_path }}"
+        recurse: true
+        file_type: any
+      register: rootless_deployment_path_contents
+
+    - name: Assert everything under rootless_deployment_path is owned by the deploy user, not root
+      # A privileged test container can docker-exec as root regardless of what the deploy
+      # itself did - this, not the container's own privilege level, is what actually proves
+      # nothing in the deploy path used root: a root-owned file here means some task silently
+      # became root.
+      vars:
+        non_deploy_user_files: "{{ rootless_deployment_path_contents.files | rejectattr('pw_name', 'equalto', deployment_user) | map(attribute='path') | list }}"
+      assert:
+        that:
+          - non_deploy_user_files | length == 0
+        fail_msg: "Found files under rootless_deployment_path not owned by {{ deployment_user }}: {{ non_deploy_user_files }}"
+        quiet: true
+
+    - name: Read the generated systemd --user unit file
+      slurp:
+        src: "{{ ansible_env.HOME }}/.config/systemd/user/{{ rootless_unit }}"
+      register: unit_file_slurp
+
+    - name: Assert the unit's ExecStart/EnvironmentFile point under rootless_deployment_path, not a hardcoded root path
+      vars:
+        unit_content: "{{ unit_file_slurp.content | b64decode }}"
+      assert:
+        that:
+          - rootless_deployment_path in unit_content
+          - ("EnvironmentFile=" ~ rootless_deployment_path) in unit_content
+        fail_msg: "cp-{{ rootless_component }} unit file doesn't reference rootless_deployment_path as expected:\n{{ unit_content }}"
+        quiet: true
+
+    - name: Read the generated systemd EnvironmentFile
+      slurp:
+        src: "{{ rootless_deployment_path }}/rootless-bin/{{ rootless_component }}.env"
+      register: env_file_slurp
+
+    - name: Assert the EnvironmentFile actually rendered content, not empty or unrendered Jinja
+      vars:
+        env_content: "{{ env_file_slurp.content | b64decode }}"
+        # Built via multiplication, not a literal '{{', so ansible's own templating of this
+        # assert's `that:` strings doesn't try to parse it as the start of an expression.
+        unrendered_jinja_marker: "{{ '{' * 2 }}"
+      assert:
+        that:
+          - env_content | trim | length > 0
+          - unrendered_jinja_marker not in env_content
+        fail_msg: "{{ rootless_component }}.env is empty or has unrendered template syntax:\n{{ env_content }}"
+        quiet: true
+
+- name: Verify - zookeeper dataDir under rootless_deployment_path
+  hosts: zookeeper
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/zookeeper.properties"
+        property: dataDir
+        expected_value: "{{ rootless_deployment_path }}/data/zookeeper"
 
 - name: Verify - kafka_controller
   hosts: kafka_controller
@@ -11,12 +143,12 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/controller/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/controller/server.properties"
         property: listener.name.controller.ssl.keystore.location
-        expected_value: /var/ssl/private/kafka_controller.keystore.jks
+        expected_value: "{{ rootless_deployment_path }}/ssl/kafka_controller.keystore.jks"
 
     - name: Get super.users
-      shell: grep "super.users" /etc/controller/server.properties
+      shell: "grep 'super.users' {{ rootless_deployment_path }}/confluent/etc/controller/server.properties"
       register: super_users_grep
 
     - name: Assert full dname found in server.properties
@@ -33,20 +165,20 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
         property: listener.name.internal.ssl.keystore.location
-        expected_value: /var/ssl/private/kafka_broker.keystore.jks
+        expected_value: "{{ rootless_deployment_path }}/ssl/kafka_broker.keystore.jks"
 
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
         property: ldap.java.naming.provider.url
         expected_value: ldaps://ldap1:636
 
     - name: Get super.users
-      shell: grep "super.users" /etc/kafka/server.properties
+      shell: "grep 'super.users' {{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
       register: super_users_grep
 
     - name: Assert full dname found in server.properties
@@ -63,9 +195,9 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/schema-registry/schema-registry.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/schema-registry/schema-registry.properties"
         property: ssl.truststore.location
-        expected_value: /var/ssl/private/schema_registry.truststore.jks
+        expected_value: "{{ rootless_deployment_path }}/ssl/schema_registry.truststore.jks"
 
 - name: Verify - kafka_rest
   hosts: kafka_rest
@@ -75,9 +207,9 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka-rest/kafka-rest.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka-rest/kafka-rest.properties"
         property: ssl.truststore.location
-        expected_value: /var/ssl/private/kafka_rest.truststore.jks
+        expected_value: "{{ rootless_deployment_path }}/ssl/kafka_rest.truststore.jks"
 
 - name: Verify - kafka_connect
   hosts: kafka_connect
@@ -87,9 +219,9 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka/connect-distributed.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
         property: ssl.truststore.location
-        expected_value: /var/ssl/private/kafka_connect.truststore.jks
+        expected_value: "{{ rootless_deployment_path }}/ssl/kafka_connect.truststore.jks"
 
 - name: Verify - ksql
   hosts: ksql
@@ -99,9 +231,9 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/ksqldb/ksql-server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/ksqldb/ksql-server.properties"
         property: ssl.truststore.location
-        expected_value: /var/ssl/private/ksql.truststore.jks
+        expected_value: "{{ rootless_deployment_path }}/ssl/ksql.truststore.jks"
 
 - name: Verify - control_center
   hosts: control_center
@@ -111,9 +243,9 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/confluent-control-center/control-center-production.properties"
         property: confluent.controlcenter.streams.ssl.truststore.location
-        expected_value: /var/ssl/private/control_center.truststore.jks
+        expected_value: "{{ rootless_deployment_path }}/ssl/control_center.truststore.jks"
 
 - name: Verify - Client Packages
   hosts: kafka_broker

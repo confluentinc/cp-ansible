@@ -1,4 +1,21 @@
 ---
+### certificates.yml's second play ("Copy certs on remote src", hosts: all) and its first play
+### (hosts: kafka_broker[0]) both connect using whatever ansible_user the inventory currently
+### resolves to - which is deployment_user (cp-user) globally in this scenario's group_vars, and
+### that account doesn't exist yet (rootless_bootstrap.yml, which creates it, only runs later, in
+### converge.yml). Without this shim, prepare.yml fails UNREACHABLE trying to SSH as cp-user
+### before it exists. ldap_server already opts out of rootless (ansible_user: root in
+### molecule.yml), so it's left out of this shim's host list.
+
+- name: Cache ansible_user=root so certificates.yml/ldap.yml connect as root before the deploy user exists
+  hosts: kafka_controller:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  gather_facts: false
+  vars:
+    ansible_user: root
+  tasks:
+    - set_fact:
+        ansible_user: root
+
 - name: Create Custom Certs
   import_playbook: ../certificates.yml
 

@@ -2,6 +2,28 @@
 ### Installation of Confluent Platform on Oracle Linux 9.
 ### Kerberos enabled with custom client config path
 ### Creates a Connector in Connect cluster
+###
+### Runs Zookeeper by default (${KRAFT_CONTROLLER:-zookeeper} unset), KRaft via
+### `molecule --env-file molecule/kraft.yml converge -s kerberos-rhel` - same toggle every other
+### scenario in this repo uses (see docs/HOW_TO_TEST.md). Zookeeper's own Kerberos
+### principal/keytab were already wired up before this conversion (unlike some other
+### scenarios) - nothing extra needed to make ZK mode work under Kerberos here.
+###
+### Also covers rootless in place (rootless_enabled: true below) - dropped the original
+### ZK<->KRaft migration-group coverage (_migration groups, ${MIGRATION_CONVERGE} toggle) to do
+### so: migration testing under rootless is a separate, out-of-scope concern, orthogonal to just
+### running ZK-or-KRaft single-mode, which the toggle above still fully covers.
+###
+### Known container limitations (not fixable here, called out for reviewers):
+### - privileged: true + cgroupns_mode: host is required for systemd --user to run inside
+###   Docker at all - it does NOT mean the deploy itself used root. That's verified instead by:
+###   (1) asserting the deploy user has zero passwordless-sudo escalation path, so a task missing
+###   its rootless_enabled guard fails loudly instead of silently succeeding as root (verify.yml);
+###   (2) asserting every file under rootless_deployment_path is owned by deployment_user
+###   (verify.yml); and (3) the extensive live-EC2 (non-containerized) verification recorded in
+###   ROOTLESS_DEPLOYMENT_STEPS.md.
+### - loginctl enable-linger surviving an actual host reboot is a design promise that isn't
+###   exercisable in a container (no real reboot) - also only verified live on EC2.
 
 driver:
   name: docker
@@ -23,7 +45,6 @@ platforms:
     hostname: ${KRAFT_CONTROLLER:-zookeeper}1.confluent
     groups:
       - ${CONTROLLER_HOSTGROUP:-zookeeper}
-      - ${CONTROLLER_HOSTGROUP:-zookeeper}_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java8.j2
     command: ""
@@ -37,7 +58,6 @@ platforms:
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java8.j2
     command: ""
@@ -51,7 +71,6 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java8.j2
     command: ""
@@ -65,7 +84,6 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-      - kafka_broker_migration
     image: redhat/ubi9-minimal
     dockerfile: ../Dockerfile-rhel-java8.j2
     command: ""
@@ -142,23 +160,9 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
-    # Cluster 2 (Kraft) goups, groupnames will be changed during converge phase
-  - name: controller1-mig
-    hostname: controller1-mig.confluent
-    groups:
-      - kafka_controller_migration
-    image: redhat/ubi9-minimal
-    dockerfile: ../Dockerfile-rhel-java8.j2
-    command: ""
-    volumes:
-      - /sys/fs/cgroup:/sys/fs/cgroup:rw
-    cgroupns_mode: host
-    privileged: true
-    networks:
-      - name: confluent
 provisioner:
   playbooks:
-    converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
+    converge: converge.yml
   inventory:
     group_vars:
       all:
@@ -170,18 +174,32 @@ provisioner:
           kdc_hostname: kerberos1
           admin_hostname: kerberos1
 
-        kerberos_client_config_file_dest: /krb/krb5.conf
+        rootless_enabled: true
+        deployment_user: cp-user
+        deployment_group: cp-user
+        rootless_deployment_path: /home/cp-user/cp-data
+        installation_method: archive
+        rootless_install_packages: true
+        ansible_user: "{{ deployment_user }}"
+        # Dockerfile-rhel-java8.j2 installs Java via `yum install java-1.8.0-openjdk` directly
+        # (real RPM, registered on PATH via alternatives already), not a standalone tarball
+        # under /opt - install_java: false so rootless_bootstrap.yml doesn't try to yum-install
+        # java-17-openjdk on top of the image's Java 8 (its default,
+        # (custom_java_path | length) == 0, would otherwise install it).
+        install_java: false
+
+        kerberos_client_config_file_dest: "{{ rootless_deployment_path }}/krb/krb5.conf"
 
         # To run the FileStream connector, you must add the filestream-connectors path in the plugin.path
         kafka_connect_custom_properties:
-          plugin.path: "/usr/share/filestream-connectors,/usr/share/java/connect_plugins"
+          plugin.path: "{{ binary_base_path }}/share/filestream-connectors,{{ binary_base_path }}/share/java/connect_plugins"
 
         kafka_connect_connectors:
           - name: sample-connector-1
             config:
               connector.class: "FileStreamSinkConnector"
               tasks.max: "1"
-              file: "/etc/kafka/connect-distributed.properties"
+              file: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
               topics: "test_topic"
 
       zookeeper:
@@ -210,21 +228,20 @@ provisioner:
         control_center_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/control_center-{{inventory_hostname}}.keytab"
 
       kerberos_server:
+        ansible_user: root
+        deployment_user: ""
+        rootless_deployment_path: ""
         realm_name: "{{ kerberos.realm | upper }}"
 
         keytab_output_directory: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs"
 
         kerberos_principals:
           # Wish there was a better way to create this list, this will do for now
-          # zookeeper keytabs and principal is not  used in Kraft mode, it will be removed once we drop zookeeper support
           - principal: "zk/zookeeper1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
 
           - principal: "kafka-a/controller1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_controller-controller1.keytab"
-
-          - principal: "kafka-a/controller1-mig.confluent@{{kerberos.realm | upper}}"
-            keytab_path: "keytabs/kafka_controller-controller1-mig.keytab"
 
           - principal: "kafka-a/kafka-broker1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/kafka_broker-kafka-broker1.keytab"

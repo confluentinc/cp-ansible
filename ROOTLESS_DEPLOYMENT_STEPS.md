@@ -138,7 +138,8 @@ user has nothing to escalate to - so a clean run through these checks is a real 
 rootlessness, not just an absence of errors.
 
 The "before the run" sudo-escalation check above is also asserted (not just documented) in the
-3 dedicated `rootless-*` molecule scenarios' `verify.yml` - `privileged: true`/`cgroupns_mode: host`
+rootless-covering molecule scenarios' (`archive-plain-debian10`, `kerberos-rhel`,
+`rbac-mtls-provided-ubuntu`) `verify.yml` - `privileged: true`/`cgroupns_mode: host`
 (needed for `systemd --user` to work inside Docker at all) is a container-runtime requirement, not
 proof the deploy avoided root, so those scenarios independently assert the deploy user has no
 passwordless-sudo path, the same way this section does for a real host.
