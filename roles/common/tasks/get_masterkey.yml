@@ -1,26 +1,40 @@
 ---
-- name: Check if override.conf exists
+# Reads back a previously-persisted CONFLUENT_SECURITY_MASTER_KEY. Root writes it into
+# systemd_override_path (Environment="KEY=value", quoted); rootless writes it into
+# {{ rootless_lifecycle_bin_dir }}/{{ rootless_component_name }}.env instead (systemd
+# EnvironmentFile syntax: unquoted KEY=value) - see roles/common/tasks/rootless_lifecycle.yml.
+# Callers must pass both systemd_override_path and rootless_component_name.
+
+- name: Determine the master key source file (rootless env file or root override.conf)
+  set_fact:
+    masterkey_source_file: "{{ (rootless_lifecycle_bin_dir ~ '/' ~ rootless_component_name ~ '.env') if (rootless_enabled | bool) else systemd_override_path }}"
+
+- name: Check if master key source file exists
   stat:
-    path: "{{ systemd_override_path }}"
+    path: "{{ masterkey_source_file }}"
   register: override_stat
 
-- name: Log when override.conf is not found
+- name: Log when master key source file is not found
   debug:
-    msg: "override.conf not found at {{ systemd_override_path }} — skipping master key extraction"
+    msg: "{{ masterkey_source_file }} not found — skipping master key extraction"
   when: not (override_stat.stat.exists | default(false))
 
-- name: Load override.conf for master key
+- name: Load master key source file
   slurp:
-    src: "{{ systemd_override_path }}"
+    src: "{{ masterkey_source_file }}"
   register: slurped_override
   when: override_stat.stat.exists | default(false)
   no_log: "{{mask_secrets|bool}}"
 
-- name: Extract CONFLUENT_SECURITY_MASTER_KEY from override.conf
+- name: Extract CONFLUENT_SECURITY_MASTER_KEY from master key source file
   set_fact:
     existing_masterkey: "{{ (slurped_override.content | b64decode).split('\n') |
       select('match', '.*CONFLUENT_SECURITY_MASTER_KEY=.*') |
-      list | first | regex_search('CONFLUENT_SECURITY_MASTER_KEY=(.+)\"', '\\1') | first }}"
+      list | first | regex_search(masterkey_extraction_pattern, '\\1') | first }}"
+  vars:
+    # Root's override.conf quotes the whole Environment= value, so the key ends at a
+    # trailing '"'; rootless's EnvironmentFile line has no quoting, so the key runs to EOL.
+    masterkey_extraction_pattern: "{{ 'CONFLUENT_SECURITY_MASTER_KEY=(.+)\"' if not (rootless_enabled | bool) else 'CONFLUENT_SECURITY_MASTER_KEY=(.+)$' }}"
   when:
     - slurped_override is not skipped
     - slurped_override.content | default('') | b64decode is search('CONFLUENT_SECURITY_MASTER_KEY')

@@ -5,6 +5,10 @@
 ### Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy user has no
 ### passwordless-sudo escalation path, nothing landed under /opt beyond the pre-baked JDK, and
 ### the generated unit/env files point under rootless_deployment_path.
+### Validates secrets protection under rootless: the master key is persisted where
+### roles/common/tasks/get_masterkey.yml now knows to read it back from (the rootless env file,
+### not the root-only override.conf), and that the LDAP credential property was actually
+### encrypted (not left as the plaintext value from molecule.yml).
 
 - name: Verify - rootless lifecycle on all CP components
   hosts: kafka_controller:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
@@ -157,6 +161,27 @@
           - "'User:CN=kafka_controller,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US' in super_users_grep.stdout"
         fail_msg: "Super Users property: {{super_users_grep.stdout}} does not contain User:CN=kafka_controller,OU=QE IT,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US"
 
+- name: Verify - secrets protection master key persisted where get_masterkey.yml reads it back (rootless)
+  hosts: kafka_broker:kafka_controller
+  gather_facts: false
+  tasks:
+    - name: Read the rootless EnvironmentFile
+      slurp:
+        src: "{{ rootless_deployment_path }}/rootless-bin/{{ 'kafka_broker' if 'kafka_broker' in group_names else 'kafka_controller' }}.env"
+      register: masterkey_env_slurp
+
+    - name: Assert CONFLUENT_SECURITY_MASTER_KEY is present and non-empty
+      vars:
+        env_content: "{{ masterkey_env_slurp.content | b64decode }}"
+      assert:
+        that:
+          - env_content is search('CONFLUENT_SECURITY_MASTER_KEY=.+')
+        fail_msg: >-
+          CONFLUENT_SECURITY_MASTER_KEY missing from the rootless EnvironmentFile - this is the
+          exact file roles/common/tasks/get_masterkey.yml now reads back under rootless_enabled,
+          so a missing/empty key here means that fix's read path would find nothing.
+        quiet: true
+
 - name: Verify - kafka_broker
   hosts: kafka_broker
   gather_facts: false
@@ -176,6 +201,18 @@
         file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
         property: ldap.java.naming.provider.url
         expected_value: ldaps://ldap1:636
+
+    - name: Get the (should now be encrypted) ldap.java.naming.security.credentials value
+      shell: "grep 'ldap.java.naming.security.credentials' {{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
+      register: ldap_credentials_grep
+
+    - name: Assert the LDAP credential was actually encrypted by secrets protection, not left plaintext
+      assert:
+        that:
+          - "'securepass' in ldap_credentials_grep.stdout"
+          - "'ldap.java.naming.security.credentials=password' not in ldap_credentials_grep.stdout"
+        fail_msg: "Expected ldap.java.naming.security.credentials to be encrypted via the securepass config provider, found: {{ ldap_credentials_grep.stdout }}"
+        quiet: true
 
     - name: Get super.users
       shell: "grep 'super.users' {{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
