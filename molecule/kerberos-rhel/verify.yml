@@ -46,14 +46,8 @@
         fail_msg: "Expected all component processes to run as {{ deployment_user }}, found: {{ process_owners.stdout_lines }}"
         quiet: true
 
-    # Deliberately re-checked here rather than trusting roles/common/tasks/main.yml's own probe
-    # of the same thing: that task is tagged `notest` (molecule hardcodes --skip-tags
-    # molecule-notest,notest on every invocation, so it never runs under molecule at all) and its
-    # result doesn't survive across converge -> verify anyway (separate ansible-playbook
-    # processes). Without this, privileged: true + cgroupns_mode: host (needed for systemd --user
-    # to work in Docker) could mask a missing rootless_enabled guard silently succeeding as root -
-    # this is what makes that impossible, matching ROOTLESS_DEPLOYMENT_STEPS.md's real-EC2 "before
-    # the run" proof.
+    # Re-checked here (not via roles/common/tasks/main.yml's own probe): that task is tagged
+    # `notest`, which molecule skips unconditionally.
     - name: Check for non-interactive sudo escalation (rootless)
       command: sudo -n true
       register: rootless_sudo_probe
@@ -78,10 +72,6 @@
       register: rootless_deployment_path_contents
 
     - name: Assert everything under rootless_deployment_path is owned by the deploy user, not root
-      # A privileged test container can docker-exec as root regardless of what the deploy
-      # itself did - this, not the container's own privilege level, is what actually proves
-      # nothing in the deploy path used root: a root-owned file here means some task silently
-      # became root.
       vars:
         non_deploy_user_files: "{{ rootless_deployment_path_contents.files | rejectattr('pw_name', 'equalto', deployment_user) | map(attribute='path') | list }}"
       assert:
@@ -113,8 +103,7 @@
     - name: Assert the EnvironmentFile actually rendered content, not empty or unrendered Jinja
       vars:
         env_content: "{{ env_file_slurp.content | b64decode }}"
-        # Built via multiplication, not a literal '{{', so ansible's own templating of this
-        # assert's `that:` strings doesn't try to parse it as the start of an expression.
+        # Built via multiplication so ansible doesn't parse this as the start of an expression.
         unrendered_jinja_marker: "{{ '{' * 2 }}"
       assert:
         that:

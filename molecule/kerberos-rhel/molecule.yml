@@ -3,29 +3,10 @@
 ### Kerberos enabled with custom client config path
 ### Creates a Connector in Connect cluster
 ###
-### Runs Zookeeper by default (${KRAFT_CONTROLLER:-zookeeper} unset), KRaft via
-### `molecule --env-file molecule/kraft.yml converge -s kerberos-rhel` - same toggle every other
-### scenario in this repo uses (see docs/HOW_TO_TEST.md). Zookeeper's own Kerberos
-### principal/keytab were already wired up before this conversion (unlike some other
-### scenarios) - nothing extra needed to make ZK mode work under Kerberos here.
-###
-### Also covers rootless in place (rootless_enabled: true below) - the original ZK<->KRaft
-### migration-group coverage (_migration groups, ${MIGRATION_CONVERGE} toggle, controller1-mig
-### host) is kept intact. converge.yml runs the rootless bootstrap shim first, then imports
-### whichever playbook ${MIGRATION_CONVERGE} resolves to (default ../collections_converge.yml).
-### Note: the MIGRATION=true path itself has not been live-verified against rootless_enabled -
-### only the toggle's continued presence (not a new regression) is guaranteed here.
-###
-### Known container limitations (not fixable here, called out for reviewers):
-### - privileged: true + cgroupns_mode: host is required for systemd --user to run inside
-###   Docker at all - it does NOT mean the deploy itself used root. That's verified instead by:
-###   (1) asserting the deploy user has zero passwordless-sudo escalation path, so a task missing
-###   its rootless_enabled guard fails loudly instead of silently succeeding as root (verify.yml);
-###   (2) asserting every file under rootless_deployment_path is owned by deployment_user
-###   (verify.yml); and (3) the extensive live-EC2 (non-containerized) verification recorded in
-###   ROOTLESS_DEPLOYMENT_STEPS.md.
-### - loginctl enable-linger surviving an actual host reboot is a design promise that isn't
-###   exercisable in a container (no real reboot) - also only verified live on EC2.
+### Runs Zookeeper by default, KRaft via `--env-file molecule/kraft.yml` (see docs/HOW_TO_TEST.md).
+### Also covers rootless in place (rootless_enabled: true below); ZK<->KRaft migration coverage
+### kept intact but not verified under rootless. See ROOTLESS_DEPLOYMENT_STEPS.md for why
+### privileged: true here doesn't undermine the rootless proof.
 
 driver:
   name: docker
@@ -201,11 +182,7 @@ provisioner:
         installation_method: archive
         rootless_install_packages: true
         ansible_user: "{{ deployment_user }}"
-        # Dockerfile-rhel-java8.j2 installs Java via `yum install java-1.8.0-openjdk` directly
-        # (real RPM, registered on PATH via alternatives already), not a standalone tarball
-        # under /opt - install_java: false so rootless_bootstrap.yml doesn't try to yum-install
-        # java-17-openjdk on top of the image's Java 8 (its default,
-        # (custom_java_path | length) == 0, would otherwise install it).
+        # Dockerfile-rhel-java8.j2 installs Java 8 via yum already.
         install_java: false
 
         kerberos_client_config_file_dest: "{{ rootless_deployment_path }}/krb/krb5.conf"
