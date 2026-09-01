@@ -43,6 +43,63 @@
     success_msg: "BYOP: external Prometheus auth mode is valid."
     quiet: true
 
+# BYOP server-CA trust check (TLS is already asserted on above).
+# C3 and the broker/controller telemetry exporters only trust the external Prometheus server
+# certificate if its CA is imported into their truststores. That import (in this role's main.yml and
+# in the kafka_broker / kafka_controller roles) is gated on
+# control_center_next_gen_dependency_prometheus_provided_ca_cert_path being set. If it is empty and
+# the CA is not otherwise trusted, TLS to the external Prometheus fails silently: the run looks green
+# but C3 shows blank dashboards. This is a WARNING rather than a hard assert on purpose - some setups
+# supply the CA another way (a publicly-trusted CA, or an out-of-band distribute-CA step) and set
+# control_center_next_gen_dependency_prometheus_server_ca_trusted to acknowledge that.
+- name: BYOP - external Prometheus server CA is not configured for import
+  ansible.builtin.set_fact:
+    byop_server_ca_untrusted: >-
+      {{ (control_center_next_gen_dependency_prometheus_provided_ca_cert_path | default('') | trim | length) == 0
+         and not (control_center_next_gen_dependency_prometheus_server_ca_trusted | default(false) | bool) }}
+
+- name: BYOP - warn when no server CA source is set for the external Prometheus
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: control_center_next_gen_dependency_prometheus_provided_ca_cert_path is not set, so the
+      external Prometheus server CA will NOT be imported into the Control Center and broker/controller
+      truststores. TLS reads and metric pushes to the external Prometheus may fail silently (a green
+      run with blank dashboards). Set control_center_next_gen_dependency_prometheus_provided_ca_cert_path
+      to the CA that signed the external Prometheus server certificate, or set
+      control_center_next_gen_dependency_prometheus_server_ca_trusted to true if that CA is already
+      trusted by the Confluent nodes.
+  when: byop_server_ca_untrusted | bool
+
+# BYOP best-effort reachability probe (gated on the toggle).
+# Catches an obviously wrong or unreachable endpoint early, from the Ansible control node. This is a
+# SOFT check: the control node's view of the network can differ from the Control Center host's (split
+# DNS, firewall, an endpoint only reachable from the cluster subnet), so it never fails the run - it
+# only warns. Disable with control_center_next_gen_external_prometheus_preflight_probe=false.
+- name: BYOP - probe the external Prometheus endpoint (best-effort)
+  ansible.builtin.uri:
+    url: >-
+      {{ (control_center_next_gen_dependency_prometheus_ssl_enabled | bool) | ternary('https', 'http') }}://{{
+      control_center_next_gen_dependency_prometheus_host }}:{{ control_center_next_gen_dependency_prometheus_port }}/-/ready
+    method: GET
+    validate_certs: false
+    timeout: 5
+  register: byop_prometheus_probe
+  failed_when: false
+  changed_when: false
+  when: control_center_next_gen_external_prometheus_preflight_probe | default(true) | bool
+
+- name: BYOP - warn if the external Prometheus was not reachable from the control node
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: could not reach the external Prometheus at
+      {{ control_center_next_gen_dependency_prometheus_host }}:{{ control_center_next_gen_dependency_prometheus_port }}/-/ready
+      from the Ansible control node (status {{ byop_prometheus_probe.status | default('n/a') }}). This is a
+      best-effort check and may just be a control-node-vs-Control-Center network difference. If C3 later
+      shows blank dashboards, verify the endpoint, port, DNS, and firewall from the Control Center host.
+  when:
+    - control_center_next_gen_external_prometheus_preflight_probe | default(true) | bool
+    - (byop_prometheus_probe.status | default(0) | int) not in [200, 401, 403]
+
 # TODO(SETU-3482): C3-version guard. BYOP needs a C3 Next Gen that supports
 # confluent.controlcenter.prometheus.external.enable (control-center-backend #395). Until that ships
 # we do not know the exact release version, so this stays commented out. Once #395 lands, replace
