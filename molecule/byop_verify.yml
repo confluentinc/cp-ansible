@@ -7,6 +7,8 @@
 #   - C3's rendered config points at the external Prometheus and has alerts off
 #   - C3 is serving (cluster ONLINE) reading from the external Prometheus
 #   - the external Prometheus has C3's recording rules loaded and is receiving the node push
+#   - C3's own BYOP validation status API (/2.0/services/prometheus/status) reports the external
+#     Prometheus valid: external=true, no failing version or recording-rules check
 #
 # DRAFT: the config-file path and a couple of endpoint paths are best-guesses and must be
 # confirmed on the first local molecule run (marked with CONFIRM below).
@@ -203,3 +205,41 @@
       # See the note on the broker-push check above: node push is validated on the Basic-auth-over-TLS
       # scenarios, not under mTLS where the mock rejects the node's cluster-signed client cert.
       when: (not prom_mtls | bool) or (byop_assert_mtls_push | default(false) | bool)
+
+    # --- 5. C3's own BYOP validation status API ---
+    # /2.0/services/prometheus/status always returns HTTP 200; the validation state is in the body:
+    #   { "componentName": "PROMETHEUS", "componentStatus": "ONLINE|OFFLINE", "external": true,
+    #     "checks": [ { "id", "status" (FAIL|UNKNOWN), "summary", "message", "details" }, ... ] }
+    # Only non-passing checks appear. Here the external Prometheus is >= 3.0 and carries C3's
+    # recording rules (asserted in section 4), so C3's own validation must agree: external=true, no
+    # FAIL/UNKNOWN check, and componentStatus ONLINE. This exercises the version check and the
+    # recording-rules check together, from C3's side rather than by querying Prometheus directly.
+    - name: C3 BYOP status API validates the external Prometheus (version + recording rules)
+      ansible.builtin.uri:
+        url: "{{ c3_base }}/2.0/services/prometheus/status"
+        url_username: "{{ c3_user }}"
+        url_password: "{{ c3_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        return_content: true
+      register: byop_prom_status
+      until:
+        - byop_prom_status.status == 200
+        - byop_prom_status.json.external | default(false) | bool
+        - (byop_prom_status.json.checks | default([]) | selectattr('status', 'equalto', 'FAIL') | list | length) == 0
+        - (byop_prom_status.json.checks | default([]) | selectattr('status', 'equalto', 'UNKNOWN') | list | length) == 0
+      retries: "{{ hc_retries }}"
+      delay: "{{ hc_delay }}"
+      when: not rbac_enabled | default(false) | bool
+
+    - name: Assert the BYOP status is ONLINE with no non-passing checks
+      ansible.builtin.assert:
+        that:
+          - byop_prom_status.json.componentStatus == 'ONLINE'
+          - (byop_prom_status.json.checks | default([]) | length) == 0
+        fail_msg: >-
+          C3's BYOP validation reported a non-passing check:
+          {{ byop_prom_status.json.checks | default([]) }}
+        success_msg: >-
+          BYOP: C3 validates the external Prometheus (version >= 3.0 and recording rules present).
+      when: not rbac_enabled | default(false) | bool
