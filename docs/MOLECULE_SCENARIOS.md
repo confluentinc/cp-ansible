@@ -1188,6 +1188,8 @@ Validates that Rest Proxy has correct auth property.
 
 Validates that Java 25 is in Use
 
+Validates that Control Center Next Gen's jaas.conf uses the Jetty login module matching the installed Control Center Next Gen version.
+
 ***
 
 ### molecule/plaintext-rhel-customrepo
