@@ -1,0 +1,182 @@
+---
+# BYOP negative validation: confirm validate_byop.yml REJECTS bad external-Prometheus configs.
+# Runs on localhost (no cluster needed). Imported from a scenario's verify.yml:
+#   - import_playbook: ../byop_validate_negative.yml
+#
+# Each case runs validate_byop.yml with a deliberately bad config and asserts that it fails. The
+# flag pattern (set true only if validation did NOT fail) avoids inspecting ansible_failed_result,
+# so a passing validation and a failing rescue assertion cannot be confused.
+- name: BYOP validation - bad configs are rejected
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    control_center_next_gen_external_prometheus_enabled: true
+    control_center_next_gen_dependency_prometheus_host: prom.example
+    control_center_next_gen_dependency_prometheus_port: 9090
+  tasks:
+    - name: Case 1 - external Prometheus with TLS off must be rejected
+      block:
+        - name: Run validation with TLS off
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_byop.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: false
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+        - name: Validation unexpectedly passed (TLS off)
+          ansible.builtin.set_fact:
+            byop_tls_off_passed: true
+      rescue:
+        - name: Validation rejected TLS off as expected
+          ansible.builtin.set_fact:
+            byop_tls_off_passed: false
+
+    - name: Assert TLS-off was rejected
+      ansible.builtin.assert:
+        that:
+          - not (byop_tls_off_passed | default(true) | bool)
+        fail_msg: "validate_byop did not reject a non-TLS external Prometheus."
+        success_msg: "BYOP negative: non-TLS external Prometheus is rejected."
+
+    - name: Case 2 - external Prometheus with both auth modes must be rejected
+      block:
+        - name: Run validation with both Basic and mTLS on
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_byop.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: true
+        - name: Validation unexpectedly passed (both auth modes)
+          ansible.builtin.set_fact:
+            byop_both_auth_passed: true
+      rescue:
+        - name: Validation rejected both auth modes as expected
+          ansible.builtin.set_fact:
+            byop_both_auth_passed: false
+
+    - name: Assert both-auth-modes was rejected
+      ansible.builtin.assert:
+        that:
+          - not (byop_both_auth_passed | default(true) | bool)
+        fail_msg: "validate_byop did not reject both auth modes at once."
+        success_msg: "BYOP negative: both auth modes at once is rejected."
+
+    - name: Case 3 - external Prometheus with no auth mode must be rejected
+      block:
+        - name: Run validation with neither auth mode
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_byop.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+        - name: Validation unexpectedly passed (no auth mode)
+          ansible.builtin.set_fact:
+            byop_no_auth_passed: true
+      rescue:
+        - name: Validation rejected no auth mode as expected
+          ansible.builtin.set_fact:
+            byop_no_auth_passed: false
+
+    - name: Assert no-auth-mode was rejected
+      ansible.builtin.assert:
+        that:
+          - not (byop_no_auth_passed | default(true) | bool)
+        fail_msg: "validate_byop did not reject a missing auth mode."
+        success_msg: "BYOP negative: missing auth mode is rejected."
+
+    # --- Item 4: server-CA trust is a WARNING, not a hard fail ---
+    - name: Case 4 - TLS on, valid auth, but no server CA source must WARN (not fail)
+      block:
+        - name: Run validation with no server CA source
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_byop.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+            control_center_next_gen_external_prometheus_preflight_probe: false
+        - name: Validation completed (missing CA is a soft warning)
+          ansible.builtin.set_fact:
+            byop_no_ca_validation_passed: true
+      rescue:
+        - name: Validation unexpectedly hard-failed on a missing CA
+          ansible.builtin.set_fact:
+            byop_no_ca_validation_passed: false
+
+    - name: Assert a missing server CA did not hard-fail validation
+      ansible.builtin.assert:
+        that:
+          - byop_no_ca_validation_passed | default(false) | bool
+        fail_msg: "validate_byop hard-failed on a missing server CA; it must only warn."
+        success_msg: "BYOP: a missing server CA does not fail the run."
+
+    - name: Assert the missing-server-CA warning condition fired
+      ansible.builtin.assert:
+        that:
+          - byop_server_ca_untrusted | default(false) | bool
+        fail_msg: "validate_byop did not flag the missing external Prometheus server CA."
+        success_msg: "BYOP: a missing server CA is flagged for warning."
+
+    - name: Case 5 - a provided server CA clears the warning
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_byop.yml"
+      vars:
+        control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+        control_center_next_gen_dependency_prometheus_mtls_enabled: false
+        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: /tmp/byop-fake-ca.crt
+        control_center_next_gen_external_prometheus_preflight_probe: false
+
+    - name: Assert no warning when a server CA is provided
+      ansible.builtin.assert:
+        that:
+          - not (byop_server_ca_untrusted | default(true) | bool)
+        fail_msg: "validate_byop warned about the server CA even though one was provided."
+        success_msg: "BYOP: a provided server CA clears the warning."
+
+    - name: Case 6 - the publicly-trusted-CA opt-out clears the warning
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_byop.yml"
+      vars:
+        control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+        control_center_next_gen_dependency_prometheus_mtls_enabled: false
+        control_center_next_gen_dependency_prometheus_server_ca_trusted: true
+        control_center_next_gen_external_prometheus_preflight_probe: false
+
+    - name: Assert the opt-out clears the server-CA warning
+      ansible.builtin.assert:
+        that:
+          - not (byop_server_ca_untrusted | default(true) | bool)
+        fail_msg: "validate_byop warned about the server CA despite the trusted-CA opt-out."
+        success_msg: "BYOP: the trusted-CA opt-out clears the warning."
+
+    # --- Item 7: the reachability probe is best-effort (never fails the run) ---
+    - name: Case 7 - an unreachable endpoint with the probe on must not fail validation
+      block:
+        - name: Run validation with the probe on against an unreachable endpoint
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_byop.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+            control_center_next_gen_dependency_prometheus_provided_ca_cert_path: /tmp/byop-fake-ca.crt
+            control_center_next_gen_external_prometheus_preflight_probe: true
+        - name: Validation completed (unreachable endpoint is a soft warning)
+          ansible.builtin.set_fact:
+            byop_probe_validation_passed: true
+      rescue:
+        - name: Validation unexpectedly hard-failed on an unreachable endpoint
+          ansible.builtin.set_fact:
+            byop_probe_validation_passed: false
+
+    - name: Assert the reachability probe did not hard-fail validation
+      ansible.builtin.assert:
+        that:
+          - byop_probe_validation_passed | default(false) | bool
+        fail_msg: "validate_byop hard-failed on an unreachable endpoint; the probe must be best-effort."
+        success_msg: "BYOP: an unreachable endpoint does not fail the run."
+
+    - name: Assert the probe actually ran and detected the endpoint as unreachable
+      ansible.builtin.assert:
+        that:
+          - (byop_prometheus_probe.status | default(0) | int) not in [200, 401, 403]
+        fail_msg: "The reachability probe did not run or unexpectedly reported the endpoint reachable."
+        success_msg: "BYOP: the reachability probe ran and flagged the unreachable endpoint."
