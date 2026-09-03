@@ -4,7 +4,7 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-8.3.1
+8.4.0
 ======
 New features
 -------------
