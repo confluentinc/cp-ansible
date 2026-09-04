@@ -75,6 +75,12 @@ options:
         required: false
         description:
             - List of logger names to apply the RedactorAppender to.
+    charset:
+        type: str
+        required: false
+        description:
+            - Charset to set for PatternLayout in all appenders (e.g., 'UTF-8', 'IBM-1047' for EBCDIC on z/OS).
+            - If not specified, charset will not be modified.
 author:
     - Mansi Sinha (@mansisinha)
 '''
@@ -188,6 +194,7 @@ def main():
         redactor_rules=dict(type='str', required=False),
         redactor_policy_refresh_interval=dict(type='str', required=False),
         redactor_logger_names=dict(type='list', elements='str', required=False),
+        charset=dict(type='str', required=False, default=None),
     )
 
     result = dict(changed=False, message='')
@@ -210,6 +217,9 @@ def main():
     redactor_rules = module.params['redactor_rules']
     redactor_policy_refresh_interval = module.params['redactor_policy_refresh_interval']
     redactor_logger_names = module.params['redactor_logger_names'] or []
+    
+    # Charset parameter
+    charset = module.params['charset']
 
     # Validate parameters when adding redactor
     if add_redactor:
@@ -266,6 +276,13 @@ def main():
                 appender['filePattern'] = new_pattern
                 changed = True
 
+        # Update charset in PatternLayout if specified
+        if charset and 'PatternLayout' in appender:
+            if isinstance(appender['PatternLayout'], dict):
+                if appender['PatternLayout'].get('charset') != charset:
+                    appender['PatternLayout']['charset'] = charset
+                    changed = True
+
         max_backup_value = int(max_backup) if max_backup.isdigit() else max_backup
 
         file_name = appender.get('fileName', '')
@@ -305,6 +322,30 @@ def main():
             rollingfiles[0] if single_rollingfile and len(rollingfiles) == 1
             else rollingfiles
         )
+
+    # Update charset in Console appender PatternLayout if specified
+    if charset:
+        appenders = data['Configuration']['Appenders']
+        if 'Console' in appenders:
+            console_appenders = appenders['Console']
+            # Handle both single Console appender (dict) and multiple (list)
+            if isinstance(console_appenders, dict):
+                console_appenders = [console_appenders]
+            elif not isinstance(console_appenders, list):
+                console_appenders = []
+            
+            for console_appender in console_appenders:
+                if 'PatternLayout' in console_appender:
+                    if isinstance(console_appender['PatternLayout'], dict):
+                        if console_appender['PatternLayout'].get('charset') != charset:
+                            console_appender['PatternLayout']['charset'] = charset
+                            changed = True
+            
+            # Write back Console appender(s)
+            if len(console_appenders) == 1:
+                appenders['Console'] = console_appenders[0]
+            elif len(console_appenders) > 1:
+                appenders['Console'] = console_appenders
 
     # Optionally update root logger level and update root logger appenders
     loggers = data['Configuration'].get('Loggers', {})
@@ -428,6 +469,8 @@ def main():
                 f"referencing {redactor_refs} to {len(redactor_logger_names)} "
                 f"logger(s)."
             )
+        if charset:
+            result['message'] += f" Set charset to {charset} for PatternLayout in appenders."
     else:
         result['message'] = "No changes needed."
 
