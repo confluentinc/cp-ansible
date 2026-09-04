@@ -1,10 +1,13 @@
 ---
 ### Validates that SASL SSL protocol is set across all components.
 ### Validates that custom log4j configuration is in place.
-### Validates that Java 17 is in Use
+### Validates that Java 17 is in Use.
+### Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy user has no
+### passwordless-sudo escalation path, nothing landed under /opt beyond the pre-baked JDK, and
+### the generated unit/env files point under rootless_deployment_path.
 
 - name: Verify Java
-  hosts: all,!kafka_controller_migration  #Workaround to skip the task in migration test, need to remove in CP 8.0
+  hosts: all
   gather_facts: false
   tasks:
     - name: Get Java Version
@@ -18,6 +21,71 @@
         fail_msg: "Current Java Version is: {{version_output.stderr_lines[0]}}. Verify again"
         quiet: true
 
+- import_playbook: ../rootless_lifecycle_verify.yml
+
+- name: Verify - rootless lifecycle nothing written under /opt
+  hosts: kafka_controller:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  gather_facts: false
+  tasks:
+    - name: Check nothing was written under /opt
+      find:
+        paths: /opt
+        recurse: true
+      register: opt_contents
+
+    - name: Assert nothing besides the pre-baked custom_java_path JDK exists under /opt
+      # The JDK under custom_java_path is baked into the image at build time, not written by this install.
+      vars:
+        unexpected_opt_files: "{{ opt_contents.files | rejectattr('path', 'match', '^' + custom_java_path + '/') | map(attribute='path') | list }}"
+      assert:
+        that:
+          - unexpected_opt_files | length == 0
+        fail_msg: "Rootless install wrote to /opt outside custom_java_path: {{ unexpected_opt_files }}"
+        quiet: true
+
+- name: Verify - restart-propagation regression (side_effect.yml changed kafka_broker's config)
+  hosts: kafka_broker
+  gather_facts: true
+  tasks:
+    # Guarded on the marker file: MOLECULE_RUN=converge+verify never runs `molecule side_effect`,
+    # so this play is only meaningful under the full `molecule test` lifecycle.
+    - name: Check whether side_effect.yml ran (marker file present)
+      stat:
+        path: /tmp/molecule_side_effect_before_ts
+      register: side_effect_marker
+
+    - name: Read the pre-side-effect timestamp
+      slurp:
+        src: /tmp/molecule_side_effect_before_ts
+      register: before_ts_slurp
+      when: side_effect_marker.stat.exists
+
+    - name: Get ActiveEnterTimestamp now
+      command: systemctl --user show cp-kafka_broker.service -p ActiveEnterTimestamp --value
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+      register: after_ts
+      changed_when: false
+      when: side_effect_marker.stat.exists
+
+    - name: Confirm the generated unit actually carries the injected override
+      command: "grep -c StartLimitIntervalSec {{ ansible_env.HOME }}/.config/systemd/user/cp-kafka_broker.service"
+      register: override_grep
+      changed_when: false
+      failed_when: override_grep.stdout | trim == "0"
+      when: side_effect_marker.stat.exists
+
+    - name: Assert the unit restarted when its service_unit_overrides changed
+      assert:
+        that:
+          - after_ts.stdout != (before_ts_slurp.content | b64decode)
+        fail_msg: >-
+          cp-kafka_broker.service did not restart after its service_unit_overrides changed
+          (before={{ before_ts_slurp.content | b64decode }}, after={{ after_ts.stdout }}) -
+          the notify-on-change chain in rootless_lifecycle.yml regressed.
+        quiet: true
+      when: side_effect_marker.stat.exists
+
 - name: Verify - kafka_controller
   hosts: kafka_controller
   gather_facts: false
@@ -28,14 +96,14 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/controller/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/controller/server.properties"
         property: controller.quorum.voters
         expected_value: "{{ kafka_controller_quorum_voters }}"
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/controller/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/controller/server.properties"
         property: listener.name.controller.sasl.enabled.mechanisms
         expected_value: PLAIN
 
@@ -47,7 +115,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/kafka/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
         property: listener.name.internal.sasl.enabled.mechanisms
         expected_value: PLAIN
 
@@ -59,7 +127,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/schema-registry/schema-registry.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/schema-registry/schema-registry.properties"
         property: kafkastore.security.protocol
         expected_value: SASL_SSL
 
@@ -71,7 +139,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/kafka-rest/kafka-rest.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka-rest/kafka-rest.properties"
         property: client.security.protocol
         expected_value: SASL_SSL
 
@@ -83,7 +151,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/kafka/connect-distributed.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
         property: security.protocol
         expected_value: SASL_SSL
 
@@ -95,7 +163,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/ksqldb/ksql-server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/ksqldb/ksql-server.properties"
         property: security.protocol
         expected_value: SASL_SSL
 
@@ -107,9 +175,29 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /opt/confluent/etc/confluent-control-center/control-center-production.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/confluent-control-center/control-center-production.properties"
         property: confluent.controlcenter.streams.security.protocol
         expected_value: SASL_SSL
+
+- name: Verify - kafka_connect plugin deployed (rootless)
+  hosts: kafka_connect
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: List installed connect plugins under kafka_connect_confluent_hub_plugins_dest
+      command: "ls {{ kafka_connect_confluent_hub_plugins_dest }}"
+      register: hub_components
+      changed_when: false
+
+    - name: Assert the confluent-hub plugin was installed under rootless_deployment_path, not root
+      assert:
+        that:
+          - kafka_connect_confluent_hub_plugins_dest is search(rootless_deployment_path)
+          - "'jcustenborder-kafka-connect-spooldir' in hub_components.stdout"
+        fail_msg: "Expected jcustenborder-kafka-connect-spooldir under {{ kafka_connect_confluent_hub_plugins_dest }}, found: {{ hub_components.stdout }}"
+        quiet: true
 
 - name: Verify log4j Configuration
   hosts: all,!kafka_controller_migration  #Workaround to skip the task in migration test, need to remove in CP 8.0

@@ -5,6 +5,14 @@
 ### MTLS enabled.
 ### Kafka Broker Customer Listener.
 ### RBAC Additional System Admin.
+###
+### Runs Zookeeper by default, KRaft via `--env-file molecule/kraft.yml` (see docs/HOW_TO_TEST.md).
+### zookeeper_export_certs needs no explicit override - ssl_mutual_auth_enabled: true already
+### makes it default to True.
+### Also covers rootless in place (rootless_enabled: true below), including ZK<->KRaft migration
+### (MIGRATION=true) - the bootstrap shim lives in collections_converge.yml/migration_converge.yml
+### so this scenario stays auto-discoverable by the migration-test tooling. See
+### ROOTLESS_DEPLOYMENT_STEPS.md for why privileged: true here doesn't undermine the rootless proof.
 
 driver:
   name: docker
@@ -246,8 +254,25 @@ provisioner:
         rbac_component_additional_system_admins:
           - User:user1
 
-      zookeeper:
-        zookeeper_export_certs: true
+        # Property lists mirror rbac-plain-provided-debian9's; control_center's is commented
+        # out there too, so kept consistent here.
+        secrets_protection_enabled: true
+        kafka_broker_secrets_protection_encrypt_properties: [ldap.java.naming.security.credentials, kafka.rest.confluent.metadata.basic.auth.user.info]
+        # control_center_secrets_protection_encrypt_properties: [confluent.metadata.basic.auth.user.info]
+        schema_registry_secrets_protection_encrypt_properties: [confluent.metadata.basic.auth.user.info]
+        ksql_secrets_protection_encrypt_properties: [ksql.schema.registry.basic.auth.user.info, confluent.metadata.basic.auth.user.info]
+        kafka_rest_secrets_protection_encrypt_properties: [confluent.metadata.basic.auth.user.info]
+        kafka_connect_secrets_protection_encrypt_properties: [confluent.metadata.basic.auth.user.info]
+
+        rootless_enabled: true
+        deployment_user: cp-user
+        deployment_group: cp-user
+        rootless_deployment_path: /home/cp-user/cp-data
+        installation_method: archive
+        rootless_install_packages: true
+        ansible_user: "{{ deployment_user }}"
+        # Dockerfile-ubuntu.j2 installs Java 17 via apt already.
+        install_java: false
 
       kafka_broker:
         ldap_config: |
@@ -255,7 +280,7 @@ provisioner:
           ldap.com.sun.jndi.ldap.read.timeout=3000
           ldap.java.naming.provider.url=ldaps://ldap1:636
           ldap.java.naming.security.protocol=SSL
-          ldap.ssl.truststore.location=/var/ssl/private/kafka_broker.truststore.jks
+          ldap.ssl.truststore.location={{ rootless_deployment_path }}/ssl/kafka_broker.truststore.jks
           ldap.ssl.truststore.password=truststorepass
           ldap.java.naming.security.principal=uid=mds,OU=rbac,DC=example,DC=com
           ldap.java.naming.security.credentials=password
@@ -269,6 +294,10 @@ provisioner:
           ldap.user.object.class=account
 
       ldap_server:
+        ansible_user: root
+        deployment_user: ""
+        rootless_deployment_path: ""
+
         ldaps_enabled: true
         ldaps_custom_certs: true
         ssl_custom_certs: true

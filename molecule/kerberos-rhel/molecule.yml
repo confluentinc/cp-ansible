@@ -2,6 +2,12 @@
 ### Installation of Confluent Platform on Oracle Linux 9.
 ### Kerberos enabled with custom client config path
 ### Creates a Connector in Connect cluster
+###
+### Runs Zookeeper by default, KRaft via `--env-file molecule/kraft.yml` (see docs/HOW_TO_TEST.md).
+### Also covers rootless in place (rootless_enabled: true below), including ZK<->KRaft migration
+### (MIGRATION=true) - the bootstrap shim lives in collections_converge.yml/migration_converge.yml
+### so this scenario stays auto-discoverable by the migration-test tooling. See
+### ROOTLESS_DEPLOYMENT_STEPS.md for why privileged: true here doesn't undermine the rootless proof.
 
 driver:
   name: docker
@@ -170,18 +176,28 @@ provisioner:
           kdc_hostname: kerberos1
           admin_hostname: kerberos1
 
-        kerberos_client_config_file_dest: /krb/krb5.conf
+        rootless_enabled: true
+        deployment_user: cp-user
+        deployment_group: cp-user
+        rootless_deployment_path: /home/cp-user/cp-data
+        installation_method: archive
+        rootless_install_packages: true
+        ansible_user: "{{ deployment_user }}"
+        # Dockerfile-rhel-java8.j2 installs Java 8 via yum already.
+        install_java: false
+
+        kerberos_client_config_file_dest: "{{ rootless_deployment_path }}/krb/krb5.conf"
 
         # To run the FileStream connector, you must add the filestream-connectors path in the plugin.path
         kafka_connect_custom_properties:
-          plugin.path: "/usr/share/filestream-connectors,/usr/share/java/connect_plugins"
+          plugin.path: "{{ binary_base_path }}/share/filestream-connectors,{{ binary_base_path }}/share/java/connect_plugins"
 
         kafka_connect_connectors:
           - name: sample-connector-1
             config:
               connector.class: "FileStreamSinkConnector"
               tasks.max: "1"
-              file: "/etc/kafka/connect-distributed.properties"
+              file: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
               topics: "test_topic"
 
       zookeeper:
@@ -210,13 +226,15 @@ provisioner:
         control_center_kerberos_keytab_path: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/control_center-{{inventory_hostname}}.keytab"
 
       kerberos_server:
+        ansible_user: root
+        deployment_user: ""
+        rootless_deployment_path: ""
         realm_name: "{{ kerberos.realm | upper }}"
 
         keytab_output_directory: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs"
 
         kerberos_principals:
           # Wish there was a better way to create this list, this will do for now
-          # zookeeper keytabs and principal is not  used in Kraft mode, it will be removed once we drop zookeeper support
           - principal: "zk/zookeeper1.confluent@{{kerberos.realm | upper}}"
             keytab_path: "keytabs/zookeeper-zookeeper1.keytab"
 

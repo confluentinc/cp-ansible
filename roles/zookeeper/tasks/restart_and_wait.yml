@@ -1,11 +1,19 @@
 ---
+- name: "Check if the rootless systemd --user unit exists"
+  stat:
+    path: "{{ ansible_env.HOME }}/.config/systemd/user/cp-zookeeper.service"
+  register: zookeeper_rootless_unit
+  when: rootless_enabled | bool
+
 - name: Restart Zookeeper
-  systemd:
-    daemon_reload: true
-    name: "{{zookeeper_service_name}}"
+  ansible.builtin.systemd:
+    name: "{{ 'cp-zookeeper.service' if (rootless_enabled | bool) else zookeeper_service_name }}"
+    scope: "{{ 'user' if (rootless_enabled | bool) else 'system' }}"
+    daemon_reload: "{{ not (rootless_enabled | bool) }}"
     state: restarted
-  tags:
-    - systemd
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+  when: not (rootless_enabled | bool) or (rootless_enabled | bool and zookeeper_rootless_unit.stat.exists)
 
 - name: Startup Delay
   wait_for:
