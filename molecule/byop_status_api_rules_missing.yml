@@ -1,0 +1,117 @@
+---
+# BYOP negative: prove C3's recording-rules validation FAILS when the external Prometheus is missing
+# C3's recording rules. This directly exercises the recording-rules check on
+# /2.0/services/prometheus/status (the version check stays passing, since only the rules change).
+#
+# Flow:
+#   play 1 (localhost/docker) - empty the mock Prometheus's rules file(s) and reload, so no recording
+#                               rules are loaded.
+#   play 2 (C3 host)          - assert C3's status API reports the recording-rules check FAIL, with
+#                               missing rules listed and componentStatus OFFLINE.
+#   play 3 (localhost/docker) - restore the rules and reload, leaving the scenario clean.
+#
+# Imported by a dedicated negative scenario's verify (or run by hand) AFTER converge + the custom-C3
+# install, on a scenario whose external Prometheus is the mock container `byop-prometheus`:
+#   - import_playbook: ../byop_status_api_rules_missing.yml
+#
+# CONFIRM on the first local run: the rule_files discovery below assumes the mock's config lists its
+# rules under `rule_files:` in /etc/prometheus/prometheus.yml. Adjust the discovery if the mock image
+# stores them differently.
+
+- name: BYOP negative - remove the recording rules from the mock Prometheus
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    mock_name: byop-prometheus
+  tasks:
+    - name: Discover the mock Prometheus rule file path(s) from its config
+      ansible.builtin.command: >-
+        docker exec {{ mock_name }} sh -c
+        "sed -n '/rule_files:/,/^[^[:space:]]/p' /etc/prometheus/prometheus.yml
+         | grep -oE '/[^[:space:]]+\.ya?ml'"
+      register: byop_rule_files
+      changed_when: false
+
+    - name: Fail early if no rule file was discovered (nothing to remove)
+      ansible.builtin.assert:
+        that: (byop_rule_files.stdout_lines | length) > 0
+        fail_msg: >-
+          Could not find a rule_files entry in the mock Prometheus config; adjust the discovery in
+          this playbook to match the mock image.
+
+    - name: Back up and empty each rule file so no recording rules load
+      ansible.builtin.command: >-
+        docker exec {{ mock_name }} sh -c
+        "cp '{{ item }}' '{{ item }}.byopbak' && printf 'groups: []\n' > '{{ item }}'"
+      loop: "{{ byop_rule_files.stdout_lines }}"
+      changed_when: true
+
+    - name: Reload the mock Prometheus so the emptied rules take effect
+      ansible.builtin.command: "docker exec {{ mock_name }} kill -HUP 1"
+      changed_when: true
+      # The next play polls C3's status API with retries, which waits out both the mock reload and
+      # C3's next validation poll, so no separate wait step is needed here.
+
+- name: BYOP negative - C3 reports the recording-rules check FAIL
+  hosts: control_center_next_gen
+  gather_facts: true
+  vars:
+    c3_scheme: "{{ control_center_next_gen_http_protocol | default('https' if ssl_enabled | default(false) | bool else 'http', true) }}"
+    c3_host: "{{ ansible_fqdn | default(inventory_hostname, true) }}"
+    c3_base: "{{ c3_scheme }}://{{ c3_host }}:{{ control_center_next_gen_port | default(9021) }}"
+    c3_user: "{{ control_center_next_gen_health_check_user | default('') }}"
+    c3_pass: "{{ control_center_next_gen_health_check_password | default('') }}"
+    hc_retries: "{{ control_center_next_gen_health_check_retries | default(30) }}"
+    hc_delay: "{{ control_center_next_gen_health_check_retry_delay | default(10) }}"
+  tasks:
+    - name: C3 status API flags the missing recording rules
+      ansible.builtin.uri:
+        url: "{{ c3_base }}/2.0/services/prometheus/status"
+        url_username: "{{ c3_user }}"
+        url_password: "{{ c3_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        return_content: true
+      register: byop_neg_status
+      until:
+        - byop_neg_status.status == 200
+        - byop_neg_status.json.external | default(false) | bool
+        - (byop_neg_status.json.checks | default([]) | selectattr('id', 'equalto', 'recording-rules')
+           | selectattr('status', 'equalto', 'FAIL') | list | length) == 1
+      retries: "{{ hc_retries }}"
+      delay: "{{ hc_delay }}"
+      when: not rbac_enabled | default(false) | bool
+
+    - name: Assert the recording-rules check is FAIL with missing rules and the component is OFFLINE
+      vars:
+        rules_check: >-
+          {{ (byop_neg_status.json.checks | selectattr('id', 'equalto', 'recording-rules')
+             | list | first) }}
+      ansible.builtin.assert:
+        that:
+          - byop_neg_status.json.componentStatus == 'OFFLINE'
+          - rules_check.status == 'FAIL'
+          - (rules_check.details.missing | default([]) | length) > 0
+          - rules_check.details.requiredCount | default(0) | int > 0
+        fail_msg: "Expected a FAIL recording-rules check with missing rules; got {{ byop_neg_status.json.checks }}"
+        success_msg: "BYOP negative: C3 correctly flags the missing recording rules as FAIL."
+      when: not rbac_enabled | default(false) | bool
+
+- name: BYOP negative - restore the mock Prometheus recording rules
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    mock_name: byop-prometheus
+  tasks:
+    - name: Restore each backed-up rule file
+      ansible.builtin.command: >-
+        docker exec {{ mock_name }} sh -c
+        "for f in $(sed -n '/rule_files:/,/^[^[:space:]]/p' /etc/prometheus/prometheus.yml
+         | grep -oE '/[^[:space:]]+\.ya?ml'); do [ -f \"$f.byopbak\" ] && mv \"$f.byopbak\" \"$f\"; done"
+      changed_when: true
+
+    - name: Reload the mock Prometheus so the restored rules take effect
+      ansible.builtin.command: "docker exec {{ mock_name }} kill -HUP 1"
+      changed_when: true
