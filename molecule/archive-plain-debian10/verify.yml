@@ -21,112 +21,12 @@
         fail_msg: "Current Java Version is: {{version_output.stderr_lines[0]}}. Verify again"
         quiet: true
 
-- name: Verify - rootless lifecycle on all CP components
+- import_playbook: ../rootless_lifecycle_verify.yml
+
+- name: Verify - rootless lifecycle nothing written under /opt
   hosts: kafka_controller:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
-  gather_facts: true
-  vars:
-    rootless_unit_map:
-      kafka_controller: cp-kafka_controller.service
-      zookeeper: cp-zookeeper.service
-      kafka_broker: cp-kafka_broker.service
-      schema_registry: cp-schema_registry.service
-      kafka_connect: cp-kafka_connect.service
-      kafka_rest: cp-kafka_rest.service
-      ksql: cp-ksql.service
-      control_center: cp-control_center.service
+  gather_facts: false
   tasks:
-    - name: Determine this host's rootless unit name and component name
-      set_fact:
-        rootless_unit: "{{ rootless_unit_map[group_names | intersect(rootless_unit_map.keys()) | first] }}"
-        rootless_component: "{{ group_names | intersect(rootless_unit_map.keys()) | first }}"
-
-    - name: Check the systemd --user unit is active
-      command: "systemctl --user is-active {{ rootless_unit }}"
-      environment:
-        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
-      register: unit_active
-      changed_when: false
-      failed_when: unit_active.stdout != "active"
-
-    - name: Check the process is owned by the deploy user, not root
-      shell: "ps -eo user,cmd | grep -E 'kafka.Kafka|QuorumPeerMain|SchemaRegistryMain|ConnectDistributed|KafkaRestMain|KsqlServerMain|ControlCenter' | grep -v grep | awk '{print $1}' | sort -u"
-      register: process_owners
-      changed_when: false
-
-    - name: Assert no process runs as root
-      assert:
-        that:
-          - "'root' not in process_owners.stdout_lines"
-          - process_owners.stdout_lines | length > 0
-        fail_msg: "Expected all component processes to run as {{ deployment_user }}, found: {{ process_owners.stdout_lines }}"
-        quiet: true
-
-    # Re-checked here (not via roles/common/tasks/main.yml's own probe): that task is tagged
-    # `notest`, which molecule skips unconditionally.
-    - name: Check for non-interactive sudo escalation (rootless)
-      command: sudo -n true
-      register: rootless_sudo_probe
-      changed_when: false
-      failed_when: rootless_sudo_probe.rc == 0
-
-    - name: Assert the deploy user has no passwordless-sudo escalation path
-      assert:
-        that:
-          - rootless_sudo_probe.rc != 0
-        fail_msg: >-
-          '{{ ansible_user }}' has passwordless sudo access to root on this host - this makes the
-          rootless proof meaningless (a task missing its rootless_enabled guard would silently
-          succeed as root instead of failing loudly). Investigate why this account can escalate.
-        quiet: true
-
-    - name: Find everything under rootless_deployment_path
-      find:
-        paths: "{{ rootless_deployment_path }}"
-        recurse: true
-        file_type: any
-      register: rootless_deployment_path_contents
-
-    - name: Assert everything under rootless_deployment_path is owned by the deploy user, not root
-      vars:
-        non_deploy_user_files: "{{ rootless_deployment_path_contents.files | rejectattr('pw_name', 'equalto', deployment_user) | map(attribute='path') | list }}"
-      assert:
-        that:
-          - non_deploy_user_files | length == 0
-        fail_msg: "Found files under rootless_deployment_path not owned by {{ deployment_user }}: {{ non_deploy_user_files }}"
-        quiet: true
-
-    - name: Read the generated systemd --user unit file
-      slurp:
-        src: "{{ ansible_env.HOME }}/.config/systemd/user/{{ rootless_unit }}"
-      register: unit_file_slurp
-
-    - name: Assert the unit's ExecStart/EnvironmentFile point under rootless_deployment_path, not a hardcoded root path
-      vars:
-        unit_content: "{{ unit_file_slurp.content | b64decode }}"
-      assert:
-        that:
-          - rootless_deployment_path in unit_content
-          - ("EnvironmentFile=" ~ rootless_deployment_path) in unit_content
-        fail_msg: "cp-{{ rootless_component }} unit file doesn't reference rootless_deployment_path as expected:\n{{ unit_content }}"
-        quiet: true
-
-    - name: Read the generated systemd EnvironmentFile
-      slurp:
-        src: "{{ rootless_deployment_path }}/rootless-bin/{{ rootless_component }}.env"
-      register: env_file_slurp
-
-    - name: Assert the EnvironmentFile actually rendered content, not empty or unrendered Jinja
-      vars:
-        env_content: "{{ env_file_slurp.content | b64decode }}"
-        # Built via multiplication so ansible doesn't parse this as the start of an expression.
-        unrendered_jinja_marker: "{{ '{' * 2 }}"
-      assert:
-        that:
-          - env_content | trim | length > 0
-          - unrendered_jinja_marker not in env_content
-        fail_msg: "{{ rootless_component }}.env is empty or has unrendered template syntax:\n{{ env_content }}"
-        quiet: true
-
     - name: Check nothing was written under /opt
       find:
         paths: /opt
@@ -185,18 +85,6 @@
           the notify-on-change chain in rootless_lifecycle.yml regressed.
         quiet: true
       when: side_effect_marker.stat.exists
-
-- name: Verify - zookeeper dataDir under rootless_deployment_path
-  hosts: zookeeper
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: confluent.test
-        tasks_from: check_property.yml
-      vars:
-        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/zookeeper.properties"
-        property: dataDir
-        expected_value: "{{ rootless_deployment_path }}/data/zookeeper"
 
 - name: Verify - kafka_controller
   hosts: kafka_controller
