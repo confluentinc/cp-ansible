@@ -4,6 +4,12 @@
 ### SSL Enabled.
 ### Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-spooldir:2.0.43).
 ### Custom log dirs for all components.
+###
+### Runs Zookeeper by default, KRaft via `--env-file molecule/kraft.yml` (see docs/HOW_TO_TEST.md).
+### Also covers rootless in place (rootless_enabled: true below), including ZK<->KRaft migration
+### (MIGRATION=true) - the bootstrap shim lives in collections_converge.yml/migration_converge.yml
+### so this scenario stays auto-discoverable by the migration-test tooling. See
+### ROOTLESS_DEPLOYMENT_STEPS.md for why privileged: true here doesn't undermine the rootless proof.
 
 platforms:
   - name: ${KRAFT_CONTROLLER:-zookeeper}1
@@ -123,6 +129,7 @@ platforms:
 provisioner:
   playbooks:
     converge: ${MIGRATION_CONVERGE:-../collections_converge.yml}
+    side_effect: side_effect.yml
   inventory:
     group_vars:
       all:
@@ -132,11 +139,20 @@ provisioner:
         kafka_connect_confluent_hub_plugins:
           - jcustenborder/kafka-connect-spooldir:2.0.43
 
-        ${CONTROLLER_HOSTGROUP:-zookeeper}_log_dir: /${CONTROLLER_HOSTGROUP:-zookeeper}/logs
-        kafka_broker_log_dir: /kafka/logs/
-        schema_registry_log_dir: /sr/logs
-        kafka_rest_log_dir: /rp/logs
-        kafka_connect_log_dir: /connect/logs
-        ksql_log_dir: /ksql/logs/
-        control_center_log_dir: /c3/logs
-        custom_java_path: /opt/jdk17 # Use custom Java 17
+        rootless_enabled: true
+        deployment_user: cp-user
+        deployment_group: cp-user
+        rootless_deployment_path: /home/cp-user/cp-data
+        rootless_install_packages: true
+        ansible_user: "{{ deployment_user }}"
+
+        # Dockerfile-debian10-archive.j2 pre-installs a JDK here at image build time.
+        custom_java_path: /opt/jdk17
+
+        ${CONTROLLER_HOSTGROUP:-zookeeper}_log_dir: "{{ rootless_deployment_path }}/logs/${CONTROLLER_HOSTGROUP:-zookeeper}"
+        kafka_broker_log_dir: "{{ rootless_deployment_path }}/logs/kafka"
+        schema_registry_log_dir: "{{ rootless_deployment_path }}/logs/sr"
+        kafka_rest_log_dir: "{{ rootless_deployment_path }}/logs/rp"
+        kafka_connect_log_dir: "{{ rootless_deployment_path }}/logs/connect"
+        ksql_log_dir: "{{ rootless_deployment_path }}/logs/ksql"
+        control_center_log_dir: "{{ rootless_deployment_path }}/logs/c3"
