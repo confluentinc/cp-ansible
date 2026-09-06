@@ -1,0 +1,32 @@
+---
+### Regression test: rootless_lifecycle.yml's unit/EnvironmentFile generation must notify the
+### component's restart handler on change. Give kafka_broker a new unit override and let
+### verify.yml confirm the unit actually restarted, not just that the file on disk changed.
+
+- name: Capture kafka_broker's unit start time before the side effect
+  hosts: kafka_broker
+  gather_facts: true
+  tasks:
+    - name: Get ActiveEnterTimestamp before the change
+      command: systemctl --user show cp-kafka_broker.service -p ActiveEnterTimestamp --value
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+      register: before_ts
+      changed_when: false
+
+    - name: Save it so verify.yml (a separate ansible-playbook run) can compare
+      copy:
+        content: "{{ before_ts.stdout }}"
+        dest: /tmp/molecule_side_effect_before_ts
+        mode: '0644'
+
+- name: Inject a new unit override to force a real config change on kafka_broker
+  hosts: kafka_controller:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  gather_facts: false
+  tasks:
+    - set_fact:
+        kafka_broker_service_unit_overrides:
+          StartLimitIntervalSec: "10"
+      when: "'kafka_broker' in group_names"
+
+- import_playbook: ../collections_converge.yml
