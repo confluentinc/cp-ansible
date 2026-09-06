@@ -1,4 +1,30 @@
 ---
+### deployment_user (cp-user) doesn't exist yet when MIGRATION=true runs confluent.platform.all
+### here, so bootstrap it and switch to it before that import (converge.yml does the same later).
+
+- name: Cache ansible_user=root so a MIGRATION=true prepare run connects as root before the deploy user exists
+  hosts: kafka_controller:kafka_controller_migration:zookeeper:zookeeper_migration:kafka_broker:kafka_broker_migration:schema_registry:schema_registry_migration:kafka_connect:kafka_connect_migration:kafka_rest:kafka_rest_migration:ksql:ksql_migration:control_center:control_center_migration
+  gather_facts: false
+  vars:
+    ansible_user: root
+  tasks:
+    - set_fact:
+        ansible_user: root
+      when: lookup('env', 'MIGRATION')|default('false') == 'true'
+
+- import_playbook: confluent.platform.rootless_bootstrap
+  when: lookup('env', 'MIGRATION')|default('false') == 'true'
+
+- name: Cache ansible_user=deployment_user so the unprivileged deploy connects as that user
+  hosts: kafka_controller:kafka_controller_migration:zookeeper:zookeeper_migration:kafka_broker:kafka_broker_migration:schema_registry:schema_registry_migration:kafka_connect:kafka_connect_migration:kafka_rest:kafka_rest_migration:ksql:ksql_migration:control_center:control_center_migration
+  gather_facts: false
+  tasks:
+    - set_fact:
+        ansible_user: "{{ deployment_user }}"
+      when:
+        - lookup('env', 'MIGRATION')|default('false') == 'true'
+        - (deployment_user | default('') | length > 0) and (rootless_deployment_path | default('') | length > 0)
+
 - name: Install Zookeeper Cluster
   import_playbook: confluent.platform.all
   when: lookup('env', 'MIGRATION')|default('false') == 'true'
