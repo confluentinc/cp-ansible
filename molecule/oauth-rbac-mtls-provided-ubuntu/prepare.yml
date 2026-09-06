@@ -1,13 +1,11 @@
 ---
-- name: Configure IPv6 Preference
-  import_playbook: ../configure_ipv6.yml
+### deployment_user (cp-user) doesn't exist yet when the IPv6-preference play (implicit
+### gather_facts, connects as ansible_user unconditionally) or certificates.yml/ldap.yml/
+### oauth.yml connect here, so they all need to run as root. Same story for the MIGRATION=true
+### confluent.platform.all import below - bootstrap it and switch to it first. ldap_server/
+### oauth_server are excluded - they already opt out of rootless in molecule.yml.
 
-### deployment_user (cp-user) doesn't exist yet when certificates.yml/ldap.yml/oauth.yml connect
-### here, so they run as root. Same story for the MIGRATION=true confluent.platform.all import
-### below - bootstrap it and switch to it first. ldap_server/oauth_server are excluded - they
-### already opt out of rootless in molecule.yml.
-
-- name: Cache ansible_user=root so certificates.yml/ldap.yml/oauth.yml connect as root before the deploy user exists
+- name: Cache ansible_user=root so early prepare plays connect as root before the deploy user exists
   hosts: kafka_controller:kafka_controller_migration:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center:control_center_next_gen:control_center_next_gen_migration
   gather_facts: false
   vars:
@@ -15,6 +13,9 @@
   tasks:
     - set_fact:
         ansible_user: root
+
+- name: Configure IPv6 Preference
+  import_playbook: ../configure_ipv6.yml
 
 - name: Create Custom Certs
   import_playbook: ../certificates.yml
