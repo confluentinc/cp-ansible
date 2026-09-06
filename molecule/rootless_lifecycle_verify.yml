@@ -110,6 +110,77 @@
         fail_msg: "{{ rootless_component }}.env is empty or has unrendered template syntax:\n{{ env_content }}"
         quiet: true
 
+- name: Verify - control_center_next_gen rootless lifecycle (3 co-located systemd --user units)
+  hosts: control_center_next_gen
+  gather_facts: true
+  vars:
+    c3ng_units:
+      control_center_next_gen: cp-control_center_next_gen.service
+      control_center_next_gen_dep_prometheus: cp-control_center_next_gen_dep_prometheus.service
+      control_center_next_gen_dep_alertmanager: cp-control_center_next_gen_dep_alertmanager.service
+  tasks:
+    - name: Check each systemd --user unit is active
+      command: "systemctl --user is-active {{ item.value }}"
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+      loop: "{{ c3ng_units | dict2items }}"
+      register: c3ng_unit_active
+      changed_when: false
+      failed_when: c3ng_unit_active.stdout != "active"
+
+    - name: Check none of the 3 processes run as root
+      shell: "ps -eo user,cmd | grep -E 'control-center-start|prometheus-start|alertmanager-start' | grep -v grep | awk '{print $1}' | sort -u"
+      register: c3ng_process_owners
+      changed_when: false
+
+    - name: Assert no c3ng-family process runs as root
+      assert:
+        that:
+          - "'root' not in c3ng_process_owners.stdout_lines"
+          - c3ng_process_owners.stdout_lines | length > 0
+        fail_msg: "Expected all control_center_next_gen/prometheus/alertmanager processes to run as {{ deployment_user }}, found: {{ c3ng_process_owners.stdout_lines }}"
+        quiet: true
+
+    - name: Read each generated systemd --user unit file
+      slurp:
+        src: "{{ ansible_env.HOME }}/.config/systemd/user/{{ item.value }}"
+      loop: "{{ c3ng_units | dict2items }}"
+      register: c3ng_unit_slurp
+
+    - name: Assert each unit's ExecStart/EnvironmentFile point under rootless_deployment_path
+      vars:
+        unit_content: "{{ item.content | b64decode }}"
+      loop: "{{ c3ng_unit_slurp.results }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+      assert:
+        that:
+          - rootless_deployment_path in unit_content
+          - ("EnvironmentFile=" ~ rootless_deployment_path) in unit_content
+        fail_msg: "{{ item.item.value }} doesn't reference rootless_deployment_path as expected:\n{{ unit_content }}"
+        quiet: true
+
+    - name: Read each generated systemd EnvironmentFile
+      slurp:
+        src: "{{ rootless_deployment_path }}/rootless-bin/{{ item.key }}.env"
+      loop: "{{ c3ng_units | dict2items }}"
+      register: c3ng_env_slurp
+
+    - name: Assert each EnvironmentFile actually rendered content, not empty or unrendered Jinja
+      vars:
+        env_content: "{{ item.content | b64decode }}"
+        # Built via multiplication so ansible doesn't parse this as the start of an expression.
+        unrendered_jinja_marker: "{{ '{' * 2 }}"
+      loop: "{{ c3ng_env_slurp.results }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+      assert:
+        that:
+          - env_content | trim | length > 0
+          - unrendered_jinja_marker not in env_content
+        fail_msg: "{{ item.item.key }}.env is empty or has unrendered template syntax:\n{{ env_content }}"
+        quiet: true
+
 - name: Verify - zookeeper dataDir under rootless_deployment_path
   hosts: zookeeper
   gather_facts: false
