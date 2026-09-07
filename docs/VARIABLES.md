@@ -6418,11 +6418,43 @@ Default:  "https://packages.confluent.io"
 
 ***
 
+### confluent_control_center_next_gen_version_segment
+
+C3 Next Gen version-isolated path segment (e.g. "/2.7"), set automatically by the repo-layout probe (common/tasks/versioned_layout_probe.yml); "" for legacy flat lines. Set manually only with the probe disabled below.
+
+Default:  ""
+
+***
+
+### confluent_control_center_next_gen_layout_probe_enabled
+
+Set to false to skip the C3 Next Gen repo-layout probe and use confluent_control_center_next_gen_version_segment verbatim - e.g. an internal mirror whose missing dirs don't return 404, or an overridden repo/archive source.
+
+Default:  true
+
+***
+
 ### confluent_usm_agent_independent_repository_baseurl
 
 Confluent USM Agent RPM and Debian Package Repositories
 
 Default:  "{{confluent_independent_repository_baseurl}}/confluent-usm-agent"
+
+***
+
+### confluent_usm_agent_version_segment
+
+USM Agent version-isolated path segment (e.g. "/1.3"), set automatically by the repo-layout probe (common/tasks/versioned_layout_probe.yml); "" for legacy flat lines. Set manually only with the probe disabled below.
+
+Default:  ""
+
+***
+
+### confluent_usm_agent_layout_probe_enabled
+
+Set to false to skip the USM Agent repo-layout probe and use confluent_usm_agent_version_segment verbatim (see the C3 toggle above).
+
+Default:  true
 
 ***
 
