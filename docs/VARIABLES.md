@@ -7058,6 +7058,22 @@ Default:  "https://packages.confluent.io"
 
 ***
 
+### confluent_control_center_next_gen_version_segment
+
+C3 Next Gen version-isolated path segment (e.g. "/2.7"), set automatically by the repo-layout probe (common/tasks/versioned_layout_probe.yml); "" for legacy flat lines. Set manually only with the probe disabled below.
+
+Default:  ""
+
+***
+
+### confluent_control_center_next_gen_layout_probe_enabled
+
+Set to false to skip the C3 Next Gen repo-layout probe and use confluent_control_center_next_gen_version_segment verbatim - e.g. an internal mirror whose missing dirs don't return 404, or an overridden repo/archive source.
+
+Default:  true
+
+***
+
 ### custom_java_path
 
 Full pre-existing Java path on custom nodes. CP-Ansible will use the provided path and will skip installing java as part of execution
@@ -7166,7 +7182,7 @@ Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_vers
 
 A path reference to a local archive file or URL for control-center-next-gen archive. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/archive/confluent-control-center-next-gen-{{confluent_control_center_next_gen_package_version}}.tar.gz"
+Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/archive{{confluent_control_center_next_gen_version_segment}}/confluent-control-center-next-gen-{{confluent_control_center_next_gen_package_version}}.tar.gz"
 
 ***
 
