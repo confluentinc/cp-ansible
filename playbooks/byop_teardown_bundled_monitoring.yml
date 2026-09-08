@@ -1,35 +1,61 @@
 ---
-# BYOP - Teardown Bundled Monitoring (customer-facing, brownfield)
+# Teardown bundled monitoring (customer-facing, brownfield).
 #
 # For customers migrating an existing Control Center Next Gen deployment from the bundled Prometheus
-# and Alertmanager to their own external Prometheus (BYOP).
+# and Alertmanager to their own external Prometheus.
 #
 # Enabling control_center_next_gen_external_prometheus_enabled only stops FRESH installs of the
-# bundled monitoring - it does NOT stop or remove an already-running bundled Prometheus/Alertmanager.
-# This is intentional (safe and reversible): after you flip the toggle and re-run the platform
-# playbook, verify that C3 reads your external Prometheus, and only THEN run this playbook to remove
-# the now-orphaned bundle.
-#
-# This is a deliberate, manual step. It stops and disables the bundled services and removes their
-# unit files, config, and data. Run it against your control_center_next_gen hosts:
+# bundled monitoring; it does not remove an already-running bundled Prometheus/Alertmanager. After
+# you flip the toggle, re-run the platform playbook, and confirm C3 reads your external Prometheus,
+# run this playbook to remove the now-orphaned bundle:
 #   ansible-playbook -i <inventory> confluent.platform.byop_teardown_bundled_monitoring
 #
-# WARNING: the last step deletes /var/lib/prometheus and /var/lib/alertmanager (the bundled
-# monitoring data). Take a backup first if you need to retain any of it.
+# WARNING: this is destructive. It deletes the bundled Prometheus and Alertmanager config files and
+# their data directories (control_center_next_gen_dep_prometheus.data_path and
+# control_center_next_gen_dep_alertmanager.data_path). Back these up first if you need to retain any
+# historical monitoring data, for example on each control_center_next_gen host:
+#   tar czf /root/bundled-monitoring-backup.tgz \
+#     /var/lib/confluent/control-center/prometheus \
+#     /var/lib/confluent/control-center/alertmanager \
+#     /opt/confluent-control-center/dependencies/prometheus-generated.yml \
+#     /opt/confluent-control-center/dependencies/alertmanager-generated.yml
+# (adjust the paths if you overrode control_center_next_gen_data_dir or the dependencies config path).
 
-- name: BYOP - remove the bundled Prometheus and Alertmanager
+- name: Remove the bundled Prometheus and Alertmanager
   hosts: control_center_next_gen
   gather_facts: false
   become: true
   tasks:
+    - name: Import variables
+      ansible.builtin.import_role:
+        name: variables
+
+    # Guard the irreversible delete: only safe once C3 reads from an external Prometheus.
+    - name: Refuse to run unless external Prometheus is enabled
+      ansible.builtin.assert:
+        that:
+          - control_center_next_gen_external_prometheus_enabled | bool
+        fail_msg: >-
+          This playbook removes the bundled Prometheus and Alertmanager and is only safe once Control
+          Center reads from an external Prometheus. Set
+          control_center_next_gen_external_prometheus_enabled to true, re-run the platform playbook,
+          confirm C3 reads the external Prometheus, and only then run this teardown.
+        success_msg: "External Prometheus is enabled; safe to remove the bundled monitoring."
+        quiet: true
+
+    - name: Health check before teardown
+      ansible.builtin.include_role:
+        name: control_center_next_gen
+        tasks_from: health_check.yml
+
     - name: Stop and disable the bundled monitoring services
       ansible.builtin.systemd:
         name: "{{ item }}"
         state: stopped
         enabled: false
       loop:
-        - prometheus.service
-        - alertmanager.service
+        - "{{ control_center_next_gen_dep_prometheus_service_name }}.service"
+        - "{{ control_center_next_gen_dep_alertmanager_service_name }}.service"
       failed_when: false
 
     - name: Remove the bundled monitoring overrides, config, and data
@@ -37,17 +63,27 @@
         path: "{{ item }}"
         state: absent
       # Do NOT remove the package-provided unit files under /usr/lib/systemd/system: they are owned
-      # by the Control Center Next Gen package and are the copy source the role reinstalls from, so
-      # removing them would break any later bundled run. Stopping and disabling the services above is
-      # enough to take the bundled monitoring out of service.
+      # by the Control Center Next Gen package and are the copy source the role reinstalls from.
+      # Delete only the bundle's own generated config files and data dirs, not the shared
+      # dependencies config directory (control_center_next_gen_dependencies_config_path), which holds
+      # C3's other dependency configs.
       loop:
-        - /etc/systemd/system/prometheus.service.d
-        - /etc/systemd/system/alertmanager.service.d
-        - /etc/prometheus
-        - /var/lib/prometheus
-        - /etc/alertmanager
-        - /var/lib/alertmanager
+        - "{{ control_center_next_gen_dep_prometheus.systemd_override | dirname }}"
+        - "{{ control_center_next_gen_dep_alertmanager.systemd_override | dirname }}"
+        - "{{ control_center_next_gen_dep_prometheus.data_path }}"
+        - "{{ control_center_next_gen_dep_alertmanager.data_path }}"
+        - "{{ control_center_next_gen_dep_prometheus.config_file }}"
+        - "{{ control_center_next_gen_dep_prometheus.web_config_file }}"
+        - "{{ control_center_next_gen_dep_prometheus.recording_rules_config_file }}"
+        - "{{ control_center_next_gen_dep_prometheus.trigger_rules_config_file }}"
+        - "{{ control_center_next_gen_dep_alertmanager.config_file }}"
+        - "{{ control_center_next_gen_dep_alertmanager.web_config_file }}"
 
     - name: Reload systemd after removing the units
       ansible.builtin.systemd:
         daemon_reload: true
+
+    - name: Health check after teardown
+      ansible.builtin.include_role:
+        name: control_center_next_gen
+        tasks_from: health_check.yml
