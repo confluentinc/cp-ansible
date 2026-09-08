@@ -1,0 +1,60 @@
+---
+### EXPERIMENTAL / worth trying - may or may not work on a real molecule run.
+### Full bundle -> external -> bundle round-trip on the cluster left by converge (bundled):
+### 1) sanity bundle present, 2) flip external + re-run + cleanup (assert bundle gone),
+### 3) flip BACK to bundled + re-run (assert bundle reinstalled). Ends on bundled -> verify asserts that.
+###
+### UNPROVEN HERE: the set_fact toggle flips across passes, and that re-running with the bundle on
+### after a cleanup fully reinstalls Prometheus/Alertmanager. Confirm on the first run.
+
+- name: Sanity - the bundled Prometheus is running after converge
+  hosts: control_center_next_gen
+  gather_facts: false
+  become: true
+  tasks:
+    - name: List running service units (before)
+      ansible.builtin.command: systemctl list-units --type=service --state=running --no-legend
+      register: rt_before
+      changed_when: false
+    - name: Assert the bundled Prometheus is running before the round-trip
+      ansible.builtin.assert:
+        that: ["'prometheus.service' in rt_before.stdout"]
+
+# --- to external + cleanup ---
+- name: Flip to external Prometheus
+  hosts: control_center_next_gen:kafka_broker:kafka_controller
+  gather_facts: false
+  tasks:
+    - ansible.builtin.set_fact:
+        control_center_next_gen_external_prometheus_enabled: true
+- name: Re-run with external on
+  import_playbook: confluent.platform.all
+- import_playbook: ../byop_cleanup_bundled.yml
+
+- name: Assert the bundled monitoring is stopped at the external midpoint
+  hosts: control_center_next_gen
+  gather_facts: false
+  become: true
+  tasks:
+    - name: List running service units (midpoint)
+      ansible.builtin.command: systemctl list-units --type=service --state=running --no-legend
+      register: rt_mid
+      changed_when: false
+    - name: Assert the bundled monitoring is not running at the external midpoint
+      # The BYOP teardown stops and disables the bundled services but keeps their package-owned unit
+      # files (so the round-trip back to bundled can restart them without reinstalling). So assert they
+      # are not RUNNING here, not that the unit files were removed.
+      ansible.builtin.assert:
+        that:
+          - "'prometheus.service' not in rt_mid.stdout"
+          - "'alertmanager.service' not in rt_mid.stdout"
+
+# --- back to bundled ---
+- name: Flip back to bundled Prometheus
+  hosts: control_center_next_gen:kafka_broker:kafka_controller
+  gather_facts: false
+  tasks:
+    - ansible.builtin.set_fact:
+        control_center_next_gen_external_prometheus_enabled: false
+- name: Re-run with the bundle back on
+  import_playbook: confluent.platform.all
