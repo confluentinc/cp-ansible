@@ -2394,10 +2394,23 @@ control_center_next_gen_properties:
       confluent.controlcenter.streams.security.protocol: "{{kafka_broker_listeners[control_center_next_gen_streams_kafka_listener_name] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol) }}"
       confluent.controlcenter.prometheus.enable: true
       confluent.controlcenter.prometheus.url: "{{control_center_next_gen_dependency_prometheus_url}}"
+  # BYOP: the bundled Prometheus/Alertmanager management properties render only when the
+  # bundle is deployed (external Prometheus off). In BYOP the customer configures the
+  # equivalent on their own external Prometheus, and C3 reads over the url.
+  bundled_monitoring:
+    enabled: "{{ not control_center_next_gen_external_prometheus_enabled | bool }}"
+    properties:
       confluent.controlcenter.alertmanager.url: "{{control_center_next_gen_dependency_alertmanager_url}}"
       confluent.controlcenter.prometheus.config.file: "{{control_center_next_gen_dep_prometheus.config_file}}"
       confluent.controlcenter.prometheus.rules.file: "{{control_center_next_gen_dep_prometheus.trigger_rules_config_file}}"
       confluent.controlcenter.alertmanager.config.file: "{{control_center_next_gen_dep_alertmanager.config_file}}"
+  # BYOP: tell C3 it is reading from a customer-managed external Prometheus (so it does not require
+  # bundled rules/alertmanager files), and disable alerts (no bundled Alertmanager to write to).
+  external_prometheus:
+    enabled: "{{ control_center_next_gen_external_prometheus_enabled | bool }}"
+    properties:
+      confluent.controlcenter.prometheus.external.enable: true
+      confluent.controlcenter.alerts.enable: false
   prometheus_client:
     enabled: "{{control_center_next_gen_dependency_prometheus_ssl_enabled | bool or control_center_next_gen_dependency_prometheus_basic_auth_enabled | bool}}"
     properties: "{{ control_center_next_gen_dependency_prometheus_ssl_enabled | confluent.platform.prometheus_client_properties(
@@ -2412,7 +2425,7 @@ control_center_next_gen_properties:
         control_center_next_gen_dependency_prometheus_service_name
       ) }}"
   alertmanager_client:
-    enabled: "{{control_center_next_gen_dependency_alertmanager_ssl_enabled | bool or control_center_next_gen_dependency_alertmanager_basic_auth_enabled | bool}}"
+    enabled: "{{ (control_center_next_gen_dependency_alertmanager_ssl_enabled | bool or control_center_next_gen_dependency_alertmanager_basic_auth_enabled | bool) and not control_center_next_gen_external_prometheus_enabled | bool }}"
     properties: "{{ control_center_next_gen_dependency_alertmanager_ssl_enabled | confluent.platform.alertmanager_client_properties(
         control_center_next_gen_dependency_alertmanager_truststore_path,
         control_center_next_gen_dependency_alertmanager_truststore_storepass,
