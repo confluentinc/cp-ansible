@@ -53,7 +53,7 @@ pip install pylint
 pip install "ansible==$ANSIBLE_VERSION"
 pip install yamllint
 pip install galaxy-importer
-pip install "setuptools<81"
+pip install setuptools
 
 python --version
 ansible --version
