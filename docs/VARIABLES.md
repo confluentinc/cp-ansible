@@ -6418,19 +6418,27 @@ Default:  "https://packages.confluent.io"
 
 ***
 
-### confluent_control_center_next_gen_version_segment
+### confluent_control_center_next_gen_flat_minor_versions_default
 
-C3 Next Gen version-isolated path segment (e.g. "/2.7"), set automatically by the repo-layout probe (common/tasks/versioned_layout_probe.yml); "" for legacy flat lines. Set manually only with the probe disabled below.
+C3 Next Gen minor lines published FLAT (no version-isolated <major.minor>/ subdir). Confluent-maintained; to add to this, override the _custom list below rather than this one.
 
-Default:  ""
+Default:  ["2.0", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6"]
 
 ***
 
-### confluent_control_center_next_gen_layout_probe_enabled
+### confluent_control_center_next_gen_flat_minor_versions_custom
 
-Set to false to skip the C3 Next Gen repo-layout probe and use confluent_control_center_next_gen_version_segment verbatim - e.g. an internal mirror whose missing dirs don't return 404, or an overridden repo/archive source.
+Extra flat C3 Next Gen minor lines to append - e.g. if a future line ships flat. Empty by default.
 
-Default:  true
+Default:  []
+
+***
+
+### confluent_control_center_next_gen_version_segment
+
+C3 Next Gen version-isolated path segment: "/<major.minor>" for versioned lines, "" for the flat lines above. Override to force a specific layout.
+
+Default:  "{{ '' if confluent_control_center_next_gen_repo_version in confluent_control_center_next_gen_flat_minor_versions else '/' + confluent_control_center_next_gen_repo_version }}"
 
 ***
 
@@ -6442,19 +6450,27 @@ Default:  "{{confluent_independent_repository_baseurl}}/confluent-usm-agent"
 
 ***
 
-### confluent_usm_agent_version_segment
+### confluent_usm_agent_flat_minor_versions_default
 
-USM Agent version-isolated path segment (e.g. "/1.3"), set automatically by the repo-layout probe (common/tasks/versioned_layout_probe.yml); "" for legacy flat lines. Set manually only with the probe disabled below.
+USM Agent minor lines published FLAT (no version-isolated <major.minor>/ subdir). Confluent-maintained; to add to this, override the _custom list below rather than this one.
 
-Default:  ""
+Default:  ["1.0", "1.1", "1.2"]
 
 ***
 
-### confluent_usm_agent_layout_probe_enabled
+### confluent_usm_agent_flat_minor_versions_custom
 
-Set to false to skip the USM Agent repo-layout probe and use confluent_usm_agent_version_segment verbatim (see the C3 toggle above).
+Extra flat USM Agent minor lines to append - e.g. if a future line ships flat. Empty by default.
 
-Default:  true
+Default:  []
+
+***
+
+### confluent_usm_agent_version_segment
+
+USM Agent version-isolated path segment: "/<major.minor>" for versioned lines, "" for the flat lines above. Override to force a specific layout.
+
+Default:  "{{ '' if confluent_usm_agent_repo_version in confluent_usm_agent_flat_minor_versions else '/' + confluent_usm_agent_repo_version }}"
 
 ***
 
