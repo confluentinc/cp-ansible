@@ -7058,19 +7058,27 @@ Default:  "https://packages.confluent.io"
 
 ***
 
-### confluent_control_center_next_gen_version_segment
+### confluent_control_center_next_gen_versioned_from_minor_version
 
-C3 Next Gen version-isolated path segment (e.g. "/2.7"), set automatically by the repo-layout probe (common/tasks/versioned_layout_probe.yml); "" for legacy flat lines. Set manually only with the probe disabled below.
+C3 Next Gen minor line from which the version-isolated <major.minor>/ layout applies; lower minors are flat.
+
+Default:  "2.7"
+
+***
+
+### confluent_control_center_next_gen_versioned_until_minor_version
+
+Optional rollback: this C3 Next Gen minor and higher go back to flat (e.g. "3.0"). Empty means versioned indefinitely.
 
 Default:  ""
 
 ***
 
-### confluent_control_center_next_gen_layout_probe_enabled
+### confluent_control_center_next_gen_version_segment
 
-Set to false to skip the C3 Next Gen repo-layout probe and use confluent_control_center_next_gen_version_segment verbatim - e.g. an internal mirror whose missing dirs don't return 404, or an overridden repo/archive source.
+C3 Next Gen version-isolated path segment: "/<major.minor>" for versioned lines, "" for flat lines. Override to force a specific layout.
 
-Default:  true
+Default:  "{{ ('/' + confluent_control_center_next_gen_repo_version) if (confluent_control_center_next_gen_repo_version is version(confluent_control_center_next_gen_versioned_from_minor_version, '>=') and (confluent_control_center_next_gen_versioned_until_minor_version == '' or confluent_control_center_next_gen_repo_version is version(confluent_control_center_next_gen_versioned_until_minor_version, '<'))) else '' }}"
 
 ***
 
