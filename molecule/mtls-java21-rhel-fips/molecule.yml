@@ -100,15 +100,45 @@ platforms:
       - "9021:9021"
     networks:
       - name: confluent
+  # BYOP: prebuilt mock external Prometheus (cp-ansible-tools/docker/byop-mock-prometheus), Basic auth over TLS.
+  - name: byop-prometheus
+    hostname: byop-prometheus.confluent
+    groups:
+      - byop_prometheus
+    image: byop-mock-prometheus:latest
+    pre_build_image: true
+    command: "--config.file=/etc/prometheus/prometheus.yml --web.config.file=/etc/prometheus/web-config-basic.yml --web.enable-otlp-receiver --storage.tsdb.path=/prometheus"
+    networks:
+      - name: confluent
 provisioner:
   playbooks:
     converge: ../collections_converge.yml
   inventory:
+    host_vars:
+      # BYOP mock has no Python; treat it as an unmanaged appliance (no connect, no facts).
+      byop-prometheus:
+        ansible_connection: local
+        gather_facts: false
     group_vars:
       all:
 
         ssl_enabled: true
         ssl_mutual_auth_enabled: true
+
+        # BYOP: read from the external mock Prometheus over TLS + basic auth.
+        control_center_next_gen_external_prometheus_enabled: true
+        control_center_next_gen_dependency_prometheus_host: byop-prometheus.confluent
+        control_center_next_gen_dependency_prometheus_port: 9090
+        control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+        control_center_next_gen_dependency_prometheus_ca_cert_path: /var/ssl/private/byop_prometheus_ca.crt
+        # BYOP: controller-side source of the mock CA, imported into broker/controller truststores
+        # so the telemetry exporter trusts the external Prometheus over TLS.
+        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/ca.crt"
+        control_center_next_gen_dependency_prometheus_basic_users:
+          admin:
+            principal: c3
+            password: c3-prometheus-secret
 
         redhat_java_package_name: java-21-openjdk
 
