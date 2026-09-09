@@ -6724,6 +6724,30 @@ Default:  "{{pause_rolling_deployment}}"
 
 ***
 
+### control_center_next_gen_external_prometheus_enabled
+
+Boolean. BYOP (Bring Your Own Prometheus): when true, the bundled Prometheus and Alertmanager for Control Center Next Gen are not installed, and C3 reads from an external Prometheus configured via the control_center_next_gen_dependency_prometheus_* variables.
+
+Default:  false
+
+***
+
+### control_center_next_gen_external_prometheus_preflight_probe
+
+Boolean. BYOP: run a best-effort reachability probe against the external Prometheus (host:port/-/ready) from the Ansible control node during pre-flight validation. The probe never fails the run (the control node's network view can differ from the Control Center host's); it only warns so an obviously wrong endpoint is caught early. Set to false to skip the probe.
+
+Default:  true
+
+***
+
+### control_center_next_gen_dependency_prometheus_server_ca_trusted
+
+Boolean. BYOP: set true to declare that the external Prometheus server certificate is signed by a CA the Confluent nodes already trust (a publicly-trusted CA, or one distributed outside cp-ansible). When false and control_center_next_gen_dependency_prometheus_provided_ca_cert_path is unset, pre-flight validation warns that the external Prometheus CA will not be imported into the Control Center and broker/controller truststores, so TLS reads/pushes may fail silently (a green run with blank dashboards).
+
+Default:  false
+
+***
+
 ### control_center_next_gen_dependency_prometheus_health_check_user
 
 user for the user used to do healthcheck on Control Center Next Gen (prometheus)

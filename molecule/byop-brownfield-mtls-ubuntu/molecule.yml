@@ -1,0 +1,94 @@
+---
+### BYOP brownfield + mTLS: start on the BUNDLED Prometheus, then side_effect migrates C3 and the
+### nodes to the external mock Prometheus over mTLS and removes the old bundle. Same migration flow
+### as byop-brownfield-ubuntu, but the external endpoint uses mutual TLS instead of Basic auth.
+
+driver:
+  name: docker
+platforms:
+  - name: controller1
+    hostname: controller1.confluent
+    groups:
+      - kafka_controller
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java25-lean.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-broker1
+    hostname: kafka-broker1.confluent
+    groups:
+      - kafka_broker
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java25-lean.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: control-center-next-gen
+    hostname: control-center-next-gen.confluent
+    groups:
+      - control_center_next_gen
+    image: geerlingguy/docker-ubuntu2404-ansible
+    dockerfile: ../Dockerfile-ubuntu-java25-lean.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    published_ports:
+      - "9022:9022"
+    networks:
+      - name: confluent
+  # Present from the start but unused during the bundled pass; C3 migrates to it (mTLS) in side_effect.
+  - name: byop-prometheus
+    hostname: byop-prometheus.confluent
+    groups:
+      - byop_prometheus
+    image: byop-mock-prometheus:latest
+    pre_build_image: true
+    command: "--config.file=/etc/prometheus/prometheus.yml --web.config.file=/etc/prometheus/web-config-mtls.yml --web.enable-otlp-receiver --storage.tsdb.path=/prometheus"
+    networks:
+      - name: confluent
+provisioner:
+  playbooks:
+    converge: ../collections_converge.yml
+  inventory:
+    host_vars:
+      byop-prometheus:
+        ansible_connection: local
+        gather_facts: false
+      kafka-broker1:
+        node_id: 300
+    group_vars:
+      all:
+        control_center_next_gen_port: 9022
+        # Pass 1: bundled monitoring on. side_effect flips this to true.
+        control_center_next_gen_external_prometheus_enabled: false
+        # External connection details (mTLS), pre-set so migration only flips the enable toggle above.
+        control_center_next_gen_dependency_prometheus_host: byop-prometheus.confluent
+        control_center_next_gen_dependency_prometheus_port: 9090
+        control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_mtls_enabled: true
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+        control_center_next_gen_dependency_prometheus_ca_cert_path: /var/ssl/private/byop_prometheus_ca.crt
+        control_center_next_gen_dependency_prometheus_cert_path: /var/ssl/private/byop_prometheus_client.crt
+        control_center_next_gen_dependency_prometheus_key_path: /var/ssl/private/byop_prometheus_client.key
+        # Source for C3's Prometheus client keystore: mock CA/client cert staged on the controller
+        # (BYOP_CERTS_DIR); the ssl role copies these to the *_cert_path above (must be a different
+        # location - the ssl role deletes the destination first).
+        control_center_next_gen_dependency_prometheus_provided_certs_remote_src: false
+        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/ca.crt"
+        control_center_next_gen_dependency_prometheus_provided_cert_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/client.crt"
+        control_center_next_gen_dependency_prometheus_provided_key_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/client.key"
+        ssl_enabled: true
+        ssl_mutual_auth_enabled: true
+        kafka_broker_custom_properties:
+          log.dirs: /var/lib/kafka/data1
