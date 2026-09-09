@@ -5,7 +5,7 @@
   tags: common
 
 - name: Validate external Prometheus configuration before installing
-  ansible.builtin.include_tasks: validate_byop.yml
+  ansible.builtin.include_tasks: validate_external_prometheus.yml
   when: control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - configuration
@@ -264,10 +264,10 @@
     ( 'ksql' in groups and ksql_ssl_enabled|bool )
   tags: ssl
 
-# Bundled Prometheus over TLS, or BYOP Basic-auth-over-TLS: no provided client cert. Let the ssl role
+# Bundled Prometheus over TLS, or External Prometheus Basic-auth-over-TLS: no provided client cert. Let the ssl role
 # follow the cluster/scenario cert setup (self-signed, or the scenario's own custom certs). This must
 # NOT force ssl_custom_certs or the ssl_*_filepath sources, otherwise custom-cert clusters break (they
-# rely on the scenario's global ssl_custom_certs and default source paths). Matches the pre-BYOP task.
+# rely on the scenario's global ssl_custom_certs and default source paths). Matches the pre-external-Prometheus task.
 - name: Create Control Center Next Gen Dependency Prometheus Keystore and Truststore
   include_role:
     name: ssl
@@ -289,7 +289,7 @@
     - control_center_next_gen_dependency_prometheus_ssl_enabled|bool
     - not (control_center_next_gen_dependency_prometheus_provided_cert_path is defined and (control_center_next_gen_dependency_prometheus_provided_cert_path | trim | length) > 0)
 
-# BYOP mTLS: a client cert/key is PROVIDED (signed by a CA the external Prometheus trusts). Build the
+# External Prometheus mTLS: a client cert/key is PROVIDED (signed by a CA the external Prometheus trusts). Build the
 # keystore from THAT cert instead of self-signing with the cluster CA, otherwise C3 would present a
 # cluster-CA cert the external Prometheus rejects. Only this branch touches ssl_custom_certs / the
 # ssl_*_filepath sources, so bundled and custom-cert clusters are unaffected.
@@ -323,19 +323,19 @@
     - control_center_next_gen_dependency_prometheus_ssl_enabled|bool
     - control_center_next_gen_dependency_prometheus_provided_cert_path is defined and (control_center_next_gen_dependency_prometheus_provided_cert_path | trim | length) > 0
 
-# BYOP Basic-auth over TLS: with no provided client cert the ssl role self-signs C3's Prometheus
+# External Prometheus Basic-auth over TLS: with no provided client cert the ssl role self-signs C3's Prometheus
 # client keystore/truststore with a generated CA, so the truststore does not trust the external
 # Prometheus endpoint. Import the external Prometheus CA into that truststore so C3 trusts the
 # endpoint's server certificate on read. For mTLS this is already handled by the provided-cert path
 # above (custom certs import the provided CA into the truststore).
-- name: Import external Prometheus CA to Control Center Prometheus Truststore (BYOP)
+- name: Import external Prometheus CA to Control Center Prometheus Truststore (Basic auth)
   include_role:
     name: common
     tasks_from: idp_certs.yml
   vars:
     idp_cert_path: "{{ control_center_next_gen_dependency_prometheus_provided_ca_cert_path | default(control_center_next_gen_dependency_prometheus_ca_cert_path) }}"
-    idp_cert_dest: /tmp/byop_prometheus_ca.pem
-    alias: "byop_prometheus_ca"
+    idp_cert_dest: /tmp/external_prometheus_ca.pem
+    alias: "external_prometheus_ca"
     truststore_storepass: "{{ control_center_next_gen_dependency_prometheus_truststore_storepass }}"
     truststore_path: "{{ control_center_next_gen_dependency_prometheus_truststore_path }}"
     # The C3 Prometheus client truststore is a single PKCS12 store (no BCFKS variant), even under
@@ -598,7 +598,7 @@
 
 - name: Configure Control Center Next Gen Dependencies Prometheus & Alertmanager Logging
   include_tasks: logging.yml
-  # BYOP: this sets up logging/systemd-overrides/logrotate for the BUNDLED Prometheus & Alertmanager,
+  # External Prometheus: this sets up logging/systemd-overrides/logrotate for the BUNDLED Prometheus & Alertmanager,
   # which are not installed in external-Prometheus mode - skip it there.
   when: not control_center_next_gen_external_prometheus_enabled | bool
   tags:
