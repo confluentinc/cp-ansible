@@ -7058,6 +7058,30 @@ Default:  "https://packages.confluent.io"
 
 ***
 
+### confluent_control_center_next_gen_versioned_from_minor_version
+
+C3 Next Gen minor line from which the version-isolated <major.minor>/ layout applies; lower minors are flat.
+
+Default:  "2.7"
+
+***
+
+### confluent_control_center_next_gen_versioned_until_minor_version
+
+Optional rollback: this C3 Next Gen minor and higher go back to flat (e.g. "3.0"). Empty means versioned indefinitely.
+
+Default:  ""
+
+***
+
+### confluent_control_center_next_gen_version_segment
+
+C3 Next Gen version-isolated path segment: "/<major.minor>" for versioned lines, "" for flat lines. Override to force a specific layout.
+
+Default:  "{{ ('/' + confluent_control_center_next_gen_repo_version) if (confluent_control_center_next_gen_repo_version is version(confluent_control_center_next_gen_versioned_from_minor_version, '>=') and (confluent_control_center_next_gen_versioned_until_minor_version == '' or confluent_control_center_next_gen_repo_version is version(confluent_control_center_next_gen_versioned_until_minor_version, '<'))) else '' }}"
+
+***
+
 ### custom_java_path
 
 Full pre-existing Java path on custom nodes. CP-Ansible will use the provided path and will skip installing java as part of execution
@@ -7166,7 +7190,7 @@ Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_vers
 
 A path reference to a local archive file or URL for control-center-next-gen archive. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/archive/confluent-control-center-next-gen-{{confluent_control_center_next_gen_package_version}}.tar.gz"
+Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/archive{{confluent_control_center_next_gen_version_segment}}/confluent-control-center-next-gen-{{confluent_control_center_next_gen_package_version}}.tar.gz"
 
 ***
 
