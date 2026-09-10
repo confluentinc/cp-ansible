@@ -43,17 +43,27 @@
   tasks:
     - name: Gather OS Facts
       setup:
-        # Only gathers items in list, filters out the rest
-        filter: ansible_os_family
+        # Only gathers items in list, filters out the rest. ansible_env.HOME is needed below
+        # to locate the rootless systemd --user unit file.
+        filter: ansible_os_family,ansible_env
         gather_subset:
           - '!all'
 
     - import_role:
         name: variables
 
+    # Rootless has no /etc/systemd/system override.conf - the equivalent ExecStart lives in
+    # the systemd --user unit file instead, and it's the same value either way (both templates
+    # source ExecStart from the same *_service_overrides.ExecStart var), so the regex below
+    # doesn't need to change - only which file we slurp it from.
+    - name: Determine Zookeeper override/unit file to read current version from
+      set_fact:
+        zookeeper_version_source_file: "{{ (ansible_env.HOME ~ '/.config/systemd/user/cp-zookeeper.service') if (rootless_enabled | bool) else zookeeper.systemd_override }}"
+      when: installation_method == "archive" and "zookeeper" in group_names
+
     - name: Load override.conf
       slurp:
-        src: "{{ zookeeper.systemd_override }}"
+        src: "{{ zookeeper_version_source_file }}"
       register: slurped_override
       when: installation_method == "archive" and "zookeeper" in group_names
 
@@ -64,9 +74,14 @@
               list | first | regex_search('[0-9]+(.[0-9]+)+') }}"
       when: installation_method == "archive" and "zookeeper" in group_names
 
+    - name: Determine Kafka Broker override/unit file to read current version from
+      set_fact:
+        kafka_broker_version_source_file: "{{ (ansible_env.HOME ~ '/.config/systemd/user/cp-kafka_broker.service') if (rootless_enabled | bool) else kafka_broker.systemd_override }}"
+      when: installation_method == "archive" and "kafka_broker" in group_names
+
     - name: Load override.conf
       slurp:
-        src: "{{ kafka_broker.systemd_override }}"
+        src: "{{ kafka_broker_version_source_file }}"
       register: slurped_override
       when: installation_method == "archive" and "kafka_broker" in group_names
 
