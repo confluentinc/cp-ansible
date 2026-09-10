@@ -1,4 +1,18 @@
 ---
+### deployment_user (cp-user) doesn't exist yet when certificates.yml/ldap.yml/oauth.yml connect
+### here, so they run as root. Same story for the MIGRATION=true confluent.platform.all import
+### below - bootstrap it and switch to it first. ldap_server/oauth_server are excluded - they
+### already opt out of rootless in molecule.yml.
+
+- name: Cache ansible_user=root so certificates.yml/ldap.yml/oauth.yml connect as root before the deploy user exists
+  hosts: kafka_controller:kafka_controller_migration:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  gather_facts: false
+  vars:
+    ansible_user: root
+  tasks:
+    - set_fact:
+        ansible_user: root
+
 - name: Create Custom Certs
   import_playbook: ../certificates.yml
 
@@ -12,6 +26,19 @@
   hosts: localhost
   tasks:
     - shell: openssl s_client -showcerts -connect localhost:8443 </dev/null 2>/dev/null|openssl x509 -outform PEM > oauthcertfile.pem
+
+- import_playbook: confluent.platform.rootless_bootstrap
+  when: lookup('env', 'MIGRATION')|default('false') == 'true'
+
+- name: Cache ansible_user=deployment_user so the unprivileged deploy connects as that user
+  hosts: kafka_controller:kafka_controller_migration:zookeeper:kafka_broker:schema_registry:kafka_connect:kafka_rest:ksql:control_center
+  gather_facts: false
+  tasks:
+    - set_fact:
+        ansible_user: "{{ deployment_user }}"
+      when:
+        - lookup('env', 'MIGRATION')|default('false') == 'true'
+        - (deployment_user | default('') | length > 0) and (rootless_deployment_path | default('') | length > 0)
 
 - name: Install Zookeeper Cluster
   import_playbook: confluent.platform.all

@@ -80,3 +80,15 @@ echo "Running custom URI authorization sanity check..."
 python$PYTHON_VERSION $PATH_TO_CPA/.semaphore/uri_auth_check.py
 
 echo "URI authorization secret leak sanity check completed."
+
+# Test5 - Rootless privileged-tag Check
+echo "Running rootless privileged-tag sanity check..."
+python$PYTHON_VERSION $PATH_TO_CPA/.semaphore/rootless_privileged_tag_check.py
+
+echo "Rootless privileged-tag sanity check completed."
+
+# Test6 - Rootless unguarded-become Check
+echo "Running rootless unguarded-become sanity check..."
+python$PYTHON_VERSION $PATH_TO_CPA/.semaphore/rootless_become_check.py
+
+echo "Rootless unguarded-become sanity check completed."
