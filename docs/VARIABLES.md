@@ -6756,6 +6756,30 @@ Default:  "{{pause_rolling_deployment}}"
 
 ***
 
+### control_center_next_gen_external_prometheus_enabled
+
+Boolean. External Prometheus: when true, the bundled Prometheus and Alertmanager for Control Center Next Gen are not installed, and C3 reads from an external Prometheus configured via the control_center_next_gen_dependency_prometheus_* variables.
+
+Default:  false
+
+***
+
+### control_center_next_gen_external_prometheus_preflight_probe
+
+Boolean. External Prometheus: run a best-effort reachability probe against the external Prometheus (host:port/-/ready) from the Ansible control node during pre-flight validation. The probe never fails the run (the control node's network view can differ from the Control Center host's); it only warns so an obviously wrong endpoint is caught early. Set to false to skip the probe.
+
+Default:  true
+
+***
+
+### control_center_next_gen_dependency_prometheus_server_ca_trusted
+
+Boolean. External Prometheus: set true to declare that the external Prometheus server certificate is signed by a CA the Confluent nodes already trust (a publicly-trusted CA, or one distributed outside cp-ansible). When false and control_center_next_gen_dependency_prometheus_provided_ca_cert_path is unset, pre-flight validation warns that the external Prometheus CA will not be imported into the Control Center and broker/controller truststores, so TLS reads/pushes may fail silently (a green run with blank dashboards).
+
+Default:  false
+
+***
+
 ### control_center_next_gen_dependency_prometheus_health_check_user
 
 user for the user used to do healthcheck on Control Center Next Gen (prometheus)
@@ -7080,7 +7104,7 @@ Default:  ""
 
 Version of Confluent USM Agent to install
 
-Default:  1.0.0
+Default:  1.2.1
 
 ***
 
@@ -7426,11 +7450,59 @@ Default:  "https://packages.confluent.io"
 
 ***
 
+### confluent_control_center_next_gen_versioned_from_minor_version
+
+C3 Next Gen minor line from which the version-isolated <major.minor>/ layout applies; lower minors are flat.
+
+Default:  "2.7"
+
+***
+
+### confluent_control_center_next_gen_versioned_until_minor_version
+
+Optional rollback: this C3 Next Gen minor and higher go back to flat (e.g. "3.0"). Empty means versioned indefinitely.
+
+Default:  ""
+
+***
+
+### confluent_control_center_next_gen_version_segment
+
+C3 Next Gen version-isolated path segment: "/<major.minor>" for versioned lines, "" for flat lines. Override to force a specific layout.
+
+Default:  "{{ ('/' + confluent_control_center_next_gen_repo_version) if (confluent_control_center_next_gen_repo_version is version(confluent_control_center_next_gen_versioned_from_minor_version, '>=') and (confluent_control_center_next_gen_versioned_until_minor_version == '' or confluent_control_center_next_gen_repo_version is version(confluent_control_center_next_gen_versioned_until_minor_version, '<'))) else '' }}"
+
+***
+
 ### confluent_usm_agent_independent_repository_baseurl
 
 Confluent USM Agent RPM and Debian Package Repositories
 
 Default:  "{{confluent_independent_repository_baseurl}}/confluent-usm-agent"
+
+***
+
+### confluent_usm_agent_versioned_from_minor_version
+
+USM Agent minor line from which the version-isolated <major.minor>/ layout applies; lower minors are flat.
+
+Default:  "1.3"
+
+***
+
+### confluent_usm_agent_versioned_until_minor_version
+
+Optional rollback: this USM Agent minor and higher go back to flat (e.g. "2.0"). Empty means versioned indefinitely.
+
+Default:  ""
+
+***
+
+### confluent_usm_agent_version_segment
+
+USM Agent version-isolated path segment: "/<major.minor>" for versioned lines, "" for flat lines. Override to force a specific layout.
+
+Default:  "{{ ('/' + confluent_usm_agent_repo_version) if (confluent_usm_agent_repo_version is version(confluent_usm_agent_versioned_from_minor_version, '>=') and (confluent_usm_agent_versioned_until_minor_version == '' or confluent_usm_agent_repo_version is version(confluent_usm_agent_versioned_until_minor_version, '<'))) else '' }}"
 
 ***
 
@@ -7542,7 +7614,7 @@ Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_vers
 
 A path reference to a local archive file or URL for control-center-next-gen archive. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/archive/confluent-control-center-next-gen-{{confluent_control_center_next_gen_package_version}}.tar.gz"
+Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/archive{{confluent_control_center_next_gen_version_segment}}/confluent-control-center-next-gen-{{confluent_control_center_next_gen_package_version}}.tar.gz"
 
 ***
 
@@ -7550,7 +7622,7 @@ Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/
 
 A path reference to a local archive file or URL for confluent-usm-agent archive. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_usm_agent_independent_repository_baseurl}}/archive/confluent-usm-agent-{{ confluent_usm_agent_full_package_version }}.tar.gz"
+Default:  "{{confluent_usm_agent_independent_repository_baseurl}}/archive{{confluent_usm_agent_version_segment}}/confluent-usm-agent-{{ confluent_usm_agent_full_package_version }}.tar.gz"
 
 ***
 
