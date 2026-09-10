@@ -48,6 +48,10 @@ sudo apt install -y shellcheck
 # Explicitly activate the desired Python version using Semaphore's sem-version
 sem-version python $PYTHON_VERSION
 
+# mise only keeps one global Python version active by default, which breaks ansible-test
+# sanity's multi-interpreter compile checks (they shim into python3.10/3.11/etc directly).
+mise use --global python@3.10 python@3.11 python@3.12 python@3.13
+
 pip install wheel
 pip install pylint
 pip install "ansible==$ANSIBLE_VERSION"
