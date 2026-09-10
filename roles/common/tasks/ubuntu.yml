@@ -7,6 +7,7 @@
   until: install_apt_transport_result is success  or ansible_check_mode
   retries: 5
   delay: 90
+  when: not (rootless_enabled | bool)
   tags: package
 
 - name: Install gnupg for gpg-keys
@@ -16,6 +17,7 @@
   until: install_gnupg_result is success  or ansible_check_mode
   retries: 5
   delay: 90
+  when: not (rootless_enabled | bool)
   tags: package
 
 - name: Install python3-debian for deb822_repository module
@@ -26,6 +28,9 @@
   retries: 5
   delay: 90
   tags: package
+  when:
+    - repository_configuration == 'confluent'
+    - installation_method == "package"
 
 - name: Add Confluent Repositories using deb822_repository
   deb822_repository:
@@ -79,6 +84,7 @@
     - confluent-control-center-next-gen
   when:
     - repository_configuration == 'custom'
+    - installation_method == "package"
 
 - name: Add Custom Apt Repo
   copy:
@@ -100,6 +106,9 @@
     path: /usr/share/man/man1
     state: directory
     mode: '755'
+  when: not (rootless_enabled | bool)
+  tags:
+    - privileged
 
 - name: Custom Java Install
   include_tasks: custom_java_install.yml
@@ -116,6 +125,9 @@
   when:
     - repository_configuration == 'confluent'
     - install_java|bool
+    - not (rootless_enabled | bool)
+  tags:
+    - package
 
 - name: Install Java
   apt:
@@ -124,12 +136,15 @@
   until: java_install_result is success  or ansible_check_mode
   retries: 10
   delay: 5
-  when: install_java|bool
+  when:
+    - install_java|bool
+    - not (rootless_enabled | bool)
   tags: package
 
 - name: Install OpenSSL
   apt:
     name: openssl
+  when: not (rootless_enabled | bool)
   tags: package
 
 - name: Get Java Version
@@ -151,6 +166,7 @@
   tags:
     - package
     - pip-package
+  when: not (rootless_enabled | bool)
 
 - name: Upgrade pip
   ansible.builtin.pip:
@@ -161,6 +177,7 @@
     - pip-package
   when:
     - ansible_distribution_major_version not in ['24']
+    - not (rootless_enabled | bool)
 
 - name: Install pip packages
   ansible.builtin.pip:
@@ -170,6 +187,7 @@
     - pip-package
   when:
     - ansible_distribution_major_version not in ['24']
+    - not (rootless_enabled | bool)
 
 - name: Install pip packages using apt
   apt:
@@ -181,6 +199,7 @@
   tags: package
   when:
     - ansible_distribution_major_version == "24"
+    - not (rootless_enabled | bool)
 
 - name: Install pyyaml package using apt
   apt:
@@ -189,3 +208,4 @@
     state: present
   become: true
   tags: package
+  when: not (rootless_enabled | bool)
