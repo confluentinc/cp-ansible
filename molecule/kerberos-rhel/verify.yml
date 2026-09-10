@@ -2,6 +2,11 @@
 ### Validates that Kerberos is enabled across all components.
 ### Validates that SASL SSL Plaintext is enabled across all components.
 ### Validates that Connector is running
+### Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy user has no
+### passwordless-sudo escalation path, nothing landed under /opt beyond the pre-baked JDK, and
+### the generated unit/env files point under rootless_deployment_path.
+
+- import_playbook: ../rootless_lifecycle_verify.yml
 
 - name: Verify - kafka_controller
   hosts: kafka_controller
@@ -13,14 +18,14 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/controller/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/controller/server.properties"
         property: controller.quorum.voters
         expected_value: "{{ kafka_controller_quorum_voters }}"
     - import_role:
         name: confluent.test
         tasks_from: check_subproperty.yml
       vars:
-        file_path: /etc/controller/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/controller/server.properties"
         property: sasl.enabled.mechanisms
         expected_values:
           - GSSAPI
@@ -29,7 +34,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/controller/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/controller/server.properties"
         property: sasl.kerberos.service.name
         expected_value: kafka-a
 
@@ -38,10 +43,12 @@
   gather_facts: false
   tasks:
     - import_role:
+        name: variables
+    - import_role:
         name: confluent.test
         tasks_from: check_subproperty.yml
       vars:
-        file_path: /etc/kafka/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
         property: sasl.enabled.mechanisms
         expected_values:
           - GSSAPI
@@ -51,21 +58,21 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka/server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/server.properties"
         property: sasl.kerberos.service.name
         expected_value: kafka-a
 
     - name: Copy client properties for plain protocol
       copy:
         src: client_plain.properties
-        dest: /etc/kafka/client_plain.properties
+        dest: "{{ rootless_deployment_path }}/confluent/etc/kafka/client_plain.properties"
         mode: '0644'
       tags: copy
 
     - name: Create Kafka topic
-      shell: kafka-topics --create --topic test-topic \
-        --bootstrap-server kafka-broker1:9092 --command-config /etc/kafka/client_plain.properties \
-        --replication-factor 1 --partitions 6
+      shell: "{{ binary_base_path }}/bin/kafka-topics --create --topic test-topic \
+        --bootstrap-server kafka-broker1:9092 --command-config \"{{ rootless_deployment_path }}/confluent/etc/kafka/client_plain.properties\" \
+        --replication-factor 1 --partitions 6"
       run_once: true
       register: output
       failed_when:
@@ -74,14 +81,14 @@
 
     - name: Create Topic Data
       shell: |
-        seq 10 | kafka-console-producer --topic test-topic \
-        --bootstrap-server kafka-broker1:9092 --producer.config /etc/kafka/client_plain.properties
+        seq 10 | {{ binary_base_path }}/bin/kafka-console-producer --topic test-topic \
+        --bootstrap-server kafka-broker1:9092 --producer.config "{{ rootless_deployment_path }}/confluent/etc/kafka/client_plain.properties"
       run_once: true
 
     - name: Read Topic Data
-      shell: kafka-console-consumer --topic test-topic \
+      shell: "{{ binary_base_path }}/bin/kafka-console-consumer --topic test-topic \
         --bootstrap-server kafka-broker1:9092 --timeout-ms 10000 \
-        --from-beginning --consumer.config /etc/kafka/client_plain.properties
+        --from-beginning --consumer.config \"{{ rootless_deployment_path }}/confluent/etc/kafka/client_plain.properties\""
       run_once: true
       register: consumer_output
       failed_when:
@@ -95,7 +102,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/schema-registry/schema-registry.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/schema-registry/schema-registry.properties"
         property: kafkastore.security.protocol
         expected_value: SASL_PLAINTEXT
 
@@ -103,7 +110,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/schema-registry/schema-registry.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/schema-registry/schema-registry.properties"
         property: kafkastore.sasl.kerberos.service.name
         expected_value: kafka-a
 
@@ -115,7 +122,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka/connect-distributed.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
         property: security.protocol
         expected_value: SASL_PLAINTEXT
 
@@ -123,7 +130,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka/connect-distributed.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
         property: sasl.kerberos.service.name
         expected_value: kafka-a
 
@@ -154,7 +161,7 @@
             config:
               connector.class: "FileStreamSourceConnector"
               tasks.max: "1"
-              file: "/etc/kafka/connect-distributed.properties"
+              file: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
               topic: "test_topic"
 
         update_existing_connector:
@@ -162,7 +169,7 @@
             config:
               connector.class: "FileStreamSourceConnector"
               tasks.max: "5"
-              file: "/etc/kafka/connect-distributed.properties"
+              file: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
               topic: "test_topic"
 
         add_bad_request_connector:
@@ -170,13 +177,13 @@
             config:
               connector.class: "FileStreamSourceConnector"
               tasks.max: "5"
-              file: "/etc/kafka/connect-distributed.properties"
+              file: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
               topic: "test_topic"
           - name: test-connector-2
             config:
               connector.class: "org.apache.kafka.connect.mirror.MirrorHeartbeatConnector"
               tasks.max: "1"
-              file: "/etc/kafka/connect-distributed.properties"
+              file: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
               topics: "foo"
 
         add_non_existent_connector:
@@ -184,7 +191,7 @@
             config:
               connector.class: "FileStreamSourceConnector"
               tasks.max: "5"
-              file: "/etc/kafka/connect-distributed.properties"
+              file: "{{ rootless_deployment_path }}/confluent/etc/kafka/connect-distributed.properties"
               topic: "test_topic"
           - name: test-connector-2
             config:
@@ -255,7 +262,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka-rest/kafka-rest.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka-rest/kafka-rest.properties"
         property: client.security.protocol
         expected_value: SASL_PLAINTEXT
 
@@ -263,7 +270,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka-rest/kafka-rest.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/kafka-rest/kafka-rest.properties"
         property: client.sasl.kerberos.service.name
         expected_value: kafka-a
 
@@ -275,7 +282,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/ksqldb/ksql-server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/ksqldb/ksql-server.properties"
         property: security.protocol
         expected_value: SASL_PLAINTEXT
 
@@ -283,7 +290,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/ksqldb/ksql-server.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/ksqldb/ksql-server.properties"
         property: sasl.kerberos.service.name
         expected_value: kafka-a
 
@@ -295,7 +302,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/confluent-control-center/control-center-production.properties"
         property: confluent.controlcenter.streams.security.protocol
         expected_value: SASL_PLAINTEXT
 
@@ -303,7 +310,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/confluent-control-center/control-center-production.properties"
         property: confluent.controlcenter.streams.sasl.kerberos.service.name
         expected_value: kafka-a
 
@@ -315,7 +322,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/confluent-control-center/control-center-production.properties"
         property: confluent.controlcenter.streams.security.protocol
         expected_value: SASL_PLAINTEXT
 
@@ -323,9 +330,12 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
+        file_path: "{{ rootless_deployment_path }}/confluent/etc/confluent-control-center/control-center-production.properties"
         property: confluent.controlcenter.streams.sasl.kerberos.service.name
         expected_value: kafka-a
 
-- name: Verify - USM Agent Functionality
-  import_playbook: ../verify_usm_agent.yml
+# USM Agent testing disabled under rootless for now, see the molecule.yml comment-out note.
+# verify_usm_agent.yml's kafka_controller/kafka_broker plays check
+# confluent.telemetry.exporter._usm.* properties that only render when usm_agent is in groups.
+# - name: Verify - USM Agent Functionality
+#   import_playbook: ../verify_usm_agent.yml
