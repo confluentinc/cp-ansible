@@ -444,6 +444,10 @@ NOTE: ssl_enabled puts ZooKeeper on TLS (port 2182) — the rollback's ZK
 
 cleanup is TLS-aware for this reason.
 
+Also asserts, mid-converge, that --tags migrate_to_pure_dual_write lands
+
+the cluster in PURE_DUAL_WRITE before the partial rollback runs.
+
 #### Scenario kraft-rollback-to-hybrid verify test's the following:
 
 Verifies Scenario 2: partial rollback landed the cluster back in hybrid mode.
