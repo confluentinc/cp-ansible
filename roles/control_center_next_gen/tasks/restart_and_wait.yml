@@ -1,32 +1,65 @@
 ---
+- name: "Check if the rootless systemd --user unit exists (Prometheus)"
+  stat:
+    path: "{{ ansible_env.HOME }}/.config/systemd/user/cp-control_center_next_gen_dep_prometheus.service"
+  register: control_center_next_gen_dep_prometheus_rootless_unit
+  when: rootless_enabled | bool
+
+# Rootless: skip if the unit doesn't exist yet - rootless_start_service.yml does the first start
+# later. Deliberately untagged (unlike root's `systemd` tag) so a rootless restart can never be
+# silently skipped via the legacy `--skip-tags systemd` fallback - it isn't a privileged operation.
 - name: Restart Control Center Dependency Prometheus
-  systemd:
-    daemon_reload: true
-    name: "{{control_center_next_gen_dep_prometheus_service_name}}"
+  ansible.builtin.systemd:
+    name: "{{ 'cp-control_center_next_gen_dep_prometheus.service' if (rootless_enabled | bool) else control_center_next_gen_dep_prometheus_service_name }}"
+    scope: "{{ 'user' if (rootless_enabled | bool) else 'system' }}"
+    daemon_reload: "{{ not (rootless_enabled | bool) }}"
     state: restarted
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
   # External Prometheus: the bundled Prometheus is not managed in external-Prometheus mode - do not (re)start it,
   # otherwise a config-change notify would bring up the bundled service the deployment opted out of.
-  when: not control_center_next_gen_external_prometheus_enabled | bool
+  when: >-
+    (not (rootless_enabled | bool) or (rootless_enabled | bool and control_center_next_gen_dep_prometheus_rootless_unit.stat.exists))
+    and not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - systemd
+
+- name: "Check if the rootless systemd --user unit exists (AlertManager)"
+  stat:
+    path: "{{ ansible_env.HOME }}/.config/systemd/user/cp-control_center_next_gen_dep_alertmanager.service"
+  register: control_center_next_gen_dep_alertmanager_rootless_unit
+  when: rootless_enabled | bool
 
 - name: Restart Control Center Dependency AlertManager
-  systemd:
-    daemon_reload: true
-    name: "{{control_center_next_gen_dep_alertmanager_service_name}}"
+  ansible.builtin.systemd:
+    name: "{{ 'cp-control_center_next_gen_dep_alertmanager.service' if (rootless_enabled | bool) else control_center_next_gen_dep_alertmanager_service_name }}"
+    scope: "{{ 'user' if (rootless_enabled | bool) else 'system' }}"
+    daemon_reload: "{{ not (rootless_enabled | bool) }}"
     state: restarted
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
   # External Prometheus: the bundled Alertmanager is not managed in external-Prometheus mode - do not (re)start it.
-  when: not control_center_next_gen_external_prometheus_enabled | bool
+  when: >-
+    (not (rootless_enabled | bool) or (rootless_enabled | bool and control_center_next_gen_dep_alertmanager_rootless_unit.stat.exists))
+    and not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - systemd
 
+- name: "Check if the rootless systemd --user unit exists (Control Center)"
+  stat:
+    path: "{{ ansible_env.HOME }}/.config/systemd/user/cp-control_center_next_gen.service"
+  register: control_center_next_gen_rootless_unit
+  when: rootless_enabled | bool
+
 - name: Restart Control Center
-  systemd:
-    daemon_reload: true
-    name: "{{control_center_next_gen_service_name}}"
+  ansible.builtin.systemd:
+    name: "{{ 'cp-control_center_next_gen.service' if (rootless_enabled | bool) else control_center_next_gen_service_name }}"
+    scope: "{{ 'user' if (rootless_enabled | bool) else 'system' }}"
+    daemon_reload: "{{ not (rootless_enabled | bool) }}"
     state: restarted
-  tags:
-    - systemd
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+  when: not (rootless_enabled | bool) or (rootless_enabled | bool and control_center_next_gen_rootless_unit.stat.exists)
 
 - name: Startup Delay
   wait_for:

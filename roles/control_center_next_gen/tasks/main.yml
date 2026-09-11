@@ -52,7 +52,9 @@
     tasks_from: remove_packages.yml
   vars:
     service_name: "{{ control_center_next_gen_service_name }}"
-  when: installation_method == "package"
+  when:
+    - installation_method == "package"
+    - not (rootless_enabled | bool)
   tags:
     - package
     - cp_package
@@ -68,6 +70,7 @@
   when:
     - ansible_os_family == "RedHat"
     - installation_method == "package"
+    - not (rootless_enabled | bool)
   ignore_errors: "{{ ansible_check_mode }}"
   tags:
     - package
@@ -84,6 +87,7 @@
   when:
     - ansible_os_family == "Debian"
     - installation_method == "package"
+    - not (rootless_enabled | bool)
   ignore_errors: "{{ ansible_check_mode }}"
   tags:
     - package
@@ -93,6 +97,7 @@
 - name: Create Control Center Next Gen Group
   group:
     name: "{{control_center_next_gen_group}}"
+  when: not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -110,7 +115,9 @@
     system: true
     shell: "{{user_login_shell}}"
     group: "{{control_center_next_gen_group}}"
-  when: (getent_passwd|default({}))[control_center_next_gen_user] is not defined
+  when:
+    - (getent_passwd|default({}))[control_center_next_gen_user] is not defined
+    - not (rootless_enabled | bool)
   tags:
     - privileged
 
@@ -232,7 +239,9 @@
       - service_file_source: "{{confluent_control_center_next_gen_binary_base_path}}/lib/systemd/system/{{control_center_next_gen_dep_alertmanager.systemd_file|basename}}"
         service_file_dest: "{{control_center_next_gen_dep_alertmanager.systemd_file}}"
   loop: "{{ c3_service_files + (bundled_dependency_service_files if not control_center_next_gen_external_prometheus_enabled | bool else []) }}"
-  when: installation_method == "archive"
+  when:
+    - installation_method == "archive"
+    - not (rootless_enabled | bool)
   tags:
     - systemd
 
@@ -598,9 +607,13 @@
 
 - name: Configure Control Center Next Gen Dependencies Prometheus & Alertmanager Logging
   include_tasks: logging.yml
+  # Entirely root-owned system paths (/etc/systemd/system, /etc/logrotate.d, /usr/local/bin,
+  # package installs, root's crontab) with no rootless equivalent - skip under rootless.
   # External Prometheus: this sets up logging/systemd-overrides/logrotate for the BUNDLED Prometheus & Alertmanager,
   # which are not installed in external-Prometheus mode - skip it there.
-  when: not control_center_next_gen_external_prometheus_enabled | bool
+  when:
+    - not (rootless_enabled | bool)
+    - not control_center_next_gen_external_prometheus_enabled | bool
   tags:
     - log
     - logrotate
@@ -654,6 +667,7 @@
     group: "{{control_center_next_gen_group}}"
     mode: '750'
   loop: "{{ [control_center_next_gen.systemd_override | dirname] + ([control_center_next_gen_dep_alertmanager.systemd_override | dirname, control_center_next_gen_dep_prometheus.systemd_override | dirname] if not control_center_next_gen_external_prometheus_enabled | bool else []) }}"
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
     - privileged
@@ -677,9 +691,55 @@
   loop: "{{ c3_service_overrides + (bundled_dependency_service_overrides if not control_center_next_gen_external_prometheus_enabled | bool else []) }}"
   notify: restart control center next gen
   diff: "{{ not mask_sensitive_diff|bool }}"
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
     - privileged
+
+- name: Generate Control Center Next Gen rootless lifecycle scripts
+  include_role:
+    name: common
+    tasks_from: rootless_lifecycle.yml
+  vars:
+    rootless_component_name: control_center_next_gen
+    rootless_service_environment_overrides: "{{ control_center_next_gen_service_environment_overrides }}"
+    rootless_service_exec: "{{ control_center_next_gen_service_overrides.ExecStart }}"
+    rootless_service_overrides: "{{ control_center_next_gen_service_overrides }}"
+    rootless_service_unit_overrides: "{{ control_center_next_gen_service_unit_overrides }}"
+    rootless_restart_handler: restart control center next gen
+  when: rootless_lifecycle_enabled | bool
+  tags:
+    - filesystem
+
+- name: Generate Control Center Next Gen Dependency Prometheus rootless lifecycle scripts
+  include_role:
+    name: common
+    tasks_from: rootless_lifecycle.yml
+  vars:
+    rootless_component_name: control_center_next_gen_dep_prometheus
+    rootless_service_environment_overrides: "{{ control_center_next_gen_dependency_prometheus_service_environment_overrides }}"
+    rootless_service_exec: "{{ control_center_next_gen_dependency_prometheus_service_overrides.ExecStart }}"
+    rootless_service_overrides: "{{ control_center_next_gen_dependency_prometheus_service_overrides }}"
+    rootless_service_unit_overrides: "{{ control_center_next_gen_dependency_prometheus_service_unit_overrides }}"
+    rootless_restart_handler: restart control center next gen
+  when: rootless_lifecycle_enabled | bool
+  tags:
+    - filesystem
+
+- name: Generate Control Center Next Gen Dependency Alertmanager rootless lifecycle scripts
+  include_role:
+    name: common
+    tasks_from: rootless_lifecycle.yml
+  vars:
+    rootless_component_name: control_center_next_gen_dep_alertmanager
+    rootless_service_environment_overrides: "{{ control_center_next_gen_dependency_alertmanager_service_environment_overrides }}"
+    rootless_service_exec: "{{ control_center_next_gen_dependency_alertmanager_service_overrides.ExecStart }}"
+    rootless_service_overrides: "{{ control_center_next_gen_dependency_alertmanager_service_overrides }}"
+    rootless_service_unit_overrides: "{{ control_center_next_gen_dependency_alertmanager_service_unit_overrides }}"
+    rootless_restart_handler: restart control center next gen
+  when: rootless_lifecycle_enabled | bool
+  tags:
+    - filesystem
 
 - name: Certs were Updated - Trigger Restart
   command: /bin/true
@@ -695,8 +755,36 @@
     enabled: true
     state: started
   loop: "{{ [control_center_next_gen_service_name] + ([control_center_next_gen_dep_alertmanager_service_name, control_center_next_gen_dep_prometheus_service_name] if not control_center_next_gen_external_prometheus_enabled | bool else []) }}"
+  when: not (rootless_enabled | bool)
   tags:
     - systemd
+
+- name: Start Control Center Next Gen (rootless, non-systemd)
+  include_role:
+    name: common
+    tasks_from: rootless_start_service.yml
+  vars:
+    rootless_component_name: control_center_next_gen
+    rootless_component_port: "{{ control_center_next_gen_port }}"
+  when: rootless_lifecycle_enabled | bool
+
+- name: Start Control Center Next Gen Dependency Prometheus (rootless, non-systemd)
+  include_role:
+    name: common
+    tasks_from: rootless_start_service.yml
+  vars:
+    rootless_component_name: control_center_next_gen_dep_prometheus
+    rootless_component_port: "{{ control_center_next_gen_dependency_prometheus_port }}"
+  when: rootless_lifecycle_enabled | bool
+
+- name: Start Control Center Next Gen Dependency Alertmanager (rootless, non-systemd)
+  include_role:
+    name: common
+    tasks_from: rootless_start_service.yml
+  vars:
+    rootless_component_name: control_center_next_gen_dep_alertmanager
+    rootless_component_port: "{{ control_center_next_gen_dependency_alertmanager_port }}"
+  when: rootless_lifecycle_enabled | bool
 
 - name: Do Health Check on Control Center Next Gen & its dependencies Alertmanager & Prometheus
   include_tasks: health_check.yml
