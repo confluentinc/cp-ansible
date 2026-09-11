@@ -249,13 +249,43 @@ Description: For all zookeeper tasks - installing, configuring. Runs the zookeep
 
 ### Tag - migrate_to_dual_write
 
-Description: To pause Zookeeper to Kraft migration at Dual Write mode. Used to manually validate the metadata/ACLs before moving to Kraft mode.
+Description: To pause Zookeeper to Kraft migration at Dual Write mode (HYBRID_DUAL_WRITE: KRaft controllers active, some brokers still on ZooKeeper). Used to manually validate the metadata/ACLs before moving to Kraft mode. Alias: `migrate_to_hybrid_dual_write`.
+
+***
+
+### Tag - migrate_to_hybrid_dual_write
+
+Description: Alias for `migrate_to_dual_write`. Recommended name when using the full 3-phase migration flow (`migrate_to_hybrid_dual_write` -> `migrate_to_pure_dual_write` -> `finalize_migration`).
+
+***
+
+### Tag - migrate_to_pure_dual_write
+
+Description: From Dual Write mode, migrates all brokers to KRaft (`process.roles=broker`) without touching the controllers. Cluster reaches PURE_DUAL_WRITE: KRaft is the source of truth and no ZooKeeper-mode brokers remain, but the migration is still rollback-able (`KRaftToZKRollback.yml --tags rollback_to_hybrid`). This is the phase to soak test/validate the cluster as if it were fully KRaft, before finalizing.
+
+***
+
+### Tag - finalize_migration
+
+Description: From PURE_DUAL_WRITE, takes the controllers out of migration mode and completes the migration. This step is irreversible - only run it once you're done soak testing in PURE_DUAL_WRITE.
 
 ***
 
 ### Tag - migrate_to_kraft
 
-Description: To migrate from Dual Write mode to Kraft mode. Used only when the cluster is currently in Dual Write mode.
+Description: Legacy alias that runs `migrate_to_pure_dual_write` followed immediately by `finalize_migration` in one pass (no opportunity to soak test in between). Used only when the cluster is currently in Dual Write mode. Prefer `migrate_to_pure_dual_write` + `finalize_migration` as two separate runs if you need to validate the cluster before finalizing.
+
+***
+
+### Tag - rollback_to_hybrid
+
+Description: Rolls a cluster in PURE_DUAL_WRITE back to HYBRID_DUAL_WRITE (reverts brokers off KRaft; controllers remain active). Run via `KRaftToZKRollback.yml --tags rollback_to_hybrid`.
+
+***
+
+### Tag - rollback_to_premigration
+
+Description: Rolls a cluster in HYBRID_DUAL_WRITE (or PURE_DUAL_WRITE) all the way back to pure ZooKeeper (pre-migration). Run via `KRaftToZKRollback.yml --tags rollback_to_premigration`.
 
 ***
 

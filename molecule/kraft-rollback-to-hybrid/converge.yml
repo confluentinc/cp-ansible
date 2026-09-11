@@ -4,12 +4,10 @@
 # deploy (prepare) → forward to HYBRID_DUAL_WRITE → push brokers to
 # PURE_DUAL_WRITE → partial rollback to hybrid.
 #
-# Steps that depend on --tags (forward migrate, rollback) run the real entry
-# playbooks as a tagged sub-run, because import_playbook applies tags additively
-# and cannot scope execution to a tag subset. The PURE step has no tag
-# dependency (it is a standalone replay of just the broker-migration plays), so
-# it is imported directly: in-process on molecule's own connection, with output
-# visible inline.
+# All --tags-dependent steps (forward migrate, push to PURE_DUAL_WRITE,
+# rollback) run the real entry playbooks as tagged sub-runs, because
+# import_playbook applies tags additively and cannot scope execution to a tag
+# subset.
 
 - name: Promote controllers and migrate forward to HYBRID_DUAL_WRITE
   hosts: localhost
@@ -56,12 +54,45 @@
       debug:
         var: forward_migrate.stdout_lines
 
-# Push brokers HYBRID_DUAL_WRITE → PURE_DUAL_WRITE. Replays only the
-# broker-migration plays (no controller finalize), so there is no tag
-# dependency and it can be imported directly.
-- import_playbook: migrate_brokers_to_kraft.yml
+    - name: Push brokers to PURE_DUAL_WRITE (--tags migrate_to_pure_dual_write)
+      command: >-
+        ansible-playbook
+        -i {{ molecule_inventory }}
+        {{ repo_root }}/playbooks/ZKtoKraftMigration.yml
+        --tags migrate_to_pure_dual_write
+        -e kraft_migration=true
+        {{ migration_forward_args }}
+      args:
+        chdir: "{{ repo_root }}"
+      changed_when: true
+      register: pure_dual_write_migrate
+
+    - name: Show PURE_DUAL_WRITE migration output
+      debug:
+        var: pure_dual_write_migrate.stdout_lines
+
+# Confirms --tags migrate_to_pure_dual_write actually lands the cluster in
+# PURE_DUAL_WRITE (reusing the same detection logic KRaftToZKRollback.yml's
+# pre-rollback checks rely on), before we roll it back.
+- name: Verify migrate_to_pure_dual_write reached PURE_DUAL_WRITE
+  hosts: localhost
+  gather_facts: true  # detection resolves kafka_broker.config_file, which needs ansible_os_family
   vars:
-    kraft_migration: true
+    repo_root: "{{ playbook_dir }}/../.."
+  tasks:
+    - import_role:
+        name: variables
+
+    - include_tasks: "{{ repo_root }}/playbooks/tasks/detect_migration_phase.yml"
+
+    - name: Assert cluster reached PURE_DUAL_WRITE
+      assert:
+        that:
+          - migration_state == "PURE_DUAL_WRITE"
+        fail_msg: >-
+          Expected PURE_DUAL_WRITE after --tags migrate_to_pure_dual_write,
+          got {{ migration_state }}.
+        success_msg: "Cluster is in PURE_DUAL_WRITE as expected"
 
 - name: Partial rollback to hybrid
   hosts: localhost
