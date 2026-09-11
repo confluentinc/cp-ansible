@@ -1,8 +1,20 @@
 FROM {{ item.image }}
 
-# replace mirror.centos.org with vault.centos.org as centos7 is eol and this url does not work now.
-RUN sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo
-RUN sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo
+# CentOS 7 is EOL: mirrorlist.centos.org is decommissioned (DNS gone) and
+# mirror.centos.org is retired. Disable the dead mirrorlists and point every
+# repo at the frozen vault.centos.org tree over HTTPS -- plain http now
+# 301-redirects to https and CentOS 7's old curl then gets a 403 from CloudFront.
+# vault/EPEL are also flaky (intermittent CDN 403s / empty replies); since every
+# OS package is baked into this image below, mark these repos skip_if_unavailable
+# so a metadata refresh miss at converge time can't abort the run.
+RUN sed -i \
+      -e 's|^mirrorlist=|#mirrorlist=|g' \
+      -e 's|^#\s*baseurl=|baseurl=|g' \
+      -e 's|http://mirror.centos.org/centos|https://vault.centos.org/centos|g' \
+      -e 's|http://vault.centos.org/centos|https://vault.centos.org/centos|g' \
+      -e '/^\[/a skip_if_unavailable=1' \
+      /etc/yum.repos.d/*.repo
+RUN yum clean all
 RUN yum update -y
 
 # Download Java using wget
