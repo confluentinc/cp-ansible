@@ -38,7 +38,7 @@ The migration playbook performs the steps in the required order:
 ## Run
 
 ```bash
-ansible-playbook -i hosts.yml confluent.platform.kraft_static_to_dynamic_migration
+ansible-playbook -i hosts.yml confluent.platform.StaticToDynamicQuorumMigration
 ```
 
 The playbook is idempotent: re-running after a completed migration is a no-op (feature already `1`,
