@@ -300,6 +300,42 @@
   tags:
     - configuration
 
+- name: Detect Existing KRaft Data Directory for Dynamic Quorum Migration Guard
+  command: "{{ binary_base_path }}/bin/kafka-storage info -c {{ kafka_controller.config_file }}"
+  register: kraft_guard_formatted
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: kraft_dynamic_quorum_enabled|bool
+
+- name: Read KRaft Feature Version on Existing Cluster for Dynamic Quorum Migration Guard
+  shell: |
+    {{ binary_base_path }}/bin/kafka-features --bootstrap-controller {{inventory_hostname}}:{{kafka_controller_port}} \
+      --command-config {{kafka_controller.client_config_file}} describe \
+      | grep 'kraft.version' | grep -oE 'FinalizedVersionLevel: [0-9]+' | awk '{print $2}'
+  args:
+    executable: "{{ shell_executable }}"
+  environment:
+    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+  register: kraft_guard_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when:
+    - kraft_dynamic_quorum_enabled|bool
+    - kraft_guard_formatted.rc | default(1) == 0
+
+- name: Fail When Applying Dynamic Quorum Config to a Static KRaft Cluster
+  fail:
+    msg: >-
+      Detected a running static KRaft cluster (kraft.version=0). Applying dynamic quorum
+      configuration directly is unsafe. Run playbooks/StaticToDynamicQuorumMigration.yaml
+      to upgrade kraft.version and switch to controller.quorum.bootstrap.servers.
+  when:
+    - kraft_dynamic_quorum_enabled|bool
+    - kraft_guard_formatted.rc | default(1) == 0
+    - kraft_guard_version.stdout | default('') | trim == '0'
+
 - name: Create Kafka Controller Config
   template:
     src: server.properties.j2
