@@ -61,3 +61,22 @@
   changed_when: false
   check_mode: false
   when: greenfield.rc == 0 or confluent_server_enabled|bool
+
+- name: Verify All Controllers Joined the Dynamic Quorum as Voters
+  shell: |
+    {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-{{bootstrap_server_or_controller}} {{server_hostname}}:{{server_port}} \
+      --command-config {{kafka_controller.client_config_file}} describe --replication | grep -c Observer || true
+  args:
+    executable: "{{ shell_executable }}"
+  environment:
+    KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+  register: dynamic_quorum_observers
+  until: dynamic_quorum_observers.stdout | int == 0
+  retries: 12
+  delay: 10
+  changed_when: false
+  check_mode: false
+  run_once: true
+  when:
+    - kraft_dynamic_quorum_enabled|bool
+    - greenfield.rc == 0 or confluent_server_enabled|bool
