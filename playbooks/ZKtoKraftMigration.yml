@@ -1,9 +1,9 @@
 ---
 - import_playbook: migration_precheck.yml
-  tags: migrate_to_dual_write
+  tags: [migrate_to_dual_write, migrate_to_hybrid_dual_write]
 
 - import_playbook: kafka_controller.yml
-  tags: migrate_to_dual_write
+  tags: [migrate_to_dual_write, migrate_to_hybrid_dual_write]
 
 - name: Validate Jolokia Endpoint Access
   hosts: kafka_controller
@@ -71,11 +71,11 @@
 - import_playbook: kafka_broker.yml
   vars:
     deployment_strategy: 'serial'
-  tags: migrate_to_dual_write
+  tags: [migrate_to_dual_write, migrate_to_hybrid_dual_write]
 
 - name: Wait for migration to complete
   hosts: kafka_controller
-  tags: migrate_to_dual_write
+  tags: [migrate_to_dual_write, migrate_to_hybrid_dual_write]
   gather_facts: false
   any_errors_fatal: true
   tasks:
@@ -111,7 +111,7 @@
 
 - name: Migrate Brokers to Kraft
   hosts: kafka_broker
-  tags: migrate_to_kraft
+  tags: [migrate_to_kraft, migrate_to_pure_dual_write]
   gather_facts: true
   any_errors_fatal: true
   tasks:
@@ -150,7 +150,7 @@
 
 - name: Restart Kafka Broker
   hosts: kafka_broker
-  tags: migrate_to_kraft
+  tags: [migrate_to_kraft, migrate_to_pure_dual_write]
   gather_facts: true
   serial: '1'
   any_errors_fatal: true
@@ -163,9 +163,24 @@
         tasks_from: health_check.yml
       tags: health_check
 
+- name: Pure Dual Write Reached
+  hosts: kafka_controller
+  tags: migrate_to_pure_dual_write
+  tasks:
+    - debug:
+        msg: >-
+          All brokers have been migrated to KRaft mode (process.roles=broker)
+          and no ZooKeeper-mode brokers remain: the cluster is now in
+          PURE_DUAL_WRITE. KRaft is the source of truth for cluster metadata.
+          You can soak test/validate the cluster now. Rollback is still
+          possible via `ansible-playbook KRaftToZKRollback.yml --tags
+          rollback_to_hybrid`. Run this playbook again with `--tags
+          finalize_migration` to complete the migration (this step is
+          irreversible).
+
 - name: Take Controllers out of migration mode
   hosts: kafka_controller
-  tags: migrate_to_kraft
+  tags: [migrate_to_kraft, finalize_migration]
   gather_facts: true
   any_errors_fatal: true
   tasks:
@@ -182,7 +197,7 @@
 
 - name: Restart Kafka Controller
   hosts: kafka_controller
-  tags: migrate_to_kraft
+  tags: [migrate_to_kraft, finalize_migration]
   gather_facts: true
   serial: '1'
   any_errors_fatal: true
@@ -198,7 +213,7 @@
 
 - name: Check Cluster State
   hosts: kafka_controller
-  tags: migrate_to_kraft
+  tags: [migrate_to_kraft, finalize_migration]
   gather_facts: false
   any_errors_fatal: true
   tasks:
@@ -234,7 +249,7 @@
 
 - name: Finish Migration
   hosts: kafka_controller
-  tags: migrate_to_kraft
+  tags: [migrate_to_kraft, finalize_migration]
   tasks:
     - debug:
         msg: "Migration from Zookeeper to Kraft has completed, you may shut down your Zookeeper. Please remove Zookeeper section and migration flag from your inventory file."
