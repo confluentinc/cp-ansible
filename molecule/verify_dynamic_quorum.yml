@@ -94,26 +94,18 @@
         dq_target_node_id: "{{ hostvars[dq_target_controller].dq_node_id.stdout | trim }}"
       run_once: true
 
-    - name: Get Target Controller directory.id
-      shell: |
-        {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ dq_bootstrap }} \
-          --command-config {{ kafka_controller.client_config_file }} describe --replication \
-          | awk -v id={{ dq_target_node_id }} '$1==id {print $2}'
-      args:
-        executable: "{{ shell_executable }}"
-      environment:
-        KAFKA_OPTS: "{{ dq_kafka_opts }}"
-      register: dq_target_dir_id_raw
-      changed_when: false
-      check_mode: false
+    - name: Extract Target Controller directory.id from Replication
+      set_fact:
+        dq_target_dir_id: >-
+          {{ dq_replication.stdout_lines | select('search', '^' ~ dq_target_node_id ~ '[ \\t]')
+             | first | regex_replace('^\\S+\\s+(\\S+).*$', '\\1') }}
       run_once: true
-      delegate_to: "{{ dq_first_controller }}"
 
     - name: Remove Target Controller from the Quorum
       shell: |
         {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ dq_bootstrap }} \
           --command-config {{ kafka_controller.client_config_file }} \
-          remove-controller --controller-id {{ dq_target_node_id }} --controller-directory-id {{ dq_target_dir_id_raw.stdout | trim }}
+          remove-controller --controller-id {{ dq_target_node_id }} --controller-directory-id {{ dq_target_dir_id }}
       args:
         executable: "{{ shell_executable }}"
       environment:
