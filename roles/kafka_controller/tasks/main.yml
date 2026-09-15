@@ -300,8 +300,20 @@
   tags:
     - configuration
 
+- name: Get Existing Master Key for Dynamic Quorum Migration Guard
+  include_role:
+    name: common
+    tasks_from: get_masterkey.yml
+  vars:
+    systemd_override_path: "{{ kafka_controller.systemd_override }}"
+    rootless_component_name: kafka_controller
+  when:
+    - kraft_dynamic_quorum_enabled|bool
+    - kafka_controller_secrets_protection_enabled|bool
+
 - name: Detect Existing KRaft Data Directory for Dynamic Quorum Migration Guard
   command: "{{ binary_base_path }}/bin/kafka-storage info -c {{ kafka_controller.config_file }}"
+  environment: "{{ {'CONFLUENT_SECURITY_MASTER_KEY': existing_masterkey} if kafka_controller_secrets_protection_enabled|bool and existing_masterkey | default('') != '' else {} }}"
   register: kraft_guard_formatted
   changed_when: false
   failed_when: false
