@@ -1,15 +1,11 @@
 ---
-- name: Import Variables for Dynamic Quorum Verification
-  hosts: kafka_controller:kafka_broker
+- name: Verify Dynamic Quorum Controller Config
+  hosts: kafka_controller
   gather_facts: false
   tasks:
     - import_role:
         name: variables
 
-- name: Verify Dynamic Quorum Controller Config
-  hosts: kafka_controller
-  gather_facts: false
-  tasks:
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
@@ -35,12 +31,17 @@
 - name: Verify Dynamic Quorum Membership and Capability
   hosts: kafka_controller
   gather_facts: false
-  vars:
-    dq_first_controller: "{{ groups.kafka_controller[0] }}"
-    dq_target_controller: "{{ groups.kafka_controller[-1] }}"
-    dq_bootstrap: "{{ hostvars[groups.kafka_controller[0]] | confluent.platform.resolve_hostname }}:{{ kafka_controller_port }}"
-    dq_kafka_opts: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
   tasks:
+    - import_role:
+        name: variables
+
+    - name: Set Dynamic Quorum Verification Facts
+      set_fact:
+        dq_first_controller: "{{ groups.kafka_controller[0] }}"
+        dq_target_controller: "{{ groups.kafka_controller[-1] }}"
+        dq_bootstrap: "{{ hostvars[groups.kafka_controller[0]] | confluent.platform.resolve_hostname }}:{{ kafka_controller_port }}"
+        dq_kafka_opts: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+
     - name: Verify kraft.version Finalized Is 1
       shell: |
         {{ binary_base_path }}/bin/kafka-features --bootstrap-controller {{ dq_bootstrap }} \
@@ -137,11 +138,16 @@
 - name: Verify Metadata Write Path After Membership Change
   hosts: kafka_broker
   gather_facts: false
-  vars:
-    dq_broker_bootstrap: "{{ hostvars[groups.kafka_broker[0]] | confluent.platform.resolve_hostname }}:{{ kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port'] }}"
-    dq_topic: dynamic-quorum-verify
-    dq_kafka_opts: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
   tasks:
+    - import_role:
+        name: variables
+
+    - name: Set Broker Verification Facts
+      set_fact:
+        dq_broker_bootstrap: "{{ hostvars[groups.kafka_broker[0]] | confluent.platform.resolve_hostname }}:{{ kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port'] }}"
+        dq_topic: dynamic-quorum-verify
+        dq_kafka_opts: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+
     - name: Create Verification Topic
       shell: |
         {{ binary_base_path }}/bin/kafka-topics --bootstrap-server {{ dq_broker_bootstrap }} \
