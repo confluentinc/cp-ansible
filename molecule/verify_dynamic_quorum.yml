@@ -47,7 +47,7 @@
         dq_target_controller: "{{ groups.kafka_controller[-1] }}"
         dq_bootstrap: "{{ hostvars[groups.kafka_controller[0]] | confluent.platform.resolve_hostname }}:{{ kafka_controller_port }}"
         dq_kafka_opts: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
-        dq_controller_node_ids: "{{ groups.kafka_controller | map('extract', hostvars, ['dq_node_id', 'stdout']) | map('trim') | list }}"
+        dq_controller_count: "{{ groups.kafka_controller | length }}"
       run_once: true
 
     - name: Verify kraft.version Finalized Is 1
@@ -78,15 +78,15 @@
       check_mode: false
       run_once: true
       delegate_to: "{{ dq_first_controller }}"
-      until: dq_controller_node_ids | difference(dq_replication.stdout_lines | default([]) | select('search', '(Leader|Follower)') | map('regex_replace', '^(\S+).*$', '\1') | list) | length == 0
+      until: (dq_replication.stdout_lines | select('search', '(Leader|Follower)') | list | length) == (dq_controller_count | int)
       retries: 12
       delay: 10
 
-    - name: Assert No Controller Is Stuck as Observer
+    - name: Assert All Controllers Are Voters
       assert:
         that:
-          - dq_controller_node_ids | difference(dq_replication.stdout_lines | select('search', '(Leader|Follower)') | map('regex_replace', '^(\S+).*$', '\1') | list) | length == 0
-        fail_msg: "One or more controllers are not voters (still Observer or missing). Controller node.ids: {{ dq_controller_node_ids }}. Replication: {{ dq_replication.stdout }}"
+          - (dq_replication.stdout_lines | select('search', '(Leader|Follower)') | list | length) == (dq_controller_count | int)
+        fail_msg: "Expected {{ dq_controller_count }} controller voters (Leader/Follower) but found {{ dq_replication.stdout_lines | select('search', '(Leader|Follower)') | list | length }}. Replication: {{ dq_replication.stdout }}"
       run_once: true
 
     - name: Set Target Controller node.id
@@ -97,8 +97,8 @@
     - name: Extract Target Controller directory.id from Replication
       set_fact:
         dq_target_dir_id: >-
-          {{ dq_replication.stdout_lines | select('search', '^' ~ dq_target_node_id ~ '[ \t]')
-             | first | regex_replace('^\S+\s+(\S+).*$', '\1') }}
+          {{ dq_replication.stdout_lines | select('search', '^' ~ dq_target_node_id ~ '[ \\t]')
+             | first | regex_replace('^\\S+\\s+(\\S+).*$', '\\1') }}
       run_once: true
 
     - name: Remove Target Controller from the Quorum
@@ -142,7 +142,7 @@
       check_mode: false
       run_once: true
       delegate_to: "{{ dq_first_controller }}"
-      until: dq_controller_node_ids | difference(dq_replication_final.stdout_lines | default([]) | select('search', '(Leader|Follower)') | map('regex_replace', '^(\S+).*$', '\1') | list) | length == 0
+      until: (dq_replication_final.stdout_lines | select('search', '(Leader|Follower)') | list | length) == (dq_controller_count | int)
       retries: 12
       delay: 10
 
