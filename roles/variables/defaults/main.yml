@@ -382,6 +382,15 @@ metadata_migration_retries: 10
 ### Default controller quorum voters
 kafka_controller_quorum_voters: "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{hostvars[controller_hostname]|confluent.platform.resolve_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
 
+### Enable KRaft dynamic controller quorum (KIP-853); controllers use controller.quorum.bootstrap.servers instead of the static controller.quorum.voters, the initial voter formats storage with --standalone and the rest with --no-initial-controllers. Requires CP 8.4.0 or later. Opt-in; static quorum remains the default.
+kraft_dynamic_quorum_enabled: false
+
+### The kafka_controller inventory host that bootstraps a dynamic quorum by formatting storage with --standalone (it becomes the sole initial voter); all other controllers join as observers and are promoted automatically via auto-join. Required when kraft_dynamic_quorum_enabled is true (validation halts the run if unset).
+kafka_controller_initial_voter: ""
+
+### Default controller quorum bootstrap servers (dynamic quorum): plain host:port list (no node-id prefix), honouring hostname aliasing so it works for single-region and MRC deployments.
+kafka_controller_quorum_bootstrap_servers: "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if not loop.first %},{% endif %}{{ hostvars[controller_hostname]|confluent.platform.resolve_hostname }}:{{ kafka_controller_listeners['controller']['port'] }}{% endfor %}"
+
 ### Default Kafka config prefix. Only valid to customize when installation_method: archive
 kafka_controller_config_prefix: "{{ config_prefix }}/controller"
 
