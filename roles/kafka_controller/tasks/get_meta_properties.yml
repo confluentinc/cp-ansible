@@ -27,10 +27,32 @@
   changed_when: false
   run_once: true
 
+- name: Assert All Controllers Reported Data Directory State Before Bootstrapping Dynamic Quorum
+  assert:
+    that:
+      - groups.kafka_controller | map('extract', hostvars) | selectattr('formatted.rc', 'defined') | list | length == groups.kafka_controller | length
+    fail_msg: "Forming a dynamic quorum requires running against all kafka_controller hosts together (no --limit). If you are recovering a wiped or replaced bootstrap controller, follow the controller recovery procedure instead of re-running the deploy."
+  when:
+    - kraft_dynamic_quorum_enabled|bool
+    - inventory_hostname == kafka_controller_initial_voter
+    - formatted.rc == 1
+
+- name: Decide Whether This Controller Bootstraps the Dynamic Quorum
+  set_fact:
+    kafka_controller_use_standalone: >-
+      {{ inventory_hostname == kafka_controller_initial_voter
+         and groups.kafka_controller | difference([inventory_hostname])
+             | map('extract', hostvars) | selectattr('formatted.rc', 'defined')
+             | selectattr('formatted.rc', 'equalto', 0) | list | length == 0 }}
+  when:
+    - kraft_dynamic_quorum_enabled|bool
+    - formatted.rc == 1
+
 - name: Format Data Directory and Add Scram Credentials
   shell: |
     {{ binary_base_path }}/bin/kafka-storage format \
     -t={{ clusterid }} -c {{ kafka_controller.config_file }} \
+    {% if kraft_dynamic_quorum_enabled|bool %}{{ '--standalone' if kafka_controller_use_standalone|bool else '--no-initial-controllers' }} {% endif %}\
     {% if 'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms %}--add-scram 'SCRAM-SHA-512=[name={{ sasl_scram_users_final.admin.principal }},password={{ sasl_scram_users_final.admin.password }}]' {% endif %} \
     {% if 'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms %}--add-scram 'SCRAM-SHA-256=[name={{ sasl_scram256_users_final.admin.principal }},password={{ sasl_scram256_users_final.admin.password }}]' {% endif %} \
     --ignore-formatted
