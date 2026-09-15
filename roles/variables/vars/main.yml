@@ -309,13 +309,21 @@ kafka_controller_properties:
       log.dirs: "{{ (rootless_deployment_path_final ~ '/data/controller/data') if rootless_deployment_path | length > 0 else '/var/lib/controller/data' }}"
       kafka.rest.enable: "{{kafka_controller_rest_proxy_enabled|string|lower}}"
       process.roles: controller
-      controller.quorum.voters: "{{ kafka_controller_quorum_voters }}"
       controller.listener.names: "{{kafka_controller_listeners['controller']['name']}}"
       listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %},{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}:{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}"
       listeners: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
       advertised.listeners: "{{kafka_controller_listeners['controller']['name']}}://{{ kafka_controller_listeners['controller']['hostname'] | default(hostvars[inventory_hostname]|confluent.platform.resolve_hostname) | confluent.platform.format_hostname }}:{{kafka_controller_listeners['controller']['port']}}"
       node.id: "{{ node_id|default(groups.kafka_controller.index(inventory_hostname)|int + 9991) if inventory_hostname in groups.kafka_controller else 0}}"
       inter.broker.listener.name: "{{kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['name']}}"
+  kraft_static_quorum:
+    enabled: "{{ not kraft_dynamic_quorum_enabled|bool }}"
+    properties:
+      controller.quorum.voters: "{{ kafka_controller_quorum_voters }}"
+  kraft_dynamic_quorum:
+    enabled: "{{ kraft_dynamic_quorum_enabled|bool }}"
+    properties:
+      controller.quorum.bootstrap.servers: "{{ kafka_controller_quorum_bootstrap_servers }}"
+      controller.quorum.auto.join.enable: "true"
   broker_listener:
     enabled: true
     properties: "{{  {'broker_listener': kafka_broker_listeners[kafka_broker_inter_broker_listener_name]} | confluent.platform.listener_properties(ssl_enabled, fips_enabled, ssl_client_authentication, principal_mapping_rules, sasl_protocol,
@@ -627,10 +635,17 @@ kafka_broker_properties:
   broker_on_controller:
     enabled: "{{kraft_enabled|bool}}"
     properties:
-      controller.quorum.voters: "{{ kafka_controller_quorum_voters }}"
       controller.listener.names: "{{kafka_controller_listeners['controller']['name']}}"
       listener.security.protocol.map: "{% for listener in kafka_controller_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(kafka_controller_ssl_enabled, kafka_controller_sasl_protocol)}}{% endfor %},{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}:{{ listener['value'] | confluent.platform.kafka_protocol_defaults(ssl_enabled, sasl_protocol)}}{% endfor %}"
       listeners: "{% for listener in kafka_broker_listeners|dict2items %}{% if loop.index > 1%},{% endif %}{{ listener['value']['name'] }}://{{ listener['value']['ip'] | default('') }}:{{ listener['value']['port'] }}{% endfor %}"
+  kraft_static_quorum:
+    enabled: "{{ kraft_enabled|bool and not kraft_dynamic_quorum_enabled|bool }}"
+    properties:
+      controller.quorum.voters: "{{ kafka_controller_quorum_voters }}"
+  kraft_dynamic_quorum:
+    enabled: "{{ kraft_enabled|bool and kraft_dynamic_quorum_enabled|bool }}"
+    properties:
+      controller.quorum.bootstrap.servers: "{{ kafka_controller_quorum_bootstrap_servers }}"
   controller_sasl:
     enabled: "{{ kraft_enabled|bool and 'none' not in (kafka_controller_listeners['controller']['sasl_protocol'] | default(sasl_protocol) | confluent.platform.normalize_sasl_protocol) }}"
     properties:
