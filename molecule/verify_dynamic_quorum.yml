@@ -1,0 +1,186 @@
+---
+- name: Verify Dynamic Quorum Controller Config
+  hosts: kafka_controller
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: "{{ kafka_controller.config_file }}"
+        property: controller.quorum.bootstrap.servers
+        expected_value: "{{ kafka_controller_quorum_bootstrap_servers }}"
+
+    - import_role:
+        name: confluent.test
+        tasks_from: check_property.yml
+      vars:
+        file_path: "{{ kafka_controller.config_file }}"
+        property: controller.quorum.auto.join.enable
+        expected_value: "true"
+
+    - name: Assert controller.quorum.voters Is Absent
+      shell: "egrep '^controller.quorum.voters[ ]?=' {{ kafka_controller.config_file }} || true"
+      register: dq_voters_line
+      changed_when: false
+      failed_when: dq_voters_line.stdout | trim | length > 0
+
+- name: Verify Dynamic Quorum Membership and Capability
+  hosts: kafka_controller
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Read This Controller's node.id
+      shell: "egrep '^node.id[ ]?=' {{ kafka_controller.config_file }} | awk -F'=' '{print $2}' | tr -d '[:space:]'"
+      register: dq_node_id
+      changed_when: false
+      check_mode: false
+
+    - name: Set Dynamic Quorum Verification Facts
+      set_fact:
+        dq_first_controller: "{{ groups.kafka_controller[0] }}"
+        dq_target_controller: "{{ groups.kafka_controller[-1] }}"
+        dq_bootstrap: "{{ hostvars[groups.kafka_controller[0]] | confluent.platform.resolve_hostname }}:{{ kafka_controller_port }}"
+        dq_kafka_opts: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+        dq_controller_node_ids: "{{ groups.kafka_controller | map('extract', hostvars, ['dq_node_id', 'stdout']) | map('trim') | list }}"
+      run_once: true
+
+    - name: Verify kraft.version Finalized Is 1
+      shell: |
+        {{ binary_base_path }}/bin/kafka-features --bootstrap-controller {{ dq_bootstrap }} \
+          --command-config {{ kafka_controller.client_config_file }} describe \
+          | grep 'kraft.version' | grep -oE 'FinalizedVersionLevel: [0-9]+' | awk '{print $2}'
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ dq_kafka_opts }}"
+      register: dq_kraft_version
+      changed_when: false
+      failed_when: dq_kraft_version.stdout | trim != '1'
+      run_once: true
+      delegate_to: "{{ dq_first_controller }}"
+
+    - name: Wait for Every Controller to Become a Voter
+      shell: |
+        {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ dq_bootstrap }} \
+          --command-config {{ kafka_controller.client_config_file }} describe --replication
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ dq_kafka_opts }}"
+      register: dq_replication
+      changed_when: false
+      check_mode: false
+      run_once: true
+      delegate_to: "{{ dq_first_controller }}"
+      until: dq_controller_node_ids | difference(dq_replication.stdout_lines | default([]) | select('search', '(Leader|Follower)$') | map('regex_replace', '^(\S+).*$', '\1') | list) | length == 0
+      retries: 12
+      delay: 10
+
+    - name: Assert No Controller Is Stuck as Observer
+      assert:
+        that:
+          - dq_controller_node_ids | difference(dq_replication.stdout_lines | select('search', '(Leader|Follower)$') | map('regex_replace', '^(\S+).*$', '\1') | list) | length == 0
+        fail_msg: "One or more controllers are not voters (still Observer or missing). Controller node.ids: {{ dq_controller_node_ids }}. Replication: {{ dq_replication.stdout }}"
+      run_once: true
+
+    - name: Set Target Controller node.id
+      set_fact:
+        dq_target_node_id: "{{ hostvars[dq_target_controller].dq_node_id.stdout | trim }}"
+      run_once: true
+
+    - name: Extract Target Controller directory.id from Replication
+      set_fact:
+        dq_target_dir_id: "{{ dq_replication.stdout_lines | select('search', '^' ~ dq_target_node_id ~ '[ \t]') | first | regex_replace('^\S+\s+(\S+).*$', '\1') }}"
+      run_once: true
+
+    - name: Remove Target Controller from the Quorum
+      shell: |
+        {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ dq_bootstrap }} \
+          --command-config {{ kafka_controller.client_config_file }} \
+          remove-controller --controller-id {{ dq_target_node_id }} --controller-directory-id {{ dq_target_dir_id }}
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ dq_kafka_opts }}"
+      register: dq_remove
+      changed_when: dq_remove.rc == 0
+      run_once: true
+      delegate_to: "{{ dq_first_controller }}"
+
+    - name: Add Target Controller Back to the Quorum
+      shell: |
+        {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ dq_bootstrap }} \
+          --command-config {{ kafka_controller.client_config_file }} add-controller
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ dq_kafka_opts }}"
+      register: dq_add
+      changed_when: dq_add.rc == 0
+      failed_when: false
+      run_once: true
+      delegate_to: "{{ dq_target_controller }}"
+
+    - name: Verify Every Controller Is a Voter Again
+      shell: |
+        {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ dq_bootstrap }} \
+          --command-config {{ kafka_controller.client_config_file }} describe --replication
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ dq_kafka_opts }}"
+      register: dq_replication_final
+      changed_when: false
+      check_mode: false
+      run_once: true
+      delegate_to: "{{ dq_first_controller }}"
+      until: dq_controller_node_ids | difference(dq_replication_final.stdout_lines | default([]) | select('search', '(Leader|Follower)$') | map('regex_replace', '^(\S+).*$', '\1') | list) | length == 0
+      retries: 12
+      delay: 10
+
+- name: Verify Metadata Write Path After Membership Change
+  hosts: kafka_broker
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Set Broker Verification Facts
+      set_fact:
+        dq_broker_bootstrap: "{{ hostvars[groups.kafka_broker[0]] | confluent.platform.resolve_hostname }}:{{ kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port'] }}"
+        dq_topic: dynamic-quorum-verify
+        dq_kafka_opts: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+
+    - name: Create Verification Topic
+      shell: |
+        {{ binary_base_path }}/bin/kafka-topics --bootstrap-server {{ dq_broker_bootstrap }} \
+          --command-config {{ kafka_broker.client_config_file }} \
+          --create --if-not-exists --topic {{ dq_topic }} --partitions 1 --replication-factor {{ [3, groups.kafka_broker | length] | min }}
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ dq_kafka_opts }}"
+      register: dq_topic_create
+      changed_when: "'Created topic' in dq_topic_create.stdout"
+      run_once: true
+      delegate_to: "{{ groups.kafka_broker[0] }}"
+
+    - name: Assert Verification Topic Exists
+      shell: |
+        {{ binary_base_path }}/bin/kafka-topics --bootstrap-server {{ dq_broker_bootstrap }} \
+          --command-config {{ kafka_broker.client_config_file }} --describe --topic {{ dq_topic }}
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ dq_kafka_opts }}"
+      register: dq_topic_describe
+      changed_when: false
+      failed_when: dq_topic | string not in dq_topic_describe.stdout
+      run_once: true
+      delegate_to: "{{ groups.kafka_broker[0] }}"
