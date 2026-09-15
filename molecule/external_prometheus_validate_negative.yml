@@ -14,6 +14,13 @@
     control_center_next_gen_external_prometheus_enabled: true
     control_center_next_gen_dependency_prometheus_host: prom.example
     control_center_next_gen_dependency_prometheus_port: 9090
+    # Play-level default so every pre-existing case below (which does not itself care about the
+    # C3-version guard) resolves to a supported version and is unaffected by it. In the real role
+    # these come from the variables role (a dependency of control_center_next_gen, not exercised by
+    # this standalone localhost playbook); the version-guard test cases further down override both
+    # explicitly to exercise specific versions.
+    confluent_control_center_next_gen_package_version: "2.7.0"
+    confluent_control_center_next_gen_repo_version: "2.7"
   tasks:
     - name: Case 1 - external Prometheus with TLS off must be rejected
       block:
@@ -229,3 +236,93 @@
           - not (external_prometheus_server_ca_untrusted | default(true) | bool)
         fail_msg: "validate_external_prometheus flagged a missing server CA even though one was provided under mTLS."
         success_msg: "External Prometheus: mTLS with a provided server CA is accepted."
+
+    # --- C3-version guard: rejects a C3 version known not to support external Prometheus.
+    # confluent_control_center_next_gen_repo_version is normally computed by the variables role
+    # (a role dependency of control_center_next_gen, not exercised by this standalone localhost
+    # playbook), so each case below sets both the raw package version and its major.minor
+    # explicitly, matching what the real role would compute. ---
+    - name: Case 10 - C3 2.6.0 with external Prometheus enabled must be rejected
+      block:
+        - name: Run validation with C3 2.6.0
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+            control_center_next_gen_dependency_prometheus_provided_ca_cert_path: /tmp/external_prometheus-fake-ca.crt
+            control_center_next_gen_external_prometheus_preflight_probe: false
+            confluent_control_center_next_gen_package_version: "2.6.0"
+            confluent_control_center_next_gen_repo_version: "2.6"
+        - name: Validation unexpectedly passed (C3 2.6.0)
+          ansible.builtin.set_fact:
+            external_prometheus_c3_260_passed: true
+      rescue:
+        - name: Validation rejected C3 2.6.0 as expected
+          ansible.builtin.set_fact:
+            external_prometheus_c3_260_passed: false
+
+    - name: Assert C3 2.6.0 was rejected
+      ansible.builtin.assert:
+        that:
+          - not (external_prometheus_c3_260_passed | default(true) | bool)
+        fail_msg: "validate_external_prometheus did not reject C3 2.6.0, which is known not to support external Prometheus."
+        success_msg: "External Prometheus negative: C3 2.6.0 is rejected."
+
+    - name: Case 11 - C3 2.6.1 with external Prometheus enabled must be rejected
+      block:
+        - name: Run validation with C3 2.6.1
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+            control_center_next_gen_dependency_prometheus_provided_ca_cert_path: /tmp/external_prometheus-fake-ca.crt
+            control_center_next_gen_external_prometheus_preflight_probe: false
+            confluent_control_center_next_gen_package_version: "2.6.1"
+            confluent_control_center_next_gen_repo_version: "2.6"
+        - name: Validation unexpectedly passed (C3 2.6.1)
+          ansible.builtin.set_fact:
+            external_prometheus_c3_261_passed: true
+      rescue:
+        - name: Validation rejected C3 2.6.1 as expected
+          ansible.builtin.set_fact:
+            external_prometheus_c3_261_passed: false
+
+    - name: Assert C3 2.6.1 was rejected
+      ansible.builtin.assert:
+        that:
+          - not (external_prometheus_c3_261_passed | default(true) | bool)
+        fail_msg: "validate_external_prometheus did not reject C3 2.6.1, which is still not newer than the latest released 2.6 line."
+        success_msg: "External Prometheus negative: C3 2.6.1 is rejected."
+
+    - name: Case 12 - C3 2.7.0 with external Prometheus enabled is accepted
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+      vars:
+        control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+        control_center_next_gen_dependency_prometheus_mtls_enabled: false
+        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: /tmp/external_prometheus-fake-ca.crt
+        control_center_next_gen_external_prometheus_preflight_probe: false
+        confluent_control_center_next_gen_package_version: "2.7.0"
+        confluent_control_center_next_gen_repo_version: "2.7"
+      # No block/rescue: a supported C3 version must not be rejected, so a failure here should fail
+      # this whole verify play, not be swallowed.
+
+    - name: Case 13 - external Prometheus disabled entirely skips the version guard regardless of C3 version
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+      when: control_center_next_gen_external_prometheus_enabled | bool
+      register: external_prometheus_disabled_gate_result
+      vars:
+        control_center_next_gen_external_prometheus_enabled: false
+        confluent_control_center_next_gen_package_version: "2.5.0"
+        confluent_control_center_next_gen_repo_version: "2.5"
+
+    - name: Assert the disabled gate actually skipped validation (mirrors main.yml's include gate)
+      ansible.builtin.assert:
+        that:
+          - external_prometheus_disabled_gate_result is skipped
+        fail_msg: >-
+          Setting control_center_next_gen_external_prometheus_enabled to false did not skip
+          validate_external_prometheus.yml the same way main.yml's include gate does.
+        success_msg: "External Prometheus: disabling it entirely skips the version guard (and all other checks)."
