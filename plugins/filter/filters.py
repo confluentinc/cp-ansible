@@ -648,13 +648,18 @@ class FilterModule(object):
         if ssl_enabled:
             final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
             final_dict[config_prefix + 'ssl.truststore.password'] = str(truststore_storepass)
-            final_dict[config_prefix + 'alias.name'] = service_name
 
             # mTLS properties
             if mtls_enabled:
                 final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
                 final_dict[config_prefix + 'ssl.keystore.password'] = str(keystore_storepass)
                 final_dict[config_prefix + 'ssl.key.password'] = str(keystore_keypass)
+                # The client keystore built by roles/ssl/tasks/create_keystores_from_certs.yml
+                # always imports the provided cert/key under the fixed alias "localhost"
+                # (openssl pkcs12 -export ... -name localhost), regardless of service_name.
+                # alias.name must match that actual keystore alias, not the service name, or
+                # C3's TLS client can fail to select the right identity during the mTLS handshake.
+                final_dict[config_prefix + 'alias.name'] = 'localhost'
 
         # Basic authentication
         if basic_auth_enabled:
