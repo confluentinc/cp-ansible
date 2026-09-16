@@ -178,6 +178,26 @@
           finalize_migration` to complete the migration (this step is
           irreversible).
 
+- name: Verify Cluster is in PURE_DUAL_WRITE Before Finalizing
+  hosts: localhost
+  gather_facts: true  # detection resolves kafka_broker.config_file, which needs ansible_os_family
+  tags: [migrate_to_kraft, finalize_migration]
+  tasks:
+    - import_role:
+        name: variables
+
+    - include_tasks: tasks/detect_migration_phase.yml
+
+    - name: Fail if cluster has not reached PURE_DUAL_WRITE
+      fail:
+        msg: |
+          ERROR: --tags finalize_migration requires the cluster to already be in
+          PURE_DUAL_WRITE. Current state: {{ migration_state }}
+
+          Run this playbook with --tags migrate_to_pure_dual_write first, then
+          re-run with --tags finalize_migration once you're done soak testing.
+      when: migration_state != "PURE_DUAL_WRITE"
+
 - name: Take Controllers out of migration mode
   hosts: kafka_controller
   tags: [migrate_to_kraft, finalize_migration]
