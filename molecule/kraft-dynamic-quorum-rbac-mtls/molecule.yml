@@ -1,16 +1,9 @@
 ---
-### Installs Confluent Platform Cluster on Oracle Linux 9.
+### Installs Confluent Platform Cluster on Oracle Linux 8.
 ### RBAC enabled.
 ### MTLS enabled.
-### Secrets protection enabled
-### FIPS enabled.
 ### Kafka Broker Customer Listener.
-### RBAC Additional System Admin.
-### Provided SSL Principal Mapping rule
-### Creates two unique Connectors in Connect cluster.
-### Broker and Kraft Controller co-located while Migration
-### Kafka broker has custom listener at port 9093
-### Kraft Controller is running at port 9095
+### SSO authentication using OIDC in Control center using Okta IdP
 
 driver:
   name: docker
@@ -28,13 +21,51 @@ platforms:
     privileged: true
     networks:
       - name: confluent
+  - name: controller1
+    hostname: controller1.confluent
+    groups:
+      - kafka_controller
+    image: redhat/ubi10-minimal
+    dockerfile: ../Dockerfile-rhel-java25.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller2
+    hostname: controller2.confluent
+    groups:
+      - kafka_controller
+    image: redhat/ubi10-minimal
+    dockerfile: ../Dockerfile-rhel-java25.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: controller3
+    hostname: controller3.confluent
+    groups:
+      - kafka_controller
+    image: redhat/ubi10-minimal
+    dockerfile: ../Dockerfile-rhel-java25.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
   - name: kafka-broker1
     hostname: kafka-broker1.confluent
     groups:
       - kafka_broker
-      - kafka_controller
     image: redhat/ubi10-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
+    dockerfile: ../Dockerfile-rhel-java25.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -46,9 +77,8 @@ platforms:
     hostname: kafka-broker2.confluent
     groups:
       - kafka_broker
-      - kafka_controller
     image: redhat/ubi10-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
+    dockerfile: ../Dockerfile-rhel-java25.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -60,9 +90,8 @@ platforms:
     hostname: kafka-broker3.confluent
     groups:
       - kafka_broker
-      - kafka_controller
     image: redhat/ubi10-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
+    dockerfile: ../Dockerfile-rhel-java25.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -75,7 +104,7 @@ platforms:
     groups:
       - schema_registry
     image: redhat/ubi10-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
+    dockerfile: ../Dockerfile-rhel-java25.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -88,7 +117,7 @@ platforms:
     groups:
       - kafka_rest
     image: redhat/ubi10-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
+    dockerfile: ../Dockerfile-rhel-java25.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -101,7 +130,7 @@ platforms:
     groups:
       - kafka_connect
     image: redhat/ubi10-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
+    dockerfile: ../Dockerfile-rhel-java25.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -114,7 +143,7 @@ platforms:
     groups:
       - ksql
     image: redhat/ubi10-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
+    dockerfile: ../Dockerfile-rhel-java25.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -127,7 +156,7 @@ platforms:
     groups:
       - control_center_next_gen
     image: redhat/ubi10-minimal
-    dockerfile: ../Dockerfile-rhel-java21.j2
+    dockerfile: ../Dockerfile-rhel-java25.j2
     command: ""
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -137,33 +166,61 @@ platforms:
       - "9022:9022"
     networks:
       - name: confluent
+  - name: usm-agent1
+    hostname: usm-agent1.confluent
+    groups:
+      - usm_agent
+    image: redhat/ubi10-minimal
+    dockerfile: ../Dockerfile-rhel-java25.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ccloud-mock-service
+    hostname: ccloud-mock-service.confluent
+    groups:
+      - ccloud_mock
+    image: usmagent-mock-ccloud:latest
+    pre_build_image: true
+    command: ""
+    published_ports:
+      - "8081:8081"
+    networks:
+      - name: confluent
+    env:
+      MOCK_SERVER_HOST: "0.0.0.0"
+      MOCK_SERVER_PORT: "8081"
+      MOCK_SERVER_USE_TLS: "false"
+      MOCK_SERVER_REQUIRE_BASIC_AUTH: "true"
+      MOCK_SERVER_USERNAME: "ccloud-user"
+      MOCK_SERVER_PASSWORD: "ccloud-secret"
+      MOCK_SERVER_REQUIRE_MTLS: "false"
 provisioner:
   playbooks:
     converge: ../collections_converge.yml
   inventory:
+    host_vars:
+      ccloud-mock-service:
+        ansible_connection: local
+        gather_facts: false
+      usm-agent1:
+        usm_agent_custom_properties:
+          confluent.usm-agent.ccloud.ssl.enabled: "false"
+        usm_agent_health_check_enabled: false
     group_vars:
       all:
         kraft_dynamic_quorum_enabled: true
         kafka_controller_initial_voter: "{{ groups.kafka_controller[0] }}"
+        ssl_enabled: true
+
         control_center_next_gen_port: 9022
         control_center_next_gen_dependency_prometheus_ssl_enabled: true
         control_center_next_gen_dependency_prometheus_mtls_enabled: true
         control_center_next_gen_dependency_alertmanager_ssl_enabled: true
         control_center_next_gen_dependency_alertmanager_mtls_enabled: true
-        scenario_name: rbac-mtls-rhel-fips
-        redhat_java_package_name: java-21-openjdk
-
-        rbac_super_users:
-          - User:CONFLUENT
-
-        ssl_enabled: true
-        fips_enabled: true
-        fips_mode: "fips-140-3"
-
-        ssl_custom_certs: true
-        ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
-        ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
-        ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
 
         # ssl_mutual_auth_enabled: true
         kafka_controller_ssl_mutual_auth_enabled: true
@@ -173,17 +230,33 @@ provisioner:
         ksql_ssl_mutual_auth_enabled: true
         kafka_connect_replicator_ssl_mutual_auth_enabled: true
 
-        kafka_controller_port: 9095
-        secrets_protection_enabled: true
+        rbac_super_users:
+          - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_broker
+          - User:C=US,ST=Ca,L=PaloAlto,O=CONFLUENT,OU=TEST,CN=kafka_controller
+          - User:CN=kafka_controller,OU=TEST TEAM,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
+          - User:CN=kafka_broker,OU=TEST TEAM,O=CONFLUENT,L=PaloAlto,ST=Ca,C=US
+
         rbac_enabled: true
 
+        sso_mode: oidc
+        # necessary configs in MDS server for sso in C3
+        sso_groups_claim: groups
+        sso_sub_claim: sub
+        sso_groups_scope: groups # scope is optional, depending on the Idp
+        sso_issuer_url: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7
+        sso_jwks_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/keys
+        sso_authorize_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/authorize
+        sso_token_uri: https://dev-59009577.okta.com/oauth2/aus96p2og3u7Cpwu65d7/v1/token
+        sso_client_id: ${OKTA_CLIENT:-user}
+        sso_client_password: ${OKTA_PASSWORD:-pass}
+
         kafka_broker_custom_listeners:
-          broker: # trying out mtls in interbk without global config
+          broker:
             name: BROKER
             port: 9091
             ssl_enabled: true
-            ssl_mutual_auth_enabled: true # testing if old config works
-            ssl_client_authentication: none
+            ssl_mutual_auth_enabled: false
+            ssl_client_authentication: required # testing if new config works
             sasl_protocol: none
           client_listener:
             name: CLIENT
@@ -207,73 +280,36 @@ provisioner:
         control_center_next_gen_ldap_user: control-center1
         control_center_next_gen_ldap_password: password
 
-        principal_mapping_rules:
-          - "RULE:.*O=(.*?),OU=TEST.*$$/$$1/"
-          - "DEFAULT"
-
         kafka_broker_custom_properties:
-          super.users: User:dom;User:jeff
-        # kafka_controller_custom_properties:
-          # ssl.principal.mapping.rules: "RULE:.*O=(.*?),OU=TEST.*$$/$$1/"  #since we are providing mapping.rules to broker and have mTLS between broker and controller #}
+          ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
+          ldap.com.sun.jndi.ldap.read.timeout: 3000
+          ldap.java.naming.provider.url: ldap://ldap1:389
+          ldap.java.naming.security.principal: uid=mds,OU=rbac,DC=example,DC=com
+          ldap.java.naming.security.credentials: password
+          ldap.java.naming.security.authentication: simple
+          ldap.user.search.base: OU=rbac,DC=example,DC=com
+          ldap.group.search.base: OU=rbac,DC=example,DC=com
+          ldap.user.name.attribute: uid
+          ldap.user.memberof.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.group.name.attribute: cn
+          ldap.group.member.attribute.pattern: CN=(.*),OU=rbac,DC=example,DC=com
+          ldap.user.object.class: account
 
-        # To run the FileStream connector, you must add the filestream-connectors path in the plugin.path
-        kafka_connect_custom_properties:
-          plugin.path: "/usr/share/filestream-connectors,/usr/share/java/connect_plugins"
+        # USM Agent Configuration - mTLS
+        usm_agent_basic_auth_enabled: false
+        usm_agent_ssl_enabled: true
+        usm_agent_ssl_mutual_auth_enabled: true
 
-      kafka_broker:
-        kafka_broker_cluster_name: Test-Broker
-        # Testing old way of passing ldap configs
-        ldap_config: |
-          ldap.java.naming.factory.initial=com.sun.jndi.ldap.LdapCtxFactory
-          ldap.com.sun.jndi.ldap.read.timeout=3000
-          ldap.java.naming.provider.url=ldaps://{{ groups['ldap_server'][0] }}:636
-          ldap.java.naming.security.protocol=SSL
-          ldap.ssl.truststore.location=/var/ssl/private/kafka_broker.truststore.jks
-          ldap.ssl.truststore.password=confluenttruststorepass
-          ldap.java.naming.security.principal=uid=mds,OU=rbac,DC=example,DC=com
-          ldap.java.naming.security.credentials=password
-          ldap.java.naming.security.authentication=simple
-          ldap.user.search.base=OU=rbac,DC=example,DC=com
-          ldap.group.search.base=OU=rbac,DC=example,DC=com
-          ldap.user.name.attribute=uid
-          ldap.user.memberof.attribute.pattern=CN=(.*),OU=rbac,DC=example,DC=com
-          ldap.group.name.attribute=cn
-          ldap.group.member.attribute.pattern=CN=(.*),OU=rbac,DC=example,DC=com
-          ldap.user.object.class=account
-
-      schema_registry:
-        schema_registry_cluster_name: Test-Schema
-
-      kafka_connect:
-        kafka_connect_cluster_name: Test-Connect
-        kafka_connect_connector_white_list: "test_topic1,test_topic2"
-        kafka_connect_connectors:
-          - name: sample-connector-1
-            config:
-              connector.class: "FileStreamSinkConnector"
-              tasks.max: "1"
-              file: "/etc/kafka/connect-distributed.properties"
-              topics: "test_topic1"
-              key.converter: "org.apache.kafka.connect.json.JsonConverter"
-              value.converter: "org.apache.kafka.connect.json.JsonConverter"
-          - name: sample-connector-2
-            config:
-              connector.class: "FileStreamSourceConnector"
-              tasks.max: "1"
-              file: "/etc/kafka/connect-distributed.properties"
-              topic: "test_topic2"
-              key.converter: "org.apache.kafka.connect.json.JsonConverter"
-              value.converter: "org.apache.kafka.connect.json.JsonConverter"
-      ksql:
-        ksql_cluster_name: Test-Ksql
+        # USM Agent Configuration - CCloud Mock Server
+        ccloud_endpoint: http://ccloud-mock-service:8081
+        ccloud_environment_id: env-mock-123
+        ccloud_credential:
+          username: ccloud-user
+          password: ccloud-secret
 
       ldap_server:
-        ldaps_enabled: true
-        ldaps_custom_certs: true
-        ssl_custom_certs: true
-        ssl_ca_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/ca.crt"
-        ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
-        ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
+        ldaps_enabled: false
+        ldaps_custom_certs: false
 
         ldap_admin_password: ldppassword
 
