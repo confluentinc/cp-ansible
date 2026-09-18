@@ -2924,6 +2924,7 @@ usm_agent_properties:
       confluent.usm-agent.listener.admin.port: "{{ usm_agent_admin_port }}"
       confluent.usm-agent.listener.controlplane.port: "{{ usm_agent_controlplane_port }}"
       confluent.usm-agent.listener.dataplane.port: "{{ usm_agent_dataplane_port }}"
+      confluent.usm-agent.listener.command-handler.port: "{{ usm_agent_command_handler_listener_port }}"
       confluent.usm-agent.listener.dataplane.basic.auth.enabled: "{{ usm_agent_basic_auth_enabled|string|lower }}"
       confluent.usm-agent.listener.dataplane.ssl.enabled: "{{ usm_agent_ssl_enabled|string|lower }}"
       confluent.usm-agent.listener.dataplane.ssl.client.auth.enabled: "{{ usm_agent_ssl_mutual_auth_enabled|string|lower }}"
@@ -2953,3 +2954,27 @@ usm_agent_properties:
 usm_agent_combined_properties: "{{usm_agent_properties | confluent.platform.combine_properties}}"
 
 usm_agent_final_properties: "{{ usm_agent_combined_properties | combine(usm_agent_custom_properties) }}"
+
+#### USM Agent Command Handler Variables ####
+usm_agent_command_handler_service_name: usm-agent-command-handler
+
+usm_agent_command_handler:
+  config_file: "{{ ((config_base_path,('confluent-usm-agent-',confluent_usm_agent_archive_version) | join) | path_join) if installation_method == 'archive' else '' }}/etc/confluent/usm-agent/command-handler.properties"
+  systemd_file: "{{ (systemd_base_dir, (usm_agent_command_handler_service_name, '.service') | join) | path_join }}"
+  systemd_override: /etc/systemd/system/{{usm_agent_command_handler_service_name}}.service.d/override.conf
+
+# Global settings. The managed Connect clusters are NOT here -- being a list,
+# they are rendered by a loop in command-handler.properties.j2. agent.port is
+# wired to the agent's Envoy dedicated loopback command-handler listener (the port
+# the command-handler dials), so the two can never drift apart.
+usm_agent_command_handler_properties:
+  defaults:
+    enabled: true
+    properties:
+      confluent.usm-agent.command-handler.monitoring.port: "{{ usm_agent_command_handler_monitoring_port }}"
+      confluent.usm-agent.command-handler.admin.port: "{{ usm_agent_command_handler_admin_port }}"
+      confluent.usm-agent.command-handler.agent.port: "{{ usm_agent_command_handler_listener_port }}"
+
+usm_agent_command_handler_combined_properties: "{{ usm_agent_command_handler_properties | confluent.platform.combine_properties }}"
+
+usm_agent_command_handler_final_properties: "{{ usm_agent_command_handler_combined_properties | combine(usm_agent_command_handler_custom_properties) }}"

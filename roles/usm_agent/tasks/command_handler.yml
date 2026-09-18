@@ -1,0 +1,77 @@
+---
+- name: Create USM Agent Command Handler Config
+  template:
+    src: command-handler.properties.j2
+    dest: "{{ usm_agent_command_handler.config_file }}"
+    mode: '644'
+    owner: "{{ usm_agent_default_user }}"
+    group: "{{ usm_agent_default_group }}"
+  notify: restart command handler
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
+- name: Ensure USM Agent Command Handler Secrets Directory
+  file:
+    path: "{{ usm_agent_secrets_dir }}"
+    state: directory
+    mode: '700'
+    owner: "{{ usm_agent_default_user }}"
+    group: "{{ usm_agent_default_group }}"
+  tags:
+    - configuration
+    - filesystem
+
+- name: Create Command Handler Connect Credential Files (basic auth clusters)
+  copy:
+    content: "{{ item.auth.username }}\n{{ item.auth.password }}\n"
+    dest: "{{ usm_agent_secrets_dir }}/command-handler-{{ item.name }}-credential.txt"
+    mode: '600'
+    owner: "{{ usm_agent_default_user }}"
+    group: "{{ usm_agent_default_group }}"
+  loop: "{{ usm_agent_command_handler_connect_clusters | selectattr('auth', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: (item.auth.type | default('none')) == 'basic'
+  notify: restart command handler
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - configuration
+
+- name: Copy Command Handler Connect CA Files (tls clusters)
+  copy:
+    src: "{{ item.tls.trusted_ca_filepath }}"
+    dest: "{{ usm_agent_secrets_dir }}/command-handler-{{ item.name }}-ca.crt"
+    mode: '600'
+    owner: "{{ usm_agent_default_user }}"
+    group: "{{ usm_agent_default_group }}"
+  loop: "{{ usm_agent_command_handler_connect_clusters | selectattr('tls', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: restart command handler
+  tags:
+    - configuration
+
+- name: Create Command Handler Service Override Directory
+  file:
+    path: "{{ usm_agent_command_handler.systemd_override | dirname }}"
+    owner: "{{ usm_agent_default_user }}"
+    group: "{{ usm_agent_default_group }}"
+    state: directory
+    mode: '750'
+  tags:
+    - systemd
+    - privileged
+
+- name: Write Command Handler Service Overrides
+  template:
+    src: command-handler-override.conf.j2
+    dest: "{{ usm_agent_command_handler.systemd_override }}"
+    mode: '640'
+    owner: root
+    group: root
+  notify: restart command handler
+  diff: "{{ not mask_sensitive_diff|bool }}"
+  tags:
+    - systemd
+    - privileged
