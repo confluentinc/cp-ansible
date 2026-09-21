@@ -32,13 +32,31 @@ Kafka Connect Confluent Hub Plugins logic (Installs jcustenborder/kafka-connect-
 
 Custom log dirs for all components.
 
+
+
+Runs Zookeeper by default, KRaft via `--env-file molecule/kraft.yml` (see docs/HOW_TO_TEST.md).
+
+Also covers rootless in place (rootless_enabled: true below), including ZK<->KRaft migration
+
+(MIGRATION=true) - the bootstrap shim lives in collections_converge.yml/migration_converge.yml
+
+so this scenario stays auto-discoverable by the migration-test tooling. See
+
+ROOTLESS_DEPLOYMENT_STEPS.md for why privileged: true here doesn't undermine the rootless proof.
+
 #### Scenario archive-plain-debian10 verify test's the following:
 
 Validates that SASL SSL protocol is set across all components.
 
 Validates that custom log4j configuration is in place.
 
-Validates that Java 17 is in Use
+Validates that Java 17 is in Use.
+
+Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy user has no
+
+passwordless-sudo escalation path, nothing landed under /opt beyond the pre-baked JDK, and
+
+the generated unit/env files point under rootless_deployment_path.
 
 ***
 
@@ -414,6 +432,18 @@ Kerberos enabled with custom client config path
 
 Creates a Connector in Connect cluster
 
+
+
+Runs Zookeeper by default, KRaft via `--env-file molecule/kraft.yml` (see docs/HOW_TO_TEST.md).
+
+Also covers rootless in place (rootless_enabled: true below), including ZK<->KRaft migration
+
+(MIGRATION=true) - the bootstrap shim lives in collections_converge.yml/migration_converge.yml
+
+so this scenario stays auto-discoverable by the migration-test tooling. See
+
+ROOTLESS_DEPLOYMENT_STEPS.md for why privileged: true here doesn't undermine the rootless proof.
+
 #### Scenario kerberos-rhel verify test's the following:
 
 Validates that Kerberos is enabled across all components.
@@ -421,6 +451,12 @@ Validates that Kerberos is enabled across all components.
 Validates that SASL SSL Plaintext is enabled across all components.
 
 Validates that Connector is running
+
+Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy user has no
+
+passwordless-sudo escalation path, nothing landed under /opt beyond the pre-baked JDK, and
+
+the generated unit/env files point under rootless_deployment_path.
 
 ***
 
@@ -1382,6 +1418,22 @@ Kafka Broker Customer Listener.
 
 RBAC Additional System Admin.
 
+
+
+Runs Zookeeper by default, KRaft via `--env-file molecule/kraft.yml` (see docs/HOW_TO_TEST.md).
+
+zookeeper_export_certs needs no explicit override - ssl_mutual_auth_enabled: true already
+
+makes it default to True.
+
+Also covers rootless in place (rootless_enabled: true below), including ZK<->KRaft migration
+
+(MIGRATION=true) - the bootstrap shim lives in collections_converge.yml/migration_converge.yml
+
+so this scenario stays auto-discoverable by the migration-test tooling. See
+
+ROOTLESS_DEPLOYMENT_STEPS.md for why privileged: true here doesn't undermine the rootless proof.
+
 #### Scenario rbac-mtls-provided-ubuntu verify test's the following:
 
 Validates that keystores are present on all components.
@@ -1389,6 +1441,20 @@ Validates that keystores are present on all components.
 Validates that LDAPS is working.
 
 Validates that TLS CN is being registered as super user.
+
+Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy user has no
+
+passwordless-sudo escalation path, nothing landed under /opt beyond the pre-baked JDK, and
+
+the generated unit/env files point under rootless_deployment_path.
+
+Validates secrets protection under rootless: the master key is persisted where
+
+roles/common/tasks/get_masterkey.yml now knows to read it back from (the rootless env file,
+
+not the root-only override.conf), and that the LDAP credential property was actually
+
+encrypted (not left as the plaintext value from molecule.yml).
 
 ***
 
