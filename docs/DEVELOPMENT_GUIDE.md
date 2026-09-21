@@ -240,11 +240,6 @@ Our `-post` branches are released branches and not meant for Pull Requests, unle
 
 We use bump2version tool to update the version strings in files based on the rules in config file.
 
-Run following command to bump up the `confluent_package_version`:
-```shell
-bump2version --config-file .bumpversion.cfg <patch|minor|major>
-```
-
 Run following command to bump up the cp-ansible version:
 ```shell
 bump2version --config-file .bumpversion-ansible.cfg <patch|minor|major>
