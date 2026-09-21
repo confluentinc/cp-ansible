@@ -1,0 +1,170 @@
+---
+- name: KRaft Static-to-Dynamic Quorum Migration - Precheck
+  hosts: kafka_controller
+  gather_facts: true
+  environment: "{{ proxy_env }}"
+  tags: dynamic_quorum_precheck
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Assert Dynamic Quorum Is Requested in Inventory
+      assert:
+        that:
+          - kraft_dynamic_quorum_enabled | bool
+        fail_msg: "Set kraft_dynamic_quorum_enabled: true in your inventory before running the static-to-dynamic migration."
+      run_once: true
+
+    - name: Health Check the Existing Controller Quorum Before Migration
+      include_role:
+        name: kafka_controller
+        tasks_from: health_check.yml
+
+- name: KRaft Static-to-Dynamic Quorum Migration - Feature Upgrade
+  hosts: kafka_controller
+  gather_facts: true
+  environment: "{{ proxy_env }}"
+  tags: dynamic_quorum_feature_upgrade
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Read Current KRaft Feature Version
+      shell: |
+        {{ binary_base_path }}/bin/kafka-features --bootstrap-controller {{inventory_hostname}}:{{kafka_controller_port}} \
+          --command-config {{kafka_controller.client_config_file}} describe \
+          | grep 'kraft.version' | grep -oE 'FinalizedVersionLevel: [0-9]+' | awk '{print $2}'
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+      register: kraft_feature_version
+      changed_when: false
+      check_mode: false
+      run_once: true
+
+    - name: Assert KRaft Feature Version Is a Known Migratable State
+      assert:
+        that:
+          - kraft_feature_version.stdout | trim in ['0', '1']
+        fail_msg: >-
+          Expected kraft.version 0 (static, to be upgraded) or 1 (already upgraded, resuming a
+          previous migration) but read '{{ kraft_feature_version.stdout | trim }}'. Ensure the
+          controller quorum is healthy and re-run.
+      run_once: true
+
+    - name: Upgrade KRaft Feature to Dynamic Quorum (kraft.version=1)
+      shell: |
+        {{ binary_base_path }}/bin/kafka-features --bootstrap-controller {{inventory_hostname}}:{{kafka_controller_port}} \
+          --command-config {{kafka_controller.client_config_file}} upgrade --feature kraft.version=1
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+      register: kraft_feature_upgrade
+      changed_when: kraft_feature_upgrade.rc == 0
+      run_once: true
+      when: kraft_feature_version.stdout | trim == '0'
+
+    - name: Verify KRaft Feature Version Is 1
+      shell: |
+        {{ binary_base_path }}/bin/kafka-features --bootstrap-controller {{inventory_hostname}}:{{kafka_controller_port}} \
+          --command-config {{kafka_controller.client_config_file}} describe \
+          | grep 'kraft.version' | grep -oE 'FinalizedVersionLevel: [0-9]+' | awk '{print $2}'
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+      register: kraft_feature_version_post
+      changed_when: false
+      check_mode: false
+      failed_when: kraft_feature_version_post.stdout | trim != '1'
+      run_once: true
+
+- name: KRaft Static-to-Dynamic Quorum Migration - Switch Controller Configuration
+  hosts: kafka_controller
+  gather_facts: true
+  any_errors_fatal: true
+  environment: "{{ proxy_env }}"
+  tags: dynamic_quorum_controller_config
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Remove Static controller.quorum.voters from Controller Config
+      lineinfile:
+        path: "{{ kafka_controller.config_file }}"
+        regexp: '^controller\.quorum\.voters='
+        state: absent
+
+    - name: Set controller.quorum.bootstrap.servers on Controller Config
+      lineinfile:
+        path: "{{ kafka_controller.config_file }}"
+        regexp: '^controller\.quorum\.bootstrap\.servers='
+        line: "controller.quorum.bootstrap.servers={{ kafka_controller_quorum_bootstrap_servers }}"
+
+    - name: Enable controller.quorum.auto.join on Controller Config
+      lineinfile:
+        path: "{{ kafka_controller.config_file }}"
+        regexp: '^controller\.quorum\.auto\.join\.enable='
+        line: "controller.quorum.auto.join.enable={{ kafka_controller_kraft_auto_join_enabled | lower }}"
+
+- name: KRaft Static-to-Dynamic Quorum Migration - Rolling Restart Controllers
+  hosts: kafka_controller
+  gather_facts: true
+  serial: 1
+  any_errors_fatal: true
+  environment: "{{ proxy_env }}"
+  tags: dynamic_quorum_controller_restart
+  tasks:
+    - import_role:
+        name: variables
+
+    - include_role:
+        name: kafka_controller
+        tasks_from: restart_and_wait.yml
+
+    - include_role:
+        name: kafka_controller
+        tasks_from: health_check.yml
+
+- name: KRaft Static-to-Dynamic Quorum Migration - Switch Broker Configuration
+  hosts: kafka_broker
+  gather_facts: true
+  any_errors_fatal: true
+  environment: "{{ proxy_env }}"
+  tags: dynamic_quorum_broker_config
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Remove Static controller.quorum.voters from Broker Config
+      lineinfile:
+        path: "{{ kafka_broker.config_file }}"
+        regexp: '^controller\.quorum\.voters='
+        state: absent
+
+    - name: Set controller.quorum.bootstrap.servers on Broker Config
+      lineinfile:
+        path: "{{ kafka_broker.config_file }}"
+        regexp: '^controller\.quorum\.bootstrap\.servers='
+        line: "controller.quorum.bootstrap.servers={{ kafka_controller_quorum_bootstrap_servers }}"
+
+- name: KRaft Static-to-Dynamic Quorum Migration - Rolling Restart Brokers
+  hosts: kafka_broker
+  gather_facts: true
+  serial: 1
+  any_errors_fatal: true
+  environment: "{{ proxy_env }}"
+  tags: dynamic_quorum_broker_restart
+  tasks:
+    - import_role:
+        name: variables
+
+    - include_role:
+        name: kafka_broker
+        tasks_from: restart_and_wait.yml
+
+    - include_role:
+        name: kafka_broker
+        tasks_from: health_check.yml
