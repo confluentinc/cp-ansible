@@ -6,7 +6,7 @@ Below are the supported variables for the role variables
 
 ### confluent_package_version
 
-Version of Confluent Platform to install
+Confluent Platform version to install. Required: empty by default, so you must set it explicitly in your inventory or the playbook fails early with a clear error.
 
 Default:  ""
 
