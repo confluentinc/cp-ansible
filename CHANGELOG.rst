@@ -4,6 +4,28 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+7.7.12
+======
+Breaking Changes
+-------------
+- ``confluent_package_version`` is now required. CP-Ansible no longer ships a hardcoded default Confluent Platform version. Before upgrading, add ``confluent_package_version`` to your inventory, set to the CP version you want to install. See the CP-Ansible / Confluent Platform compatibility matrix: https://docs.confluent.io/ansible/current/ansible-requirements.html. If it is not set, the playbook will fail early.
+
+New features
+-------------
+- Rootless (non-root) CP-Ansible install: end-to-end support for installing Confluent Platform as a non-root user.
+
+Notable enhancements
+-------------
+- Split the ZK→KRaft migration into 3 explicit, independently-runnable phases to allow soak testing with KRaft.
+
+Notable Fixes
+-------------
+- Fixed DN extraction from keystores truncating on colon-containing certificate fields.
+- Fixed security.properties copy failing on a static/BYO masterkey with nothing to copy, by gating on the file actually existing on the controller.
+- Scope archive-ownership chown to ``binary_base_path`` instead of the shared ``archive_destination_path``.
+- Fixed ``kafka_controller_quorum_voters`` to honor ``hostname_aliasing_enabled`` and use resolved controller hostnames instead of raw inventory hostnames, ensuring consistent and routable controller endpoints.
+
+
 7.7.11
 ======
 New features
