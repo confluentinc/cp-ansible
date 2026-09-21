@@ -4,6 +4,29 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+8.2.4
+======
+Breaking Changes
+-------------
+- ``confluent_package_version`` is now required. CP-Ansible no longer ships a hardcoded default Confluent Platform version. Before upgrading, add ``confluent_package_version`` to your inventory, set to the CP version you want to install. See the CP-Ansible / Confluent Platform compatibility matrix: https://docs.confluent.io/ansible/current/ansible-requirements.html. If it is not set, the playbook will fail early.
+
+New features
+-------------
+- Rootless (non-root) CP-Ansible install: end-to-end support for installing Confluent Platform as a non-root user.
+
+Notable enhancements
+-------------
+- Control Center Next Gen (2.7.0+) and USM Agent (1.3.0+) packages are now fetched from version-numbered repository paths (for example ``.../rpm/2.7/`` instead of ``.../rpm/``); older versions and standard installations are unaffected, and air-gapped or mirrored setups can adjust the path via the new ``confluent_control_center_next_gen_versioned_from_minor_version`` and ``confluent_usm_agent_versioned_from_minor_version`` variables.
+
+Notable Fixes
+-------------
+- Fixed DN extraction from keystores truncating on colon-containing certificate fields.
+- Fixed security.properties copy failing on a static/BYO masterkey with nothing to copy, by gating on the file actually existing on the controller.
+- Scope archive-ownership chown to ``binary_base_path`` instead of the shared ``archive_destination_path``.
+- Fixed Control Center Next Gen Basic Authentication by generating JAAS configuration with the correct Jetty login module.
+- Fixed ``kafka_controller_quorum_voters`` to honor ``hostname_aliasing_enabled`` and use resolved controller hostnames instead of raw inventory hostnames, ensuring consistent and routable controller endpoints.
+
+
 8.2.3
 ======
 New features

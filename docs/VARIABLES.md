@@ -904,7 +904,7 @@ Default:  10
 
 Default controller quorum voters
 
-Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{controller_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{hostvars[controller_hostname]|confluent.platform.resolve_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
 
 ***
 
@@ -2392,7 +2392,7 @@ Default:  "{{ config_prefix }}/confluent-control-center"
 
 Default Control Center's dependency (prometheus & alertmanager) config path
 
-Default:  "/opt/confluent-control-center/dependencies"
+Default:  "{{ (rootless_deployment_path_final ~ '/confluent-control-center/dependencies') if rootless_deployment_path | length > 0 else '/opt/confluent-control-center/dependencies' }}"
 
 ***
 
@@ -2464,7 +2464,7 @@ Default:  "{{control_center_next_gen_default_log_dir}}"
 
 Set this variable to customize the directory that Control Center writes data files to. Default location is /var/lib/confluent/control-center.
 
-Default:  "/var/lib/confluent/control-center"
+Default:  "{{ (rootless_deployment_path_final ~ '/lib/confluent/control-center') if rootless_deployment_path | length > 0 else '/var/lib/confluent/control-center' }}"
 
 ***
 
