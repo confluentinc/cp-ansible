@@ -1288,7 +1288,7 @@ Default:  30
 
 Default controller quorum voters
 
-Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{controller_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{hostvars[controller_hostname]|confluent.platform.resolve_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
 
 ***
 
