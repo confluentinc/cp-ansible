@@ -34,28 +34,58 @@
         usm_agent_server_mtls_effective: "{{ usm_agent_ssl_mutual_auth_enabled | bool }}"
 
     # ── Command Handler input validation (runs only when clusters are declared) ──
-    - name: Validate Command Handler connect clusters have required fields
+    - name: Validate Command Handler connect cluster definitions
       assert:
         that:
-          - item.name is defined and item.name | string | length > 0
-          - item.url is defined and item.url | string | length > 0
-          - item.group_id is defined and item.group_id | string | length > 0
-        fail_msg: "Each usm_agent_command_handler_connect_clusters entry requires name, url, and group_id. Offending entry: {{ item }}"
-        success_msg: "Command Handler cluster '{{ item.name | default('<unnamed>') }}' has the required fields"
-      loop: "{{ usm_agent_command_handler_connect_clusters }}"
+          - item.value.url | default('') | length > 0
+          - item.value.group_id | default('') | length > 0
+          - (item.value.url | default('')).startswith('http://') or (item.value.url | default('')).startswith('https://')
+          - (item.value.auth_type | default('none')) in ['none', 'basic']
+        fail_msg: "cluster '{{ item.key }}': requires url + group_id, an http(s):// url, and auth_type of none or basic"
+        success_msg: "Command Handler cluster '{{ item.key }}' definition is valid"
+      loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
       loop_control:
-        label: "{{ item.name | default('<unnamed>') }}"
+        label: "{{ item.key }}"
       when: usm_agent_command_handler_enabled | bool
 
-    - name: Validate Command Handler connect cluster names are unique
+    - name: Validate Command Handler basic-auth credentials
       assert:
         that:
-          - (usm_agent_command_handler_connect_clusters | map(attribute='name') | list | length) == (usm_agent_command_handler_connect_clusters | map(attribute='name') | unique | list | length)
-        fail_msg: >-
-          usm_agent_command_handler_connect_clusters names must be unique -- a name is used as the
-          registry key and to name that cluster's secret files, so a duplicate silently overwrites.
-          Names given: {{ usm_agent_command_handler_connect_clusters | map(attribute='name') | list }}
-        success_msg: "Command Handler cluster names are unique"
+          - item.value.basic_auth_username | default('') | length > 0
+          - item.value.basic_auth_password | default('') | length > 0
+        fail_msg: "cluster '{{ item.key }}': auth_type basic requires basic_auth_username and basic_auth_password"
+        success_msg: "Command Handler cluster '{{ item.key }}' basic-auth credentials present"
+      when:
+        - usm_agent_command_handler_enabled | bool
+        - (item.value.auth_type | default('none')) == 'basic'
+      loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Validate Command Handler credentials are only set with basic auth
+      assert:
+        that:
+          - (item.value.auth_type | default('none')) == 'basic'
+        fail_msg: "cluster '{{ item.key }}': basic_auth_username/password set but auth_type is not basic"
+        success_msg: "Command Handler cluster '{{ item.key }}' credentials are consistent with auth_type"
+      when:
+        - usm_agent_command_handler_enabled | bool
+        - item.value.basic_auth_username is defined or item.value.basic_auth_password is defined
+      loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Validate Command Handler TLS settings
+      assert:
+        that:
+          - not (item.value.ca_cert_path is defined and (item.value.autogen_ca | default(false) | bool))
+          - not (item.value.ca_cert_path is defined and not (item.value.url | default('')).startswith('https://'))
+          - not ((item.value.autogen_ca | default(false) | bool) and not (item.value.url | default('')).startswith('https://'))
+        fail_msg: "cluster '{{ item.key }}': ca_cert_path and autogen_ca are mutually exclusive and each requires an https:// url"
+        success_msg: "Command Handler cluster '{{ item.key }}' TLS settings are valid"
+      loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
       when: usm_agent_command_handler_enabled | bool
 
     - name: Validate Command Handler ports are distinct
