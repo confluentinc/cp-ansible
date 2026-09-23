@@ -144,6 +144,44 @@
         label: "{{ item.key }}"
       when: usm_agent_command_handler_connect_clusters | default({}) | length > 0
 
+    - name: Stat command-handler credential files (basic clusters)
+      stat:
+        path: "/etc/confluent/usm-agent/secrets/command-handler-{{ item.key }}-credential.txt"
+      register: command_handler_cred_stat
+      when: (item.value.auth_type | default('none')) == 'basic'
+      loop: "{{ usm_agent_command_handler_connect_clusters | default({}) | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Assert command-handler credential files exist
+      assert:
+        that:
+          - item.stat.exists
+        fail_msg: "credential file missing for cluster '{{ item.item.key }}'"
+      loop: "{{ command_handler_cred_stat.results | rejectattr('skipped', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+
+    - name: Stat command-handler CA files (tls clusters)
+      stat:
+        path: "/etc/confluent/usm-agent/secrets/command-handler-{{ item.key }}-ca.crt"
+      register: command_handler_ca_stat
+      when:
+        - (item.value.url | default('')).startswith('https://')
+        - item.value.ca_cert_path is defined or (item.value.autogen_ca | default(false) | bool)
+      loop: "{{ usm_agent_command_handler_connect_clusters | default({}) | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Assert command-handler CA files exist
+      assert:
+        that:
+          - item.stat.exists
+        fail_msg: "CA file missing for cluster '{{ item.item.key }}'"
+      loop: "{{ command_handler_ca_stat.results | rejectattr('skipped', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+
 - name: Verify USM HTTP Exporter Configs - Kafka Controller
   hosts: kafka_controller
   gather_facts: false
