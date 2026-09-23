@@ -8,16 +8,17 @@
 {{property_name}}={{final_properties[property_name]}}
 {% endfor %}
 
-# Managed Connect clusters, from usm_agent_command_handler_connect_clusters.
-# Each cluster is keyed by its name; auth/tls lines are emitted only when set.
-{% for c in usm_agent_command_handler_connect_clusters %}
-confluent.usm-agent.command-handler.connect.clusters.{{ c.name }}.url={{ c.url }}
-confluent.usm-agent.command-handler.connect.clusters.{{ c.name }}.group.id={{ c.group_id }}
-{% if c.auth is defined and c.auth.type == 'basic' %}
-confluent.usm-agent.command-handler.connect.clusters.{{ c.name }}.auth.type=basic
-confluent.usm-agent.command-handler.connect.clusters.{{ c.name }}.auth.credential.file={{ usm_agent_secrets_dir }}/command-handler-{{ c.name }}-credential.txt
+# Managed Connect clusters, from usm_agent_command_handler_connect_clusters (a
+# dict keyed by cluster name). TLS is implied by an https:// url; auth lines are
+# emitted only for auth_type: basic.
+{% for name, c in usm_agent_command_handler_connect_clusters.items() %}
+confluent.usm-agent.command-handler.connect.clusters.{{ name }}.url={{ c.url }}
+confluent.usm-agent.command-handler.connect.clusters.{{ name }}.group.id={{ c.group_id }}
+{% if (c.auth_type | default('none')) == 'basic' %}
+confluent.usm-agent.command-handler.connect.clusters.{{ name }}.auth.type=basic
+confluent.usm-agent.command-handler.connect.clusters.{{ name }}.auth.credential.file={{ usm_agent_secrets_dir }}/command-handler-{{ name }}-credential.txt
 {% endif %}
-{% if c.tls is defined %}
-confluent.usm-agent.command-handler.connect.clusters.{{ c.name }}.tls.trusted.ca.file={{ usm_agent_secrets_dir }}/command-handler-{{ c.name }}-ca.crt
+{% if c.url.startswith('https://') and (c.ca_cert_path is defined or c.autogen_ca | default(false) | bool) %}
+confluent.usm-agent.command-handler.connect.clusters.{{ name }}.tls.trusted.ca.file={{ usm_agent_secrets_dir }}/command-handler-{{ name }}-ca.crt
 {% endif %}
 {% endfor %}

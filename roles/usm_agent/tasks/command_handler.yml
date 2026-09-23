@@ -1,4 +1,9 @@
 ---
+- name: Validate USM Agent Command Handler Configuration
+  include_tasks: validate_command_handler.yml
+  tags:
+    - configuration
+
 - name: Create USM Agent Command Handler Config
   template:
     src: command-handler.properties.j2
@@ -24,30 +29,75 @@
 
 - name: Create Command Handler Connect Credential Files (basic auth clusters)
   copy:
-    content: "{{ item.auth.username }}\n{{ item.auth.password }}\n"
-    dest: "{{ usm_agent_secrets_dir }}/command-handler-{{ item.name }}-credential.txt"
+    content: "{{ item.value.basic_auth_username }}\n{{ item.value.basic_auth_password }}\n"
+    dest: "{{ usm_agent_secrets_dir }}/command-handler-{{ item.key }}-credential.txt"
     mode: '600'
     owner: "{{ usm_agent_default_user }}"
     group: "{{ usm_agent_default_group }}"
-  loop: "{{ usm_agent_command_handler_connect_clusters | selectattr('auth', 'defined') | list }}"
+  loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
   loop_control:
-    label: "{{ item.name }}"
-  when: (item.auth.type | default('none')) == 'basic'
+    label: "{{ item.key }}"
+  when: (item.value.auth_type | default('none')) == 'basic'
   notify: restart command handler
   diff: "{{ not mask_sensitive_diff|bool }}"
   tags:
     - configuration
 
-- name: Copy Command Handler Connect CA Files (tls clusters)
+- name: Copy Command Handler Connect CA Files (custom CA clusters)
   copy:
-    src: "{{ item.tls.trusted_ca_filepath }}"
-    dest: "{{ usm_agent_secrets_dir }}/command-handler-{{ item.name }}-ca.crt"
+    src: "{{ item.value.ca_cert_path }}"
+    dest: "{{ usm_agent_secrets_dir }}/command-handler-{{ item.key }}-ca.crt"
     mode: '600'
     owner: "{{ usm_agent_default_user }}"
     group: "{{ usm_agent_default_group }}"
-  loop: "{{ usm_agent_command_handler_connect_clusters | selectattr('tls', 'defined') | list }}"
+  loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
   loop_control:
-    label: "{{ item.name }}"
+    label: "{{ item.key }}"
+  when:
+    - item.value.url.startswith('https://')
+    - item.value.ca_cert_path is defined
+  notify: restart command handler
+  tags:
+    - configuration
+
+- name: Copy Command Handler Connect CA Files (autogen CA clusters)
+  copy:
+    src: "{{ ssl_self_signed_ca_cert_filepath }}"
+    dest: "{{ usm_agent_secrets_dir }}/command-handler-{{ item.key }}-ca.crt"
+    mode: '600'
+    owner: "{{ usm_agent_default_user }}"
+    group: "{{ usm_agent_default_group }}"
+  loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - item.value.url.startswith('https://')
+    - item.value.ca_cert_path is not defined
+    - item.value.autogen_ca | default(false) | bool
+  notify: restart command handler
+  tags:
+    - configuration
+
+- name: Find existing Command Handler secret files
+  find:
+    paths: "{{ usm_agent_secrets_dir }}"
+    patterns:
+      - "command-handler-*-credential.txt"
+      - "command-handler-*-ca.crt"
+  register: usm_agent_command_handler_secret_files
+  tags:
+    - configuration
+
+- name: Remove Command Handler secret files for clusters no longer declared
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ usm_agent_command_handler_secret_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: >
+    (item.path | basename | regex_replace('^command-handler-(.+)-(credential\.txt|ca\.crt)$', '\1'))
+    not in (usm_agent_command_handler_connect_clusters | list)
   notify: restart command handler
   tags:
     - configuration

@@ -1,0 +1,112 @@
+---
+### Installation of Confluent Platform on RHEL with full TLS (autogen self-signed CA).
+### Kafka Connect REST is https + basic auth.
+### USM Agent Command Handler manages that Connect over TLS via autogen_ca and basic auth.
+
+driver:
+  name: docker
+platforms:
+  - name: controller1-kafka-broker1
+    hostname: controller1.confluent
+    groups:
+      - kafka_controller
+      - kafka_broker
+    image: redhat/ubi10-minimal
+    dockerfile: ../Dockerfile-rhel-java25.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: kafka-connect1
+    hostname: kafka-connect1.confluent
+    groups:
+      - kafka_connect
+    image: redhat/ubi10-minimal
+    dockerfile: ../Dockerfile-rhel-java25.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: usm-agent1
+    hostname: usm-agent1.confluent
+    groups:
+      - usm_agent
+    image: redhat/ubi10-minimal
+    dockerfile: ../Dockerfile-rhel-java25.j2
+    command: ""
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+    privileged: true
+    networks:
+      - name: confluent
+  - name: ccloud-mock-service
+    hostname: ccloud-mock-service.confluent
+    groups:
+      - ccloud_mock
+    image: usmagent-mock-ccloud:latest
+    pre_build_image: true
+    command: ""
+    published_ports:
+      - "8081:8081"
+    networks:
+      - name: confluent
+    env:
+      MOCK_SERVER_HOST: "0.0.0.0"
+      MOCK_SERVER_PORT: "8081"
+      MOCK_SERVER_USE_TLS: "false"
+      MOCK_SERVER_REQUIRE_BASIC_AUTH: "true"
+      MOCK_SERVER_USERNAME: "ccloud-user"
+      MOCK_SERVER_PASSWORD: "ccloud-secret"
+      MOCK_SERVER_REQUIRE_MTLS: "false"
+provisioner:
+  playbooks:
+    converge: ../collections_converge.yml
+  inventory:
+    host_vars:
+      ccloud-mock-service:
+        ansible_connection: local
+        gather_facts: false
+      usm-agent1:
+        usm_agent_custom_properties:
+          confluent.usm-agent.ccloud.ssl.enabled: "false"
+        usm_agent_health_check_enabled: false
+        confluent_usm_agent_package_version: "1.3.0"
+        usm_agent_command_handler_connect_clusters:
+          tls-autogen:
+            url: https://kafka-connect1:8083
+            group_id: connect-cluster
+            autogen_ca: true
+          tls-basic-autogen:
+            url: https://kafka-connect1:8083
+            group_id: connect-cluster-basic
+            auth_type: basic
+            basic_auth_username: user1
+            basic_auth_password: password
+            autogen_ca: true
+    group_vars:
+      all:
+        scenario_name: command-handler-tls-basic-rhel
+        ssl_enabled: true
+
+        usm_agent_ssl_enabled: false
+        usm_agent_ssl_mutual_auth_enabled: false
+
+        ccloud_endpoint: http://ccloud-mock-service:8081
+        ccloud_environment_id: env-mock-123
+        ccloud_credential:
+          username: ccloud-user
+          password: ccloud-secret
+
+      kafka_connect:
+        kafka_connect_authentication_type: basic
+        kafka_connect_basic_users:
+          admin:
+            principal: user1
+            password: password
