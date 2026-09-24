@@ -27,6 +27,60 @@
   changed_when: false
   run_once: true
 
+- name: Probe Every Controller's Data Directory State for Dynamic Quorum Bootstrap
+  command: "{{ binary_base_path }}/bin/kafka-storage info -c {{ kafka_controller.config_file }}"
+  environment: "{{ {'CONFLUENT_SECURITY_MASTER_KEY': existing_masterkey} if kafka_controller_secrets_protection_enabled|bool and existing_masterkey | default('') != '' else {} }}"
+  delegate_to: "{{ item }}"
+  loop: "{{ groups.kafka_controller | default([]) }}"
+  register: kafka_controller_quorum_probe
+  changed_when: false
+  failed_when: false
+  ignore_unreachable: true
+  check_mode: false
+  no_log: "{{mask_secrets|bool}}"
+  run_once: true
+  when: kraft_dynamic_quorum_enabled|bool
+
+- name: Determine Whether This Is a Greenfield Dynamic Quorum Setup
+  set_fact:
+    greenfield_setup: >-
+      {{ (kafka_controller_quorum_probe.results | default([])
+          | selectattr('rc', 'defined') | selectattr('rc', 'equalto', 0)
+          | list | length) == 0 }}
+  when: kraft_dynamic_quorum_enabled|bool
+
+- name: Fail When a Controller's Data Directory State Could Not Be Determined Before Bootstrapping
+  assert:
+    that:
+      - (kafka_controller_quorum_probe.results | selectattr('rc', 'defined') | list | length) == (groups.kafka_controller | default([]) | length)
+    fail_msg: >-
+      Could not read the data directory state of every kafka_controller (one or more were
+      unreachable). Founding a new dynamic quorum is unsafe until all controllers can be
+      reached. Bring them online (or follow the controller recovery procedure) and re-run.
+  when:
+    - kraft_dynamic_quorum_enabled|bool
+    - formatted.rc == 1
+
+- name: Validate Initial Voter Points to a Single kafka_controller for Greenfield Bootstrap
+  assert:
+    that:
+      - (groups.kafka_controller | select('equalto', kafka_controller_initial_voter) | list | length) == 1
+    fail_msg: >-
+      Forming a new KRaft dynamic quorum requires kafka_controller_initial_voter set to exactly one
+      kafka_controller inventory host (found '{{ kafka_controller_initial_voter }}').
+  run_once: true
+  when:
+    - kraft_dynamic_quorum_enabled|bool
+    - greenfield_setup | default(false) | bool
+
+- name: Decide Whether This Controller Bootstraps the Dynamic Quorum
+  set_fact:
+    kafka_controller_use_standalone: >-
+      {{ kraft_dynamic_quorum_enabled | bool
+         and (inventory_hostname == kafka_controller_initial_voter)
+         and (formatted.rc == 1)
+         and (greenfield_setup | default(false) | bool) }}
+
 - name: Format Data Directory and Add Scram Credentials
   shell: |
     {{ binary_base_path }}/bin/kafka-storage format \
@@ -40,4 +94,47 @@
   no_log: "{{mask_secrets|bool}}"
   vars:
     clusterid: "{{ uuid_key.stdout }}"
-  when: formatted.rc == 1
+  when:
+    - not kraft_dynamic_quorum_enabled|bool
+    - formatted.rc == 1
+
+- name: Format Data Directory for the Initial Voter
+  shell: |
+    {{ binary_base_path }}/bin/kafka-storage format \
+    -t={{ clusterid }} -c {{ kafka_controller.config_file }} \
+    {{ '--standalone' if kafka_controller_use_standalone|bool else '--no-initial-controllers' }} \
+    {% if 'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms %}--add-scram 'SCRAM-SHA-512=[name={{ sasl_scram_users_final.admin.principal }},password={{ sasl_scram_users_final.admin.password }}]' {% endif %} \
+    {% if 'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms %}--add-scram 'SCRAM-SHA-256=[name={{ sasl_scram256_users_final.admin.principal }},password={{ sasl_scram256_users_final.admin.password }}]' {% endif %} \
+    --ignore-formatted
+  environment: "{{ {'CONFLUENT_SECURITY_MASTER_KEY': existing_masterkey} if kafka_controller_secrets_protection_enabled|bool and existing_masterkey | default('') != '' else {} }}"
+  register: format_meta_initial_voter
+  changed_when: format_meta_initial_voter.rc == 0
+  no_log: "{{mask_secrets|bool}}"
+  vars:
+    clusterid: "{{ uuid_key.stdout }}"
+  when:
+    - kraft_dynamic_quorum_enabled|bool
+    - formatted.rc == 1
+    - inventory_hostname == kafka_controller_initial_voter
+
+- name: Format Data Directory for Controllers Other Than the Initial Voter
+  shell: |
+    {{ binary_base_path }}/bin/kafka-storage format \
+    -t={{ clusterid }} -c {{ kafka_controller.config_file }} \
+    --no-initial-controllers \
+    {% if 'SCRAM-SHA-512' in kafka_sasl_enabled_mechanisms %}--add-scram 'SCRAM-SHA-512=[name={{ sasl_scram_users_final.admin.principal }},password={{ sasl_scram_users_final.admin.password }}]' {% endif %} \
+    {% if 'SCRAM-SHA-256' in kafka_sasl_enabled_mechanisms %}--add-scram 'SCRAM-SHA-256=[name={{ sasl_scram256_users_final.admin.principal }},password={{ sasl_scram256_users_final.admin.password }}]' {% endif %} \
+    --ignore-formatted
+  environment: "{{ {'CONFLUENT_SECURITY_MASTER_KEY': existing_masterkey} if kafka_controller_secrets_protection_enabled|bool and existing_masterkey | default('') != '' else {} }}"
+  register: format_meta_observer
+  changed_when: format_meta_observer.rc == 0
+  no_log: "{{mask_secrets|bool}}"
+  vars:
+    clusterid: "{{ uuid_key.stdout }}"
+  when:
+    - kraft_dynamic_quorum_enabled|bool
+    - formatted.rc == 1
+    - inventory_hostname != kafka_controller_initial_voter
+    - >-
+      (hostvars[kafka_controller_initial_voter].formatted.rc | default(1)) == 0
+      or (hostvars[kafka_controller_initial_voter].format_meta_initial_voter.rc | default(1)) == 0
