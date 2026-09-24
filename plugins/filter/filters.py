@@ -222,7 +222,7 @@ class FilterModule(object):
                             kerberos_principal, kerberos_primary,
                             scram_user, scram_password, scram256_user,
                             scram256_password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience,
-                            oauth_sub_claim, rbac_enabled, kraft_listener, idp_self_signed):
+                            oauth_issuer_url, oauth_sub_claim, rbac_enabled, kraft_listener, idp_self_signed):
         # For kafka broker properties: Takes listeners dictionary and outputs all properties based on the listeners' settings
         # Other inputs help fill out the properties
         final_dict = {}
@@ -326,6 +326,10 @@ class FilterModule(object):
             if 'OAUTHBEARER' in normalize_sasl_protocols and \
                     oauth_enabled and oauth_expected_audience != 'none':
                 final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.expected.audience'] = oauth_expected_audience
+
+            if 'OAUTHBEARER' in normalize_sasl_protocols and \
+                    oauth_enabled and oauth_issuer_url != 'none':
+                final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.expected.issuer'] = oauth_issuer_url
 
             if kraft_listener and (rbac_enabled or oauth_enabled):
                 final_dict['listener.name.' + listener_name + '.principal.builder.class'] =\
