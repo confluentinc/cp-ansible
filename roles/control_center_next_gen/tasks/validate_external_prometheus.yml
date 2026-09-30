@@ -1,8 +1,8 @@
 ---
 # External Prometheus pre-flight validation.
 # Included from main.yml, gated on control_center_next_gen_external_prometheus_enabled.
-# Enforces the supported contract: a real external endpoint, TLS on every connection, exactly
-# one auth mode, and a C3 Next Gen version that supports it.
+# Enforces the supported contract: a real external endpoint, TLS on every connection, at most one
+# client auth mode (Basic auth, mTLS, or none for TLS only), and a C3 Next Gen version that supports it.
 
 - name: External Prometheus - a real external endpoint must be set
   ansible.builtin.assert:
@@ -33,16 +33,15 @@
     success_msg: "External Prometheus TLS is enabled."
     quiet: true
 
-- name: External Prometheus - exactly one auth mode is required
+- name: External Prometheus - at most one auth mode (Basic auth or mTLS)
   ansible.builtin.assert:
     that:
-      - (control_center_next_gen_dependency_prometheus_basic_auth_enabled | bool)
-        != (control_center_next_gen_dependency_prometheus_mtls_enabled | bool)
+      - not (control_center_next_gen_dependency_prometheus_basic_auth_enabled | bool
+             and control_center_next_gen_dependency_prometheus_mtls_enabled | bool)
     fail_msg: >-
-      Choose exactly one auth mode for the external Prometheus. Set either
-      control_center_next_gen_dependency_prometheus_basic_auth_enabled (Basic auth over TLS) or
-      control_center_next_gen_dependency_prometheus_mtls_enabled (mutual TLS) to true, not both
-      and not neither.
+      control_center_next_gen_dependency_prometheus_basic_auth_enabled and
+      control_center_next_gen_dependency_prometheus_mtls_enabled cannot both be true. Set at most one
+      (Basic auth over TLS, or mutual TLS); setting neither is valid (TLS only).
     success_msg: "External Prometheus auth mode is valid."
     quiet: true
 
@@ -73,7 +72,7 @@
     quiet: true
   when: control_center_next_gen_dependency_prometheus_mtls_enabled | bool
 
-- name: External Prometheus - warn when no server CA source is set (Basic auth)
+- name: External Prometheus - warn when no server CA source is set (Basic auth or TLS-only)
   ansible.builtin.debug:
     msg: >-
       WARNING: control_center_next_gen_dependency_prometheus_provided_ca_cert_path is not set, so the
