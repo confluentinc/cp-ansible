@@ -86,6 +86,138 @@
         fail_msg: "USM Agent v1/metrics endpoint not found in logs or not returning 200 status"
       when: log_file_stat.stat.exists
 
+    - name: Stat command-handler config
+      stat:
+        path: /etc/confluent/usm-agent/command-handler.properties
+      register: command_handler_config_stat
+      when: usm_agent_command_handler_connect_clusters | default({}) | length > 0
+
+    - name: Check command-handler service is active
+      command: systemctl is-active usm-agent-command-handler
+      register: command_handler_is_active
+      changed_when: false
+      failed_when: false
+      when: usm_agent_command_handler_connect_clusters | default({}) | length > 0
+
+    - name: Assert command-handler config exists
+      assert:
+        that:
+          - command_handler_config_stat.stat.exists
+        fail_msg: "command-handler.properties not found at /etc/confluent/usm-agent/"
+      when: usm_agent_command_handler_connect_clusters | default({}) | length > 0
+
+    - name: Assert command-handler service is active
+      assert:
+        that:
+          - command_handler_is_active.stdout == 'active'
+        fail_msg: "usm-agent-command-handler service is not active (got '{{ command_handler_is_active.stdout | default('') }}')"
+      when: usm_agent_command_handler_connect_clusters | default({}) | length > 0
+
+    - name: Probe command-handler /healthz (liveness)
+      uri:
+        url: "http://localhost:{{ usm_agent_command_handler_monitoring_port | default(9930) }}/healthz"
+        status_code: 200
+        timeout: 5
+      register: command_handler_healthz
+      until: command_handler_healthz.status == 200
+      retries: 5
+      delay: 3
+      when: usm_agent_command_handler_connect_clusters | default({}) | length > 0
+
+    - name: Read command-handler config
+      slurp:
+        path: /etc/confluent/usm-agent/command-handler.properties
+      register: command_handler_config_raw
+      when: usm_agent_command_handler_connect_clusters | default({}) | length > 0
+
+    - name: Assert custom properties are rendered in the config
+      assert:
+        that:
+          - (item.key ~ '=' ~ item.value) in command_handler_config
+        fail_msg: "custom property '{{ item.key }}' not rendered in command-handler.properties"
+      vars:
+        command_handler_config: "{{ command_handler_config_raw.content | b64decode }}"
+      loop: "{{ usm_agent_command_handler_custom_properties | default({}) | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when: usm_agent_command_handler_connect_clusters | default({}) | length > 0
+
+    - name: Assert each declared cluster is rendered in the config
+      assert:
+        that:
+          - ('connect.clusters.' ~ item.key ~ '.url=' ~ item.value.url) in command_handler_config
+          - ('connect.clusters.' ~ item.key ~ '.group.id=' ~ item.value.group_id) in command_handler_config
+          - ((item.value.auth_type | default('none')) != 'basic') or (('connect.clusters.' ~ item.key ~ '.auth.type=basic') in command_handler_config)
+          - not (ca_expected | bool) or (('connect.clusters.' ~ item.key ~ '.tls.trusted.ca.file=/etc/confluent/usm-agent/secrets/command-handler-' ~ item.key ~ '-ca.crt') in command_handler_config)
+          - (ca_expected | bool) or (('connect.clusters.' ~ item.key ~ '.tls.trusted.ca.file=') not in command_handler_config)
+        fail_msg: "cluster '{{ item.key }}' not rendered correctly in command-handler.properties"
+      vars:
+        command_handler_config: "{{ command_handler_config_raw.content | b64decode }}"
+        ca_expected: "{{ (item.value.url | default('')).startswith('https://') and (item.value.ca_cert_path is defined or (ssl_custom_certs | default(false) | bool)) }}"
+      loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when: usm_agent_command_handler_connect_clusters | default({}) | length > 0
+
+    - name: Stat command-handler credential files (basic clusters)
+      stat:
+        path: "/etc/confluent/usm-agent/secrets/command-handler-{{ item.key }}-credential.txt"
+      register: command_handler_cred_stat
+      when: (item.value.auth_type | default('none')) == 'basic'
+      loop: "{{ usm_agent_command_handler_connect_clusters | default({}) | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Assert command-handler credential files exist
+      assert:
+        that:
+          - item.stat.exists
+        fail_msg: "credential file missing for cluster '{{ item.item.key }}'"
+      loop: "{{ command_handler_cred_stat.results | rejectattr('skipped', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+
+    - name: Stat command-handler CA files (tls clusters)
+      stat:
+        path: "/etc/confluent/usm-agent/secrets/command-handler-{{ item.key }}-ca.crt"
+      register: command_handler_ca_stat
+      when:
+        - (item.value.url | default('')).startswith('https://')
+        - item.value.ca_cert_path is defined or (ssl_custom_certs | default(false) | bool)
+      loop: "{{ usm_agent_command_handler_connect_clusters | default({}) | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Assert command-handler CA files exist
+      assert:
+        that:
+          - item.stat.exists
+        fail_msg: "CA file missing for cluster '{{ item.item.key }}'"
+      loop: "{{ command_handler_ca_stat.results | rejectattr('skipped', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+
+    - name: Stat command-handler CA files (public/OS-trust clusters)
+      stat:
+        path: "/etc/confluent/usm-agent/secrets/command-handler-{{ item.key }}-ca.crt"
+      register: command_handler_ca_absent_stat
+      when:
+        - (item.value.url | default('')).startswith('https://')
+        - item.value.ca_cert_path is not defined
+        - not (ssl_custom_certs | default(false) | bool)
+      loop: "{{ usm_agent_command_handler_connect_clusters | default({}) | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Assert no CA file is copied for public/OS-trust clusters
+      assert:
+        that:
+          - not item.stat.exists
+        fail_msg: "cluster '{{ item.item.key }}' has no ca_cert_path (OS trust) but a CA file was copied"
+      loop: "{{ command_handler_ca_absent_stat.results | rejectattr('skipped', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+
 - name: Verify USM HTTP Exporter Configs - Kafka Controller
   hosts: kafka_controller
   gather_facts: false
