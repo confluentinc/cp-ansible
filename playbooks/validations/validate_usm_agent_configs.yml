@@ -33,6 +33,70 @@
         usm_agent_server_ssl_effective: "{{ usm_agent_ssl_enabled | bool }}"
         usm_agent_server_mtls_effective: "{{ usm_agent_ssl_mutual_auth_enabled | bool }}"
 
+    # ── Command Handler input validation (runs only when clusters are declared) ──
+    - name: Validate Command Handler connect cluster definitions
+      assert:
+        that:
+          - item.value.url | default('') | length > 0
+          - item.value.group_id | default('') | length > 0
+          - (item.value.url | default('')).startswith('http://') or (item.value.url | default('')).startswith('https://')
+          - (item.value.auth_type | default('none')) in ['none', 'basic']
+        fail_msg: "cluster '{{ item.key }}': requires url + group_id, an http(s):// url, and auth_type of none or basic"
+        success_msg: "Command Handler cluster '{{ item.key }}' definition is valid"
+      loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when: usm_agent_command_handler_enabled | bool
+
+    - name: Validate Command Handler basic-auth credentials
+      assert:
+        that:
+          - item.value.basic_auth_username | default('') | length > 0
+          - item.value.basic_auth_password | default('') | length > 0
+        fail_msg: "cluster '{{ item.key }}': auth_type basic requires basic_auth_username and basic_auth_password"
+        success_msg: "Command Handler cluster '{{ item.key }}' basic-auth credentials present"
+      when:
+        - usm_agent_command_handler_enabled | bool
+        - (item.value.auth_type | default('none')) == 'basic'
+      loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Validate Command Handler credentials are only set with basic auth
+      assert:
+        that:
+          - (item.value.auth_type | default('none')) == 'basic'
+        fail_msg: "cluster '{{ item.key }}': basic_auth_username/password set but auth_type is not basic"
+        success_msg: "Command Handler cluster '{{ item.key }}' credentials are consistent with auth_type"
+      when:
+        - usm_agent_command_handler_enabled | bool
+        - item.value.basic_auth_username is defined or item.value.basic_auth_password is defined
+      loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Validate Command Handler TLS settings
+      assert:
+        that:
+          - not (item.value.ca_cert_path is defined and not (item.value.url | default('')).startswith('https://'))
+        fail_msg: "cluster '{{ item.key }}': ca_cert_path requires an https:// url"
+        success_msg: "Command Handler cluster '{{ item.key }}' TLS settings are valid"
+      loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when: usm_agent_command_handler_enabled | bool
+
+    - name: Validate Command Handler ports are distinct
+      assert:
+        that:
+          - "[usm_agent_command_handler_monitoring_port, usm_agent_command_handler_admin_port, usm_agent_controlplane_port] | map('int') | unique | list | length == 3"
+        fail_msg: >-
+          Command Handler monitoring ({{ usm_agent_command_handler_monitoring_port }}) and admin
+          ({{ usm_agent_command_handler_admin_port }}) ports must differ from each other and from
+          the agent control-plane port ({{ usm_agent_controlplane_port }}).
+        success_msg: "Command Handler ports are distinct"
+      when: usm_agent_command_handler_enabled | bool
+
 - name: USM Agent Client Configuration Validations
   hosts: kafka_controller:kafka_broker:kafka_connect
   gather_facts: false
