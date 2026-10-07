@@ -29,6 +29,95 @@
         - inventory_hostname in groups.kafka_broker | default([])
         - inventory_hostname not in kraft_quorum_recovery_failed_hosts | default([])
 
+- name: KRaft Quorum Recovery - Load Recovery State
+  hosts: kraft_quorum_recovery_controllers
+  gather_facts: true
+  any_errors_fatal: true
+  environment: "{{ proxy_env }}"
+  tags: always
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Set Metadata Log Directory
+      set_fact:
+        kraft_quorum_recovery_metadata_log_dir: "{{ kafka_controller_final_properties['metadata.log.dir'] | default(kafka_controller_final_properties['log.dirs'].split(',') | first) }}"
+
+    - name: Set Recovery State File
+      set_fact:
+        kraft_quorum_recovery_state_file: "{{ kraft_quorum_recovery_metadata_log_dir | dirname }}/kraft-quorum-recovery.json"
+
+    - name: Read Saved Recovery State
+      slurp:
+        src: "{{ kraft_quorum_recovery_state_file }}"
+      register: kraft_quorum_recovery_state_raw
+      failed_when: false
+
+    - name: Load Saved Recovery State
+      set_fact:
+        kraft_quorum_recovery_host_state: "{{ (kraft_quorum_recovery_state_raw.content | b64decode | from_json) if kraft_quorum_recovery_state_raw.content is defined else {'step': 0} }}"
+
+    - name: Select Most Advanced Saved Recovery State
+      set_fact:
+        kraft_quorum_recovery_state: "{{ ansible_play_hosts | map('extract', hostvars, 'kraft_quorum_recovery_host_state') | list | sort(attribute='step') | last }}"
+      run_once: true
+
+    - name: Set Recovery Progress
+      set_fact:
+        kraft_quorum_recovery_id: "{{ kraft_quorum_recovery_state.id | default(ansible_date_time.epoch) }}"
+        kraft_quorum_recovery_step: "{{ kraft_quorum_recovery_state.step | int }}"
+      run_once: true
+
+    - name: Use Saved Seed Controller
+      set_fact:
+        kraft_quorum_recovery_seed: "{{ kraft_quorum_recovery_state.seed }}"
+      run_once: true
+      when: kraft_quorum_recovery_step | int >= 2
+
+    - name: Fail When the Saved Seed Controller Is Not a Surviving Controller
+      fail:
+        msg: >-
+          Recovery {{ kraft_quorum_recovery_id }} rebuilt the quorum on {{ kraft_quorum_recovery_seed }},
+          but that host is not a surviving controller in this run. Recovery can only continue from that host.
+      run_once: true
+      when:
+        - kraft_quorum_recovery_step | int >= 2
+        - kraft_quorum_recovery_seed not in ansible_play_hosts
+
+    - name: Record That Force Standalone Finished
+      copy:
+        content: "{{ {'id': kraft_quorum_recovery_id, 'step': 3, 'seed': kraft_quorum_recovery_seed} | to_nice_json }}"
+        dest: "{{ kraft_quorum_recovery_state_file }}"
+        mode: '0644'
+      when:
+        - kraft_quorum_recovery_step | int == 2
+        - kraft_quorum_recovery_force_standalone_done | default(false) | bool
+
+    - name: Set Recovery Progress After Force Standalone Confirmation
+      set_fact:
+        kraft_quorum_recovery_step: 3
+      run_once: true
+      when:
+        - kraft_quorum_recovery_step | int == 2
+        - kraft_quorum_recovery_force_standalone_done | default(false) | bool
+
+    - name: Stop When Force Standalone May Have Been Interrupted
+      fail:
+        msg: >-
+          A previous run started force-standalone on {{ kraft_quorum_recovery_seed }} but did not record that it finished.
+          Do not run force-standalone again. Check the seed controller's metadata log with Confluent Support.
+          If force-standalone finished, re-run with kraft_quorum_recovery_force_standalone_done=true.
+      run_once: true
+      when: kraft_quorum_recovery_step | int == 2
+
+    - name: Show Recovery Progress
+      debug:
+        msg:
+          recovery_id: "{{ kraft_quorum_recovery_id }}"
+          step: "{{ kraft_quorum_recovery_step }}"
+          seed: "{{ kraft_quorum_recovery_seed | default('not selected yet') }}"
+      run_once: true
+
 - name: KRaft Quorum Recovery - Precheck
   hosts: kraft_quorum_recovery_controllers
   gather_facts: true
@@ -71,14 +160,25 @@
       failed_when: false
       check_mode: false
       run_once: true
+      when: kraft_quorum_recovery_step | int < 2
+
+    - name: Clear Saved Recovery State When the Quorum Has a Leader
+      file:
+        path: "{{ kraft_quorum_recovery_state_file }}"
+        state: absent
+      when:
+        - kraft_quorum_recovery_step | int < 2
+        - kraft_quorum_recovery_status.rc == 0
 
     - name: Fail When the Controller Quorum Still Has a Leader
       fail:
         msg: >-
-          The controller quorum still has a leader, so quorum recovery is not needed.
-          Replace failed controllers by re-running the kafka_controller playbook instead.
+          The controller quorum has a leader, so quorum recovery is not needed.
+          Re-run the kafka_controller playbook to start any stopped controllers and replace failed ones.
           Status: {{ kraft_quorum_recovery_status.stdout }}
-      when: kraft_quorum_recovery_status.rc == 0
+      when:
+        - kraft_quorum_recovery_step | int < 2
+        - kraft_quorum_recovery_status.rc == 0
       run_once: true
 
 - name: KRaft Quorum Recovery - Stop Controllers
@@ -91,6 +191,13 @@
     - import_role:
         name: variables
 
+    - name: Record That Recovery Started
+      copy:
+        content: "{{ {'id': kraft_quorum_recovery_id, 'step': 1} | to_nice_json }}"
+        dest: "{{ kraft_quorum_recovery_state_file }}"
+        mode: '0644'
+      when: kraft_quorum_recovery_step | int < 1
+
     - name: Stop Kafka Controller
       ansible.builtin.systemd:
         name: "{{ 'cp-kafka_controller.service' if (rootless_enabled | bool) else kafka_controller_service_name }}"
@@ -98,6 +205,7 @@
         state: stopped
       environment:
         XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+      when: kraft_quorum_recovery_step | int < 2
 
 - name: KRaft Quorum Recovery - Measure Controller Metadata Logs
   hosts: kraft_quorum_recovery_controllers
@@ -109,69 +217,68 @@
     - import_role:
         name: variables
 
-    - name: Set Metadata Log Directory
-      set_fact:
-        kraft_quorum_recovery_metadata_log_dir: "{{ kafka_controller_final_properties['metadata.log.dir'] | default(kafka_controller_final_properties['log.dirs'].split(',') | first) }}"
+    - name: Measure Metadata Log
+      when: kraft_quorum_recovery_step | int < 2
+      block:
+        - name: Create Metadata Log Directory Lock File
+          file:
+            path: "{{ kraft_quorum_recovery_metadata_log_dir }}/.lock"
+            state: touch
+            owner: "{{ kafka_controller_user }}"
+            group: "{{ kafka_controller_group }}"
+            mode: '0644'
+            modification_time: preserve
+            access_time: preserve
 
-    - name: Create Metadata Log Directory Lock File
-      file:
-        path: "{{ kraft_quorum_recovery_metadata_log_dir }}/.lock"
-        state: touch
-        owner: "{{ kafka_controller_user }}"
-        group: "{{ kafka_controller_group }}"
-        mode: '0644'
-        modification_time: preserve
-        access_time: preserve
+        - name: Back Up Metadata Log
+          shell: |
+            set -e
+            rm -rf {{ kraft_quorum_recovery_backup_dir }}/__cluster_metadata-0.partial
+            mkdir -p {{ kraft_quorum_recovery_backup_dir }}
+            cp -a {{ kraft_quorum_recovery_metadata_log_dir }}/__cluster_metadata-0 {{ kraft_quorum_recovery_backup_dir }}/__cluster_metadata-0.partial
+            mv {{ kraft_quorum_recovery_backup_dir }}/__cluster_metadata-0.partial {{ kraft_quorum_recovery_backup_dir }}/__cluster_metadata-0
+          args:
+            executable: "{{ shell_executable }}"
+          changed_when: true
+          vars:
+            kraft_quorum_recovery_backup_dir: "{{ kraft_quorum_recovery_metadata_log_dir | dirname }}/kraft-quorum-recovery-backup/{{ kraft_quorum_recovery_id }}/{{ ansible_date_time.epoch }}"
 
-    - name: Back Up Metadata Log
-      shell: |
-        mkdir -p {{ kraft_quorum_recovery_metadata_log_dir | dirname }}/kraft-quorum-recovery-backup/{{ ansible_date_time.epoch }}
-        cp -a {{ kraft_quorum_recovery_metadata_log_dir }}/__cluster_metadata-0 {{ kraft_quorum_recovery_metadata_log_dir | dirname }}/kraft-quorum-recovery-backup/{{ ansible_date_time.epoch }}/
-      args:
-        executable: "{{ shell_executable }}"
-        removes: "{{ kraft_quorum_recovery_metadata_log_dir }}/__cluster_metadata-0"
+        - name: Read Metadata Log Epoch and End Offset
+          command: >-
+            {{ binary_base_path }}/bin/kafka-metadata-recovery reconfig log-length
+            --metadata-log-dir {{ kraft_quorum_recovery_metadata_log_dir }}
+          environment:
+            KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
+          register: kraft_quorum_recovery_log_length
+          changed_when: false
+          check_mode: false
 
-    - name: Read Metadata Log Epoch and End Offset
-      command: >-
-        {{ binary_base_path }}/bin/kafka-metadata-recovery reconfig log-length
-        --metadata-log-dir {{ kraft_quorum_recovery_metadata_log_dir }}
-      environment:
-        KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
-      register: kraft_quorum_recovery_log_length
-      changed_when: false
-      check_mode: false
+        - name: Assert Metadata Log Epoch and End Offset Were Read
+          assert:
+            that:
+              - "kraft_quorum_recovery_log_length.stdout is search('epoch: [0-9]+, log end offset: [0-9]+')"
+            fail_msg: "Could not read the metadata log epoch and end offset. Output: {{ kraft_quorum_recovery_log_length.stdout }}"
 
-    - name: Assert Metadata Log Epoch and End Offset Were Read
-      assert:
-        that:
-          - "kraft_quorum_recovery_log_length.stdout is search('epoch: [0-9]+, log end offset: [0-9]+')"
-        fail_msg: "Could not read the metadata log epoch and end offset. Output: {{ kraft_quorum_recovery_log_length.stdout }}"
+        - name: Parse Metadata Log Epoch and End Offset
+          set_fact:
+            kraft_quorum_recovery_log_position: >-
+              {{ {'host': inventory_hostname,
+                  'epoch': kraft_quorum_recovery_log_length.stdout | regex_search('epoch: ([0-9]+)', '\1') | first | int,
+                  'offset': kraft_quorum_recovery_log_length.stdout | regex_search('log end offset: ([0-9]+)', '\1') | first | int} }}
 
-    - name: Parse Metadata Log Epoch and End Offset
-      set_fact:
-        kraft_quorum_recovery_log_position: >-
-          {{ {'host': inventory_hostname,
-              'epoch': kraft_quorum_recovery_log_length.stdout | regex_search('epoch: ([0-9]+)', '\1') | first | int,
-              'offset': kraft_quorum_recovery_log_length.stdout | regex_search('log end offset: ([0-9]+)', '\1') | first | int} }}
+        - name: Select Seed Controller by Largest Epoch, Then Largest End Offset
+          set_fact:
+            kraft_quorum_recovery_seed: >-
+              {{ (ansible_play_hosts | map('extract', hostvars, 'kraft_quorum_recovery_log_position') | list
+                  | sort(attribute='epoch,offset', reverse=true) | first).host }}
+          run_once: true
 
-- name: KRaft Quorum Recovery - Select Seed Controller
-  hosts: kraft_quorum_recovery_controllers
-  gather_facts: false
-  tags: kraft_quorum_recovery_measure
-  tasks:
-    - name: Select Seed Controller by Largest Epoch, Then Largest End Offset
-      set_fact:
-        kraft_quorum_recovery_seed: >-
-          {{ (ansible_play_hosts | map('extract', hostvars, 'kraft_quorum_recovery_log_position') | list
-              | sort(attribute='epoch,offset', reverse=true) | first).host }}
-      run_once: true
-
-    - name: Show Metadata Log Positions and Selected Seed
-      debug:
-        msg:
-          seed: "{{ kraft_quorum_recovery_seed }}"
-          positions: "{{ ansible_play_hosts | map('extract', hostvars, 'kraft_quorum_recovery_log_position') | list }}"
-      run_once: true
+        - name: Show Metadata Log Positions and Selected Seed
+          debug:
+            msg:
+              seed: "{{ kraft_quorum_recovery_seed }}"
+              positions: "{{ ansible_play_hosts | map('extract', hostvars, 'kraft_quorum_recovery_log_position') | list }}"
+          run_once: true
 
 - name: KRaft Quorum Recovery - Force Standalone on Seed Controller
   hosts: kraft_quorum_recovery_controllers
@@ -183,26 +290,41 @@
     - import_role:
         name: variables
 
-    - name: Get Existing Master Key from override.conf
-      include_role:
-        name: common
-        tasks_from: get_masterkey.yml
-      vars:
-        systemd_override_path: "{{ kafka_controller.systemd_override }}"
-        rootless_component_name: kafka_controller
-      when:
-        - inventory_hostname == kraft_quorum_recovery_seed
-        - kafka_controller_secrets_protection_enabled|bool
+    - name: Rebuild Voter Set
+      when: kraft_quorum_recovery_step | int < 2
+      block:
+        - name: Get Existing Master Key from override.conf
+          include_role:
+            name: common
+            tasks_from: get_masterkey.yml
+          vars:
+            systemd_override_path: "{{ kafka_controller.systemd_override }}"
+            rootless_component_name: kafka_controller
+          when:
+            - inventory_hostname == kraft_quorum_recovery_seed
+            - kafka_controller_secrets_protection_enabled|bool
 
-    - name: Rebuild Voter Set With Only the Seed Controller
-      command: >-
-        {{ binary_base_path }}/bin/kafka-metadata-recovery reconfig force-standalone
-        --config {{ kafka_controller.config_file }}
-      environment: "{{ {'KAFKA_OPTS': '-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions'} | combine({'CONFLUENT_SECURITY_MASTER_KEY': existing_masterkey} if kafka_controller_secrets_protection_enabled|bool and existing_masterkey | default('') != '' else {}) }}"
-      no_log: "{{mask_secrets|bool}}"
-      register: kraft_quorum_recovery_force_standalone
-      changed_when: kraft_quorum_recovery_force_standalone.rc == 0
-      when: inventory_hostname == kraft_quorum_recovery_seed
+        - name: Record That Force Standalone Started
+          copy:
+            content: "{{ {'id': kraft_quorum_recovery_id, 'step': 2, 'seed': kraft_quorum_recovery_seed} | to_nice_json }}"
+            dest: "{{ kraft_quorum_recovery_state_file }}"
+            mode: '0644'
+
+        - name: Rebuild Voter Set With Only the Seed Controller
+          command: >-
+            {{ binary_base_path }}/bin/kafka-metadata-recovery reconfig force-standalone
+            --config {{ kafka_controller.config_file }}
+          environment: "{{ {'KAFKA_OPTS': '-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions'} | combine({'CONFLUENT_SECURITY_MASTER_KEY': existing_masterkey} if kafka_controller_secrets_protection_enabled|bool and existing_masterkey | default('') != '' else {}) }}"
+          no_log: "{{mask_secrets|bool}}"
+          register: kraft_quorum_recovery_force_standalone
+          changed_when: kraft_quorum_recovery_force_standalone.rc == 0
+          when: inventory_hostname == kraft_quorum_recovery_seed
+
+        - name: Record That Force Standalone Finished
+          copy:
+            content: "{{ {'id': kraft_quorum_recovery_id, 'step': 3, 'seed': kraft_quorum_recovery_seed} | to_nice_json }}"
+            dest: "{{ kraft_quorum_recovery_state_file }}"
+            mode: '0644'
 
     - name: Restore Metadata Log Ownership on Seed Controller
       file:
@@ -223,33 +345,47 @@
     - import_role:
         name: variables
 
-    - name: Start Seed Controller
-      include_role:
-        name: kafka_controller
-        tasks_from: restart_and_wait.yml
+    - name: Start Seed Controller and Wait for Leadership
       when: inventory_hostname == kraft_quorum_recovery_seed
+      block:
+        - name: Check Whether the Seed Controller Is Already Leader
+          shell: |
+            {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{inventory_hostname}}:{{kafka_controller_port}} \
+              --command-config {{ kafka_controller.client_config_file }} describe --status
+          args:
+            executable: "{{ shell_executable }}"
+          environment:
+            KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+          register: kraft_quorum_recovery_seed_status_before
+          changed_when: false
+          failed_when: false
+          check_mode: false
 
-    - name: Wait for Seed Controller to Become Leader
-      shell: |
-        {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{inventory_hostname}}:{{kafka_controller_port}} \
-          --command-config {{ kafka_controller.client_config_file }} describe --status
-      args:
-        executable: "{{ shell_executable }}"
-      environment:
-        KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
-      register: kraft_quorum_recovery_seed_status
-      changed_when: false
-      check_mode: false
-      until: kraft_quorum_recovery_seed_status.stdout is search('LeaderId:\\s+' ~ kafka_controller_final_properties['node.id'] ~ '\\b')
-      retries: 30
-      delay: 10
-      when: inventory_hostname == kraft_quorum_recovery_seed
+        - name: Start Seed Controller
+          include_role:
+            name: kafka_controller
+            tasks_from: restart_and_wait.yml
+          when: kraft_quorum_recovery_seed_status_before.stdout is not search('LeaderId:\\s+' ~ kafka_controller_final_properties['node.id'] ~ '\\b')
 
-    - name: Health Check Seed Controller
-      include_role:
-        name: kafka_controller
-        tasks_from: health_check.yml
-      when: inventory_hostname == kraft_quorum_recovery_seed
+        - name: Wait for Seed Controller to Become Leader
+          shell: |
+            {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{inventory_hostname}}:{{kafka_controller_port}} \
+              --command-config {{ kafka_controller.client_config_file }} describe --status
+          args:
+            executable: "{{ shell_executable }}"
+          environment:
+            KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+          register: kraft_quorum_recovery_seed_status
+          changed_when: false
+          check_mode: false
+          until: kraft_quorum_recovery_seed_status.stdout is search('LeaderId:\\s+' ~ kafka_controller_final_properties['node.id'] ~ '\\b')
+          retries: 30
+          delay: 10
+
+        - name: Health Check Seed Controller
+          include_role:
+            name: kafka_controller
+            tasks_from: health_check.yml
 
 - name: KRaft Quorum Recovery - Rejoin Controllers
   hosts: kraft_quorum_recovery_controllers
@@ -262,28 +398,10 @@
     - import_role:
         name: variables
 
-    - name: Rejoin Controller as Observer
+    - name: Rejoin Controller
       when: inventory_hostname != kraft_quorum_recovery_seed | default('')
       block:
-        - name: Stop Kafka Controller
-          ansible.builtin.systemd:
-            name: "{{ 'cp-kafka_controller.service' if (rootless_enabled | bool) else kafka_controller_service_name }}"
-            scope: "{{ 'user' if (rootless_enabled | bool) else 'system' }}"
-            state: stopped
-          environment:
-            XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
-
-        - name: Remove Stale Metadata Log
-          file:
-            path: "{{ kafka_controller_final_properties['metadata.log.dir'] | default(kafka_controller_final_properties['log.dirs'].split(',') | first) }}/__cluster_metadata-0"
-            state: absent
-
-        - name: Start Kafka Controller
-          include_role:
-            name: kafka_controller
-            tasks_from: restart_and_wait.yml
-
-        - name: Wait for Controller to Become a Voter
+        - name: Describe Controller Quorum Membership
           shell: |
             {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ kafka_controller_quorum_bootstrap_servers }} \
               --command-config {{ kafka_controller.client_config_file }} describe --replication
@@ -291,17 +409,58 @@
             executable: "{{ shell_executable }}"
           environment:
             KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
-          register: kraft_quorum_recovery_replication
+          register: kraft_quorum_recovery_membership
           changed_when: false
+          failed_when: false
           check_mode: false
-          until: kraft_quorum_recovery_replication.stdout_lines | select('match', '^' ~ kafka_controller_final_properties['node.id'] ~ '\\s.*(Leader|Follower)') | list | length == 1
-          retries: 30
-          delay: 10
 
-        - name: Health Check Controller
-          include_role:
-            name: kafka_controller
-            tasks_from: health_check.yml
+        - name: Fail When the Controller Quorum Has No Leader
+          fail:
+            msg: >-
+              The controller quorum has no leader, so {{ inventory_hostname }} was not changed.
+              Make sure the seed controller is running and is the leader, then re-run.
+          when: kraft_quorum_recovery_membership.rc != 0
+
+        - name: Rejoin Controller as Observer
+          when: kraft_quorum_recovery_membership.stdout_lines | select('match', '^' ~ kafka_controller_final_properties['node.id'] ~ '\\s.*(Leader|Follower)') | list | length == 0
+          block:
+            - name: Stop Kafka Controller
+              ansible.builtin.systemd:
+                name: "{{ 'cp-kafka_controller.service' if (rootless_enabled | bool) else kafka_controller_service_name }}"
+                scope: "{{ 'user' if (rootless_enabled | bool) else 'system' }}"
+                state: stopped
+              environment:
+                XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+
+            - name: Remove Stale Metadata Log
+              file:
+                path: "{{ kafka_controller_final_properties['metadata.log.dir'] | default(kafka_controller_final_properties['log.dirs'].split(',') | first) }}/__cluster_metadata-0"
+                state: absent
+
+            - name: Start Kafka Controller
+              include_role:
+                name: kafka_controller
+                tasks_from: restart_and_wait.yml
+
+            - name: Wait for Controller to Become a Voter
+              shell: |
+                {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ kafka_controller_quorum_bootstrap_servers }} \
+                  --command-config {{ kafka_controller.client_config_file }} describe --replication
+              args:
+                executable: "{{ shell_executable }}"
+              environment:
+                KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions {% if kerberos_client_config_file_dest != '/etc/krb5.conf' %}-Djava.security.krb5.conf={{kerberos_client_config_file_dest}}{% endif %}"
+              register: kraft_quorum_recovery_replication
+              changed_when: false
+              check_mode: false
+              until: kraft_quorum_recovery_replication.stdout_lines | select('match', '^' ~ kafka_controller_final_properties['node.id'] ~ '\\s.*(Leader|Follower)') | list | length == 1
+              retries: 30
+              delay: 10
+
+            - name: Health Check Controller
+              include_role:
+                name: kafka_controller
+                tasks_from: health_check.yml
 
 - name: KRaft Quorum Recovery - Recover Brokers
   hosts: kraft_quorum_recovery_brokers
@@ -314,23 +473,73 @@
     - import_role:
         name: variables
 
-    - name: Stop Kafka Broker
-      ansible.builtin.systemd:
-        name: "{{ 'cp-kafka_broker.service' if (rootless_enabled | bool) else kafka_broker_service_name }}"
-        scope: "{{ 'user' if (rootless_enabled | bool) else 'system' }}"
-        state: stopped
-      environment:
-        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+    - name: Set Broker Recovery Facts
+      set_fact:
+        kraft_quorum_recovery_broker_metadata_log_dir: "{{ kafka_broker_final_properties['metadata.log.dir'] | default(kafka_broker_final_properties['log.dirs'].split(',') | first) }}"
+        kraft_quorum_recovery_broker_id: "{{ hostvars[groups.kraft_quorum_recovery_controllers[0]].kraft_quorum_recovery_id | default('') if groups.kraft_quorum_recovery_controllers | default([]) | length > 0 else '' }}"
 
-    - name: Remove Stale Metadata Log
+    - name: Set Broker Recovery State File
+      set_fact:
+        kraft_quorum_recovery_broker_state_file: "{{ kraft_quorum_recovery_broker_metadata_log_dir | dirname }}/kraft-quorum-recovery.json"
+
+    - name: Read Broker Recovery State
+      slurp:
+        src: "{{ kraft_quorum_recovery_broker_state_file }}"
+      register: kraft_quorum_recovery_broker_state_raw
+      failed_when: false
+
+    - name: Recover Broker Metadata
+      when: >-
+        kraft_quorum_recovery_broker_id == '' or kraft_quorum_recovery_broker_state_raw.content is not defined
+        or (kraft_quorum_recovery_broker_state_raw.content | b64decode | from_json).id | string != kraft_quorum_recovery_broker_id | string
+      block:
+        - name: Stop Kafka Broker
+          ansible.builtin.systemd:
+            name: "{{ 'cp-kafka_broker.service' if (rootless_enabled | bool) else kafka_broker_service_name }}"
+            scope: "{{ 'user' if (rootless_enabled | bool) else 'system' }}"
+            state: stopped
+          environment:
+            XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
+
+        - name: Remove Stale Metadata Log
+          file:
+            path: "{{ kraft_quorum_recovery_broker_metadata_log_dir }}/__cluster_metadata-0"
+            state: absent
+
+        - include_role:
+            name: kafka_broker
+            tasks_from: restart_and_wait.yml
+
+        - include_role:
+            name: kafka_broker
+            tasks_from: health_check.yml
+
+        - name: Record That Broker Recovered
+          copy:
+            content: "{{ {'id': kraft_quorum_recovery_broker_id} | to_nice_json }}"
+            dest: "{{ kraft_quorum_recovery_broker_state_file }}"
+            mode: '0644'
+          when: kraft_quorum_recovery_broker_id != ''
+
+- name: KRaft Quorum Recovery - Clear Controller Recovery State
+  hosts: kraft_quorum_recovery_controllers
+  gather_facts: false
+  any_errors_fatal: true
+  tags: kraft_quorum_recovery_complete
+  tasks:
+    - name: Remove Controller Recovery State File
       file:
-        path: "{{ kafka_broker_final_properties['metadata.log.dir'] | default(kafka_broker_final_properties['log.dirs'].split(',') | first) }}/__cluster_metadata-0"
+        path: "{{ kraft_quorum_recovery_state_file }}"
         state: absent
 
-    - include_role:
-        name: kafka_broker
-        tasks_from: restart_and_wait.yml
-
-    - include_role:
-        name: kafka_broker
-        tasks_from: health_check.yml
+- name: KRaft Quorum Recovery - Clear Broker Recovery State
+  hosts: kraft_quorum_recovery_brokers
+  gather_facts: false
+  any_errors_fatal: true
+  tags: kraft_quorum_recovery_complete
+  tasks:
+    - name: Remove Broker Recovery State File
+      file:
+        path: "{{ kraft_quorum_recovery_broker_state_file }}"
+        state: absent
+      when: kraft_quorum_recovery_broker_state_file is defined

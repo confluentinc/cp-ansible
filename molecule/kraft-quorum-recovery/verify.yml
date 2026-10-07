@@ -43,6 +43,17 @@
           - qr_backup.matched > 0
         fail_msg: "No metadata log backup found on {{ inventory_hostname }}"
 
+    - name: Check Controller Recovery State File Was Removed
+      stat:
+        path: "{{ kafka_controller_final_properties['log.dirs'] | dirname }}/kraft-quorum-recovery.json"
+      register: qr_controller_state
+
+    - name: Assert Controller Recovery State File Was Removed
+      assert:
+        that:
+          - not qr_controller_state.stat.exists
+        fail_msg: "Recovery state file was left on {{ inventory_hostname }}"
+
 - name: Verify Data and Write Path After Recovery
   hosts: kafka_broker
   gather_facts: true
@@ -64,6 +75,17 @@
         qr_broker_bootstrap: "{{ hostvars[groups.kafka_broker[0]] | confluent.platform.resolve_hostname }}:{{ kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port'] }}"
         qr_topic: kraft-quorum-recovery
         qr_kafka_opts: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
+
+    - name: Check Broker Recovery State File Was Removed
+      stat:
+        path: "{{ kafka_broker_final_properties['log.dirs'] | dirname }}/kraft-quorum-recovery.json"
+      register: qr_broker_state
+
+    - name: Assert Broker Recovery State File Was Removed
+      assert:
+        that:
+          - not qr_broker_state.stat.exists
+        fail_msg: "Recovery state file was left on {{ inventory_hostname }}"
 
     - name: Consume Records Produced Before Quorum Loss
       shell: |
