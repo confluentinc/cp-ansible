@@ -1,0 +1,83 @@
+---
+- name: Configure IPv6 Preference
+  import_playbook: ../configure_ipv6.yml
+
+- name: Check That a Divergent Initial Voter Is Rejected on Greenfield
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Write Inventory Override With a Different Initial Voter on controller2
+      copy:
+        dest: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/divergent_initial_voter.yml"
+        content: |
+          all:
+            hosts:
+              controller2:
+                kafka_controller_initial_voter: controller2
+        mode: '0644'
+
+    - name: Deploy Controllers With a Divergent Initial Voter
+      command: >-
+        ansible-playbook
+        -i {{ lookup('env', 'MOLECULE_INVENTORY_FILE') }}
+        -i {{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/divergent_initial_voter.yml
+        confluent.platform.kafka_controller
+      args:
+        chdir: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}"
+      environment:
+        ANSIBLE_STDOUT_CALLBACK: ansible.builtin.default
+        ANSIBLE_FORCE_COLOR: "0"
+        ANSIBLE_NOCOLOR: "1"
+      register: qs_divergent
+      changed_when: false
+      failed_when: >-
+        qs_divergent.rc == 0
+        or 'set the same kafka_controller_initial_voter' not in qs_divergent.stdout
+
+- name: Deploy Dynamic KRaft Cluster in dc1
+  import_playbook: ../collections_converge.yml
+
+- name: Produce Data Before Scaling
+  hosts: kafka_broker
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Get Existing Master Key from override.conf
+      include_role:
+        name: common
+        tasks_from: get_masterkey.yml
+      vars:
+        systemd_override_path: "{{ kafka_broker.systemd_override }}"
+        rootless_component_name: kafka_broker
+      when: kafka_broker_secrets_protection_enabled|bool
+
+    - name: Set Scale-Up Test Facts
+      set_fact:
+        qs_broker_bootstrap: "{{ hostvars[groups.kafka_broker[0]] | confluent.platform.resolve_hostname }}:{{ kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port'] }}"
+        qs_topic: kraft-dynamic-quorum-scale-up
+        qs_kafka_opts: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
+
+    - name: Create Scale-Up Test Topic
+      shell: |
+        {{ binary_base_path }}/bin/kafka-topics --bootstrap-server {{ qs_broker_bootstrap }} \
+          --command-config {{ kafka_broker.client_config_file }} \
+          --create --if-not-exists --topic {{ qs_topic }} --partitions 1 --replication-factor {{ groups.kafka_broker | length }}
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ qs_kafka_opts }}"
+        CONFLUENT_SECURITY_MASTER_KEY: "{{ existing_masterkey | default('') }}"
+      run_once: true
+
+    - name: Produce Scale-Up Test Records
+      shell: |
+        seq 10 | {{ binary_base_path }}/bin/kafka-console-producer --topic {{ qs_topic }} \
+          --bootstrap-server {{ qs_broker_bootstrap }} --producer.config {{ kafka_broker.client_config_file }}
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ qs_kafka_opts }}"
+        CONFLUENT_SECURITY_MASTER_KEY: "{{ existing_masterkey | default('') }}"
+      run_once: true
