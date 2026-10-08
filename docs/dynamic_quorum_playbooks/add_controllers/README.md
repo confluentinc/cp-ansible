@@ -37,7 +37,7 @@ Add controllers in pairs within a single region. Going from 3 to 4 voters does n
 
 ## Sample inventory
 
-[`hosts.yml`](hosts.yml) shows a 3-controller cluster after adding `kcontroller-4` and `kcontroller-5`. Only the new hosts are added. Keep `kafka_controller_initial_voter` as it is. It is only used on the first deployment.
+[`hosts.yml`](hosts.yml) shows a 3-controller cluster after adding `kcontroller-4` and `kcontroller-5`. Only the new hosts are added.
 
 ## Add the controllers
 
@@ -47,32 +47,14 @@ Add the new hosts under `kafka_controller`, with the same settings as the existi
 
 ### Step 2: deploy the new controllers
 
-Pick one of these:
-
-**Option A: run the controller playbook for all controllers (recommended).**
-
-```bash
-ansible-playbook -i hosts.yml confluent.platform.kafka_controller
-```
-
-The new controllers are installed and started first. Then the existing controllers are restarted one at a time, so their `controller.quorum.bootstrap.servers` also lists the new controllers.
-
-**Option B: run the controller playbook only for the new controllers.**
+Run the controller playbook for the new controllers only:
 
 ```bash
 ansible-playbook -i hosts.yml confluent.platform.kafka_controller \
   --limit kcontroller-4.example.com,kcontroller-5.example.com
 ```
 
-The existing controllers are not restarted. They keep their old `controller.quorum.bootstrap.servers` list until the next full run. The quorum works either way, because controllers find each other through the voter set in the metadata log. Use this option when you want to avoid restarting the existing controllers now.
-
-### Step 3: update the brokers
-
-```bash
-ansible-playbook -i hosts.yml confluent.platform.kafka_broker
-```
-
-This restarts the brokers one at a time so their `controller.quorum.bootstrap.servers` lists the new controllers. Brokers keep working without this step, so you can schedule it later.
+The existing controllers and the brokers are not restarted.
 
 ## What happens to a new controller
 
@@ -100,7 +82,7 @@ A new controller can show as `Observer` for a short time while it catches up. Th
 
 ## Adding a region
 
-Adding a second region is the same procedure. For example, to go from 3 controllers in `dc1` to the 2DC 3-3 layout, add the 3 `dc2` controllers and the `dc2` brokers to the inventory (see [`hosts_2dc.yml`](../greenfield/hosts_2dc.yml)), then run the controller and broker playbooks. You do not need to pass the cluster id. cp-ansible reads it from an existing controller.
+Adding a second region is the same procedure. For example, to go from 3 controllers in `dc1` to the 2DC 3-3 layout, add the 3 `dc2` controllers and the `dc2` brokers to the inventory (see [`hosts_2dc.yml`](../greenfield/hosts_2dc.yml)). Then run the controller playbook with `--limit` on the new controllers, and the broker playbook with `--limit` on the new brokers. cp-ansible reads the cluster id from an existing controller.
 
 ## Replacing a controller
 

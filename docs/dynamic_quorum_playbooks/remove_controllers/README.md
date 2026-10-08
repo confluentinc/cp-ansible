@@ -100,18 +100,9 @@ The removed controller must no longer be listed as `Leader` or `Follower`. Repea
 
 ### Step 5: remove the hosts from the inventory
 
-Delete the removed hosts from `kafka_controller`. If `kafka_controller_initial_voter` points to a removed host, you can point it to any remaining controller. It is only used on the first deployment.
+Delete the removed hosts from `kafka_controller`.
 
-### Step 6: update the remaining controllers and the brokers
-
-```bash
-ansible-playbook -i hosts.yml confluent.platform.kafka_controller
-ansible-playbook -i hosts.yml confluent.platform.kafka_broker
-```
-
-These restart the remaining controllers and the brokers one at a time, so their `controller.quorum.bootstrap.servers` no longer lists the removed controllers. The cluster keeps working without this step, so you can schedule it later.
-
-### Step 7: decommission the removed hosts
+### Step 6: decommission the removed hosts
 
 Before you reuse or delete a removed host, uninstall Confluent Platform or empty its controller data directory (default `/var/lib/controller/data`). Then it cannot join the cluster again by accident.
 
