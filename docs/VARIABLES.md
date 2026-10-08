@@ -212,11 +212,19 @@ Default:  false
 
 ***
 
+### jmxexporter_version
+
+Version of JmxExporter Agent Jar to Download
+
+Default:  1.6.0
+
+***
+
 ### jmxexporter_jar_path
 
-Full path to download the Prometheus Exporter Agent Jar
+Full path to download the Prometheus Exporter Agent Jar. The file name carries jmxexporter_version so a version change always installs a new jar and restarts the components.
 
-Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/jmx_prometheus_javaagent.jar') if rootless_deployment_path | length > 0 else '/opt/prometheus/jmx_prometheus_javaagent.jar' }}"
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter') if rootless_deployment_path | length > 0 else '/opt/prometheus' }}/jmx_prometheus_javaagent-{{ jmxexporter_version }}.jar"
 
 ***
 
@@ -7586,19 +7594,11 @@ Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jv
 
 ***
 
-### jmxexporter_version
-
-Version of JmxExporter Agent Jar to Donwload
-
-Default:  1.0.1
-
-***
-
 ### jmxexporter_jar_url
 
-Full URL used for Prometheus Exporter Jar Download. When `jolokia_url_remote=false` this represents the path on Ansible control host.
+Full URL used for Prometheus Exporter Jar Download. When `jmxexporter_url_remote=false` this represents the path on Ansible control host.
 
-Default:  "https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/{{jmxexporter_version}}/jmx_prometheus_javaagent-{{jmxexporter_version}}.jar"
+Default:  "https://github.com/prometheus/jmx_exporter/releases/download/{{jmxexporter_version}}/jmx_prometheus_javaagent-{{jmxexporter_version}}.jar"
 
 ***
 
