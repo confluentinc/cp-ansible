@@ -240,7 +240,7 @@ If a failed controller's machine or disk is gone for good, it cannot rejoin. Rep
 
 Replace lost brokers with the `kafka_broker` playbook, also with `--limit`.
 
-For the full procedures, see [Remove Controllers](../dynamic_quorum_remove_controllers/README.md) and [Add Controllers](../dynamic_quorum_add_controllers/README.md).
+For the full procedures, see [Remove Controllers](../remove_controllers/README.md) and [Add Controllers](../add_controllers/README.md).
 
 ## Minority of controllers down (quorum still healthy)
 

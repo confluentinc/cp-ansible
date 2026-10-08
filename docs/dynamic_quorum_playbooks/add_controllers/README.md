@@ -100,16 +100,16 @@ A new controller can show as `Observer` for a short time while it catches up. Th
 
 ## Adding a region
 
-Adding a second region is the same procedure. For example, to go from 3 controllers in `dc1` to the 2DC 3-3 layout, add the 3 `dc2` controllers and the `dc2` brokers to the inventory (see [`hosts_2dc.yml`](../dynamic_quorum_greenfield/hosts_2dc.yml)), then run the controller and broker playbooks. You do not need to pass the cluster id. cp-ansible reads it from an existing controller.
+Adding a second region is the same procedure. For example, to go from 3 controllers in `dc1` to the 2DC 3-3 layout, add the 3 `dc2` controllers and the `dc2` brokers to the inventory (see [`hosts_2dc.yml`](../greenfield/hosts_2dc.yml)), then run the controller and broker playbooks. You do not need to pass the cluster id. cp-ansible reads it from an existing controller.
 
 ## Replacing a controller
 
 To replace a controller whose host or disk is lost:
 
-1. Remove the old controller from the quorum. See [Remove Controllers](../dynamic_quorum_remove_controllers/README.md).
+1. Remove the old controller from the quorum. See [Remove Controllers](../remove_controllers/README.md).
 2. Add the new host by following this guide. You can reuse the old inventory hostname.
 
-If the quorum itself is lost, use [Disaster Recovery](../dynamic_quorum_disaster_recovery/README.md) instead.
+If the quorum itself is lost, use [Disaster Recovery](../disaster_recovery/README.md) instead.
 
 ## Troubleshooting
 

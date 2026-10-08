@@ -6,7 +6,7 @@ Static quorum uses `controller.quorum.voters` with a fixed set of controllers. D
 
 The migration is a one-time, one-way operation, run by `playbooks/StaticToDynamicQuorumMigration.yaml`. It rolls the controllers and brokers one at a time, so the cluster keeps serving during the migration.
 
-To deploy a new cluster with a dynamic quorum, see [Greenfield Deployment](../dynamic_quorum_greenfield/README.md) instead.
+To deploy a new cluster with a dynamic quorum, see [Greenfield Deployment](../greenfield/README.md) instead.
 
 ## Contents
 
@@ -129,4 +129,4 @@ grep -E '^controller\.quorum\.(voters|bootstrap\.servers)' /etc/kafka/server.pro
 ## After the migration
 
 - Keep `kraft_dynamic_quorum_enabled: true` in the inventory. The normal playbooks now render the dynamic quorum configuration.
-- You can now [add controllers](../dynamic_quorum_add_controllers/README.md), [remove controllers](../dynamic_quorum_remove_controllers/README.md), and use [disaster recovery](../dynamic_quorum_disaster_recovery/README.md).
+- You can now [add controllers](../add_controllers/README.md), [remove controllers](../remove_controllers/README.md), and use [disaster recovery](../disaster_recovery/README.md).

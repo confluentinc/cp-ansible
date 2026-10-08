@@ -20,7 +20,7 @@ Removing a controller is a manual procedure with `kafka-metadata-quorum remove-c
 - The quorum is healthy: it has a leader.
 - Access to a remaining controller to run `kafka-metadata-quorum`.
 
-If the quorum has no leader, you cannot remove controllers. Use [Disaster Recovery](../dynamic_quorum_disaster_recovery/README.md) instead.
+If the quorum has no leader, you cannot remove controllers. Use [Disaster Recovery](../disaster_recovery/README.md) instead.
 
 ## Before you remove a controller
 
@@ -37,7 +37,7 @@ The quorum needs a majority of voters to work. For `N` voters, the majority is `
 - **Remove one controller at a time**, and check the quorum after each one.
 - **Keep an odd number of voters** in a single region. 4 voters tolerate only 1 failure, the same as 3, but need one more voter for every metadata write.
 - **Keep enough voters running.** Count the voters that are actually up, not only the ones in the voter set. Removing a running voter while another one is already down can leave the quorum without a majority.
-- **To replace a controller, remove the old one first**, then [add](../dynamic_quorum_add_controllers/README.md) the new one.
+- **To replace a controller, remove the old one first**, then [add](../add_controllers/README.md) the new one.
 
 ## Sample inventory
 

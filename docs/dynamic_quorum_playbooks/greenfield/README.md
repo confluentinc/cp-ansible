@@ -2,7 +2,7 @@
 
 This guide explains how to deploy a **new** Confluent Platform cluster with a **dynamic KRaft controller quorum** (KIP-853).
 
-Greenfield means the cluster starts from scratch. It runs with a dynamic quorum (`kraft.version=1`) from day one. To move an existing static KRaft cluster to a dynamic quorum, see [Static to Dynamic Quorum Migration](../dynamic_quorum_migration/README.md) instead.
+Greenfield means the cluster starts from scratch. It runs with a dynamic quorum (`kraft.version=1`) from day one. To move an existing static KRaft cluster to a dynamic quorum, see [Static to Dynamic Quorum Migration](../migration/README.md) instead.
 
 ## Contents
 
@@ -24,7 +24,7 @@ Greenfield means the cluster starts from scratch. It runs with a dynamic quorum 
 | Controller config | `controller.quorum.voters` (fixed list of `id@host:port`) | `controller.quorum.bootstrap.servers` (list of `host:port`) |
 | `kraft.version` | `0` | `1` |
 | Add or remove controllers | Not supported without rebuilding the cluster | Supported at runtime |
-| Disaster recovery | Not supported | [Supported](../dynamic_quorum_disaster_recovery/README.md) |
+| Disaster recovery | Not supported | [Supported](../disaster_recovery/README.md) |
 
 Static quorum stays the default. Dynamic quorum is opt-in with `kraft_dynamic_quorum_enabled: true`.
 
@@ -48,7 +48,7 @@ The quorum can elect a leader and accept metadata changes only while a **majorit
 
 Use an odd number of controllers in a single region. Adding a fourth controller does not tolerate more failures than three.
 
-For two regions, a 2DC 3-3 layout (6 voters) loses its quorum when a whole region is lost. It can be recovered with no metadata loss, using the [disaster recovery procedure](../dynamic_quorum_disaster_recovery/README.md).
+For two regions, a 2DC 3-3 layout (6 voters) loses its quorum when a whole region is lost. It can be recovered with no metadata loss, using the [disaster recovery procedure](../disaster_recovery/README.md).
 
 ## Sample inventories
 
@@ -117,10 +117,10 @@ kafka-metadata-quorum --bootstrap-controller <leader-host>:9093 \
   --command-config /etc/controller/server.properties add-controller
 ```
 
-**The run fails with "Detected a running static KRaft cluster".** The cluster already runs a static quorum. Use the [migration playbook](../dynamic_quorum_migration/README.md) instead.
+**The run fails with "Detected a running static KRaft cluster".** The cluster already runs a static quorum. Use the [migration playbook](../migration/README.md) instead.
 
 ## Next steps
 
-- [Add controllers](../dynamic_quorum_add_controllers/README.md)
-- [Remove controllers](../dynamic_quorum_remove_controllers/README.md)
-- [Disaster recovery](../dynamic_quorum_disaster_recovery/README.md)
+- [Add controllers](../add_controllers/README.md)
+- [Remove controllers](../remove_controllers/README.md)
+- [Disaster recovery](../disaster_recovery/README.md)
