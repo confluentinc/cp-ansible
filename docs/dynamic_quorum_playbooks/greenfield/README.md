@@ -9,7 +9,7 @@ Greenfield means the cluster starts from scratch. It runs with a dynamic quorum 
 - [Static vs dynamic quorum](#static-vs-dynamic-quorum)
 - [Requirements](#requirements)
 - [Choosing the number of controllers](#choosing-the-number-of-controllers)
-- [Sample inventories](#sample-inventories)
+- [Sample inventory](#sample-inventory)
 - [Variables](#variables)
 - [Deploy](#deploy)
 - [How the quorum is formed](#how-the-quorum-is-formed)
@@ -46,14 +46,12 @@ The quorum can elect a leader and accept metadata changes only while a **majorit
 | 5 | 3 | 2 |
 | 6 | 4 | 2 |
 
-Use an odd number of controllers in a single region. Adding a fourth controller does not tolerate more failures than three.
+Use an odd number of controllers. Adding a fourth controller does not tolerate more failures than three.
 
-For two regions, a 2DC 3-3 layout (6 voters) loses its quorum when a whole region is lost. It can be recovered with no metadata loss, using the [disaster recovery procedure](../disaster_recovery/README.md).
 
-## Sample inventories
+## Sample inventory
 
-- [`hosts.yml`](hosts.yml): single region, 3 controllers and 3 brokers.
-- [`hosts_2dc.yml`](hosts_2dc.yml): two regions (2DC 3-3), 3 controllers and 3 brokers in each region, with `broker.rack` set per region.
+[`hosts.yml`](hosts.yml) is a cluster with 3 controllers and 3 brokers.
 
 ## Variables
 
@@ -66,7 +64,7 @@ For two regions, a 2DC 3-3 layout (6 voters) loses its quorum when a whole regio
 
 ## Deploy
 
-1. Copy one of the sample inventories and update the hostnames, connection settings, and security settings.
+1. Copy the sample inventory and update the hostnames, connection settings, and security settings.
 2. Set `kraft_dynamic_quorum_enabled: true` and `kafka_controller_initial_voter`.
 3. Run the playbook as usual:
 

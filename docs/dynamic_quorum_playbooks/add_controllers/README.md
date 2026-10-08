@@ -1,6 +1,6 @@
 # KRaft Dynamic Quorum: Add Controllers
 
-This guide explains how to add controllers to a running Confluent Platform cluster with a **dynamic KRaft controller quorum** (KIP-853). Use it to tolerate more controller failures, to add a second region, or to replace a controller that was removed.
+This guide explains how to add controllers to a running Confluent Platform cluster with a **dynamic KRaft controller quorum** (KIP-853). Use it to tolerate more controller failures, or to replace a controller that was removed.
 
 With a dynamic quorum, adding a controller is a normal playbook run. You add the host to the inventory and run the controller playbook. cp-ansible formats the new controller to join the existing cluster, and auto-join makes it a voter. No `kafka-metadata-quorum` commands are needed.
 
@@ -12,7 +12,6 @@ With a dynamic quorum, adding a controller is a normal playbook run. You add the
 - [Add the controllers](#add-the-controllers)
 - [What happens to a new controller](#what-happens-to-a-new-controller)
 - [Verify](#verify)
-- [Adding a region](#adding-a-region)
 - [Replacing a controller](#replacing-a-controller)
 - [Troubleshooting](#troubleshooting)
 
@@ -33,7 +32,7 @@ The quorum needs a majority of voters to work. For `N` voters, the majority is `
 | 4 | 3 | 1 |
 | 5 | 3 | 2 |
 
-Add controllers in pairs within a single region. Going from 3 to 4 voters does not tolerate more failures, and needs one more voter for every metadata write.
+Add controllers in pairs. Going from 3 to 4 voters does not tolerate more failures, and needs one more voter for every metadata write.
 
 ## Sample inventory
 
@@ -79,10 +78,6 @@ grep cluster.id /var/lib/controller/data/meta.properties
 ```
 
 A new controller can show as `Observer` for a short time while it catches up. That is expected.
-
-## Adding a region
-
-Adding a second region is the same procedure. For example, to go from 3 controllers in `dc1` to the 2DC 3-3 layout, add the 3 `dc2` controllers and the `dc2` brokers to the inventory (see [`hosts_2dc.yml`](../greenfield/hosts_2dc.yml)). Then run the controller playbook with `--limit` on the new controllers, and the broker playbook with `--limit` on the new brokers. cp-ansible reads the cluster id from an existing controller.
 
 ## Replacing a controller
 

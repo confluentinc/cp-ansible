@@ -35,7 +35,7 @@ The quorum needs a majority of voters to work. For `N` voters, the majority is `
 | 1 | 1 | 0 |
 
 - **Remove one controller at a time**, and check the quorum after each one.
-- **Keep an odd number of voters** in a single region. 4 voters tolerate only 1 failure, the same as 3, but need one more voter for every metadata write.
+- **Keep an odd number of voters**. 4 voters tolerate only 1 failure, the same as 3, but need one more voter for every metadata write.
 - **Keep enough voters running.** Count the voters that are actually up, not only the ones in the voter set. Removing a running voter while another one is already down can leave the quorum without a majority.
 - **To replace a controller, remove the old one first**, then [add](../add_controllers/README.md) the new one.
 

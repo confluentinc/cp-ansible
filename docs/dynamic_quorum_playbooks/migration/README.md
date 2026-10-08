@@ -26,7 +26,6 @@ To deploy a new cluster with a dynamic quorum, see [Greenfield Deployment](../gr
 - The controller quorum is healthy: it has a leader and every controller is a voter.
 - The inventory the cluster was deployed with.
 
-Single region and multi-region clusters use the same procedure. cp-ansible already configures `advertised.listeners` on the controllers, so multi-region clusters need no extra step.
 
 ## Why a migration playbook is needed
 
@@ -69,7 +68,7 @@ The playbook runs these stages as plays. Each has its own tag:
 
 ## Sample inventory
 
-[`hosts.yml`](hosts.yml) is a single-region cluster with 3 controllers and 3 brokers. It is the inventory the cluster was deployed with, plus `kraft_dynamic_quorum_enabled: true`.
+[`hosts.yml`](hosts.yml) is a cluster with 3 controllers and 3 brokers. It is the inventory the cluster was deployed with, plus `kraft_dynamic_quorum_enabled: true`.
 
 `kafka_controller_initial_voter` is **not** needed. It is only used when a new cluster is created.
 
