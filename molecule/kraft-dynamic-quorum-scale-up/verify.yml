@@ -1,0 +1,136 @@
+---
+- name: Verify Scaled-Up Controller Quorum
+  hosts: kafka_controller:kafka_controller_dc2
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Read This Controller's node.id
+      shell: "egrep '^node.id[ ]?=' {{ kafka_controller.config_file }} | awk -F'=' '{print $2}' | tr -d '[:space:]'"
+      register: qs_node_id
+      changed_when: false
+
+    - name: Read This Controller's cluster.id
+      shell: "grep '^cluster.id=' {{ kafka_controller_final_properties['log.dirs'] }}/meta.properties | cut -d= -f2"
+      register: qs_cluster_id
+      changed_when: false
+
+    - name: Assert Every Controller Has the Same cluster.id
+      assert:
+        that:
+          - ansible_play_hosts | map('extract', hostvars, ['qs_cluster_id', 'stdout']) | unique | list | length == 1
+        fail_msg: "Controllers have different cluster ids: {{ ansible_play_hosts | map('extract', hostvars, ['qs_cluster_id', 'stdout']) | list }}"
+      run_once: true
+
+    - name: Read controller.quorum.bootstrap.servers
+      shell: "egrep '^controller.quorum.bootstrap.servers[ ]?=' {{ kafka_controller.config_file }}"
+      register: qs_bootstrap_line
+      changed_when: false
+
+    - name: Assert Every Controller Is in controller.quorum.bootstrap.servers
+      assert:
+        that:
+          - (hostvars[item] | confluent.platform.resolve_hostname) ~ ':' ~ kafka_controller_port in qs_bootstrap_line.stdout
+        fail_msg: "{{ item }} is missing from {{ qs_bootstrap_line.stdout }}"
+      loop: "{{ ansible_play_hosts }}"
+
+    - name: Describe Controller Quorum Replication
+      shell: |
+        {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ inventory_hostname }}:{{ kafka_controller_port }} \
+          --command-config {{ kafka_controller.client_config_file }} describe --replication
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
+      register: qs_replication
+      changed_when: false
+      until: (qs_replication.stdout_lines | select('search', '(Leader|Follower)') | list | length) == (ansible_play_hosts | length)
+      retries: 12
+      delay: 10
+
+    - name: Assert This Controller Is a Voter
+      assert:
+        that:
+          - qs_replication.stdout_lines | select('match', '^' ~ qs_node_id.stdout ~ '\\s.*(Leader|Follower)') | list | length == 1
+        fail_msg: "Node {{ qs_node_id.stdout }} is not a voter. Replication: {{ qs_replication.stdout }}"
+
+    - name: Read Initial Voter Directory Id Before Replacement
+      slurp:
+        src: /var/tmp/qs_old_directory_id
+      register: qs_old_directory_id
+      when: inventory_hostname == 'controller1'
+
+    - name: Assert the Initial Voter Rejoined With a New Directory Id
+      assert:
+        that:
+          - (qs_replication.stdout_lines | select('match', '^' ~ qs_node_id.stdout ~ '\\s') | first).split()[1] != (qs_old_directory_id.content | b64decode | trim)
+        fail_msg: "controller1 kept its old directory id, so it was not reformatted. Replication: {{ qs_replication.stdout }}"
+      when: inventory_hostname == 'controller1'
+
+- name: Verify Data and Write Path After Scaling
+  hosts: kafka_broker
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Get Existing Master Key from override.conf
+      include_role:
+        name: common
+        tasks_from: get_masterkey.yml
+      vars:
+        systemd_override_path: "{{ kafka_broker.systemd_override }}"
+        rootless_component_name: kafka_broker
+      when: kafka_broker_secrets_protection_enabled|bool
+
+    - name: Set Scale-Up Test Facts
+      set_fact:
+        qs_broker_bootstrap: "{{ hostvars[groups.kafka_broker[0]] | confluent.platform.resolve_hostname }}:{{ kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port'] }}"
+        qs_topic: kraft-dynamic-quorum-scale-up
+        qs_kafka_opts: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
+
+    - name: Read Broker controller.quorum.bootstrap.servers
+      shell: "egrep '^controller.quorum.bootstrap.servers[ ]?=' {{ kafka_broker.config_file }}"
+      register: qs_broker_bootstrap_line
+      changed_when: false
+
+    - name: Assert Broker Lists the dc2 Controllers
+      assert:
+        that:
+          - item ~ ':' ~ kafka_controller_port in qs_broker_bootstrap_line.stdout
+        fail_msg: "{{ item }} is missing from {{ qs_broker_bootstrap_line.stdout }}"
+      loop:
+        - controller4
+        - controller5
+        - controller6
+
+    - name: Consume Records Produced Before Scaling
+      shell: |
+        {{ binary_base_path }}/bin/kafka-console-consumer --topic {{ qs_topic }} \
+          --bootstrap-server {{ qs_broker_bootstrap }} --consumer.config {{ kafka_broker.client_config_file }} \
+          --from-beginning --max-messages 10 --timeout-ms 60000
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ qs_kafka_opts }}"
+        CONFLUENT_SECURITY_MASTER_KEY: "{{ existing_masterkey | default('') }}"
+      register: qs_consume
+      changed_when: false
+      failed_when: qs_consume.stdout_lines | length != 10
+      run_once: true
+
+    - name: Create Topic After Scaling
+      shell: |
+        {{ binary_base_path }}/bin/kafka-topics --bootstrap-server {{ qs_broker_bootstrap }} \
+          --command-config {{ kafka_broker.client_config_file }} \
+          --create --if-not-exists --topic {{ qs_topic }}-post --partitions 1 --replication-factor {{ groups.kafka_broker | length }}
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ qs_kafka_opts }}"
+        CONFLUENT_SECURITY_MASTER_KEY: "{{ existing_masterkey | default('') }}"
+      register: qs_topic_create
+      changed_when: false
+      failed_when: qs_topic_create.rc != 0
+      run_once: true

@@ -1,0 +1,89 @@
+---
+- name: Add dc2 Controllers to the Inventory
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Add dc2 Controller to kafka_controller
+      add_host:
+        hostname: "{{ item }}"
+        groups: kafka_controller
+      loop:
+        - controller4
+        - controller5
+        - controller6
+      run_once: true
+
+- name: Add dc2 Controllers to the Quorum
+  import_playbook: confluent.platform.kafka_controller
+
+- name: Refresh Brokers With the New Controller List
+  import_playbook: confluent.platform.kafka_broker
+
+- name: Remove the Initial Voter and Wipe Its Disk
+  hosts: controller1
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Set Replacement Test Facts
+      set_fact:
+        qs_bootstrap: "{{ hostvars['controller2'] | confluent.platform.resolve_hostname }}:{{ kafka_controller_port }}"
+        qs_kafka_opts: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
+        qs_node_id: "{{ kafka_controller_final_properties['node.id'] }}"
+
+    - name: Read Initial Voter Directory Id
+      shell: |
+        {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ qs_bootstrap }} \
+          --command-config {{ kafka_controller.client_config_file }} describe --replication \
+          | awk -v id={{ qs_node_id }} '$1==id {print $2}'
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ qs_kafka_opts }}"
+      register: qs_old_directory_id
+      changed_when: false
+      failed_when: qs_old_directory_id.stdout | trim | length == 0
+
+    - name: Save Initial Voter Directory Id for Verification
+      copy:
+        content: "{{ qs_old_directory_id.stdout | trim }}"
+        dest: /var/tmp/qs_old_directory_id
+        mode: '0644'
+
+    - name: Stop Initial Voter
+      systemd:
+        name: "{{ kafka_controller_service_name }}"
+        state: stopped
+
+    - name: Remove Initial Voter From the Quorum
+      shell: |
+        {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ qs_bootstrap }} \
+          --command-config {{ kafka_controller.client_config_file }} \
+          remove-controller --controller-id {{ qs_node_id }} --controller-directory-id {{ qs_old_directory_id.stdout | trim }}
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ qs_kafka_opts }}"
+
+    - name: Wait Until the Initial Voter Is No Longer a Voter
+      shell: |
+        {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ qs_bootstrap }} \
+          --command-config {{ kafka_controller.client_config_file }} describe --replication
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ qs_kafka_opts }}"
+      register: qs_replication_removed
+      changed_when: false
+      until: qs_replication_removed.stdout_lines | select('match', '^' ~ qs_node_id ~ '\\s.*(Leader|Follower)') | list | length == 0
+      retries: 12
+      delay: 10
+
+    - name: Wipe Initial Voter Data Directory
+      shell: "find {{ kafka_controller_final_properties['log.dirs'] }} -mindepth 1 -delete"
+      args:
+        executable: "{{ shell_executable }}"
+
+- name: Replace the Initial Voter
+  import_playbook: confluent.platform.kafka_controller
