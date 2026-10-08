@@ -4,10 +4,7 @@ This guide explains how to recover a Confluent Platform cluster that runs a **dy
 
 A region, rack, or set of machines went down and took enough KRaft voters with it that the quorum is lost. There is no controller leader, so no metadata changes are possible: no topic changes, no partition leader moves, no new brokers. The surviving controllers and brokers are still there. This procedure builds a new working quorum from the surviving controllers so the cluster is available again. Until the failed hosts are restored, the cluster runs on a smaller quorum with less fault tolerance.
 
-There are two ways to recover:
-
-- **[Automated recovery](#automated-recovery):** the `playbooks/KRaftQuorumRecovery.yaml` playbook. This is the recommended path.
-- **[Manual recovery](#manual-recovery):** the same steps by hand.
+Recovery is a manual procedure with `kafka-metadata-recovery` and `kafka-metadata-quorum`, run on the surviving hosts.
 
 ## Contents
 
@@ -15,9 +12,7 @@ There are two ways to recover:
 - [Which procedure applies?](#which-procedure-applies)
 - [Data safety and RPO](#data-safety-and-rpo)
 - [Before you begin](#before-you-begin)
-- [Sample inventory](#sample-inventory)
-- [Automated recovery](#automated-recovery)
-- [Manual recovery](#manual-recovery)
+- [Recovery](#recovery)
 - [Replacing a host that will not come back](#replacing-a-host-that-will-not-come-back)
 - [Minority of controllers down (quorum still healthy)](#minority-of-controllers-down-quorum-still-healthy)
 - [Verification](#verification)
@@ -66,7 +61,7 @@ A metadata write is **committed** only after a majority of voters store it.
 - **Failed voters fewer than the majority:** every committed metadata write reached at least one surviving controller. Rebuilding the quorum from the surviving controllers loses no metadata, so the RPO is zero. In the 2DC 3-3 example, three failed voters are fewer than the majority of four.
 - **Failed voters equal to or greater than the majority:** this procedure still applies. But a committed metadata write might exist only on failed controllers, so rebuilding the quorum can lose that metadata.
 
-The new quorum is rebuilt from one surviving controller, called the **seed**. Choose the seed by the **highest metadata epoch** first, and break ties by the **largest log end offset**. Do not choose the seed by log end offset alone. A longer log from an older epoch can be a stale copy that is missing committed writes. The playbook applies this rule for you.
+The new quorum is rebuilt from one surviving controller, called the **seed**. Choose the seed by the **highest metadata epoch** first, and break ties by the **largest log end offset**. Do not choose the seed by log end offset alone. A longer log from an older epoch can be a stale copy that is missing committed writes.
 
 Recovery only changes **metadata** (the `__cluster_metadata` log). Topic data on the brokers is not changed.
 
@@ -82,6 +77,13 @@ Recovery only changes **metadata** (the `__cluster_metadata` log). Topic data on
 - Free disk space on each surviving controller for one copy of its `__cluster_metadata-0` folder.
 
 **Rehearse this before you need it.** Run the full procedure on a staging cluster that matches your production layout. A dry run finds setup-specific problems (DNS, certificates, firewalls, custom paths) while there is no pressure.
+
+### Identify the failed hosts
+
+> **⚠ Failed means the disk, not the process.**
+> Treat a host as failed only if its metadata disk is gone or cannot be used. A controller whose Kafka process crashed but whose disk is fine is a **survivor**. Include it in the recovery. Its metadata counts, and leaving it out can make the recovery lose metadata.
+>
+> **How to identify the failed hosts:** while the quorum has no leader, Kafka cannot tell you which voters are dead. Identify them from your infrastructure: the region, rack, or machines that are down (cloud console, hypervisor, data center status).
 
 ### Keep the failed hosts down during recovery
 
@@ -100,160 +102,9 @@ Bring failed hosts back only with Phase 2, which clears their old metadata first
 
 The step that rebuilds the voter set **cannot be undone**. Before Phase 1, take a disk-level snapshot of each surviving controller's metadata disk (default `/var/lib/controller`). That is your real rollback if something goes wrong.
 
-Both recovery paths also copy `__cluster_metadata-0` into a backup folder on each surviving controller before changing anything.
+The recovery steps also copy `__cluster_metadata-0` into a backup folder on each surviving controller before changing anything.
 
-## Sample inventory
-
-[`hosts.yml`](hosts.yml) is a two-region (2DC 3-3) cluster:
-
-- `dc1`: `kcontroller-1..3.dc1.example.com` and `kafka-1..3.dc1.example.com`
-- `dc2`: `kcontroller-1..3.dc2.example.com` and `kafka-1..3.dc2.example.com`
-
-The quorum has 6 voters and needs 4. If `dc1` is lost, 3 voters remain, so the quorum is lost. The 3 failed voters are fewer than the majority of 4, so the RPO is zero.
-
-The examples below use this inventory with `dc1` lost. With the default node ids, the controllers are `9991`, `9992`, `9993` in `dc1` and `9994`, `9995`, `9996` in `dc2`.
-
-## Automated recovery
-
-### Recovery variables
-
-These variables are only read by `playbooks/KRaftQuorumRecovery.yaml`.
-
-| Variable | Description |
-|---|---|
-| `kraft_quorum_recovery_failed_hosts` | List of failed controllers and brokers. The playbook never connects to them. Every other `kafka_controller` and `kafka_broker` host is treated as a survivor. |
-| `kraft_quorum_recovery_confirmed` | Must be `true`. Confirms that the failed hosts are stopped and will stay stopped. The playbook refuses to run without it. |
-| `kraft_quorum_recovery_force_standalone_done` | Only for resuming a run that stopped while the voter set was being rebuilt. See [How the playbook resumes safely](#how-the-playbook-resumes-safely). |
-
-> **⚠ Failed means the disk, not the process.**
-> List a host as failed only if its metadata disk is gone or cannot be used. A controller whose Kafka process crashed but whose disk is fine is a **survivor**. Do not list it. Its metadata counts, and leaving it out can make the recovery lose metadata.
->
-> **How to identify the failed hosts:** while the quorum has no leader, Kafka cannot tell you which voters are dead. Identify them from your infrastructure: the region, rack, or machines that are down (cloud console, hypervisor, data center status).
-
-### Phase 1: recover the surviving controllers
-
-**Step 1. List the failed hosts** in a vars file, for example `recovery.yml`:
-
-```yaml
-kraft_quorum_recovery_failed_hosts:
-  - kcontroller-1.dc1.example.com
-  - kcontroller-2.dc1.example.com
-  - kcontroller-3.dc1.example.com
-  - kafka-1.dc1.example.com
-  - kafka-2.dc1.example.com
-  - kafka-3.dc1.example.com
-```
-
-**Step 2 (optional). Preview the seed.** To see which controller will be the seed before anything irreversible happens, run only the first stages:
-
-```bash
-ansible-playbook -i hosts.yml confluent.platform.KRaftQuorumRecovery \
-  -e @recovery.yml -e kraft_quorum_recovery_confirmed=true \
-  --tags kraft_quorum_recovery_precheck,kraft_quorum_recovery_stop_controllers,kraft_quorum_recovery_measure
-```
-
-This stops KRaft on the surviving controllers, backs up their metadata, and prints each controller's epoch and log end offset and the chosen seed:
-
-```
-"msg": {
-    "seed": "kcontroller-2.dc2.example.com",
-    "positions": [
-        {"host": "kcontroller-1.dc2.example.com", "epoch": 12, "offset": 48210},
-        {"host": "kcontroller-2.dc2.example.com", "epoch": 12, "offset": 48213},
-        {"host": "kcontroller-3.dc2.example.com", "epoch": 11, "offset": 48300}
-    ]
-}
-```
-
-`kcontroller-2.dc2` wins. It shares the highest epoch (12) and has the larger offset. `kcontroller-3.dc2` has the largest offset, but its epoch is older.
-
-Nothing irreversible has happened yet. The surviving controllers stay stopped until you run Step 3.
-
-**Step 3. Run the recovery:**
-
-```bash
-ansible-playbook -i hosts.yml confluent.platform.KRaftQuorumRecovery \
-  -e @recovery.yml -e kraft_quorum_recovery_confirmed=true
-```
-
-The playbook stops KRaft on the surviving controllers, backs up and measures their metadata, picks the seed, and rebuilds the voter set on the seed. It then starts the seed, rejoins the other surviving controllers one at a time, and restarts the brokers one at a time with fresh metadata. At the end, the surviving controllers are the voters and the cluster accepts metadata writes again.
-
-### How the playbook resumes safely
-
-Only one step is unsafe to repeat: **rebuilding the voter set** (`kafka-metadata-recovery reconfig force-standalone`). If it runs twice, or runs on a different seed, it can damage the metadata. Every other step is safe to run again.
-
-So the playbook keeps a small note, `kraft-quorum-recovery.json`, next to the metadata folder on every surviving controller (default `/var/lib/controller/kraft-quorum-recovery.json`). The note records the seed and whether the rebuild has `started` or is `done`:
-
-1. Just before the rebuild, the playbook writes `started` on every surviving controller.
-2. It runs the rebuild on the seed.
-3. Right after it succeeds, the playbook writes `done` on every surviving controller.
-4. When the whole recovery finishes, it deletes the note.
-
-**To resume after any failure, re-run the same command.** On every run, the playbook first reads the note:
-
-| Note | What it means | What the playbook does |
-|---|---|---|
-| No note | The rebuild has not started. | Runs from the beginning. Everything before the rebuild is safe to repeat. A new backup is taken. |
-| `started` | The run stopped during the rebuild. It may or may not have finished. | **Stops** and changes nothing. |
-| `done` | The rebuild finished. | Skips stopping, measuring, and rebuilding. Continues from starting the saved seed. |
-
-The note is written on every surviving controller, so one missing or out-of-date copy does not matter. The playbook uses the most advanced state it finds.
-
-**If the note says `started`:**
-
-1. Do not rebuild the voter set again, by hand or with the playbook.
-2. Contact Confluent Support to check the seed controller's metadata.
-3. Once Support confirms the rebuild finished, resume with:
-
-   ```bash
-   ansible-playbook -i hosts.yml confluent.platform.KRaftQuorumRecovery \
-     -e @recovery.yml -e kraft_quorum_recovery_confirmed=true \
-     -e kraft_quorum_recovery_force_standalone_done=true
-   ```
-
-   `kraft_quorum_recovery_force_standalone_done` is ignored on a new run. It only applies when the note says `started`.
-
-**Other checks that make a re-run safe:**
-
-| Check | Why it matters |
-|---|---|
-| Failed hosts are never contacted. | Nothing can start or change a failed host by mistake. |
-| The run refuses to start without `kraft_quorum_recovery_confirmed=true`. | The operator must confirm the failed hosts are down. |
-| A new recovery refuses to start while the quorum has a leader. | Recovery is only for a lost quorum. It cannot rebuild a healthy cluster by mistake. |
-| On a resume, the saved seed is always used. If it is now a failed host, the run stops. | The recovery cannot switch to a different seed halfway. |
-| The seed is not restarted if it is already the leader. | A resume does not interrupt a working quorum. |
-| Before a controller is wiped and rejoined, the live quorum is checked. If the controller is already a voter, it is skipped. If the quorum has no leader, nothing is changed. | A controller that already rejoined is never wiped. Deleting a voter's log can lose committed metadata. |
-| Brokers are restarted one at a time with a health check. | Restarting a broker again on a resume is harmless. |
-
-### Phase 2: restore the failed hosts
-
-Do this only after Phase 1 is complete and the new quorum is healthy. It is not urgent.
-
-The failed hosts still hold metadata from before the rebuild. That history no longer matches the new one, so each returning controller and broker must have its old `__cluster_metadata-0` removed before Kafka starts.
-
-1. Make sure Kafka is stopped and disabled on each returning host. See [Keep the failed hosts down during recovery](#keep-the-failed-hosts-down-during-recovery).
-2. Remove the returning hosts from `kraft_quorum_recovery_failed_hosts`.
-3. Run only the rejoin, broker, and cleanup stages, limited to the returning hosts:
-
-   ```bash
-   ansible-playbook -i hosts.yml confluent.platform.KRaftQuorumRecovery \
-     -e kraft_quorum_recovery_confirmed=true \
-     --tags kraft_quorum_recovery_rejoin_controllers,kraft_quorum_recovery_brokers,kraft_quorum_recovery_complete \
-     --limit kcontroller-1.dc1.example.com,kcontroller-2.dc1.example.com,kcontroller-3.dc1.example.com,kafka-1.dc1.example.com,kafka-2.dc1.example.com,kafka-3.dc1.example.com
-   ```
-
-   Each returning controller is wiped and rejoined only if it is not already a voter. Each returning broker gets fresh metadata and is health checked.
-
-   **Why only these tags:** after Phase 1 the quorum has a leader again. The full playbook only starts a new recovery when there is no leader, so a run without tags stops at the precheck. These tags skip the recovery stages and run only the steps that bring hosts back.
-
-4. Re-enable Kafka at boot on the returning hosts:
-
-   ```bash
-   sudo systemctl enable confluent-kcontroller   # controllers
-   sudo systemctl enable confluent-server        # brokers
-   ```
-
-## Manual recovery
+## Recovery
 
 The commands assume a package install with cp-ansible defaults:
 
@@ -454,21 +305,17 @@ If secrets protection is enabled, the broker's `client.properties` is encrypted.
 
 ## Clean up after recovery
 
-The metadata backups are **never deleted automatically**. They let you inspect what was replaced. When metadata loss was possible, a backup may hold the only copy of a lost change. Once the full quorum is healthy and you have checked the recovery point, free the space:
+Keep the metadata backups until the recovery is verified. They let you inspect what was replaced. When metadata loss was possible, a backup may hold the only copy of a lost change. Once the full quorum is healthy and you have checked the recovery point, free the space:
 
 ```bash
 # On each controller, after the quorum is confirmed healthy:
 sudo rm -rf /var/lib/controller/kraft-quorum-recovery-backup
 ```
 
-Also delete the disk snapshots you took before recovery, and remove the recovery variables from any inventory or vars file. **Do not clean up until the recovery is fully verified.**
-
-If a recovery note (`/var/lib/controller/kraft-quorum-recovery.json`) is still there after an automated recovery, the playbook did not finish. Do not delete it unless you are sure the recovery is complete. It is what stops the voter set rebuild from running twice.
+Also delete the disk snapshots you took before recovery. **Do not clean up until the recovery is fully verified.**
 
 ## References
 
 - [KIP-853: KRaft Controller Membership Changes](https://cwiki.apache.org/confluence/display/KAFKA/KIP-853%3A+KRaft+Controller+Membership+Changes)
 - [KRaft Configuration for Confluent Platform](https://docs.confluent.io/platform/current/kafka-metadata/config-kraft.html)
 - [Disaster Recovery for Multi-Region KRaft Clusters (Confluent for Kubernetes)](https://docs.confluent.io/operator/current/co-disaster-recovery.html)
-- [`playbooks/KRaftQuorumRecovery.yaml`](../../playbooks/KRaftQuorumRecovery.yaml)
-- [`hosts.yml`](hosts.yml) (sample inventory)
