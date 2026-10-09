@@ -10,7 +10,6 @@ With a dynamic quorum, adding a controller is a normal playbook run. You add the
 - [How many controllers to add](#how-many-controllers-to-add)
 - [Sample inventory](#sample-inventory)
 - [Add the controllers](#add-the-controllers)
-- [What happens to a new controller](#what-happens-to-a-new-controller)
 - [Verify](#verify)
 - [Replacing a controller](#replacing-a-controller)
 - [Troubleshooting](#troubleshooting)
@@ -21,6 +20,15 @@ With a dynamic quorum, adding a controller is a normal playbook run. You add the
 - The quorum is healthy: it has a leader and every existing controller is a voter.
 - `kafka_controller_kraft_auto_join_enabled` is `true` (the default).
 - The new hosts are reachable from the Ansible host and from the existing controllers on the controller port (default `9093`).
+
+Check the quorum on any existing controller:
+
+```bash
+kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+  --command-config /etc/controller/client.properties describe --replication
+```
+
+Every existing controller must show as `Leader` or `Follower`. Brokers show as `Observer`, which is expected.
 
 ## How many controllers to add
 
@@ -36,7 +44,7 @@ Add controllers in pairs. Going from 3 to 4 voters does not tolerate more failur
 
 ## Sample inventory
 
-[`hosts.yml`](hosts.yml) shows a 3-controller cluster after adding `kcontroller-4` and `kcontroller-5`. Only the new hosts are added.
+[`hosts.yml`](hosts.yml) shows a 3-controller cluster after adding `kcontroller-4` and `kcontroller-5`. Only the new hosts are added. Nothing else needs to change in the inventory.
 
 ## Add the controllers
 
@@ -54,13 +62,6 @@ ansible-playbook -i hosts.yml confluent.platform.kafka_controller \
 ```
 
 The existing controllers and the brokers are not restarted.
-
-## What happens to a new controller
-
-1. cp-ansible checks the data directory of every controller. Because the existing controllers are already formatted, it knows the cluster exists.
-2. It reads the cluster id from an existing controller and formats the new controller with that cluster id and `--no-initial-controllers`. A new controller never creates a new quorum.
-3. The new controller starts as an observer and copies the metadata log from the leader.
-4. Once it has caught up, auto-join promotes it to a voter.
 
 ## Verify
 
