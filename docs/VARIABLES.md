@@ -7596,9 +7596,9 @@ Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jv
 
 ### jmxexporter_jar_url
 
-Full URL used for Prometheus Exporter Jar Download. When `jmxexporter_url_remote=false` this represents the path on Ansible control host.
+Full URL used for Prometheus Exporter Jar Download. Versions 1.1.0 and later come from GitHub Releases, older versions from Maven Central. When `jmxexporter_url_remote=false` this represents the path on Ansible control host.
 
-Default:  "https://github.com/prometheus/jmx_exporter/releases/download/{{jmxexporter_version}}/jmx_prometheus_javaagent-{{jmxexporter_version}}.jar"
+Default:  "{{ ('https://github.com/prometheus/jmx_exporter/releases/download/' ~ jmxexporter_version) if jmxexporter_version is version('1.1.0', '>=') else ('https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/' ~ jmxexporter_version) }}/jmx_prometheus_javaagent-{{jmxexporter_version}}.jar"
 
 ***
 
