@@ -93,11 +93,7 @@ Run this **on the controller you are removing**:
 sudo systemctl disable --now confluent-kcontroller
 ```
 
-On a rootless deployment, run this as the deployment user instead:
-
-```bash
-systemctl --user disable --now cp-kafka_controller.service
-```
+If the service name was changed, use the value of `kafka_controller_service_name` instead of `confluent-kcontroller`.
 
 The controller must stay stopped. See [Why the controller must stay stopped](#why-the-controller-must-stay-stopped).
 
