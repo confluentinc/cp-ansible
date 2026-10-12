@@ -27,10 +27,10 @@ For example, a two-region cluster with three controllers in each region has six 
 
 ## Which procedure applies?
 
-Check whether the quorum still has a leader. Run this from any surviving controller:
+Check whether the quorum still has a leader. Run this from any surviving controller. `<controller-port>` is the controller port, `kafka_controller_port` in your inventory (default `9093`).
 
 ```bash
-kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+kafka-metadata-quorum --bootstrap-controller <controller-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe --status
 ```
 
@@ -114,7 +114,7 @@ The commands assume a package install with cp-ansible defaults:
 | Controller config | `/etc/controller/server.properties` |
 | Controller admin client config | `/etc/controller/client.properties` |
 | Controller metadata folder | `/var/lib/controller/data` |
-| Controller port | `9093` |
+| Controller port | `kafka_controller_port` (default `9093`) |
 | Broker service | `confluent-server` (`confluent-kafka` for Community) |
 | Broker metadata folder | `/var/lib/kafka/data` |
 | Service user | `cp-kafka` |
@@ -162,7 +162,7 @@ sudo -u cp-kafka env CONFLUENT_SECURITY_MASTER_KEY="$MASTER_KEY" \
 
 # 6. On the SEED: start KRaft and confirm it is the only voter and the leader.
 sudo systemctl start confluent-kcontroller
-kafka-metadata-quorum --bootstrap-controller <seed-host>:9093 \
+kafka-metadata-quorum --bootstrap-controller <seed-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe --status
 # LeaderId must be the seed's node id, and CurrentVoters must list only the seed.
 
@@ -173,7 +173,7 @@ sudo rm -rf /var/lib/controller/data/__cluster_metadata-0
 sudo systemctl start confluent-kcontroller
 #    The controller starts as an Observer, copies the log from the seed,
 #    and auto-join promotes it to a voter. Wait until it shows as Follower:
-kafka-metadata-quorum --bootstrap-controller <seed-host>:9093 \
+kafka-metadata-quorum --bootstrap-controller <seed-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe --replication
 #    Then move on to the next controller.
 
@@ -188,7 +188,7 @@ sudo systemctl start confluent-server
 **If auto-join is disabled** (`kafka_controller_kraft_auto_join_enabled: false`), a controller from step 7 stays an Observer. Promote it by running `add-controller` **on that controller**. The tool reads the node id and directory id from the local config:
 
 ```bash
-kafka-metadata-quorum --bootstrap-controller <seed-host>:9093 \
+kafka-metadata-quorum --bootstrap-controller <seed-host>:<controller-port> \
   --command-config /etc/controller/server.properties add-controller
 ```
 
@@ -258,7 +258,7 @@ Because the quorum has a leader, `describe --replication` shows which voters are
 
 ```bash
 # 1. List the voters and find the dead ones.
-kafka-metadata-quorum --bootstrap-controller <healthy-controller>:9093 \
+kafka-metadata-quorum --bootstrap-controller <healthy-controller>:<controller-port> \
   --command-config /etc/controller/client.properties describe --replication
 
 # NodeId  DirectoryId             LogEndOffset  Lag   LastFetchTimestamp  Status
@@ -266,7 +266,7 @@ kafka-metadata-quorum --bootstrap-controller <healthy-controller>:9093 \
 # 9991    kNxsHyUj3x0pKeAdMowmbQ  33808         132   1777643849923       Follower   <- dead
 
 # 2. Remove each dead voter by node id and directory id.
-kafka-metadata-quorum --bootstrap-controller <healthy-controller>:9093 \
+kafka-metadata-quorum --bootstrap-controller <healthy-controller>:<controller-port> \
   --command-config /etc/controller/client.properties \
   remove-controller --controller-id 9991 --controller-directory-id kNxsHyUj3x0pKeAdMowmbQ
 
@@ -281,11 +281,11 @@ Returning brokers need no manual step in this case. They catch up on their own.
 
 ```bash
 # Quorum status: a LeaderId and the expected CurrentVoters.
-kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+kafka-metadata-quorum --bootstrap-controller <controller-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe --status
 
 # Every expected controller is Leader or Follower, with low Lag.
-kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+kafka-metadata-quorum --bootstrap-controller <controller-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe --replication
 
 # No partitions are under-replicated or offline.

@@ -74,15 +74,15 @@ The playbook runs these stages as plays. Each has its own tag:
 
 ## Before you start
 
-Check the starting state on any controller:
+Check the starting state on any controller. `<controller-port>` is the controller port, `kafka_controller_port` in your inventory (default `9093`).
 
 ```bash
 # kraft.version is 0.
-kafka-features --bootstrap-controller <controller-host>:9093 \
+kafka-features --bootstrap-controller <controller-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe | grep kraft.version
 
 # The quorum has a leader and every controller is a voter.
-kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+kafka-metadata-quorum --bootstrap-controller <controller-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe --replication
 ```
 
@@ -113,11 +113,11 @@ You can also run only the remaining stages with `--tags`, for example `--tags st
 
 ```bash
 # kraft.version is 1.
-kafka-features --bootstrap-controller <controller-host>:9093 \
+kafka-features --bootstrap-controller <controller-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe | grep kraft.version
 
 # Every controller is a voter (Leader or Follower), with low Lag.
-kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+kafka-metadata-quorum --bootstrap-controller <controller-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe --replication
 
 # Controllers and brokers use bootstrap.servers, and no longer use voters.

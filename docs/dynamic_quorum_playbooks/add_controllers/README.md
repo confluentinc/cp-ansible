@@ -27,11 +27,13 @@ With a dynamic quorum, adding a controller is a normal playbook run. You add the
 Check the quorum on any existing controller:
 
 ```bash
-kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+kafka-metadata-quorum --bootstrap-controller <controller-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe --replication
 ```
 
 Every existing controller must show as `Leader` or `Follower`. Brokers show as `Observer`, which is expected.
+
+`<controller-port>` is the controller port, `kafka_controller_port` in your inventory (default `9093`).
 
 ## How many controllers to add
 
@@ -79,11 +81,11 @@ Brokers are not restarted in either case, and do not need to be. A broker only n
 
 ```bash
 # Every controller, old and new, is a voter (Leader or Follower), with low Lag.
-kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+kafka-metadata-quorum --bootstrap-controller <controller-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe --replication
 
 # CurrentVoters lists every controller.
-kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+kafka-metadata-quorum --bootstrap-controller <controller-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe --status
 
 # Every controller has the same cluster.id.
@@ -110,7 +112,7 @@ If the quorum itself is lost, use [Disaster Recovery](../disaster_recovery/READM
    **Fix:** check that its `Lag` is low in `describe --replication`, that it can reach the other controllers on the controller port (default `9093`), and that `controller.quorum.auto.join.enable=true` is in its `server.properties`. If you turned auto-join off, promote it by running this **on the new controller**:
 
    ```bash
-   kafka-metadata-quorum --bootstrap-controller <leader-host>:9093 \
+   kafka-metadata-quorum --bootstrap-controller <leader-host>:<controller-port> \
      --command-config /etc/controller/server.properties add-controller
    ```
 

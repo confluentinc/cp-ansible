@@ -1,8 +1,12 @@
 # KRaft Dynamic Quorum: Remove Controllers
 
-This guide explains how to remove controllers from a running Confluent Platform cluster with a **dynamic KRaft controller quorum** (KIP-853). Use it to shrink the quorum, to decommission a host, or as the first step of replacing a controller.
+This guide explains how to remove controllers from a running Confluent Platform cluster with a **dynamic KRaft controller quorum** (KIP-853). Use it to:
 
-Removing a controller is a manual procedure with `kafka-metadata-quorum remove-controller`, followed by a normal playbook run. cp-ansible does not automate it, which matches Confluent for Kubernetes.
+1. Reduce the number of controllers, for example from 5 to 3.
+2. Decommission a controller host.
+3. Replace a controller. Remove the old one first, then [add](../add_controllers/README.md) the new one.
+
+Removing a controller is a manual procedure with `kafka-metadata-quorum remove-controller`, followed by an inventory change. cp-ansible does not automate it.
 
 ## Contents
 
@@ -18,9 +22,18 @@ Removing a controller is a manual procedure with `kafka-metadata-quorum remove-c
 
 - The cluster runs a dynamic quorum (`kraft_dynamic_quorum_enabled: true`).
 - The quorum is healthy: it has a leader.
-- Access to a remaining controller to run `kafka-metadata-quorum`.
+- Shell access to one of the controllers you are **keeping**. You run `kafka-metadata-quorum` there to find the controller's ids (step 1), remove it from the quorum (step 3), and check the result (step 4). The commands use that controller's `/etc/controller/client.properties`, which cp-ansible creates with the cluster's security settings.
 
-If the quorum has no leader, you cannot remove controllers. Use [Disaster Recovery](../disaster_recovery/README.md) instead.
+To check that the quorum has a leader, run this on any controller:
+
+```bash
+kafka-metadata-quorum --bootstrap-controller <controller-host>:<controller-port> \
+  --command-config /etc/controller/client.properties describe --status
+```
+
+If the output shows a `LeaderId`, the quorum has a leader. If the command times out, or there is no leader, you cannot remove controllers. Use [Disaster Recovery](../disaster_recovery/README.md) instead.
+
+`<controller-port>` is the controller port, `kafka_controller_port` in your inventory (default `9093`).
 
 ## Before you remove a controller
 
@@ -36,12 +49,11 @@ The quorum needs a majority of voters to work. For `N` voters, the majority is `
 
 - **Remove one controller at a time**, and check the quorum after each one.
 - **Keep an odd number of voters**. 4 voters tolerate only 1 failure, the same as 3, but need one more voter for every metadata write.
-- **Keep enough voters running.** Count the voters that are actually up, not only the ones in the voter set. Removing a running voter while another one is already down can leave the quorum without a majority.
-- **To replace a controller, remove the old one first**, then [add](../add_controllers/README.md) the new one.
+- **If a controller is already down, remove that one first.** The quorum needs a majority of its voters to be **running**, not just listed. For example, with 3 voters where 1 is already down, removing one of the 2 running voters leaves 2 voters with only 1 running. That is not a majority of 2, so the quorum stops.
 
 ## Sample inventory
 
-[`hosts.yml`](hosts.yml) shows a 5-controller cluster after removing `kcontroller-4` and `kcontroller-5`. The removed hosts are taken out of `kafka_controller`.
+[`hosts.yml`](hosts.yml) shows a scale-down from 5 to 3 controllers. `kcontroller-4` and `kcontroller-5` were removed from the `kafka_controller` group. They are shown commented out.
 
 ## Remove the controllers
 
@@ -49,10 +61,10 @@ Run these steps for **one controller at a time**. The commands assume a package 
 
 ### Step 1: find the controller's node id and directory id
 
-Run this on any remaining controller:
+Run this on a controller you are keeping:
 
 ```bash
-kafka-metadata-quorum --bootstrap-controller <remaining-controller>:9093 \
+kafka-metadata-quorum --bootstrap-controller <remaining-controller>:<controller-port> \
   --command-config /etc/controller/client.properties describe --replication
 ```
 
@@ -79,10 +91,10 @@ The controller must stay stopped. See [Why the controller must stay stopped](#wh
 
 ### Step 3: remove the controller from the quorum
 
-Run this on any remaining controller:
+Run this on a controller you are keeping:
 
 ```bash
-kafka-metadata-quorum --bootstrap-controller <remaining-controller>:9093 \
+kafka-metadata-quorum --bootstrap-controller <remaining-controller>:<controller-port> \
   --command-config /etc/controller/client.properties \
   remove-controller --controller-id 9995 --controller-directory-id ezDCta58rqhUD_Fpr3UHJQ
 ```
@@ -92,7 +104,7 @@ If the removed controller was the leader, the remaining voters elect a new leade
 ### Step 4: check the quorum
 
 ```bash
-kafka-metadata-quorum --bootstrap-controller <remaining-controller>:9093 \
+kafka-metadata-quorum --bootstrap-controller <remaining-controller>:<controller-port> \
   --command-config /etc/controller/client.properties describe --replication
 ```
 
@@ -100,11 +112,22 @@ The removed controller must no longer be listed as `Leader` or `Follower`. Repea
 
 ### Step 5: remove the hosts from the inventory
 
-Delete the removed hosts from `kafka_controller`.
+Remove the removed hosts from the `kafka_controller` group in your inventory.
 
 ### Step 6: decommission the removed hosts
 
-Before you reuse or delete a removed host, uninstall Confluent Platform or empty its controller data directory (default `/var/lib/controller/data`). Then it cannot join the cluster again by accident.
+**Why:** a removed host still has Kafka installed and still holds its KRaft data. If it is ever started again, for example after a reboot, by a playbook run with an old inventory, or when someone reuses the machine, it tries to rejoin the cluster, and auto-join adds it back as a voter.
+
+**How:** on each removed host, after step 4 confirms it is out of the quorum, do one of these:
+
+- Uninstall Confluent Platform from the host.
+- Or keep it installed, but delete the controller data, so it has nothing to rejoin with:
+
+  ```bash
+  sudo rm -rf /var/lib/controller/data/*
+  ```
+
+KRaft is already stopped and disabled from step 2.
 
 ## Why the controller must stay stopped
 
@@ -113,24 +136,36 @@ cp-ansible enables auto-join (`controller.quorum.auto.join.enable=true`). Auto-j
 - If you run `remove-controller` while the controller is still running, it is added back right away. The removal has no lasting effect.
 - If you leave a removed host in the inventory, the next playbook run starts it again, and auto-join adds it back.
 
-That is why you stop and disable the controller before removing it, take it out of the inventory, and decommission it. This is how auto-join works in Kafka. It is not a cp-ansible limitation.
+That is why you stop and disable the controller before removing it, take it out of the inventory, and decommission it.
 
 ## Verify
 
 ```bash
 # The remaining controllers are voters (Leader or Follower). The removed ones are gone.
-kafka-metadata-quorum --bootstrap-controller <remaining-controller>:9093 \
+kafka-metadata-quorum --bootstrap-controller <remaining-controller>:<controller-port> \
   --command-config /etc/controller/client.properties describe --replication
 
 # CurrentVoters lists only the remaining controllers.
-kafka-metadata-quorum --bootstrap-controller <remaining-controller>:9093 \
+kafka-metadata-quorum --bootstrap-controller <remaining-controller>:<controller-port> \
   --command-config /etc/controller/client.properties describe --status
 ```
 
 ## Troubleshooting
 
-**The removed controller shows up as a voter again.** It was still running, or it was started again, and auto-join added it back. Stop and disable it, remove it from the inventory, and run step 3 again.
+1. **The removed controller shows up as a voter again.**
 
-**`remove-controller` fails with an unknown voter or wrong directory id.** The `NodeId` and `DirectoryId` must match the same row of `describe --replication`. Run step 1 again and copy both values from the same line.
+   **Cause:** it was still running, or it was started again, and auto-join added it back.
 
-**A controller host is lost and cannot be stopped.** A lost host is already stopped. Run steps 1, 3, and 4 from a remaining controller, then continue with step 5. The dead controller is listed with a `LastFetchTimestamp` that stops moving and a growing `Lag`. Lag alone does not mean a controller is gone, so confirm the host is really down by other means first.
+   **Fix:** stop and disable it (step 2), remove it from the inventory (step 5), then run step 3 again.
+
+2. **`remove-controller` fails with an unknown voter or a wrong directory id.**
+
+   **Cause:** the `NodeId` and `DirectoryId` do not come from the same row of `describe --replication`.
+
+   **Fix:** run step 1 again and copy both values from the same line.
+
+3. **A controller host is lost and cannot be stopped.**
+
+   **Cause:** its machine or disk is gone, so it is already down.
+
+   **Fix:** first confirm the host is really down by other means, such as the cloud console or hypervisor. A dead controller shows a `LastFetchTimestamp` that stops moving and a growing `Lag`, but lag alone does not prove it is gone. Then run steps 1, 3, and 4 from a remaining controller, and continue with step 5.

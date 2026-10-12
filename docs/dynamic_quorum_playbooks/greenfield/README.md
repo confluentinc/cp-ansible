@@ -70,19 +70,19 @@ When you run the playbooks, Ansible automatically templates the following. You d
 
 ## Verify
 
-Run these on any controller.
+Run these on any controller. `<controller-port>` is the controller port, `kafka_controller_port` in your inventory (default `9093`).
 
 ```bash
 # Every controller is a voter (Leader or Follower), with low Lag.
-kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+kafka-metadata-quorum --bootstrap-controller <controller-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe --replication
 
 # The quorum has a leader, and CurrentVoters lists every controller.
-kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+kafka-metadata-quorum --bootstrap-controller <controller-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe --status
 
 # kraft.version is 1.
-kafka-features --bootstrap-controller <controller-host>:9093 \
+kafka-features --bootstrap-controller <controller-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe | grep kraft.version
 ```
 
@@ -130,7 +130,7 @@ In `describe --replication`, brokers always show as `Observer`. That is expected
    **Fix:** check that its `Lag` is low in `describe --replication`, and that `controller.quorum.auto.join.enable=true` is in its `server.properties`. If you turned auto-join off, promote it by running this **on that controller**:
 
    ```bash
-   kafka-metadata-quorum --bootstrap-controller <leader-host>:9093 \
+   kafka-metadata-quorum --bootstrap-controller <leader-host>:<controller-port> \
      --command-config /etc/controller/server.properties add-controller
    ```
 
