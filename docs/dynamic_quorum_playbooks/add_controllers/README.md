@@ -2,7 +2,7 @@
 
 This guide explains how to add controllers to a running Confluent Platform cluster with a **dynamic KRaft controller quorum** (KIP-853). Use it to:
 
-1. Tolerate more controller failures.
+1. Add more controllers so as to tolerate more controller failures.
 2. Replace a controller that was removed.
 
 With a dynamic quorum, adding a controller is a normal playbook run. You add the host to the inventory and run the controller playbook. cp-ansible formats the new controller to join the existing cluster, and auto-join makes it a voter.
@@ -73,7 +73,7 @@ ansible-playbook -i hosts.yml confluent.platform.kafka_controller \
 - **With `--limit`** (as above), only the new controllers are installed and started. The existing controllers are not restarted.
 - **Without `--limit`**, the playbook also updates the existing controllers so their `controller.quorum.bootstrap.servers` lists the new hosts, and restarts them one at a time. This is not required. The quorum works either way, because controllers know the voters from the metadata log.
 
-Brokers are not restarted in either case, and do not need to be. A broker only needs one reachable controller in its `controller.quorum.bootstrap.servers` list. The list picks up the new hosts the next time you run the broker playbook.
+Brokers are not restarted in either case, and do not need to be. A broker only needs one reachable controller in its `controller.quorum.bootstrap.servers` list.
 
 ## Verify
 
