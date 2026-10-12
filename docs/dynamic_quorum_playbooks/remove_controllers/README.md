@@ -169,4 +169,4 @@ kafka-metadata-quorum --bootstrap-controller <remaining-controller>:<controller-
 
    **Cause:** its machine or disk is gone, so it is already down.
 
-   **Fix:** first confirm the host is really down by other means, such as the cloud console or hypervisor. A dead controller shows a `LastFetchTimestamp` that stops moving and a growing `Lag`, but lag alone does not prove it is gone. Then run steps 1, 3, and 4 from a remaining controller, and continue with step 5.
+   **Fix:** confirm that the host is actually down. Then contact Confluent Support, who will help you with the disaster recovery.
