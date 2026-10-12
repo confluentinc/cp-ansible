@@ -35,13 +35,9 @@ kafka-metadata-quorum --bootstrap-controller <controller-host>:<controller-port>
 
 If the output shows a `LeaderId`, the quorum has a leader and you can continue.
 
-If the command times out, that alone does not mean the quorum is lost. First rule out other causes:
+If the command times out, rule out common causes (incorrect port, network or firewall issues, and so on), or contact Confluent Support for assistance.
 
-- A wrong host or `<controller-port>`.
-- A network or firewall problem between you and that controller.
-- Wrong security settings in `client.properties`.
-
-Try the command on another controller too. Only if every controller is reachable and none of them reports a leader is the quorum lost. In that case you cannot remove controllers. Use [Disaster Recovery](../disaster_recovery/README.md) instead.
+In a disaster where controllers are lost, use the [Disaster Recovery](../disaster_recovery/README.md) runbook instead.
 
 ## Before you remove a controller
 
@@ -124,16 +120,13 @@ Remove the removed hosts from the `kafka_controller` group in your inventory.
 
 ### Step 6: decommission the removed hosts
 
-**Why:** a removed host still has Kafka installed and still holds its KRaft data. If it is ever started again, for example after a reboot, by a playbook run with an old inventory, or when someone reuses the machine, it tries to rejoin the cluster, and auto-join adds it back as a voter.
+**Why:** a removed host still holds its KRaft data, including the cluster id and its node id. If Kafka is ever started on it again, for example after a reboot, by a playbook run with an old inventory, or when someone reuses the machine, it tries to rejoin the cluster, and auto-join adds it back as a voter.
 
-**How:** on each removed host, after step 4 confirms it is out of the quorum, do one of these:
+**How:** on each removed host, after step 4 confirms it is out of the quorum, delete the controller data so it has nothing to rejoin with:
 
-- Uninstall Confluent Platform from the host.
-- Or keep it installed, but delete the controller data, so it has nothing to rejoin with:
-
-  ```bash
-  sudo rm -rf /var/lib/controller/data/*
-  ```
+```bash
+sudo rm -rf /var/lib/controller/data/*
+```
 
 KRaft is already stopped and disabled from step 2.
 
