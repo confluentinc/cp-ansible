@@ -11,7 +11,6 @@ Greenfield means the cluster starts from scratch. It runs with a dynamic quorum 
 - [Sample inventory](#sample-inventory)
 - [Variables](#variables)
 - [Deploy](#deploy)
-- [How the quorum is formed](#how-the-quorum-is-formed)
 - [Verify](#verify)
 - [Troubleshooting](#troubleshooting)
 - [Next steps](#next-steps)
@@ -36,19 +35,28 @@ The quorum can elect a leader and accept metadata changes only while a **majorit
 
 Use an odd number of controllers. Adding a fourth controller does not tolerate more failures than three.
 
-
 ## Sample inventory
 
 [`hosts.yml`](hosts.yml) is a cluster with 3 controllers and 3 brokers.
 
 ## Variables
 
+### Variables you set
+
+Set these in your inventory, under `all.vars`:
+
 | Variable | Default | Description |
 |---|---|---|
-| `kraft_dynamic_quorum_enabled` | `false` | Set to `true` to deploy the controllers with a dynamic quorum. |
+| `kraft_dynamic_quorum_enabled` | `false` | **Required.** Set to `true` to deploy the controllers with a dynamic quorum. |
 | `kafka_controller_initial_voter` | `""` | **Required.** The one controller that creates the new quorum. It must be a `kafka_controller` inventory hostname, exactly as written in the inventory (not an IP address or a hostname alias). Every controller must use the same value. Only used on the first deployment. |
 
-`controller.quorum.bootstrap.servers` is built for you from the `kafka_controller` group, and it follows `hostname_aliasing_enabled` the same way the controllers' listeners do. `controller.quorum.auto.join.enable=true` is also set for you.
+### Set automatically
+
+When you run the playbooks, Ansible automatically templates the following. You do not set them yourself.
+
+- `controller.quorum.bootstrap.servers` on every controller and broker. It lists every host in the `kafka_controller` group as `host:port`, and follows `hostname_aliasing_enabled` the same way the controllers' listeners do.
+- `controller.quorum.auto.join.enable=true` on every controller.
+- No `controller.quorum.voters`. That property is only used by a static quorum.
 
 ## Deploy
 
@@ -60,19 +68,9 @@ Use an odd number of controllers. Adding a fourth controller does not tolerate m
    ansible-playbook -i hosts.yml confluent.platform.all
    ```
 
-## How the quorum is formed
-
-1. **Checks.** cp-ansible checks that Confluent Platform is 8.4.0 or later and KRaft is enabled. It then checks the data directory of every controller. A new quorum is created only if **no** controller is formatted yet. If any controller cannot be reached, the run stops, because it cannot be sure the cluster is new.
-2. **Initial voter.** The initial voter formats its storage with `--standalone`. It becomes the only voter of the new quorum.
-3. **Other controllers.** Every other controller formats with `--no-initial-controllers` and the same cluster id. They start as observers.
-4. **Auto-join.** Each observer catches up with the leader. Auto-join then promotes it to a voter.
-5. **Brokers.** Brokers are deployed with `controller.quorum.bootstrap.servers` and connect to the quorum.
-
-Re-running the playbook later is safe. Controllers that are already formatted are never formatted again. A wiped controller rejoins the existing quorum as an observer. It never creates a second quorum, even if it is the initial voter.
-
 ## Verify
 
-Run these on any controller. With secrets protection, the controller's `client.properties` is not encrypted, so no master key is needed.
+Run these on any controller.
 
 ```bash
 # Every controller is a voter (Leader or Follower), with low Lag.
@@ -92,18 +90,49 @@ In `describe --replication`, brokers always show as `Observer`. That is expected
 
 ## Troubleshooting
 
-**The run fails with "requires every kafka_controller to set the same kafka_controller_initial_voter".** `kafka_controller_initial_voter` is empty, does not match a `kafka_controller` inventory hostname, or is set differently on some hosts. Set it once, under `all.vars`, to an inventory hostname.
+1. **The playbook fails with this error:**
 
-**The run fails with "Could not read the data directory state of every kafka_controller".** At least one controller was unreachable during the first deployment. Bring it online and re-run.
+   ```
+   Forming a new KRaft dynamic quorum requires every kafka_controller to set the same
+   kafka_controller_initial_voter, pointing to exactly one kafka_controller inventory host
+   ```
 
-**A controller stays an Observer.** Check that it caught up with the leader (low `Lag` in `describe --replication`), and that `controller.quorum.auto.join.enable=true` is in its `server.properties`. If you disabled auto-join, promote it by running this **on that controller**:
+   **Cause:** `kafka_controller_initial_voter` is empty, does not match a `kafka_controller` inventory hostname, or is set differently on some hosts.
 
-```bash
-kafka-metadata-quorum --bootstrap-controller <leader-host>:9093 \
-  --command-config /etc/controller/server.properties add-controller
-```
+   **Fix:** set it once, under `all.vars`, to a `kafka_controller` inventory hostname, then re-run.
 
-**The run fails with "Detected a running static KRaft cluster".** The cluster already runs a static quorum. Use the [migration playbook](../migration/README.md) instead.
+2. **The playbook fails with this error:**
+
+   ```
+   Could not read the data directory state of every kafka_controller (one or more were
+   unreachable). Founding a new dynamic quorum is unsafe until all controllers can be reached.
+   ```
+
+   **Cause:** at least one controller could not be reached during the first deployment.
+
+   **Fix:** bring every controller online, then re-run.
+
+3. **The playbook fails with this error:**
+
+   ```
+   Detected a running static KRaft cluster (kraft.version=0). Applying dynamic quorum
+   configuration directly is unsafe.
+   ```
+
+   **Cause:** the cluster already runs a static quorum, so it is not a new cluster.
+
+   **Fix:** use the [migration playbook](../migration/README.md) instead.
+
+4. **A controller stays an Observer.**
+
+   **Cause:** it has not caught up with the leader yet, or auto-join is off.
+
+   **Fix:** check that its `Lag` is low in `describe --replication`, and that `controller.quorum.auto.join.enable=true` is in its `server.properties`. If you turned auto-join off, promote it by running this **on that controller**:
+
+   ```bash
+   kafka-metadata-quorum --bootstrap-controller <leader-host>:9093 \
+     --command-config /etc/controller/server.properties add-controller
+   ```
 
 ## Next steps
 
