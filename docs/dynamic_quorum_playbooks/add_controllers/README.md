@@ -61,7 +61,7 @@ So going from 3 to 4 adds a controller without adding any failure tolerance.
 
 ### Step 1: add the new hosts to the inventory
 
-Add the new hosts under `kafka_controller`, with the same settings as the existing controllers.
+Add the new hosts at the **end** of the `kafka_controller` group, with the same settings as the existing controllers. If `node_id` is not set, cp-ansible works out each controller's node id from its position in the group, so inserting a host earlier in the list would change the node ids of the controllers after it, and they would fail to start.
 
 ### Step 2: deploy the new controllers
 
