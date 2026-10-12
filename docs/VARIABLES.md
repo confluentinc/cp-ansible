@@ -7808,6 +7808,14 @@ Default:
 
 ***
 
+### control_center_next_gen_dependency_alertmanager_web_external_url
+
+Optional. Overrides the AlertManager --web.external-url flag (exported as ALERTMANAGER_WEB_EXTERNAL_URL). Empty means the alertmanager-start script's default is used.
+
+Default:  ""
+
+***
+
 ### control_center_next_gen_service_unit_overrides
 
 Overrides to the Unit Section of Control Center Next Gen Systemd File. This variable is a dictionary.
