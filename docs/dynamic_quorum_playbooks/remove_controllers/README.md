@@ -5,8 +5,6 @@ This guide explains how to remove a controller from a running Confluent Platform
 1. Remove the old controller from the quorum, with this guide.
 2. Add the replacement, with [Add Controllers](../add_controllers/README.md).
 
-Reducing the number of controllers (scale-down) is not supported.
-
 Removing a controller is a manual procedure with `kafka-metadata-quorum remove-controller`. cp-ansible does not automate it.
 
 ## Contents
