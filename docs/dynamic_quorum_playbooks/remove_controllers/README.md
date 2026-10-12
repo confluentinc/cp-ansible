@@ -53,7 +53,9 @@ The quorum needs a majority of voters to work. For `N` voters, the majority is `
 
 - **Remove one controller at a time**, and check the quorum after each one.
 - **Keep an odd number of voters**. 4 voters tolerate only 1 failure, the same as 3, but need one more voter for every metadata write.
-- **If a controller is already down, remove that one first.** The quorum needs a majority of its voters to be **running**, not just listed. For example, with 3 voters where 1 is already down, removing one of the 2 running voters leaves 2 voters with only 1 running. That is not a majority of 2, so the quorum stops.
+- **Remove dead controllers before healthy ones.** The quorum keeps working only while more than half of its voters are running. For example, you have 3 voters, A, B and C, and C has crashed. A and B are running, so the quorum works (2 of 3).
+  - If you remove **B**, the voters become A and C. Only A is running, which is 1 of 2, not more than half, so the quorum stops.
+  - If you remove **C** instead, the voters become A and B. Both are running, so the quorum keeps working.
 
 ## Sample inventory
 
@@ -91,6 +93,12 @@ Run this **on the controller you are removing**:
 sudo systemctl disable --now confluent-kcontroller
 ```
 
+On a rootless deployment, run this as the deployment user instead:
+
+```bash
+systemctl --user disable --now cp-kafka_controller.service
+```
+
 The controller must stay stopped. See [Why the controller must stay stopped](#why-the-controller-must-stay-stopped).
 
 ### Step 3: remove the controller from the quorum
@@ -120,7 +128,7 @@ Remove the removed hosts from the `kafka_controller` group in your inventory.
 
 ### Step 6: decommission the removed hosts
 
-**Why:** a removed host still holds its KRaft data, including the cluster id and its node id. If Kafka is ever started on it again, for example after a reboot, by a playbook run with an old inventory, or when someone reuses the machine, it tries to rejoin the cluster, and auto-join adds it back as a voter.
+**Why:** a removed host still holds its KRaft data, including the cluster id and its node id. If the service is started on it again, for example after a reboot, by a playbook run with an old inventory, or when someone reuses the machine, it tries to rejoin the cluster, and auto-join adds it back as a voter.
 
 **How:** on each removed host, after step 4 confirms it is out of the quorum, delete the controller data so it has nothing to rejoin with:
 
