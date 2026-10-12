@@ -111,6 +111,17 @@
       run_once: true
       delegate_to: "{{ dq_first_controller }}"
 
+    - name: Stop Target Controller
+      when: (dq_controller_count | int) > 1
+      ansible.builtin.systemd:
+        name: "{{ 'cp-kafka_controller.service' if (rootless_enabled | bool) else kafka_controller_service_name }}"
+        scope: "{{ 'user' if (rootless_enabled | bool) else 'system' }}"
+        state: stopped
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ hostvars[dq_target_controller].ansible_user_uid }}"
+      run_once: true
+      delegate_to: "{{ dq_target_controller }}"
+
     - name: Remove Target Controller from the Quorum
       when: (dq_controller_count | int) > 1
       shell: |
@@ -126,18 +137,34 @@
       run_once: true
       delegate_to: "{{ dq_first_controller }}"
 
-    - name: Add Target Controller Back to the Quorum
+    - name: Wait Until the Target Controller Is No Longer a Voter
       when: (dq_controller_count | int) > 1
       shell: |
         {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ dq_bootstrap }} \
-          --command-config {{ kafka_controller.client_config_file }} add-controller
+          --command-config {{ kafka_controller.client_config_file }} describe --replication
       args:
         executable: "{{ shell_executable }}"
       environment:
         KAFKA_OPTS: "{{ dq_kafka_opts }}"
-      register: dq_add
-      changed_when: dq_add.rc == 0
-      failed_when: false
+      register: dq_replication_removed
+      changed_when: false
+      check_mode: false
+      run_once: true
+      delegate_to: "{{ dq_first_controller }}"
+      until:
+        - (dq_replication_removed.stdout_lines | select('search', '(Leader|Follower)') | list | length) == (dq_controller_count | int) - 1
+        - dq_replication_removed.stdout_lines | select('match', '^' ~ dq_target_node_id ~ '\\s.*(Leader|Follower)') | list | length == 0
+      retries: 12
+      delay: 10
+
+    - name: Start Target Controller So Auto-Join Adds It Back
+      when: (dq_controller_count | int) > 1
+      ansible.builtin.systemd:
+        name: "{{ 'cp-kafka_controller.service' if (rootless_enabled | bool) else kafka_controller_service_name }}"
+        scope: "{{ 'user' if (rootless_enabled | bool) else 'system' }}"
+        state: started
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ hostvars[dq_target_controller].ansible_user_uid }}"
       run_once: true
       delegate_to: "{{ dq_target_controller }}"
 
@@ -156,7 +183,7 @@
       run_once: true
       delegate_to: "{{ dq_first_controller }}"
       until: (dq_replication_final.stdout_lines | select('search', '(Leader|Follower)') | list | length) == (dq_controller_count | int)
-      retries: 12
+      retries: 30
       delay: 10
 
 - name: Verify Metadata Write Path After Membership Change
