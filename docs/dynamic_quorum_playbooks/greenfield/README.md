@@ -6,7 +6,6 @@ Greenfield means the cluster starts from scratch. It runs with a dynamic quorum 
 
 ## Contents
 
-- [Static vs dynamic quorum](#static-vs-dynamic-quorum)
 - [Requirements](#requirements)
 - [Choosing the number of controllers](#choosing-the-number-of-controllers)
 - [Sample inventory](#sample-inventory)
@@ -16,17 +15,6 @@ Greenfield means the cluster starts from scratch. It runs with a dynamic quorum 
 - [Verify](#verify)
 - [Troubleshooting](#troubleshooting)
 - [Next steps](#next-steps)
-
-## Static vs dynamic quorum
-
-| | Static quorum | Dynamic quorum |
-|---|---|---|
-| Controller config | `controller.quorum.voters` (fixed list of `id@host:port`) | `controller.quorum.bootstrap.servers` (list of `host:port`) |
-| `kraft.version` | `0` | `1` |
-| Add or remove controllers | Not supported without rebuilding the cluster | Supported at runtime |
-| Disaster recovery | Not supported | [Supported](../disaster_recovery/README.md) |
-
-Static quorum stays the default. Dynamic quorum is opt-in with `kraft_dynamic_quorum_enabled: true`.
 
 ## Requirements
 
