@@ -60,6 +60,17 @@
   when:
     - kraft_dynamic_quorum_enabled|bool
     - formatted.rc == 1
+    - greenfield_setup | bool
+
+- name: Read Cluster Id From a Formatted Controller to Join the Existing Dynamic Quorum
+  slurp:
+    src: "{{ kafka_controller_final_properties['log.dirs'].split(',') | first }}/meta.properties"
+  delegate_to: "{{ (kafka_controller_quorum_probe.results | selectattr('rc', 'defined') | selectattr('rc', 'equalto', 0) | first).item }}"
+  register: kafka_controller_existing_meta
+  run_once: true
+  when:
+    - kraft_dynamic_quorum_enabled|bool
+    - not greenfield_setup | bool
 
 - name: Validate Initial Voter Points to a Single kafka_controller for Greenfield Bootstrap
   assert:
@@ -113,7 +124,7 @@
   changed_when: format_meta_initial_voter.rc == 0
   no_log: "{{mask_secrets|bool}}"
   vars:
-    clusterid: "{{ uuid_key.stdout }}"
+    clusterid: "{{ (kafka_controller_existing_meta.content | b64decode).partition('cluster.id=')[2].partition('\\n')[0] if kafka_controller_existing_meta.content is defined else uuid_key.stdout }}"
   when:
     - kraft_dynamic_quorum_enabled|bool
     - formatted.rc == 1
@@ -132,11 +143,11 @@
   changed_when: format_meta_observer.rc == 0
   no_log: "{{mask_secrets|bool}}"
   vars:
-    clusterid: "{{ uuid_key.stdout }}"
+    clusterid: "{{ (kafka_controller_existing_meta.content | b64decode).partition('cluster.id=')[2].partition('\\n')[0] if kafka_controller_existing_meta.content is defined else uuid_key.stdout }}"
   when:
     - kraft_dynamic_quorum_enabled|bool
     - formatted.rc == 1
     - inventory_hostname != kafka_controller_initial_voter
     - >-
-      (hostvars[kafka_controller_initial_voter].formatted.rc | default(1)) == 0
+      not greenfield_setup | bool
       or (hostvars[kafka_controller_initial_voter].format_meta_initial_voter.rc | default(1)) == 0
