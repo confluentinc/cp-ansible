@@ -1,0 +1,321 @@
+# KRaft Dynamic Quorum Disaster Recovery
+
+This guide explains how to recover a Confluent Platform cluster that runs a **dynamic KRaft controller quorum** (KIP-853) after it loses its quorum.
+
+A region, rack, or set of machines went down and took enough KRaft voters with it that the quorum is lost. There is no controller leader, so no metadata changes are possible: no topic changes, no partition leader moves, no new brokers. The surviving controllers and brokers are still there. This procedure builds a new working quorum from the surviving controllers so the cluster is available again. Until the failed hosts are restored, the cluster runs on a smaller quorum with less fault tolerance.
+
+Recovery is a manual procedure with `kafka-metadata-recovery` and `kafka-metadata-quorum`, run on the surviving hosts.
+
+## Contents
+
+- [Quorum loss in a dynamic quorum](#quorum-loss-in-a-dynamic-quorum)
+- [Which procedure applies?](#which-procedure-applies)
+- [Data safety and RPO](#data-safety-and-rpo)
+- [Before you begin](#before-you-begin)
+- [Recovery](#recovery)
+- [Replacing a host that will not come back](#replacing-a-host-that-will-not-come-back)
+- [Minority of controllers down (quorum still healthy)](#minority-of-controllers-down-quorum-still-healthy)
+- [Verification](#verification)
+- [Clean up after recovery](#clean-up-after-recovery)
+- [References](#references)
+
+## Quorum loss in a dynamic quorum
+
+In a dynamic KRaft quorum, the controllers that vote on metadata changes are called **voters**. The quorum can elect a leader and accept metadata writes only while a **majority** of voters are available. For `N` voters, the majority is `floor(N / 2) + 1`.
+
+For example, a two-region cluster with three controllers in each region has six voters, so the majority is four. If one region is lost, only three voters remain. The quorum has no leader, and metadata writes are blocked.
+
+## Which procedure applies?
+
+Check whether the quorum still has a leader. Run this from any surviving controller:
+
+```bash
+kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+  --command-config /etc/controller/client.properties describe --status
+```
+
+```
+KRaft quorum status?
+├── Healthy (describe --status returns a LeaderId)
+│   ├── All voters present and caught up → nothing to do
+│   └── A minority of voters down, cluster still serving →
+│       Minority of controllers down (quorum still healthy)
+└── Lost (describe --status times out, or there is no leader)
+    ├── Failed voters < majority → quorum-loss recovery, RPO = 0
+    └── Failed voters >= majority → quorum-loss recovery, metadata loss possible
+```
+
+| Topology | Voters | Majority | Quorum is lost when | Recovery |
+|---|---|---|---|---|
+| 1DC, 3 controllers | 3 | 2 | 2 voters fail | Metadata loss possible |
+| 1DC, 5 controllers | 5 | 3 | 3 voters fail | Metadata loss possible |
+| 2DC 3-3 | 6 | 4 | One region fails (3 voters) | RPO = 0 |
+| 2.5DC 2-2-1 | 5 | 3 | 3 voters fail | Metadata loss possible |
+
+## Data safety and RPO
+
+The **Recovery Point Objective (RPO)** is how much committed data you can lose in a recovery. **RPO = 0** means no committed data is lost.
+
+A metadata write is **committed** only after a majority of voters store it.
+
+- **Failed voters fewer than the majority:** every committed metadata write reached at least one surviving controller. Rebuilding the quorum from the surviving controllers loses no metadata, so the RPO is zero. In the 2DC 3-3 example, three failed voters are fewer than the majority of four.
+- **Failed voters equal to or greater than the majority:** this procedure still applies. But a committed metadata write might exist only on failed controllers, so rebuilding the quorum can lose that metadata.
+
+The new quorum is rebuilt from one surviving controller, called the **seed**. Choose the seed by the **highest metadata epoch** first, and break ties by the **largest log end offset**. Do not choose the seed by log end offset alone. A longer log from an older epoch can be a stale copy that is missing committed writes.
+
+Recovery only changes **metadata** (the `__cluster_metadata` log). Topic data on the brokers is not changed.
+
+## Before you begin
+
+### Prerequisites
+
+- Confluent Platform **8.4.0 or later**, deployed by cp-ansible.
+- The cluster runs with `kraft_dynamic_quorum_enabled: true` (deployed as dynamic, or migrated with `playbooks/StaticToDynamicQuorumMigration.yaml`).
+- `kafka_controller_kraft_auto_join_enabled` is `true` (the default). Recovered controllers rejoin the quorum through auto-join.
+- The inventory the cluster was deployed with.
+- SSH access to every **surviving** controller and broker.
+- Free disk space on each surviving controller for one copy of its `__cluster_metadata-0` folder.
+
+**Rehearse this before you need it.** Run the full procedure on a staging cluster that matches your production layout. A dry run finds setup-specific problems (DNS, certificates, firewalls, custom paths) while there is no pressure.
+
+### Identify the failed hosts
+
+> **⚠ Failed means the disk, not the process.**
+> Treat a host as failed only if its metadata disk is gone or cannot be used. A controller whose Kafka process crashed but whose disk is fine is a **survivor**. Include it in the recovery. Its metadata counts, and leaving it out can make the recovery lose metadata.
+>
+> **How to identify the failed hosts:** while the quorum has no leader, Kafka cannot tell you which voters are dead. Identify them from your infrastructure: the region, rack, or machines that are down (cloud console, hypervisor, data center status).
+
+### Keep the failed hosts down during recovery
+
+Recovery rebuilds the quorum and creates a new metadata history, so the failed hosts must stay offline for the entire process. If the failed controllers come back while recovery is in progress and can reach each other, they can form a second, competing quorum on the old history. This results in **split-brain**: two leaders accepting different metadata changes for the same cluster.
+
+**Keep the failed hosts powered off or unreachable until you finish Phase 1.** cp-ansible enables the Kafka services at boot, so a failed host that powers back on starts Kafka by itself. As soon as you can reach a failed host, and before it can reach the rest of the cluster, stop and disable Kafka on it:
+
+```bash
+sudo systemctl disable --now confluent-kcontroller   # controllers
+sudo systemctl disable --now confluent-server        # brokers
+```
+
+Bring failed hosts back only with Phase 2, which clears their old metadata first.
+
+### Snapshot the controller disks
+
+The step that rebuilds the voter set **cannot be undone**. Before Phase 1, take a disk-level snapshot of each surviving controller's metadata disk (default `/var/lib/controller`). That is your real rollback if something goes wrong.
+
+The recovery steps also copy `__cluster_metadata-0` into a backup folder on each surviving controller before changing anything.
+
+## Recovery
+
+The commands assume a package install with cp-ansible defaults:
+
+| Item | Default |
+|---|---|
+| Controller service | `confluent-kcontroller` |
+| Controller config | `/etc/controller/server.properties` |
+| Controller admin client config | `/etc/controller/client.properties` |
+| Controller metadata folder | `/var/lib/controller/data` |
+| Controller port | `9093` |
+| Broker service | `confluent-server` (`confluent-kafka` for Community) |
+| Broker metadata folder | `/var/lib/kafka/data` |
+| Service user | `cp-kafka` |
+
+Archive installs, custom users, and rootless deployments use different paths and service names. Adapt the commands to your setup.
+
+> **Note:** run `kafka-metadata-recovery` as the service user (`cp-kafka`, or your custom user), as shown below. If you run it as root, give ownership of `/var/lib/controller/data/__cluster_metadata-0` back to the service user before you start KRaft:
+> `sudo chown -R cp-kafka:confluent /var/lib/controller/data/__cluster_metadata-0`
+
+### Phase 1: recover the surviving controllers
+
+```bash
+# 0. Decide which controllers failed and which survived.
+#    A controller is failed only if its metadata disk is gone or cannot be used.
+#    A controller whose process crashed but whose disk is fine is a survivor.
+#    While the quorum has no leader, Kafka cannot tell you which voters are dead.
+#    Identify the failed hosts from your infrastructure (cloud console, hypervisor, data center status).
+
+# 1. On EVERY surviving controller: stop KRaft.
+sudo systemctl stop confluent-kcontroller
+
+# 2. On EVERY surviving controller: back up the metadata log.
+TS=$(date +%s)
+sudo mkdir -p /var/lib/controller/kraft-quorum-recovery-backup/$TS
+sudo cp -a /var/lib/controller/data/__cluster_metadata-0 /var/lib/controller/kraft-quorum-recovery-backup/$TS/
+
+# 3. On EVERY surviving controller: read the epoch and log end offset.
+#    The tool needs a .lock file in the metadata folder. A stopped controller may not have one.
+sudo -u cp-kafka bash -c '[ -f /var/lib/controller/data/.lock ] || : > /var/lib/controller/data/.lock'
+sudo -u cp-kafka kafka-metadata-recovery reconfig log-length --metadata-log-dir /var/lib/controller/data
+# Example output:
+#   epoch: 12, log end offset: 48213
+
+# 4. Pick the SEED: highest epoch first, then (only on a tie) largest log end offset.
+#    Never pick by offset alone.
+
+# 5. On the SEED only: rebuild the voter set. IRREVERSIBLE. Run it exactly once.
+#    If secrets protection is enabled, the tool needs the master key to read server.properties:
+MASTER_KEY=$(sudo grep -oP 'CONFLUENT_SECURITY_MASTER_KEY=\K[^"]+' \
+  /etc/systemd/system/confluent-kcontroller.service.d/override.conf)
+sudo -u cp-kafka env CONFLUENT_SECURITY_MASTER_KEY="$MASTER_KEY" \
+  kafka-metadata-recovery reconfig force-standalone --config /etc/controller/server.properties
+#    Without secrets protection, drop the MASTER_KEY lines and the env part.
+#    If it fails or is interrupted: STOP. Do not run it again. Contact Confluent Support.
+
+# 6. On the SEED: start KRaft and confirm it is the only voter and the leader.
+sudo systemctl start confluent-kcontroller
+kafka-metadata-quorum --bootstrap-controller <seed-host>:9093 \
+  --command-config /etc/controller/client.properties describe --status
+# LeaderId must be the seed's node id, and CurrentVoters must list only the seed.
+
+# 7. On each OTHER surviving controller, ONE AT A TIME:
+#    delete the old metadata log (the backup from step 2 is kept), then start KRaft.
+#    meta.properties stays, so the controller keeps its node id and directory id.
+sudo rm -rf /var/lib/controller/data/__cluster_metadata-0
+sudo systemctl start confluent-kcontroller
+#    The controller starts as an Observer, copies the log from the seed,
+#    and auto-join promotes it to a voter. Wait until it shows as Follower:
+kafka-metadata-quorum --bootstrap-controller <seed-host>:9093 \
+  --command-config /etc/controller/client.properties describe --replication
+#    Then move on to the next controller.
+
+# 8. On each surviving BROKER, ONE AT A TIME:
+#    stop Kafka, delete its old metadata log (topic data is not touched), start Kafka.
+sudo systemctl stop confluent-server
+sudo rm -rf /var/lib/kafka/data/__cluster_metadata-0
+sudo systemctl start confluent-server
+#    Wait until the broker is healthy and has no under-replicated partitions before the next one.
+```
+
+**If auto-join is disabled** (`kafka_controller_kraft_auto_join_enabled: false`), a controller from step 7 stays an Observer. Promote it by running `add-controller` **on that controller**. The tool reads the node id and directory id from the local config:
+
+```bash
+kafka-metadata-quorum --bootstrap-controller <seed-host>:9093 \
+  --command-config /etc/controller/server.properties add-controller
+```
+
+Phase 1 is complete here. The cluster runs on the surviving controllers.
+
+### Phase 2: restore the failed hosts
+
+Do this only after Phase 1 is complete and the new quorum is healthy. It is not urgent.
+
+The failed hosts still hold metadata from before the rebuild, so each returning controller and broker must have its old `__cluster_metadata-0` removed before Kafka starts.
+
+```bash
+# 1. On each returning host, as soon as you can reach it: make sure Kafka is stopped and disabled.
+sudo systemctl disable --now confluent-kcontroller   # controllers
+sudo systemctl disable --now confluent-server        # brokers
+
+# 2. On each returning CONTROLLER, ONE AT A TIME: move the old metadata log aside, then start KRaft.
+TS=$(date +%s)
+sudo mkdir -p /var/lib/controller/kraft-quorum-recovery-backup/$TS
+sudo mv /var/lib/controller/data/__cluster_metadata-0 /var/lib/controller/kraft-quorum-recovery-backup/$TS/
+sudo systemctl start confluent-kcontroller
+#    Wait until it shows as Follower in describe --replication (auto-join), then do the next one.
+
+# 3. On each returning BROKER, ONE AT A TIME: delete the old metadata log, then start Kafka.
+sudo rm -rf /var/lib/kafka/data/__cluster_metadata-0
+sudo systemctl start confluent-server
+#    Wait until it is healthy and its partitions are back in sync, then do the next one.
+
+# 4. On each returning host: re-enable Kafka at boot.
+sudo systemctl enable confluent-kcontroller   # controllers
+sudo systemctl enable confluent-server        # brokers
+```
+
+When the failed voters were fewer than the majority, the moved-aside metadata on the returning controllers holds nothing the survivors do not already have. When they were the majority or more, it may hold the only copy of metadata that was lost. Keep it until you have checked.
+
+## Replacing a host that will not come back
+
+If a failed controller's machine or disk is gone for good, it cannot rejoin. Replace it instead:
+
+1. Remove the old controller from the voter set. See [Remove a dead voter](#remove-a-dead-voter).
+2. Provision the new host with the same inventory hostname, or update the inventory.
+3. Run the controller playbook for that host only:
+
+   ```bash
+   ansible-playbook -i hosts.yml confluent.platform.kafka_controller --limit <new-controller-host>
+   ```
+
+   cp-ansible sees that the other controllers are already formatted. It formats the new host as an observer (`--no-initial-controllers`), and auto-join makes it a voter. Existing controllers are not restarted.
+
+Replace lost brokers with the `kafka_broker` playbook, also with `--limit`.
+
+For the full procedures, see [Remove Controllers](../remove_controllers/README.md) and [Add Controllers](../add_controllers/README.md).
+
+## Minority of controllers down (quorum still healthy)
+
+If a minority of voters is down, the quorum still has a leader and the cluster keeps serving. No voter set rebuild is needed, and there is no risk of losing metadata.
+
+**They will come back soon.** Do nothing. When they start again, they catch up from the leader and continue as voters.
+
+**They will be gone for a while, and you want your failure headroom back.** Remove the dead voters so the remaining ones form a smaller quorum. For example, in a 2.5DC 2-2-1 cluster (5 voters, majority 3) that lost the 2-voter region, removing the 2 dead voters leaves 3 voters with a majority of 2. The cluster can then survive one more failure.
+
+### Remove a dead voter
+
+Because the quorum has a leader, `describe --replication` shows which voters are not responding. Dead voters stay listed, but their `LastFetchTimestamp` stops moving and their `Lag` grows.
+
+> **Lag alone does not mean a voter is gone.** A voter can fall behind because of a short network problem, a restart, or a GC pause. Confirm the host is really down by other means before you remove it.
+
+```bash
+# 1. List the voters and find the dead ones.
+kafka-metadata-quorum --bootstrap-controller <healthy-controller>:9093 \
+  --command-config /etc/controller/client.properties describe --replication
+
+# NodeId  DirectoryId             LogEndOffset  Lag   LastFetchTimestamp  Status
+# 9994    lQ92sYMTnYHE2pVWw7bJ9w  33940         0     1777643877128       Leader
+# 9991    kNxsHyUj3x0pKeAdMowmbQ  33808         132   1777643849923       Follower   <- dead
+
+# 2. Remove each dead voter by node id and directory id.
+kafka-metadata-quorum --bootstrap-controller <healthy-controller>:9093 \
+  --command-config /etc/controller/client.properties \
+  remove-controller --controller-id 9991 --controller-directory-id kNxsHyUj3x0pKeAdMowmbQ
+
+# 3. Describe again. Only the remaining voters should be listed.
+```
+
+**The removal only sticks while the controller stays stopped.** With auto-join on (the cp-ansible default), a removed controller that starts again is added back as a voter automatically. That is also how it returns: when the host is back, start KRaft on it and auto-join promotes it. No metadata wipe is needed here, because the voter set was never rebuilt and the controller's log is simply behind.
+
+Returning brokers need no manual step in this case. They catch up on their own.
+
+## Verification
+
+```bash
+# Quorum status: a LeaderId and the expected CurrentVoters.
+kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+  --command-config /etc/controller/client.properties describe --status
+
+# Every expected controller is Leader or Follower, with low Lag.
+kafka-metadata-quorum --bootstrap-controller <controller-host>:9093 \
+  --command-config /etc/controller/client.properties describe --replication
+
+# No partitions are under-replicated or offline.
+kafka-topics --bootstrap-server <broker-host>:<port> \
+  --command-config /etc/kafka/client.properties --describe --under-replicated-partitions
+kafka-topics --bootstrap-server <broker-host>:<port> \
+  --command-config /etc/kafka/client.properties --describe --unavailable-partitions
+
+# Metadata writes work: create and delete a test topic.
+kafka-topics --bootstrap-server <broker-host>:<port> \
+  --command-config /etc/kafka/client.properties --create --topic dr-check --partitions 1 --replication-factor 3
+kafka-topics --bootstrap-server <broker-host>:<port> \
+  --command-config /etc/kafka/client.properties --delete --topic dr-check
+```
+
+If secrets protection is enabled, the broker's `client.properties` is encrypted. Export `CONFLUENT_SECURITY_MASTER_KEY` (from `/etc/systemd/system/confluent-server.service.d/override.conf`) before running `kafka-topics`. The controller's `client.properties` is not encrypted.
+
+## Clean up after recovery
+
+Keep the metadata backups until the recovery is verified. They let you inspect what was replaced. When metadata loss was possible, a backup may hold the only copy of a lost change. Once the full quorum is healthy and you have checked the recovery point, free the space:
+
+```bash
+# On each controller, after the quorum is confirmed healthy:
+sudo rm -rf /var/lib/controller/kraft-quorum-recovery-backup
+```
+
+Also delete the disk snapshots you took before recovery. **Do not clean up until the recovery is fully verified.**
+
+## References
+
+- [KIP-853: KRaft Controller Membership Changes](https://cwiki.apache.org/confluence/display/KAFKA/KIP-853%3A+KRaft+Controller+Membership+Changes)
+- [KRaft Configuration for Confluent Platform](https://docs.confluent.io/platform/current/kafka-metadata/config-kraft.html)
+- [Disaster Recovery for Multi-Region KRaft Clusters (Confluent for Kubernetes)](https://docs.confluent.io/operator/current/co-disaster-recovery.html)
