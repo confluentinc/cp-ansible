@@ -31,9 +31,17 @@ kafka-metadata-quorum --bootstrap-controller <controller-host>:<controller-port>
   --command-config /etc/controller/client.properties describe --status
 ```
 
-If the output shows a `LeaderId`, the quorum has a leader. If the command times out, or there is no leader, you cannot remove controllers. Use [Disaster Recovery](../disaster_recovery/README.md) instead.
-
 `<controller-port>` is the controller port, `kafka_controller_port` in your inventory (default `9093`).
+
+If the output shows a `LeaderId`, the quorum has a leader and you can continue.
+
+If the command times out, that alone does not mean the quorum is lost. First rule out other causes:
+
+- A wrong host or `<controller-port>`.
+- A network or firewall problem between you and that controller.
+- Wrong security settings in `client.properties`.
+
+Try the command on another controller too. Only if every controller is reachable and none of them reports a leader is the quorum lost. In that case you cannot remove controllers. Use [Disaster Recovery](../disaster_recovery/README.md) instead.
 
 ## Before you remove a controller
 
