@@ -1,12 +1,13 @@
 ---
-# External Prometheus negative validation: confirm validate_external_prometheus.yml REJECTS bad external-Prometheus configs.
+# External Prometheus validation: confirm validate_external_prometheus.yml rejects bad external-Prometheus
+# configs and accepts the valid auth modes (TLS-only, TLS + Basic auth, mTLS).
 # Runs on localhost (no cluster needed). Imported from a scenario's verify.yml:
-#   - import_playbook: ../external_prometheus_validate_negative.yml
+#   - import_playbook: ../external_prometheus_validate.yml
 #
-# Each case runs validate_external_prometheus.yml with a deliberately bad config and asserts that it fails. The
+# Each case runs validate_external_prometheus.yml with a config and asserts the expected outcome. The
 # flag pattern (set true only if validation did NOT fail) avoids inspecting ansible_failed_result,
 # so a passing validation and a failing rescue assertion cannot be confused.
-- name: External Prometheus validation - bad configs are rejected
+- name: External Prometheus validation - auth-mode rules
   hosts: localhost
   connection: local
   gather_facts: false
@@ -68,28 +69,56 @@
         fail_msg: "validate_external_prometheus did not reject both auth modes at once."
         success_msg: "External Prometheus negative: both auth modes at once is rejected."
 
-    - name: Case 3 - external Prometheus with no auth mode must be rejected
+    - name: Case 3 - external Prometheus with no client auth (TLS-only) is accepted
       block:
-        - name: Run validation with neither auth mode
+        - name: Run validation with neither auth mode (TLS-only)
           ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
           vars:
             control_center_next_gen_dependency_prometheus_ssl_enabled: true
             control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
             control_center_next_gen_dependency_prometheus_mtls_enabled: false
-        - name: Validation unexpectedly passed (no auth mode)
+        - name: Validation accepted TLS-only as expected
           ansible.builtin.set_fact:
             external_prometheus_no_auth_passed: true
       rescue:
-        - name: Validation rejected no auth mode as expected
+        - name: Validation unexpectedly rejected TLS-only
           ansible.builtin.set_fact:
             external_prometheus_no_auth_passed: false
 
-    - name: Assert no-auth-mode was rejected
+    - name: Assert no-client-auth (TLS-only) is accepted
       ansible.builtin.assert:
         that:
-          - not (external_prometheus_no_auth_passed | default(true) | bool)
-        fail_msg: "validate_external_prometheus did not reject a missing auth mode."
-        success_msg: "External Prometheus negative: missing auth mode is rejected."
+          - external_prometheus_no_auth_passed | default(false) | bool
+        fail_msg: "validate_external_prometheus wrongly rejected TLS-only (no client auth)."
+        success_msg: "External Prometheus: TLS-only (no client auth) is accepted."
+
+    - name: Case 3b - TLS-only with no server CA source WARNS (not a hard fail; mTLS CA rule is skipped)
+      block:
+        - name: Run validation with TLS-only and no server CA source
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+            # No server CA source, so the mTLS-only hard-fail must NOT trigger under TLS-only.
+            control_center_next_gen_dependency_prometheus_provided_ca_cert_path: ""
+            control_center_next_gen_dependency_prometheus_server_ca_trusted: false
+            control_center_next_gen_external_prometheus_preflight_probe: false
+        - name: Validation completed (missing CA is a soft warning under TLS-only)
+          ansible.builtin.set_fact:
+            external_prometheus_tls_only_no_ca_passed: true
+      rescue:
+        - name: Validation unexpectedly hard-failed on a missing CA under TLS-only
+          ansible.builtin.set_fact:
+            external_prometheus_tls_only_no_ca_passed: false
+
+    - name: Assert TLS-only with a missing server CA did not hard-fail validation
+      ansible.builtin.assert:
+        that:
+          - external_prometheus_tls_only_no_ca_passed | default(false) | bool
+          - external_prometheus_server_ca_untrusted | default(false) | bool
+        fail_msg: "validate_external_prometheus hard-failed TLS-only with a missing server CA; it must only warn."
+        success_msg: "External Prometheus: TLS-only with a missing server CA warns, does not fail."
 
     # --- Item 4: under Basic auth a missing server CA is a WARNING, not a hard fail ---
     - name: Case 4 - Basic auth, TLS on, but no server CA source must WARN (not fail)
