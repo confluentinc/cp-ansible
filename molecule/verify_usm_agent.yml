@@ -86,6 +86,144 @@
         fail_msg: "USM Agent v1/metrics endpoint not found in logs or not returning 200 status"
       when: log_file_stat.stat.exists
 
+    # The Command Handler is verified from BOX STATE (the rendered config on the
+    # host), not from scenario inventory vars: molecule verify does not load the
+    # scenario's provisioner.inventory host_vars/group_vars. When the config is
+    # absent the CH was not configured for this scenario, so these checks no-op.
+    # The config and secrets paths differ by install method (package -> /etc,
+    # archive -> under the versioned archive dir), so resolve them from the
+    # service's own systemd unit (-config-file) rather than hard-coding /etc.
+    - name: Read the command-handler systemd unit
+      command: systemctl cat usm-agent-command-handler
+      register: command_handler_unit
+      changed_when: false
+      failed_when: false
+
+    # Take the LAST -config-file: archive installs add an ExecStart override
+    # (pointing under the archive dir) that supersedes the base unit's /etc path.
+    # Empty when there is no command-handler unit (non-CH scenarios), so the
+    # checks below no-op.
+    - name: Resolve the active config path from the unit's ExecStart
+      set_fact:
+        command_handler_config_path: >-
+          {{ (command_handler_unit.stdout | default('') | regex_findall('-config-file\s+(\S+)') | last)
+             if (command_handler_unit.stdout | default('') | regex_findall('-config-file\s+(\S+)')) | length > 0
+             else '' }}
+
+    - name: Stat command-handler config
+      stat:
+        path: "{{ command_handler_config_path }}"
+      register: command_handler_config_stat
+      when: command_handler_config_path | length > 0
+
+    - name: Assert command-handler config exists
+      assert:
+        that: command_handler_config_stat.stat.exists
+        fail_msg: "command-handler config not found at {{ command_handler_config_path }}"
+      when: command_handler_config_path | length > 0
+
+    - name: Read command-handler config
+      slurp:
+        path: "{{ command_handler_config_path }}"
+      register: command_handler_config_raw
+      when: command_handler_config_path | length > 0
+
+    - name: Assert command-handler service is active
+      command: systemctl is-active usm-agent-command-handler
+      register: command_handler_is_active
+      changed_when: false
+      failed_when: command_handler_is_active.stdout != 'active'
+      when: command_handler_config_path | length > 0
+
+    - name: Probe command-handler /healthz (liveness)
+      uri:
+        url: "http://localhost:{{ usm_agent_command_handler_monitoring_port | default(9930) }}/healthz"
+        status_code: 200
+        timeout: 5
+      register: command_handler_healthz
+      until: command_handler_healthz.status == 200
+      retries: 5
+      delay: 3
+      when: command_handler_config_path | length > 0
+
+    - name: Derive managed cluster names + secrets dir from box state
+      set_fact:
+        command_handler_config: "{{ command_handler_config_raw.content | b64decode }}"
+        command_handler_clusters: "{{ command_handler_config_raw.content | b64decode | regex_findall('connect\\.clusters\\.([A-Za-z0-9_-]+)\\.url=') | unique }}"
+        command_handler_secrets_dir: "{{ command_handler_config_path | dirname }}/secrets"
+      when: command_handler_config_path | length > 0
+
+    - name: Assert at least one managed cluster is rendered
+      assert:
+        that: command_handler_clusters | length > 0
+        fail_msg: "no managed Connect clusters rendered in command-handler.properties"
+      when: command_handler_config_path | length > 0
+
+    - name: Assert each cluster renders url + group.id
+      vars:
+        prefix: "confluent.usm-agent.command-handler.connect.clusters.{{ item }}"
+      assert:
+        that:
+          - (prefix ~ '.url=') in command_handler_config
+          - (prefix ~ '.group.id=') in command_handler_config
+        fail_msg: "cluster '{{ item }}' missing url/group.id in command-handler.properties"
+      loop: "{{ command_handler_clusters | default([]) }}"
+
+    - name: Stat every CA / credential file referenced by the config
+      stat:
+        path: "{{ item }}"
+      register: command_handler_ref_files
+      loop: "{{ (command_handler_config | default('') | regex_findall('(?:tls\\.trusted\\.ca\\.file|auth\\.credential\\.file)=(\\S+)')) | default([]) }}"
+      when: command_handler_config_path | length > 0
+
+    - name: Assert referenced CA / credential files exist
+      assert:
+        that: item.stat.exists
+        fail_msg: "referenced command-handler file missing: {{ item.item }}"
+      loop: "{{ command_handler_ref_files.results | default([]) | rejectattr('skipped', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Stat would-be CA files for OS-trust clusters (https, no trusted CA line)
+      stat:
+        path: "{{ command_handler_secrets_dir }}/command-handler-{{ item }}-ca.crt"
+      register: command_handler_ostrust_ca
+      loop: "{{ command_handler_clusters | default([]) }}"
+      when:
+        - command_handler_config_path | length > 0
+        - ('confluent.usm-agent.command-handler.connect.clusters.' ~ item ~ '.url=https://') in command_handler_config
+        - ('confluent.usm-agent.command-handler.connect.clusters.' ~ item ~ '.tls.trusted.ca.file=') not in command_handler_config
+
+    - name: Assert no CA file is copied for OS-trust clusters
+      assert:
+        that: not item.stat.exists
+        fail_msg: "OS-trust cluster '{{ item.item }}' unexpectedly has a CA file"
+      loop: "{{ command_handler_ostrust_ca.results | default([]) | rejectattr('skipped', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # Every command-handler secret file on disk must map to a currently-managed
+    # cluster. Catches secrets left behind for removed/renamed/downgraded clusters
+    # (the side_effect seeds one for an undeclared cluster to exercise the reconcile).
+    - name: List command-handler secret files on disk
+      find:
+        paths: "{{ command_handler_secrets_dir }}"
+        patterns:
+          - "command-handler-*-credential.txt"
+          - "command-handler-*-ca.crt"
+      register: command_handler_secret_files_on_disk
+      when: command_handler_config_path | length > 0
+
+    - name: Assert no orphaned command-handler secret files remain
+      assert:
+        that:
+          - (item.path | basename | regex_replace('^command-handler-', '') | regex_replace('-(credential\.txt|ca\.crt)$', '')) in command_handler_clusters
+        fail_msg: "orphaned command-handler secret file '{{ item.path | basename }}' has no matching managed cluster"
+      loop: "{{ command_handler_secret_files_on_disk.files | default([]) }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      when: command_handler_config_path | length > 0
+
 - name: Verify USM HTTP Exporter Configs - Kafka Controller
   hosts: kafka_controller
   gather_facts: false
