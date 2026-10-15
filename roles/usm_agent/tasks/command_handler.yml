@@ -42,6 +42,7 @@
   copy:
     src: "{{ item.value.ca_cert_path | default(usm_agent_command_handler_connect_ca_default) }}"
     dest: "{{ usm_agent_secrets_dir }}/command-handler-{{ item.key }}-ca.crt"
+    remote_src: "{{ ssl_custom_certs_remote_src }}"
     mode: '600'
     owner: "{{ usm_agent_default_user }}"
     group: "{{ usm_agent_default_group }}"
@@ -54,6 +55,52 @@
   notify: restart command handler
   tags:
     - configuration
+
+- name: Find Existing Command Handler Secret Files
+  find:
+    paths: "{{ usm_agent_secrets_dir }}"
+    patterns:
+      - "command-handler-*-credential.txt"
+      - "command-handler-*-ca.crt"
+  register: command_handler_existing_secrets
+  tags:
+    - configuration
+    - filesystem
+
+- name: Compute Expected Command Handler CA Files
+  set_fact:
+    command_handler_expected_secrets: "{{ (command_handler_expected_secrets | default([])) + ['command-handler-' ~ item.key ~ '-ca.crt'] }}"
+  loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - item.value.url.startswith('https://')
+    - (item.value.ca_cert_path | default(usm_agent_command_handler_connect_ca_default)) | length > 0
+  tags:
+    - configuration
+
+- name: Add Expected Command Handler Credential Files
+  set_fact:
+    command_handler_expected_secrets: "{{ (command_handler_expected_secrets | default([])) + ['command-handler-' ~ item.key ~ '-credential.txt'] }}"
+  loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: (item.value.auth_type | default('none')) == 'basic'
+  tags:
+    - configuration
+
+- name: Remove Stale Command Handler Secret Files
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ command_handler_existing_secrets.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: (item.path | basename) not in (command_handler_expected_secrets | default([]))
+  notify: restart command handler
+  tags:
+    - configuration
+    - filesystem
 
 - name: Create Command Handler Service Override Directory
   file:

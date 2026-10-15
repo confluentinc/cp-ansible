@@ -34,6 +34,20 @@
         usm_agent_server_mtls_effective: "{{ usm_agent_ssl_mutual_auth_enabled | bool }}"
 
     # ── Command Handler input validation (runs only when clusters are declared) ──
+    - name: Validate Command Handler cluster names
+      assert:
+        that:
+          - item.key is match('^[A-Za-z0-9_:-]+$')
+        fail_msg: >-
+          cluster name '{{ item.key }}' is invalid: use only letters, digits, '_', '-' and ':'.
+          The name is embedded in property keys (connect.clusters.<name>.*) and secret file
+          paths, so dots, slashes and spaces would produce a broken config.
+        success_msg: "Command Handler cluster name '{{ item.key }}' is valid"
+      loop: "{{ usm_agent_command_handler_connect_clusters | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when: usm_agent_command_handler_enabled | bool
+
     - name: Validate Command Handler connect cluster definitions
       assert:
         that:
@@ -87,14 +101,23 @@
       when: usm_agent_command_handler_enabled | bool
 
     - name: Validate Command Handler ports are distinct
+      vars:
+        usm_agent_on_host_ports:
+          - "{{ usm_agent_admin_port }}"
+          - "{{ usm_agent_controlplane_port }}"
+          - "{{ usm_agent_dataplane_port }}"
+          - "{{ usm_agent_command_handler_listener_port }}"
+          - "{{ usm_agent_listener_monitoring_port }}"
+          - "{{ usm_agent_command_handler_monitoring_port }}"
+          - "{{ usm_agent_command_handler_admin_port }}"
       assert:
         that:
-          - "[usm_agent_command_handler_monitoring_port, usm_agent_command_handler_admin_port, usm_agent_controlplane_port] | map('int') | unique | list | length == 3"
+          - "usm_agent_on_host_ports | map('int') | unique | list | length == usm_agent_on_host_ports | length"
         fail_msg: >-
-          Command Handler monitoring ({{ usm_agent_command_handler_monitoring_port }}) and admin
-          ({{ usm_agent_command_handler_admin_port }}) ports must differ from each other and from
-          the agent control-plane port ({{ usm_agent_controlplane_port }}).
-        success_msg: "Command Handler ports are distinct"
+          USM Agent and Command Handler ports must all be distinct on the host, got
+          {{ usm_agent_on_host_ports }} (agent admin/controlplane/dataplane/command-handler-listener/monitoring,
+          command-handler monitoring/admin).
+        success_msg: "USM Agent and Command Handler ports are distinct"
       when: usm_agent_command_handler_enabled | bool
 
 - name: USM Agent Client Configuration Validations
