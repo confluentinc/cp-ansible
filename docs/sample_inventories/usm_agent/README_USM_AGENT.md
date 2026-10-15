@@ -125,13 +125,17 @@ See `usm_agent_command_handler.yml` for a full sample.
 - Listing one or more Connect clusters (below) turns the Command Handler on. There is **no** separate on/off flag -- this mirrors the agent, which is enabled by being in the `usm_agent` group. An empty/absent list means the Command Handler is not deployed.
 
 ### `usm_agent_command_handler_connect_clusters`
-- **Default**: `[]`
-- **Purpose**: The list of Connect clusters to manage. Each entry is a dict:
-  - `name` — a slug (`[A-Za-z0-9_-]`) used as the registry key
+- **Default**: `{}`
+- **Purpose**: The Connect clusters to manage, as a dict keyed by cluster name.
+  The key is a slug (`[A-Za-z0-9_:-]`) used as the registry identifier; each
+  value holds:
   - `url` — the Connect REST endpoint, e.g. `http://connect:8083`
   - `group_id` — the Connect worker `group.id`
-  - `auth` *(optional)* — `{type: basic, username: <u>, password: <p>}`
-  - `tls` *(optional)* — `{trusted_ca_filepath: <path on the control node>}`
+  - `auth_type` *(optional)* — `none` (default) or `basic`
+  - `basic_auth_username` / `basic_auth_password` — required when `auth_type: basic`
+  - `ca_cert_path` *(optional)* — CA file for an `https://` cluster; read per
+    `ssl_custom_certs_remote_src`. Omit to use the OS trust store (or the
+    deployment CA when `ssl_custom_certs` is set).
 
 ### `usm_agent_command_handler_monitoring_port`
 - **Default**: `9930`
