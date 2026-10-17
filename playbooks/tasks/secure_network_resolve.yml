@@ -1,0 +1,62 @@
+---
+# Shared by both plays in secure_network.yml (rule rendering and live verification), so ingress rules,
+# egress rules and probes are all derived from ONE resolved description of each flow:
+#   - peers' addresses come from facts gathered for EVERY CP host, even when --limit selects a few
+#   - each flow's ports come from the DESTINATION host's own variables
+# Result: secure_network_resolved_flows = [{name, dst, from, cidrs, src_ips, endpoints: [{host, ip, ports}]}]
+
+- name: Gather network facts for every CP host (rules reference peers even under --limit)
+  setup:
+    gather_subset:
+      - network
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+  loop: "{{ secure_network_cp_groups | map('extract', groups) | select('defined') | flatten | unique | list }}"
+  run_once: true
+
+- name: Guard - every CP host has an IPv4 address
+  assert:
+    that: hostvars[item].ansible_default_ipv4.address is defined
+    fail_msg: "{{ item }} has no ansible_default_ipv4.address; network facts could not be gathered."
+  loop: "{{ secure_network_cp_groups | map('extract', groups) | select('defined') | flatten | unique | list }}"
+  run_once: true
+
+# A destination's port is read from that host's variables. Under --limit, hosts outside the play have
+# not had the variables role applied, so their values fall back to this host's (identical unless a
+# per-group port override exists on an unselected host; run without --limit to honour those).
+- name: Resolve flow endpoints (destination ports + addresses)
+  set_fact:
+    secure_network_resolved_flows: >-
+      {%- set out = [] -%}
+      {%- for f in secure_network_flows -%}
+      {%- set eps = [] -%}
+      {%- for h in groups.get(f.dst, []) -%}
+      {%- set hv = hostvars[h] -%}
+      {%- set ports = [] -%}
+      {%- for p in f.ports -%}
+      {%- if p.var is defined -%}
+      {%- set _ = ports.append((hv[p.var] if p.var in hv else vars[p.var]) | int) -%}
+      {%- else -%}
+      {%- set ls = hv.kafka_broker_listeners if 'kafka_broker_listeners' in hv else kafka_broker_listeners -%}
+      {%- set present = p.listener | select('in', ls) | list -%}
+      {%- if present | length > 0 -%}
+      {%- set _ = ports.append(ls[present[0]].port | int) -%}
+      {%- endif -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {%- set _ = eps.append({'host': h, 'ip': hv.ansible_default_ipv4.address, 'ports': ports | unique | sort}) -%}
+      {%- endfor -%}
+      {%- set src = [] -%}
+      {%- for g in (f.from | default([])) -%}
+      {%- for h in groups.get(g, []) -%}
+      {%- set _ = src.append(hostvars[h].ansible_default_ipv4.address) -%}
+      {%- endfor -%}
+      {%- endfor -%}
+      {%- set _ = out.append({'name': f.name, 'dst': f.dst, 'from': f.from | default([]), 'cidrs': f.cidrs | default([]),
+                              'src_ips': src | unique | sort, 'endpoints': eps}) -%}
+      {%- endfor -%}
+      {{ out | to_json }}
+
+- name: Decode resolved flows
+  set_fact:
+    secure_network_resolved_flows: "{{ secure_network_resolved_flows | from_json }}"
