@@ -1,0 +1,92 @@
+---
+# Allowed-flow matrix for secure_network.yml. One entry = one permitted direction:
+#   from -> dst:ports. Anything not listed is dropped (ingress AND egress, default-deny).
+#
+#   dst    inventory group that listens
+#   ports  resolved from the same variables the deploy uses, so custom ports follow automatically
+#   from   inventory groups allowed to connect (their hosts also get the matching egress rule)
+#   cidrs  extra non-inventory sources (clients, users, admins) - set in the inventory
+#
+# Which component talks to which is derived from Confluent Platform's architecture and the
+# default ports in roles/variables/defaults/main.yml. Validate against your own topology with
+# log-only mode (secure_network_enforce: false) before enforcing.
+
+secure_network_cp_groups:
+  - kafka_controller
+  - kafka_broker
+  - schema_registry
+  - kafka_connect
+  - ksql
+  - kafka_rest
+  - control_center_next_gen
+
+secure_network_component_groups:
+  - schema_registry
+  - kafka_connect
+  - ksql
+  - kafka_rest
+  - control_center_next_gen
+
+secure_network_flows:
+  - name: controller-quorum
+    dst: kafka_controller
+    ports: ["{{ kafka_controller_port }}"]
+    from: [kafka_controller, kafka_broker]
+    cidrs: []
+
+  - name: broker-replication
+    dst: kafka_broker
+    ports: ["{{ kafka_broker_listeners.broker.port }}"]
+    from: [kafka_broker]
+    cidrs: []
+
+  - name: broker-internal-listeners
+    dst: kafka_broker
+    ports:
+      - "{{ kafka_broker_listeners.internal.port }}"
+      - "{{ internal_token_port }}"
+    from: "{{ secure_network_component_groups }}"
+    cidrs: "{{ secure_network_client_cidrs }}"
+
+  - name: mds
+    dst: kafka_broker
+    ports: ["{{ mds_port }}"]
+    from: "{{ secure_network_component_groups + ['kafka_broker'] }}"
+    cidrs: "{{ secure_network_admin_cidrs }}"
+
+  - name: schema-registry
+    dst: schema_registry
+    ports: ["{{ schema_registry_listener_port }}"]
+    from: [kafka_connect, ksql, kafka_rest, kafka_broker, control_center_next_gen]
+    cidrs: "{{ secure_network_client_cidrs }}"
+
+  - name: kafka-connect
+    dst: kafka_connect
+    ports: ["{{ kafka_connect_rest_port }}"]
+    from: [control_center_next_gen]
+    cidrs: "{{ secure_network_admin_cidrs }}"
+
+  - name: ksql
+    dst: ksql
+    ports: ["{{ ksql_listener_port }}"]
+    from: [control_center_next_gen]
+    cidrs: "{{ secure_network_client_cidrs }}"
+
+  - name: kafka-rest
+    dst: kafka_rest
+    ports: ["{{ kafka_rest_port }}"]
+    from: []
+    cidrs: "{{ secure_network_client_cidrs }}"
+
+  - name: control-center-ui
+    dst: control_center_next_gen
+    ports: ["{{ control_center_next_gen_port }}"]
+    from: []
+    cidrs: "{{ secure_network_user_cidrs }}"
+
+  # Brokers/controllers push telemetry to the bundled Prometheus on the C3 host.
+  - name: c3-prometheus
+    dst: control_center_next_gen
+    ports: ["{{ control_center_next_gen_dependency_prometheus_port }}"]
+    from: [kafka_broker, kafka_controller]
+    cidrs: []

@@ -1,0 +1,221 @@
+---
+# Network boundaries for the secure-by-default deployment: a default-deny, stateful nftables
+# policy per host, generated from the inventory so each host only accepts (and only initiates)
+# the flows listed in vars/secure_network.yml.
+#
+# Needs root. It is deliberately NOT part of secure_all: rootless components cannot change
+# firewall rules, which is what makes this layer tamper-resistant against a compromised cp-user.
+# Run it in the privileged phase, as an admin:
+#
+#   ansible-playbook -i <inventory> confluent.platform.secure_network -e ansible_user=<admin> \
+#     -e secure_network_admin_cidrs='["<control-node-or-bastion-ip>/32"]'
+#
+# Recommended order: set -e secure_network_enforce=false first (logs would-be drops, blocks
+# nothing), review `journalctl -k | grep cp-secure-drop`, then enforce.
+#
+# Variables (inventory or -e):
+#   secure_network_admin_cidrs      REQUIRED  SSH + MDS access; also prevents self-lockout
+#   secure_network_client_cidrs     Kafka/SR/ksqlDB/REST clients outside the inventory
+#   secure_network_user_cidrs       Control Center users
+#   secure_network_ldap_hosts       LDAP server IPs for brokers/controllers (ports 389/636)
+#   secure_network_dns_servers / secure_network_ntp_servers   empty = allow any
+#   secure_network_extra_ingress / secure_network_extra_egress   [{name, from|to, proto, ports}]
+#   secure_network_allow_package_egress   true only during an archive download window
+#   secure_network_enforce          true (default) = default-deny; false = log-only
+#   secure_network_log_drops        true (default)
+#   secure_network_verify           true (default) = run the live allow/deny checks afterwards
+
+- name: Secure network - apply default-deny host firewall
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:ksql:control_center_next_gen:kafka_rest
+  gather_facts: true
+  vars_files:
+    - vars/secure_network.yml
+  vars:
+    ansible_become: true
+    secure_host_groups: "{{ group_names | intersect(secure_network_cp_groups) }}"
+  tasks:
+    - import_role:
+        name: variables
+      tags: always
+
+    # Defaults via set_fact + default(): play-level vars would outrank (and silently discard) any
+    # value the customer sets in the inventory.
+    - name: Compute secure_network defaults
+      set_fact:
+        secure_network_admin_cidrs: "{{ secure_network_admin_cidrs | default([]) }}"
+        secure_network_client_cidrs: "{{ secure_network_client_cidrs | default([]) }}"
+        secure_network_user_cidrs: "{{ secure_network_user_cidrs | default([]) }}"
+        secure_network_ldap_hosts: "{{ secure_network_ldap_hosts | default([]) }}"
+        secure_network_ldap_ports: "{{ secure_network_ldap_ports | default([389, 636]) }}"
+        secure_network_dns_servers: "{{ secure_network_dns_servers | default([]) }}"
+        secure_network_ntp_servers: "{{ secure_network_ntp_servers | default([]) }}"
+        secure_network_extra_ingress: "{{ secure_network_extra_ingress | default([]) }}"
+        secure_network_extra_egress: "{{ secure_network_extra_egress | default([]) }}"
+        secure_network_allow_package_egress: "{{ secure_network_allow_package_egress | default(false) }}"
+        secure_network_enforce: "{{ secure_network_enforce | default(true) }}"
+        secure_network_log_drops: "{{ secure_network_log_drops | default(true) }}"
+        secure_network_nft_bin: "{{ secure_network_nft_bin | default('/usr/sbin/nft') }}"
+        secure_network_dir: "{{ secure_network_dir | default('/etc/cp-secure') }}"
+
+    - name: Guard - admin CIDRs are mandatory so the policy cannot lock out the control node
+      assert:
+        that:
+          - secure_network_admin_cidrs | length > 0
+          - ansible_user | default('root') != deployment_user | default('')
+        fail_msg: >-
+          Set secure_network_admin_cidrs to the control node/bastion address(es) and run as a privileged
+          admin (-e ansible_user=<admin>), not as the rootless deployment_user.
+
+    - name: Guard - every CP host has a resolvable IPv4 address for the rule set
+      assert:
+        that: hostvars[item].ansible_default_ipv4.address is defined
+        fail_msg: "{{ item }} has no ansible_default_ipv4.address; facts could not be gathered."
+      loop: "{{ ansible_play_hosts_all }}"
+      run_once: true
+
+    # Minimal images (e.g. ubi9-minimal) ship microdnf without the dnf Python bindings, so Ansible's
+    # package module cannot run there. Bake nftables into the image; install only if it is missing.
+    - name: Check for nftables
+      stat:
+        path: "{{ secure_network_nft_bin }}"
+      register: secure_network_nft_stat
+
+    - name: Install nftables
+      package:
+        name: nftables
+        state: present
+      when: not secure_network_nft_stat.stat.exists
+
+    - name: Create policy directory
+      file:
+        path: "{{ secure_network_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Render nftables policy (syntax-checked before it is written)
+      template:
+        src: templates/secure_network.nft.j2
+        dest: "{{ secure_network_dir }}/cp-secure.nft"
+        owner: root
+        group: root
+        mode: '0600'
+        validate: "{{ secure_network_nft_bin }} -c -f %s"
+      register: secure_network_rendered
+
+    - name: Install firewall unit (applied early at boot, removed cleanly on stop)
+      copy:
+        dest: /etc/systemd/system/cp-secure-firewall.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Confluent Platform secure-by-default host firewall
+          Wants=network-pre.target
+          Before=network-pre.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart={{ secure_network_nft_bin }} -f {{ secure_network_dir }}/cp-secure.nft
+          ExecReload={{ secure_network_nft_bin }} -f {{ secure_network_dir }}/cp-secure.nft
+          ExecStop=-{{ secure_network_nft_bin }} delete table inet cp_secure
+
+          [Install]
+          WantedBy=multi-user.target
+      register: secure_network_unit
+
+    - name: Apply policy, and roll back if the control node can no longer reach the host
+      block:
+        - name: Load policy
+          systemd:
+            name: cp-secure-firewall
+            daemon_reload: true
+            enabled: true
+            state: "{{ 'restarted' if (secure_network_rendered.changed or secure_network_unit.changed) else 'started' }}"
+
+        - name: Confirm the host is still reachable from the control node
+          wait_for_connection:
+            timeout: 30
+            delay: 1
+      rescue:
+        - name: ROLLBACK - remove the policy (lockout detected)
+          command: "{{ secure_network_nft_bin }} delete table inet cp_secure"
+          failed_when: false
+
+        - name: Fail after rollback
+          fail:
+            msg: "Policy made {{ inventory_hostname }} unreachable and was removed. Check secure_network_admin_cidrs."
+
+    - name: Report mode
+      debug:
+        msg: >-
+          {{ inventory_hostname }}: {{ 'ENFORCING default-deny' if secure_network_enforce | bool else 'LOG-ONLY (nothing blocked)' }}
+          policy loaded from {{ secure_network_dir }}/cp-secure.nft
+
+- name: Secure network - verify live allow/deny behaviour
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:ksql:control_center_next_gen:kafka_rest
+  gather_facts: false
+  vars_files:
+    - vars/secure_network.yml
+  vars:
+    ansible_become: true
+    secure_host_groups: "{{ group_names | intersect(secure_network_cp_groups) }}"
+  tags: verify
+  tasks:
+    - name: Compute secure_network verify defaults
+      set_fact:
+        secure_network_verify: "{{ secure_network_verify | default(true) }}"
+        secure_network_enforce: "{{ secure_network_enforce | default(true) }}"
+        secure_network_client_cidrs: "{{ secure_network_client_cidrs | default([]) }}"
+        secure_network_admin_cidrs: "{{ secure_network_admin_cidrs | default([]) }}"
+        secure_network_user_cidrs: "{{ secure_network_user_cidrs | default([]) }}"
+        secure_network_nft_bin: "{{ secure_network_nft_bin | default('/usr/sbin/nft') }}"
+        secure_network_connect_timeout: "{{ secure_network_connect_timeout | default(3) }}"
+
+    - name: Verification disabled
+      meta: end_play
+      when: not (secure_network_verify | bool)
+
+    - import_role:
+        name: variables
+      tags: always
+
+    - name: Policy table is loaded
+      command: "{{ secure_network_nft_bin }} list table inet cp_secure"
+      changed_when: false
+
+    - name: Build the list of connections to probe from this host
+      set_fact:
+        secure_network_probes: >-
+          {%- set out = [] -%}
+          {%- for f in secure_network_flows -%}
+          {%- for h in groups.get(f.dst, []) if h != inventory_hostname -%}
+          {%- for p in f.ports -%}
+          {%- set _ = out.append({
+                'flow': f.name, 'host': h, 'port': p | int,
+                'allowed': (secure_host_groups | intersect(f.from | default([]))) | length > 0
+              }) -%}
+          {%- endfor -%}
+          {%- endfor -%}
+          {%- endfor -%}
+          {{ out | to_json }}
+
+    - name: "Allowed flows must connect, forbidden flows must be blocked"
+      command:
+        argv:
+          - timeout
+          - "{{ secure_network_connect_timeout }}"
+          - bash
+          - -c
+          - "exec 3<>/dev/tcp/{{ item.host }}/{{ item.port }}"
+      register: secure_network_probe_result
+      changed_when: false
+      failed_when: >-
+        (item.allowed and secure_network_probe_result.rc != 0) or
+        (not item.allowed and secure_network_probe_result.rc == 0 and secure_network_enforce | bool)
+      loop: "{{ secure_network_probes | from_json }}"
+      loop_control:
+        label: "{{ inventory_hostname }} -> {{ item.host }}:{{ item.port }} ({{ item.flow }}) expect {{ 'ALLOW' if item.allowed else 'DENY' }}"

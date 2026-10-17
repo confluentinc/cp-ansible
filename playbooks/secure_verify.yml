@@ -1,0 +1,74 @@
+---
+# Post-deploy proof that the hardened posture actually holds on every host:
+#   - the deploy user has no path to root
+#   - nothing under the deployment path is owned by anyone else
+#   - no CP process runs as root, no system-scope cp-* unit exists
+#   - private key material is not readable by group/other
+#   - the systemd --user units are present and none have failed
+#
+# Run standalone:   ansible-playbook -i <inventory> confluent.platform.secure_verify
+
+- name: Secure post-deploy verification
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:ksql:control_center_next_gen:kafka_rest:kafka_connect_replicator:usm_agent
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+      tags: always
+
+    - name: Deploy user must NOT have passwordless sudo
+      command: sudo -n true
+      register: secure_sudo_probe
+      failed_when: secure_sudo_probe.rc == 0
+      changed_when: false
+
+    - name: No files under the deployment path are owned by another user
+      command: "find {{ rootless_deployment_path }} -not -user {{ deployment_user }}"
+      register: secure_foreign_files
+      failed_when: secure_foreign_files.stdout | length > 0
+      changed_when: false
+
+    # cp-ansible writes key material 0640 owned by deployment_user:deployment_group. That is fine while
+    # deployment_group is the deploy user's own private group; it is NOT fine if anyone else can read
+    # it or the group is some other (shared) group.
+    - name: Private keys and keystores are not world-readable and belong to the deployment group only
+      command: >-
+        find {{ ssl_file_dir_final }} -type f
+        ( -name *.key -o -name *.jks -o -name *.p12 -o -name tokenKeypair.pem )
+        ( -perm /007 -o -not -group {{ deployment_group }} -o -not -user {{ deployment_user }} )
+      register: secure_loose_keys
+      failed_when: secure_loose_keys.stdout | length > 0
+      changed_when: false
+
+    - name: No Confluent Platform process runs as root
+      shell: "ps -eo user:32,args | awk '$1==\"root\"' | grep -ciE 'kafka|confluent|ksql|connect'"
+      register: secure_root_procs
+      failed_when: secure_root_procs.stdout | trim != '0'
+      changed_when: false
+
+    - name: No system-scope cp-* units exist
+      command: systemctl list-units 'cp-*' --no-legend
+      register: secure_system_units
+      failed_when: secure_system_units.stdout | length > 0
+      changed_when: false
+
+    - name: Resolve deploy user uid
+      command: id -u
+      register: secure_uid
+      changed_when: false
+
+    - name: User-scope cp-* units exist
+      command: systemctl --user list-units 'cp-*' --no-legend
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ secure_uid.stdout }}"
+      register: secure_user_units
+      failed_when: secure_user_units.stdout | length == 0
+      changed_when: false
+
+    - name: No user-scope cp-* unit is in a failed state
+      command: systemctl --user list-units 'cp-*' --state=failed --no-legend
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ secure_uid.stdout }}"
+      register: secure_failed_units
+      failed_when: secure_failed_units.stdout | length > 0
+      changed_when: false
