@@ -9,9 +9,16 @@
 ##   - Secrets   : secrets protection + log redactor + audit logs + vaulted credentials
 ##
 ## Run (see docs/SECURE_DEPLOYMENT.md for the full walkthrough):
-##   1. ansible-playbook -i <this> confluent.platform.rootless_bootstrap -e ansible_user=<admin> -e rootless_install_packages=true
+##   1. ansible-playbook -i <this> confluent.platform.rootless_bootstrap -e ansible_user=<admin> -e ansible_become=true -e rootless_install_packages=true
+##      (ansible_become must be overridden: this inventory sets it to false, which would otherwise
+##       beat the playbook's own become and leave a non-root admin unprivileged)
 ##   2. ansible-playbook -i <this> confluent.platform.secure_preflight --ask-vault-pass
 ##   3. ansible-playbook -i <this> confluent.platform.secure_all --ask-vault-pass
+##   4. ansible-playbook -i <this> confluent.platform.secure_network -e ansible_user=<admin> \
+##        -e '{"secure_network_admin_cidrs":["<control-node-ip>/32"],"secure_network_ldap_hosts":["<ldap-ip>"]}'
+##
+## Scope: kafka_controller, kafka_broker, schema_registry, kafka_connect, ksql, kafka_rest and
+## control_center_next_gen. kafka_connect_replicator / usm_agent are rejected by pre-flight.
 ##
 ## Every value in <angle brackets> must be replaced. Every vault_* variable must live in an
 ## Ansible Vault file (ansible-vault create group_vars/all/vault.yml) - never in this file.
@@ -96,10 +103,20 @@ all:
 
     kafka_broker_cluster_name: <cluster-name>
     audit_logs_destination_enabled: true
+    # The audit cluster is outside the inventory, so secure_network cannot see all of its brokers:
+    # it opens egress to the bootstrap addresses below. Clients also connect to every ADVERTISED broker,
+    # so add them all with -e secure_network_extra_egress='[{"name":"audit","to":["<ip>",...],"ports":[9092]}]'.
     audit_logs_destination_bootstrap_servers: "<audit-broker-1>:9092,<audit-broker-2>:9092"
     audit_logs_destination_listener:
       ssl_enabled: true
       sasl_protocol: none
+
+    ## ---- Bundled Prometheus/Alertmanager (C3 host): the global ssl flags do not reach them -------
+    ## Without these, broker/controller telemetry is sent over unauthenticated HTTP (pre-flight rejects it).
+    control_center_next_gen_dependency_prometheus_ssl_enabled: true
+    control_center_next_gen_dependency_prometheus_mtls_enabled: true
+    control_center_next_gen_dependency_alertmanager_ssl_enabled: true
+    control_center_next_gen_dependency_alertmanager_mtls_enabled: true
 
     ## ---- Left off on purpose (secure default): Jolokia / JMX exporter ----------------------------
     jolokia_enabled: false

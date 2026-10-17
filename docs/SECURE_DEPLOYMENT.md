@@ -9,21 +9,29 @@ existing cp-ansible features; it adds a pre-flight gate and a post-deploy verifi
 | `docs/sample_inventories/secure_by_default.yml` | Hardened inventory template (fill in `<...>` values, vault the `vault_*` secrets) |
 | `playbooks/secure_preflight.yml` | Fails before any change if the inventory is below the baseline |
 | `playbooks/secure_all.yml` | preflight -> validate_hosts -> `all.yml` -> verify |
-| `playbooks/secure_verify.yml` | Proves rootlessness and key-file permissions on every host |
+| `playbooks/secure_verify.yml` | Proves rootlessness (sudo grants, private group, ownership, no root processes/units) and key-file permissions |
+| `playbooks/secure_network.yml` (+ `vars/`, `templates/`, `tasks/`) | Default-deny nftables policy per host from a flow matrix, host-local rollback timer, live allow/deny probes |
+
+**Scope:** `kafka_controller`, `kafka_broker`, `schema_registry`, `kafka_connect`, `ksql`, `kafka_rest`,
+`control_center_next_gen`. `kafka_connect_replicator` and `usm_agent` are **rejected** by the pre-flight (they
+have no firewall flows and no verified hardening) rather than deployed without the baseline.
 
 ## What the pre-flight enforces
+
+Every setting is checked on **every host** against that host's effective value (host/group overrides
+included), and any failure aborts the whole run before the first change (`any_errors_fatal`).
 
 | Control | Assertion |
 |---|---|
 | Isolation | One CP component per host; no two inventory entries share an `ansible_host` |
 | Rootless | `rootless_enabled`, `installation_method: archive`, no `become`, non-root `deployment_user`, non-system path |
-| mTLS | `ssl_enabled`, `ssl_mutual_auth_enabled`, `ssl_client_authentication: required`, every Kafka listener TLS + client auth, MDS TLS |
+| mTLS | `ssl_enabled`, `ssl_mutual_auth_enabled`, `ssl_client_authentication: required`; every Kafka listener TLS **and** client certificates (SASL does not replace them); MDS TLS **and** `mds_ssl_client_authentication: required` for any `auth_mode`; each REST component's `<group>_authentication_type` is `mtls`; no `*_custom_properties` entry weakens `ssl.client.auth*`; bundled Prometheus/Alertmanager use TLS + mTLS |
 | Certificates | CA-signed (`ssl_custom_certs` or provided keystores); the snakeoil CA is rejected |
 | Passwords | No well-known keystore/truststore/CA/LDAP/MDS/Jolokia passwords, minimum 16 chars |
 | RBAC | `rbac_enabled`, `auth_mode` not `none`, bounded `impersonation_super_users` |
-| Secrets | `secrets_protection_enabled`, `mask_secrets` |
-| Logging | Log redactor enabled with rules; audit logs shipped to a destination cluster over TLS |
-| Deny by default | `allow.everyone.if.no.acl.found` not `true`; Jolokia off or authenticated |
+| Secrets | `mask_secrets`; per component `*_secrets_protection_enabled` and `*_secrets_protection_encrypt_passwords` |
+| Logging | Per component: log redactor on with rules and `*_custom_log4j2` true; audit logs shipped to a destination cluster over TLS |
+| Deny by default | `allow.everyone.if.no.acl.found` not `true`; per component Jolokia off or authenticated |
 
 Non-production escape hatches (each prints a warning): `secure_allow_self_signed`,
 `secure_allow_shared_hosts`, `secure_allow_no_audit_logs`.
@@ -31,8 +39,10 @@ Non-production escape hatches (each prints a warning): `secure_allow_self_signed
 ## Run order
 
 ```bash
-# 1. One-time privileged bootstrap (admin/sudo) - creates cp-user, linger, optional packages
-ansible-playbook -i inventory.yml confluent.platform.rootless_bootstrap -e ansible_user=<admin> -e rootless_install_packages=true
+# 1. One-time privileged bootstrap (admin/sudo) - creates cp-user, linger, optional packages.
+#    ansible_become=true is required: the sample inventory sets ansible_become: false, which overrides the
+#    playbook's own become and would leave a non-root admin unprivileged.
+ansible-playbook -i inventory.yml confluent.platform.rootless_bootstrap -e ansible_user=<admin> -e ansible_become=true -e rootless_install_packages=true
 
 # 2. Gate (no changes made)
 ansible-playbook -i inventory.yml confluent.platform.secure_preflight --ask-vault-pass
@@ -46,6 +56,26 @@ ansible-playbook -i inventory.yml confluent.platform.secure_all --ask-vault-pass
 ansible-playbook -i inventory.yml confluent.platform.secure_network -e ansible_user=<admin> \
   -e '{"secure_network_admin_cidrs":["<control-node-ip>/32"],"secure_network_ldap_hosts":["<ldap-ip>"]}'
 ```
+
+## How the network policy behaves
+
+- **Ports come from each destination host's own variables**, so a per-group override such as
+  `kafka_connect_rest_port: 18083` is honoured by the destination's ingress rule, every source's egress
+  rule and the probes. With `--limit`, peers outside the limit fall back to this host's values; run without
+  `--limit` to honour per-host overrides on unselected peers.
+- **Flows include same-group peers** where they talk to each other (Schema Registry leader forwarding,
+  Connect worker forwarding, ksqlDB pull-query routing, controller quorum, inter-broker), and controllers on
+  the inter-broker listener (used for their RBAC metadata bootstrap). With a single Kafka listener the
+  replication port is the `internal` listener.
+- **SSH** is allowed from `secure_network_admin_cidrs` on the host's `ansible_port`.
+- **Audit logs:** egress is opened to the `audit_logs_destination_bootstrap_servers` addresses only. Clients
+  then connect to every advertised broker of that cluster, so add them all via `secure_network_extra_egress`.
+- **Rollback:** before loading, a host-local `systemd-run` timer (default 600 s) is armed that restores the
+  previous ruleset and persisted file (or disables the unit on a first install). It is cancelled only after a
+  **fresh** administrative connection succeeds, so it recovers from a lockout the Ansible connection cannot.
+- **Probes** use the same addresses and per-destination ports the rules were generated from. Probes whose port
+  is also covered by a custom `secure_network_extra_ingress/extra_egress` rule are skipped, since the
+  group-based expectation no longer holds for them.
 
 ## Prerequisites learned from test deployments
 
@@ -62,8 +92,13 @@ ansible-playbook -i inventory.yml confluent.platform.secure_network -e ansible_u
 - **LDAP:** the `mds` bind account needs read/search on the `ou=rbac` tree, or the broker never opens
   its listeners (it logs "LDAP search failed" and keeps retrying).
 - **Network policy vs. LDAP:** brokers/controllers need egress to the LDAP server; pass
-  `secure_network_ldap_hosts`. Run `secure_all` before `secure_network` (or set
-  `secure_network_allow_package_egress=true`) because the policy blocks archive downloads.
+  `secure_network_ldap_hosts`. Run `secure_all` before `secure_network`.
+- **Re-running `secure_all` after the policy is enforced:** the policy blocks egress to the package
+  repository, so `validate_hosts` fails its connectivity check (`packages.confluent.io` timeout) and every
+  host is aborted. Either point `confluent_common_repository_baseurl` at an internal mirror and allow it with
+  `secure_network_extra_egress`, re-apply `secure_network` with `secure_network_allow_package_egress=true`
+  for the maintenance window, or pass `--skip-tags validate_internet_access` when no download is needed
+  (the archive is already installed).
 
 ## Known limits - read before shipping to customers
 

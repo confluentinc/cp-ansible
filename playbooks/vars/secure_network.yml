@@ -3,8 +3,16 @@
 #   from -> dst:ports. Anything not listed is dropped (ingress AND egress, default-deny).
 #
 #   dst    inventory group that listens
-#   ports  resolved from the same variables the deploy uses, so custom ports follow automatically
-#   from   inventory groups allowed to connect (their hosts also get the matching egress rule)
+#   ports  how to find the listening port ON EACH DESTINATION HOST (so a per-group override such as
+#          kafka_connect_rest_port: 18083 is honoured by the destination's ingress rule, every source's
+#          egress rule and the probes alike):
+#            {var: <variable name>}              the variable's value on the destination host
+#            {listener: [<key>, <fallback>...]}  port of the first present entry of that host's
+#                                                kafka_broker_listeners (with a single listener the
+#                                                replication listener is 'internal', not 'broker')
+#   from   inventory groups allowed to connect (their hosts get the matching egress rule). A component
+#          lists its OWN group where peers talk to each other (SR leader forwarding, Connect worker
+#          forwarding, ksqlDB pull-query routing, controller quorum, inter-broker replication).
 #   cidrs  extra non-inventory sources (clients, users, admins) - set in the inventory
 #
 # Which component talks to which is derived from Confluent Platform's architecture and the
@@ -30,63 +38,65 @@ secure_network_component_groups:
 secure_network_flows:
   - name: controller-quorum
     dst: kafka_controller
-    ports: ["{{ kafka_controller_port }}"]
+    ports: [{var: kafka_controller_port}]
     from: [kafka_controller, kafka_broker]
     cidrs: []
 
+  # Brokers replicate over this listener, and controllers use it as the bootstrap for the RBAC
+  # metadata service (confluent.metadata.bootstrap.servers), so controllers are sources too.
   - name: broker-replication
     dst: kafka_broker
-    ports: ["{{ kafka_broker_listeners.broker.port }}"]
-    from: [kafka_broker]
+    ports: [{listener: [broker, internal]}]
+    from: [kafka_broker, kafka_controller]
     cidrs: []
 
   - name: broker-internal-listeners
     dst: kafka_broker
     ports:
-      - "{{ kafka_broker_listeners.internal.port }}"
-      - "{{ internal_token_port }}"
+      - {listener: [internal]}
+      - {var: internal_token_port}
     from: "{{ secure_network_component_groups }}"
     cidrs: "{{ secure_network_client_cidrs }}"
 
   - name: mds
     dst: kafka_broker
-    ports: ["{{ mds_port }}"]
+    ports: [{var: mds_port}]
     from: "{{ secure_network_component_groups + ['kafka_broker'] }}"
     cidrs: "{{ secure_network_admin_cidrs }}"
 
   - name: schema-registry
     dst: schema_registry
-    ports: ["{{ schema_registry_listener_port }}"]
-    from: [kafka_connect, ksql, kafka_rest, kafka_broker, control_center_next_gen]
+    ports: [{var: schema_registry_listener_port}]
+    from: [schema_registry, kafka_connect, ksql, kafka_rest, kafka_broker, control_center_next_gen]
     cidrs: "{{ secure_network_client_cidrs }}"
 
   - name: kafka-connect
     dst: kafka_connect
-    ports: ["{{ kafka_connect_rest_port }}"]
-    from: [control_center_next_gen]
+    ports: [{var: kafka_connect_rest_port}]
+    from: [kafka_connect, control_center_next_gen]
     cidrs: "{{ secure_network_admin_cidrs }}"
 
   - name: ksql
     dst: ksql
-    ports: ["{{ ksql_listener_port }}"]
-    from: [control_center_next_gen]
+    ports: [{var: ksql_listener_port}]
+    from: [ksql, control_center_next_gen]
     cidrs: "{{ secure_network_client_cidrs }}"
 
   - name: kafka-rest
     dst: kafka_rest
-    ports: ["{{ kafka_rest_port }}"]
+    ports: [{var: kafka_rest_port}]
     from: []
     cidrs: "{{ secure_network_client_cidrs }}"
 
   - name: control-center-ui
     dst: control_center_next_gen
-    ports: ["{{ control_center_next_gen_port }}"]
+    ports: [{var: control_center_next_gen_port}]
     from: []
     cidrs: "{{ secure_network_user_cidrs }}"
 
   # Brokers/controllers push telemetry to the bundled Prometheus on the C3 host.
   - name: c3-prometheus
     dst: control_center_next_gen
-    ports: ["{{ control_center_next_gen_dependency_prometheus_port }}"]
+    ports: [{var: control_center_next_gen_dependency_prometheus_port}]
     from: [kafka_broker, kafka_controller]
     cidrs: []

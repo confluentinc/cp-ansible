@@ -9,8 +9,16 @@
 #   5. Secrets    - secrets protection on, no well-known keystore/truststore passwords
 #   6. Hardening  - no allow-everyone ACL fallback, no unauthenticated JMX/Jolokia
 #
+# Every security setting is evaluated on EVERY host against that host's effective value (host and
+# group overrides included), and any failure aborts the whole run (any_errors_fatal) before the
+# first change is made. Only genuinely inventory-wide checks use run_once.
+#
 # Run standalone:   ansible-playbook -i <inventory> confluent.platform.secure_preflight
 # Also runs first in confluent.platform.secure_all.
+#
+# Scope: kafka_controller, kafka_broker, schema_registry, kafka_connect, ksql, kafka_rest and
+# control_center_next_gen. kafka_connect_replicator and usm_agent are rejected (no firewall flows,
+# no verified hardening) rather than silently deployed without the baseline.
 #
 # Escape hatches (non-production ONLY, each prints a loud warning):
 #   secure_allow_self_signed: true    - allow the generated snakeoil CA instead of custom certs
@@ -19,8 +27,9 @@
 - name: Secure pre-flight - cluster layout and security baseline
   hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:ksql:control_center_next_gen:kafka_rest:kafka_connect_replicator:usm_agent
   gather_facts: false
+  any_errors_fatal: true
   vars:
-    secure_cp_groups:
+    secure_supported_groups:
       - kafka_controller
       - kafka_broker
       - schema_registry
@@ -28,13 +37,21 @@
       - ksql
       - kafka_rest
       - control_center_next_gen
+    secure_unsupported_groups:
       - kafka_connect_replicator
       - usm_agent
+    secure_cp_groups: "{{ secure_supported_groups + secure_unsupported_groups }}"
     # Components that terminate mTLS themselves. C3 is browser-facing, so it cannot
     # require client certs; it authenticates users through MDS instead.
     secure_mtls_server_groups:
       - kafka_controller
       - kafka_broker
+      - schema_registry
+      - kafka_connect
+      - ksql
+      - kafka_rest
+    # REST components whose client-auth policy is selected by <group>_authentication_type.
+    secure_rest_groups:
       - schema_registry
       - kafka_connect
       - ksql
@@ -49,10 +66,21 @@
       - ''
     secure_min_password_length: 16
     secure_host_cp_groups: "{{ group_names | intersect(secure_cp_groups) }}"
+    secure_host_supported_groups: "{{ group_names | intersect(secure_supported_groups) }}"
   tasks:
     - import_role:
         name: variables
       tags: always
+
+    # ---------------------------------------------------------------- scope
+    - name: Scope - unsupported component groups are rejected
+      assert:
+        that: groups.get(item, []) | length == 0
+        fail_msg: >-
+          Group {{ item }} is not covered by the secure-by-default template (no network flows, no verified
+          hardening). Deploy it outside this template or remove it from the inventory.
+      loop: "{{ secure_unsupported_groups }}"
+      run_once: true
 
     # ---------------------------------------------------------------- 1. isolation
     - name: Isolation - exactly one CP component per host
@@ -121,7 +149,6 @@
         fail_msg: >-
           ssl_enabled, ssl_mutual_auth_enabled must be true, ssl_client_authentication must be 'required'
           and kafka_broker_rest_ssl_enabled (MDS) must be true.
-      run_once: true
 
     - name: mTLS - every component serves TLS
       assert:
@@ -139,23 +166,63 @@
       # The broker has no kafka_broker_ssl_mutual_auth_enabled; its listeners are asserted below.
       loop: "{{ secure_host_cp_groups | intersect(secure_mtls_server_groups) | difference(['kafka_broker']) }}"
 
-    - name: mTLS - every Kafka listener uses TLS and authenticates clients
+    # <group>_authentication_type is what actually switches client-cert authentication on for the
+    # REST components; the SSL flags above can stay true while it is 'none'.
+    - name: mTLS - REST components authenticate clients with certificates (effective authentication type)
+      assert:
+        that: lookup('vars', item ~ '_authentication_type', default='mtls') == 'mtls'
+        fail_msg: "{{ item }}_authentication_type must be 'mtls' (currently {{ lookup('vars', item ~ '_authentication_type', default='unset') }})."
+      loop: "{{ secure_host_cp_groups | intersect(secure_rest_groups) }}"
+
+    # custom_properties are merged last and can silently downgrade generated client-auth settings.
+    - name: mTLS - no custom property weakens required client authentication
+      assert:
+        that: weakened | length == 0
+        fail_msg: "{{ item }}_custom_properties weakens client authentication: {{ weakened | map(attribute='key') | list }}"
+      vars:
+        props: "{{ lookup('vars', item ~ '_custom_properties', default={}) }}"
+        weakened: >-
+          {{ props | dict2items
+             | selectattr('key', 'match', '.*ssl\.client\.auth(entication)?$')
+             | rejectattr('value', 'in', ['required', 'REQUIRED', 'true', true])
+             | list }}
+      loop: "{{ secure_host_cp_groups }}"
+
+    # Client certificates are required on every Kafka listener, with or without SASL on top:
+    # SASL authenticates the user, it does not prove possession of a TLS client certificate.
+    - name: mTLS - every Kafka listener uses TLS and requires client certificates
       assert:
         that:
           - item.value.ssl_enabled | default(false) | bool
-          - (item.value.ssl_client_authentication | default('none') == 'required') or (item.value.sasl_protocol | default('none') != 'none')
+          - item.value.ssl_client_authentication | default('none') == 'required'
         fail_msg: >-
-          Kafka listener {{ item.key }} must have ssl_enabled=true and either
-          ssl_client_authentication=required or a SASL mechanism.
+          Kafka listener {{ item.key }} must have ssl_enabled=true and ssl_client_authentication=required
+          (a SASL mechanism does not replace the client certificate).
       loop: "{{ kafka_broker_listeners | dict2items }}"
       when: "'kafka_broker' in group_names"
 
-    - name: mTLS - MDS requires client certificates when mTLS is the MDS auth mode
+    # MDS client certificates are required whatever the user store (mtls/ldap/oauth) is.
+    - name: mTLS - MDS requires client certificates
       assert:
         that: mds_ssl_client_authentication == 'required'
-        fail_msg: auth_mode=mtls requires mds_ssl_client_authentication=required.
-      run_once: true
-      when: auth_mode == 'mtls'
+        fail_msg: mds_ssl_client_authentication must be 'required' (also with auth_mode ldap/oauth).
+
+    # The bundled Prometheus/Alertmanager receive broker/controller telemetry; the global ssl flags
+    # do not reach them (their ssl/mtls switches default to false).
+    - name: mTLS - bundled Prometheus and Alertmanager use TLS with client certificates
+      assert:
+        that:
+          - control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+          - control_center_next_gen_dependency_prometheus_mtls_enabled | bool
+          - control_center_next_gen_dependency_alertmanager_ssl_enabled | bool
+          - control_center_next_gen_dependency_alertmanager_mtls_enabled | bool
+        fail_msg: >-
+          Set control_center_next_gen_dependency_prometheus_ssl_enabled/_mtls_enabled and
+          control_center_next_gen_dependency_alertmanager_ssl_enabled/_mtls_enabled to true; otherwise
+          telemetry travels over unauthenticated HTTP.
+      when:
+        - "'control_center_next_gen' in group_names"
+        - not (control_center_next_gen_external_prometheus_enabled | default(false) | bool)
 
     # ---------------------------------------------------------------- certificates
     - name: Certificates - CA-signed certificates or provided keystores are required
@@ -165,7 +232,6 @@
           The generated self-signed CA is not allowed. Provide certificates from your PKI with
           ssl_custom_certs=true (ssl_ca_cert_filepath, ssl_signed_cert_filepath, ssl_key_filepath, ssl_key_password)
           or ssl_provided_keystore_and_truststore=true. Set secure_allow_self_signed=true for non-production only.
-      run_once: true
       when: not (secure_allow_self_signed | default(false) | bool)
 
     - name: Certificates - warn when self-signed is explicitly allowed
@@ -180,7 +246,6 @@
           - ssl_self_signed_ca_password not in secure_known_default_passwords
           - ssl_self_signed_ca_password | length >= secure_min_password_length
         fail_msg: ssl_self_signed_ca_password is a default or too short (min {{ secure_min_password_length }}). Override it with a vaulted value.
-      run_once: true
       when: self_signed | bool
 
     - name: Certificates - no well-known keystore/truststore passwords
@@ -209,7 +274,6 @@
         fail_msg: >-
           RBAC must be enabled (rbac_enabled=true), auth_mode must not be 'none', MDS must use TLS, and
           mds_super_user_password must be a vaulted password of at least {{ secure_min_password_length }} characters.
-      run_once: true
 
     - name: RBAC - component credentials are not defaults (LDAP user store)
       assert:
@@ -226,17 +290,23 @@
           - impersonation_super_users | length > 0
           - '"*" not in impersonation_super_users'
         fail_msg: impersonation_super_users must list the exact service principals (not empty, no wildcard).
-      run_once: true
       when: auth_mode == 'mtls'
 
     # ---------------------------------------------------------------- 5. secrets
-    - name: Secrets - protection and log masking enabled
+    - name: Secrets - log masking enabled on this host
+      assert:
+        that: mask_secrets | bool
+        fail_msg: mask_secrets must be true so passwords are not written to Ansible output or logs.
+
+    - name: Secrets - protection and password encryption enabled for each hosted component
       assert:
         that:
-          - secrets_protection_enabled | bool
-          - mask_secrets | bool
-        fail_msg: secrets_protection_enabled and mask_secrets must be true so passwords are not stored in clear text in config or logs.
-      run_once: true
+          - lookup('vars', item ~ '_secrets_protection_enabled', default=secrets_protection_enabled) | bool
+          - lookup('vars', item ~ '_secrets_protection_encrypt_passwords', default=secrets_protection_encrypt_passwords) | bool
+        fail_msg: >-
+          {{ item }}: secrets protection and password encryption must both be on
+          ({{ item }}_secrets_protection_enabled / {{ item }}_secrets_protection_encrypt_passwords).
+      loop: "{{ secure_host_supported_groups }}"
 
     # ---------------------------------------------------------------- 6. hardening
     - name: Hardening - no allow-everyone ACL fallback or other open authorizer settings
@@ -246,25 +316,28 @@
         fail_msg: "{{ item }}_custom_properties sets allow.everyone.if.no.acl.found=true, which disables deny-by-default."
       loop: "{{ secure_host_cp_groups }}"
 
-    - name: Hardening - Jolokia, when enabled, must be authenticated and not use the default password
+    - name: Hardening - Jolokia, when enabled for a component, must be authenticated and not use the default password
       assert:
         that:
           - jolokia_auth_mode != 'none'
           - jolokia_password not in secure_known_default_passwords
-        fail_msg: Jolokia is enabled but jolokia_auth_mode is 'none' or jolokia_password is a default. Disable it or authenticate it.
-      run_once: true
-      when: jolokia_enabled | bool
+        fail_msg: >-
+          {{ item }}_jolokia_enabled is true but jolokia_auth_mode is 'none' or jolokia_password is a default.
+          Disable it or authenticate it.
+      loop: "{{ secure_host_supported_groups }}"
+      when: lookup('vars', item ~ '_jolokia_enabled', default=jolokia_enabled) | bool
 
-    - name: Hardening - log redactor on, with a rules file supplied
+    - name: Hardening - log redactor on (with rules) for each hosted component
       assert:
         that:
           - logredactor_enabled | bool
-          - custom_log4j2 | bool
+          - lookup('vars', item ~ '_custom_log4j2', default=custom_log4j2) | bool
           - (logredactor_rule_path_local | length > 0) or (logredactor_rule_url | length > 0)
         fail_msg: >-
-          Set logredactor_enabled=true and provide logredactor_rule_path_local (see docs/rules_example.json)
-          or logredactor_rule_url so sensitive values are redacted from component logs.
-      run_once: true
+          {{ item }}: set logredactor_enabled=true, keep {{ item }}_custom_log4j2 true, and provide
+          logredactor_rule_path_local (see docs/rules_example.json) or logredactor_rule_url so sensitive
+          values are redacted from component logs.
+      loop: "{{ secure_host_supported_groups }}"
 
     - name: Hardening - audit logs shipped to a destination cluster
       assert:
@@ -276,5 +349,5 @@
           Set audit_logs_destination_enabled=true, audit_logs_destination_bootstrap_servers,
           audit_logs_destination_listener.ssl_enabled=true and kafka_broker_cluster_name.
           Set secure_allow_no_audit_logs=true to downgrade this to a warning.
-      run_once: true
       ignore_errors: "{{ secure_allow_no_audit_logs | default(false) | bool }}"
+      when: "'kafka_broker' in group_names"
