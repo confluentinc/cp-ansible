@@ -146,6 +146,26 @@
       delay: 3
       when: command_handler_config_path | length > 0
 
+    - name: Search the agent access log for a successful hybrid-commands poll (200)
+      shell: "grep -cE 'GET.*hybrid-commands.*200' {{ usm_agent_log_file }} || true"
+      register: hybrid_commands_grep_result
+      until: (hybrid_commands_grep_result.stdout | int) > 0
+      retries: 10
+      delay: 6
+      failed_when: false
+      when: command_handler_config_path | length > 0
+
+    - name: Assert the Command Handler completed a Cloud poll (hybrid-commands 200)
+      assert:
+        that:
+          - (hybrid_commands_grep_result.stdout | int) > 0
+        fail_msg: >-
+          No successful GET /v1/hybrid-commands (200) in the agent access log
+          ({{ usm_agent_log_file }}) -- the Command Handler never completed a Cloud
+          poll against the mock's hybrid endpoint.
+        success_msg: "Command Handler completed a hybrid-commands poll against Cloud (mock)"
+      when: command_handler_config_path | length > 0
+
     - name: Derive managed cluster names + secrets dir from box state
       set_fact:
         command_handler_config: "{{ command_handler_config_raw.content | b64decode }}"
