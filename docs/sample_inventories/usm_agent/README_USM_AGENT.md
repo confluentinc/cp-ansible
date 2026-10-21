@@ -116,8 +116,8 @@ This document explains the variables used in the USM Agent sample inventories fo
 
 ## Command Handler Variables
 
-The Command Handler lets Confluent Cloud manage self-managed Kafka Connect
-clusters *through* the agent. It ships in the same `confluent-usm-agent` package
+The Command Handler lets Confluent Cloud manage self-managed connectors
+*through* the agent. It ships in the same `confluent-usm-agent` package
 and runs as the `usm-agent-command-handler` service on the `usm_agent` host.
 See `usm_agent_command_handler.yml` for a full sample.
 
