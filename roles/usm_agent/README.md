@@ -6,7 +6,7 @@ We don't recommend using this role explicitly, we'd rather suggest to use the pl
 
 ## Command Handler
 
-This role can also run the **USM Agent Command Handler**, an optional sibling service (shipped in the same `confluent-usm-agent` package) that lets Confluent Cloud manage self-managed Kafka Connect clusters through the agent. It is **enabled by declaring one or more Connect clusters** in `usm_agent_command_handler_connect_clusters` — there is no separate on/off flag, mirroring how the agent itself is enabled by inventory-group membership. A full example is in [docs/sample_inventories/usm_agent/usm_agent_command_handler.yml](../../docs/sample_inventories/usm_agent/usm_agent_command_handler.yml).
+This role can also run the **USM Agent Command Handler**, an optional sibling service (shipped in the same `confluent-usm-agent` package) that lets Confluent Cloud manage self-managed connectors through the agent. It is **enabled by declaring one or more Connect clusters** in `usm_agent_command_handler_connect_clusters` — there is no separate on/off flag, mirroring how the agent itself is enabled by inventory-group membership. A full example is in [docs/sample_inventories/usm_agent/usm_agent_command_handler.yml](../../docs/sample_inventories/usm_agent/usm_agent_command_handler.yml).
 
 ## Documentation
 

@@ -7294,7 +7294,7 @@ Default:  {}
 
 ### usm_agent_command_handler_enabled
 
-Whether the USM Agent Command Handler runs, letting Confluent Cloud manage self-managed Kafka Connect clusters through this agent. Presence-derived -- true when one or more managed Connect clusters are declared, so operators normally never set it directly.
+Whether the USM Agent Command Handler runs, letting Confluent Cloud manage self-managed connectors through this agent. Presence-derived -- true when one or more managed Connect clusters are declared, so operators normally never set it directly.
 
 Default:  "{{ usm_agent_command_handler_connect_clusters | length > 0 }}"
 
