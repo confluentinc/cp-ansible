@@ -45,14 +45,6 @@ The quorum needs a majority of voters to work. For `N` voters, the majority is `
 | 4 | 3 | 1 |
 | 5 | 3 | 2 |
 
-Add controllers two at a time, so the number of voters stays odd:
-
-- With 3 voters, the majority is 2, so 1 controller can fail.
-- With 4 voters, the majority is 3, so still only 1 controller can fail. Every metadata write also waits for one more controller.
-- With 5 voters, the majority is 3, so 2 controllers can fail.
-
-So going from 3 to 4 adds a controller without adding any failure tolerance.
-
 ## Sample inventory
 
 [`hosts.yml`](hosts.yml) shows a scale-up from 3 to 5 controllers. `kcontroller-1` to `kcontroller-3` already exist, and `kcontroller-4` and `kcontroller-5` are added under `kafka_controller`. Nothing else needs to change in the inventory.

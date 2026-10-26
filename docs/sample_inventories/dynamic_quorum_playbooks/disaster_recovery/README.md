@@ -200,6 +200,8 @@ Do this only after Phase 1 is complete and the new quorum is healthy. It is not 
 
 The failed hosts still hold metadata from before the rebuild, so each returning controller and broker must have its old `__cluster_metadata-0` removed before Kafka starts.
 
+**Power on the failed controllers one at a time.** Each one still has the old voter set. If enough of them start together to make a majority of that old voter set, they can elect a leader on the old history. Finish steps 1 and 2 on one controller before you power on the next one.
+
 ```bash
 # 1. On each returning host, as soon as you can reach it: make sure Kafka is stopped and disabled.
 sudo systemctl disable --now confluent-kcontroller   # controllers

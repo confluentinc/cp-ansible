@@ -101,7 +101,9 @@ Run the migration playbook before any other playbook that would render the new c
 
 ## If the migration stops partway
 
-Fix the cause and **re-run the same command**. Every stage is safe to repeat:
+Fix the cause and **re-run the same command** soon. If the run stopped after the kraft.version upgrade, `kraft.version` is `1` but the controllers and brokers still use `controller.quorum.voters`. Do not leave the cluster in this state for long. Disaster recovery is harder in this state.
+
+Every stage is safe to repeat:
 
 - If `kraft.version` is already `1`, the upgrade is skipped.
 - Config lines that are already switched are left as they are.

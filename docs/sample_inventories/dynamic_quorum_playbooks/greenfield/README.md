@@ -18,7 +18,6 @@ Greenfield means the cluster starts from scratch. It runs with a dynamic quorum 
 ## Requirements
 
 - Confluent Platform **8.4.0 or later**.
-- KRaft mode (`kraft_enabled: true`).
 - Dedicated controllers in the `kafka_controller` group.
 - Every controller is reachable from the Ansible host during the first deployment.
 
@@ -32,8 +31,6 @@ The quorum can elect a leader and accept metadata changes only while a **majorit
 | 4 | 3 | 1 |
 | 5 | 3 | 2 |
 | 6 | 4 | 2 |
-
-Use an odd number of controllers. Adding a fourth controller does not tolerate more failures than three.
 
 ## Sample inventory
 
