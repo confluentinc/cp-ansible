@@ -130,4 +130,4 @@ grep -E '^controller\.quorum\.(voters|bootstrap\.servers)' /etc/kafka/server.pro
 ## After the migration
 
 - Keep `kraft_dynamic_quorum_enabled: true` in the inventory. The normal playbooks now render the dynamic quorum configuration.
-- You can now [add controllers](../add_controllers/README.md), [remove controllers](../remove_controllers/README.md), and use [disaster recovery](../disaster_recovery/README.md).
+- You can now [add controllers](../add_controllers/README.md) and [remove controllers](../remove_controllers/README.md).

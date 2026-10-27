@@ -135,4 +135,3 @@ In `describe --replication`, brokers always show as `Observer`. That is expected
 
 - [Add controllers](../add_controllers/README.md)
 - [Remove controllers](../remove_controllers/README.md)
-- [Disaster recovery](../disaster_recovery/README.md)

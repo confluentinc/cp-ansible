@@ -93,8 +93,6 @@ To replace a controller whose host or disk is lost:
 1. Remove the old controller from the quorum. See [Remove Controllers](../remove_controllers/README.md).
 2. Add the new host by following this guide. You can reuse the old inventory hostname.
 
-If the quorum itself is lost, use [Disaster Recovery](../disaster_recovery/README.md) instead.
-
 ## Troubleshooting
 
 1. **A new controller stays an Observer.**

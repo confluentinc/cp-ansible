@@ -35,8 +35,6 @@ If the output shows a `LeaderId`, the quorum has a leader and you can continue.
 
 If the command times out, rule out common causes (incorrect port, network or firewall issues, and so on), or contact Confluent Support for assistance.
 
-In a disaster where controllers are lost, use the [Disaster Recovery](../disaster_recovery/README.md) runbook instead.
-
 ## Sample inventory
 
 [`hosts.yml`](hosts.yml) shows a 3-controller cluster where `kcontroller-2` is replaced:
