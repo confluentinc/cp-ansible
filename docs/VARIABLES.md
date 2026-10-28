@@ -912,7 +912,31 @@ Default:  10
 
 Default controller quorum voters
 
-Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{controller_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{hostvars[controller_hostname]|confluent.platform.resolve_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+
+***
+
+### kraft_dynamic_quorum_enabled
+
+Enable KRaft dynamic controller quorum (KIP-853); controllers use controller.quorum.bootstrap.servers instead of the static controller.quorum.voters, the initial voter formats storage with --standalone and the rest with --no-initial-controllers. Requires CP 8.4.0 or later. Opt-in; static quorum remains the default.
+
+Default:  false
+
+***
+
+### kafka_controller_initial_voter
+
+Ansible inventory hostname of the kafka_controller that bootstraps a dynamic quorum by formatting storage with --standalone as the sole initial voter while the others join as observers via auto-join. Required when kraft_dynamic_quorum_enabled is true (validation halts the run if it is unset). Set it to one of the kafka_controller inventory hosts (the inventory name, not an IP, node id or advertised hostname; use the inventory name even when hostname_aliasing_enabled is true) and do not change it after the initial deployment.
+
+Default:  ""
+
+***
+
+### kafka_controller_quorum_bootstrap_servers
+
+Default controller quorum bootstrap servers (dynamic quorum): plain host:port list (no node-id prefix), honouring hostname aliasing so it works for single-region and MRC deployments.
+
+Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if not loop.first %},{% endif %}{{ hostvars[controller_hostname]|confluent.platform.resolve_hostname }}:{{ kafka_controller_listeners['controller']['port'] }}{% endfor %}"
 
 ***
 
@@ -2400,7 +2424,7 @@ Default:  "{{ config_prefix }}/confluent-control-center"
 
 Default Control Center's dependency (prometheus & alertmanager) config path
 
-Default:  "/opt/confluent-control-center/dependencies"
+Default:  "{{ (rootless_deployment_path_final ~ '/confluent-control-center/dependencies') if rootless_deployment_path | length > 0 else '/opt/confluent-control-center/dependencies' }}"
 
 ***
 
@@ -2472,7 +2496,7 @@ Default:  "{{control_center_next_gen_default_log_dir}}"
 
 Set this variable to customize the directory that Control Center writes data files to. Default location is /var/lib/confluent/control-center.
 
-Default:  "/var/lib/confluent/control-center"
+Default:  "{{ (rootless_deployment_path_final ~ '/lib/confluent/control-center') if rootless_deployment_path | length > 0 else '/var/lib/confluent/control-center' }}"
 
 ***
 
@@ -2481,6 +2505,30 @@ Default:  "/var/lib/confluent/control-center"
 Name of listener used by C3 Next Gen to talk to Kafka
 
 Default:  internal
+
+***
+
+### control_center_next_gen_external_prometheus_enabled
+
+Boolean. External Prometheus: when true, the bundled Prometheus and Alertmanager for Control Center Next Gen are not installed, and C3 reads from an external Prometheus configured via the control_center_next_gen_dependency_prometheus_* variables.
+
+Default:  false
+
+***
+
+### control_center_next_gen_external_prometheus_preflight_probe
+
+Boolean. External Prometheus: run a best-effort reachability probe against the external Prometheus (host:port/-/ready) from the Ansible control node during pre-flight validation. The probe never fails the run (the control node's network view can differ from the Control Center host's); it only warns so an obviously wrong endpoint is caught early. Set to false to skip the probe.
+
+Default:  true
+
+***
+
+### control_center_next_gen_dependency_prometheus_server_ca_trusted
+
+Boolean. External Prometheus: set true to declare that the external Prometheus server certificate is signed by a CA the Confluent nodes already trust (a publicly-trusted CA, or one distributed outside cp-ansible). When false and control_center_next_gen_dependency_prometheus_provided_ca_cert_path is unset, pre-flight validation warns that the external Prometheus CA will not be imported into the Control Center and broker/controller truststores, so TLS reads/pushes may fail silently (a green run with blank dashboards).
+
+Default:  false
 
 ***
 
@@ -6761,30 +6809,6 @@ Default:  "{{deployment_strategy}}"
 Boolean to Pause Rolling Deployment after each USM Agent Node starts up.
 
 Default:  "{{pause_rolling_deployment}}"
-
-***
-
-### control_center_next_gen_external_prometheus_enabled
-
-Boolean. External Prometheus: when true, the bundled Prometheus and Alertmanager for Control Center Next Gen are not installed, and C3 reads from an external Prometheus configured via the control_center_next_gen_dependency_prometheus_* variables.
-
-Default:  false
-
-***
-
-### control_center_next_gen_external_prometheus_preflight_probe
-
-Boolean. External Prometheus: run a best-effort reachability probe against the external Prometheus (host:port/-/ready) from the Ansible control node during pre-flight validation. The probe never fails the run (the control node's network view can differ from the Control Center host's); it only warns so an obviously wrong endpoint is caught early. Set to false to skip the probe.
-
-Default:  true
-
-***
-
-### control_center_next_gen_dependency_prometheus_server_ca_trusted
-
-Boolean. External Prometheus: set true to declare that the external Prometheus server certificate is signed by a CA the Confluent nodes already trust (a publicly-trusted CA, or one distributed outside cp-ansible). When false and control_center_next_gen_dependency_prometheus_provided_ca_cert_path is unset, pre-flight validation warns that the external Prometheus CA will not be imported into the Control Center and broker/controller truststores, so TLS reads/pushes may fail silently (a green run with blank dashboards).
-
-Default:  false
 
 ***
 
