@@ -34,6 +34,14 @@ Custom log dirs for all components.
 
 USM Agent Basic Auth
 
+
+
+KRaft-only (no zookeeper role from 8.0.x onward). Also covers rootless in place
+
+(rootless_enabled: true below). See ROOTLESS_DEPLOYMENT_STEPS.md for why
+
+privileged: true here doesn't undermine the rootless proof.
+
 #### Scenario archive-plain-debian verify test's the following:
 
 Validates that SASL SSL protocol is set across all components
@@ -41,6 +49,20 @@ Validates that SASL SSL protocol is set across all components
 Validates that custom log4j configuration is in place.
 
 Validates that Java 17 is in Use
+
+
+
+KRaft-only (no zookeeper role from 8.0.x onward). Also covers rootless in place
+
+(rootless_enabled: true below). See ROOTLESS_DEPLOYMENT_STEPS.md for why
+
+privileged: true here doesn't undermine the rootless proof.
+
+Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy user has no
+
+passwordless-sudo escalation path, nothing landed under /opt beyond the pre-baked JDK, and
+
+the generated unit/env files point under rootless_deployment_path.
 
 Validates that Confluent CLI is installed.
 
@@ -258,6 +280,144 @@ Validates that each component is running with the correct custom logging path.
 
 ***
 
+### molecule/external-prometheus-basic-ubuntu
+
+#### Scenario external-prometheus-basic-ubuntu test's the following:
+
+External Prometheus: greenfield, external Prometheus over TLS with Basic auth (no mTLS).
+
+Focused cluster (controller + broker + C3 + mock Prometheus) - proves C3 reads the external
+
+Prometheus over TLS+Basic auth, the nodes push to it, and no bundled monitoring runs. This is
+
+the simplest External Prometheus core path (no client-cert trust chain), used to isolate Basic auth from mTLS.
+
+#### Scenario external-prometheus-basic-ubuntu verify test's the following:
+
+***
+
+### molecule/external-prometheus-brownfield-mtls-ubuntu
+
+#### Scenario external-prometheus-brownfield-mtls-ubuntu test's the following:
+
+External Prometheus brownfield + mTLS: start on the BUNDLED Prometheus, then side_effect migrates C3 and the
+
+nodes to the external mock Prometheus over mTLS and removes the old bundle. Same migration flow
+
+as external_prometheus-brownfield-ubuntu, but the external endpoint uses mutual TLS instead of Basic auth.
+
+#### Scenario external-prometheus-brownfield-mtls-ubuntu verify test's the following:
+
+***
+
+### molecule/external-prometheus-brownfield-ubuntu
+
+#### Scenario external-prometheus-brownfield-ubuntu test's the following:
+
+External Prometheus: brownfield migrate + round-trip.
+
+Pass 1 (converge): install with the BUNDLED Prometheus/Alertmanager (external_prometheus_enabled
+
+  starts false). Pass 2 (side_effect): flip to the external mock Prometheus, re-run the platform
+
+  playbook, and run the documented cleanup; then a round-trip pass back to bundled.
+
+The external-connection vars are pre-set here so the migration only flips the enable toggle.
+
+NEEDS A MOLECULE RUN TO CONFIRM: the per-pass var flip (set_fact precedence over group_vars in
+
+side_effect) and the cleanup are the parts a live run validates.
+
+#### Scenario external-prometheus-brownfield-ubuntu verify test's the following:
+
+***
+
+### molecule/external-prometheus-mtls-selfsigned-ubuntu
+
+#### Scenario external-prometheus-mtls-selfsigned-ubuntu test's the following:
+
+#### Scenario external-prometheus-mtls-selfsigned-ubuntu verify test's the following:
+
+***
+
+### molecule/external-prometheus-mtls-ubuntu
+
+#### Scenario external-prometheus-mtls-ubuntu test's the following:
+
+External Prometheus: greenfield, external Prometheus over mTLS.
+
+Focused cluster (controller + broker + C3 + mock Prometheus) - enough to prove C3 reads the
+
+external Prometheus over mTLS, the nodes push to it, and no bundled monitoring is installed.
+
+NEEDS A MOLECULE RUN TO CONFIRM: the mTLS client-cert trust chain (C3's client cert, signed by
+
+the mock CA, accepted by the mock's client_ca) is the part that only a live run validates.
+
+#### Scenario external-prometheus-mtls-ubuntu verify test's the following:
+
+***
+
+### molecule/external-prometheus-roundtrip
+
+#### Scenario external-prometheus-roundtrip test's the following:
+
+External Prometheus round-trip: bundle -> external -> bundle. EXPERIMENTAL - may or may not
+
+work, worth trying. converge installs the BUNDLE; side_effect flips to the external mock
+
+Prometheus + cleanup, then flips BACK to bundled and reinstalls. verify asserts the bundle is
+
+back (this scenario intentionally ends on bundled).
+
+The external-connection vars are pre-set here so each flip only toggles the enable var.
+
+NEEDS A MOLECULE RUN TO CONFIRM: the per-pass set_fact toggle, and that re-running with the
+
+bundle on after a cleanup fully reinstalls Prometheus/Alertmanager.
+
+#### Scenario external-prometheus-roundtrip verify test's the following:
+
+***
+
+### molecule/external-prometheus-upgrade-migrate
+
+#### Scenario external-prometheus-upgrade-migrate test's the following:
+
+External Prometheus: upgrade THEN migrate. EXPERIMENTAL / OPTIONAL - worth trying, may need adjustment on
+
+a real molecule run (the old->new CP upgrade flow across passes is the part not proven here).
+
+
+
+Pass 1 (converge): install an OLDER CP version WITH the bundled Prometheus.
+
+Pass 2 (side_effect): upgrade CP to the current version (bundle stays, C3 healthy), THEN flip to
+
+  the external Prometheus + cleanup. verify asserts the final external state.
+
+External-connection vars are pre-set so the migration only flips the enable toggle.
+
+#### Scenario external-prometheus-upgrade-migrate verify test's the following:
+
+***
+
+### molecule/jmx-exporter-stale-jar-upgrade
+
+#### Scenario jmx-exporter-stale-jar-upgrade test's the following:
+
+JMX exporter stale jar upgrade test (ANSIENG-5919).
+
+First converge installs the exporter the way older cp-ansible did: version 0.12.0 at the
+
+version-less jar path. Second converge runs with defaults and must replace the jar with the default version.
+
+Verify confirms the default version is running and exporting Kafka metrics.
+
+#### Scenario jmx-exporter-stale-jar-upgrade verify test's the following:
+
+***
+
 ### molecule/kafka-connect-replicator-plain-kerberos-rhel-fips
 
 #### Scenario kafka-connect-replicator-plain-kerberos-rhel-fips test's the following:
@@ -324,6 +484,14 @@ Creates a Connector in Connect cluster
 
 USM Agent Authentication Configuration - BASIC AUTHENTICATION
 
+
+
+KRaft-only (no zookeeper role from 8.0.x onward). Also covers rootless in place
+
+(rootless_enabled: true below). See ROOTLESS_DEPLOYMENT_STEPS.md for why
+
+privileged: true here doesn't undermine the rootless proof.
+
 #### Scenario kerberos-rhel verify test's the following:
 
 Validates that Kerberos is enabled across all components.
@@ -331,6 +499,72 @@ Validates that Kerberos is enabled across all components.
 Validates that SASL SSL Plaintext is enabled across all components.
 
 Validates that Connector is running
+
+Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy user has no
+
+passwordless-sudo escalation path, nothing landed under /opt beyond the pre-baked JDK, and
+
+the generated unit/env files point under rootless_deployment_path.
+
+***
+
+### molecule/kraft-dynamic-quorum-rbac-mtls
+
+#### Scenario kraft-dynamic-quorum-rbac-mtls test's the following:
+
+Installs Confluent Platform Cluster on Oracle Linux 8.
+
+RBAC enabled.
+
+MTLS enabled.
+
+Kafka Broker Customer Listener.
+
+SSO authentication using OIDC in Control center using Okta IdP
+
+#### Scenario kraft-dynamic-quorum-rbac-mtls verify test's the following:
+
+Validates TLS keysizes across all components.
+
+Validates OIDC authenticate api for SSO in Control Center
+
+***
+
+### molecule/kraft-dynamic-quorum-scale-up
+
+#### Scenario kraft-dynamic-quorum-scale-up test's the following:
+
+Installs Confluent Platform with a dynamic KRaft controller quorum on RHEL.
+
+Secrets protection enabled.
+
+Starts with 3 controllers, adds 2 more (5 voters),
+
+then replaces the initial voter after its disk is wiped.
+
+#### Scenario kraft-dynamic-quorum-scale-up verify test's the following:
+
+***
+
+### molecule/kraft-static-to-dynamic-migration-rbac-mtls
+
+#### Scenario kraft-static-to-dynamic-migration-rbac-mtls test's the following:
+
+Installs Confluent Platform Cluster on Oracle Linux 8.
+
+RBAC enabled.
+
+MTLS enabled.
+
+Kafka Broker Customer Listener.
+
+SSO authentication using OIDC in Control center using Okta IdP
+
+#### Scenario kraft-static-to-dynamic-migration-rbac-mtls verify test's the following:
+
+Validates TLS keysizes across all components.
+
+Validates OIDC authenticate api for SSO in Control Center
 
 ***
 
@@ -1218,6 +1452,14 @@ Kafka Broker Customer Listener.
 
 RBAC Additional System Admin.
 
+
+
+KRaft-only (no zookeeper role from 8.0.x onward). Also covers rootless in place
+
+(rootless_enabled: true below). See ROOTLESS_DEPLOYMENT_STEPS.md for why
+
+privileged: true here doesn't undermine the rootless proof.
+
 #### Scenario oauth-rbac-mtls-provided-ubuntu verify test's the following:
 
 Validates that keystores are present on all components.
@@ -1225,6 +1467,20 @@ Validates that keystores are present on all components.
 Validates that LDAPS is working.
 
 Validates that TLS CN is being registered as super user.
+
+Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy user has no
+
+passwordless-sudo escalation path, nothing landed under /opt beyond the pre-baked JDK, and
+
+the generated unit/env files point under rootless_deployment_path.
+
+Validates secrets protection under rootless: the master key is persisted where
+
+roles/common/tasks/get_masterkey.yml now knows to read it back from (the rootless env file,
+
+not the root-only override.conf), and that the LDAP credential property was actually
+
+encrypted (not left as the plaintext value from molecule.yml).
 
 ***
 
