@@ -1,0 +1,70 @@
+---
+##
+## The following is an example inventory file for deploying Confluent Platform
+## to GCP VMs that are only reachable through Identity-Aware Proxy (IAP) TCP forwarding,
+## using the google.cloud.iap connection plugin.
+##
+## The plugin behaves like the stock ssh plugin but starts an IAP tunnel
+## (`gcloud compute start-iap-tunnel`) per host. No change to cp-ansible roles or
+## playbooks is needed.
+##
+## Prerequisites on the control node:
+##   - Collection installed: `ansible-galaxy collection install google.cloud`
+##     (it is part of the `ansible` package, but not of ansible-core)
+##   - gcloud CLI installed and authenticated (`gcloud auth login`, or a service account).
+##     The plugin does not authenticate for you.
+##   - SSH key available (`gcloud compute ssh` creates ~/.ssh/google_compute_engine),
+##     published through project/instance metadata or OS Login
+##   - IAM role roles/iap.tunnelResourceAccessor (and Compute Viewer) on the project
+## Prerequisites on the GCP side:
+##   - Firewall rule allowing tcp:22 from 35.235.240.0/20 (the IAP range) to the VMs
+##   - Other CP ports open between the VMs themselves
+##
+## When hostname_aliasing_enabled is false (default), the resolve_hostname filter returns
+## inventory_hostname. Therefore the inventory hostname must be the VM's network address
+## (internal DNS name), while ansible_host holds the GCE instance name, which is what the
+## plugin expects. The zone is set per host or group; the project is set once.
+##
+## Plugin defaults to override for cp-ansible:
+##   - ansible_ssh_timeout defaults to 10 seconds. Tunnel setup can be slow, so 60 is set below.
+##   - ansible_pipelining defaults to false. cp-ansible's ansible.cfg enables it; it is set
+##     here too so the inventory works regardless of the ansible.cfg in use.
+##   - Host key checking is off by default.
+##
+## Usage:
+##   ansible-playbook -i docs/sample_inventories/gcp_iap/gcp_iap_plugin.yml confluent.platform.all
+
+all:
+  vars:
+    confluent_package_version: 7.9.10
+    ## IAP connection settings
+    ansible_connection: google.cloud.iap
+    ansible_gcloud_project: my-gcp-project
+    ansible_user: my_ssh_user
+    ansible_become: true
+    ansible_ssh_timeout: 60
+    ansible_pipelining: true
+
+zookeeper:
+  hosts:
+    zk1.us-central1-a.c.my-gcp-project.internal:
+      ansible_host: zk1
+      ansible_gcloud_zone: us-central1-a
+    zk2.us-central1-b.c.my-gcp-project.internal:
+      ansible_host: zk2
+      ansible_gcloud_zone: us-central1-b
+    zk3.us-central1-c.c.my-gcp-project.internal:
+      ansible_host: zk3
+      ansible_gcloud_zone: us-central1-c
+
+kafka_broker:
+  hosts:
+    broker1.us-central1-a.c.my-gcp-project.internal:
+      ansible_host: broker1
+      ansible_gcloud_zone: us-central1-a
+    broker2.us-central1-b.c.my-gcp-project.internal:
+      ansible_host: broker2
+      ansible_gcloud_zone: us-central1-b
+    broker3.us-central1-c.c.my-gcp-project.internal:
+      ansible_host: broker3
+      ansible_gcloud_zone: us-central1-c
