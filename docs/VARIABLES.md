@@ -2476,6 +2476,30 @@ Default:  internal
 
 ***
 
+### control_center_next_gen_external_prometheus_enabled
+
+Boolean. External Prometheus: when true, the bundled Prometheus and Alertmanager for Control Center Next Gen are not installed, and C3 reads from an external Prometheus configured via the control_center_next_gen_dependency_prometheus_* variables.
+
+Default:  false
+
+***
+
+### control_center_next_gen_external_prometheus_preflight_probe
+
+Boolean. External Prometheus: run a best-effort reachability probe against the external Prometheus (host:port/-/ready) from the Ansible control node during pre-flight validation. The probe never fails the run (the control node's network view can differ from the Control Center host's); it only warns so an obviously wrong endpoint is caught early. Set to false to skip the probe.
+
+Default:  true
+
+***
+
+### control_center_next_gen_dependency_prometheus_server_ca_trusted
+
+Boolean. External Prometheus: set true to declare that the external Prometheus server certificate is signed by a CA the Confluent nodes already trust (a publicly-trusted CA, or one distributed outside cp-ansible). When false and control_center_next_gen_dependency_prometheus_provided_ca_cert_path is unset, pre-flight validation warns that the external Prometheus CA will not be imported into the Control Center and broker/controller truststores, so TLS reads/pushes may fail silently (a green run with blank dashboards).
+
+Default:  false
+
+***
+
 ### control_center_next_gen_copy_files
 
 Use to copy files from control node to Control Center hosts. Set to list of dictionaries with keys: source_path (full path of file on control node) and destination_path (full path to copy file to). Optionally specify directory_mode (default: '750') and file_mode (default: '640') to set directory and file permissions.
@@ -7148,6 +7172,14 @@ Default:  10000
 
 ***
 
+### usm_agent_command_handler_listener_port
+
+Port of the USM Agent's dedicated loopback-only command-handler listener
+
+Default:  10001
+
+***
+
 ### usm_agent_listener_monitoring_port
 
 USM Agent listener monitoring port
@@ -7279,6 +7311,46 @@ Default:  "{{ '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem' if ansible_os_
 ### usm_agent_custom_properties
 
 USM Agent custom properties
+
+Default:  {}
+
+***
+
+### usm_agent_command_handler_enabled
+
+Whether the USM Agent Command Handler runs, letting Confluent Cloud manage self-managed connectors through this agent. Presence-derived -- true when one or more managed Connect clusters are declared, so operators normally never set it directly.
+
+Default:  "{{ usm_agent_command_handler_connect_clusters | length > 0 }}"
+
+***
+
+### usm_agent_command_handler_connect_clusters
+
+The Connect clusters the command-handler manages, as a dict keyed by cluster name, each with url, group_id, auth_type, basic_auth_username/password and ca_cert_path. TLS is implied by an https:// url. Empty by default. See docs/sample_inventories/usm_agent/usm_agent_command_handler.yml.
+
+Default:  {}
+
+***
+
+### usm_agent_command_handler_monitoring_port
+
+USM Agent Command Handler monitoring port for /healthz, exposed on all interfaces.
+
+Default:  9930
+
+***
+
+### usm_agent_command_handler_admin_port
+
+USM Agent Command Handler admin port for /statusz, bound to loopback by the daemon and never exposed off-host.
+
+Default:  9920
+
+***
+
+### usm_agent_command_handler_custom_properties
+
+USM Agent Command Handler custom properties dictionary, merged last so these win.
 
 Default:  {}
 
