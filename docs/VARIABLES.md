@@ -7180,6 +7180,14 @@ Default:  10000
 
 ***
 
+### usm_agent_command_handler_listener_port
+
+Port of the USM Agent's dedicated loopback-only command-handler listener
+
+Default:  10001
+
+***
+
 ### usm_agent_listener_monitoring_port
 
 USM Agent listener monitoring port
@@ -7311,6 +7319,46 @@ Default:  "{{ '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem' if ansible_os_
 ### usm_agent_custom_properties
 
 USM Agent custom properties
+
+Default:  {}
+
+***
+
+### usm_agent_command_handler_enabled
+
+Whether the USM Agent Command Handler runs, letting Confluent Cloud manage self-managed connectors through this agent. Presence-derived -- true when one or more managed Connect clusters are declared, so operators normally never set it directly.
+
+Default:  "{{ usm_agent_command_handler_connect_clusters | length > 0 }}"
+
+***
+
+### usm_agent_command_handler_connect_clusters
+
+The Connect clusters the command-handler manages, as a dict keyed by cluster name, each with url, group_id, auth_type, basic_auth_username/password and ca_cert_path. TLS is implied by an https:// url. Empty by default. See docs/sample_inventories/usm_agent/usm_agent_command_handler.yml.
+
+Default:  {}
+
+***
+
+### usm_agent_command_handler_monitoring_port
+
+USM Agent Command Handler monitoring port for /healthz, exposed on all interfaces.
+
+Default:  9930
+
+***
+
+### usm_agent_command_handler_admin_port
+
+USM Agent Command Handler admin port for /statusz, bound to loopback by the daemon and never exposed off-host.
+
+Default:  9920
+
+***
+
+### usm_agent_command_handler_custom_properties
+
+USM Agent Command Handler custom properties dictionary, merged last so these win.
 
 Default:  {}
 
