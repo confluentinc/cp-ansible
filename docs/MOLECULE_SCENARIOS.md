@@ -280,6 +280,144 @@ Validates that each component is running with the correct custom logging path.
 
 ***
 
+### molecule/external-prometheus-basic-ubuntu
+
+#### Scenario external-prometheus-basic-ubuntu test's the following:
+
+External Prometheus: greenfield, external Prometheus over TLS with Basic auth (no mTLS).
+
+Focused cluster (controller + broker + C3 + mock Prometheus) - proves C3 reads the external
+
+Prometheus over TLS+Basic auth, the nodes push to it, and no bundled monitoring runs. This is
+
+the simplest External Prometheus core path (no client-cert trust chain), used to isolate Basic auth from mTLS.
+
+#### Scenario external-prometheus-basic-ubuntu verify test's the following:
+
+***
+
+### molecule/external-prometheus-brownfield-mtls-ubuntu
+
+#### Scenario external-prometheus-brownfield-mtls-ubuntu test's the following:
+
+External Prometheus brownfield + mTLS: start on the BUNDLED Prometheus, then side_effect migrates C3 and the
+
+nodes to the external mock Prometheus over mTLS and removes the old bundle. Same migration flow
+
+as external_prometheus-brownfield-ubuntu, but the external endpoint uses mutual TLS instead of Basic auth.
+
+#### Scenario external-prometheus-brownfield-mtls-ubuntu verify test's the following:
+
+***
+
+### molecule/external-prometheus-brownfield-ubuntu
+
+#### Scenario external-prometheus-brownfield-ubuntu test's the following:
+
+External Prometheus: brownfield migrate + round-trip.
+
+Pass 1 (converge): install with the BUNDLED Prometheus/Alertmanager (external_prometheus_enabled
+
+  starts false). Pass 2 (side_effect): flip to the external mock Prometheus, re-run the platform
+
+  playbook, and run the documented cleanup; then a round-trip pass back to bundled.
+
+The external-connection vars are pre-set here so the migration only flips the enable toggle.
+
+NEEDS A MOLECULE RUN TO CONFIRM: the per-pass var flip (set_fact precedence over group_vars in
+
+side_effect) and the cleanup are the parts a live run validates.
+
+#### Scenario external-prometheus-brownfield-ubuntu verify test's the following:
+
+***
+
+### molecule/external-prometheus-mtls-selfsigned-ubuntu
+
+#### Scenario external-prometheus-mtls-selfsigned-ubuntu test's the following:
+
+#### Scenario external-prometheus-mtls-selfsigned-ubuntu verify test's the following:
+
+***
+
+### molecule/external-prometheus-mtls-ubuntu
+
+#### Scenario external-prometheus-mtls-ubuntu test's the following:
+
+External Prometheus: greenfield, external Prometheus over mTLS.
+
+Focused cluster (controller + broker + C3 + mock Prometheus) - enough to prove C3 reads the
+
+external Prometheus over mTLS, the nodes push to it, and no bundled monitoring is installed.
+
+NEEDS A MOLECULE RUN TO CONFIRM: the mTLS client-cert trust chain (C3's client cert, signed by
+
+the mock CA, accepted by the mock's client_ca) is the part that only a live run validates.
+
+#### Scenario external-prometheus-mtls-ubuntu verify test's the following:
+
+***
+
+### molecule/external-prometheus-roundtrip
+
+#### Scenario external-prometheus-roundtrip test's the following:
+
+External Prometheus round-trip: bundle -> external -> bundle. EXPERIMENTAL - may or may not
+
+work, worth trying. converge installs the BUNDLE; side_effect flips to the external mock
+
+Prometheus + cleanup, then flips BACK to bundled and reinstalls. verify asserts the bundle is
+
+back (this scenario intentionally ends on bundled).
+
+The external-connection vars are pre-set here so each flip only toggles the enable var.
+
+NEEDS A MOLECULE RUN TO CONFIRM: the per-pass set_fact toggle, and that re-running with the
+
+bundle on after a cleanup fully reinstalls Prometheus/Alertmanager.
+
+#### Scenario external-prometheus-roundtrip verify test's the following:
+
+***
+
+### molecule/external-prometheus-upgrade-migrate
+
+#### Scenario external-prometheus-upgrade-migrate test's the following:
+
+External Prometheus: upgrade THEN migrate. EXPERIMENTAL / OPTIONAL - worth trying, may need adjustment on
+
+a real molecule run (the old->new CP upgrade flow across passes is the part not proven here).
+
+
+
+Pass 1 (converge): install an OLDER CP version WITH the bundled Prometheus.
+
+Pass 2 (side_effect): upgrade CP to the current version (bundle stays, C3 healthy), THEN flip to
+
+  the external Prometheus + cleanup. verify asserts the final external state.
+
+External-connection vars are pre-set so the migration only flips the enable toggle.
+
+#### Scenario external-prometheus-upgrade-migrate verify test's the following:
+
+***
+
+### molecule/jmx-exporter-stale-jar-upgrade
+
+#### Scenario jmx-exporter-stale-jar-upgrade test's the following:
+
+JMX exporter stale jar upgrade test (ANSIENG-5919).
+
+First converge installs the exporter the way older cp-ansible did: version 0.12.0 at the
+
+version-less jar path. Second converge runs with defaults and must replace the jar with the default version.
+
+Verify confirms the default version is running and exporting Kafka metrics.
+
+#### Scenario jmx-exporter-stale-jar-upgrade verify test's the following:
+
+***
+
 ### molecule/kafka-connect-replicator-plain-kerberos-rhel-fips
 
 #### Scenario kafka-connect-replicator-plain-kerberos-rhel-fips test's the following:
@@ -367,6 +505,66 @@ Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy
 passwordless-sudo escalation path, nothing landed under /opt beyond the pre-baked JDK, and
 
 the generated unit/env files point under rootless_deployment_path.
+
+***
+
+### molecule/kraft-dynamic-quorum-rbac-mtls
+
+#### Scenario kraft-dynamic-quorum-rbac-mtls test's the following:
+
+Installs Confluent Platform Cluster on Oracle Linux 8.
+
+RBAC enabled.
+
+MTLS enabled.
+
+Kafka Broker Customer Listener.
+
+SSO authentication using OIDC in Control center using Okta IdP
+
+#### Scenario kraft-dynamic-quorum-rbac-mtls verify test's the following:
+
+Validates TLS keysizes across all components.
+
+Validates OIDC authenticate api for SSO in Control Center
+
+***
+
+### molecule/kraft-dynamic-quorum-scale-up
+
+#### Scenario kraft-dynamic-quorum-scale-up test's the following:
+
+Installs Confluent Platform with a dynamic KRaft controller quorum on RHEL.
+
+Secrets protection enabled.
+
+Starts with 3 controllers, adds 2 more (5 voters),
+
+then replaces the initial voter after its disk is wiped.
+
+#### Scenario kraft-dynamic-quorum-scale-up verify test's the following:
+
+***
+
+### molecule/kraft-static-to-dynamic-migration-rbac-mtls
+
+#### Scenario kraft-static-to-dynamic-migration-rbac-mtls test's the following:
+
+Installs Confluent Platform Cluster on Oracle Linux 8.
+
+RBAC enabled.
+
+MTLS enabled.
+
+Kafka Broker Customer Listener.
+
+SSO authentication using OIDC in Control center using Okta IdP
+
+#### Scenario kraft-static-to-dynamic-migration-rbac-mtls verify test's the following:
+
+Validates TLS keysizes across all components.
+
+Validates OIDC authenticate api for SSO in Control Center
 
 ***
 
@@ -830,6 +1028,44 @@ Validates that FIPS is in use in OpenSSL.
 
 ***
 
+### molecule/mtls-java21-ubuntu
+
+#### Scenario mtls-java21-ubuntu test's the following:
+
+Installation of Confluent Platform on Ubuntu2404.
+
+MTLS enabled.
+
+Java 21.
+
+#### Scenario mtls-java21-ubuntu verify test's the following:
+
+Validates that protocol is set to SSl across all components.
+
+***
+
+### molecule/mtls-java25-rhel-fips
+
+#### Scenario mtls-java25-rhel-fips test's the following:
+
+Installation of Confluent Platform on Alma Linux 9.
+
+MTLS enabled.
+
+Java 25.
+
+FIPS enabled
+
+#### Scenario mtls-java25-rhel-fips verify test's the following:
+
+Validates that Java 25 is in use.
+
+Validates that FIPS security is enabled on the Brokers.
+
+Validates that FIPS is in use in OpenSSL.
+
+***
+
 ### molecule/mtls-ubuntu
 
 #### Scenario mtls-ubuntu test's the following:
@@ -1047,6 +1283,52 @@ Validates that Service Description has been overridden.
 Validates that SASL Plaintext protocol is set across components.
 
 Validates that Connectors are present on Kafka Connect.
+
+***
+
+### molecule/oauth-rbac-kafka-connect-replicator-kerberos-mtls-custom-al2023-java25
+
+#### Scenario oauth-rbac-kafka-connect-replicator-kerberos-mtls-custom-al2023-java25 test's the following:
+
+Installation of Confluent Platform on Amazon Linux 2023 with RBAC and Confluent Replicator.
+
+RBAC enabled.
+
+RBAC additional system admin user.
+
+TLS custom certificates.
+
+Java 25.
+
+Kafka Broker Customer listener.
+
+Kafka clusters are using names for cluster registry.
+
+Kerberos enabled on cluster1 (MDS), no TLS.
+
+MTLS enabled on cluster2.
+
+External MDS enabled on cluster2.
+
+Kafka Connect Replicator with OAUTH for Authorization to Cluster1 (MDS).
+
+Kafka Connect Replicator Consumes with kerberos from Cluster1 (MDS).
+
+Kafka Connect Replicator Produces to Cluster2 using MTLS.
+
+Kafka Connect Replicator uses default values for Monitoring Interceptors.
+
+#### Scenario oauth-rbac-kafka-connect-replicator-kerberos-mtls-custom-al2023-java25 verify test's the following:
+
+Validates that the Console Consumer can consume data from cluster2, proving that data has been replicated from cluster1 (MDS).
+
+Validates that Replicator is using MTLS with RBAC to Produce data to Cluster2.
+
+Validates that Replicator is using Kerberos with RBAC to Consume from Cluster1 (MDS).
+
+Validates that client ID's are set correctly on Replicator.
+
+Validates that Replicator logging path is valid.
 
 ***
 
@@ -1320,7 +1602,7 @@ Validates that each component has a unique auth user.
 
 Validates that Rest Proxy has correct auth property.
 
-Validates that Java 21 is in Use
+Validates that Java 25 is in Use
 
 ***
 

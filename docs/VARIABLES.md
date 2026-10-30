@@ -212,11 +212,19 @@ Default:  false
 
 ***
 
+### jmxexporter_version
+
+Version of JmxExporter Agent Jar to Download
+
+Default:  1.6.0
+
+***
+
 ### jmxexporter_jar_path
 
-Full path to download the Prometheus Exporter Agent Jar
+Full path to download the Prometheus Exporter Agent Jar. The file name carries jmxexporter_version so a version change always installs a new jar and restarts the components.
 
-Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/jmx_prometheus_javaagent.jar') if rootless_deployment_path | length > 0 else '/opt/prometheus/jmx_prometheus_javaagent.jar' }}"
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter') if rootless_deployment_path | length > 0 else '/opt/prometheus' }}/jmx_prometheus_javaagent-{{ jmxexporter_version }}.jar"
 
 ***
 
@@ -584,7 +592,7 @@ Default:  "{{ (confluent_cli_base_path ~ '/confluent') if rootless_deployment_pa
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  4.72.0
+Default:  4.74.0
 
 ***
 
@@ -905,6 +913,30 @@ Default:  10
 Default controller quorum voters
 
 Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{hostvars[controller_hostname]|confluent.platform.resolve_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+
+***
+
+### kraft_dynamic_quorum_enabled
+
+Enable KRaft dynamic controller quorum (KIP-853); controllers use controller.quorum.bootstrap.servers instead of the static controller.quorum.voters, the initial voter formats storage with --standalone and the rest with --no-initial-controllers. Requires CP 8.4.0 or later. Opt-in; static quorum remains the default.
+
+Default:  false
+
+***
+
+### kafka_controller_initial_voter
+
+Ansible inventory hostname of the kafka_controller that bootstraps a dynamic quorum by formatting storage with --standalone as the sole initial voter while the others join as observers via auto-join. Required when kraft_dynamic_quorum_enabled is true (validation halts the run if it is unset). Set it to one of the kafka_controller inventory hosts (the inventory name, not an IP, node id or advertised hostname; use the inventory name even when hostname_aliasing_enabled is true) and do not change it after the initial deployment.
+
+Default:  ""
+
+***
+
+### kafka_controller_quorum_bootstrap_servers
+
+Default controller quorum bootstrap servers (dynamic quorum): plain host:port list (no node-id prefix), honouring hostname aliasing so it works for single-region and MRC deployments.
+
+Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if not loop.first %},{% endif %}{{ hostvars[controller_hostname]|confluent.platform.resolve_hostname }}:{{ kafka_controller_listeners['controller']['port'] }}{% endfor %}"
 
 ***
 
@@ -2473,6 +2505,30 @@ Default:  "{{ (rootless_deployment_path_final ~ '/lib/confluent/control-center')
 Name of listener used by C3 Next Gen to talk to Kafka
 
 Default:  internal
+
+***
+
+### control_center_next_gen_external_prometheus_enabled
+
+Boolean. External Prometheus: when true, the bundled Prometheus and Alertmanager for Control Center Next Gen are not installed, and C3 reads from an external Prometheus configured via the control_center_next_gen_dependency_prometheus_* variables.
+
+Default:  false
+
+***
+
+### control_center_next_gen_external_prometheus_preflight_probe
+
+Boolean. External Prometheus: run a best-effort reachability probe against the external Prometheus (host:port/-/ready) from the Ansible control node during pre-flight validation. The probe never fails the run (the control node's network view can differ from the Control Center host's); it only warns so an obviously wrong endpoint is caught early. Set to false to skip the probe.
+
+Default:  true
+
+***
+
+### control_center_next_gen_dependency_prometheus_server_ca_trusted
+
+Boolean. External Prometheus: set true to declare that the external Prometheus server certificate is signed by a CA the Confluent nodes already trust (a publicly-trusted CA, or one distributed outside cp-ansible). When false and control_center_next_gen_dependency_prometheus_provided_ca_cert_path is unset, pre-flight validation warns that the external Prometheus CA will not be imported into the Control Center and broker/controller truststores, so TLS reads/pushes may fail silently (a green run with blank dashboards).
+
+Default:  false
 
 ***
 
@@ -7124,6 +7180,14 @@ Default:  10000
 
 ***
 
+### usm_agent_command_handler_listener_port
+
+Port of the USM Agent's dedicated loopback-only command-handler listener
+
+Default:  10001
+
+***
+
 ### usm_agent_listener_monitoring_port
 
 USM Agent listener monitoring port
@@ -7255,6 +7319,46 @@ Default:  "{{ '/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem' if ansible_os_
 ### usm_agent_custom_properties
 
 USM Agent custom properties
+
+Default:  {}
+
+***
+
+### usm_agent_command_handler_enabled
+
+Whether the USM Agent Command Handler runs, letting Confluent Cloud manage self-managed connectors through this agent. Presence-derived -- true when one or more managed Connect clusters are declared, so operators normally never set it directly.
+
+Default:  "{{ usm_agent_command_handler_connect_clusters | length > 0 }}"
+
+***
+
+### usm_agent_command_handler_connect_clusters
+
+The Connect clusters the command-handler manages, as a dict keyed by cluster name, each with url, group_id, auth_type, basic_auth_username/password and ca_cert_path. TLS is implied by an https:// url. Empty by default. See docs/sample_inventories/usm_agent/usm_agent_command_handler.yml.
+
+Default:  {}
+
+***
+
+### usm_agent_command_handler_monitoring_port
+
+USM Agent Command Handler monitoring port for /healthz, exposed on all interfaces.
+
+Default:  9930
+
+***
+
+### usm_agent_command_handler_admin_port
+
+USM Agent Command Handler admin port for /statusz, bound to loopback by the daemon and never exposed off-host.
+
+Default:  9920
+
+***
+
+### usm_agent_command_handler_custom_properties
+
+USM Agent Command Handler custom properties dictionary, merged last so these win.
 
 Default:  {}
 
@@ -7500,9 +7604,9 @@ Default:  "{{ false if custom_java_path | length > 0 else true }}"
 
 ### redhat_java_package_name
 
-Java Package to install on RHEL/Centos hosts. Possible values java-17-openjdk or java-21-openjdk
+Java Package to install on RHEL/Centos hosts. Possible values java-17-openjdk, java-21-openjdk or java-25-openjdk
 
-Default:  java-21-openjdk
+Default:  java-25-openjdk
 
 ***
 
@@ -7516,17 +7620,17 @@ Default:  openjdk-17-jdk
 
 ### amazon_java_package_name
 
-Java Package to install on Amazon hosts. Possible values java-17-amazon-corretto or java-21-amazon-corretto
+Java Package to install on Amazon hosts. Possible values java-17-amazon-corretto, java-21-amazon-corretto or java-25-amazon-corretto
 
-Default:  java-21-amazon-corretto
+Default:  java-25-amazon-corretto
 
 ***
 
 ### ubuntu_java_package_name
 
-Java Package to install on Ubuntu hosts. Possible values openjdk-17-jdk, openjdk-21-jdk
+Java Package to install on Ubuntu hosts. Possible values openjdk-17-jdk, openjdk-21-jdk or openjdk-25-jdk
 
-Default:  openjdk-21-jdk
+Default:  openjdk-25-jdk
 
 ***
 
@@ -7562,19 +7666,11 @@ Default:  "http://search.maven.org/remotecontent?filepath=org/jolokia/jolokia-jv
 
 ***
 
-### jmxexporter_version
-
-Version of JmxExporter Agent Jar to Donwload
-
-Default:  1.0.1
-
-***
-
 ### jmxexporter_jar_url
 
-Full URL used for Prometheus Exporter Jar Download. When `jolokia_url_remote=false` this represents the path on Ansible control host.
+Full URL used for Prometheus Exporter Jar Download. Versions 1.1.0 and later come from GitHub Releases, older versions from Maven Central. When `jmxexporter_url_remote=false` this represents the path on Ansible control host.
 
-Default:  "https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/{{jmxexporter_version}}/jmx_prometheus_javaagent-{{jmxexporter_version}}.jar"
+Default:  "{{ ('https://github.com/prometheus/jmx_exporter/releases/download/' ~ jmxexporter_version) if jmxexporter_version is version('1.1.0', '>=') else ('https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/' ~ jmxexporter_version) }}/jmx_prometheus_javaagent-{{jmxexporter_version}}.jar"
 
 ***
 
@@ -7781,6 +7877,14 @@ Default:
 Environment Variables to be added to the AlertManager (Control Center Next Gen's dependency) Service. This variable is a dictionary.
 
 Default: 
+
+***
+
+### control_center_next_gen_dependency_alertmanager_web_external_url
+
+Optional. Overrides the AlertManager --web.external-url flag (exported as ALERTMANAGER_WEB_EXTERNAL_URL). Empty means the alertmanager-start script's default is used.
+
+Default:  ""
 
 ***
 

@@ -94,8 +94,11 @@ jmxexporter_url_remote: true
 ### Boolean to enable Prometheus Exporter Agent installation and configuration on all components
 jmxexporter_enabled: false
 
-### Full path to download the Prometheus Exporter Agent Jar
-jmxexporter_jar_path: "{{ (rootless_deployment_path_final ~ '/jmx_exporter/jmx_prometheus_javaagent.jar') if rootless_deployment_path | length > 0 else '/opt/prometheus/jmx_prometheus_javaagent.jar' }}"
+### Version of JmxExporter Agent Jar to Download
+jmxexporter_version: 1.6.0
+
+### Full path to download the Prometheus Exporter Agent Jar. The file name carries jmxexporter_version so a version change always installs a new jar and restarts the components.
+jmxexporter_jar_path: "{{ (rootless_deployment_path_final ~ '/jmx_exporter') if rootless_deployment_path | length > 0 else '/opt/prometheus' }}/jmx_prometheus_javaagent-{{ jmxexporter_version }}.jar"
 
 ### Boolean to force update of Prometheus Exporter Agent Jar (must be set to true if jmxexporter_jar_path already exists)
 jmxexporter_jar_url_force: false
@@ -253,7 +256,7 @@ confluent_cli_base_path: "{{ (rootless_deployment_path_final ~ '/confluent-cli')
 confluent_cli_path: "{{ (confluent_cli_base_path ~ '/confluent') if rootless_deployment_path | length > 0 else '/usr/local/bin/confluent' }}"
 
 ### Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
-confluent_cli_version: 4.72.0
+confluent_cli_version: 4.74.0
 
 ### Recommended replication factor, defaults to 3. When splitting your cluster across 2 DCs with 4 or more Brokers, this should be increased to 4 to balance topic replicas.
 default_internal_replication_factor: 3
@@ -381,6 +384,17 @@ metadata_migration_retries: 10
 
 ### Default controller quorum voters
 kafka_controller_quorum_voters: "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{hostvars[controller_hostname]|confluent.platform.resolve_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+
+### Enable KRaft dynamic controller quorum (KIP-853); controllers use controller.quorum.bootstrap.servers instead of the static controller.quorum.voters, the initial voter formats storage with --standalone and the rest with --no-initial-controllers. Requires CP 8.4.0 or later. Opt-in; static quorum remains the default.
+kraft_dynamic_quorum_enabled: false
+
+### Ansible inventory hostname of the kafka_controller that bootstraps a dynamic quorum by formatting storage with --standalone as the sole initial voter while the others join as observers via auto-join. Required when kraft_dynamic_quorum_enabled is true (validation halts the run if it is unset). Set it to one of the kafka_controller inventory hosts (the inventory name, not an IP, node id or advertised hostname; use the inventory name even when hostname_aliasing_enabled is true) and do not change it after the initial deployment.
+kafka_controller_initial_voter: ""
+
+### Default controller quorum bootstrap servers (dynamic quorum): plain host:port list (no node-id prefix), honouring hostname aliasing so it works for single-region and MRC deployments.
+kafka_controller_quorum_bootstrap_servers: "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if not loop.first %},{% endif %}{{ hostvars[controller_hostname]|confluent.platform.resolve_hostname }}:{{ kafka_controller_listeners['controller']['port'] }}{% endfor %}"
+
+kafka_controller_kraft_auto_join_enabled: true
 
 ### Default Kafka config prefix. Only valid to customize when installation_method: archive
 kafka_controller_config_prefix: "{{ config_prefix }}/controller"
@@ -1266,6 +1280,12 @@ control_center_next_gen_monitoring_interceptor_kafka_listener_name: "{{ control_
 
 control_center_next_gen_dependency_web_listener_host: "0.0.0.0"
 
+### Boolean. External Prometheus: when true, the bundled Prometheus and Alertmanager for Control Center Next Gen are not installed, and C3 reads from an external Prometheus configured via the control_center_next_gen_dependency_prometheus_* variables.
+control_center_next_gen_external_prometheus_enabled: false
+### Boolean. External Prometheus: run a best-effort reachability probe against the external Prometheus (host:port/-/ready) from the Ansible control node during pre-flight validation. The probe never fails the run (the control node's network view can differ from the Control Center host's); it only warns so an obviously wrong endpoint is caught early. Set to false to skip the probe.
+control_center_next_gen_external_prometheus_preflight_probe: true
+### Boolean. External Prometheus: set true to declare that the external Prometheus server certificate is signed by a CA the Confluent nodes already trust (a publicly-trusted CA, or one distributed outside cp-ansible). When false and control_center_next_gen_dependency_prometheus_provided_ca_cert_path is unset, pre-flight validation warns that the external Prometheus CA will not be imported into the Control Center and broker/controller truststores, so TLS reads/pushes may fail silently (a green run with blank dashboards).
+control_center_next_gen_dependency_prometheus_server_ca_trusted: false
 control_center_next_gen_dependency_prometheus_schema: "{{ 'https' if control_center_next_gen_dependency_prometheus_ssl_enabled|bool else 'http' }}"
 control_center_next_gen_dependency_prometheus_host: "{{ (groups.get('control_center_next_gen') if groups.get('control_center_next_gen') else ['localhost']) | confluent.platform.resolve_hostnames(hostvars) | first }}"
 control_center_next_gen_dependency_prometheus_web_listener_host: "{{ control_center_next_gen_dependency_web_listener_host }}"
@@ -3289,6 +3309,8 @@ kafka_connect_replicator_monitoring_interceptor_oauth_client_assertion_template_
 
 whitelist_explicit_oauth_urls: false
 
+whitelist_explicit_oauth_files: false
+
 
 jolokia_access_control_enabled: false
 
@@ -3407,6 +3429,9 @@ usm_agent_controlplane_port: 9999
 ### USM Agent dataplane port
 usm_agent_dataplane_port: 10000
 
+### Port of the USM Agent's dedicated loopback-only command-handler listener
+usm_agent_command_handler_listener_port: 10001
+
 ### USM Agent listener monitoring port
 usm_agent_listener_monitoring_port: 9910
 
@@ -3476,6 +3501,26 @@ usm_agent_ccloud_ssl_trusted_ca_location: "{{ '/etc/pki/ca-trust/extracted/pem/t
 
 ### USM Agent custom properties
 usm_agent_custom_properties: {}
+
+# USM Agent Command Handler Variables
+
+### Whether the USM Agent Command Handler runs, letting Confluent Cloud manage self-managed connectors through this agent. Presence-derived -- true when one or more managed Connect clusters are declared, so operators normally never set it directly.
+usm_agent_command_handler_enabled: "{{ usm_agent_command_handler_connect_clusters | length > 0 }}"
+
+### The Connect clusters the command-handler manages, as a dict keyed by cluster name, each with url, group_id, auth_type, basic_auth_username/password and ca_cert_path. TLS is implied by an https:// url. Empty by default. See docs/sample_inventories/usm_agent/usm_agent_command_handler.yml.
+usm_agent_command_handler_connect_clusters: {}
+
+# CA the command-handler trusts for an https cluster with no ca_cert_path of its own: the custom-cert CA when set, else empty (-> OS trust store).
+usm_agent_command_handler_connect_ca_default: "{{ ssl_ca_cert_filepath if ssl_custom_certs | bool else '' }}"
+
+### USM Agent Command Handler monitoring port for /healthz, exposed on all interfaces.
+usm_agent_command_handler_monitoring_port: 9930
+
+### USM Agent Command Handler admin port for /statusz, bound to loopback by the daemon and never exposed off-host.
+usm_agent_command_handler_admin_port: 9920
+
+### USM Agent Command Handler custom properties dictionary, merged last so these win.
+usm_agent_command_handler_custom_properties: {}
 
 ### Boolean to Enable Kafka Client Metrics for USM.
 usm_client_metrics_enabled: false

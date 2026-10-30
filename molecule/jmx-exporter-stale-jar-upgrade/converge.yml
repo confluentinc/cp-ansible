@@ -1,0 +1,28 @@
+---
+- name: Pass 1 - install with the old exporter jar at the version-less path
+  import_playbook: confluent.platform.all
+  vars:
+    jmxexporter_version: 0.12.0
+    jmxexporter_jar_path: /opt/prometheus/jmx_prometheus_javaagent.jar
+
+- name: Pass 1 verify - broker runs the stale 0.12.0 exporter
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Get jmxexporter metrics
+      uri:
+        url: "http://{{inventory_hostname}}:8080/metrics"
+        return_content: true
+      register: jmxexporter_metrics
+      until: jmxexporter_metrics.status == 200
+      retries: 10
+      delay: 10
+
+    - name: Assert jmxexporter 0.12.0 agent is running
+      assert:
+        that:
+          - jmxexporter_metrics.content is search('jmx_exporter_build_info\\{.*version="0\\.12\\.0"')
+        quiet: true
+
+- name: Pass 2 - upgrade with default exporter settings
+  import_playbook: confluent.platform.all

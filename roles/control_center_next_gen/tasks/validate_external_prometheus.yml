@@ -1,0 +1,129 @@
+---
+# External Prometheus pre-flight validation.
+# Included from main.yml, gated on control_center_next_gen_external_prometheus_enabled.
+# Enforces the supported contract: a real external endpoint, TLS on every connection, at most one
+# client auth mode (Basic auth, mTLS, or none for TLS only), and a C3 Next Gen version that supports it.
+
+- name: External Prometheus - a real external endpoint must be set
+  ansible.builtin.assert:
+    that:
+      - control_center_next_gen_dependency_prometheus_host is defined
+      - (control_center_next_gen_dependency_prometheus_host | default('') | trim | length) > 0
+      # The host has a computed default (the Control Center host), so a length check alone always
+      # passes. Require it to differ from that default, i.e. a real external endpoint was provided.
+      - control_center_next_gen_dependency_prometheus_host !=
+        ((groups.get('control_center_next_gen') if groups.get('control_center_next_gen') else ['localhost'])
+        | confluent.platform.resolve_hostnames(hostvars) | first)
+    fail_msg: >-
+      control_center_next_gen_external_prometheus_enabled is true but no external Prometheus endpoint
+      was provided (the host still resolves to the Control Center host default). Set
+      control_center_next_gen_dependency_prometheus_host and
+      control_center_next_gen_dependency_prometheus_port to your external Prometheus.
+    success_msg: "External Prometheus endpoint is set."
+    quiet: true
+
+- name: External Prometheus - TLS must be enabled
+  ansible.builtin.assert:
+    that:
+      - control_center_next_gen_dependency_prometheus_ssl_enabled | bool
+    fail_msg: >-
+      control_center_next_gen_external_prometheus_enabled is true but TLS is not enabled. Set
+      control_center_next_gen_dependency_prometheus_ssl_enabled to true. Every connection to the
+      external Prometheus must use TLS.
+    success_msg: "External Prometheus TLS is enabled."
+    quiet: true
+
+- name: External Prometheus - at most one auth mode (Basic auth or mTLS)
+  ansible.builtin.assert:
+    that:
+      - not (control_center_next_gen_dependency_prometheus_basic_auth_enabled | bool
+             and control_center_next_gen_dependency_prometheus_mtls_enabled | bool)
+    fail_msg: >-
+      control_center_next_gen_dependency_prometheus_basic_auth_enabled and
+      control_center_next_gen_dependency_prometheus_mtls_enabled cannot both be true. Set at most one
+      (Basic auth over TLS, or mutual TLS); setting neither is valid (TLS only).
+    success_msg: "External Prometheus auth mode is valid."
+    quiet: true
+
+# Server-CA trust: C3 and the broker/controller exporters only trust the external Prometheus server
+# certificate if its CA is imported into their truststores, and that import is gated on
+# control_center_next_gen_dependency_prometheus_provided_ca_cert_path. If it is empty and the CA is
+# not otherwise trusted, TLS fails silently (a green run with blank dashboards). Under mTLS this is a
+# hard failure; under Basic auth it is a warning, since some setups supply the CA out of band and set
+# control_center_next_gen_dependency_prometheus_server_ca_trusted to acknowledge that.
+- name: External Prometheus - compute whether a server-CA source is missing
+  ansible.builtin.set_fact:
+    external_prometheus_server_ca_untrusted: >-
+      {{ (control_center_next_gen_dependency_prometheus_provided_ca_cert_path | default('') | trim | length) == 0
+         and not (control_center_next_gen_dependency_prometheus_server_ca_trusted | default(false) | bool) }}
+
+- name: External Prometheus - server CA is required under mutual TLS
+  ansible.builtin.assert:
+    that:
+      - not (external_prometheus_server_ca_untrusted | bool)
+    fail_msg: >-
+      Mutual TLS to the external Prometheus is enabled but no server CA is configured. Set
+      control_center_next_gen_dependency_prometheus_provided_ca_cert_path to the CA that signed the
+      external Prometheus server certificate so it is imported into the Control Center and
+      broker/controller truststores, or set
+      control_center_next_gen_dependency_prometheus_server_ca_trusted to true if that CA is already
+      trusted by the Confluent nodes.
+    success_msg: "External Prometheus server CA is configured."
+    quiet: true
+  when: control_center_next_gen_dependency_prometheus_mtls_enabled | bool
+
+- name: External Prometheus - warn when no server CA source is set (Basic auth or TLS-only)
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: control_center_next_gen_dependency_prometheus_provided_ca_cert_path is not set, so the
+      external Prometheus server CA will NOT be imported into the Control Center and broker/controller
+      truststores. TLS reads and metric pushes may fail silently (a green run with blank dashboards).
+      Set control_center_next_gen_dependency_prometheus_provided_ca_cert_path to the CA that signed the
+      external Prometheus server certificate, or set
+      control_center_next_gen_dependency_prometheus_server_ca_trusted to true if that CA is already
+      trusted by the Confluent nodes.
+  when:
+    - external_prometheus_server_ca_untrusted | bool
+    - not (control_center_next_gen_dependency_prometheus_mtls_enabled | bool)
+
+# Best-effort reachability probe from the Ansible control node. The control node's view of the
+# network can differ from the Control Center host's, so this only warns, never fails. Disable with
+# control_center_next_gen_external_prometheus_preflight_probe=false.
+- name: External Prometheus - probe the endpoint (best-effort)
+  ansible.builtin.uri:
+    url: >-
+      {{ (control_center_next_gen_dependency_prometheus_ssl_enabled | bool) | ternary('https', 'http') }}://{{
+      control_center_next_gen_dependency_prometheus_host }}:{{ control_center_next_gen_dependency_prometheus_port }}/-/ready
+    method: GET
+    validate_certs: false
+    timeout: 5
+  register: external_prometheus_probe
+  failed_when: false
+  changed_when: false
+  when: control_center_next_gen_external_prometheus_preflight_probe | default(true) | bool
+
+- name: External Prometheus - warn if the endpoint was not reachable from the control node
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: could not reach the external Prometheus at
+      {{ control_center_next_gen_dependency_prometheus_host }}:{{ control_center_next_gen_dependency_prometheus_port }}/-/ready
+      from the Ansible control node (status {{ external_prometheus_probe.status | default('n/a') }}). This is a
+      best-effort check and may just be a control-node-vs-Control-Center network difference. If C3 later
+      shows blank dashboards, verify the endpoint, port, DNS, and firewall from the Control Center host.
+  when:
+    - control_center_next_gen_external_prometheus_preflight_probe | default(true) | bool
+    - (external_prometheus_probe.status | default(0) | int) not in [200, 401, 403]
+
+- name: External Prometheus - C3 Next Gen must be newer than 2.6 (the latest released version)
+  assert:
+    that:
+      - confluent_control_center_next_gen_repo_version is version('2.6', '>')
+    fail_msg: >-
+      control_center_next_gen_external_prometheus_enabled is true, but the configured C3 Next Gen
+      version ({{ confluent_control_center_next_gen_package_version }}) is not newer than the latest
+      released version (2.6) and is known not to support external Prometheus. It will boot its own
+      embedded Prometheus/Alertmanager and fail to start because the bundled configuration files
+      external Prometheus intentionally omits are missing. Upgrade C3 Next Gen or set
+      control_center_next_gen_external_prometheus_enabled to false.
+    success_msg: "External Prometheus: C3 Next Gen version is supported."
+    quiet: true

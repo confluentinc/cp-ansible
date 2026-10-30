@@ -4,30 +4,28 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-8.2.4
+8.4.0
 ======
 Breaking Changes
 -------------
-- ``confluent_package_version`` is now required. CP-Ansible no longer ships a hardcoded default Confluent Platform version. Before upgrading, add ``confluent_package_version`` to your inventory, set to the CP version you want to install. See the CP-Ansible / Confluent Platform compatibility matrix: https://docs.confluent.io/ansible/current/ansible-requirements.html. If it is not set, the playbook will fail early.
+- ``confluent_package_version`` is now required. CP-Ansible no longer ships a default Confluent Platform version. Before you upgrade, set ``confluent_package_version`` in your inventory to the Confluent Platform version you want to install. If it is not set, the playbooks fail early. For supported versions, see the compatibility matrix: https://docs.confluent.io/ansible/current/ansible-requirements.html.
 
 New features
 -------------
-- Rootless (non-root) CP-Ansible install: end-to-end support for installing Confluent Platform as a non-root user.
+- Support for KRaft dynamic controller quorum (KIP-853). Deploy new clusters with a dynamic quorum, migrate existing static-quorum clusters to it, and add or replace controllers without rebuilding the cluster.
+- Bring your own Prometheus for Control Center Next Gen. Control Center can use an externally managed Prometheus instead of the bundled Prometheus and Alertmanager.
+- Control Center Next Gen now collects Kafka producer and consumer client metrics by default.
 
 Notable enhancements
 -------------
-- Control Center Next Gen (2.7.0+) and USM Agent (1.3.0+) packages are now fetched from version-numbered repository paths (for example ``.../rpm/2.7/`` instead of ``.../rpm/``); older versions and standard installations are unaffected, and air-gapped or mirrored setups can adjust the path via the new ``confluent_control_center_next_gen_versioned_from_minor_version`` and ``confluent_usm_agent_versioned_from_minor_version`` variables.
+- Upgraded the Prometheus JMX Exporter agent from 1.0.1 to 1.6.0. Versions 1.1.0 and later are downloaded from GitHub Releases instead of Maven Central.
+- New ``control_center_next_gen_dependency_alertmanager_web_external_url`` variable sets the external URL of the bundled Alertmanager for Control Center Next Gen, so alert links work when Alertmanager runs behind a proxy or load balancer.
 
 Notable Fixes
 -------------
-- Fixed DN extraction from keystores truncating on colon-containing certificate fields.
-- Fixed security.properties copy failing on a static/BYO masterkey with nothing to copy, by gating on the file actually existing on the controller.
-- Scope archive-ownership chown to ``binary_base_path`` instead of the shared ``archive_destination_path``.
-- Fixed Control Center Next Gen Basic Authentication by generating JAAS configuration with the correct Jetty login module.
-- Fixed ``kafka_controller_quorum_voters`` to honor ``hostname_aliasing_enabled`` and use resolved controller hostnames instead of raw inventory hostnames, ensuring consistent and routable controller endpoints.
+- N/A
 
-
-8.2.3
+8.3.1
 ======
 New features
 -------------
@@ -35,13 +33,13 @@ New features
 
 Notable enhancements
 -------------
-- This release adds protection against Common Vulnerabilites and Exposures found in Confluent Platform. More info: https://docs.confluent.io/platform/8.2/release-notes/index.html#cp-release-8-2-3
+- This release adds protection against Common Vulnerabilites and Exposures found in Confluent Platform. More info: https://docs.confluent.io/platform/8.3/release-notes/index.html#cp-release-8-3-1
 
 Notable Fixes
 -------------
 - N/A
 
-v8.2.2
+v8.3.0
 ======
 New features
 -------------
@@ -49,26 +47,16 @@ New features
 
 Notable enhancements
 -------------
-- Added validation of CP package availability before installation: the playbook now fails early if the requested package version is unavailable, before removing the existing packages (https://github.com/confluentinc/cp-ansible/pull/2548).
 - Introduced Confluent CLI v3.0.0 preflight assertion.
+- Support added for Java 25.
 
-Notable fixes
+Notable Fixes
 -------------
-- For the list of security and vulnerability issues fixed in this release, see https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 - Removed redundant double restart for kafka broker and kafka controller.
 - Fixed the security.properties copy task so the file is correctly copied to the Ansible host.
 - Fixed kafka-storage format failures on KRaft clusters with secrets protection enabled - the master key is now passed to the format step via the CONFLUENT_SECURITY_MASTER_KEY environment variable.
 - Fixed custom certificate chain building for multi-tier and partial-chain PKIs - chains now assemble correctly for root + intermediate bundles and DoD-style partial chains.
-
-v8.2.1
-======
-Notable fixes
--------------
-- For the list of security and vulnerability issues fixed in this release, see https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
-
-Bug fixes
--------------
-- Fixed kafka-storage format failures on KRaft clusters with secrets protection enabled — the masterkey is now passed via the CONFLUENT_SECURITY_MASTER_KEY env var (https://github.com/confluentinc/cp-ansible/pull/2477).
+- Fixed OAuth client-assertion components failing to start on Confluent Platform 8.3 by passing the new ``-Dorg.apache.kafka.sasl.oauthbearer.allowed.files`` JVM property.
 
 v8.2.0
 ======
