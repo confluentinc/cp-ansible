@@ -7136,7 +7136,7 @@ Default:  ""
 
 Version of Confluent USM Agent to install
 
-Default:  1.2.1
+Default:  1.3.0
 
 ***
 

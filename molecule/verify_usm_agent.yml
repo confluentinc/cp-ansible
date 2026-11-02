@@ -244,6 +244,82 @@
         label: "{{ item.path | basename }}"
       when: command_handler_config_path | length > 0
 
+    - name: Wait for the Command Handler to resolve a Connect cluster (/statusz)
+      uri:
+        url: "http://127.0.0.1:{{ command_handler_config | regex_findall('command-handler\\.admin\\.port=(\\d+)') | first | default('9920') }}/statusz"
+        return_content: true
+        status_code: 200
+        timeout: 5
+      register: command_handler_statusz
+      until: (command_handler_statusz.json.clusters | default([]) | selectattr('resolved') | list | length) > 0
+      retries: 36
+      delay: 5
+      when: command_handler_config_path | length > 0
+
+    - name: Set the resolved Connect clusters and the round trip command id
+      set_fact:
+        command_handler_resolved_clusters: "{{ command_handler_statusz.json.clusters | selectattr('resolved') | list }}"
+        command_handler_command_id_prefix: "molecule-{{ inventory_hostname }}-{{ now(utc=true).strftime('%s') }}"
+      when: command_handler_config_path | length > 0
+
+    - name: Queue a GET / command on the ccloud mock for each resolved cluster
+      uri:
+        url: "http://{{ ccloud_mock_host }}:{{ ccloud_mock_port }}/hybrid_commands"
+        method: POST
+        user: "{{ ccloud_mock_user }}"
+        password: "{{ ccloud_mock_password }}"
+        force_basic_auth: true
+        body_format: json
+        body:
+          kafka_cluster_id: "{{ item.kafkaClusterId }}"
+          connect_group_id: "{{ item.connectGroupId }}"
+          connector_name: molecule-ch-verify
+          commands:
+            - command_id: "{{ command_handler_command_id_prefix }}-{{ item.name }}"
+              command:
+                method: GET
+                path: /
+        status_code: 201
+        timeout: 10
+      register: command_handler_queued
+      until: command_handler_queued.status == 201
+      retries: 5
+      delay: 5
+      loop: "{{ command_handler_resolved_clusters | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: command_handler_config_path | length > 0
+
+    - name: Wait for the Command Handler to report each command status to the ccloud mock
+      uri:
+        url: "http://{{ ccloud_mock_host }}:{{ ccloud_mock_port }}/hybrid_commands_status?command_id={{ command_handler_command_id_prefix }}-{{ item.name }}"
+        user: "{{ ccloud_mock_user }}"
+        password: "{{ ccloud_mock_password }}"
+        force_basic_auth: true
+        return_content: true
+        status_code: 200
+        timeout: 10
+      register: command_handler_command_statuses
+      until: command_handler_command_statuses.status == 200
+      retries: 36
+      delay: 5
+      loop: "{{ command_handler_resolved_clusters | default([]) }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: command_handler_config_path | length > 0
+
+    - name: Assert each command executed on Connect and returned its Kafka cluster id
+      assert:
+        that:
+          - item.json.phase == 'EXECUTED'
+          - item.json.detail.http_status == 200
+          - (item.json.detail.message | from_json).kafka_cluster_id == item.item.kafkaClusterId
+        fail_msg: "cluster '{{ item.item.name }}': unexpected command status {{ item.json | default(item.content) }}"
+        success_msg: "cluster '{{ item.item.name }}': GET / executed on Connect and reported back through the agent"
+      loop: "{{ command_handler_command_statuses.results | default([]) | rejectattr('skipped', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
 - name: Verify USM HTTP Exporter Configs - Kafka Controller
   hosts: kafka_controller
   gather_facts: false
