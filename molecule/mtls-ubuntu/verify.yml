@@ -14,6 +14,16 @@
         file_path: /etc/controller/server.properties
         property: controller.quorum.voters
         expected_value: "{{ kafka_controller_quorum_voters }}"
+    - name: Assert controller quorum voters honor hostname aliasing
+      assert:
+        that:
+          - kafka_controller_quorum_voters is search(hostvars[inventory_hostname] | confluent.platform.resolve_hostname)
+          - kafka_controller_quorum_voters is not search('@' + inventory_hostname + ':')
+        fail_msg: >-
+          controller.quorum.voters '{{ kafka_controller_quorum_voters }}' is not using the aliased
+          hostname '{{ hostvars[inventory_hostname] | confluent.platform.resolve_hostname }}'
+        success_msg: "controller.quorum.voters correctly uses aliased hostname"
+      when: hostvars[inventory_hostname].hostname_aliasing_enabled | default(false) | bool
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml

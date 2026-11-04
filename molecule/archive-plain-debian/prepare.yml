@@ -1,6 +1,34 @@
 ---
+### deployment_user (cp-user) doesn't exist yet when the IPv6-preference play (implicit
+### gather_facts, connects as ansible_user unconditionally) or a MIGRATION=true
+### confluent.platform.all run below connect here - bootstrap it and switch to it first
+### (converge.yml does the same later). Also lets IPv6 preference itself run as root, which
+### is appropriate since it writes a root-owned /etc/gai.conf.
+
+- name: Cache ansible_user=root so early prepare plays connect as root before the deploy user exists
+  hosts: kafka_controller:kafka_controller_migration:zookeeper:zookeeper_migration:kafka_broker:kafka_broker_migration:schema_registry:schema_registry_migration:kafka_connect:kafka_connect_migration:kafka_rest:kafka_rest_migration:ksql:ksql_migration:control_center:control_center_migration:control_center_next_gen:control_center_next_gen_migration
+  gather_facts: false
+  vars:
+    ansible_user: root
+  tasks:
+    - set_fact:
+        ansible_user: root
+
 - name: Configure IPv6 Preference
   import_playbook: ../configure_ipv6.yml
+
+- import_playbook: confluent.platform.rootless_bootstrap
+  when: lookup('env', 'MIGRATION')|default('false') == 'true'
+
+- name: Cache ansible_user=deployment_user so the unprivileged deploy connects as that user
+  hosts: kafka_controller:kafka_controller_migration:zookeeper:zookeeper_migration:kafka_broker:kafka_broker_migration:schema_registry:schema_registry_migration:kafka_connect:kafka_connect_migration:kafka_rest:kafka_rest_migration:ksql:ksql_migration:control_center:control_center_migration:control_center_next_gen:control_center_next_gen_migration
+  gather_facts: false
+  tasks:
+    - set_fact:
+        ansible_user: "{{ deployment_user }}"
+      when:
+        - lookup('env', 'MIGRATION')|default('false') == 'true'
+        - (deployment_user | default('') | length > 0) and (rootless_deployment_path | default('') | length > 0)
 
 - name: Install Zookeeper Cluster
   import_playbook: confluent.platform.all

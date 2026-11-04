@@ -6,9 +6,9 @@ Below are the supported variables for the role variables
 
 ### confluent_package_version
 
-Version of Confluent Platform to install
+Confluent Platform version to install. Required: empty by default, so you must set it explicitly in your inventory or the playbook fails early with a clear error.
 
-Default:  7.9.8
+Default:  ""
 
 ***
 
@@ -160,7 +160,7 @@ Default:  false
 
 Full path to download the Jolokia Agent Jar
 
-Default:  /opt/jolokia/jolokia.jar
+Default:  "{{ (rootless_deployment_path_final ~ '/jolokia/jolokia.jar') if rootless_deployment_path | length > 0 else '/opt/jolokia/jolokia.jar' }}"
 
 ***
 
@@ -360,7 +360,7 @@ Default:  false
 
 Full path to download the Prometheus Exporter Agent Jar
 
-Default:  /opt/prometheus/jmx_prometheus_javaagent.jar
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/jmx_prometheus_javaagent.jar') if rootless_deployment_path | length > 0 else '/opt/prometheus/jmx_prometheus_javaagent.jar' }}"
 
 ***
 
@@ -448,7 +448,7 @@ Default:  true
 
 Custom path for the location of kerberos client configuration file, works with any value of kerberos_configure
 
-Default:  /etc/krb5.conf
+Default:  "{{ (rootless_deployment_path_final ~ '/krb5.conf') if rootless_deployment_path | length > 0 else '/etc/krb5.conf' }}"
 
 ***
 
@@ -644,11 +644,43 @@ Default:  "package"
 
 ***
 
+### rootless_deployment_path
+
+Rootless base path/user/group - install paths, users/groups, and data/log dirs derive from these. Empty rootless_deployment_path/deployment_user = no change.
+
+Default:  ""
+
+***
+
+### rootless_enabled
+
+Master switch for rootless deploys - skips root-requiring steps and runs the systemd --user lifecycle instead. Default false = no change.
+
+Default:  false
+
+***
+
+### rootless_lifecycle_enabled
+
+Generates a systemd --user unit per component instead of system-level systemd. Defaults to rootless_enabled; can be set independently.
+
+Default:  "{{ rootless_enabled }}"
+
+***
+
+### rootless_lifecycle_bin_dir
+
+Directory the rootless lifecycle env-file + start/stop scripts are written to.
+
+Default:  "{{ (rootless_deployment_path_final ~ '/rootless-bin') if rootless_deployment_path | length > 0 else (archive_destination_path ~ '/rootless-bin') }}"
+
+***
+
 ### archive_destination_path
 
 The path the downloaded archive is expanded into. Using the default with a `confluent_package_version` of *5.5.1* results in the following installation path `/opt/confluent/confluent-5.5.1/` that contains directories such as `bin` and `share`, but may be overridden usinf the `binary_base_path` property.
 
-Default:  "/opt/confluent"
+Default:  "{{ (rootless_deployment_path_final ~ '/confluent') if rootless_deployment_path | length > 0 else '/opt/confluent' }}"
 
 ***
 
@@ -704,7 +736,7 @@ Default:  true
 
 The path the Confluent CLI archive is expanded into.
 
-Default:  /opt/confluent-cli
+Default:  "{{ (rootless_deployment_path_final ~ '/confluent-cli') if rootless_deployment_path | length > 0 else '/opt/confluent-cli' }}"
 
 ***
 
@@ -712,7 +744,7 @@ Default:  /opt/confluent-cli
 
 Full path on hosts for Confluent CLI symlink to executable
 
-Default:  "/usr/local/bin/confluent"
+Default:  "{{ (confluent_cli_base_path ~ '/confluent') if rootless_deployment_path | length > 0 else '/usr/local/bin/confluent' }}"
 
 ***
 
@@ -800,7 +832,7 @@ Default:  "{{ false if ssl_provided_keystore_and_truststore|bool or ssl_custom_c
 
 Directory on hosts to store all ssl files.
 
-Default:  /var/ssl/private/
+Default:  "{{ (rootless_deployment_path_final ~ '/ssl') if rootless_deployment_path | length > 0 else '/var/ssl/private/' }}"
 
 ***
 
@@ -1200,7 +1232,7 @@ Default:  zookeeper.yml
 
 Destination path for Zookeeper jmx config file
 
-Default:  /opt/prometheus/zookeeper.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/zookeeper.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/zookeeper.yml' }}"
 
 ***
 
@@ -1280,7 +1312,7 @@ Default:  30
 
 Default controller quorum voters
 
-Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{controller_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
+Default:  "{% for controller_hostname in groups.kafka_controller|default([]) %}{% if loop.index > 1%},{% endif %}{{groups.kafka_controller.index(controller_hostname)|int + 9991}}@{{hostvars[controller_hostname]|confluent.platform.resolve_hostname}}:{{ kafka_controller_listeners['controller']['port'] }}{%endfor%}"
 
 ***
 
@@ -1448,7 +1480,7 @@ Default:  kafka.yml.j2
 
 Destination path for Kafka controller jmx config file
 
-Default:  /opt/prometheus/kafka.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/kafka_controller.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/kafka.yml' }}"
 
 ***
 
@@ -1688,7 +1720,7 @@ Default:  kafka.yml.j2
 
 Destination path for Kafka Broker jmx config file
 
-Default:  /opt/prometheus/kafka.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/kafka.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/kafka.yml' }}"
 
 ***
 
@@ -1968,7 +2000,7 @@ Default:  schema_registry.yml
 
 Destination path for Schema Registry jmx config file
 
-Default:  /opt/prometheus/schema_registry.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/schema_registry.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/schema_registry.yml' }}"
 
 ***
 
@@ -2192,7 +2224,7 @@ Default:  kafka_rest.yml
 
 Destination path for Rest Proxy jmx config file
 
-Default:  /opt/prometheus/kafka_rest.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/kafka_rest.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/kafka_rest.yml' }}"
 
 ***
 
@@ -2456,7 +2488,7 @@ Default:  kafka_connect.yml
 
 Destination path for Connect jmx config file
 
-Default:  /opt/prometheus/kafka_connect.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/kafka_connect.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/kafka_connect.yml' }}"
 
 ***
 
@@ -2720,7 +2752,7 @@ Default:  ksql.yml
 
 Destination path for ksqlDB jmx config file
 
-Default:  /opt/prometheus/ksql.yml
+Default:  "{{ (rootless_deployment_path_final ~ '/jmx_exporter/ksql.yml') if rootless_deployment_path | length > 0 else '/opt/prometheus/ksql.yml' }}"
 
 ***
 
@@ -2928,7 +2960,7 @@ Default:  "{{ config_prefix }}/confluent-control-center"
 
 Default Control Center's dependency (prometheus & alertmanager) config path
 
-Default:  "/opt/confluent-control-center/dependencies"
+Default:  "{{ (rootless_deployment_path_final ~ '/confluent-control-center/dependencies') if rootless_deployment_path | length > 0 else '/opt/confluent-control-center/dependencies' }}"
 
 ***
 
@@ -3000,7 +3032,7 @@ Default:  "{{control_center_next_gen_default_log_dir}}"
 
 Set this variable to customize the directory that Control Center writes data files to. Default location is /var/lib/confluent/control-center.
 
-Default:  "/var/lib/confluent/control-center"
+Default:  "{{ (rootless_deployment_path_final ~ '/lib/confluent/control-center') if rootless_deployment_path | length > 0 else '/var/lib/confluent/control-center' }}"
 
 ***
 
@@ -4968,7 +5000,7 @@ Default:  7777
 
 Full path to download the Jolokia Agent Jar.
 
-Default:  /opt/jolokia/jolokia.jar
+Default:  "{{ (rootless_deployment_path_final ~ '/jolokia/jolokia.jar') if rootless_deployment_path | length > 0 else '/opt/jolokia/jolokia.jar' }}"
 
 ***
 
@@ -4976,7 +5008,7 @@ Default:  /opt/jolokia/jolokia.jar
 
 Set this variable to customize the directory that Kafka Connect Replicator writes log files to.
 
-Default:  /var/log/confluent/kafka-connect-replicator
+Default:  "{{ (rootless_deployment_path_final ~ '/log/kafka-connect-replicator') if rootless_deployment_path | length > 0 else '/var/log/confluent/kafka-connect-replicator' }}"
 
 ***
 
@@ -5160,7 +5192,7 @@ Default:  ""
 
 Set this variable to override the default location of the public pem file for connecting to the ERP when RBAC is enabled.
 
-Default:  /var/ssl/private/kafka_connect_replicator/public.pem
+Default:  "{{ (rootless_deployment_path_final ~ '/kafka_connect_replicator/public.pem') if rootless_deployment_path | length > 0 else '/var/ssl/private/kafka_connect_replicator/public.pem' }}"
 
 ***
 
@@ -5376,7 +5408,7 @@ Default:  ""
 
 Set this variable to override the default location of the public pem file for connecting to the ERP when RBAC is enabled.
 
-Default:  /var/ssl/private/kafka_connect_replicator_consumer/public.pem
+Default:  "{{ (rootless_deployment_path_final ~ '/kafka_connect_replicator_consumer/public.pem') if rootless_deployment_path | length > 0 else '/var/ssl/private/kafka_connect_replicator_consumer/public.pem' }}"
 
 ***
 
@@ -6144,7 +6176,7 @@ Default:  ""
 
 Version of Confluent USM Agent to install
 
-Default:  1.2.0
+Default:  1.2.1
 
 ***
 
@@ -6418,11 +6450,59 @@ Default:  "https://packages.confluent.io"
 
 ***
 
+### confluent_control_center_next_gen_versioned_from_minor_version
+
+C3 Next Gen minor line from which the version-isolated <major.minor>/ layout applies; lower minors are flat.
+
+Default:  "2.7"
+
+***
+
+### confluent_control_center_next_gen_versioned_until_minor_version
+
+Optional rollback: this C3 Next Gen minor and higher go back to flat (e.g. "3.0"). Empty means versioned indefinitely.
+
+Default:  ""
+
+***
+
+### confluent_control_center_next_gen_version_segment
+
+C3 Next Gen version-isolated path segment: "/<major.minor>" for versioned lines, "" for flat lines. Override to force a specific layout.
+
+Default:  "{{ ('/' + confluent_control_center_next_gen_repo_version) if (confluent_control_center_next_gen_repo_version is version(confluent_control_center_next_gen_versioned_from_minor_version, '>=') and (confluent_control_center_next_gen_versioned_until_minor_version == '' or confluent_control_center_next_gen_repo_version is version(confluent_control_center_next_gen_versioned_until_minor_version, '<'))) else '' }}"
+
+***
+
 ### confluent_usm_agent_independent_repository_baseurl
 
 Confluent USM Agent RPM and Debian Package Repositories
 
 Default:  "{{confluent_independent_repository_baseurl}}/confluent-usm-agent"
+
+***
+
+### confluent_usm_agent_versioned_from_minor_version
+
+USM Agent minor line from which the version-isolated <major.minor>/ layout applies; lower minors are flat.
+
+Default:  "1.3"
+
+***
+
+### confluent_usm_agent_versioned_until_minor_version
+
+Optional rollback: this USM Agent minor and higher go back to flat (e.g. "2.0"). Empty means versioned indefinitely.
+
+Default:  ""
+
+***
+
+### confluent_usm_agent_version_segment
+
+USM Agent version-isolated path segment: "/<major.minor>" for versioned lines, "" for flat lines. Override to force a specific layout.
+
+Default:  "{{ ('/' + confluent_usm_agent_repo_version) if (confluent_usm_agent_repo_version is version(confluent_usm_agent_versioned_from_minor_version, '>=') and (confluent_usm_agent_versioned_until_minor_version == '' or confluent_usm_agent_repo_version is version(confluent_usm_agent_versioned_until_minor_version, '<'))) else '' }}"
 
 ***
 
@@ -6534,7 +6614,7 @@ Default:  "{{confluent_common_repository_baseurl}}/archive/{{confluent_repo_vers
 
 A path reference to a local archive file or URL for control-center-next-gen archive. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/archive/confluent-control-center-next-gen-{{confluent_control_center_next_gen_package_version}}.tar.gz"
+Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/archive{{confluent_control_center_next_gen_version_segment}}/confluent-control-center-next-gen-{{confluent_control_center_next_gen_package_version}}.tar.gz"
 
 ***
 
@@ -6542,7 +6622,7 @@ Default:  "{{confluent_control_center_next_gen_independent_repository_baseurl}}/
 
 A path reference to a local archive file or URL for confluent-usm-agent archive. By default this is the URL from Confluent's repositories. In an ansible-pull deployment this could be set to a local file such as "~/.ansible/pull/{{inventory_hostname}}/{{confluent_archive_file_name}}".
 
-Default:  "{{confluent_usm_agent_independent_repository_baseurl}}/archive/confluent-usm-agent-{{ confluent_usm_agent_full_package_version }}.tar.gz"
+Default:  "{{confluent_usm_agent_independent_repository_baseurl}}/archive{{confluent_usm_agent_version_segment}}/confluent-usm-agent-{{ confluent_usm_agent_full_package_version }}.tar.gz"
 
 ***
 
