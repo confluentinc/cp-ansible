@@ -125,16 +125,19 @@ provisioner:
         ssl_enabled: true
         ssl_mutual_auth_enabled: true
 
+        # External Prometheus needs C3 Next Gen newer than 2.6 (same check as validate_external_prometheus.yml).
+        # With an older C3 the scenario falls back to the bundled Prometheus over plain HTTP.
+        external_prometheus_c3_supported: "{{ (confluent_control_center_next_gen_package_version | default('0.0') | regex_replace('^([0-9]+)\\.([0-9]+).*', '\\1.\\2')) is version('2.6', '>') }}"
         # External Prometheus: read from the external mock Prometheus over TLS + basic auth.
-        control_center_next_gen_external_prometheus_enabled: true
-        control_center_next_gen_dependency_prometheus_host: external-prometheus.confluent
+        control_center_next_gen_external_prometheus_enabled: "{{ external_prometheus_c3_supported }}"
+        control_center_next_gen_dependency_prometheus_host: "{{ 'external-prometheus.confluent' if external_prometheus_c3_supported else ((groups.get('control_center_next_gen') if groups.get('control_center_next_gen') else ['localhost']) | confluent.platform.resolve_hostnames(hostvars) | first) }}"
         control_center_next_gen_dependency_prometheus_port: 9090
-        control_center_next_gen_dependency_prometheus_ssl_enabled: true
-        control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
-        control_center_next_gen_dependency_prometheus_ca_cert_path: /var/ssl/private/external_prometheus_ca.crt
+        control_center_next_gen_dependency_prometheus_ssl_enabled: "{{ external_prometheus_c3_supported }}"
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: "{{ external_prometheus_c3_supported }}"
+        control_center_next_gen_dependency_prometheus_ca_cert_path: "{{ '/var/ssl/private/external_prometheus_ca.crt' if external_prometheus_c3_supported else ssl_file_dir_final ~ '/ca.crt' }}"
         # External Prometheus: controller-side source of the mock CA, imported into broker/controller truststores
         # so the telemetry exporter trusts the external Prometheus over TLS.
-        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/ca.crt"
+        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: "{{ (lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) ~ '/ca.crt') if external_prometheus_c3_supported else '' }}"
         control_center_next_gen_dependency_prometheus_basic_users:
           admin:
             principal: c3
