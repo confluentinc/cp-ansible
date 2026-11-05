@@ -444,6 +444,14 @@ Default:  true
 
 ***
 
+### kerberos_copy_keytab
+
+Boolean to copy keytab files from the control node to hosts. Set to false if keytabs are managed externally and already present at the keytab destination path on each host.
+
+Default:  true
+
+***
+
 ### kerberos_client_config_file_dest
 
 Custom path for the location of kerberos client configuration file, works with any value of kerberos_configure
