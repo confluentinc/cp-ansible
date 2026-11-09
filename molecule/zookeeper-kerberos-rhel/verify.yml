@@ -37,3 +37,19 @@
         file_path: /etc/schema-registry/schema-registry.properties
         property: kafkastore.security.protocol
         expected_value: SASL_PLAINTEXT
+
+- name: Verify - keytabs were not copied by cp-ansible (kerberos_copy_keytab false)
+  hosts: zookeeper,kafka_broker,schema_registry
+  gather_facts: false
+  tasks:
+    - name: Stat keytab
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: keytab_stat
+      loop: "{{ [zookeeper_keytab_path] if inventory_hostname in groups['zookeeper'] else ([kafka_broker_keytab_path] if inventory_hostname in groups['kafka_broker'] else [schema_registry_keytab_path]) }}"
+
+    - name: Assert keytab still exists and is untouched (owned by root, not the service user)
+      ansible.builtin.assert:
+        that:
+          - keytab_stat.results[0].stat.exists
+          - keytab_stat.results[0].stat.pw_name == 'root'

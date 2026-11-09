@@ -2136,11 +2136,15 @@ Enables Kerberos on Zookeeper.
 
 SASL SCRAM enabled on all components except Zookeeper.
 
+Keytabs are managed externally (`kerberos_copy_keytab: false`): `prepare.yml` places them on the hosts, cp-ansible does not copy them.
+
 #### Scenario zookeeper-kerberos-rhel verify test's the following:
 
 Validates Zookeeper sasl mechanism.
 
 Validates Kafka Broker and Schema Registry is set to SCRAM.
+
+Validates the externally placed keytabs still exist and were not re-copied by cp-ansible.
 
 ***
 
