@@ -10,10 +10,13 @@
   hosts: kafka-broker1
   gather_facts: false
   tasks:
+    - import_role:
+        name: variables
+
     - name: Consume Records from destination cluster
       shell: |
-        kafka-console-consumer --topic test-replicator-source --bootstrap-server kafka-broker1:9091 \
-        --from-beginning --timeout-ms 10000 --consumer.config /etc/kafka/client.properties
+        {{ binary_base_path }}/bin/kafka-console-consumer --topic test-replicator-source --bootstrap-server kafka-broker1:9091 \
+        --from-beginning --timeout-ms 10000 --consumer.config /opt/confluent/etc/kafka/client.properties
       run_once: true
       register: consumer_output
       failed_when:
@@ -27,7 +30,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka-connect-replicator/kafka-connect-replicator.properties
+        file_path: /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator.properties
         property: sasl.mechanism
         expected_value: OAUTHBEARER
 
@@ -35,7 +38,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka-connect-replicator/kafka-connect-replicator-consumer.properties
+        file_path: /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator-consumer.properties
         property: security.protocol
         expected_value: SASL_SSL
 
@@ -43,7 +46,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka-connect-replicator/kafka-connect-replicator-consumer.properties
+        file_path: /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator-consumer.properties
         property: client.id
         expected_value: consumer-test
 
@@ -51,7 +54,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka-connect-replicator/kafka-connect-replicator-producer.properties
+        file_path: /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator-producer.properties
         property: sasl.mechanism
         expected_value: OAUTHBEARER
 
@@ -59,7 +62,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka-connect-replicator/kafka-connect-replicator-producer.properties
+        file_path: /opt/confluent/etc/kafka-connect-replicator/kafka-connect-replicator-producer.properties
         property: client.id
         expected_value: producer-test
 
@@ -71,18 +74,5 @@
         custom_path: /var/log/confluent/kafka-connect-replicator/
         group: confluent
         user: cp-kafka-connect-replicator
-
-- name: Verify - Client Packages
-  hosts: kafka_broker
-  gather_facts: false
-  tasks:
-    - import_role:
-        name: common
-    - shell: grep -REq "deb {{confluent_clients_repository_baseurl}}/clients/deb/ .* main" /etc/apt/sources.list.d
-      register: linecheck
-      check_mode: false
-      changed_when: false
-      failed_when: linecheck.rc != 0
-
 - name: Verify - USM Agent Functionality
   import_playbook: ../verify_usm_agent.yml

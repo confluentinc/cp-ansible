@@ -9,21 +9,21 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/controller/server.properties
+        file_path: /opt/confluent/etc/controller/server.properties
         property: controller.quorum.voters
         expected_value: "{{ kafka_controller_quorum_voters }}"
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/controller/server.properties
+        file_path: /opt/confluent/etc/controller/server.properties
         property: process.roles
         expected_value: controller
     - import_role:
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/controller/server.properties
+        file_path: /opt/confluent/etc/controller/server.properties
         property: listeners
         expected_value: "{{kafka_controller_listeners['controller']['name']}}://:{{kafka_controller_listeners['controller']['port']}}"
 
@@ -66,12 +66,15 @@
   gather_facts: false
   hosts: kafka-broker5
   tasks:
+    - import_role:
+        name: variables
+
     - set_fact:
         kraft_mode: "{{ ('kafka_controller' in groups.keys() and groups['kafka_controller'] | length > 0) }}"
 
     - name: Run zookeeper shell to get broker ID's
       shell: >
-          /usr/bin/zookeeper-shell zookeeper1:2182  -zk-tls-config-file  /etc/kafka/zookeeper-tls-client.properties ls /brokers/ids
+          {{ binary_base_path }}/bin/zookeeper-shell zookeeper1:2182  -zk-tls-config-file  /opt/confluent/etc/kafka/zookeeper-tls-client.properties ls /brokers/ids
       register: zk_output
       when: not kraft_mode|bool
 
@@ -84,7 +87,7 @@
 
     - name: Get broker ID's
       shell: >
-          kafka-metadata-quorum --command-config /etc/kafka/client.properties --bootstrap-server kafka-broker1:9091 describe --status | grep -oP '(?<=CurrentObservers:).*' | jq length
+          {{ binary_base_path }}/bin/kafka-metadata-quorum --command-config /opt/confluent/etc/kafka/client.properties --bootstrap-server kafka-broker1:9091 describe --status | grep -oP '(?<=CurrentObservers:).*' | jq length
       register: broker_cnt
       when: kraft_mode|bool
 
@@ -103,7 +106,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
+        file_path: /opt/confluent/etc/confluent-control-center/control-center-production.properties
         property: bootstrap.servers
         expected_value: kafka-broker1:9092,kafka-broker2:9092,kafka-broker3:9092,kafka-broker4:9092,kafka-broker5:9092
 
@@ -111,7 +114,7 @@
       shell: grep "^{{ property }}" {{ file_path }}
       register: bootstrap_servers
       vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
+        file_path: /opt/confluent/etc/confluent-control-center/control-center-production.properties
         property: bootstrap.servers
 
     - name: Check broker4 in bootstrap Server urls
