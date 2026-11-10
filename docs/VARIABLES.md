@@ -20,19 +20,11 @@ Default:  2.0.0
 
 ***
 
-### deploy_tmp_dir
+### tmp_dir
 
-Directory on managed hosts for temporary files created during deployment (secrets staging, IdP certs, connect plugin downloads, etc). Set to a path that is not mounted noexec/restricted if /tmp is locked down.
+Directory on managed hosts for temporary files: deployment staging (secrets, IdP certs, connect plugin downloads, etc) and, when not /tmp, java.io.tmpdir for the CP JVM services. It must exist, be writable by the service users and must not be mounted noexec. Set this if /tmp is mounted noexec.
 
 Default:  /tmp
-
-***
-
-### jvm_tmp_dir
-
-Directory on managed hosts used as java.io.tmpdir by the CP JVM services (each service gets a <jvm_tmp_dir>/<role> subdirectory). If left as empty string, cp-ansible does not set java.io.tmpdir and the JVM default (/tmp) is used. Set this when /tmp is mounted noexec.
-
-Default:  ""
 
 ***
 
@@ -40,7 +32,7 @@ Default:  ""
 
 Path on component to store logs collected during fetch_logs playbook
 
-Default:  "{{ deploy_tmp_dir }}"
+Default:  "{{ tmp_dir }}"
 
 ***
 
@@ -72,7 +64,7 @@ Default:  0
 
 Base path on remote hosts for temporary diagnostic files during collection. Log and config files are fetched directly from their original locations.
 
-Default:  "{{ deploy_tmp_dir }}"
+Default:  "{{ tmp_dir }}"
 
 ***
 

@@ -482,3 +482,37 @@
 
 - name: Verify - USM Agent Functionality
   import_playbook: ../verify_usm_agent.yml
+
+- name: Verify - tmp_dir applied (oauth idp cert)
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Find service override.conf
+      find:
+        paths: /etc/systemd/system
+        patterns: override.conf
+        recurse: true
+      register: tmp_dir_overrides
+
+    - name: Read override files
+      slurp:
+        src: "{{ item.path }}"
+      loop: "{{ tmp_dir_overrides.files }}"
+      register: tmp_dir_override_contents
+
+    - name: Assert java.io.tmpdir is set to tmp_dir
+      assert:
+        that:
+          - tmp_dir_override_contents.results | map(attribute='content') | map('b64decode') | join('\n') is search('-Djava.io.tmpdir=/var/tmp')
+
+    - name: Find staging files left in /tmp or tmp_dir
+      find:
+        paths:
+          - /tmp
+          - /var/tmp
+        patterns: "oauth_idp_cert.pem,sso_idp_cert.pem"
+      register: tmp_dir_leftovers
+
+    - name: Assert no staging files left behind
+      assert:
+        that: tmp_dir_leftovers.matched == 0
