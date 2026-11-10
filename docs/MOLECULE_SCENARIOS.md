@@ -374,6 +374,8 @@ Kerberos enabled with custom client config path
 
 Creates a Connector in Connect cluster
 
+Keytabs are managed externally (kerberos_copy_keytab: false), placed on the hosts by prepare.yml
+
 USM Agent Authentication Configuration - BASIC AUTHENTICATION
 
 
@@ -395,6 +397,8 @@ Validates that Kerberos is enabled across all components.
 Validates that SASL SSL Plaintext is enabled across all components.
 
 Validates that Connector is running
+
+Validates the externally placed keytabs were not re-copied by cp-ansible (kerberos_copy_keytab: false)
 
 Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy user has no
 
@@ -2136,15 +2140,11 @@ Enables Kerberos on Zookeeper.
 
 SASL SCRAM enabled on all components except Zookeeper.
 
-Keytabs are managed externally (`kerberos_copy_keytab: false`): `prepare.yml` places them on the hosts, cp-ansible does not copy them.
-
 #### Scenario zookeeper-kerberos-rhel verify test's the following:
 
 Validates Zookeeper sasl mechanism.
 
 Validates Kafka Broker and Schema Registry is set to SCRAM.
-
-Validates the externally placed keytabs still exist and were not re-copied by cp-ansible.
 
 ***
 
