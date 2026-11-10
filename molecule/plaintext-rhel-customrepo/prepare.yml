@@ -12,6 +12,11 @@
         ansible_distribution_major_version: 7
     - import_role:
         name: variables
+    # The common role defaults are not loaded here, so mirror the version-isolated path segment
+    # (CPBR-3912): "/<major.minor>" from the versioned minor line onwards, "" for flat lines.
+    - set_fact:
+        c3_next_gen_version_segment: "{{ ('/' + confluent_control_center_next_gen_repo_version) if confluent_control_center_next_gen_repo_version is version('2.7', '>=') else '' }}"
+        usm_agent_version_segment: "{{ ('/' + confluent_usm_agent_repo_version) if confluent_usm_agent_repo_version is version('1.3', '>=') else '' }}"
     - name: Create custom repo file
       copy:
         dest: "{{ custom_yum_repofile_filepath }}"
@@ -32,17 +37,17 @@
           name = Custom Confluent repository (clients)
           [Confluent.custom_control_center_next_gen]
           async = 1
-          baseurl = {{confluent_control_center_next_gen_independent_repository_baseurl | default(confluent_repository_baseurl)}}/rpm
+          baseurl = {{confluent_control_center_next_gen_independent_repository_baseurl | default(confluent_repository_baseurl)}}/rpm{{c3_next_gen_version_segment}}
           enabled = 1
           gpgcheck = 1
-          gpgkey = {{confluent_control_center_next_gen_independent_repository_baseurl | default(confluent_repository_baseurl)}}/rpm/archive.key
+          gpgkey = {{confluent_control_center_next_gen_independent_repository_baseurl | default(confluent_repository_baseurl)}}/rpm{{c3_next_gen_version_segment}}/archive.key
           name = Custom Confluent Control Center Next Gen repository
           [Confluent.custom_usm_agent]
           async = 1
-          baseurl = {{confluent_usm_agent_independent_repository_baseurl | default(confluent_repository_baseurl)}}/rpm
+          baseurl = {{confluent_usm_agent_independent_repository_baseurl | default(confluent_repository_baseurl)}}/rpm{{usm_agent_version_segment}}
           enabled = 1
           gpgcheck = 1
-          gpgkey = {{confluent_usm_agent_independent_repository_baseurl | default(confluent_repository_baseurl)}}/rpm/archive.key
+          gpgkey = {{confluent_usm_agent_independent_repository_baseurl | default(confluent_repository_baseurl)}}/rpm{{usm_agent_version_segment}}/archive.key
           name = Custom Confluent USM Agent repository
 
     - name: Download Jolokia Jar
@@ -51,5 +56,7 @@
         dest: "{{ jolokia_jar_url }}"
     - name: Download Jmx Exporter Jar
       get_url:
-        url: https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/1.0.1/jmx_prometheus_javaagent-1.0.1.jar
+        url: "https://github.com/prometheus/jmx_exporter/releases/download/{{ jmxexporter_default_version }}/jmx_prometheus_javaagent-{{ jmxexporter_default_version }}.jar"
         dest: "{{ jmxexporter_jar_url }}"
+      vars:
+        jmxexporter_default_version: "{{ (lookup('file', playbook_dir ~ '/../../roles/variables/defaults/main.yml') | from_yaml).jmxexporter_version }}"

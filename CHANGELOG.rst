@@ -4,6 +4,27 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
+8.4.0
+======
+Breaking Changes
+-------------
+- ``confluent_package_version`` is now required. CP-Ansible no longer ships a default Confluent Platform version. Before you upgrade, set ``confluent_package_version`` in your inventory to the Confluent Platform version you want to install. If it is not set, the playbooks fail early. For supported versions, see the compatibility matrix: https://docs.confluent.io/ansible/current/ansible-requirements.html.
+
+New features
+-------------
+- Support for KRaft dynamic controller quorum (KIP-853). Deploy new clusters with a dynamic quorum, migrate existing static-quorum clusters to it, and add or replace controllers without rebuilding the cluster.
+- Bring your own Prometheus for Control Center Next Gen. Control Center can use an externally managed Prometheus instead of the bundled Prometheus and Alertmanager.
+- Control Center Next Gen now collects Kafka producer and consumer client metrics by default.
+
+Notable enhancements
+-------------
+- Upgraded the Prometheus JMX Exporter agent from 1.0.1 to 1.6.0. Versions 1.1.0 and later are downloaded from GitHub Releases instead of Maven Central.
+- New ``control_center_next_gen_dependency_alertmanager_web_external_url`` variable sets the external URL of the bundled Alertmanager for Control Center Next Gen, so alert links work when Alertmanager runs behind a proxy or load balancer.
+
+Notable Fixes
+-------------
+- N/A
+
 8.3.1
 ======
 New features

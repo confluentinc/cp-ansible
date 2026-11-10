@@ -1,0 +1,44 @@
+---
+- name: Verify - kafka_broker
+  hosts: kafka_broker
+  gather_facts: false
+  tasks:
+    - name: Get jmxexporter metrics
+      uri:
+        url: "http://{{inventory_hostname}}:8080/metrics"
+        return_content: true
+      register: jmxexporter_metrics
+      until: jmxexporter_metrics.content is search('kafka_server_replicamanager_partitioncount')
+      retries: 10
+      delay: 10
+
+    - name: Assert default jmxexporter agent is running and exporting Kafka metrics
+      assert:
+        that:
+          - jmxexporter_metrics.content is search('jmx_exporter_build_info\\{.*version="' ~ (jmxexporter_default_version | regex_escape) ~ '"')
+          - jmxexporter_metrics.content is search('kafka_server_replicamanager_partitioncount')
+        quiet: true
+      vars:
+        jmxexporter_default_version: "{{ (lookup('file', playbook_dir ~ '/../../roles/variables/defaults/main.yml') | from_yaml).jmxexporter_version }}"
+
+- name: Verify - kafka_controller
+  hosts: kafka_controller
+  gather_facts: false
+  tasks:
+    - name: Get jmxexporter metrics
+      uri:
+        url: "http://{{inventory_hostname}}:8079/metrics"
+        return_content: true
+      register: jmxexporter_metrics
+      until: jmxexporter_metrics.content is search('kafka_controller_kafkacontroller_activecontrollercount')
+      retries: 10
+      delay: 10
+
+    - name: Assert default jmxexporter agent is running and exporting Kafka metrics
+      assert:
+        that:
+          - jmxexporter_metrics.content is search('jmx_exporter_build_info\\{.*version="' ~ (jmxexporter_default_version | regex_escape) ~ '"')
+          - jmxexporter_metrics.content is search('kafka_controller_kafkacontroller_activecontrollercount')
+        quiet: true
+      vars:
+        jmxexporter_default_version: "{{ (lookup('file', playbook_dir ~ '/../../roles/variables/defaults/main.yml') | from_yaml).jmxexporter_version }}"
