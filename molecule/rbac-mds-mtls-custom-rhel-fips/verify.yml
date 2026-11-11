@@ -26,6 +26,9 @@
   hosts: kafka_broker2
   gather_facts: false
   tasks:
+    - import_role:
+        name: variables
+
     - name: Test TLS version used in certificate
       shell: openssl s_client -connect {{inventory_hostname}}:9091 </dev/null 2>/dev/null  | grep 'Protocol  :' | sed 's/^.*:\ //'
       register: tls_version
@@ -41,7 +44,7 @@
 
     - name: Check 2 way tls line omitted in properties
       shell: |
-        grep "confluent.metadata.server.ssl.truststore.location"  /etc/kafka/server.properties
+        grep "confluent.metadata.server.ssl.truststore.location"  /opt/confluent/etc/kafka/server.properties
       register: linecheck
       check_mode: false
       changed_when: false
@@ -49,16 +52,16 @@
 
     - name: Create Topic
       shell: |
-        kafka-topics --bootstrap-server mds-kafka-broker1:9091 \
-          --command-config /etc/kafka/client.properties \
+        {{ binary_base_path }}/bin/kafka-topics --bootstrap-server mds-kafka-broker1:9091 \
+          --command-config /opt/confluent/etc/kafka/client.properties \
           --create --if-not-exists --topic test1 \
           --replication-factor 1 --partitions 1
       run_once: true
 
     - name: Consume audit logs topic
       shell: |
-        timeout 10 kafka-console-consumer --bootstrap-server kafka-broker1:9091 \
-            --consumer.config /etc/kafka/client.properties \
+        timeout 10 {{ binary_base_path }}/bin/kafka-console-consumer --bootstrap-server kafka-broker1:9091 \
+            --consumer.config /opt/confluent/etc/kafka/client.properties \
             --from-beginning --topic confluent-audit-log-events
       register: output
       run_once: true
@@ -84,7 +87,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/controller/server.properties
+        file_path: /opt/confluent/etc/controller/server.properties
         property: confluent.metadata.bootstrap.servers
         expected_value: mds-kafka-broker1:9093,mds-kafka-broker2:9093
 
@@ -96,7 +99,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/schema-registry/schema-registry.properties
+        file_path: /opt/confluent/etc/schema-registry/schema-registry.properties
         property: confluent.metadata.bootstrap.server.urls
         expected_value: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
 
@@ -108,7 +111,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka-rest/kafka-rest.properties
+        file_path: /opt/confluent/etc/kafka-rest/kafka-rest.properties
         property: confluent.metadata.bootstrap.server.urls
         expected_value: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
 
@@ -120,7 +123,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/kafka/connect-distributed.properties
+        file_path: /opt/confluent/etc/kafka/connect-distributed.properties
         property: confluent.metadata.bootstrap.server.urls
         expected_value: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
 
@@ -132,7 +135,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/ksqldb/ksql-server.properties
+        file_path: /opt/confluent/etc/ksqldb/ksql-server.properties
         property: confluent.metadata.bootstrap.server.urls
         expected_value: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
 
@@ -145,7 +148,7 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
+        file_path: /opt/confluent/etc/confluent-control-center/control-center-production.properties
         property: confluent.metadata.bootstrap.server.urls
         expected_value: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
 
@@ -157,6 +160,6 @@
         name: confluent.test
         tasks_from: check_property.yml
       vars:
-        file_path: /etc/confluent-control-center/control-center-production.properties
+        file_path: /opt/confluent/etc/confluent-control-center/control-center-production.properties
         property: confluent.metadata.bootstrap.server.urls
         expected_value: https://mds-kafka-broker1:8090,https://mds-kafka-broker2:8090
