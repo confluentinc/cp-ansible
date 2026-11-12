@@ -56,8 +56,10 @@ pip install wheel
 pip install pylint
 pip install "ansible==$ANSIBLE_VERSION"
 pip install yamllint
+# galaxy-importer imports pkg_resources, which newer setuptools releases no longer ship (setuptools 84
+# broke this job). Install a setuptools that still has it BEFORE galaxy-importer so pip keeps it.
+pip install "setuptools<81"
 pip install galaxy-importer
-pip install setuptools
 
 python --version
 ansible --version
