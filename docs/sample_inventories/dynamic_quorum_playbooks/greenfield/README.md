@@ -124,7 +124,7 @@ In `describe --replication`, brokers always show as `Observer`. That is expected
 
    **Cause:** it has not caught up with the leader yet, or auto-join is off.
 
-   **Fix:** check that its `Lag` is low in `describe --replication`, and that `controller.quorum.auto.join.enable=true` is in its `server.properties`. If you turned auto-join off, promote it by running this **on that controller**:
+   **Fix:** check that its `Lag` is low in `describe --replication`, and that `controller.quorum.auto.join.enable=true` is in its `server.properties`. If it still stays an Observer, promote it by running this **on that controller**:
 
    ```bash
    kafka-metadata-quorum --bootstrap-controller <leader-host>:<controller-port> \
