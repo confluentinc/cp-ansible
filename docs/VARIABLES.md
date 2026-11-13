@@ -22,7 +22,7 @@ Default:  2.0.0
 
 ### tmp_dir
 
-Directory on managed hosts for temporary files: deployment staging (secrets, IdP certs, connect plugin downloads, etc) and, when not /tmp, java.io.tmpdir for the CP JVM services. It must exist, be writable by the service users and must not be mounted noexec. Set this if /tmp is mounted noexec.
+Directory on managed hosts for temporary files: deployment staging (secrets, IdP certs, connect plugin downloads, etc) and, when not /tmp, java.io.tmpdir for the CP JVM services. It must exist, be world-writable and searchable (e.g. mode 1777) so every service user can use it, and must not be mounted noexec; the common role fails the run otherwise. Set this if /tmp is mounted noexec. Also used for the log rotation cron output.
 
 Default:  /tmp
 

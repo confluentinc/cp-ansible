@@ -54,22 +54,62 @@
     - validate
     - validate_tmp_dir
 
-- name: Check if tmp_dir is mounted noexec
-  command: findmnt -n -o OPTIONS --target {{ tmp_dir | quote }}
-  register: tmp_dir_mount_options
+- name: Resolve tmp_dir real path
+  command: readlink -f {{ tmp_dir | quote }}
+  register: tmp_dir_realpath
   changed_when: false
-  failed_when: false
   check_mode: false
+  tags:
+    - validate
+    - validate_tmp_dir
+
+# Uses the mounts gathered with the hardware facts (no dependency on findmnt):
+# the mount whose mount point is the longest prefix of the resolved tmp_dir.
+- name: Determine tmp_dir mount options
+  set_fact:
+    tmp_dir_mount_options: >-
+      {%- set ns = namespace(best=none) -%}
+      {%- set real = tmp_dir_realpath.stdout | trim -%}
+      {%- for m in ansible_facts.mounts | default([]) -%}
+      {%- if (m.mount == '/' or real == m.mount or real.startswith(m.mount ~ '/'))
+             and (ns.best is none or m.mount | length > ns.best.mount | length) -%}
+      {%- set ns.best = m -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ ns.best.options if ns.best is not none else 'UNKNOWN' }}
+  tags:
+    - validate
+    - validate_tmp_dir
+
+- name: Assert tmp_dir mount options could be determined
+  assert:
+    that: tmp_dir_mount_options != 'UNKNOWN'
+    fail_msg: >-
+      Could not determine the mount options of tmp_dir ({{ tmp_dir }}) on {{ inventory_hostname }}, so the noexec check cannot run.
   tags:
     - validate
     - validate_tmp_dir
 
 - name: Assert tmp_dir is not mounted noexec
   assert:
-    that: "'noexec' not in (tmp_dir_mount_options.stdout | default('')).split(',')"
+    that: "'noexec' not in tmp_dir_mount_options.split(',')"
     fail_msg: >-
       tmp_dir ({{ tmp_dir }}) is mounted noexec on {{ inventory_hostname }}. Confluent Platform JVMs extract native libraries into
       java.io.tmpdir and fail to load them from a noexec mount. Set tmp_dir to a directory that is writable by the service users and not mounted noexec.
+  tags:
+    - validate
+    - validate_tmp_dir
+
+# The service users are created later in the run and differ per component, so access is
+# checked on the directory mode: every user must be able to traverse and write to it.
+- name: Assert tmp_dir is writable by the service users
+  assert:
+    that:
+      - tmp_dir_stat.stat.woth
+      - tmp_dir_stat.stat.xoth
+    fail_msg: >-
+      tmp_dir ({{ tmp_dir }}) on {{ inventory_hostname }} has mode {{ tmp_dir_stat.stat.mode }}, so the Confluent Platform service users cannot
+      all write to it and the JVMs would fail silently. Make it writable and searchable by all service users, for example chmod 1777 {{ tmp_dir }}.
   tags:
     - validate
     - validate_tmp_dir
