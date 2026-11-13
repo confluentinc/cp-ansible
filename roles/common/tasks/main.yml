@@ -64,18 +64,29 @@
     - validate
     - validate_tmp_dir
 
+- name: Read mounted filesystems
+  slurp:
+    src: /proc/self/mounts
+  register: tmp_dir_mounts
+  tags:
+    - validate
+    - validate_tmp_dir
+
 - name: Determine tmp_dir mount options
   set_fact:
     tmp_dir_mount_options: >-
-      {%- set ns = namespace(best=none) -%}
+      {%- set ns = namespace(options='UNKNOWN', length=-1) -%}
       {%- set real = tmp_dir_realpath.stdout | trim -%}
-      {%- for m in ansible_facts.mounts | default([]) -%}
-      {%- if (m.mount == '/' or real == m.mount or real.startswith(m.mount ~ '/'))
-             and (ns.best is none or m.mount | length > ns.best.mount | length) -%}
-      {%- set ns.best = m -%}
+      {%- for line in (tmp_dir_mounts.content | b64decode).splitlines() -%}
+      {%- set f = line.split(' ') -%}
+      {%- if f | length >= 4
+             and (f[1] == '/' or real == f[1] or real.startswith(f[1] ~ '/'))
+             and f[1] | length >= ns.length -%}
+      {%- set ns.options = f[3] -%}
+      {%- set ns.length = f[1] | length -%}
       {%- endif -%}
       {%- endfor -%}
-      {{ ns.best.options if ns.best is not none else 'UNKNOWN' }}
+      {{ ns.options }}
   tags:
     - validate
     - validate_tmp_dir
