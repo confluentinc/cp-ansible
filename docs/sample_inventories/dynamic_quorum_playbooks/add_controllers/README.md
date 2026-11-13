@@ -21,7 +21,7 @@ With a dynamic quorum, adding a controller is a normal playbook run. You add the
 
 - The cluster runs a dynamic quorum (`kraft_dynamic_quorum_enabled: true`), deployed as greenfield or migrated from static to dynamic quorum.
 - The quorum is healthy: it has a leader and every existing controller is a voter.
-- `kafka_controller_kraft_auto_join_enabled` is `true` (the default if you used the cp-ansible playbooks).
+- Auto-join is on (`controller.quorum.auto.join.enable=true`, which cp-ansible sets).
 - The new hosts are reachable from the Ansible host and from the existing controllers on the controller port (default `9093`).
 
 Check the quorum on any existing controller:
@@ -93,13 +93,15 @@ To replace a controller whose host or disk is lost:
 1. Remove the old controller from the quorum. See [Remove Controllers](../remove_controllers/README.md).
 2. Add the new host by following this guide. You can reuse the old inventory hostname.
 
+If the quorum itself is lost, use [Disaster Recovery](../disaster_recovery/README.md) instead.
+
 ## Troubleshooting
 
 1. **A new controller stays an Observer.**
 
    **Cause:** it has not caught up with the leader yet, it cannot reach the other controllers on the controller port, or auto-join is off.
 
-   **Fix:** check that its `Lag` is low in `describe --replication`, that it can reach the other controllers on the controller port (default `9093`), and that `controller.quorum.auto.join.enable=true` is in its `server.properties`. If you turned auto-join off, promote it by running this **on the new controller**:
+   **Fix:** check that its `Lag` is low in `describe --replication`, that it can reach the other controllers on the controller port (default `9093`), and that `controller.quorum.auto.join.enable=true` is in its `server.properties`. If it still stays an Observer, promote it by running this **on the new controller**:
 
    ```bash
    kafka-metadata-quorum --bootstrap-controller <leader-host>:<controller-port> \
