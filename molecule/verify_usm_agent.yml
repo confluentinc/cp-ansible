@@ -93,6 +93,14 @@
     # The config and secrets paths differ by install method (package -> /etc,
     # archive -> under the versioned archive dir), so resolve them from the
     # service's own systemd unit (-config-file) rather than hard-coding /etc.
+    # The package always ships the unit and a default config, so only the role
+    # enabling the service marks the Command Handler as configured.
+    - name: Check whether the command-handler service is enabled
+      command: systemctl is-enabled usm-agent-command-handler
+      register: command_handler_is_enabled
+      changed_when: false
+      failed_when: false
+
     - name: Read the command-handler systemd unit
       command: systemctl cat usm-agent-command-handler
       register: command_handler_unit
@@ -101,13 +109,14 @@
 
     # Take the LAST -config-file: archive installs add an ExecStart override
     # (pointing under the archive dir) that supersedes the base unit's /etc path.
-    # Empty when there is no command-handler unit (non-CH scenarios), so the
-    # checks below no-op.
+    # Empty when the service is not enabled (non-CH scenarios), so the checks
+    # below no-op.
     - name: Resolve the active config path from the unit's ExecStart
       set_fact:
         command_handler_config_path: >-
           {{ (command_handler_unit.stdout | default('') | regex_findall('-config-file\s+(\S+)') | last)
-             if (command_handler_unit.stdout | default('') | regex_findall('-config-file\s+(\S+)')) | length > 0
+             if (command_handler_is_enabled.stdout | default('') == 'enabled'
+                 and (command_handler_unit.stdout | default('') | regex_findall('-config-file\s+(\S+)')) | length > 0)
              else '' }}
 
     - name: Stat command-handler config
