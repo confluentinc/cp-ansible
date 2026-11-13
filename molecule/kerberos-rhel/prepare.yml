@@ -18,8 +18,34 @@
 - name: Provision Kerberos Server
   import_playbook: ../kerberos.yml
 
+# Bootstrap always runs here (idempotent, converge runs it again) so the deploy user and
+# rootless path exist before the externally-managed keytabs are placed.
 - import_playbook: confluent.platform.rootless_bootstrap
-  when: lookup('env', 'MIGRATION')|default('false') == 'true'
+
+- name: Place externally-managed keytabs (kerberos_copy_keytab is false, cp-ansible will not copy them)
+  hosts: kafka_controller:kafka_controller_migration:zookeeper:zookeeper_migration:kafka_broker:kafka_broker_migration:schema_registry:kafka_connect:kafka_rest:ksql:control_center:control_center_next_gen
+  gather_facts: false
+  vars:
+    ansible_user: root
+  tasks:
+    - name: Create keytab directory
+      ansible.builtin.file:
+        path: "{{ rootless_deployment_path | regex_replace('/+$', '') }}/security/keytabs"
+        state: directory
+        owner: "{{ deployment_user }}"
+        group: "{{ deployment_group }}"
+        mode: '750'
+
+    # Mode 0400 on purpose: the kerberos role's copy task would set 0640, so verify.yml can tell
+    # the keytab was not re-copied.
+    - name: Copy keytab (simulates external keytab management)
+      ansible.builtin.copy:
+        src: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/keytabs/{{ item.name }}-{{ inventory_hostname }}.keytab"
+        dest: "{{ rootless_deployment_path | regex_replace('/+$', '') }}/security/keytabs/{{ item.name }}.keytab"
+        owner: "{{ deployment_user }}"
+        group: "{{ deployment_group }}"
+        mode: '0400'
+      loop: "{{ external_keytab_components | selectattr('group', 'in', group_names) | list }}"
 
 - name: Cache ansible_user=deployment_user so the unprivileged deploy connects as that user
   hosts: kafka_controller:kafka_controller_migration:zookeeper:zookeeper_migration:kafka_broker:kafka_broker_migration:schema_registry:kafka_connect:kafka_rest:ksql:control_center:control_center_next_gen
