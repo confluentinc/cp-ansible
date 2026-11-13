@@ -7,10 +7,21 @@
   gather_facts: false
   become: true
   tasks:
+    # The secrets dir sits next to the active config, which is under the archive
+    # dir for archive installs, so resolve it from the unit like verify does.
+    - name: Read the command-handler systemd unit
+      command: systemctl cat usm-agent-command-handler
+      register: command_handler_unit
+      changed_when: false
+
+    - name: Resolve the secrets dir from the unit's ExecStart
+      set_fact:
+        command_handler_secrets_dir: "{{ command_handler_unit.stdout | regex_findall('-config-file\\s+(\\S+)') | last | dirname }}/secrets"
+
     - name: Write a credential file for an undeclared cluster
       copy:
         content: "ghost\nghost\n"
-        dest: /etc/confluent/usm-agent/secrets/command-handler-ghost-credential.txt
+        dest: "{{ command_handler_secrets_dir }}/command-handler-ghost-credential.txt"
         mode: '600'
 
 - name: Re-converge so the reconcile removes the stale secret
