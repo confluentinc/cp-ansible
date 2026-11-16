@@ -263,3 +263,46 @@
 
 - name: Verify - USM Agent Functionality
   import_playbook: ../verify_usm_agent.yml
+
+- name: Verify - tmp_dir applied (ksql, connect)
+  hosts: ksql:kafka_connect
+  gather_facts: false
+  tasks:
+    - name: Find service override.conf
+      find:
+        paths: /etc/systemd/system
+        patterns: override.conf
+        recurse: true
+      register: tmp_dir_overrides
+
+    - name: Read JVM service override files
+      slurp:
+        src: "{{ item.path }}"
+      loop: "{{ tmp_dir_overrides.files | selectattr('path', 'search', 'confluent-(ksqldb|ksql|kafka-connect)\\.service\\.d') | list }}"
+      loop_control:
+        label: "{{ item.path }}"
+      register: tmp_dir_override_contents
+
+    - name: Assert at least one JVM service override was found
+      assert:
+        that: tmp_dir_override_contents.results | length > 0
+
+    - name: Assert java.io.tmpdir is set to tmp_dir in each service override
+      assert:
+        that: (item.content | b64decode) is search('-Djava.io.tmpdir=/var/tmp')
+        fail_msg: "{{ item.item.path }} does not set -Djava.io.tmpdir=/var/tmp"
+      loop: "{{ tmp_dir_override_contents.results }}"
+      loop_control:
+        label: "{{ item.item.path }}"
+
+    - name: Find staging files left in /tmp or tmp_dir
+      find:
+        paths:
+          - /tmp
+          - /var/tmp
+        patterns: "oauth_idp_cert.pem,isrgrootx1.der,isrg-root-x2.der"
+      register: tmp_dir_leftovers
+
+    - name: Assert no staging files left behind
+      assert:
+        that: tmp_dir_leftovers.matched == 0
