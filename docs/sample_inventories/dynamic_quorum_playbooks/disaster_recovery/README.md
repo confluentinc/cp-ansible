@@ -163,8 +163,6 @@ Archive installs, custom users, and rootless deployments use different paths and
 
 ```bash
 # 0. Decide which controllers failed and which survived.
-#    A controller is failed only if its metadata disk is gone or cannot be used.
-#    A controller whose process crashed but whose disk is fine is a survivor.
 #    While the quorum has no leader, Kafka cannot tell you which voters are dead.
 #    Identify the failed hosts from your infrastructure (cloud console, hypervisor, data center status).
 
@@ -212,13 +210,13 @@ kafka-metadata-quorum --bootstrap-controller <seed-host>:<controller-port> \
   --command-config /etc/controller/client.properties describe --replication
 #    Then move on to the next controller.
 
-# 8. On each surviving BROKER, ONE AT A TIME:
-#    stop Kafka, delete its old metadata log (topic data is not touched), start Kafka.
-sudo systemctl stop confluent-server
-sudo rm -rf /var/lib/kafka/data/__cluster_metadata-0
-sudo systemctl start confluent-server
-#    Wait until the broker is healthy and has no under-replicated partitions before the next one.
+# 8. Check the surviving BROKERS. No change is needed on them.
+#    Each broker should show as an Observer that is catching up with the seed:
+kafka-metadata-quorum --bootstrap-controller <seed-host>:<controller-port> \
+  --command-config /etc/controller/client.properties describe --replication
 ```
+
+**If a broker does not show as an Observer that is catching up**, contact Confluent Support before you change anything on it. This can happen after a recovery where fewer than half of the voters survived: the broker may hold a metadata change that the surviving controllers lost.
 
 **If a controller from step 7 stays an Observer**, promote it by running `add-controller` **on that controller**. The tool reads the node id and directory id from the local config:
 
@@ -233,7 +231,7 @@ Phase 1 is complete here. The cluster runs on the surviving controllers.
 
 Do this only after Phase 1 is complete and the new quorum is healthy. It is not urgent.
 
-The failed hosts still hold metadata from before the rebuild, so each returning controller and broker must have its old `__cluster_metadata-0` removed before Kafka starts.
+The failed controllers still hold metadata from before the rebuild, so each returning controller must have its old `__cluster_metadata-0` removed before KRaft starts.
 
 **Power on the failed controllers one at a time.** Each one still has the old voter set. If more than half of that old voter set start together, they can elect a leader on the old history. Finish steps 1 and 2 on one controller before you power on the next one.
 
@@ -249,10 +247,10 @@ sudo mv /var/lib/controller/data/__cluster_metadata-0 /var/lib/controller/kraft-
 sudo systemctl start confluent-kcontroller
 #    Wait until it shows as Follower in describe --replication (auto-join), then do the next one.
 
-# 3. On each returning BROKER, ONE AT A TIME: delete the old metadata log, then start Kafka.
-sudo rm -rf /var/lib/kafka/data/__cluster_metadata-0
+# 3. On each returning BROKER, ONE AT A TIME: start Kafka.
 sudo systemctl start confluent-server
-#    Wait until it is healthy and its partitions are back in sync, then do the next one.
+#    Wait until it shows as an Observer that is catching up, and its partitions are back in sync.
+#    Then do the next one. If it does not catch up, contact Confluent Support.
 
 # 4. On each returning host: re-enable Kafka at boot.
 sudo systemctl enable confluent-kcontroller   # controllers
@@ -265,7 +263,7 @@ When exactly half of the voters survived, the moved-aside metadata on the return
 
 If a failed controller's machine or disk is gone for good, it cannot rejoin. Replace it instead:
 
-1. Remove the old controller from the voter set. See [Remove a dead voter](#remove-a-dead-voter).
+1. If the quorum stayed healthy, remove the old controller from the voter set. See [Remove a dead voter](#remove-a-dead-voter). If you rebuilt the quorum with Phase 1, skip this step: the lost controller is no longer a voter.
 2. Provision the new host with the same inventory hostname, or update the inventory.
 3. Run the controller playbook for that host only:
 
