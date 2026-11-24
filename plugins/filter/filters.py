@@ -1,4 +1,10 @@
 import re
+import functools
+import linecache
+import traceback
+
+from ansible.errors import AnsibleError, AnsibleFilterError
+from jinja2.exceptions import UndefinedError
 
 DOCUMENTATION = '''
 ---
@@ -7,8 +13,34 @@ description: This plugin contains python functions which act as custom filters t
 '''
 
 
+def _with_error_context(filter_name, func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (AnsibleError, UndefinedError):
+            raise
+        except Exception as e:
+            message = f"Filter '{filter_name}' failed with {type(e).__name__}"
+            try:
+                message += f": {e}"
+                own_frames = [f for f in traceback.extract_tb(e.__traceback__) if f.filename == __file__ and f.name != 'wrapper']
+                if own_frames:
+                    last = own_frames[-1]
+                    end_lineno = max(getattr(last, 'end_lineno', None) or last.lineno, last.lineno)
+                    failing_code = ''.join(linecache.getline(last.filename, n) for n in range(last.lineno, end_lineno + 1))
+                    message += f"\nFailing code (line {last.lineno}):\n{failing_code}"
+            except Exception:
+                pass
+            raise AnsibleFilterError(message) from e
+    return wrapper
+
+
 class FilterModule(object):
     def filters(self):
+        return {name: _with_error_context(name, func) for name, func in self._filters().items()}
+
+    def _filters(self):
         return {
             'normalize_sasl_protocol': self.normalize_sasl_protocol,
             'kafka_protocol_normalized': self.kafka_protocol_normalized,
