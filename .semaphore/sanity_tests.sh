@@ -45,6 +45,10 @@ sudo apt install -y shellcheck
 # prepend the desired default python version to .python-version file
 { echo "$PYTHON_VERSION"; cat .python-version 2>/dev/null || true; } > .python-version.tmp && mv .python-version.tmp .python-version
 
+# mise only keeps one global Python version active by default, which breaks ansible-test
+# sanity's multi-interpreter compile checks (they shim into python3.10/3.11/etc directly).
+mise use --global python@3.10 python@3.11 python@3.12 python@3.13
+
 # Allow pip to install packages in externally-managed environments (Ubuntu 24.04 PEP 668)
 export PIP_BREAK_SYSTEM_PACKAGES=1
 
