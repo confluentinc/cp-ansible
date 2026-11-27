@@ -2,11 +2,32 @@
 ### Validates that Kerberos is enabled across all components.
 ### Validates that SASL SSL Plaintext is enabled across all components.
 ### Validates that Connector is running
+### Validates the externally placed keytabs were not re-copied by cp-ansible (kerberos_copy_keytab: false)
 ### Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy user has no
 ### passwordless-sudo escalation path, nothing landed under /opt beyond the pre-baked JDK, and
 ### the generated unit/env files point under rootless_deployment_path.
 
 - import_playbook: ../rootless_lifecycle_verify.yml
+
+- name: Verify - externally-managed keytabs were not re-copied (kerberos_copy_keytab false)
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Stat keytabs
+      ansible.builtin.stat:
+        path: "{{ rootless_deployment_path | regex_replace('/+$', '') }}/security/keytabs/{{ item.name }}.keytab"
+      register: keytab_stat
+      loop: "{{ external_keytab_components | default([]) | selectattr('group', 'in', group_names) | list }}"
+
+    - name: Assert keytabs exist and still have the externally-set mode (cp-ansible would set 0640)
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.mode == '0400'
+        fail_msg: "{{ item.item.name }} keytab missing or modified on {{ inventory_hostname }}"
+      loop: "{{ keytab_stat.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
 
 - name: Verify - kafka_controller
   hosts: kafka_controller
