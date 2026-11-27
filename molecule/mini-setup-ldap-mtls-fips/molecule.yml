@@ -185,9 +185,12 @@ provisioner:
         confluent_archive_usm_agent_file_source: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/confluent-usm-agent-{{ confluent_usm_agent_full_package_version }}.tar.gz"
         confluent_archive_usm_agent_file_remote: false
         control_center_next_gen_port: 9022
+        # External Prometheus needs C3 Next Gen newer than 2.6 (same check as validate_external_prometheus.yml).
+        # With an older C3 the scenario falls back to the bundled Prometheus over mTLS.
+        external_prometheus_c3_supported: "{{ (confluent_control_center_next_gen_package_version | default('0.0') | regex_replace('^([0-9]+)\\.([0-9]+).*', '\\1.\\2')) is version('2.6', '>') }}"
         # External Prometheus: read from the external mock Prometheus over mTLS.
-        control_center_next_gen_external_prometheus_enabled: true
-        control_center_next_gen_dependency_prometheus_host: external-prometheus.confluent
+        control_center_next_gen_external_prometheus_enabled: "{{ external_prometheus_c3_supported }}"
+        control_center_next_gen_dependency_prometheus_host: "{{ 'external-prometheus.confluent' if external_prometheus_c3_supported else ((groups.get('control_center_next_gen') if groups.get('control_center_next_gen') else ['localhost']) | confluent.platform.resolve_hostnames(hostvars) | first) }}"
         control_center_next_gen_dependency_prometheus_port: 9090
         control_center_next_gen_dependency_prometheus_ssl_enabled: true
         control_center_next_gen_dependency_prometheus_mtls_enabled: true
@@ -195,16 +198,16 @@ provisioner:
         # The mock's client CA trusts the cluster CA (external_prometheus_mock_mtls_recreate.yml), so assert the
         # nodes' mTLS telemetry push actually lands in the external Prometheus.
         external_prometheus_assert_mtls_push: true
-        control_center_next_gen_dependency_prometheus_ca_cert_path: /var/ssl/private/external_prometheus_ca.crt
-        control_center_next_gen_dependency_prometheus_cert_path: /var/ssl/private/external_prometheus_client.crt
-        control_center_next_gen_dependency_prometheus_key_path: /var/ssl/private/external_prometheus_client.key
+        control_center_next_gen_dependency_prometheus_ca_cert_path: "{{ '/var/ssl/private/external_prometheus_ca.crt' if external_prometheus_c3_supported else ssl_file_dir_final ~ '/ca.crt' }}"
+        control_center_next_gen_dependency_prometheus_cert_path: "{{ '/var/ssl/private/external_prometheus_client.crt' if external_prometheus_c3_supported else ssl_file_dir_final ~ '/control_center_dependency_prometheus.crt' }}"
+        control_center_next_gen_dependency_prometheus_key_path: "{{ '/var/ssl/private/external_prometheus_client.key' if external_prometheus_c3_supported else ssl_file_dir_final ~ '/control_center_dependency_prometheus.key' }}"
         # Source for C3's Prometheus client keystore: mock CA/client cert staged on the controller
         # (BYOP_CERTS_DIR); the ssl role copies these to the *_cert_path above (must differ - the ssl
         # role deletes the destination first).
         control_center_next_gen_dependency_prometheus_provided_certs_remote_src: false
-        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/ca.crt"
-        control_center_next_gen_dependency_prometheus_provided_cert_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/client.crt"
-        control_center_next_gen_dependency_prometheus_provided_key_path: "{{ lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) }}/client.key"
+        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: "{{ (lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) ~ '/ca.crt') if external_prometheus_c3_supported else '' }}"
+        control_center_next_gen_dependency_prometheus_provided_cert_path: "{{ (lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) ~ '/client.crt') if external_prometheus_c3_supported else '' }}"
+        control_center_next_gen_dependency_prometheus_provided_key_path: "{{ (lookup('env', 'BYOP_CERTS_DIR') | default('/tmp/byop-mock-prometheus/certs', true) ~ '/client.key') if external_prometheus_c3_supported else '' }}"
         control_center_next_gen_dependency_alertmanager_ssl_enabled: false
         control_center_next_gen_dependency_alertmanager_mtls_enabled: false
         control_center_next_gen_dependency_alertmanager_basic_auth_enabled: false
@@ -238,22 +241,22 @@ provisioner:
         control_center_next_gen_mds_cert_auth_only: true
 
         mds_super_user: mds
-        mds_super_user_password: password
+        mds_super_user_password: password  # HashiCorpIgnore
 
         schema_registry_ldap_user: schema-registry1
-        schema_registry_ldap_password: password
+        schema_registry_ldap_password: password  # HashiCorpIgnore
 
         kafka_connect_ldap_user: kafka-connect1
-        kafka_connect_ldap_password: password
+        kafka_connect_ldap_password: password  # HashiCorpIgnore
 
         ksql_ldap_user: ksql1
-        ksql_ldap_password: password
+        ksql_ldap_password: password  # HashiCorpIgnore
 
         kafka_rest_ldap_user: kafka-rest1
-        kafka_rest_ldap_password: password
+        kafka_rest_ldap_password: password  # HashiCorpIgnore
 
         control_center_next_gen_ldap_user: control-center1
-        control_center_next_gen_ldap_password: password
+        control_center_next_gen_ldap_password: password  # HashiCorpIgnore
 
         kafka_broker_custom_properties:
           ldap.java.naming.factory.initial: com.sun.jndi.ldap.LdapCtxFactory
@@ -293,7 +296,7 @@ provisioner:
         ssl_signed_cert_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-ca1-signed.crt"
         ssl_key_filepath: "{{ lookup('env', 'MOLECULE_SCENARIO_DIRECTORY') }}/generated_ssl_files/{{inventory_hostname}}-key.pem"
 
-        ldap_admin_password: ldppassword
+        ldap_admin_password: ldppassword  # HashiCorpIgnore
 
         ldap_rbac_group: rbac
         ldap_dc: example
