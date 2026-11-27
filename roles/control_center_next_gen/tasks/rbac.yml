@@ -2,12 +2,12 @@
 - name: Decide Where to delegate task of getting superuser token
   set_fact:
     delegation_target: >-
-      {%- if mds_ssl_client_authentication == 'none' -%}
-        {{ inventory_hostname }}
-      {%- elif external_mds_enabled|bool -%}
+      {%- if external_mds_enabled | bool and (mds_ssl_client_authentication != 'none' or oauth_superuser_client_assertion_enabled | bool) -%}
         localhost
-      {%- else -%}
+      {%- elif oauth_superuser_client_assertion_enabled | bool or mds_ssl_client_authentication != 'none' -%}
         {{ groups['kafka_broker'][0] }}
+      {%- else -%}
+        {{ inventory_hostname }}
       {%- endif -%}
 
 - name: RBAC Setup Tasks
@@ -51,7 +51,7 @@
   retries: "{{ mds_retries }}"
   delay: 5
   no_log: "{{mask_secrets|bool}}"
-  loop: "{{control_center_additional_system_admins}}"
+  loop: "{{control_center_next_gen_additional_system_admins}}"
   when: not ansible_check_mode
 
 - name: Grant role System Admin to Control Center user

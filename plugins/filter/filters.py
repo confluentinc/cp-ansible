@@ -1,7 +1,5 @@
 import re
 import ipaddress
-import hashlib
-import base64
 
 DOCUMENTATION = '''
 ---
@@ -39,10 +37,9 @@ class FilterModule(object):
             'resolve_and_format_hostname': self.resolve_and_format_hostname,
             'resolve_and_format_hostnames': self.resolve_and_format_hostnames,
             'c3_generate_salt_and_hash': self.c3_generate_salt_and_hash,
+            'replace_client_assertion_file': self.replace_client_assertion_file,
             'prometheus_client_properties': self.prometheus_client_properties,
             'alertmanager_client_properties': self.alertmanager_client_properties,
-            'usm_sha1_password_hash': self.usm_sha1_password_hash,
-            'schema_registry_extension_classes': self.schema_registry_extension_classes
         }
 
     def resolve_and_format_hostname(self, hosts_hostvars_dict):
@@ -298,7 +295,7 @@ class FilterModule(object):
             if 'OAUTHBEARER' in normalize_sasl_protocols \
                     and oauth_enabled and not rbac_enabled:
                 final_dict['listener.name.' + listener_name + '.oauthbearer.sasl.server.callback.handler.class'] =\
-                    'org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerValidatorCallbackHandler'
+                    'org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler'
                 final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.jwks.endpoint.url'] = oauth_jwks_uri
                 final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.sub.claim.name'] = oauth_sub_claim
 
@@ -332,12 +329,61 @@ class FilterModule(object):
 
         return final_dict
 
+    def _get_oauth_jaas_config(self, client_id, client_secret, oauth_groups_scope, truststore_path=None, truststore_storepass=None):
+        """Helper method to generate OAuth JAAS config with common patterns"""
+        config = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required'
+        if client_id:
+            config += f' clientId=\"{client_id}\"'
+        if client_secret:
+            config += f' clientSecret=\"{client_secret}\"'
+        if oauth_groups_scope != 'none':
+            config += f' scope=\"{oauth_groups_scope}\"'
+        if truststore_path and truststore_storepass:
+            config += f' ssl.truststore.location=\"{truststore_path}\" ssl.truststore.password=\"{truststore_storepass}\"'
+        config += ';'
+        return config
+
+    def replace_client_assertion_file(self, source_dict, value):
+        """Replace client_assertion_file value in a dictionary."""
+        # Simple validation without isinstance
+        if source_dict is None:
+            return {}
+
+        # Try to copy and modify
+        try:
+            result_dict = source_dict.copy()
+            if "client_assertion_file" in result_dict:
+                result_dict["client_assertion_file"] = value
+            return result_dict
+        except AttributeError:
+            # If source_dict doesn't have copy method, it's not a dict
+            raise TypeError("Piped value must be a dictionary")
+
+    def _configure_oauth_assertion(self, final_dict, config_prefix, assertion_config):
+        """Helper method to configure OAuth assertion properties"""
+        assertion_props = {
+            'client_assertion_issuer': 'sasl.oauthbearer.assertion.claim.iss',
+            'client_assertion_sub': 'sasl.oauthbearer.assertion.claim.sub',
+            'client_assertion_audience': 'sasl.oauthbearer.assertion.claim.aud',
+            'client_assertion_private_key_file': 'sasl.oauthbearer.assertion.private.key.file',
+            'client_assertion_private_key_passphrase': 'sasl.oauthbearer.assertion.private.key.passphrase',
+            'client_assertion_template_file': 'sasl.oauthbearer.assertion.template.file',
+            'client_assertion_jti_include': 'sasl.oauthbearer.assertion.claim.jti.include',
+            'client_assertion_nbf_include': 'sasl.oauthbearer.assertion.claim.nbf.include',
+            'client_assertion_file': 'sasl.oauthbearer.assertion.file'
+        }
+
+        for prop, config_key in assertion_props.items():
+            if assertion_config.get(prop) != 'none':
+                final_dict[config_prefix + config_key] = assertion_config[prop]
+
     def client_properties(self, listener_dict, default_ssl_enabled, bouncy_castle_keystore, default_ssl_mutual_auth_enabled, default_sasl_protocol,
                           config_prefix, truststore_path, truststore_storepass, public_certificates_enabled, keystore_path, keystore_storepass,
                           keystore_keypass, omit_jaas_configs, sasl_plain_username, sasl_plain_password, sasl_scram_username, sasl_scram_password,
                           sasl_scram256_username, sasl_scram256_password, kerberos_kafka_broker_primary, keytab_path, kerberos_principal,
                           omit_oauth_configs, oauth_username, oauth_password, mds_bootstrap_server_urls, oauth_enabled, oauth_superuser_client_id,
-                          oauth_superuser_client_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, kraft_listener):
+                          oauth_superuser_client_password, oauth_groups_scope, oauth_token_uri, idp_self_signed, kraft_listener,
+                          assertion_config=None):
         # For any kafka client's properties: Takes in a single kafka listener and output properties to connect to that listener
         # Other inputs help fill out the properties
         final_dict = {
@@ -406,30 +452,22 @@ class FilterModule(object):
             if normalize_sasl_protocols[0] == 'OAUTHBEARER' and oauth_enabled:
                 final_dict[config_prefix + 'sasl.mechanism'] = 'OAUTHBEARER'
                 final_dict[config_prefix + 'sasl.login.callback.handler.class'] =\
-                    'org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler'
+                    'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler'
                 final_dict[config_prefix + 'sasl.login.connect.timeout'] = '15000'
                 final_dict[config_prefix + 'sasl.oauthbearer.token.endpoint.url'] = oauth_token_uri
 
-                if (oauth_groups_scope == 'none' and (not idp_self_signed)):
-                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                        'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + '\";'
+                if assertion_config and assertion_config.get('enabled'):
+                    self._configure_oauth_assertion(final_dict, config_prefix, assertion_config)
+                    client_id = oauth_superuser_client_id
+                    client_secret = None
+                else:
+                    client_id = oauth_superuser_client_id
+                    client_secret = oauth_superuser_client_password
 
-                if (oauth_groups_scope != 'none' and (not idp_self_signed)):
-                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                        'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + \
-                        '\" scope=\"' + oauth_groups_scope + '\";'
-
-                if oauth_groups_scope == 'none' and idp_self_signed:
-                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                        'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + \
-                        '\" ssl.truststore.location=\"' + \
-                        truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
-
-                if oauth_groups_scope != 'none' and idp_self_signed:
-                    final_dict[config_prefix + 'sasl.jaas.config'] = 'org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required ' + \
-                        'clientId=\"' + oauth_superuser_client_id + '\" clientSecret=\"' + str(oauth_superuser_client_password) + \
-                        '\" scope=\"' + oauth_groups_scope + \
-                        '\" ssl.truststore.location=\"' + truststore_path + '\" ssl.truststore.password=\"' + truststore_storepass + '\";'
+                truststore_config = (truststore_path, truststore_storepass) if idp_self_signed else (None, None)
+                final_dict[config_prefix + 'sasl.jaas.config'] = self._get_oauth_jaas_config(
+                    client_id, client_secret, oauth_groups_scope, *truststore_config
+                )
 
         return final_dict
 
@@ -655,72 +693,3 @@ class FilterModule(object):
             basic_auth_enabled, basic_auth_user_info, mtls_enabled,
             service_name
         )
-
-    def usm_sha1_password_hash(self, password):
-        """
-        Generates a SHA1 hash of the provided password in the format required for USM agent basic auth.
-        Returns the hash in base64 format with {SHA} prefix.
-
-        Args:
-            password (str): The plain text password to hash
-
-        Returns:
-            str: The SHA1 hash in format {SHA}base64_hash
-        """
-        if not password:
-            return ''
-
-        # Generate SHA1 hash
-        sha1_hash = hashlib.sha1(password.encode('utf-8')).digest()
-
-        # Encode to base64
-        base64_hash = base64.b64encode(sha1_hash).decode('utf-8')
-
-        # Return in format required for basic auth: {SHA}base64_hash
-        return f"{{SHA}}{base64_hash}"
-
-    def combine_enabled_values(self, config_dict):
-        """
-        Combines values from multiple enabled configurations into a comma-separated string.
-
-        Args:
-            config_dict (dict): Dictionary where keys are feature names and values are lists
-                               of [enabled_condition, value_to_include]
-
-        Returns:
-            str: Comma-separated list of values for enabled features
-        """
-        if not isinstance(config_dict, dict):
-            return ''
-
-        enabled_values = []
-
-        for config in config_dict.values():
-            if not isinstance(config, (list, tuple)) or len(config) != 2:
-                raise ValueError(f"Malformed config entry: {config}")
-
-            enabled = config[0]
-            value = config[1]
-
-            # Convert string boolean values to actual booleans
-            if isinstance(enabled, str):
-                enabled = enabled.lower() in ('true', 'yes', '1')
-
-            # Add value if feature is enabled
-            if enabled and value and value.strip():
-                enabled_values.append(value.strip())
-
-        return ','.join(enabled_values)
-
-    def schema_registry_extension_classes(self, rbac_enabled, schema_exporters_defined, schema_importers_defined, usm_enabled):
-        """
-        Generates comma-separated list of Schema Registry resource extension classes based on enabled features.
-        """
-        extensions_dict = {
-            'rbac': [rbac_enabled, 'io.confluent.kafka.schemaregistry.security.SchemaRegistrySecurityResourceExtension'],
-            'schema_exporter': [schema_exporters_defined, 'io.confluent.schema.exporter.SchemaExporterResourceExtension'],
-            'schema_importer': [schema_importers_defined, 'io.confluent.schema.importer.SchemaImporterResourceExtension'],
-            'dek_registry': [schema_importers_defined, 'io.confluent.dekregistry.DekRegistryResourceExtension'],
-            'usm_sr': [usm_enabled, 'io.confluent.schema.registry.usm.UsmSchemaRegistryExtension'],
-        }
-        return self.combine_enabled_values(extensions_dict)

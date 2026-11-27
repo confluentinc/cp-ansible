@@ -77,8 +77,11 @@ What this means is all the variables defined in the `variables` role are accessi
 1. Is the variable only used by tasks in one role? Yes -> Define variable  in `<role>/defaults/main.yml` Ex:
 
 ```
-### Root logger within ksqlDB's log4j config. Only honored if ksql_custom_log4j: true
-ksql_log4j_root_logger: "INFO, stdout, main"
+### Root logger within ksqlDB's log4j config. Only honored if ksql_custom_log4j2: true
+ksql_log4j2_root_logger_level: "INFO"
+ksql_log4j2_root_appenders:
+  - stdout
+  - main
 ```
 
 This log4j variable is only needed in the ksql's log4j tasks.

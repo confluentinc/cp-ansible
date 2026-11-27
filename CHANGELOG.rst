@@ -4,7 +4,7 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-7.9.10
+8.0.8
 ======
 Breaking Changes
 -------------
@@ -16,18 +16,18 @@ New features
 
 Notable enhancements
 -------------
-- Control Center Next Gen (2.7.0+) and USM Agent (1.3.0+) packages are now fetched from version-numbered repository paths (for example ``.../rpm/2.7/`` instead of ``.../rpm/``); older versions and standard installations are unaffected, and air-gapped or mirrored setups can adjust the path via the new ``confluent_control_center_next_gen_versioned_from_minor_version`` and ``confluent_usm_agent_versioned_from_minor_version`` variables.
-- Split the ZK→KRaft migration into 3 explicit, independently-runnable phases to allow soak testing with KRaft.
+- Control Center Next Gen (2.7.0+) packages are now fetched from version-numbered repository paths (for example ``.../rpm/2.7/`` instead of ``.../rpm/``); older versions and standard installations are unaffected, and air-gapped or mirrored setups can adjust the path via the new ``confluent_control_center_next_gen_versioned_from_minor_version`` variable.
 
 Notable Fixes
 -------------
 - Fixed DN extraction from keystores truncating on colon-containing certificate fields.
 - Fixed security.properties copy failing on a static/BYO masterkey with nothing to copy, by gating on the file actually existing on the controller.
 - Scope archive-ownership chown to ``binary_base_path`` instead of the shared ``archive_destination_path``.
+- Fixed Control Center Next Gen Basic Authentication by generating JAAS configuration with the correct Jetty login module.
 - Fixed ``kafka_controller_quorum_voters`` to honor ``hostname_aliasing_enabled`` and use resolved controller hostnames instead of raw inventory hostnames, ensuring consistent and routable controller endpoints.
 
 
-7.9.9
+8.0.7
 ======
 New features
 -------------
@@ -35,26 +35,21 @@ New features
 
 Notable enhancements
 -------------
-- This release adds protection against Common Vulnerabilites and Exposures found in Confluent Platform. More info: https://docs.confluent.io/platform/7.9/release-notes/index.html#cp-release-7-9-9
+- This release adds protection against Common Vulnerabilites and Exposures found in Confluent Platform. More info: https://docs.confluent.io/platform/8.0/release-notes/index.html#cp-release-8-0-7
 
 Notable Fixes
 -------------
 - N/A
 
-7.9.8
+8.0.6
 ======
 New features
 -------------
-- Added KRaft → ZooKeeper migration rollback.
-- Added a migration preflight utility: the kafka-migration-check preflight-check now runs on the KRaft controller during ZK → KRaft migration to validate readiness before proceeding.
 - Support bundle generation for CP-Ansible playbook runs.
 
 Notable enhancements
 -------------
-- Added validation of CP package availability before installation, failing early if the requested package version is unavailable (https://github.com/confluentinc/cp-ansible/pull/2493).
-- all.yml playbook now fails fast when the kraft_migration flag is enabled, directing users to the dedicated ZKtoKraftMigration playbook.
-- The ZK → KRaft migration now validates cluster health before starting the migration.
-- After the KRaft controller comes up, the migration now asserts that the cluster ZkMigrationState is in the Pre-Migration state before proceeding.
+- Added validation of CP package availability before installation: the playbook now fails early if the requested package version is unavailable, before removing the existing packages (https://github.com/confluentinc/cp-ansible/pull/2548).
 - Introduced Confluent CLI v3.0.0 preflight assertion.
 
 Notable fixes
@@ -65,7 +60,7 @@ Notable fixes
 - Fixed kafka-storage format failures on KRaft clusters with secrets protection enabled - the master key is now passed to the format step via the CONFLUENT_SECURITY_MASTER_KEY environment variable.
 - Fixed custom certificate chain building for multi-tier and partial-chain PKIs - chains now assemble correctly for root + intermediate bundles and DoD-style partial chains.
 
-7.9.7
+8.0.5
 ======
 Notable fixes
 -------------
@@ -75,7 +70,7 @@ Bug fixes
 -------------
 - Fixed kafka-storage format failures on KRaft clusters with secrets protection enabled — the masterkey is now passed via the CONFLUENT_SECURITY_MASTER_KEY env var (https://github.com/confluentinc/cp-ansible/pull/2477).
 
-7.9.6
+8.0.4
 ======
 
 Notable fixes
@@ -84,14 +79,13 @@ Notable fixes
 
 New features
 -------------
-- USM Agent now supports ZooKeeper and KRaft, enabling clusters to send metrics and metadata to Confluent Cloud via USM with all supported authentication modes such as no auth, basic, TLS, and mTLS.
 - CP Ansible now supports using AWS Systems Manager (SSM) to establish connections to managed nodes.
 
 Bug fixes
 -------------
 - Fixed an issue where pipefail caused failures when extracting distinguished names from keystores in mTLS setups.
 
-v7.9.5
+v8.0.3
 ======
 
 Notable fixes
@@ -100,13 +94,13 @@ Notable fixes
 
 New features
 -------------
-- Add SSM Support for managing connection to VMs
 - Made retries and delays in health checks configurable for customers 
 - Introduced Indexing and default rollover strategy for log42j file
 
 Notable enhancements
 -------------
 - Added the possiblity to override a list of loggers using the update_log4j task in the common role
+- Add apt-key approach was deprecated in ubuntu os. Made the changes to move to a modern approach
 - Enhanced security by masking potentially exposed sensitive secrets
 
 Bug fixes
@@ -114,16 +108,15 @@ Bug fixes
 - Fixes idempotency on config files when using secrets protection feature
 - Fixed Connector deployment failures for mtls enabled with provided keystore/trustore in rolling deployments
 - Zookeeper based kafka cluster on JBOD can use migration playbook to move to KRaft 
-- Fixed bug related to zookeeper chroot creation
 
-v7.9.4
+v8.0.2
 ======
 
 Notable fixes
 -------------
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.9.3
+v8.0.1
 ======
 
 Notable enhancements
@@ -137,32 +130,33 @@ Notable fixes
 - Bug Fix to enable Control Center Next Gen systemd service for archive installations
 - CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
 
-v7.9.2
+v8.0.0
 ======
+New features
+-------------
+- Zookeeper support has been removed. All users must now use the KRaft Controller architecture.
+- Legacy Control Center has been deprecated. The Next Gen Control Center is now the default.
+- Full IPv6 support is now available across all Confluent Platform components, including Control Center Next Gen.
+- log4j1 support is removed — Components have been migrated to log4j2.
+- CP Ansible now uses Confluent CLI instead of Confluent Hub Client for managing connectors.
+- OAuth client assertion support (i.e. passwordless authentication) is now available across all CP components.
+- Cluster migration to RBAC with mTLS is now supported for those currently using LDAP or OAuth authentication.
 
 Notable enhancements
 -------------
+- Default Confluent CLI version upgraded to v4.26.0.
+- Support added for Ansible versions 10 and 11.
+- Support added for Java 21.
+- Jetty upgraded from version 9 to version 12.
+- SNI headers are now required by default.
+- Users can now explicitly whitelist IdP endpoints.
 
-- Enabled support for brownfield migrations to RBAC over mTLs
-
-Notable fixes
+Deprecations
 -------------
-
-- Resolved issue where component restart was not triggered after adding IDP certificates to the truststore.
-- Fixed assignment of role binding to certificate principals which contain spaces in their names
-- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
-
-v7.9.1
-======
-
-New features
--------------
-- Confluent Control Center Next Gen Support (Only on IPv4 based deployments)
-- IPv6 support for all CP components except Control Center Next Gen
-
-Notable Fixes
--------------
-- KSQL will now prefer OAuth over LDAP for MDS communication when both are configured on MDS server.
+- Confluent Hub Client is now deprecated.
+- Java 8 and Java 11 are no longer supported.
+- Ansible versions 7 and 8 are no longer supported.
+- Python versions earlier than 3.10 are no longer supported.
 
 v7.9.0
 ======

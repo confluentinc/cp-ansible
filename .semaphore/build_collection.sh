@@ -7,18 +7,17 @@ cd $PATH_TO_CPA
 # prepend the desired default python version to .python-version file
 { echo "$PYTHON_VERSION"; cat .python-version 2>/dev/null || true; } > .python-version.tmp && mv .python-version.tmp .python-version
 
-# Allow pip to install packages in externally-managed environments (Ubuntu 24.04 PEP 668)
-export PIP_BREAK_SYSTEM_PACKAGES=1
+# Explicitly activate the desired Python version using Semaphore's sem-version
+sem-version python $PYTHON_VERSION
 
-# Use the specific Python version for pip installations
-python$PYTHON_VERSION -m pip install wheel
-python$PYTHON_VERSION -m pip install pylint
-python$PYTHON_VERSION -m pip install "ansible==$ANSIBLE_VERSION"
+pip install wheel
+pip install pylint
+pip install "ansible==$ANSIBLE_VERSION"
 
-python$PYTHON_VERSION --version
+python --version
 ansible --version
 
-export PYTHON_INTERPRETER=$(which python$PYTHON_VERSION)
+export PYTHON_INTERPRETER=$(which python)
 echo $PYTHON_INTERPRETER
 ansible-galaxy collection build
 
