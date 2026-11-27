@@ -4,28 +4,26 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-8.3.2
+8.4.0
 ======
 Breaking Changes
 -------------
-- ``confluent_package_version`` is now required. CP-Ansible no longer ships a hardcoded default Confluent Platform version. Before upgrading, add ``confluent_package_version`` to your inventory, set to the CP version you want to install. See the CP-Ansible / Confluent Platform compatibility matrix: https://docs.confluent.io/ansible/current/ansible-requirements.html. If it is not set, the playbook will fail early.
+- ``confluent_package_version`` is now required. CP-Ansible no longer ships a default Confluent Platform version. Before you upgrade, set ``confluent_package_version`` in your inventory to the Confluent Platform version you want to install. If it is not set, the playbooks fail early. For supported versions, see the compatibility matrix: https://docs.confluent.io/ansible/current/ansible-requirements.html.
 
 New features
 -------------
-- Rootless (non-root) CP-Ansible install: end-to-end support for installing Confluent Platform as a non-root user.
+- Support for KRaft dynamic controller quorum (KIP-853). Deploy new clusters with a dynamic quorum, migrate existing static-quorum clusters to it, and add or replace controllers without rebuilding the cluster.
+- Bring your own Prometheus for Control Center Next Gen. Control Center can use an externally managed Prometheus instead of the bundled Prometheus and Alertmanager.
+- Control Center Next Gen now collects Kafka producer and consumer client metrics by default.
 
 Notable enhancements
 -------------
-- Control Center Next Gen (2.7.0+) and USM Agent (1.3.0+) packages are now fetched from version-numbered repository paths (for example ``.../rpm/2.7/`` instead of ``.../rpm/``); older versions and standard installations are unaffected, and air-gapped or mirrored setups can adjust the path via the new ``confluent_control_center_next_gen_versioned_from_minor_version`` and ``confluent_usm_agent_versioned_from_minor_version`` variables.
+- Upgraded the Prometheus JMX Exporter agent from 1.0.1 to 1.6.0. Versions 1.1.0 and later are downloaded from GitHub Releases instead of Maven Central.
+- New ``control_center_next_gen_dependency_alertmanager_web_external_url`` variable sets the external URL of the bundled Alertmanager for Control Center Next Gen, so alert links work when Alertmanager runs behind a proxy or load balancer.
 
 Notable Fixes
 -------------
-- Fixed DN extraction from keystores truncating on colon-containing certificate fields.
-- Fixed security.properties copy failing on a static/BYO masterkey with nothing to copy, by gating on the file actually existing on the controller.
-- Scope archive-ownership chown to ``binary_base_path`` instead of the shared ``archive_destination_path``.
-- Fixed Control Center Next Gen Basic Authentication by generating JAAS configuration with the correct Jetty login module.
-- Fixed ``kafka_controller_quorum_voters`` to honor ``hostname_aliasing_enabled`` and use resolved controller hostnames instead of raw inventory hostnames, ensuring consistent and routable controller endpoints.
-
+- N/A
 
 8.3.1
 ======

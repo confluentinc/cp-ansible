@@ -16,7 +16,13 @@
     state: restarted
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
-  when: not (rootless_enabled | bool) or (rootless_enabled | bool and control_center_next_gen_dep_prometheus_rootless_unit.stat.exists)
+  # External Prometheus: the bundled Prometheus is not managed in external-Prometheus mode - do not (re)start it,
+  # otherwise a config-change notify would bring up the bundled service the deployment opted out of.
+  when: >-
+    (not (rootless_enabled | bool) or (rootless_enabled | bool and control_center_next_gen_dep_prometheus_rootless_unit.stat.exists))
+    and not control_center_next_gen_external_prometheus_enabled | bool
+  tags:
+    - systemd
 
 - name: "Check if the rootless systemd --user unit exists (AlertManager)"
   stat:
@@ -32,7 +38,12 @@
     state: restarted
   environment:
     XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid }}"
-  when: not (rootless_enabled | bool) or (rootless_enabled | bool and control_center_next_gen_dep_alertmanager_rootless_unit.stat.exists)
+  # External Prometheus: the bundled Alertmanager is not managed in external-Prometheus mode - do not (re)start it.
+  when: >-
+    (not (rootless_enabled | bool) or (rootless_enabled | bool and control_center_next_gen_dep_alertmanager_rootless_unit.stat.exists))
+    and not control_center_next_gen_external_prometheus_enabled | bool
+  tags:
+    - systemd
 
 - name: "Check if the rootless systemd --user unit exists (Control Center)"
   stat:

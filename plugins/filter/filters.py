@@ -222,7 +222,7 @@ class FilterModule(object):
                             kerberos_principal, kerberos_primary,
                             scram_user, scram_password, scram256_user,
                             scram256_password, rbac_enabled_public_pem_path, oauth_enabled, oauth_jwks_uri, oauth_expected_audience,
-                            oauth_sub_claim, rbac_enabled, kraft_listener, idp_self_signed):
+                            oauth_issuer_url, oauth_sub_claim, rbac_enabled, kraft_listener, idp_self_signed):
         # For kafka broker properties: Takes listeners dictionary and outputs all properties based on the listeners' settings
         # Other inputs help fill out the properties
         final_dict = {}
@@ -326,6 +326,10 @@ class FilterModule(object):
             if 'OAUTHBEARER' in normalize_sasl_protocols and \
                     oauth_enabled and oauth_expected_audience != 'none':
                 final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.expected.audience'] = oauth_expected_audience
+
+            if 'OAUTHBEARER' in normalize_sasl_protocols and \
+                    oauth_enabled and oauth_issuer_url != 'none':
+                final_dict['listener.name.' + listener_name + '.sasl.oauthbearer.expected.issuer'] = oauth_issuer_url
 
             if kraft_listener and (rbac_enabled or oauth_enabled):
                 final_dict['listener.name.' + listener_name + '.principal.builder.class'] =\
@@ -648,13 +652,21 @@ class FilterModule(object):
         if ssl_enabled:
             final_dict[config_prefix + 'ssl.truststore.location'] = truststore_path
             final_dict[config_prefix + 'ssl.truststore.password'] = str(truststore_storepass)
-            final_dict[config_prefix + 'alias.name'] = service_name
 
             # mTLS properties
             if mtls_enabled:
                 final_dict[config_prefix + 'ssl.keystore.location'] = keystore_path
                 final_dict[config_prefix + 'ssl.keystore.password'] = str(keystore_storepass)
                 final_dict[config_prefix + 'ssl.key.password'] = str(keystore_keypass)
+                # alias.name must match this dependency's actual keystore alias, which the
+                # control_center_next_gen role's ssl-role invocations set to this same
+                # service_name (via keystore_alias in create_keystores_from_certs.yml) -
+                # deliberately NOT "localhost" (create_keystores_from_certs.yml's default),
+                # because C3's own server keystore also defaults to alias "localhost" and gets
+                # merged into the same composite key manager as this dependency's identity when
+                # C3 talks to it over mTLS. Two identities sharing one alias makes that merge
+                # ambiguous - a distinct alias per dependency is what actually disambiguates it.
+                final_dict[config_prefix + 'alias.name'] = service_name
 
         # Basic authentication
         if basic_auth_enabled:

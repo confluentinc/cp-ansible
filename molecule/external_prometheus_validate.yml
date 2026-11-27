@@ -1,0 +1,357 @@
+---
+# External Prometheus validation: confirm validate_external_prometheus.yml rejects bad external-Prometheus
+# configs and accepts the valid auth modes (TLS-only, TLS + Basic auth, mTLS).
+# Runs on localhost (no cluster needed). Imported from a scenario's verify.yml:
+#   - import_playbook: ../external_prometheus_validate.yml
+#
+# Each case runs validate_external_prometheus.yml with a config and asserts the expected outcome. The
+# flag pattern (set true only if validation did NOT fail) avoids inspecting ansible_failed_result,
+# so a passing validation and a failing rescue assertion cannot be confused.
+- name: External Prometheus validation - auth-mode rules
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    control_center_next_gen_external_prometheus_enabled: true
+    control_center_next_gen_dependency_prometheus_host: prom.example
+    control_center_next_gen_dependency_prometheus_port: 9090
+    # Play-level default so every pre-existing case below (which does not itself care about the
+    # C3-version guard) resolves to a supported version and is unaffected by it. In the real role
+    # these come from the variables role (a dependency of control_center_next_gen, not exercised by
+    # this standalone localhost playbook); the version-guard test cases further down override both
+    # explicitly to exercise specific versions.
+    confluent_control_center_next_gen_package_version: "2.7.0"
+    confluent_control_center_next_gen_repo_version: "2.7"
+  tasks:
+    - name: Case 1 - external Prometheus with TLS off must be rejected
+      block:
+        - name: Run validation with TLS off
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: false
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+        - name: Validation unexpectedly passed (TLS off)
+          ansible.builtin.set_fact:
+            external_prometheus_tls_off_passed: true
+      rescue:
+        - name: Validation rejected TLS off as expected
+          ansible.builtin.set_fact:
+            external_prometheus_tls_off_passed: false
+
+    - name: Assert TLS-off was rejected
+      ansible.builtin.assert:
+        that:
+          - not (external_prometheus_tls_off_passed | default(true) | bool)
+        fail_msg: "validate_external_prometheus did not reject a non-TLS external Prometheus."
+        success_msg: "External Prometheus negative: non-TLS external Prometheus is rejected."
+
+    - name: Case 2 - external Prometheus with both auth modes must be rejected
+      block:
+        - name: Run validation with both Basic and mTLS on
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: true
+        - name: Validation unexpectedly passed (both auth modes)
+          ansible.builtin.set_fact:
+            external_prometheus_both_auth_passed: true
+      rescue:
+        - name: Validation rejected both auth modes as expected
+          ansible.builtin.set_fact:
+            external_prometheus_both_auth_passed: false
+
+    - name: Assert both-auth-modes was rejected
+      ansible.builtin.assert:
+        that:
+          - not (external_prometheus_both_auth_passed | default(true) | bool)
+        fail_msg: "validate_external_prometheus did not reject both auth modes at once."
+        success_msg: "External Prometheus negative: both auth modes at once is rejected."
+
+    - name: Case 3 - external Prometheus with no client auth (TLS-only) is accepted
+      block:
+        - name: Run validation with neither auth mode (TLS-only)
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+        - name: Validation accepted TLS-only as expected
+          ansible.builtin.set_fact:
+            external_prometheus_no_auth_passed: true
+      rescue:
+        - name: Validation unexpectedly rejected TLS-only
+          ansible.builtin.set_fact:
+            external_prometheus_no_auth_passed: false
+
+    - name: Assert no-client-auth (TLS-only) is accepted
+      ansible.builtin.assert:
+        that:
+          - external_prometheus_no_auth_passed | default(false) | bool
+        fail_msg: "validate_external_prometheus wrongly rejected TLS-only (no client auth)."
+        success_msg: "External Prometheus: TLS-only (no client auth) is accepted."
+
+    - name: Case 3b - TLS-only with no server CA source WARNS (not a hard fail; mTLS CA rule is skipped)
+      block:
+        - name: Run validation with TLS-only and no server CA source
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+            # No server CA source, so the mTLS-only hard-fail must NOT trigger under TLS-only.
+            control_center_next_gen_dependency_prometheus_provided_ca_cert_path: ""
+            control_center_next_gen_dependency_prometheus_server_ca_trusted: false
+            control_center_next_gen_external_prometheus_preflight_probe: false
+        - name: Validation completed (missing CA is a soft warning under TLS-only)
+          ansible.builtin.set_fact:
+            external_prometheus_tls_only_no_ca_passed: true
+      rescue:
+        - name: Validation unexpectedly hard-failed on a missing CA under TLS-only
+          ansible.builtin.set_fact:
+            external_prometheus_tls_only_no_ca_passed: false
+
+    - name: Assert TLS-only with a missing server CA did not hard-fail validation
+      ansible.builtin.assert:
+        that:
+          - external_prometheus_tls_only_no_ca_passed | default(false) | bool
+          - external_prometheus_server_ca_untrusted | default(false) | bool
+        fail_msg: "validate_external_prometheus hard-failed TLS-only with a missing server CA; it must only warn."
+        success_msg: "External Prometheus: TLS-only with a missing server CA warns, does not fail."
+
+    # --- Item 4: under Basic auth a missing server CA is a WARNING, not a hard fail ---
+    - name: Case 4 - Basic auth, TLS on, but no server CA source must WARN (not fail)
+      block:
+        - name: Run validation with no server CA source
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+            # Clear the scenario's ambient CA so this case truly tests "no server CA".
+            control_center_next_gen_dependency_prometheus_provided_ca_cert_path: ""
+            control_center_next_gen_dependency_prometheus_server_ca_trusted: false
+            control_center_next_gen_external_prometheus_preflight_probe: false
+        - name: Validation completed (missing CA is a soft warning)
+          ansible.builtin.set_fact:
+            external_prometheus_no_ca_validation_passed: true
+      rescue:
+        - name: Validation unexpectedly hard-failed on a missing CA
+          ansible.builtin.set_fact:
+            external_prometheus_no_ca_validation_passed: false
+
+    - name: Assert a missing server CA did not hard-fail validation
+      ansible.builtin.assert:
+        that:
+          - external_prometheus_no_ca_validation_passed | default(false) | bool
+        fail_msg: "validate_external_prometheus hard-failed on a missing server CA; it must only warn."
+        success_msg: "External Prometheus: a missing server CA does not fail the run."
+
+    - name: Assert the missing-server-CA warning condition fired
+      ansible.builtin.assert:
+        that:
+          - external_prometheus_server_ca_untrusted | default(false) | bool
+        fail_msg: "validate_external_prometheus did not flag the missing external Prometheus server CA."
+        success_msg: "External Prometheus: a missing server CA is flagged for warning."
+
+    - name: Case 5 - a provided server CA clears the warning
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+      vars:
+        control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+        control_center_next_gen_dependency_prometheus_mtls_enabled: false
+        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: /tmp/external_prometheus-fake-ca.crt
+        control_center_next_gen_external_prometheus_preflight_probe: false
+
+    - name: Assert no warning when a server CA is provided
+      ansible.builtin.assert:
+        that:
+          - not (external_prometheus_server_ca_untrusted | default(true) | bool)
+        fail_msg: "validate_external_prometheus warned about the server CA even though one was provided."
+        success_msg: "External Prometheus: a provided server CA clears the warning."
+
+    - name: Case 6 - the publicly-trusted-CA opt-out clears the warning
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+      vars:
+        control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+        control_center_next_gen_dependency_prometheus_mtls_enabled: false
+        # Clear the scenario's ambient CA so the opt-out is tested in isolation.
+        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: ""
+        control_center_next_gen_dependency_prometheus_server_ca_trusted: true
+        control_center_next_gen_external_prometheus_preflight_probe: false
+
+    - name: Assert the opt-out clears the server-CA warning
+      ansible.builtin.assert:
+        that:
+          - not (external_prometheus_server_ca_untrusted | default(true) | bool)
+        fail_msg: "validate_external_prometheus warned about the server CA despite the trusted-CA opt-out."
+        success_msg: "External Prometheus: the trusted-CA opt-out clears the warning."
+
+    # --- Item 7: the reachability probe is best-effort (never fails the run) ---
+    - name: Case 7 - an unreachable endpoint with the probe on must not fail validation
+      block:
+        - name: Run validation with the probe on against an unreachable endpoint
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+            control_center_next_gen_dependency_prometheus_provided_ca_cert_path: /tmp/external_prometheus-fake-ca.crt
+            control_center_next_gen_external_prometheus_preflight_probe: true
+        - name: Validation completed (unreachable endpoint is a soft warning)
+          ansible.builtin.set_fact:
+            external_prometheus_probe_validation_passed: true
+      rescue:
+        - name: Validation unexpectedly hard-failed on an unreachable endpoint
+          ansible.builtin.set_fact:
+            external_prometheus_probe_validation_passed: false
+
+    - name: Assert the reachability probe did not hard-fail validation
+      ansible.builtin.assert:
+        that:
+          - external_prometheus_probe_validation_passed | default(false) | bool
+        fail_msg: "validate_external_prometheus hard-failed on an unreachable endpoint; the probe must be best-effort."
+        success_msg: "External Prometheus: an unreachable endpoint does not fail the run."
+
+    - name: Assert the probe actually ran and detected the endpoint as unreachable
+      ansible.builtin.assert:
+        that:
+          - (external_prometheus_probe.status | default(0) | int) not in [200, 401, 403]
+        fail_msg: "The reachability probe did not run or unexpectedly reported the endpoint reachable."
+        success_msg: "External Prometheus: the reachability probe ran and flagged the unreachable endpoint."
+
+    # --- Item 4 (mTLS): under mutual TLS a missing server CA is a HARD FAILURE ---
+    - name: Case 8 - mTLS with no server CA source must be rejected
+      block:
+        - name: Run validation under mTLS with no server CA source
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+            control_center_next_gen_dependency_prometheus_mtls_enabled: true
+            # Clear the scenario's ambient CA so this case truly tests "no server CA".
+            control_center_next_gen_dependency_prometheus_provided_ca_cert_path: ""
+            control_center_next_gen_dependency_prometheus_server_ca_trusted: false
+            control_center_next_gen_external_prometheus_preflight_probe: false
+        - name: Validation unexpectedly passed (mTLS, no server CA)
+          ansible.builtin.set_fact:
+            external_prometheus_mtls_no_ca_passed: true
+      rescue:
+        - name: Validation rejected mTLS without a server CA as expected
+          ansible.builtin.set_fact:
+            external_prometheus_mtls_no_ca_passed: false
+
+    - name: Assert mTLS without a server CA was rejected
+      ansible.builtin.assert:
+        that:
+          - not (external_prometheus_mtls_no_ca_passed | default(true) | bool)
+        fail_msg: "validate_external_prometheus did not reject mTLS with no server CA; under mTLS it must hard-fail."
+        success_msg: "External Prometheus: mTLS with no server CA is rejected."
+
+    - name: Case 9 - mTLS with a provided server CA is accepted
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+      vars:
+        control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: false
+        control_center_next_gen_dependency_prometheus_mtls_enabled: true
+        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: /tmp/external_prometheus-fake-ca.crt
+        control_center_next_gen_external_prometheus_preflight_probe: false
+
+    - name: Assert mTLS with a provided server CA cleared the check
+      ansible.builtin.assert:
+        that:
+          - not (external_prometheus_server_ca_untrusted | default(true) | bool)
+        fail_msg: "validate_external_prometheus flagged a missing server CA even though one was provided under mTLS."
+        success_msg: "External Prometheus: mTLS with a provided server CA is accepted."
+
+    # --- C3-version guard: rejects a C3 version known not to support external Prometheus.
+    # confluent_control_center_next_gen_repo_version is normally computed by the variables role
+    # (a role dependency of control_center_next_gen, not exercised by this standalone localhost
+    # playbook), so each case below sets both the raw package version and its major.minor
+    # explicitly, matching what the real role would compute. ---
+    - name: Case 10 - C3 2.6.0 with external Prometheus enabled must be rejected
+      block:
+        - name: Run validation with C3 2.6.0
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+            control_center_next_gen_dependency_prometheus_provided_ca_cert_path: /tmp/external_prometheus-fake-ca.crt
+            control_center_next_gen_external_prometheus_preflight_probe: false
+            confluent_control_center_next_gen_package_version: "2.6.0"
+            confluent_control_center_next_gen_repo_version: "2.6"
+        - name: Validation unexpectedly passed (C3 2.6.0)
+          ansible.builtin.set_fact:
+            external_prometheus_c3_260_passed: true
+      rescue:
+        - name: Validation rejected C3 2.6.0 as expected
+          ansible.builtin.set_fact:
+            external_prometheus_c3_260_passed: false
+
+    - name: Assert C3 2.6.0 was rejected
+      ansible.builtin.assert:
+        that:
+          - not (external_prometheus_c3_260_passed | default(true) | bool)
+        fail_msg: "validate_external_prometheus did not reject C3 2.6.0, which is known not to support external Prometheus."
+        success_msg: "External Prometheus negative: C3 2.6.0 is rejected."
+
+    - name: Case 11 - C3 2.6.1 with external Prometheus enabled must be rejected
+      block:
+        - name: Run validation with C3 2.6.1
+          ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+          vars:
+            control_center_next_gen_dependency_prometheus_ssl_enabled: true
+            control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+            control_center_next_gen_dependency_prometheus_mtls_enabled: false
+            control_center_next_gen_dependency_prometheus_provided_ca_cert_path: /tmp/external_prometheus-fake-ca.crt
+            control_center_next_gen_external_prometheus_preflight_probe: false
+            confluent_control_center_next_gen_package_version: "2.6.1"
+            confluent_control_center_next_gen_repo_version: "2.6"
+        - name: Validation unexpectedly passed (C3 2.6.1)
+          ansible.builtin.set_fact:
+            external_prometheus_c3_261_passed: true
+      rescue:
+        - name: Validation rejected C3 2.6.1 as expected
+          ansible.builtin.set_fact:
+            external_prometheus_c3_261_passed: false
+
+    - name: Assert C3 2.6.1 was rejected
+      ansible.builtin.assert:
+        that:
+          - not (external_prometheus_c3_261_passed | default(true) | bool)
+        fail_msg: "validate_external_prometheus did not reject C3 2.6.1, which is still not newer than the latest released 2.6 line."
+        success_msg: "External Prometheus negative: C3 2.6.1 is rejected."
+
+    - name: Case 12 - C3 2.7.0 with external Prometheus enabled is accepted
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+      vars:
+        control_center_next_gen_dependency_prometheus_ssl_enabled: true
+        control_center_next_gen_dependency_prometheus_basic_auth_enabled: true
+        control_center_next_gen_dependency_prometheus_mtls_enabled: false
+        control_center_next_gen_dependency_prometheus_provided_ca_cert_path: /tmp/external_prometheus-fake-ca.crt
+        control_center_next_gen_external_prometheus_preflight_probe: false
+        confluent_control_center_next_gen_package_version: "2.7.0"
+        confluent_control_center_next_gen_repo_version: "2.7"
+      # No block/rescue: a supported C3 version must not be rejected, so a failure here should fail
+      # this whole verify play, not be swallowed.
+
+    - name: Case 13 - external Prometheus disabled entirely skips the version guard regardless of C3 version
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/../roles/control_center_next_gen/tasks/validate_external_prometheus.yml"
+      when: control_center_next_gen_external_prometheus_enabled | bool
+      register: external_prometheus_disabled_gate_result
+      vars:
+        control_center_next_gen_external_prometheus_enabled: false
+        confluent_control_center_next_gen_package_version: "2.5.0"
+        confluent_control_center_next_gen_repo_version: "2.5"
+
+    - name: Assert the disabled gate actually skipped validation (mirrors main.yml's include gate)
+      ansible.builtin.assert:
+        that:
+          - external_prometheus_disabled_gate_result is skipped
+        fail_msg: >-
+          Setting control_center_next_gen_external_prometheus_enabled to false did not skip
+          validate_external_prometheus.yml the same way main.yml's include gate does.
+        success_msg: "External Prometheus: disabling it entirely skips the version guard (and all other checks)."
