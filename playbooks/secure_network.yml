@@ -1,0 +1,292 @@
+---
+# Network boundaries for the secure-by-default deployment: a default-deny, stateful nftables
+# policy per host, generated from the inventory so each host only accepts (and only initiates)
+# the flows listed in vars/secure_network.yml.
+#
+# Needs root. It is deliberately NOT part of secure_all: rootless components cannot change
+# firewall rules, which is what makes this layer tamper-resistant against a compromised cp-user.
+# Run it in the privileged phase, as an admin:
+#
+#   ansible-playbook -i <inventory> confluent.platform.secure_network -e ansible_user=<admin> \
+#     -e secure_network_admin_cidrs='["<control-node-or-bastion-ip>/32"]'
+#
+# Recommended order: set -e secure_network_enforce=false first (logs would-be drops, blocks
+# nothing), review `journalctl -k | grep cp-secure-drop`, then enforce.
+#
+# Variables (inventory or -e):
+#   secure_network_admin_cidrs      REQUIRED  SSH + MDS access; also prevents self-lockout
+#   secure_network_client_cidrs     Kafka/SR/ksqlDB/REST clients outside the inventory
+#   secure_network_user_cidrs       Control Center users
+#   secure_network_ldap_hosts       LDAP server IPs for brokers/controllers (ports 389/636)
+#   secure_network_dns_servers / secure_network_ntp_servers   empty = allow any
+#   secure_network_extra_ingress / secure_network_extra_egress   [{name, from|to, proto, ports}]
+#   secure_network_allow_package_egress   true only during an archive download window
+#   secure_network_enforce          true (default) = default-deny; false = log-only
+#   secure_network_log_drops        true (default)
+#   secure_network_rollback_seconds  600 (default) - a host-local timer removes the policy if a FRESH
+#                                    administrative connection has not confirmed it by then
+#   secure_network_verify           true (default) = run the live allow/deny checks afterwards
+#
+# Ports are resolved per destination host (see vars/secure_network.yml). Probes whose port is also
+# covered by a custom extra_ingress/extra_egress rule are skipped, because the group-based
+# expectation no longer holds for them.
+
+- name: Secure network - apply default-deny host firewall
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:ksql:control_center_next_gen:kafka_rest
+  gather_facts: false
+  any_errors_fatal: true
+  vars_files:
+    - vars/secure_network.yml
+  vars:
+    ansible_become: true
+    secure_host_groups: "{{ group_names | intersect(secure_network_cp_groups) }}"
+  tasks:
+    - import_role:
+        name: variables
+      tags: always
+
+    # Defaults via set_fact + default(): play-level vars would outrank (and silently discard) any
+    # value the customer sets in the inventory.
+    - name: Compute secure_network defaults
+      set_fact:
+        secure_network_admin_cidrs: "{{ secure_network_admin_cidrs | default([]) }}"
+        secure_network_client_cidrs: "{{ secure_network_client_cidrs | default([]) }}"
+        secure_network_user_cidrs: "{{ secure_network_user_cidrs | default([]) }}"
+        secure_network_ldap_hosts: "{{ secure_network_ldap_hosts | default([]) }}"
+        secure_network_ldap_ports: "{{ secure_network_ldap_ports | default([389, 636]) }}"
+        secure_network_dns_servers: "{{ secure_network_dns_servers | default([]) }}"
+        secure_network_ntp_servers: "{{ secure_network_ntp_servers | default([]) }}"
+        secure_network_extra_ingress: "{{ secure_network_extra_ingress | default([]) }}"
+        secure_network_extra_egress: "{{ secure_network_extra_egress | default([]) }}"
+        secure_network_allow_package_egress: "{{ secure_network_allow_package_egress | default(false) }}"
+        secure_network_enforce: "{{ secure_network_enforce | default(true) }}"
+        secure_network_log_drops: "{{ secure_network_log_drops | default(true) }}"
+        secure_network_rollback_seconds: "{{ secure_network_rollback_seconds | default(600) }}"
+        secure_network_nft_bin: "{{ secure_network_nft_bin | default('/usr/sbin/nft') }}"
+        secure_network_dir: "{{ secure_network_dir | default('/etc/cp-secure') }}"
+
+    - name: Guard - admin CIDRs are mandatory so the policy cannot lock out the control node
+      assert:
+        that:
+          - secure_network_admin_cidrs | length > 0
+          - ansible_user | default('root') != deployment_user | default('')
+        fail_msg: >-
+          Set secure_network_admin_cidrs to the control node/bastion address(es) and run as a privileged
+          admin (-e ansible_user=<admin>), not as the rootless deployment_user.
+
+    - include_tasks: tasks/secure_network_resolve.yml
+
+    # Minimal images (e.g. ubi9-minimal) ship microdnf without the dnf Python bindings, so Ansible's
+    # package module cannot run there. Bake nftables into the image; install only if it is missing.
+    - name: Check for nftables
+      stat:
+        path: "{{ secure_network_nft_bin }}"
+      register: secure_network_nft_stat
+
+    - name: Install nftables
+      package:
+        name: nftables
+        state: present
+      when: not secure_network_nft_stat.stat.exists
+
+    - name: Create policy directory
+      file:
+        path: "{{ secure_network_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Render nftables policy (syntax-checked before it is written; previous version kept for rollback)
+      template:
+        src: templates/secure_network.nft.j2
+        dest: "{{ secure_network_dir }}/cp-secure.nft"
+        owner: root
+        group: root
+        mode: '0600'
+        backup: true
+        validate: "{{ secure_network_nft_bin }} -c -f %s"
+      register: secure_network_rendered
+
+    - name: Install firewall unit (applied early at boot, removed cleanly on stop)
+      copy:
+        dest: /etc/systemd/system/cp-secure-firewall.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Confluent Platform secure-by-default host firewall
+          Wants=network-pre.target
+          Before=network-pre.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart={{ secure_network_nft_bin }} -f {{ secure_network_dir }}/cp-secure.nft
+          ExecReload={{ secure_network_nft_bin }} -f {{ secure_network_dir }}/cp-secure.nft
+          ExecStop=-{{ secure_network_nft_bin }} delete table inet cp_secure
+
+          [Install]
+          WantedBy=multi-user.target
+      register: secure_network_unit
+
+    # ---- rollback that does not depend on the connection the policy may have just broken -------------
+    - name: Capture the policy currently loaded (restored on rollback)
+      command: "{{ secure_network_nft_bin }} list table inet cp_secure"
+      register: secure_network_previous
+      failed_when: false
+      changed_when: false
+
+    - name: Write the rollback ruleset (previous policy, or just removal of the table)
+      copy:
+        dest: "{{ secure_network_dir }}/rollback.nft"
+        owner: root
+        group: root
+        mode: '0600'
+        content: |
+          table inet cp_secure
+          delete table inet cp_secure
+          {{ secure_network_previous.stdout if secure_network_previous.rc == 0 else '' }}
+
+    # Restores the previous ruleset AND the previous persisted file, so a reboot cannot reapply a
+    # policy that was rolled back. With no previous policy the unit is disabled instead.
+    - name: Prepare the rollback script
+      copy:
+        dest: "{{ secure_network_dir }}/rollback.sh"
+        owner: root
+        group: root
+        mode: '0700'
+        content: |
+          #!/bin/sh
+          {{ secure_network_nft_bin }} -f {{ secure_network_dir }}/rollback.nft
+          {% if secure_network_rendered.backup_file is defined %}
+          cp -p {{ secure_network_rendered.backup_file }} {{ secure_network_dir }}/cp-secure.nft
+          {% elif secure_network_previous.rc != 0 %}
+          systemctl disable cp-secure-firewall >/dev/null 2>&1 || true
+          {% endif %}
+
+    - name: Apply policy; a host-local timer rolls it back unless a FRESH connection confirms it
+      block:
+        # AccuracySec=1s: a transient timer defaults to 1 minute accuracy and may fire up to a minute late,
+        # which is the wrong property for a lockout safety net (observed in testing).
+        - name: Arm the rollback timer (runs on the host, so it works even if the connection is lost)
+          command: >-
+            systemd-run --unit=cp-secure-rollback --on-active={{ secure_network_rollback_seconds }}s
+            --timer-property=AccuracySec=1s
+            {{ secure_network_dir }}/rollback.sh
+
+        - name: Load policy
+          systemd:
+            name: cp-secure-firewall
+            daemon_reload: true
+            enabled: true
+            state: "{{ 'restarted' if (secure_network_rendered.changed or secure_network_unit.changed) else 'started' }}"
+
+        # An already-open SSH session survives conntrack; only a NEW connection proves admin access.
+        - name: Drop the existing connection and require a fresh one
+          meta: reset_connection
+
+        - name: Confirm a fresh administrative connection works
+          wait_for_connection:
+            timeout: 30
+            delay: 1
+
+        - name: Cancel the rollback timer (policy confirmed)
+          command: systemctl stop cp-secure-rollback.timer
+          failed_when: false
+      rescue:
+        - name: ROLLBACK - restore the previous policy now (lockout or load failure)
+          command: "{{ secure_network_dir }}/rollback.sh"
+          failed_when: false
+
+        - name: Cancel the rollback timer
+          command: systemctl stop cp-secure-rollback.timer
+          failed_when: false
+
+        - name: Fail after rollback
+          fail:
+            msg: "Policy failed or made {{ inventory_hostname }} unreachable and was rolled back. Check secure_network_admin_cidrs."
+
+    - name: Report mode
+      debug:
+        msg: >-
+          {{ inventory_hostname }}: {{ 'ENFORCING default-deny' if secure_network_enforce | bool else 'LOG-ONLY (nothing blocked)' }}
+          policy loaded from {{ secure_network_dir }}/cp-secure.nft
+
+- name: Secure network - verify live allow/deny behaviour
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:ksql:control_center_next_gen:kafka_rest
+  gather_facts: false
+  any_errors_fatal: true
+  vars_files:
+    - vars/secure_network.yml
+  vars:
+    ansible_become: true
+    secure_host_groups: "{{ group_names | intersect(secure_network_cp_groups) }}"
+  tags: verify
+  tasks:
+    - name: Compute secure_network verify defaults
+      set_fact:
+        secure_network_verify: "{{ secure_network_verify | default(true) }}"
+        secure_network_enforce: "{{ secure_network_enforce | default(true) }}"
+        secure_network_client_cidrs: "{{ secure_network_client_cidrs | default([]) }}"
+        secure_network_admin_cidrs: "{{ secure_network_admin_cidrs | default([]) }}"
+        secure_network_user_cidrs: "{{ secure_network_user_cidrs | default([]) }}"
+        secure_network_extra_ingress: "{{ secure_network_extra_ingress | default([]) }}"
+        secure_network_extra_egress: "{{ secure_network_extra_egress | default([]) }}"
+        secure_network_nft_bin: "{{ secure_network_nft_bin | default('/usr/sbin/nft') }}"
+        secure_network_connect_timeout: "{{ secure_network_connect_timeout | default(3) }}"
+
+    - name: Verification disabled
+      meta: end_play
+      when: not (secure_network_verify | bool)
+
+    - import_role:
+        name: variables
+      tags: always
+
+    - include_tasks: tasks/secure_network_resolve.yml
+
+    - name: Policy table is loaded
+      command: "{{ secure_network_nft_bin }} list table inet cp_secure"
+      changed_when: false
+
+    # Probe the SAME address and per-destination port the rules were generated from (inventory names
+    # need not resolve on managed hosts). Ports also named by a custom extra rule are skipped: the
+    # group-based expectation does not hold for them.
+    - name: Build the list of connections to probe from this host
+      set_fact:
+        secure_network_probes: >-
+          {%- set overridden = [] -%}
+          {%- for r in (secure_network_extra_ingress + secure_network_extra_egress) -%}
+          {%- for p in r.ports -%}{%- set _ = overridden.append(p | int) -%}{%- endfor -%}
+          {%- endfor -%}
+          {%- set out = [] -%}
+          {%- for f in secure_network_resolved_flows -%}
+          {%- for ep in f.endpoints if ep.host != inventory_hostname -%}
+          {%- for p in ep.ports if p not in overridden -%}
+          {%- set _ = out.append({
+                'flow': f.name, 'host': ep.host, 'ip': ep.ip, 'port': p | int,
+                'allowed': (secure_host_groups | intersect(f.from)) | length > 0
+              }) -%}
+          {%- endfor -%}
+          {%- endfor -%}
+          {%- endfor -%}
+          {{ out | to_json }}
+
+    - name: "Allowed flows must connect, forbidden flows must be blocked"
+      command:
+        argv:
+          - timeout
+          - "{{ secure_network_connect_timeout }}"
+          - bash
+          - -c
+          - "exec 3<>/dev/tcp/{{ item.ip }}/{{ item.port }}"
+      register: secure_network_probe_result
+      changed_when: false
+      failed_when: >-
+        (item.allowed and secure_network_probe_result.rc != 0) or
+        (not item.allowed and secure_network_probe_result.rc == 0 and secure_network_enforce | bool)
+      loop: "{{ secure_network_probes | from_json }}"
+      loop_control:
+        label: "{{ inventory_hostname }} -> {{ item.host }} ({{ item.ip }}):{{ item.port }} ({{ item.flow }}) expect {{ 'ALLOW' if item.allowed else 'DENY' }}"

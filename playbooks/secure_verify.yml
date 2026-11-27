@@ -1,0 +1,105 @@
+---
+# Post-deploy proof that the hardened posture actually holds on every host:
+#   - the deploy user has no passwordless sudo grant of any kind
+#   - deployment_group is private to the deploy user (nobody else can read group-readable keys)
+#   - nothing under the deployment path is owned by anyone else
+#   - private key material belongs to deployment_user:deployment_group and is not world-readable
+#   - no CP process runs as root, no system-scope Confluent unit exists (the firewall unit is allowed)
+#   - the systemd --user units are present and none have failed
+#
+# Every probe also fails on a non-zero return code, so a missing directory or a traversal error
+# cannot masquerade as "nothing found".
+#
+# This runs as the deploy user and so can only prove what that user can observe. For a privileged
+# audit of sudoers (e.g. NOPASSWD grants limited to specific commands that still allow escalation),
+# inspect /etc/sudoers* out-of-band.
+#
+# Run standalone:   ansible-playbook -i <inventory> confluent.platform.secure_verify
+
+- name: Secure post-deploy verification
+  hosts: kafka_controller:kafka_broker:schema_registry:kafka_connect:ksql:control_center_next_gen:kafka_rest:kafka_connect_replicator:usm_agent
+  gather_facts: false
+  tasks:
+    - import_role:
+        name: variables
+      tags: always
+
+    # `sudo -n -l` lists the user's sudo grants without a password. If it succeeds, the user holds
+    # at least one passwordless grant (any command can be an escalation path), so it must fail:
+    # "a password is required" / "not allowed to run sudo" / sudo absent are all acceptable.
+    - name: Deploy user holds no passwordless sudo grants
+      command: sudo -n -l
+      register: secure_sudo_grants
+      failed_when: secure_sudo_grants.rc == 0
+      changed_when: false
+
+    - name: deployment_group is private - no other user belongs to it or has it as primary group
+      shell: |
+        gid=$(getent group {{ deployment_group }} | cut -d: -f3)
+        [ -n "$gid" ] || { echo "group {{ deployment_group }} does not exist"; exit 0; }
+        members=$(getent group {{ deployment_group }} | cut -d: -f4 | tr ',' '\n' | grep -vx '{{ deployment_user }}' || true)
+        primary=$(getent passwd | awk -F: -v g="$gid" -v u="{{ deployment_user }}" '$4 == g && $1 != u { print $1 }')
+        printf '%s\n%s' "$members" "$primary" | grep -v '^$' || true
+      args:
+        executable: /bin/sh
+      register: secure_group_members
+      failed_when: secure_group_members.rc != 0 or secure_group_members.stdout | trim | length > 0
+      changed_when: false
+
+    - name: No files under the deployment path are owned by another user
+      command: "find {{ rootless_deployment_path }} -not -user {{ deployment_user }}"
+      register: secure_foreign_files
+      failed_when: secure_foreign_files.rc != 0 or secure_foreign_files.stdout | length > 0
+      changed_when: false
+
+    # cp-ansible writes key material 0640 owned by deployment_user:deployment_group. That is safe only
+    # because deployment_group was just shown to be private; world access or a different owner/group
+    # is never acceptable.
+    - name: Private keys and keystores are not world-readable and belong to the deployment user/group
+      command: >-
+        find {{ ssl_file_dir_final }} -type f
+        ( -name *.key -o -name *.jks -o -name *.p12 -o -name tokenKeypair.pem )
+        ( -perm /007 -o -not -group {{ deployment_group }} -o -not -user {{ deployment_user }} )
+      register: secure_loose_keys
+      failed_when: secure_loose_keys.rc != 0 or secure_loose_keys.stdout | length > 0
+      changed_when: false
+
+    - name: No Confluent Platform process runs as root
+      shell: "ps -eo user:32,args | awk '$1==\"root\"' | grep -ciE 'kafka|confluent|ksql|connect'"
+      register: secure_root_procs
+      failed_when: secure_root_procs.stdout | trim != '0'
+      changed_when: false
+
+    # list-unit-files (not list-units) so installed-but-unloaded units are caught too, and both the
+    # rootless cp-* names and the root-managed confluent-* names are covered. The privileged firewall
+    # and its transient rollback timer, installed by secure_network, are expected and excluded.
+    - name: No system-scope Confluent component units are installed
+      shell: >-
+        systemctl list-unit-files 'cp-*' 'confluent-*' --no-legend
+        | grep -vE '^(cp-secure-firewall|cp-secure-rollback)[.]' || true
+      args:
+        executable: /bin/sh
+      register: secure_system_units
+      failed_when: secure_system_units.stdout | trim | length > 0
+      changed_when: false
+
+    - name: Resolve deploy user uid
+      command: id -u
+      register: secure_uid
+      changed_when: false
+
+    - name: User-scope cp-* units exist
+      command: systemctl --user list-units 'cp-*' --no-legend
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ secure_uid.stdout }}"
+      register: secure_user_units
+      failed_when: secure_user_units.rc != 0 or secure_user_units.stdout | length == 0
+      changed_when: false
+
+    - name: No user-scope cp-* unit is in a failed state
+      command: systemctl --user list-units 'cp-*' --state=failed --no-legend
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ secure_uid.stdout }}"
+      register: secure_failed_units
+      failed_when: secure_failed_units.rc != 0 or secure_failed_units.stdout | length > 0
+      changed_when: false
