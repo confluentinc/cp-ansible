@@ -4,7 +4,7 @@ Ansible Playbooks for Confluent Platform - Release Notes
 
 .. contents:: Topics
 
-8.0.8
+8.1.6
 ======
 Breaking Changes
 -------------
@@ -16,7 +16,7 @@ New features
 
 Notable enhancements
 -------------
-- Control Center Next Gen (2.7.0+) packages are now fetched from version-numbered repository paths (for example ``.../rpm/2.7/`` instead of ``.../rpm/``); older versions and standard installations are unaffected, and air-gapped or mirrored setups can adjust the path via the new ``confluent_control_center_next_gen_versioned_from_minor_version`` variable.
+- Control Center Next Gen (2.7.0+) and USM Agent (1.3.0+) packages are now fetched from version-numbered repository paths (for example ``.../rpm/2.7/`` instead of ``.../rpm/``); older versions and standard installations are unaffected, and air-gapped or mirrored setups can adjust the path via the new ``confluent_control_center_next_gen_versioned_from_minor_version`` and ``confluent_usm_agent_versioned_from_minor_version`` variables.
 
 Notable Fixes
 -------------
@@ -27,7 +27,7 @@ Notable Fixes
 - Fixed ``kafka_controller_quorum_voters`` to honor ``hostname_aliasing_enabled`` and use resolved controller hostnames instead of raw inventory hostnames, ensuring consistent and routable controller endpoints.
 
 
-8.0.7
+8.1.5
 ======
 New features
 -------------
@@ -35,13 +35,13 @@ New features
 
 Notable enhancements
 -------------
-- This release adds protection against Common Vulnerabilites and Exposures found in Confluent Platform. More info: https://docs.confluent.io/platform/8.0/release-notes/index.html#cp-release-8-0-7
+- This release adds protection against Common Vulnerabilites and Exposures found in Confluent Platform. More info: https://docs.confluent.io/platform/8.1/release-notes/index.html#cp-release-8-1-5
 
 Notable Fixes
 -------------
 - N/A
 
-8.0.6
+v8.1.4
 ======
 New features
 -------------
@@ -60,7 +60,7 @@ Notable fixes
 - Fixed kafka-storage format failures on KRaft clusters with secrets protection enabled - the master key is now passed to the format step via the CONFLUENT_SECURITY_MASTER_KEY environment variable.
 - Fixed custom certificate chain building for multi-tier and partial-chain PKIs - chains now assemble correctly for root + intermediate bundles and DoD-style partial chains.
 
-8.0.5
+v8.1.3
 ======
 Notable fixes
 -------------
@@ -70,7 +70,7 @@ Bug fixes
 -------------
 - Fixed kafka-storage format failures on KRaft clusters with secrets protection enabled — the masterkey is now passed via the CONFLUENT_SECURITY_MASTER_KEY env var (https://github.com/confluentinc/cp-ansible/pull/2477).
 
-8.0.4
+v8.1.2
 ======
 
 Notable fixes
@@ -83,15 +83,10 @@ New features
 
 Bug fixes
 -------------
-- Fixed an issue where pipefail caused failures when extracting distinguished names from keystores in mTLS setups.
+- Fixed pipefail issue which caused failure when extracting distinguished name from keystore in MTLS setups
 
-v8.0.3
+v8.1.1
 ======
-
-Notable fixes
--------------
-- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
-
 New features
 -------------
 - Made retries and delays in health checks configurable for customers 
@@ -109,26 +104,19 @@ Bug fixes
 - Fixed Connector deployment failures for mtls enabled with provided keystore/trustore in rolling deployments
 - Zookeeper based kafka cluster on JBOD can use migration playbook to move to KRaft 
 
-v8.0.2
-======
 
-Notable fixes
+
+v8.1.0
+======
+New features
 -------------
-- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
-
-v8.0.1
-======
+- USM agent support has been added to CP-Ansible.
+- Schema Registry Switchover workflow for CP to CC has been added.
 
 Notable enhancements
 -------------
-- Added configurations to enable Jolokia Access Control
-
-Notable fixes
--------------
-- Removed Confluent Metrics Reporter config from broker and controller
-- Prometheus/Alertmanager Health Check fixed for Control Center Next Gen
-- Bug Fix to enable Control Center Next Gen systemd service for archive installations
-- CP critical security and vulnerability fixes can be found at https://support.confluent.io/hc/en-us/sections/360008413952-Security-Advisories-and-Security-Release-Notes
+- broker.id has been replaced with node.id for kafka broker.
+- Added configurations to enable Jolokia Access Control.
 
 v8.0.0
 ======
