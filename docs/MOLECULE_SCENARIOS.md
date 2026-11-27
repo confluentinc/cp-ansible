@@ -328,6 +328,7 @@ Kerberos enabled with custom client config path
 
 Creates a Connector in Connect cluster
 
+Keytabs are managed externally (kerberos_copy_keytab: false), placed on the hosts by prepare.yml
 
 
 KRaft-only (no zookeeper role from 8.0.x onward). Also covers rootless in place
@@ -343,6 +344,8 @@ Validates that Kerberos is enabled across all components.
 Validates that SASL SSL Plaintext is enabled across all components.
 
 Validates that Connector is running
+
+Validates the externally placed keytabs were not re-copied by cp-ansible (kerberos_copy_keytab: false)
 
 Validates the rootless systemd --user lifecycle: nothing ran as root, the deploy user has no
 
