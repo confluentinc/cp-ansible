@@ -1,0 +1,107 @@
+---
+- name: Verify Recovered Controller Quorum
+  hosts: kafka_controller:!controller2
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Read This Controller's node.id
+      shell: "egrep '^node.id[ ]?=' {{ kafka_controller.config_file }} | awk -F'=' '{print $2}' | tr -d '[:space:]'"
+      register: qr_node_id
+      changed_when: false
+
+    - name: Describe Controller Quorum Replication
+      shell: |
+        {{ binary_base_path }}/bin/kafka-metadata-quorum --bootstrap-controller {{ inventory_hostname }}:{{ kafka_controller_port }} \
+          --command-config {{ kafka_controller.client_config_file }} describe --replication
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
+      register: qr_replication
+      changed_when: false
+
+    - name: Assert Every Surviving Controller Is a Voter
+      assert:
+        that:
+          - (qr_replication.stdout_lines | select('search', '(Leader|Follower)') | list | length) == (ansible_play_hosts | length)
+          - qr_replication.stdout_lines | select('match', '^' ~ qr_node_id.stdout ~ '\\s.*(Leader|Follower)') | list | length == 1
+        fail_msg: "Expected {{ ansible_play_hosts | length }} voters including node {{ qr_node_id.stdout }}. Replication: {{ qr_replication.stdout }}"
+
+    - name: Check Metadata Log Backup Exists
+      find:
+        paths: "{{ kafka_controller_final_properties['log.dirs'] | dirname }}/kraft-quorum-recovery-backup"
+        file_type: directory
+        patterns: __cluster_metadata-0
+        recurse: true
+      register: qr_backup
+
+    - name: Assert Metadata Log Backup Exists
+      assert:
+        that:
+          - qr_backup.matched > 0
+        fail_msg: "No metadata log backup found on {{ inventory_hostname }}"
+
+    - name: Check Controller Recovery State File Was Removed
+      stat:
+        path: "{{ kafka_controller_final_properties['log.dirs'] | dirname }}/kraft-quorum-recovery.json"
+      register: qr_controller_state
+
+    - name: Assert Controller Recovery State File Was Removed
+      assert:
+        that:
+          - not qr_controller_state.stat.exists
+        fail_msg: "Recovery state file was left on {{ inventory_hostname }}"
+
+- name: Verify Data and Write Path After Recovery
+  hosts: kafka_broker
+  gather_facts: true
+  tasks:
+    - import_role:
+        name: variables
+
+    - name: Get Existing Master Key from override.conf
+      include_role:
+        name: common
+        tasks_from: get_masterkey.yml
+      vars:
+        systemd_override_path: "{{ kafka_broker.systemd_override }}"
+        rootless_component_name: kafka_broker
+      when: kafka_broker_secrets_protection_enabled|bool
+
+    - name: Set Recovery Test Facts
+      set_fact:
+        qr_broker_bootstrap: "{{ hostvars[groups.kafka_broker[0]] | confluent.platform.resolve_hostname }}:{{ kafka_broker_listeners[kafka_broker_inter_broker_listener_name]['port'] }}"
+        qr_topic: kraft-quorum-recovery
+        qr_kafka_opts: "-Xlog:all=error -XX:+IgnoreUnrecognizedVMOptions"
+
+    - name: Consume Records Produced Before Quorum Loss
+      shell: |
+        {{ binary_base_path }}/bin/kafka-console-consumer --topic {{ qr_topic }} \
+          --bootstrap-server {{ qr_broker_bootstrap }} --consumer.config {{ kafka_broker.client_config_file }} \
+          --from-beginning --max-messages 10 --timeout-ms 60000
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ qr_kafka_opts }}"
+        CONFLUENT_SECURITY_MASTER_KEY: "{{ existing_masterkey | default('') }}"
+      register: qr_consume
+      changed_when: false
+      failed_when: qr_consume.stdout_lines | length != 10
+      run_once: true
+
+    - name: Create Topic After Recovery
+      shell: |
+        {{ binary_base_path }}/bin/kafka-topics --bootstrap-server {{ qr_broker_bootstrap }} \
+          --command-config {{ kafka_broker.client_config_file }} \
+          --create --if-not-exists --topic {{ qr_topic }}-post --partitions 1 --replication-factor {{ groups.kafka_broker | length }}
+      args:
+        executable: "{{ shell_executable }}"
+      environment:
+        KAFKA_OPTS: "{{ qr_kafka_opts }}"
+        CONFLUENT_SECURITY_MASTER_KEY: "{{ existing_masterkey | default('') }}"
+      register: qr_topic_create
+      changed_when: false
+      failed_when: qr_topic_create.rc != 0
+      run_once: true
