@@ -592,7 +592,7 @@ Default:  "{{ (confluent_cli_base_path ~ '/confluent') if rootless_deployment_pa
 
 Confluent CLI version to download (e.g. "1.9.0"). Support matrix https://docs.confluent.io/platform/current/installation/versions-interoperability.html#confluent-cli
 
-Default:  4.72.0
+Default:  4.83.0
 
 ***
 
